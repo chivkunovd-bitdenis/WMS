@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
@@ -162,6 +163,17 @@ def normalize_agent_tools(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return normalized
 
 
+def agent_capability_signature(tools: list[dict[str, Any]], cwd: str) -> str:
+    """Stable fingerprint of the tools and project boundary persisted in a thread."""
+    def ordered(specs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        return sorted(({**spec, "tools": ordered(spec["tools"])} if spec.get("type") == "namespace"
+                       else spec for spec in specs), key=lambda spec: spec["name"])
+
+    payload = json.dumps({"tools": ordered(tools), "cwd": cwd}, ensure_ascii=False,
+                         sort_keys=True, separators=(",", ":"))
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
 class LlmRouter:
     def __init__(self, cfg: Config, store: Store, exec_fn: ExecFn = default_exec) -> None:
         self.cfg = cfg
@@ -239,12 +251,13 @@ class LlmRouter:
                 tools=tools or [], tool_handler=tool_handler, mode=mode,
                 cwd=work_cwd, timeout=timeout, cancelled=cancelled,
             )
+        signature = agent_capability_signature(tools, work_cwd)
         key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
         saved = self.store.kv_get(key, {})
         state = saved if isinstance(saved, dict) else {}
         session_id = state.get("thread_id")
         handoff = str(state.get("handoff") or "")
-        if state.get("rollover") and session_id:
+        if (state.get("rollover") or state.get("capability_signature") != signature) and session_id:
             try:
                 handoff_turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=min(timeout, 300))
                 handoff_text, _, _ = handoff_turn.run(
@@ -261,7 +274,8 @@ class LlmRouter:
             if not handoff_text.strip():
                 raise LlmUnavailable("context handoff empty; old session retained")
             handoff = handoff_text
-            state = {"handoff": handoff, "thread_id": None, "rollover": False}
+            state = {"handoff": handoff, "thread_id": None, "rollover": False,
+                     "capability_signature": signature}
             self.store.kv_set(key, state)
             session_id = None
         if handoff and not session_id:
@@ -276,7 +290,8 @@ class LlmRouter:
         turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=timeout)
 
         def started(thread_id: str) -> None:
-            self.store.kv_set(key, {**state, "thread_id": thread_id, "rollover": False})
+            self.store.kv_set(key, {**state, "thread_id": thread_id, "rollover": False,
+                                    "capability_signature": signature})
 
         try:
             answer, thread_id, occupied = turn.run(
@@ -290,7 +305,8 @@ class LlmRouter:
         except (AppServerError, OSError) as exc:
             raise LlmUnavailable(f"native agent turn failed: {type(exc).__name__}") from exc
         self.store.kv_set(key, {"thread_id": thread_id, "handoff": handoff,
-                                "rollover": occupied >= self.cfg.agent.context_limit_tokens})
+                                "rollover": occupied >= self.cfg.agent.context_limit_tokens,
+                                "capability_signature": signature})
         self.store.log_llm(cli=provider, model=model, effort=self.cfg.llm.codex_effort,
                            role="agent", ticket_id=None, ok=True)
         return LlmResult(answer, provider, model, thread_id)

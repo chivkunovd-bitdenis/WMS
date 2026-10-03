@@ -9,7 +9,7 @@ import pytest
 
 from support_agent.app_server import _occupancy
 from support_agent.config import config_from_dict
-from support_agent.llm import LlmRouter, normalize_agent_tools
+from support_agent.llm import LlmRouter, agent_capability_signature, normalize_agent_tools
 from support_agent.store import Store
 
 from .conftest import ExecResult, make_config
@@ -65,6 +65,38 @@ def test_real_agent_specs_and_owner_style_use_one_native_format() -> None:
     normalized = normalize_agent_tools([*plain, nested])
     assert all(spec["type"] == "function" and "inputSchema" in spec for spec in normalized)
     assert {spec["name"] for spec in normalized} >= {"project_job", plain[0]["name"]}
+
+
+def test_capability_change_rolls_thread_but_identical_tools_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from support_agent.app_server import AppServerTurn
+
+    cfg = make_config(tmp_path)
+    store = Store(cfg.db_path)
+    llm = LlmRouter(cfg, store)
+    calls: list[dict[str, object]] = []
+
+    def fake_run(self: AppServerTurn, prompt: str, **kwargs: object) -> tuple[str, str, int]:
+        calls.append({"prompt": prompt, **kwargs})
+        thread_id = kwargs.get("session_id") or f"thread-{len(calls)}"
+        started = kwargs.get("session_started")
+        if callable(started):
+            started(str(thread_id))
+        return "handoff" if "Сохрани передачу" in prompt else "done", str(thread_id), 100
+
+    monkeypatch.setattr(AppServerTurn, "run", fake_run)
+    first = [{"name": "one", "description": "first", "inputSchema": {"type": "object"}}]
+    second = [{"name": "two", "description": "second", "inputSchema": {"type": "object"}}]
+    assert agent_capability_signature(normalize_agent_tools(first), str(tmp_path)) != (
+        agent_capability_signature(normalize_agent_tools(second), str(tmp_path)))
+    kwargs = {"session_key": "job", "mode": "owner", "owner_authorized": True,
+              "cwd": str(tmp_path), "tool_handler": lambda name, args: {}}
+    llm.agent_turn("a", tools=first, **kwargs)
+    llm.agent_turn("b", tools=first, **kwargs)
+    assert len(calls) == 2 and calls[1]["session_id"] == "thread-1"
+    llm.agent_turn("c", tools=second, **kwargs)
+    assert len(calls) == 4
+    assert calls[2]["session_id"] == "thread-1"  # handoff in old session
+    assert calls[3]["session_id"] is None  # new thread gets changed tools
 
 
 def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> None:
