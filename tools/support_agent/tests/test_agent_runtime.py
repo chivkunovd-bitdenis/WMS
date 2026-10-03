@@ -8,6 +8,7 @@ from pathlib import Path
 import pytest
 
 from support_agent.app_server import _occupancy
+from support_agent.config import config_from_dict
 from support_agent.llm import LlmRouter, normalize_agent_tools
 from support_agent.store import Store
 
@@ -46,6 +47,10 @@ for line in sys.stdin:
 
 def test_actual_context_not_lifetime_total() -> None:
     assert _occupancy({"last": {"totalTokens": 123}, "total": {"totalTokens": 900_000}}) == 123
+
+
+def test_agent_opt_in_is_loaded_from_config() -> None:
+    assert config_from_dict({"agent": {"enabled": True, "owner_model": "gpt-5.6-sol"}}).agent.enabled
 
 
 def test_real_agent_specs_and_owner_style_use_one_native_format(tmp_path: Path) -> None:

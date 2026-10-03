@@ -255,6 +255,7 @@ def config_from_dict(data: dict[str, Any]) -> Config:
     cfg.wms = _build(WmsCfg, data.get("wms", {}))
     cfg.limits = _build(LimitsCfg, data.get("limits", {}))
     cfg.llm = _build(LlmCfg, data.get("llm", {}))
+    cfg.agent = _build(AgentCfg, data.get("agent", {}))
     cfg.openai = _build(OpenAiCfg, data.get("openai", {}))
     cfg.transcribe = _build(TranscribeCfg, data.get("transcribe", {}))
     cfg.hotfix = _build(HotfixCfg, data.get("hotfix", {}))
