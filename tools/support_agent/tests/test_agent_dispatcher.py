@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any
 
 from support_agent.agent_coordinator import AgentCoordinator
+from support_agent.agent_dispatcher import _priority
 from support_agent.config import config_from_dict
 from support_agent.llm import LlmResult
 from support_agent.store import Store
@@ -155,3 +156,9 @@ def test_background_message_can_be_acknowledged_without_topic(tmp_path: Path) ->
     assert saved is not None and saved["status"] == "handled"
     assert store.kv_get("agent_dispatch_queue", []) == []
     assert store.kv_get("agent_topic_index", []) == []
+
+
+def test_model_priority_names_are_tolerated() -> None:
+    assert _priority("normal") == 5
+    assert _priority("high") == 8
+    assert _priority("unexpected") == 5

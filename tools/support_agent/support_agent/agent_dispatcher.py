@@ -13,6 +13,18 @@ from .llm import extract_json
 log = logging.getLogger(__name__)
 
 
+def _priority(value: Any) -> int:
+    """Normalize model formatting of scheduling metadata, not message meaning."""
+    if isinstance(value, str):
+        named = {"low": 2, "normal": 5, "medium": 5, "high": 8, "urgent": 10}
+        if value.lower() in named:
+            return named[value.lower()]
+    try:
+        return max(0, min(10, int(value)))
+    except (TypeError, ValueError):
+        return 5
+
+
 class AgentDispatcher:
     def __init__(self, coordinator: Any) -> None:
         self.agent = coordinator
@@ -224,7 +236,7 @@ class AgentDispatcher:
                         topic["generation"] += 1
                     if event["kind"] == "input":
                         topic["last_source_id"] = event["source_id"]
-                    topic["priority"] = max(0, min(10, int(part.get("priority") or 0)))
+                    topic["priority"] = _priority(part.get("priority"))
                     related = part.get("related_topic_ids") or []
                     if isinstance(related, list):
                         topic["related_topic_ids"] = [str(x) for x in related if str(x) in index][:20]
@@ -245,7 +257,7 @@ class AgentDispatcher:
                 if action in ("set_priority", "cancel_topic") and target in index:
                     selected = self.store.kv_get(f"agent_topic:{target}", {})
                     if action == "set_priority":
-                        selected["priority"] = max(0, min(10, int(control.get("value") or 0)))
+                        selected["priority"] = _priority(control.get("value"))
                     else:
                         selected["status"] = "cancel_requested"
                         selected["cancel_requested"] = True
