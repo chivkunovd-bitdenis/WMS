@@ -27,9 +27,9 @@ export function pendingPlacement(storage: Storage, key: string): PlacementBody |
   return raw ? JSON.parse(raw) as PlacementBody : null
 }
 
-export function rememberPlacement(storage: Storage, key: string, body: Omit<PlacementBody, 'operation_id'>): PlacementBody {
+export function rememberPlacement(storage: Storage, key: string, body: Omit<PlacementBody, 'operation_id'>, operationId = randomId()): PlacementBody {
   if (pendingPlacement(storage, key)) throw new Error('Предыдущее размещение ещё ожидает ответа. Обновите документ для проверки результата.')
-  const pending = { ...body, operation_id: randomId() }
+  const pending = { ...body, operation_id: operationId }
   storage.setItem(key, JSON.stringify(pending))
   return pending
 }

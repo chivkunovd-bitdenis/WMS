@@ -6,7 +6,10 @@ export type ScanContext = { cellId: string | null; objectId: string | null }
 export const emptyScanContext: ScanContext = { cellId: null, objectId: null }
 
 export class RejectedScan extends Error {}
-type Command = { id: string; raw?: string; cellId?: string; before?: ScanContext }
+type Command = { id: string; raw?: string; cellId?: string; undo?: true; before?: ScanContext }
+
+/** Итог «назад»: контекст, к которому вернулись, и строка под полем. */
+export type UndoOutcome = { context: ScanContext; notice: string }
 
 export function scanCandidates(raw: string): string[] {
   return [raw.trim().replace(/^[\]ъЪ][A-Za-zА-Яа-яЁё][0-9]/, '')]
@@ -15,8 +18,14 @@ export function scanCandidates(raw: string): string[] {
 /** Context changes and stock requests share one queue, including rapid scanner bursts. */
 export function createSortingScanner(initial: ScanContext, dependencies: {
   data: () => { cells: Cell[]; objects: WarehouseObject[] }
-  place: (object: WarehouseObject, cellId: string, operationId: string) => Promise<void>
+  /** Возвращает подпись результата («… положен на ячейку …»), если она есть. */
+  place: (object: WarehouseObject, cellId: string, operationId: string, before: ScanContext) => Promise<string | void>
   product: (barcode: string, context: ScanContext, operationId: string) => Promise<string | void>
+  /**
+   * WMS-650 R13: «назад» идёт в ту же очередь, что и сканы, — не обгоняет
+   * ранее отсканированное. null — отменять нечего.
+   */
+  undo?: () => Promise<UndoOutcome | null>
   changed: (context: ScanContext) => void
   notice: (message: string) => void
   error: (error: unknown) => void
@@ -46,8 +55,20 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
     dependencies.changed(next)
   }
   const execute = async (command: Command) => {
+      if (command.undo) {
+        const outcome = await dependencies.undo?.()
+        if (outcome) {
+          change(outcome.context)
+          dependencies.notice(outcome.notice)
+        }
+        return
+      }
       if (command.cellId) {
-        if (context.cellId !== command.cellId) change({ cellId: command.cellId, objectId: null })
+        if (context.cellId !== command.cellId) {
+          change({ cellId: command.cellId, objectId: null })
+          const cell = dependencies.data().cells.find((one) => one.id === command.cellId)
+          if (cell) dependencies.notice(`Ячейка ${cell.code} открыта`)
+        }
         return
       }
       const candidates = scanCandidates(command.raw ?? '')
@@ -68,11 +89,13 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
           dependencies.notice(`Тара ${object.code} закрыта; товар идёт прямо в ячейку`)
           return
         }
+        const before = context
         // Clear the previous container even when opening the next one fails.
         change({ ...context, objectId: null })
+        let placed: string | void = undefined
         try {
           if (whereIs(object.holder, objects, cells).cell?.id !== context.cellId) {
-            await dependencies.place(object, context.cellId, command.id)
+            placed = await dependencies.place(object, context.cellId, command.id, before)
           }
         } catch (error) {
           // Later buffered products must not fall through into the bare cell.
@@ -80,7 +103,7 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
           throw error
         }
         change({ ...context, objectId: object.id })
-        dependencies.notice(`Тара ${object.code} открыта`)
+        dependencies.notice(placed ? `${placed}. Тара открыта` : `Тара ${object.code} открыта`)
         return
       }
       const message = await dependencies.product(candidates[0], context, command.id)
@@ -134,6 +157,7 @@ export function createSortingScanner(initial: ScanContext, dependencies: {
   return {
     selectCell: (cellId: string) => enqueue({ id: randomId(), cellId }),
     scan: (raw: string) => enqueue({ id: randomId(), raw }),
+    undo: () => enqueue({ id: randomId(), undo: true }),
     resume: () => { paused = false; change(context); notify(); return drain() },
   }
 }
