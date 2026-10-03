@@ -443,11 +443,12 @@ class LlmRouter:
         last_error = ""
         wants_db = self.cfg.prod_db.enabled and mode == "readonly" and role in ("analyst", "review")
         db_role = self.ticket_db_role(ticket_id) if wants_db else ""
+        # Resume сохраняет историю, но правила и снимок обращения могли измениться с прошлого хода.
+        full = f"{context}\n\n{prompt}" if context else prompt
         for cli, model in options:
             sessions = self._sessions(ticket_id, session_key)
             existing = sessions.get(cli)
             for resume in ([True, False] if existing else [False]):
-                full = prompt if resume else (f"{context}\n\n{prompt}" if context else prompt)
                 db_log = self._new_db_log(role, mode, db_role)
                 try:
                     try:
@@ -548,6 +549,9 @@ class LlmRouter:
                 raise _CallFailed(blob[:200])
             return LlmResult(text, "claude", model, new_id or (session[0] if session else None))
         # codex
+        # У Codex нет используемого здесь флага --system-prompt: передаём правила в каждом ходе.
+        if system:
+            prompt = f"{system}\n\n{prompt}"
         with sandbox.temp_dir() as tmp:
             out_file = str(Path(tmp) / "last.txt")
             argv = self.build_codex(model, self.effort_for("codex", role), mode, session_id, cwd,
