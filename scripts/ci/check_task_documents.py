@@ -4,7 +4,7 @@
 import argparse
 import re
 import subprocess
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 SCRIPT_PATH = "scripts/ci/check_task_documents.py"
 
@@ -46,11 +46,7 @@ def visible_lines(text: str) -> list[str]:
 
 
 def cells(line: str) -> list[str]:
-    line = line.strip()
-    if line.startswith("|"):
-        line = line[1:]
-    if line.endswith("|"):
-        line = line[:-1]
+    line = line.strip().removeprefix("|").removesuffix("|")
     return [part.strip() for part in re.split(r"(?<!\\)\|", line)]
 
 
@@ -58,7 +54,35 @@ def plain(value: str) -> str:
     return re.sub(r"\s+", " ", value.translate(str.maketrans("", "", "*_`"))).strip()
 
 
-def document_errors(text: str) -> list[str]:
+def test_reference(value: str) -> str:
+    return re.sub(r"\s+", " ", value.translate(str.maketrans("", "", "*`"))).strip()
+
+
+def test_reference_errors(root: Path, reference: str) -> list[str]:
+    path_text, separator, test_name = test_reference(reference).partition("::")
+    pure = PurePosixPath(path_text)
+    if (
+        not separator
+        or not path_text
+        or not test_name
+        or pure.is_absolute()
+        or str(pure) != path_text
+        or ".." in pure.parts
+    ):
+        return [f"Некорректная ссылка на тест: {reference}; ожидается путь::имя теста."]
+    path = root / path_text
+    if not path.is_file():
+        return [f"Нет файла теста {path_text}."]
+    try:
+        content = path.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        return [f"Файл теста {path_text} не является текстовым."]
+    if test_name not in content:
+        return [f"В {path_text} не найдено имя теста {test_name}."]
+    return []
+
+
+def document_errors(text: str, root: Path | None = None) -> list[str]:
     lines = visible_lines(text)
     errors = []
     checks = 0
@@ -74,6 +98,10 @@ def document_errors(text: str) -> list[str]:
             continue
         check_col = next(j for j, header in enumerate(headers) if header in check_names)
         verdict_col = next(j for j, header in enumerate(headers) if header in verdict_names)
+        class_col = headers.index("класс") if "класс" in headers else None
+        test_col = headers.index("тест") if "тест" in headers else None
+        if class_col is not None and test_col is None:
+            errors.append("В таблице с колонкой «Класс» нет колонки «Тест».")
         for row in lines[i + 2:]:
             if "|" not in row or not row.strip():
                 break
@@ -86,6 +114,16 @@ def document_errors(text: str) -> list[str]:
                 errors.append("В таблице есть проверка без описания или названия.")
             if not plain(values[verdict_col]):
                 errors.append(f"Нет вердикта у проверки: {values[check_col]}")
+            if class_col is not None and test_col is not None:
+                check_class = plain(values[class_col]).casefold()
+                reference = test_reference(values[test_col])
+                if check_class in {"навсегда", "разово"}:
+                    if not reference:
+                        errors.append(
+                            f"У автоматической проверки {values[check_col]} нет ссылки на тест."
+                        )
+                    elif root is not None:
+                        errors.extend(test_reference_errors(root, reference))
     if not checks:
         errors.append("Нет проверок в таблице с колонками «Проверка» и «Вердикт».")
 
@@ -111,6 +149,34 @@ def document_errors(text: str) -> list[str]:
     return errors
 
 
+def commit_changed_paths(root: Path, commit: str) -> set[str]:
+    revision = git(root, "rev-list", "--parents", "-n", "1", commit).split()
+    if len(revision) == 1:
+        return set(git(root, "ls-tree", "-r", "--name-only", commit).splitlines())
+    return set(
+        git(root, "diff", "--no-renames", "--name-only", revision[1], commit).splitlines()
+    )
+
+
+def contract_change_errors(root: Path, base: str) -> list[str]:
+    commits = git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
+    changes = [commit_changed_paths(root, commit) for commit in commits]
+    errors = []
+    for index, commit in enumerate(commits):
+        subject = git(root, "show", "-s", "--format=%s", commit)
+        match = re.fullmatch(r"(WMS-\d+): контракт тестов", subject)
+        if not match:
+            continue
+        changed_later = set().union(*changes[index + 1:]) if index + 1 < len(changes) else set()
+        overlap = sorted(changes[index] & changed_later)
+        if overlap:
+            errors.append(
+                f"изменён контракт тестов {match[1]} после его фиксации: "
+                + ", ".join(overlap)
+            )
+    return errors
+
+
 def check(root: Path, base: str) -> list[str]:
     errors = []
     if not all((root / name).is_file() for name in ("AGENTS.md", "CLAUDE.md")) or (root / "AGENTS.md").read_bytes() != (root / "CLAUDE.md").read_bytes():
@@ -120,7 +186,11 @@ def check(root: Path, base: str) -> list[str]:
         if not path.is_file():
             errors.append(f"{ref}: нет документа {path.relative_to(root)}.")
         else:
-            errors.extend(f"{ref}: {error}" for error in document_errors(path.read_text(encoding="utf-8")))
+            errors.extend(
+                f"{ref}: {error}"
+                for error in document_errors(path.read_text(encoding="utf-8"), root)
+            )
+    errors.extend(contract_change_errors(root, base))
     return errors
 
 

@@ -60,18 +60,21 @@ def verify(root: Path, base: str, allow_bootstrap: bool = False) -> dict[str, in
         )
     else:
         trusted = parse_manifest(git(root, "show", f"{base}:{MANIFEST}"))
-        if candidate != trusted:
-            raise ValueError(
-                "Guard manifest changed relative to trusted BASE; new hashes are not owner approval"
-            )
         if set(base_paths) - {MANIFEST} != set(trusted["files"]):
             raise ValueError("Trusted BASE contains unregistered guard files")
         for path, digest in trusted["files"].items():
-            if (
-                hashlib.sha256(git(root, "show", f"{base}:{path}")).hexdigest()
-                != digest
-            ):
+            if hashlib.sha256(git(root, "show", f"{base}:{path}")).hexdigest() != digest:
                 raise ValueError(f"Trusted BASE hash mismatch: {path}")
+            candidate_path = root / path
+            candidate_digest = (
+                hashlib.sha256(candidate_path.read_bytes()).hexdigest()
+                if candidate_path.is_file() and not candidate_path.is_symlink()
+                else None
+            )
+            if candidate["files"].get(path) != digest or candidate_digest != digest:
+                raise ValueError(
+                    f"изменён защищённый тест {path} — нужно решение владельца"
+                )
     actual = {}
     for directory in ROOTS:
         if not (root / directory).is_dir() or (root / directory).is_symlink():
