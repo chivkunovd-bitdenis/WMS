@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -94,6 +96,16 @@ class FakeHotfix:
         self.p.store.patch_data(tid, hotfix={**state, "step": "report", "merge_sha": "c" * 40})
 
 
+class RealGitHotfix(FakeHotfix):
+    def git(self, *args: str, cwd: str | Path | None = None) -> str:
+        self.calls.append(("git", list(args)))
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, env={**os.environ, "LC_ALL": "C"},
+            check=True, capture_output=True, text=True,
+        )
+        return result.stdout
+
+
 def make_night(env: Any, *, etalon: str = "green", release: bool = True) -> tuple[NightRunner, int]:
     task = env.store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
                                 seller="seller", stage="agent_discussion",
@@ -160,6 +172,63 @@ def test_same_failure_without_new_commit_stops_task(env: Any, tmp_path: Path) ->
     task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
     assert task["status"] == "stopped"
     assert "без изменения кода" in task["reason"]
+
+
+def test_analyst_document_and_tester_contract_are_separate_commits(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    doc = root / "docs" / "requirements" / "WMS-700.md"
+    test_file = root / "backend" / "tests" / "test_wms_700_contract.py"
+    doc.parent.mkdir(parents=True)
+    test_file.parent.mkdir(parents=True)
+    doc.write_text("# WMS-700\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "commit", "-qm", "baseline"], cwd=root, check=True,
+    )
+    hotfix = RealGitHotfix()
+    hotfix.p = env.pipe
+    runner.hotfix = hotfix  # type: ignore[assignment]
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="analyst", path=str(root))
+    env.store.patch_data(tid, night=state)
+
+    def analyst(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
+        return {"summary": "проверки добавлены", "checks": ["C1"]}
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        test_file.write_text("def test_contract():\n    assert True\n", encoding="utf-8")
+        return {"summary": "контракт добавлен", "tests": [
+            "backend/tests/test_wms_700_contract.py",
+        ]}
+
+    env.llm.on("analyst", "Ты аналитик WMS-700", analyst)
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    runner.development(tid)
+
+    analyst_files = subprocess.run(
+        ["git", "show", "--format=", "--name-only", "HEAD^"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    contract_files = subprocess.run(
+        ["git", "show", "--format=", "--name-only", "HEAD"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    assert analyst_files == ["docs/requirements/WMS-700.md"]
+    assert contract_files == ["backend/tests/test_wms_700_contract.py"]
+    assert subprocess.run(
+        ["git", "log", "-2", "--format=%s"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines() == [
+        "WMS-700: контракт тестов", "WMS-700: проверки аналитика",
+    ]
 
 
 def test_deadline_stops_unfinished_work_and_releases_only_ready_subset(env: Any) -> None:

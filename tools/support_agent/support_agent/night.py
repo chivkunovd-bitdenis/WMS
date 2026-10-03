@@ -179,6 +179,9 @@ class NightRunner:
         text = doc.read_text(encoding="utf-8") if doc.exists() else ""
         if "Класс" not in text or "Тест" not in text:
             raise StepFailed("аналитик не добавил столбцы «Класс» и «Тест»")
+        doc_rel = f"docs/requirements/{task['id']}.md"
+        if not self._commit(task, f"{task['id']}: проверки аналитика", paths=[doc_rel]):
+            raise StepFailed("аналитик не изменил документ")
         task["step"] = "tester"
         self._save(tid, state)
 
@@ -197,7 +200,11 @@ class NightRunner:
         tests = [str(item) for item in result.get("tests") or [] if self._safe_rel(str(item))]
         if not tests or any(not (Path(task["path"]) / path).is_file() for path in tests):
             raise StepFailed("тестировщик не создал контрактные тесты")
-        if not self._commit(task, f"{task['id']}: контракт тестов"):
+        unrelated = self._changed_outside(task, tests)
+        if unrelated:
+            raise StepFailed("тестировщик изменил файлы вне контракта тестов: "
+                             + ", ".join(unrelated))
+        if not self._commit(task, f"{task['id']}: контракт тестов", paths=tests):
             raise StepFailed("контракт тестов не изменил Git")
         task.update(step="developer", tests=tests, contract_commit=self._head(task),
                     contract_hashes=self._hashes(task, tests))
@@ -458,15 +465,36 @@ class NightRunner:
         self.store.set_stage(tid, "done", night={**state, "step": "done"})
 
     # -- helpers --------------------------------------------------------------------
-    def _commit(self, task: dict[str, Any], message: str) -> bool:
+    def _commit(self, task: dict[str, Any], message: str,
+                *, paths: list[str] | None = None) -> bool:
         path = task["path"]
         self.hotfix.guard_gitdir(path)
-        self.hotfix.git("add", "-A", "--", ".", ":(exclude)frontend/node_modules", cwd=path)
-        if not self.hotfix.git("status", "--porcelain", cwd=path).strip():
+        pathspecs = [f":(literal){item}" for item in paths] if paths else [
+            ".", ":(exclude)frontend/node_modules",
+        ]
+        self.hotfix.git("add", "-A", "--", *pathspecs, cwd=path)
+        staged = self.hotfix.git("diff", "--cached", "--name-only", "--", *pathspecs,
+                                 cwd=path)
+        if not staged.strip():
             return False
         self.hotfix.git("-c", "user.name=WMS support agent", "-c", "user.email=noreply@openai.com",
                         "commit", "--no-verify", "-m", message, cwd=path)
         return True
+
+    def _changed_outside(self, task: dict[str, Any], allowed: list[str]) -> list[str]:
+        exclusions = [f":(exclude,literal){item}" for item in allowed]
+        status = self.hotfix.git(
+            "status", "--porcelain", "--untracked-files=all", "--", ".",
+            ":(exclude)frontend/node_modules", *exclusions, cwd=task["path"],
+        )
+        paths: list[str] = []
+        for line in status.splitlines():
+            changed = line[3:] if len(line) > 3 else line
+            if " -> " in changed:
+                changed = changed.split(" -> ", 1)[1]
+            if changed:
+                paths.append(changed)
+        return paths
 
     def _head(self, task: dict[str, Any]) -> str:
         return self.hotfix.git("rev-parse", "HEAD", cwd=task["path"]).strip()
