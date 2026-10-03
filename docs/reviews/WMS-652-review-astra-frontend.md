@@ -8,7 +8,7 @@
 
 - `frontend/src/screens/ff/FfInboundRequestView.test.ts` — SHA256 `fa21884234fa2d2182c664ddfb990340063df3bd8ee1de7dfbecd0f25a360d6d`.
 - `frontend/src/screens/v2/FfFbsSupplyWorkspace.size.test.ts` — SHA256 `03bd2f8c70e1bb31ad3fc9e677fd664f30ca30746d4fb6b724227e34df0cf5b4`.
-- `frontend/src/utils/printMarkingCodeLabel.pagination.test.ts` — SHA256 `7582d3844b47cd3e49ad81ea6e306ba89333142893cc829749aae9a4c44862aa`.
+- `frontend/src/utils/printMarkingCodeLabel.pagination.test.ts` — SHA256 `fee7bf4e9b5045b39e8f3da81c3771ccef6b2586121e35d39fe6977c779becd4`.
 
 - `frontend/src/screens/v2/FfFbsSupplyWorkspace.wms636.dom.test.tsx` — SHA256 `c78b0488102c1d013aa3c81b5fabae55e6e0c8aec523fe370aa871635c951924`.
 
@@ -58,3 +58,7 @@ F2 исправлен по сути: комментарий теперь пра�
 ## Заключение
 
 **CODE REVIEW PASS — обязательных технических замечаний к окончательной дельте четырёх файлов нет.** F1 устранён, историческая неточность F2 и последняя редакторская рекомендация исправлены. Продуктовый код не менялся. Полный Linux CI кандидата, приёмка аналитика и CI etalon ещё должны подтвердить свои результаты отдельно. Локальный полный Vitest PASS не заявляется; успешные адресные PDF и отрицательный gate относятся к указанному выше фактическому прогону.
+
+## Узкая дельта после CI 37142284424
+
+Четыре флага Chrome отключают фоновые службы в тестовом процессе; PDF-контракт, диагностика, предел времени и очистка не ослаблены. Причинная формулировка заменена нейтральной гипотезой: сообщения GCM не доказывают причину зависания. **Условный CODE REVIEW PASS** для этой дельты; результат нового Linux CI ожидается. Финальная редактура меняет только комментарий, SHA256 PDF-теста обновлён; новых тестов и повторного ревью не проводилось.

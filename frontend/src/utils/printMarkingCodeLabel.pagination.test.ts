@@ -60,13 +60,17 @@ describe.skipIf(!chrome)('WMS-613 physical page pagination', () => {
       const input = join(dir, 'tape.html')
       const output = join(dir, 'tape.pdf')
       writeFileSync(input, html)
-      // --no-sandbox and --disable-dev-shm-usage are safe here: this test only
-      // renders a trusted local HTML file produced by this same test. CI runners
-      // (and the browser-actions/setup-chrome binary) have no SUID sandbox helper,
-      // so without --no-sandbox Chrome exits immediately with a cryptic error.
+      // WMS-652: run the isolated local HTML renderer without Chrome background
+      // networking, component updates, account sync or default-app installation.
+      // CI 37142284424 timed out with background-network warnings; their causal
+      // role is unproven. These standard automation flags are an experiment to
+      // verify in Linux CI. PDF content, page assertions and deadlines stay unchanged.
+      // --no-sandbox is limited to this synthetic HTML and disposable test profile.
       const printing = spawn(chrome!, [
         '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
         '--no-pdf-header-footer', '--no-first-run',
+        '--disable-background-networking', '--disable-component-update',
+        '--disable-sync', '--disable-default-apps',
         `--user-data-dir=${join(dir, 'profile')}`, `--print-to-pdf=${output}`, `file://${input}`,
       ], { stdio: ['ignore', 'pipe', 'pipe'] })
       type ExitInfo = { code: number | null; signal: NodeJS.Signals | null }
