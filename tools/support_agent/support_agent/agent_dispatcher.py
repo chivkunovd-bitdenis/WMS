@@ -262,6 +262,16 @@ class AgentDispatcher:
                         selected["status"] = "cancel_requested"
                         selected["cancel_requested"] = True
                         selected["recovery_note"] = "Inspect unknown effects before resuming"
+                        for job_id in self.store.kv_get("agent_job_index", []):
+                            job = self.store.kv_get(f"agent_job:{job_id}", {})
+                            if job.get("topic_id") != target or job.get("status") in (
+                                "done", "cancelled", "needs_review", "needs_owner_review"
+                            ):
+                                continue
+                            job["cancel_requested"] = True
+                            if job.get("status") in ("scheduled", "queued"):
+                                job["status"] = "cancelled"
+                            self.store.kv_set(f"agent_job:{job_id}", job)
                     self.store.kv_set(f"agent_topic:{target}", selected)
                 elif action == "cancel_job":
                     job = self.store.kv_get(f"agent_job:{target}", {})

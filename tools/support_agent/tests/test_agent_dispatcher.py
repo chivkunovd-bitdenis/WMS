@@ -8,6 +8,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from support_agent.agent_authorization import SemanticAuthorization
 from support_agent.agent_coordinator import AgentCoordinator
 from support_agent.agent_dispatcher import _priority
 from support_agent.config import config_from_dict
@@ -162,3 +163,37 @@ def test_model_priority_names_are_tolerated() -> None:
     assert _priority("normal") == 5
     assert _priority("high") == 8
     assert _priority("unexpected") == 5
+
+
+def test_cancel_topic_stops_linked_project_job(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    client = _message(store, -10, "client", "Работа")
+    agent.dispatcher.accept(client)
+    agent.dispatcher._route_once()
+    target = f"topic-{client['id']}"
+    store.kv_set("agent_job_index", ["job-a"])
+    store.kv_set("agent_job:job-a", {"id": "job-a", "topic_id": target, "status": "running"})
+    owner_id = store.add_message(source="telegram", chat_id=4242, msg_id="stop",
+                                 role="owner", author_id="42", author_name="Owner", ts=101,
+                                 kind="text", text="Останови эту задачу", file_id=None,
+                                 reply_to=None)
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    agent.dispatcher.accept(owner)
+
+    class AllowVerifier(SemanticAuthorization):
+        def check(self, event: Any, action: str, args: dict[str, Any]) -> dict[str, Any]:
+            return {"authorized": True}
+
+    agent.semantic_verifier = AllowVerifier(agent)
+
+    def cancel_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"], "topics": [],
+                              "controls": [{"action": "cancel_topic", "target": target}]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = cancel_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    assert store.kv_get(f"agent_topic:{target}")["cancel_requested"] is True
+    assert store.kv_get("agent_job:job-a")["cancel_requested"] is True
