@@ -11,7 +11,7 @@ from app.services.wb_marketplace_orders_service import (
     upsert_order_from_wb_row,
 )
 from tests.guards.stock_helpers import check
-from tests.test_fbs_stock_rule_service import _seed
+from tests.guards.stock_seeds import _seed
 
 
 @pytest.mark.asyncio

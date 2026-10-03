@@ -18,7 +18,7 @@ from app.services.fbs_stock_rule_service import (
 from app.services.fbs_warehouse_binding_service import set_binding_stock_pool_quantity
 from app.services.inventory_service import record_movement_and_adjust_balance
 from tests.guards.stock_helpers import check
-from tests.test_fbs_stock_rule_service import _ozon_binding, _seed
+from tests.guards.stock_seeds import _ozon_binding, _seed
 
 
 @pytest.mark.asyncio

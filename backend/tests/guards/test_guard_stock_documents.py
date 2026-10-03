@@ -6,7 +6,7 @@ from app.services import inventory_service as inventory
 from app.services import marketplace_unload_collect_service as collect
 from app.services import marketplace_unload_service as unload
 from tests.guards.stock_helpers import check, moves, total
-from tests.test_wms632_fbo_reserve_model import _fixture
+from tests.guards.stock_seeds import _fixture
 
 
 @pytest.mark.asyncio

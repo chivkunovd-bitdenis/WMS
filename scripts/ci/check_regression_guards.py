@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import ast
 import hashlib
 import json
 import os
@@ -40,6 +41,30 @@ def parse_manifest(raw: bytes) -> dict:
         if not isinstance(digest, str) or not re.fullmatch("[0-9a-f]{64}", digest):
             raise ValueError(f"Invalid SHA256: {path}")
     return manifest
+
+
+def verify_python_imports(path: Path, relative: str) -> None:
+    """Keep protected helpers as well as tests independent of ordinary test modules."""
+    try:
+        tree = ast.parse(path.read_bytes(), filename=relative)
+    except SyntaxError as exc:
+        raise ValueError(f"Invalid protected Python file: {relative}: {exc}") from exc
+    package = PurePosixPath(relative).parts[1:-1]  # backend is the import root
+    for node in ast.walk(tree):
+        modules = []
+        if isinstance(node, ast.Import):
+            modules = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if node.level:
+                parents = package[: len(package) - node.level + 1]
+                module = ".".join((*parents, module)) if module else ".".join(parents)
+            modules = [module, *(f"{module}.{alias.name}" for alias in node.names)]
+        for module in modules:
+            if module.startswith("tests.test_"):
+                raise ValueError(
+                    f"защищённый тест зависит от незащищённого файла {module}"
+                )
 
 
 def verify(root: Path, base: str, allow_bootstrap: bool = False) -> dict[str, int]:
@@ -96,6 +121,9 @@ def verify(root: Path, base: str, allow_bootstrap: bool = False) -> dict[str, in
         raise ValueError(
             "Protected files changed, added or deleted: " + ", ".join(changed)
         )
+    for relative in actual:
+        if relative.startswith(ROOTS[0] + "/") and relative.endswith(".py"):
+            verify_python_imports(root / relative, relative)
     counts = {
         "backend_tests": sum(
             p.startswith(ROOTS[0] + "/")

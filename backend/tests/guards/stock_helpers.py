@@ -1,4 +1,4 @@
-"""Shared stock observations; fixture construction reuses the existing source seed."""
+"""Shared stock observations and protected fixture construction."""
 
 import uuid
 
@@ -10,7 +10,7 @@ from app.models.inventory_movement import InventoryMovement
 from app.models.product_barcode import ProductBarcode
 from app.models.user import User
 from app.services import inventory_service as inventory
-from tests.test_fbs_shipment_source_service import _order, _seed_context
+from tests.guards.stock_seeds import _order, _seed_context
 
 
 def check(actual, expected, rule):
