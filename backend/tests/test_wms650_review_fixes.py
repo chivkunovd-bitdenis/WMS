@@ -86,25 +86,35 @@ async def _assert_distribution_matches_progress(
         box_lines = (
             await session.execute(
                 select(InboundIntakeBoxLine.box_id, InboundIntakeBoxLine.product_id,
-                       InboundIntakeBoxLine.quantity)
+                       InboundIntakeBoxLine.quantity, InboundIntakeBoxLine.posted_qty)
                 .join(InboundIntakeBox, InboundIntakeBox.id == InboundIntakeBoxLine.box_id)
                 .where(InboundIntakeBox.request_id == the_doc.request_id)
             )
         ).all()
-    by_product: dict[uuid.UUID, int] = defaultdict(int)
-    by_box: dict[tuple[uuid.UUID, uuid.UUID], int] = defaultdict(int)
+    by_pool: dict[tuple[uuid.UUID | None, uuid.UUID], int] = defaultdict(int)
     for row in rows:
-        by_product[row.product_id] += row.quantity
-        if row.box_id is not None:
-            by_box[(row.box_id, row.product_id)] += row.quantity
-    for line in lines:
-        assert by_product.get(line.product_id, 0) == line.posted_qty, (
-            "строки распределения разошлись с «разложено»",
-            line.product_id, by_product.get(line.product_id, 0), line.posted_qty,
+        by_pool[(row.box_id, row.product_id)] += row.quantity
+    box_posted: dict[uuid.UUID, int] = defaultdict(int)
+    for box_id, product_id, qty, posted_qty in box_lines:
+        # Строк короба не больше его «разложено» (иначе распределение проведёт их
+        # второй раз) и не больше самого короба.
+        assert by_pool.get((box_id, product_id), 0) <= min(qty, posted_qty), (
+            "строки короба больше его «разложено»", box_id, product_id,
+            by_pool.get((box_id, product_id), 0), posted_qty,
         )
-    capacity = {(box_id, product_id): qty for box_id, product_id, qty in box_lines}
-    for key, qty in by_box.items():
-        assert qty <= capacity.get(key, 0), ("строки короба больше короба", key, qty)
+        box_posted[product_id] += posted_qty
+    for line in lines:
+        rows_total = sum(qty for (_box, product), qty in by_pool.items()
+                         if product == line.product_id)
+        assert rows_total == line.posted_qty, (
+            "строки распределения разошлись с «разложено»", line.product_id,
+            rows_total, line.posted_qty,
+        )
+        loose = max(0, line.posted_qty - box_posted.get(line.product_id, 0))
+        assert by_pool.get((None, line.product_id), 0) <= loose, (
+            "строк россыпи больше её «разложено»", line.product_id,
+            by_pool.get((None, line.product_id), 0), loose,
+        )
 
 
 # ── 1. Изоляция россыпи ────────────────────────────────────────────────────
@@ -314,3 +324,66 @@ async def test_take_off_pallet_of_a_does_not_count_units_of_b(async_client: Asyn
     after_b = await document_state(world, world.b)
     assert after_b["posted"] == state_b["posted"]
     assert after_b["box_posted"] == state_b["box_posted"]
+
+
+# ── «Вынуть из короба» и «Распределить по ячейкам» ─────────────────────────
+
+
+async def _complete_distribution(world: World) -> int:
+    response = await world.client.post(
+        f"/operations/inbound-intake-requests/{world.a.request_id}/distribution-complete",
+        headers=world.headers,
+    )
+    return response.status_code
+
+
+@pytest.mark.asyncio
+async def test_taken_out_units_placed_loose_keep_distribution_completable(
+    async_client: AsyncClient,
+) -> None:
+    """К2 на А 1.1, «Вынуть» 2 шт Т1, затем вся россыпь Т1 (4 шт) на Б 1.1.
+
+    Строки распределения по коробу и россыпи совпадают с «разложено», и
+    «Распределить по ячейкам» → «Завершить» не отказывает (остаток не меняется).
+    """
+    world = await seed_world(async_client)
+    k2 = world.a.boxes["К2"]
+    ok(await place(world, kind="box", object_id=k2, cell="А 1.1"), "К2 на А 1.1")
+    inside = await balance_id(world, product_id=world.t1, location_id=world.cells["А 1.1"],
+                              container_id=k2)
+    take_out = uuid.uuid4()
+    ok(await place(world, kind="product", object_id=inside, qty=2, op=take_out), "Вынуть 2 шт")
+    await _assert_distribution_matches_progress(world)
+    loose = await balance_id(world, product_id=world.t1, location_id=world.sorting_id,
+                             container_id=None)
+    put_loose = uuid.uuid4()
+    ok(await place(world, kind="product", object_id=loose, cell="Б 1.1", qty=4, op=put_loose),
+       "вся россыпь Т1 на Б 1.1")
+    await _assert_distribution_matches_progress(world)
+    stock = await full_snapshot(world)
+
+    assert await _complete_distribution(world) == 200
+    assert (await full_snapshot(world))["placement"] == stock["placement"]
+    await _assert_distribution_matches_progress(world)
+
+    ok(await undo(world, put_loose), "назад: россыпь")
+    await _assert_distribution_matches_progress(world)
+    ok(await undo(world, take_out), "назад: вынуть")
+    await _assert_distribution_matches_progress(world)
+    assert await _complete_distribution(world) == 200
+
+
+@pytest.mark.asyncio
+async def test_take_out_scanned_unit_keeps_pools(async_client: AsyncClient) -> None:
+    """Доложенная сканом в короб штука, вынутая обратно, — строки по наборам сходятся."""
+    world = await seed_world(async_client)
+    k2 = world.a.boxes["К2"]
+    ok(await place(world, kind="box", object_id=world.a.boxes["К1"], cell="А 1.2"), "К1")
+    ok(await place(world, kind="box", object_id=k2, cell="А 1.1"), "К2 на А 1.1")
+    ok(await scan(world, barcode=world.t1_barcode, cell="А 1.1", to_id=k2), "Т1 сканом в К2")
+    await _assert_distribution_matches_progress(world)
+    inside = await balance_id(world, product_id=world.t1, location_id=world.cells["А 1.1"],
+                              container_id=k2)
+    ok(await place(world, kind="product", object_id=inside, qty=1), "Вынуть 1 шт")
+    await _assert_distribution_matches_progress(world)
+    assert await _complete_distribution(world) == 200

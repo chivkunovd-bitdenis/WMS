@@ -2279,6 +2279,107 @@ async def release_distribution(
     return left
 
 
+async def rebalance_distribution(
+    session: AsyncSession, request: InboundIntakeRequest
+) -> None:
+    """Строки распределения по наборам — ровно как «разложено» (WMS-650).
+
+    «Распределить по ячейкам» делит строки на наборы: каждый короб приёмки и
+    россыпь. Строки набора считаются проведёнными, пока их не больше
+    «разложено» этого набора: короба — его собственное, россыпи — документа
+    минус короба. Действия раскладки двигают штуки между наборами: вынутое из
+    короба и разложенное россыпью, доложенное сканом в короб и снятое вместе с
+    ним. После каждого такого действия и после «назад» излишек одного набора
+    переносится в недостающий набор с тем же местом строки, лишнее
+    снимается. Тогда ни одна строка не будет проведена второй раз, а проверка
+    завершения распределения не откажет на перекосе наборов.
+    """
+    from app.models.inbound_intake import InboundIntakeDistributionLine
+
+    await session.flush()
+    for line in request.lines:
+        box_targets: dict[uuid.UUID | None, int] = {
+            box.id: int(content.posted_qty)
+            for box in request.boxes
+            for content in box.lines
+            if content.product_id == line.product_id
+        }
+        targets: dict[uuid.UUID | None, int] = {
+            **box_targets,
+            None: max(0, int(line.posted_qty) - sum(box_targets.values())),
+        }
+        rows = list(
+            (
+                await session.scalars(
+                    select(InboundIntakeDistributionLine)
+                    .where(
+                        InboundIntakeDistributionLine.request_id == request.id,
+                        InboundIntakeDistributionLine.product_id == line.product_id,
+                    )
+                    .order_by(
+                        InboundIntakeDistributionLine.created_at.desc(),
+                        InboundIntakeDistributionLine.id.desc(),
+                    )
+                )
+            ).all()
+        )
+        totals: dict[uuid.UUID | None, int] = defaultdict(int)
+        for row in rows:
+            totals[row.box_id] += int(row.quantity)
+        if all(totals.get(pool, 0) == target for pool, target in targets.items()) and all(
+            pool in targets for pool in totals
+        ):
+            continue
+        # Излишек наборов: снимаем с самых новых строк, запоминая их место.
+        surplus: list[tuple[uuid.UUID, int]] = []
+        deleted: set[int] = set()
+        for row in rows:
+            excess = totals[row.box_id] - targets.get(row.box_id, 0)
+            if excess <= 0:
+                continue
+            taken = min(excess, int(row.quantity))
+            totals[row.box_id] -= taken
+            surplus.append((row.storage_location_id, taken))
+            if taken == row.quantity:
+                deleted.add(id(row))
+                await session.delete(row)
+            else:
+                row.quantity -= taken
+        # Недостача наборов: то же количество, на то же место.
+        for pool, target in targets.items():
+            deficit = target - totals.get(pool, 0)
+            while deficit > 0 and surplus:
+                location_id, available = surplus[0]
+                moved = min(deficit, available)
+                deficit -= moved
+                if moved == available:
+                    surplus.pop(0)
+                else:
+                    surplus[0] = (location_id, available - moved)
+                same = next(
+                    (
+                        row for row in rows
+                        if row.box_id == pool
+                        and row.storage_location_id == location_id
+                        and id(row) not in deleted
+                    ),
+                    None,
+                )
+                if same is not None:
+                    same.quantity += moved
+                    continue
+                created = InboundIntakeDistributionLine(
+                    request_id=request.id,
+                    product_id=line.product_id,
+                    storage_location_id=location_id,
+                    quantity=moved,
+                    box_id=pool,
+                )
+                session.add(created)
+                rows.append(created)
+    await session.flush()
+
+
 async def _return_balance_to_sorting(
     session: AsyncSession,
     *,
@@ -2374,7 +2475,13 @@ async def _return_balance_to_sorting(
         request_id=request.id,
         product_id=balance.product_id,
         quantity=linked,
-        box_id=distribution_box_id(request, source_kind, source_id),
+        # Тара снята целиком — строки её короба; товар вынут из короба —
+        # «разложено» короба не меняется, поэтому сначала строки россыпи.
+        box_id=(
+            distribution_box_id(request, source_kind, source_id)
+            if release_container_line
+            else None
+        ),
         prefer_location_id=location_id,
     )
 
@@ -2582,10 +2689,12 @@ async def place_sorting_object(
                     session, tenant_id, inbound_request_id,
                     operation_id=op_id, product_id=balance.product_id,
                     storage_location_id=cell_id, quantity=quantity,
-                    performer_id=actor_user_id,
+                    performer_id=actor_user_id, commit=False,
                 )
             except intake.InboundIntakeError as exc:
                 raise WarehouseMapError(exc.code) from exc
+            await rebalance_distribution(session, request)
+            await session.commit()
             return {"id": str(op_id), "moved_qty": quantity}
         result = await move_object(
             session,
@@ -2600,7 +2709,10 @@ async def place_sorting_object(
             inbound_request_id=inbound_request_id,
             transfer_group_id=op_id,
             event_id=op_id,
+            commit=False,
         )
+        await rebalance_distribution(session, request)
+        await session.commit()
         return {"id": str(op_id), "moved_qty": result["moved_qty"]}
 
     if (kind, object_id) not in owned:
@@ -2639,7 +2751,10 @@ async def place_sorting_object(
             transfer_group_id=op_id,
             event_id=op_id,
             from_label=holder_label,
+            commit=False,
         )
+        await rebalance_distribution(session, request)
+        await session.commit()
         return {"id": str(op_id), "moved_qty": result["moved_qty"]}
     moved = await _relocate_sorting_container(
         session,
@@ -2669,6 +2784,7 @@ async def place_sorting_object(
             to_label=to_label,
         )
     )
+    await rebalance_distribution(session, request)
     await session.commit()
     return {"id": str(op_id), "moved_qty": moved or None}
 
@@ -2736,5 +2852,6 @@ async def _return_product_to_sorting(
             to_label=to_label,
         )
     )
+    await rebalance_distribution(session, request)
     await session.commit()
     return {"id": str(op_id), "moved_qty": quantity}

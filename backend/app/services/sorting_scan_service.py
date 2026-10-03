@@ -338,5 +338,7 @@ async def scan_product(
                 target_id=str(target.id), product_id=str(line.product_id),
                 target_holder=f"obj:{to_id}" if to_id else f"cell:{cell_id}",
             )
+    # WMS-650: строки распределения по наборам (короб / россыпь) — как «разложено».
+    await warehouse_map.rebalance_distribution(session, req)
     await session.commit()
     return result

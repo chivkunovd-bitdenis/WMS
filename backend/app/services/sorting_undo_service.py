@@ -468,6 +468,7 @@ async def undo_sorting_action(
             to_label=target.from_label,
         )
     )
+    await warehouse_map.rebalance_distribution(session, request)
     await session.commit()
     return answer
 
