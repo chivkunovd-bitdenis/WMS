@@ -556,3 +556,47 @@ def test_message_that_keeps_failing_is_reported_not_looped(env: Any) -> None:
     assert env.store.messages_with_status("error")
     assert sum("обработать не получилось" in t for t in env.tg.to(OWNER_CHAT)) == 1
     assert env.tg.to(CLIENT_CHAT) == []
+
+
+def test_default_bug_goes_straight_to_analysis_without_urgency_question(env: Any) -> None:
+    """Владелец: клиента не дёргаем вопросом о срочности, её оценивает аналитик."""
+    env.cfg.limits.ask_client_urgency = False
+    script(env)
+    env.say(CLIENT_CHAT, "не работает передача поставки", msg_id="500")
+    run_until_report(env)
+    env.clock.advance(60)
+    env.pipe.tick()
+    env.flush()
+    assert env.tg.to(CLIENT_CHAT) == []
+    assert not env.store.tickets_in("await_urgency")
+    assert env.store.ticket(1)["stage"] == "await_owner"
+    assert any(c["role"] == "analyst" for c in env.llm.calls)
+
+
+def test_client_is_asked_at_most_once_per_ticket_and_at_most_two_questions(env: Any) -> None:
+    """Даже если аналитик снова просит данные после ответа клиента, второго опроса нет."""
+    env.cfg.limits.ask_client_urgency = False
+    need = dict(ANALYSIS_BUG, need_data={"why": "x", "points": ["первое", "второе", "третье", "четвёртое"]})
+    script(env, need)
+    env.say(CLIENT_CHAT, "не получается передать поставку", msg_id="9")
+    run_until_report(env)
+    env.flush()
+    asks = [t for t in env.tg.to(CLIENT_CHAT) if t.startswith("Чтобы разобраться")]
+    assert len(asks) == 1
+    assert "2. второе" in asks[0] and "третье" not in asks[0]
+    env.say(CLIENT_CHAT, "вот ответ", user=5)
+    env.pipe.tick()  # аналитик опять вернул need_data
+    env.clock.advance(60)
+    env.pipe.tick()
+    env.flush()
+    assert len([t for t in env.tg.to(CLIENT_CHAT) if t.startswith("Чтобы разобраться")]) == 1
+    assert env.store.ticket(1)["stage"] == "await_owner"
+
+
+def test_analyst_rules_require_own_investigation_before_asking() -> None:
+    from support_agent import prompts
+
+    rules = prompts.analyst_rules(prod_db=True)
+    assert "клиент делает минимум" in rules
+    assert "1–2 коротких точечных вопроса" in rules
+    assert "Никогда не спрашивай то, что клиент уже написал" in rules

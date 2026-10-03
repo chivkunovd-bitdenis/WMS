@@ -43,6 +43,7 @@ def make_config(tmp_path: Any, **over: Any) -> Config:
         },
         "wms": {"base_url": "https://wms.test/api", "agent_key": "K" * 40, "poll_interval_sec": 60},
         "limits": {"quiet_sec": 120, "batch_wait_sec": 45, "urgency_wait_sec": 900,
+                   "ask_client_urgency": True,
                    "data_wait_sec": 7200, "ci_timeout_sec": 600, "deploy_timeout_sec": 600},
         "hotfix": {"backend_bin": "/venv/bin", "deployed_sha_cmd": "echo sha",
                    "public_base_url": "https://wms.test"},

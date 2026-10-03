@@ -44,6 +44,7 @@ CHOICE_RE = re.compile(r"^\s*(?:№|номер|вариант)?\s*(\d)\s*[.)!]*\
 NIL_UUID = "00000000-0000-0000-0000-000000000000"
 ALLOWED_EXPORT_EXT = ("csv", "tsv", "txt", "json", "md")
 MAX_ANSWER_CHARS = 3000  # с запасом на служебный текст предпросмотра (лимит Telegram 4096)
+MAX_CLIENT_QUESTIONS = 2  # больше двух точечных вопросов за раз клиенту не уходит
 FORBIDDEN_IN_SUMMARY = re.compile(r"```|\b[\w/.-]+\.(py|tsx?|js|sql)\b|/app/|\b\d{9,}\b")
 OWNER_ACTION_CUES = {
     "go": re.compile(r"\b(?:кати|катим|выкатывай|выкати|делай|сделай|запускай|запусти|выпускай|"
@@ -701,7 +702,7 @@ class Pipeline:
             self.store.set_stage(tid, "report_ready", verdict="other", ready_at=self.clock(),
                                  report={"body": self._other_body(tid)})
             return
-        if category == "bug" and t["kind"] == "chat":
+        if category == "bug" and t["kind"] == "chat" and self.cfg.limits.ask_client_urgency:
             self._ask_urgency(tid)
             return
         self.store.set_stage(tid, "analysis")
@@ -771,7 +772,8 @@ class Pipeline:
             need = analysis.get("need_data")
             if (
                 need and need.get("points") and live_t["kind"] == "chat"
-                and len(live_d.get("data_requests", [])) < 2 and not live_d.get("no_asks")
+                and len(live_d.get("data_requests", [])) < self.cfg.limits.max_client_asks
+                and not live_d.get("no_asks")
             ):
                 self._ask_data(tid, need)
                 return
@@ -794,7 +796,7 @@ class Pipeline:
     def _ask_data(self, tid: int, need: dict[str, Any]) -> None:
         d = self.store.data(tid)
         requests = list(d.get("data_requests", []))
-        points = [str(p) for p in need["points"]]
+        points = [str(p) for p in need["points"]][:MAX_CLIENT_QUESTIONS]
         requests.append({"points": points, "answer": None})
         text = "Чтобы разобраться, пришлите, пожалуйста:\n" + "\n".join(
             f"{i}. {p}" for i, p in enumerate(points, 1)
