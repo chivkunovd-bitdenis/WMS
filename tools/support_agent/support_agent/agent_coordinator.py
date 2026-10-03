@@ -281,7 +281,7 @@ class AgentCoordinator:
             identifiers = {str(ticket["id"]), f"WMS-{agent.get('wms_number')}"}
             for task_id in wanted & identifiers:
                 mockup = agent.get("mockup") or {}
-                mockup_approval = mockup.get("owner_approval") or {}
+                mockup_approval = agent.get("mockup_approval") or {}
                 result[task_id] = {"ticket_id": int(ticket["id"]),
                                    "approved_version": (agent.get("owner_approval") or {}).get("version"),
                                    "description_version": agent.get("version"),

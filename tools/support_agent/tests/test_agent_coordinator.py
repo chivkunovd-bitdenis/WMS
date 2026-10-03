@@ -163,7 +163,7 @@ def test_selected_frontend_task_needs_current_description_and_mockup_approval(tm
     refused = agent._owner_tool("project_job", args, context)
     assert refused["error"] == "task_not_ready" and "mockup" in refused["reason"]
     data = store.data(tid)
-    data["agent"]["mockup"]["owner_approval"] = {"version": "v2", "url": "https://mock.test/v2"}
+    data["agent"]["mockup_approval"] = {"version": "v2", "url": "https://mock.test/v2"}
     store.patch_data(tid, **data)
     agent._submit_job = lambda _: None
     accepted = agent._owner_tool("project_job", args, context)
