@@ -67,6 +67,8 @@ class MockupRunner:
             latest = self.p.store.data(tid).get("agent") or {}
             if latest.get("version") != version:
                 return  # Публикация могла завершиться после правки; не сообщаем устаревшую ссылку.
+            if (latest.get("mockup") or {}).get("url") != link:
+                latest.pop("mockup_approval", None)
             latest["mockup"] = {"version": version, "status": "published", "url": link,
                                 "variants": res.get("variants") or [], "source_sha": sha}
             self.p.store.patch_data(tid, agent=latest, mockup_link=link)

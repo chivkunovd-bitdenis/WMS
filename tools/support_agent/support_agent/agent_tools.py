@@ -11,6 +11,7 @@ import json
 from typing import Any
 
 from .canonical_tasks import CanonicalTaskError, persist_task
+from .prod_sql import ProdSqlSettings, SqlRefused, role_for_scope, run_query
 from .trello import TrelloError, ensure_card
 
 
@@ -60,14 +61,24 @@ class AgentTools:
                     "confirm_author": "boolean",
                 },
             ),
+            self._spec(
+                "owner_digest",
+                "Notify the owner about meaningful discussion, a bug, agreement or blocker in this chat.",
+                {"text": "string", "ticket_id": "integer"},
+            ),
+            self._spec(
+                "read_data",
+                "Run a bounded read-only WMS query within the actual bound chat's seller or tenant scope.",
+                {"chat_id": "integer", "sql": "string"},
+            ),
         ]
         if scope == "owner":
             common.extend(
                 [
                     self._spec(
                         "approve_task",
-                        "Approve the current task description version from this owner message.",
-                        {"ticket_id": "integer", "version": "string"},
+                        "Approve the current description or published mockup from this owner message.",
+                        {"ticket_id": "integer", "version": "string", "kind": "string"},
                     ),
                     self._spec(
                         "queue_reply",
@@ -237,6 +248,53 @@ class AgentTools:
         self.store.kv_set(f"agent_memory:{chat_id}", memory)
         return {"saved": True, "source_message_ids": sources}
 
+    def _tool_owner_digest(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+        body = str(args.get("text") or "").strip()
+        if not body or len(body) > 3000:
+            raise ToolDenied("invalid_digest")
+        tid = args.get("ticket_id")
+        if tid:
+            self._ticket(tid, event, owner)
+        chat_id = int(event["chat_id"])
+        source = f"Чат {chat_id}, сообщение {event['msg_id']}"
+        key = f"agent_digest:{event['id']}:{int(tid or 0)}:{_digest(body)}"
+        self.p.say_owner(key, f"{source}\n{body}", int(tid) if tid else None, "agent_digest")
+        row = self.store.outbox_by_key(key)
+        return {"key": key, "status": row["status"], "owner_chat_id": self.p.cfg.telegram.owner_chat_id,
+                "source_message_id": event["id"]}
+
+    def _tool_read_data(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+        chat_id = self._chat(args.get("chat_id"), event, owner)
+        if chat_id == self.p.cfg.telegram.owner_chat_id:
+            raise ToolDenied("choose_bound_client_chat")
+        binding = self.store.binding(chat_id)
+        if binding is None or not self.p.cfg.prod_db.enabled:
+            return {"status": "unavailable", "reason": "chat_unbound_or_data_access_disabled"}
+        level = "tenant" if binding["level"] == "tenant" else "seller"
+        scope_id = str(binding["tenant_id"] if level == "tenant" else binding["seller_id"])
+        try:
+            role = role_for_scope(level, scope_id)
+        except SqlRefused:
+            return {"status": "unavailable", "reason": "invalid_binding"}
+        if getattr(self.p.llm, "role_ensurer", None) is not None and not self.p.llm._role_ready(
+            role, level, scope_id
+        ):
+            self.p.say_owner(f"agent_db_unready:{chat_id}:{event['id']}",
+                             f"Для чата {chat_id} доступ к данным пока не готов; запрос по сообщению "
+                             f"{event['msg_id']} не выполнен.", purpose="data_notice")
+            return {"status": "unavailable", "reason": "role_not_ready"}
+        cfg = self.p.cfg.prod_db
+        settings = ProdSqlSettings(ssh_host=cfg.ssh_host, ssh_user=cfg.ssh_user,
+            ssh_key_path=cfg.ssh_key_path, known_hosts=cfg.known_hosts, row_limit=cfg.row_limit,
+            timeout_sec=cfg.timeout_sec, max_bytes=cfg.max_bytes, ssh_bin=cfg.ssh_bin, db_role=role)
+        sql = str(args.get("sql") or "")
+        try:
+            result = run_query(settings, sql, on_send=lambda: self.store.kv_set(
+                f"agent_data_query:{event['id']}:{_digest(sql)}", {"chat_id": chat_id, "sent": True}))
+        except (SqlRefused, RuntimeError) as exc:
+            return {"status": "unavailable", "reason": str(exc)[:200]}
+        return {"status": "ok", "chat_id": chat_id, "data": result}
+
     def _tool_task_record(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         chat_id = self._chat(args.get("chat_id"), event, owner)
         title = str(args.get("title") or "").strip()[:160]
@@ -284,6 +342,7 @@ class AgentTools:
                 prior.pop("author_confirmation", None)
                 prior.pop("owner_approval", None)
                 prior.pop("mockup", None)
+                prior.pop("mockup_approval", None)
                 prior["version"] = version
             prior.update(
                 title=title,
@@ -353,30 +412,50 @@ class AgentTools:
         agent = dict(data.get("agent") or {})
         if not agent.get("version") or args.get("version") != agent["version"]:
             raise ToolDenied("stale_description")
-        agent["owner_approval"] = {"version": agent["version"], "message_id": event["id"]}
+        kind = str(args.get("kind") or "description")
+        if kind == "description":
+            agent["owner_approval"] = {"version": agent["version"], "message_id": event["id"]}
+        elif kind == "mockup":
+            mockup = agent.get("mockup") or {}
+            url = str(mockup.get("url") or "")
+            if mockup.get("status") != "published" or mockup.get("version") != agent["version"] \
+                    or not url.startswith("https://"):
+                raise ToolDenied("current_published_mockup_required")
+            agent["mockup_approval"] = {"version": agent["version"], "url": url,
+                                        "message_id": event["id"]}
+        else:
+            raise ToolDenied("unknown_approval_kind")
         self.store.patch_data(tid, agent=agent)
-        return {"approved_version": agent["version"], "source_message_id": event["id"]}
+        return {"approved_kind": kind, "approved_version": agent["version"],
+                "url": agent.get("mockup_approval", {}).get("url") if kind == "mockup" else None,
+                "source_message_id": event["id"]}
 
     def _tool_queue_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
-        tid = int(args["ticket_id"])
-        ticket = self._ticket(tid, event, owner)
+        tid = int(args.get("ticket_id") or 0)
         chat_id = int(args["chat_id"])
-        if chat_id != ticket["chat_id"]:
-            raise ToolDenied("recipient_ticket_mismatch")
-        agent = self.store.data(tid).get("agent") or {}
+        if (chat_id != self.p.cfg.telegram.owner_chat_id
+                and chat_id not in self.p.cfg.telegram.chats
+                and self.store.binding(chat_id) is None):
+            raise ToolDenied("recipient_chat_not_connected")
         version = str(args.get("version") or "")
-        if version != agent.get("version"):
-            raise ToolDenied("stale_description")
+        if tid:
+            ticket = self._ticket(tid, event, owner)
+            if chat_id != ticket["chat_id"]:
+                raise ToolDenied("recipient_ticket_mismatch")
+            if version and version != (self.store.data(tid).get("agent") or {}).get("version"):
+                raise ToolDenied("stale_description")
+        elif version:
+            raise ToolDenied("version_requires_ticket")
         body = str(args.get("text") or "").strip()
         if not body:
             raise ToolDenied("empty_reply")
-        key = f"agent_reply:{event['id']}:{tid}:{_digest(body)}"
+        key = f"agent_reply:{event['id']}:{chat_id}:{tid}:{_digest(body)}"
         created = self.store.queue_message(
             key=key,
             chat_id=chat_id,
             text=body,
             reply_to=args.get("reply_to"),
-            ticket_id=tid,
+            ticket_id=tid or None,
             purpose="owner_authorized",
             repeat_ok=False,
         )
