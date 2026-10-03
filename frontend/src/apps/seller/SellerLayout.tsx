@@ -17,6 +17,7 @@ import {
 } from '@mui/material'
 import MenuIcon from '@mui/icons-material/Menu'
 
+import { DeveloperRequests, type DeveloperRequestsProps } from '../../components/developer-requests/DeveloperRequests'
 import { WmsBrandMark } from '../../components/WmsBrandMark'
 import { NotificationBell } from '../../components/NotificationBell'
 import { SellerShopSidebar, type SellerShopRow } from '../../components/SellerShopSidebar'
@@ -35,6 +36,10 @@ export function visibleSellerNavItems(base: string, permissions: SellerPermissio
   const items: SellerNavItem[] = []
   if (permissions.documents) {
     items.push({ key: 'documents', label: 'Документы', to: `${base}/documents`, testId: 'nav-seller-documents' })
+    // WMS-616 D1: «FBS» — отдельный read-only раздел селлера, доступен по тому
+    // же праву «Документы» (новое право не создаётся). Стоит сразу после
+    // «Документов» — заказы FBS селлер видит как собственные документы.
+    items.push({ key: 'fbs', label: 'FBS', to: `${base}/fbs`, testId: 'nav-seller-fbs' })
   }
   if (permissions.products) {
     items.push({ key: 'products', label: 'Товары', to: `${base}/products`, testId: 'nav-seller-products' })
@@ -56,6 +61,7 @@ export function visibleSellerNavItems(base: string, permissions: SellerPermissio
 
 type Props = {
   children: ReactNode
+  developerRequests?: DeveloperRequestsProps
   onLogout: () => void
   title?: string
   userLabel?: string
@@ -75,6 +81,7 @@ type Props = {
 
 export function SellerLayout({
   children,
+  developerRequests,
   onLogout,
   title = 'Портал селлера',
   userLabel,
@@ -198,10 +205,11 @@ export function SellerLayout({
         </Box>
       </Drawer>
 
-      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 3 } }} data-testid="app-content">
+      <Box component="main" sx={{ flexGrow: 1, minWidth: 0, p: { xs: 2, md: 3 }, pb: developerRequests ? 10 : undefined }} data-testid="app-content">
         <Toolbar />
         {children}
       </Box>
+      {developerRequests && <DeveloperRequests {...developerRequests} />}
     </Box>
   )
 }

@@ -107,6 +107,8 @@ CANCEL_LIKE_WB_STATUSES = frozenset(
 )
 
 DEFECT_WB_STATUS = "defect"
+SOLD_WB_STATUS = "sold"
+SORTED_WB_STATUS = "sorted"
 
 NO_RESERVE_WB_STATUSES = CANCEL_LIKE_WB_STATUSES | {DEFECT_WB_STATUS}
 
@@ -199,9 +201,9 @@ def _local_status_from_wb_statuses(
 ) -> str:
     if _is_cancel_like_wb_status(wb_status) or _is_cancel_like_wb_status(supplier_status):
         return FBS_ORDER_STATUS_CANCELLED
-    if wb_status == "sold":
+    if wb_status == SOLD_WB_STATUS:
         return FBS_ORDER_STATUS_DONE
-    if wb_status == "sorted":
+    if wb_status == SORTED_WB_STATUS:
         return FBS_ORDER_STATUS_SORTED
     if wb_status == DEFECT_WB_STATUS:
         return FBS_ORDER_STATUS_DEFECT
@@ -757,6 +759,7 @@ async def _apply_wb_status_to_order(
         from app.services.fbs_packaging_integration_service import (
             detach_cancelled_order_from_supply,
         )
+        from app.services.fbs_picking_service import release_picks_of_cancelled_order
 
         order.status = FBS_ORDER_STATUS_CANCELLED
         await reverse_fbs_shipment_if_needed(
@@ -768,6 +771,10 @@ async def _apply_wb_status_to_order(
         # работы не было. Сторно идёт ровно сюда — руками такой заказ отменить
         # нельзя, статусы sorted и done в отмену не пускают.
         await reverse_fbs_order_billing(session, order, performer_id=actor_user_id)
+        # Штука, снятая подбором на сортировку, возвращается в ячейку/тару.
+        await release_picks_of_cancelled_order(
+            session, order.tenant_id, order, actor_user_id=actor_user_id,
+        )
         await detach_cancelled_order_from_supply(
             session,
             order.tenant_id,
@@ -776,7 +783,7 @@ async def _apply_wb_status_to_order(
         )
         await _release_reservation(session, order)
         return
-    if normalized_wb == "sold":
+    if normalized_wb == SOLD_WB_STATUS:
         order.status = FBS_ORDER_STATUS_DONE
         # Склад здесь не трогаем ничем. Остаток снимает только наша передача
         # поставки маркетплейсу — правило владельца OWN-20.
@@ -784,7 +791,7 @@ async def _apply_wb_status_to_order(
         await _release_reservation(session, order)
         await _charge_confirmed_order(session, order)
         return
-    if normalized_wb == "sorted":
+    if normalized_wb == SORTED_WB_STATUS:
         order.status = FBS_ORDER_STATUS_SORTED
         await _charge_confirmed_order(session, order)
         return

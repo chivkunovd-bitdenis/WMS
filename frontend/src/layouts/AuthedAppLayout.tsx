@@ -14,14 +14,22 @@ import {
 } from '@mui/material'
 import { alpha } from '@mui/material/styles'
 
+import { DeveloperRequests, type DeveloperRequestsProps } from '../components/developer-requests/DeveloperRequests'
+import type { HelpButtonCorner } from '../components/developer-requests/useHelpButtonBottom'
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
 import { AssistantPanel } from '../components/assistant/AssistantPanel'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
 
+// Кнопка помощника WMS-433 стоит в правом нижнем углу: 24 px от краёв, высота 40
+// (EDGE_GAP и BUTTON_HEIGHT в AssistantPanel). Когда она есть, кнопка «?» встаёт
+// над ней в той же колонке с зазором 12 px, а не под неё.
+const HELP_ABOVE_ASSISTANT: HelpButtonCorner = { right: 24, bottom: 24 + 40 + 12 }
+
 type Props = {
   children: ReactNode
+  developerRequests?: DeveloperRequestsProps
   onLogout: () => void
   title?: string
   subtitle?: string
@@ -42,6 +50,7 @@ type Props = {
 
 export function AuthedAppLayout({
   children,
+  developerRequests,
   onLogout,
   userLabel,
   userJobTitle,
@@ -53,6 +62,7 @@ export function AuthedAppLayout({
   assistantProfile = null,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
+  const assistantShown = assistantProfile?.assistant_enabled === true
   if (portal === 'seller') {
     const drawerWidth = 240
     return (
@@ -141,10 +151,11 @@ export function AuthedAppLayout({
           </Box>
         </Drawer>
 
-        <Box component="main" sx={{ flexGrow: 1, p: 3 }} data-testid="app-content">
+        <Box component="main" sx={{ flexGrow: 1, p: 3, pb: developerRequests ? 10 : 3 }} data-testid="app-content">
           <Toolbar />
           {children}
         </Box>
+        {developerRequests && <DeveloperRequests {...developerRequests} />}
       </Box>
     )
   }
@@ -344,8 +355,9 @@ export function AuthedAppLayout({
           flexGrow: 1,
           p: 3,
           // WMS-433: снизу запас под кнопку помощника в углу — при прокрутке до
-          // конца последняя строка таблицы остаётся над ней (R1).
-          pb: 10,
+          // конца последняя строка таблицы остаётся над ней (R1). Если над
+          // помощником стоит ещё и «?», запас покрывает обе кнопки.
+          pb: assistantShown && developerRequests ? 16 : assistantShown || developerRequests ? 10 : 3,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}
         data-testid="app-content"
@@ -361,6 +373,12 @@ export function AuthedAppLayout({
       {assistantProfile?.assistant_enabled === true ? (
         <AssistantPanel profile={assistantProfile} />
       ) : null}
+      {developerRequests && (
+        <DeveloperRequests
+          {...developerRequests}
+          corner={assistantShown ? HELP_ABOVE_ASSISTANT : undefined}
+        />
+      )}
     </Box>
   )
 }

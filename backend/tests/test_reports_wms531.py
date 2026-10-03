@@ -14,7 +14,7 @@ from __future__ import annotations
 import io
 import time
 import uuid
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta, tzinfo
 
 import pytest
 from httpx import AsyncClient
@@ -545,13 +545,23 @@ async def test_all_movement_types_get_correct_label_document_and_group(
 
 @pytest.mark.asyncio
 async def test_equation_holds_across_periods_products_seller_and_overview(
-    async_client: AsyncClient,
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """WMS-531 C2/C3/C4/C7/C8/C9(частично R7-R10): было+приход-расход=стало на
     товаре, на селлере (сумма товаров) и на плитках (сумма по всем товарам) —
     и для прошлого месяца (факт на дату), и для текущего («Остаток сейчас»).
     Товар без движений в периоде виден, если у него ненулевое было/стало;
     товар без движений НИКОГДА не виден, если и то и другое ноль (R9)."""
+    from app.services import reporting_service
+
+    class SeptemberClock(datetime):
+        @classmethod
+        def now(cls, tz: tzinfo | None = None) -> SeptemberClock:
+            fixed = cls(2026, 9, 25, 12, tzinfo=UTC)
+            return fixed.astimezone(tz) if tz else fixed.replace(tzinfo=None)
+
+    # Fixtures describe August as past and September as current, independent of CI's date.
+    monkeypatch.setattr(reporting_service, "datetime", SeptemberClock)
     headers, tenant_id, _user_id = await _org(async_client, name="Wms531eq")
     seller_id = await _seller(async_client, headers, "Equation seller")
     warehouse_id, location_id = await _warehouse_location(async_client, headers, name="eqwh")

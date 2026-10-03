@@ -470,6 +470,20 @@ async def create_manual_task(
     return loaded
 
 
+def _line_has_progress(line: PackagingTaskLine) -> bool:
+    # Printing happens before picking. Deleting such a row clears the code and
+    # print-history foreign keys (ON DELETE SET NULL), losing their binding.
+    return any(
+        value > 0
+        for value in (
+            line.qty_packed_in_task,
+            line.qty_confirmed_packed,
+            line.qty_marking_printed,
+            line.qty_marking_external,
+        )
+    )
+
+
 async def sync_lines_from_unload_plan(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -543,9 +557,9 @@ async def sync_lines_from_unload_plan(
 
     for product_id, ln in existing.items():
         if product_id not in seen:
-            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+            if _line_has_progress(ln):
                 pick_changed_with_progress = True
-            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+            else:
                 await session.delete(ln)
 
     task.pick_resync_warning = pick_changed_with_progress
@@ -644,9 +658,9 @@ async def sync_lines_from_pick_allocations(
             )
     for product_id, ln in existing.items():
         if product_id not in seen:
-            if ln.qty_packed_in_task > 0 or ln.qty_confirmed_packed > 0:
+            if _line_has_progress(ln):
                 pick_changed_with_progress = True
-            if ln.qty_packed_in_task == 0 and ln.qty_confirmed_packed == 0:
+            else:
                 await session.delete(ln)
 
     task.pick_resync_warning = pick_changed_with_progress
@@ -1527,3 +1541,222 @@ async def assert_unload_marking_done(
     if task is not None:
         await _assert_marking_ready_for_full_completion(session, tenant_id, task)
         return
+
+
+async def check_scan_undo(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    order_id: uuid.UUID,
+    scan_id: uuid.UUID | None,
+    box_id: uuid.UUID | None,
+    acting_user_id: uuid.UUID,
+) -> None:
+    """WMS-631 R19/Д20: refuse a step back before any part of it is changed."""
+    from app.models.document_event import DocumentEvent
+    from app.models.fbs_order import FBS_ORDER_MARKING_FROZEN_STATUSES, FbsOrder
+    from app.models.fbs_packing_box import FbsPackingBox
+    from app.models.fbs_supply import FbsSupply
+
+    supply = await session.scalar(
+        select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+    )
+    if supply is None or supply.marketplace != "wb":
+        raise PackagingTaskServiceError("supply_not_found")
+    order = await session.scalar(
+        select(FbsOrder).where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
+    )
+    if order is None:
+        raise PackagingTaskServiceError("order_not_found")
+    if order.supply_id != supply_id:
+        raise PackagingTaskServiceError(
+            "scan_undo_order_moved",
+            message="Заказ перенесён в другую поставку — этот скан не отменить.",
+        )
+    if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
+        raise PackagingTaskServiceError(
+            "order_frozen", message="Заказ уже передан — этот скан не отменить."
+        )
+    if supply.packaging_task_id is not None:
+        task_status = await session.scalar(
+            select(PackagingTask.status).where(PackagingTask.id == supply.packaging_task_id)
+        )
+        if task_status in (STATUS_DONE, STATUS_CANCELLED):
+            raise PackagingTaskServiceError(
+                "scan_undo_task_closed",
+                message="Задание упаковки завершено — этот скан уже не отменить.",
+            )
+    if scan_id is not None:
+        selection = await session.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.id == scan_id,
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.document_id == supply_id,
+            )
+        )
+        payload = selection.payload_json or {} if selection is not None else {}
+        if (
+            selection is None
+            or payload.get("kind") != "wms514_scan_auto_print"
+            or payload.get("order_id") != str(order_id)
+            or selection.actor_user_id != acting_user_id
+        ):
+            raise PackagingTaskServiceError("scan_selection_not_found")
+    if box_id is not None:
+        box = await session.scalar(
+            select(FbsPackingBox.id).where(
+                FbsPackingBox.id == box_id,
+                FbsPackingBox.tenant_id == tenant_id,
+                FbsPackingBox.supply_id == supply_id,
+            )
+        )
+        if box is None:
+            raise PackagingTaskServiceError("box_assignment_not_found")
+
+
+async def undo_fbs_scan_unit(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    *,
+    order_id: uuid.UUID,
+    pack_idempotency_key: str | None,
+    box_id: uuid.UUID | None,
+    scan_id: uuid.UUID | None,
+    release_selection: bool,
+    acting_user_id: uuid.UUID,
+) -> None:
+    """WMS-631 R19: undo what one WB packing scan did, in one transaction.
+
+    Unpacks exactly the unit packed under this scan's pack key, takes the order
+    out of the box this scan put it in, and (when asked) releases the scan's
+    selection so the order is a candidate again.  Every part is a no-op when it
+    was already undone, so a repeated request undoes nothing twice.
+    """
+    from app.models.fbs_order import PACK_STATUS_PENDING, FbsOrder
+    from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
+    from app.models.fbs_supply import FbsSupply
+    from app.services import fbs_packing_box_service as box_svc
+    from app.services import fbs_scan_auto_print_service as scan_print_svc
+
+    try:
+        supply = await session.scalar(
+            select(FbsSupply)
+            .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        if supply is None or supply.marketplace != "wb":
+            raise PackagingTaskServiceError("supply_not_found")
+        order = await session.scalar(
+            select(FbsOrder)
+            .where(FbsOrder.id == order_id, FbsOrder.tenant_id == tenant_id)
+            .with_for_update()
+        )
+        if order is None:
+            raise PackagingTaskServiceError("order_not_found")
+        if order.supply_id != supply_id:
+            raise PackagingTaskServiceError(
+                "scan_undo_order_moved",
+                message="Заказ перенесён в другую поставку — этот скан не отменить.",
+            )
+        from app.models.fbs_order import FBS_ORDER_MARKING_FROZEN_STATUSES
+
+        if order.status in FBS_ORDER_MARKING_FROZEN_STATUSES:
+            raise PackagingTaskServiceError(
+                "order_frozen", message="Заказ уже передан — этот скан не отменить."
+            )
+        if supply.packaging_task_id is not None:
+            supply_task = await session.get(PackagingTask, supply.packaging_task_id)
+            if supply_task is not None and supply_task.status in (STATUS_DONE, STATUS_CANCELLED):
+                raise PackagingTaskServiceError(
+                    "scan_undo_task_closed",
+                    message="Задание упаковки завершено — этот скан уже не отменить.",
+                )
+        if pack_idempotency_key:
+            fulfillment = await session.scalar(
+                select(FbsPackagingFulfillment).where(
+                    FbsPackagingFulfillment.tenant_id == tenant_id,
+                    FbsPackagingFulfillment.fbs_order_id == order.id,
+                    FbsPackagingFulfillment.pack_idempotency_key == pack_idempotency_key,
+                    FbsPackagingFulfillment.undone_at.is_(None),
+                )
+            )
+            if fulfillment is not None:
+                task = await get_task(session, tenant_id, fulfillment.packaging_task_id)
+                if task is None or task.status in (STATUS_DONE, STATUS_CANCELLED):
+                    raise PackagingTaskServiceError("scan_undo_task_closed")
+                line = next(
+                    (ln for ln in task.lines if ln.id == fulfillment.packaging_task_line_id),
+                    None,
+                )
+                if line is None:
+                    raise PackagingTaskServiceError("line_not_found")
+                now = datetime.now(UTC)
+                fulfillment.undone_at = now
+                line.qty_packed_in_task = max(0, int(line.qty_packed_in_task) - 1)
+                other = await session.scalar(
+                    select(FbsPackagingFulfillment.id)
+                    .where(
+                        FbsPackagingFulfillment.fbs_order_id == order.id,
+                        FbsPackagingFulfillment.undone_at.is_(None),
+                        FbsPackagingFulfillment.id != fulfillment.id,
+                    )
+                    .limit(1)
+                )
+                if other is None:
+                    order.pack_status = PACK_STATUS_PENDING
+                    order.packed_at = None
+                # The event of exactly this scan's pack (same id rule as record_pack_progress).
+                pack_event = await session.get(
+                    PackagingTaskEvent,
+                    uuid.uuid5(tenant_id, f"pack-progress:{pack_idempotency_key}"),
+                )
+                if pack_event is not None and (
+                    pack_event.tenant_id != tenant_id
+                    or pack_event.task_id != task.id
+                    or pack_event.line_id != line.id
+                    or pack_event.reversed_at is not None
+                ):
+                    pack_event = None
+                if pack_event is not None:
+                    pack_event.reversed_at = now
+                    pack_event.reversed_by_user_id = acting_user_id
+                _touch_task(task)
+                undo_event = await _add_task_event(
+                    session,
+                    task,
+                    action=PACKAGING_EVENT_UNDO_LAST,
+                    quantity=1,
+                    line=line,
+                    acting_user_id=acting_user_id,
+                    note="undo packing scan",
+                )
+                await record_packaging_event(
+                    session,
+                    task=task,
+                    event=undo_event,
+                    line=line,
+                    original_event_id=pack_event.id if pack_event is not None else None,
+                )
+                await billing_svc.finalize_task_billing(
+                    session, task, completed_by_user_id=acting_user_id
+                )
+        if box_id is not None:
+            try:
+                await box_svc.remove_order(session, tenant_id, supply_id, box_id, order.id)
+            except box_svc.FbsPackingBoxError as exc:
+                if exc.code != "box_assignment_not_found":
+                    raise PackagingTaskServiceError(exc.code) from exc
+        if release_selection and scan_id is not None:
+            try:
+                await scan_print_svc.cancel_selection(
+                    session, tenant_id, supply_id, scan_id,
+                    actor_user_id=acting_user_id, order_id=order.id,
+                )
+            except scan_print_svc.FbsScanAutoPrintError as exc:
+                raise PackagingTaskServiceError(exc.code) from exc
+        await session.commit()
+    except Exception:
+        await session.rollback()
+        raise

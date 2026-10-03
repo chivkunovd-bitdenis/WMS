@@ -299,7 +299,8 @@ async def test_mp_collection_cannot_spend_fbs_reservation_across_locations(
         actor=actor,
     )
     await s.commit()
-    assert sum((await balances(s, product)).values()) == 1
+    # WMS-632: подбор FBO остаток не списывает.
+    assert sum((await balances(s, product)).values()) == 2
 
 
 @pytest.mark.asyncio

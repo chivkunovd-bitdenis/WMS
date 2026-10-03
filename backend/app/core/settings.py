@@ -53,6 +53,28 @@ class Settings(BaseSettings):
         default=False,
         description="Production create requires separate release authorization; default closed.",
     )
+    trello_api_key: str | None = Field(default=None, repr=False)
+    trello_token: str | None = Field(default=None, repr=False)
+    trello_board_id: str | None = None
+    trello_review_list_id: str | None = None
+    trello_queued_list_id: str | None = None
+    trello_in_progress_list_id: str | None = None
+    trello_completed_list_id: str | None = None
+    trello_client_label_id: str | None = Field(
+        default=None, description="Existing colored Клиент label on the private board.",
+    )
+    trello_sync_interval_sec: int = Field(default=60, ge=30)
+    support_agent_key: str | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices("WMS_SUPPORT_AGENT_KEY", "SUPPORT_AGENT_KEY"),
+        description=(
+            "WMS-641: machine key of the support dispatcher agent for READ-ONLY access to "
+            "developer requests (GET /support-agent/developer-requests). Unset or shorter "
+            "than 32 characters: the endpoints answer 404 and the access is switched off."
+        ),
+    )
+
     wildberries_content_api_base: str = Field(
         default="https://content-api.wildberries.ru",
         description="WB Content API host (override in tests/mocks).",

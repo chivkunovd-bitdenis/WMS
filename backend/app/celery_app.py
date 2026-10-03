@@ -25,11 +25,16 @@ celery_app = Celery(
     include=[
         "app.tasks.background_jobs",
         "app.tasks.billing_tasks",
+        "app.tasks.developer_requests",
         "app.tasks.withdrawal_recovery",
     ],
 )
 celery_app.conf.task_ignore_result = True
 celery_app.conf.beat_schedule = {
+    "developer-requests-sync": {
+        "task": "wms.developer_requests_sync",
+        "schedule": float(settings.trello_sync_interval_sec),
+    },
     "withdrawal-poll": {"task": "wms.withdrawal_poll", "schedule": 2.0},
     "wb-catalog-hourly": {
         "task": "wms.wb_catalog_hourly_sync",

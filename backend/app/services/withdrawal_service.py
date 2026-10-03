@@ -20,6 +20,7 @@ from app.db.withdrawal_repository import (
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_withdrawal import WithdrawalItem, WithdrawalOperation
+from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
 from app.services.withdrawal_provider_ki import provider_ki
 
 INTEGRATION_GATE = "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
@@ -54,6 +55,18 @@ async def _new_items(
         )
         try:
             item.provider_cis = provider_ki(marking.value)
+            price = await resolve_wb_product_cost(
+                session,
+                tenant_id=scope.tenant_id,
+                seller_id=scope.seller_id,
+                order_id=order.id,
+            )
+            item.price_snapshot_id = price.snapshot_id
+            item.product_cost = price.product_cost
+        except WbPriceDataError as exc:
+            item.price_snapshot_id = exc.snapshot_id
+            item.state = "failed"
+            item.error = {"source": "local", "code": exc.code, "message": str(exc)}
         except ValueError as exc:
             item.state = "failed"
             item.error = {"source": "local", "code": str(exc)}

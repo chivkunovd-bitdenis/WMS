@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 import uuid
 from typing import Annotated, Literal, cast
 
@@ -13,6 +14,7 @@ from app.api.fbs_errors import envelope_from_exc
 from app.db.session import get_db
 from app.models.user import User
 from app.services import fbs_kiz_service as kiz_svc
+from app.services.wildberries_client import short_kiz_write_timeout
 
 router = APIRouter(
     prefix="/operations/fbs-orders",
@@ -45,6 +47,7 @@ class FbsKizLookupOut(BaseModel):
     # что TSD ждёт либо "wb", либо "ozon" — третьего варианта нет.
     marketplace: Literal["wb", "ozon"] = "wb"
     external_order_id: str | None = None
+    requires_honest_sign: bool = False
 
 
 class FbsKizValidateBody(BaseModel):
@@ -67,6 +70,8 @@ class FbsKizCommitPairIn(BaseModel):
 class FbsKizCommitBody(BaseModel):
     pairs: list[FbsKizCommitPairIn] = Field(min_length=1, max_length=200)
     idempotency_key: str = Field(min_length=1, max_length=128)
+    # WMS-635 Q1: a packing scan never waits long for WB (short write timeout).
+    scan_no_wb_wait: bool = False
 
 
 class FbsKizCommitRowOut(BaseModel):
@@ -138,6 +143,7 @@ def _lookup_out(result: kiz_svc.FbsKizLookup) -> FbsKizLookupOut:
         # только "wb"/"ozon" (см. _order_out в fbs_orders.py).
         marketplace=cast(Literal["wb", "ozon"], result.marketplace),
         external_order_id=result.external_order_id,
+        requires_honest_sign=result.requires_honest_sign,
     )
 
 
@@ -211,15 +217,17 @@ async def commit_fbs_order_kiz(
         )
         for item in body.pairs
     ]
+    wait = short_kiz_write_timeout() if body.scan_no_wb_wait else contextlib.nullcontext()
     async with httpx.AsyncClient() as http_client:
-        rows = await kiz_svc.commit_kiz_pairs(
-            session,
-            user.tenant_id,
-            user.id,
-            pairs,
-            body.idempotency_key,
-            http_client,
-        )
+        with wait:
+            rows = await kiz_svc.commit_kiz_pairs(
+                session,
+                user.tenant_id,
+                user.id,
+                pairs,
+                body.idempotency_key,
+                http_client,
+            )
     return [_commit_row_out(row) for row in rows]
 
 

@@ -35,7 +35,11 @@ def build_ozon_transport(*, blocked_operation: str | None = None) -> Marketplace
     if ozon_live_api_enabled():
         return HttpxOzonMarketplaceTransport()
     if blocked_operation is None:
-        return FakeMarketplaceTransport()
+        return FakeMarketplaceTransport(
+            endpoint_responses={
+                "/v4/product/info/attributes": {"result": [], "last_id": ""},
+            }
+        )
     return FakeMarketplaceTransport(
         errors={blocked_operation: MarketplaceProviderError("ozon", 403, {"code": 7})}
     )

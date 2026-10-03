@@ -200,7 +200,13 @@ async def _finish_local_cancellation(
     from app.services.fbs_packaging_integration_service import (
         detach_cancelled_order_from_supply,
     )
+    from app.services.fbs_picking_service import release_picks_of_cancelled_order
 
+    # Подбор снимаем до отцепления от поставки: возврат штуки в ячейку/тару
+    # идёт тем же путём, что отмена подбора, и нужна ещё связь заказа с поставкой.
+    await release_picks_of_cancelled_order(
+        session, tenant_id, order, actor_user_id=actor_user_id,
+    )
     await detach_cancelled_order_from_supply(
         session,
         tenant_id,

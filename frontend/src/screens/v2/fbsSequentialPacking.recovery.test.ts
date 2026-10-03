@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePackingScanDeps } from './fbsSequentialPacking'
 import type { FbsScanAutoPrintResult, FbsWorkspace } from './fbsApi'
 
+const QR = { printQr: true, printChz: false, reprintChz: false }
+
 beforeEach(() => window.localStorage.clear())
 afterEach(() => vi.unstubAllGlobals())
 
@@ -27,18 +29,18 @@ describe('WMS-604 original packing box survives recovery', () => {
     }))
     const make = (box: string | null) => makePackingScanDeps('token', () => ({}), () => workspace, () => undefined, () => undefined, () => true, () => box)
     const first = make('original-box')
-    const key = first.claim('barcode')
-    if (failure === 'selection') await expect(first.select('barcode', key)).rejects.toThrow('response lost')
+    const key = first.claim('barcode', QR).key
+    if (failure === 'selection') await expect(first.select('barcode', key, QR)).rejects.toThrow('response lost')
     else {
-      const selected = await first.select('barcode', key)
+      const selected = await first.select('barcode', key, QR)
       first.remember('barcode', selected)
-      await expect(first.pack(selected)).rejects.toThrow('response lost')
+      await expect(first.pack(selected, false, 'barcode', null)).rejects.toThrow('response lost')
     }
     const resumed = make('different-box-after-reload')
-    expect(resumed.claim('barcode')).toBe(key)
-    const selected = await resumed.select('barcode', key)
+    expect(resumed.claim('barcode', QR).key).toBe(key)
+    const selected = await resumed.select('barcode', key, QR)
     resumed.remember('barcode', selected)
-    await resumed.pack(selected)
+    await resumed.pack(selected, false, 'barcode', null)
     expect(calls.filter((path) => path.includes('/boxes/'))).toEqual(['/api/operations/fbs-supplies/supply-1/boxes/original-box/orders'])
   })
   it('keeps an explicit no-box selection instead of capturing a newly opened box on retry', async () => {
@@ -48,11 +50,11 @@ describe('WMS-604 original packing box survives recovery', () => {
     vi.stubGlobal('fetch', fetcher)
     const make = (box: string | null) => makePackingScanDeps('token', () => ({}), () => workspace, () => undefined, () => undefined, () => true, () => box)
     const first = make(null)
-    const key = first.claim('barcode')
-    first.remember('barcode', await first.select('barcode', key))
+    const key = first.claim('barcode', QR).key
+    first.remember('barcode', await first.select('barcode', key, QR))
     const resumed = make('new-box')
-    expect(resumed.claim('barcode')).toBe(key)
-    await resumed.pack(await resumed.select('barcode', key))
+    expect(resumed.claim('barcode', QR).key).toBe(key)
+    await resumed.pack(await resumed.select('barcode', key, QR), false, 'barcode', null)
     expect(fetcher.mock.calls.some(([path]) => path.includes('/boxes/'))).toBe(false)
   })
 })

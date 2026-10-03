@@ -279,7 +279,8 @@ async def test_self_content_token_does_not_enable_marketplace_without_scope(
     body = response.json()
     assert body["validation_ok"] is False
     assert body["validation_error"] == "missing_marketplace_scope"
-    assert body["cards_received"] == 1
+    assert body["cards_received"] == 0
+    assert body["catalog_job"]["state"] == "queued"
     async with SessionLocal() as session:
         content, supplies = await get_decrypted_tokens_for_seller(
             session, tenant_id, seller_id
@@ -327,7 +328,7 @@ async def test_self_content_token_keeps_200_when_marketplace_validation_unavaila
 
 
 @pytest.mark.asyncio
-async def test_self_content_token_returns_traced_error_when_task_registration_fails(
+async def test_self_content_token_returns_failed_job_when_task_registration_fails(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -365,24 +366,20 @@ async def test_self_content_token_returns_traced_error_when_task_registration_fa
         json={"content_api_token": "one-wb-key"},
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"code", "message", "ref"}
-    assert body["code"] == "token_save_failed"
-    assert "Wildberries" in body["message"]
-    assert len(body["ref"]) == 12
-    int(body["ref"], 16)
+    assert body["catalog_job"]["state"] == "failed"
+    assert set(body["catalog_job"]) == {"id", "marketplace", "state"}
     log_text = caplog.text
-    assert f"ref={body['ref']}" in log_text
+    assert f"job={body['catalog_job']['id']}" in log_text
     assert f"tenant_id={tenant_id}" in log_text
     assert f"seller_id={seller_id}" in log_text
-    assert "cards_count=2" in log_text
-    assert "exception_type=RuntimeError" in log_text
+    assert "catalog job dispatch failed" in log_text
     assert "one-wb-key" not in log_text
 
 
 @pytest.mark.asyncio
-async def test_self_content_token_returns_product_conflict_for_integrity_error(
+async def test_self_content_token_reports_background_import_failure(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
     caplog: pytest.LogCaptureFixture,
@@ -408,11 +405,11 @@ async def test_self_content_token_returns_product_conflict_for_integrity_error(
         fake_fetch_marketplace_seller_warehouses,
     )
     monkeypatch.setattr(
-        "app.api.wildberries_integration.upsert_products_from_wb_cards",
+        "app.services.wildberries_product_sync_service.upsert_products_from_wb_cards",
         fail_product_upsert,
     )
-    caplog.set_level("ERROR", logger="app.api.wildberries_integration")
-    headers, tenant_id, seller_id = await _create_authenticated_seller(async_client)
+    caplog.set_level("ERROR", logger="app.services.background_job_service")
+    headers, _tenant_id, _seller_id = await _create_authenticated_seller(async_client)
 
     response = await async_client.post(
         "/integrations/wildberries/self/content-token",
@@ -420,18 +417,17 @@ async def test_self_content_token_returns_product_conflict_for_integrity_error(
         json={"content_api_token": "conflict-wb-key"},
     )
 
-    assert response.status_code == 409
+    assert response.status_code == 200
     body = response.json()
-    assert set(body) == {"code", "message", "ref"}
-    assert body["code"] == "product_conflict"
-    assert "конфликт артикулов" in body["message"]
-    assert len(body["ref"]) == 12
-    int(body["ref"], 16)
+    assert body["catalog_job"]["state"] == "queued"
+    job = await async_client.get(
+        f"/operations/background-jobs/{body['catalog_job']['id']}", headers=headers
+    )
+    assert job.status_code == 200
+    assert job.json()["state"] == "failed"
+    assert job.json()["error_message"] == "Не удалось выполнить задачу"
     log_text = caplog.text
-    assert f"ref={body['ref']}" in log_text
-    assert f"tenant_id={tenant_id}" in log_text
-    assert f"seller_id={seller_id}" in log_text
-    assert "cards_count=1" in log_text
+    assert f"job={body['catalog_job']['id']}" in log_text
     assert "exception_type=IntegrityError" in log_text
     assert "conflict-wb-key" not in log_text
 

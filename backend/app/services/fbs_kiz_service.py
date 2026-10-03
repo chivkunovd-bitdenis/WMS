@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import uuid
 from dataclasses import dataclass
@@ -15,7 +16,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.core.settings import settings
+from app.models.document_event import (
+    DOCUMENT_TYPE_FBS_SUPPLY,
+    EVENT_DATA_CHANGED,
+    SOURCE_SYSTEM,
+    SOURCE_USER,
+    DocumentEvent,
+)
 from app.models.fbs_order import (
+    CHECK_STATUS_ERROR,
     CHECK_STATUS_NEW,
     FBS_ORDER_MARKING_FROZEN_STATUSES,
     FBS_ORDER_MARKING_WRITE_STATUSES,
@@ -54,6 +63,7 @@ from app.services import fbs_marking_service as marking_svc
 from app.services import fbs_scan_auto_print_service as scan_print_svc
 from app.services import marking_code_service as marking_code_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
+from app.services.document_event_service import record_document_event
 from app.services.marketplace_scope import is_wildberries
 from app.services.operation_fact_service import normalize_marketplace
 from app.services.ozon_kiz_service import OzonKizCommitOutcome, OzonKizError
@@ -63,15 +73,23 @@ from app.services.ozon_marking_position_service import (
     resolve_marking_position,
 )
 from app.services.wb_card_enrichment import first_photo_url_from_card
-from app.services.wildberries_client import put_marketplace_order_meta
+from app.services.wildberries_client import kiz_scan_skips_wb_readback, put_marketplace_order_meta
 from app.services.wildberries_errors import WildberriesClientError
-from app.services.wildberries_fbs_client import delete_marketplace_order_meta
+from app.services.wildberries_fbs_client import (
+    delete_marketplace_order_meta,
+    fetch_marketplace_orders_meta_batch,
+)
 
 _MISSING_PRODUCT_NAME = "Товар не сопоставлен"
 _POOL_MARKING_SOURCE = "pool"
 _OPERATOR_MARKING_SOURCE = "operator"
 _EXTERNAL_FBS_MARKING_SOURCE = "external_fbs"
 _VOID_REPLACED_REASON = "replaced_by_external_fbs_kiz"
+# WMS-635 R4: the KIZ is bound in WMS although WB refused it (row marked red).
+KIZ_BOUND_WB_REJECTED = "wb_rejected_kept"
+# WMS-631 R19: what one binding replaced, so the scan that made it can be undone.
+KIZ_BOUND_EVENT_KIND = "wms631_kiz_bound"
+_KIZ_PREVIOUS_UNKNOWN = "Прежний КИЗ не восстановлен — отсканируйте его в поле строки."
 _VOID_OPERATOR_CANCEL_REASON = marking_code_svc.MARKING_OPERATOR_CANCEL_REASON
 _REPLACEMENT_RESTORE_FAILED = "wb_replacement_restore_failed"
 _GS = "\x1d"
@@ -200,6 +218,8 @@ class FbsKizLookup:
     block_reason: str | None
     marketplace: str = "wb"
     external_order_id: str | None = None
+    # WMS-631: the same rule that decides a KIZ for the order tape.
+    requires_honest_sign: bool = False
 
 
 @dataclass(frozen=True)
@@ -656,6 +676,22 @@ def _product_payload(order: FbsOrder, image_url: str | None) -> FbsKizProduct:
     )
 
 
+async def _scan_requires_honest_sign(
+    session: AsyncSession, order: FbsOrder, current: FbsOrderMarking | None
+) -> bool:
+    """The order-tape rule, including «Сдать без Честного знака» (no code → none needed)."""
+    from app.services.fbs_order_tape_print_service import order_requires_sgtin
+
+    if not order_requires_sgtin(order):
+        return False
+    if order.supply_id is None or current is not None:
+        return True
+    skipped_at = await session.scalar(
+        select(FbsSupply.honest_sign_skipped_at).where(FbsSupply.id == order.supply_id)
+    )
+    return skipped_at is None
+
+
 async def _binding_lookup_for_order(
     session: AsyncSession,
     order: FbsOrder,
@@ -688,6 +724,7 @@ async def _binding_lookup_for_order(
         block_reason=None,
         marketplace=normalize_marketplace(order.marketplace) or "wb",
         external_order_id=order.external_order_id,
+        requires_honest_sign=await _scan_requires_honest_sign(session, order, current),
     )
 
 
@@ -1386,6 +1423,9 @@ async def _commit_one_kiz_pair(
         and current.meta_status != META_STATUS_REJECTED
     ):
         operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None and kiz_scan_skips_wb_readback():
+            # WMS-642: a repeated scan of a queued code never calls WB; the worker sends it.
+            raise FbsKizError("wb_pending_confirmation", persist_failure_state=True)
         if operation is not None:
             token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
             try:
@@ -1490,6 +1530,10 @@ async def _commit_one_kiz_pair(
         new_error = exc
     except marking_svc.FbsMarkingError as exc:
         new_write_accepted = isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError)
+        # WMS-640: the packing scan does not send the code itself; the old code
+        # (if any) is already deleted, so the new one waits for the worker.
+        scan_deferred = kiz_scan_skips_wb_readback() and exc.code == "wb_transport_error"
+        new_write_accepted = new_write_accepted or scan_deferred
         new_error = _marking_error_to_kiz(exc)
     except WildberriesClientError as exc:
         new_error = FbsKizError(marking_svc._wb_error_code(exc))
@@ -1504,16 +1548,56 @@ async def _commit_one_kiz_pair(
             new_error.code == "wb_transport_error"
             or new_error.code == "wb_pending_confirmation"
             or new_error.code == "wb_upstream_error_408"
+            # WMS-635 R4.2: «too many requests» is temporary; the background
+            # reconciliation sends the same KIZ again once WB has no code.
+            or new_error.code == "wb_upstream_error_429"
             or new_error.code.startswith("wb_upstream_error_5")
             or marking.meta_status == META_STATUS_SENDING
         )
         if not ambiguous:
-            raise new_error
+            # WMS-635 R4.3: a final WB refusal never unbinds the scanned KIZ.
+            # The code stays bound with WB's verdict «rejected» and its reason,
+            # the WB operation is closed as failed, and nothing is resent.
+            wb_reason = marking.reason or _error_message(new_error)
+            await marking_svc.record_pending_kiz_operation(
+                session, order, marking, error_code=new_error.code,
+                actor_user_id=actor_user_id, idempotency_key=idempotency_key,
+                scan_auto_print_id=pair.scan_auto_print_id,
+            )
+            operation = await marking_svc.pending_kiz_operation(session, marking)
+            if operation is not None:
+                operation.state = WB_OPERATION_STATE_FAILED
+                operation.failed_at = datetime.now(tz=UTC)
+                operation.error_code = new_error.code
+            marking.meta_status = META_STATUS_REJECTED
+            marking.check_status = CHECK_STATUS_ERROR
+            marking.reason = wb_reason
+            order.metadata_delivery_allowed = False
+            order.metadata_last_checked_at = datetime.now(tz=UTC)
+            pending_error = FbsKizError(
+                KIZ_BOUND_WB_REJECTED,
+                message=f"WB не принял ЧЗ: {marking.reason}",
+                persist_failure_state=True,
+            )
+    if (
+        new_error is not None
+        and (current is None or new_write_accepted)
+        and pending_error is None
+    ):
         await marking_svc.record_pending_kiz_operation(
             session, order, marking, error_code=new_error.code,
             actor_user_id=actor_user_id, idempotency_key=idempotency_key,
             scan_auto_print_id=pair.scan_auto_print_id,
         )
+        if pair.scan_auto_print_id is not None and actor_user_id is not None:
+            # WMS-635: the packing scan does not wait for WB; its exact copy is
+            # printed from this binding while WB's answer is reconciled later.
+            # Without the receipt only the exact copy is unavailable; the binding stays.
+            with contextlib.suppress(scan_print_svc.FbsScanAutoPrintError):
+                await scan_print_svc.record_bound_reprint_target(
+                    session, tenant_id, actor_user_id, pair.scan_auto_print_id, order.id,
+                    marking.id,
+                )
         pending_error = FbsKizError("wb_pending_confirmation", persist_failure_state=True)
     elif new_error is not None and current is not None:
         try:
@@ -1540,6 +1624,28 @@ async def _commit_one_kiz_pair(
                 persist_failure_state=True,
             ) from restore_error
         raise new_error
+    if new_error is None and marking.meta_status == META_STATUS_REJECTED:
+        # WMS-635 Д1: WB took the write, but its read-back already refuses the code.
+        # Same as a final refusal (R4.3): the KIZ stays bound and the row turns red.
+        wb_reason = (marking.reason or "").strip() or "КИЗ отклонён WB"
+        order.metadata_delivery_allowed = False
+        pending_error = FbsKizError(
+            KIZ_BOUND_WB_REJECTED,
+            message=f"WB не принял ЧЗ: {wb_reason}",
+            persist_failure_state=True,
+        )
+    if order.supply_id is not None:
+        await record_kiz_bound_event(
+            session,
+            tenant_id=tenant_id,
+            actor_user_id=actor_user_id,
+            order=order,
+            new_code_id=code.id,
+            new_value=validated.value,
+            previous=current,
+            idempotency_key=f"wms631-kiz-bound:{marking.id}",
+            commit_key=idempotency_key,
+        )
     if current is not None:
         await _void_existing_sgtin_marking_locally(
             session,
@@ -1667,3 +1773,463 @@ async def commit_kiz_pairs(
             )
 
     return rows
+
+
+
+async def record_kiz_bound_event(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    order: FbsOrder,
+    new_code_id: uuid.UUID | None,
+    new_value: str,
+    previous: FbsOrderMarking | None,
+    idempotency_key: str,
+    commit_key: str,
+) -> None:
+    """Durable receipt of one new binding and of the code it replaced (WMS-631 R19).
+
+    ``commit_key`` is the identity of the operator's action (the KIZ commit key,
+    or ``scan:<scan_id>`` for a pool code): «Назад» finds exactly that binding.
+    """
+    if order.supply_id is None or actor_user_id is None:
+        # Only an operator's scan is undone by «Назад»; system bindings keep no receipt.
+        return
+    await record_document_event(
+        session,
+        tenant_id=tenant_id,
+        document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=order.supply_id,
+        event_type=EVENT_DATA_CHANGED,
+        source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        payload_json={
+            "kind": KIZ_BOUND_EVENT_KIND,
+            "order_id": str(order.id),
+            "new_code_id": str(new_code_id) if new_code_id is not None else None,
+            "new_value": new_value,
+            "previous_code_id": (
+                str(previous.marking_code_id)
+                if previous is not None and previous.marking_code_id is not None
+                else None
+            ),
+            "previous_value": previous.value if previous is not None else None,
+            "previous_source": previous.source if previous is not None else None,
+            "commit_key": commit_key,
+        },
+        idempotency_key=idempotency_key,
+    )
+
+
+async def assert_scan_undo_open(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    order: FbsOrder,
+) -> None:
+    """R19, Д20: a scan is undone only in its own supply while packing is open."""
+    if order.supply_id != supply_id:
+        raise FbsKizError(
+            "scan_undo_order_moved",
+            message="Заказ перенесён в другую поставку — этот скан не отменить.",
+        )
+    supply = await session.scalar(
+        select(FbsSupply).where(FbsSupply.id == supply_id, FbsSupply.tenant_id == tenant_id)
+    )
+    if supply is None:
+        raise FbsKizError("supply_not_found")
+    if supply.packaging_task_id is not None:
+        task_status = await session.scalar(
+            select(PackagingTask.status).where(PackagingTask.id == supply.packaging_task_id)
+        )
+        if task_status in {"done", "cancelled"}:
+            raise FbsKizError(
+                "scan_undo_task_closed",
+                message="Задание упаковки завершено — этот скан уже не отменить.",
+            )
+
+
+def _wb_outcome_unknown(code: str) -> bool:
+    return (
+        code in {"wb_transport_error", "wb_pending_confirmation", "wb_upstream_error_408"}
+        or code.startswith("wb_upstream_error_5")
+    )
+
+
+async def _wb_sgtin_state(
+    order: FbsOrder, http_client: httpx.AsyncClient, token: str, value: str
+) -> str:
+    """Fact in WB for this order: 'same' (value bound), 'absent', 'other' or 'unknown'."""
+    try:
+        rows = await fetch_marketplace_orders_meta_batch(
+            http_client, api_token=token, order_ids=[int(order.wb_order_id)]
+        )
+    except WildberriesClientError:
+        return "unknown"
+    row = next((one for one in rows if one.order_id == int(order.wb_order_id)), None)
+    if row is None:
+        # No row for this order is no proof of anything.
+        return "unknown"
+    bound = [
+        detail.value for detail in row.meta_details
+        if detail.key == MARKING_KIND_SGTIN and detail.value
+    ]
+    if not bound:
+        return "absent"
+    return "same" if value in bound else "other"
+
+
+async def _delete_scan_kiz_from_wb(
+    session: AsyncSession,
+    order: FbsOrder,
+    http_client: httpx.AsyncClient,
+    token: str,
+    value: str,
+    intent_key: str,
+) -> None:
+    """Delete exactly this code in WB; never a blind repeat after a lost answer.
+
+    An earlier attempt leaves a durable intent: the next attempt starts by
+    reading WB and deletes only while WB still holds this very code.
+    """
+    if not is_wildberries(order):
+        return
+    earlier = await session.scalar(
+        select(DocumentEvent.id).where(
+            DocumentEvent.tenant_id == order.tenant_id,
+            DocumentEvent.idempotency_key == intent_key,
+        )
+    )
+    if earlier is not None:
+        state = await _wb_sgtin_state(order, http_client, token, value)
+        if state == "absent":
+            return
+        if state == "other":
+            raise FbsKizError(
+                "kiz_rollback_changed",
+                message="КИЗ заказа в WB уже изменён — этот скан не отменить.",
+            )
+        if state == "unknown":
+            raise FbsKizError("wb_pending_confirmation")
+    elif order.supply_id is not None:
+        await record_document_event(
+            session,
+            tenant_id=order.tenant_id,
+            document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+            document_id=order.supply_id,
+            event_type=EVENT_DATA_CHANGED,
+            source=SOURCE_SYSTEM,
+            actor_user_id=None,
+            payload_json={"kind": "wms631_kiz_undo_delete", "order_id": str(order.id)},
+            idempotency_key=intent_key,
+        )
+        # The intent is durable before the irreversible WB call.
+        await session.commit()
+        await _get_order_for_kiz(session, order.tenant_id, order.id, for_update=True)
+        current = await _current_sgtin_marking_for_update(session, order.id)
+        if current is None or current.value != value:
+            raise FbsKizError(
+                "kiz_rollback_changed",
+                message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
+            )
+    try:
+        await delete_marketplace_order_meta(
+            http_client, api_token=token, order_id=int(order.wb_order_id), key=MARKING_KIND_SGTIN
+        )
+        return
+    except WildberriesClientError as exc:
+        code = marking_svc._wb_error_code(exc)
+        if not _wb_outcome_unknown(code):
+            raise FbsKizError(code) from exc
+    state = await _wb_sgtin_state(order, http_client, token, value)
+    if state == "absent":
+        return
+    if state == "other":
+        raise FbsKizError(
+            "kiz_rollback_changed",
+            message="КИЗ заказа в WB уже изменён — этот скан не отменить.",
+        )
+    raise FbsKizError("wb_pending_confirmation")
+
+
+async def _recount_line_markings(
+    session: AsyncSession, tenant_id: uuid.UUID, line: PackagingTaskLine | None
+) -> None:
+    if line is None:
+        return
+    count_rows = await session.execute(
+        select(MarkingCode.source, func.count(MarkingCode.id))
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.packaging_task_line_id == line.id,
+            MarkingCode.status.in_({
+                STATUS_RESERVED, STATUS_PRINTED, STATUS_APPLIED,
+                STATUS_INTRODUCED, STATUS_SHIPPED, STATUS_TRANSFERRED,
+            }),
+        )
+        .group_by(MarkingCode.source)
+    )
+    counts = {source: count for source, count in count_rows}
+    line.qty_marking_external = counts.get(_EXTERNAL_FBS_MARKING_SOURCE, 0)
+    line.qty_marking_printed = sum(
+        count for source, count in counts.items() if source != _EXTERNAL_FBS_MARKING_SOURCE
+    )
+
+
+async def _bound_events_for_order(
+    session: AsyncSession, tenant_id: uuid.UUID, order: FbsOrder
+) -> list[DocumentEvent]:
+    events = (
+        await session.scalars(
+            select(DocumentEvent)
+            .where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.document_type == DOCUMENT_TYPE_FBS_SUPPLY,
+                DocumentEvent.document_id == order.supply_id,
+                DocumentEvent.event_type == EVENT_DATA_CHANGED,
+            )
+            .order_by(DocumentEvent.occurred_at, DocumentEvent.id)
+        )
+    ).all()
+    return [
+        event for event in events
+        if (event.payload_json or {}).get("kind") == KIZ_BOUND_EVENT_KIND
+        and (event.payload_json or {}).get("order_id") == str(order.id)
+    ]
+
+
+async def rollback_scan_kiz(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID | None,
+    supply_id: uuid.UUID,
+    order_id: uuid.UUID,
+    commit_keys: list[str],
+    http_client: httpx.AsyncClient,
+) -> str | None:
+    """WMS-631 R19: undo the KIZ one packing scan bound; return a warning or None.
+
+    The binding is identified by its durable receipt (``wms631_kiz_bound``)
+    with the action's own commit key — never by the code text alone.
+    Removing the new code (stage 1) and restoring the replaced one (stage 2)
+    each happen under the order lock and are committed separately, so a repeat
+    after a WB failure continues from the saved stage.  The replaced code is
+    never published as free: it goes from void straight back to applied.
+    """
+    await session.rollback()
+    order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
+    await assert_scan_undo_open(session, tenant_id, supply_id, order)
+    # WMS-635 R4.3: a KIZ WB refused stays bound (rejected) and is undone too.
+    current = await _current_sgtin_marking_for_update(session, order.id, include_rejected=True)
+    events = await _bound_events_for_order(session, tenant_id, order)
+    keys = {key for key in commit_keys if key}
+    ours_index = next(
+        (
+            index for index in range(len(events) - 1, -1, -1)
+            if (events[index].payload_json or {}).get("commit_key") in keys
+        ),
+        None,
+    )
+    if ours_index is None:
+        # This action bound no new code (a lost answer included: the receipt is
+        # written with the binding itself), so it has no KIZ to undo.
+        await session.commit()
+        return None
+    receipt = dict(events[ours_index].payload_json or {})
+    receipt_id = events[ours_index].id
+    value = str(receipt.get("new_value"))
+    previous_value = receipt.get("previous_value")
+    if current is not None and current.value != value and current.value != previous_value:
+        raise FbsKizError(
+            "kiz_rollback_changed",
+            message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
+        )
+    token = await marking_svc.require_marketplace_token(session, tenant_id, order.seller_id)
+    if current is not None and current.value == value:
+        # Stage 1: remove this scan's code from WB and from the order.
+        if current.meta_status != META_STATUS_REJECTED:
+            # WB refused this code, so WB holds nothing of it to delete.
+            await _delete_scan_kiz_from_wb(
+                session, order, http_client, token, value, f"wms631-kiz-undo-delete:{receipt_id}"
+            )
+        line: PackagingTaskLine | None = None
+        if current.marking_code is not None and current.marking_code.packaging_task_line_id:
+            line = await session.get(PackagingTaskLine, current.marking_code.packaging_task_line_id)
+        code_id = current.marking_code_id
+        was_pool = current.source == _POOL_MARKING_SOURCE
+        await _void_existing_sgtin_marking_locally(
+            session, current, actor_user_id=actor_user_id, reason=_VOID_OPERATOR_CANCEL_REASON
+        )
+        # Д19 applies to a pool KIZ this scan printed («Печатать ЧЗ», receipt
+        # scan:<id>). A KIZ the operator scanned is on the item: like the cross
+        # in the row, «Назад» leaves it usable for the next scan (Д3).
+        issued_by_print = str(receipt.get("commit_key") or "").startswith("scan:")
+        if was_pool and issued_by_print and code_id is not None:
+            # Д19: its label is already printed; the code is annulled, not returned to the pool.
+            pool_code = await session.get(MarkingCode, code_id)
+            if pool_code is not None and pool_code.status != STATUS_INTRODUCED:
+                pool_code.status = STATUS_VOID
+                pool_code.packaging_task_line_id = None
+        saved_meta = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+        next_meta = dict(saved_meta)
+        next_meta.pop(MARKING_KIND_SGTIN, None)
+        order.meta_details_json = next_meta
+        remaining = list(
+            (await session.scalars(
+                select(FbsOrderMarking).where(FbsOrderMarking.order_id == order.id)
+            )).all()
+        )
+        order.metadata_delivery_allowed = marking_svc.compute_delivery_allowed(order, remaining)
+        order.metadata_last_checked_at = datetime.now(tz=UTC)
+        await session.flush()
+        await _recount_line_markings(session, tenant_id, line)
+        await session.commit()
+        order = await _get_order_for_kiz(session, tenant_id, order_id, for_update=True)
+        await assert_scan_undo_open(session, tenant_id, supply_id, order)
+        current = await _current_sgtin_marking_for_update(session, order.id)
+        if current is not None and current.value != previous_value:
+            raise FbsKizError(
+                "kiz_rollback_changed",
+                message="КИЗ заказа уже изменён другим действием — этот скан не отменить.",
+            )
+    if previous_value is None:
+        await session.commit()
+        return None
+    if current is not None and current.value == previous_value:
+        # Already restored by an earlier attempt: finished only once WB confirms it (N5).
+        operation = await marking_svc.pending_kiz_operation(session, current)
+        if operation is not None:
+            try:
+                await marking_svc.reconcile_pending_kiz_operation(
+                    session, order, current, operation, http_client, token,
+                    actor_user_id=actor_user_id,
+                )
+            except (WildberriesClientError, marking_svc.FbsMarkingError) as exc:
+                await session.commit()
+                raise FbsKizError("wb_pending_confirmation") from exc
+            await session.commit()
+            if operation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION:
+                raise FbsKizError("wb_pending_confirmation")
+            if operation.state == WB_OPERATION_STATE_FAILED:
+                raise FbsKizError("meta_validation_fail")
+        elif current.meta_status == META_STATUS_SENDING:
+            await session.commit()
+            raise FbsKizError("wb_pending_confirmation")
+        await session.commit()
+        return None
+    previous_code_id = receipt.get("previous_code_id")
+    if previous_code_id is None:
+        await session.commit()
+        return _KIZ_PREVIOUS_UNKNOWN
+    # Stage 2: bind the replaced code again, straight from void to applied.
+    code = await session.scalar(
+        select(MarkingCode)
+        .where(
+            MarkingCode.id == uuid.UUID(str(previous_code_id)),
+            MarkingCode.tenant_id == tenant_id,
+        )
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if code is None or code.status not in {STATUS_VOID, STATUS_APPLIED, STATUS_PRINTED}:
+        await session.commit()
+        return _KIZ_PREVIOUS_UNKNOWN
+    line_ref = await _packaging_line_for_order(session, tenant_id, order)
+    code.status = STATUS_APPLIED
+    code.applied_at = code.applied_at or datetime.now(UTC)
+    code.packaging_task_line_id = line_ref.line.id
+    marking = FbsOrderMarking(
+        order_id=order.id,
+        tenant_id=tenant_id,
+        kind=MARKING_KIND_SGTIN,
+        value=str(previous_value),
+        source=str(receipt.get("previous_source") or _OPERATOR_MARKING_SOURCE),
+        check_status=CHECK_STATUS_NEW,
+        meta_status=META_STATUS_ASSIGNED,
+        marking_code_id=code.id,
+        created_by_user_id=actor_user_id,
+    )
+    session.add(marking)
+    await session.flush()
+    restore_error: FbsKizError | None = None
+    try:
+        await marking_svc.attach_order_meta_to_wb_and_sync(
+            session, tenant_id, order, marking, http_client,
+            actor_user_id=actor_user_id, api_token=token,
+        )
+    except marking_svc.FbsMarkingError as exc:
+        restore_error = _marking_error_to_kiz(exc)
+        if isinstance(exc, marking_svc.FbsMarkingWriteAcceptedError):
+            restore_error = FbsKizError("wb_pending_confirmation")
+    except WildberriesClientError as exc:
+        restore_error = FbsKizError(marking_svc._wb_error_code(exc))
+    except FbsKizError as exc:
+        restore_error = exc
+    if restore_error is not None and not (
+        _wb_outcome_unknown(restore_error.code) or marking.meta_status == META_STATUS_SENDING
+    ):
+        # WB refused: the replaced code stays void (never free) and the step stays to retry.
+        await session.rollback()
+        raise restore_error
+    if restore_error is not None:
+        # Unknown WB result: the existing pending-operation rule reconciles it, no blind resend.
+        await marking_svc.record_pending_kiz_operation(
+            session, order, marking, error_code=restore_error.code,
+            actor_user_id=actor_user_id,
+            idempotency_key=f"wms631-kiz-restore:{receipt_id}",
+            scan_auto_print_id=None,
+        )
+    await _recount_line_markings(session, tenant_id, line_ref.line)
+    await session.commit()
+    if restore_error is not None:
+        raise FbsKizError("wb_pending_confirmation")
+    return None
+
+
+async def order_has_sgtin(session: AsyncSession, order_id: uuid.UUID) -> bool:
+    found = await session.scalar(
+        select(FbsOrderMarking.id)
+        .where(
+            FbsOrderMarking.order_id == order_id,
+            FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+            FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+        )
+        .limit(1)
+    )
+    return found is not None
+
+
+async def note_pool_kiz_issued(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    *,
+    scan_id: uuid.UUID,
+    order: FbsOrder,
+    marking: FbsOrderMarking,
+) -> None:
+    """WMS-631 R19: receipt that this scan bound this pool KIZ (same transaction)."""
+    await record_kiz_bound_event(
+        session,
+        tenant_id=tenant_id,
+        actor_user_id=actor_user_id,
+        order=order,
+        new_code_id=marking.marking_code_id,
+        new_value=marking.value,
+        previous=None,
+        idempotency_key=f"wms631-kiz-bound-scan:{scan_id}",
+        commit_key=f"scan:{scan_id}",
+    )
+
+
+async def pool_kiz_issued_by_scan(
+    session: AsyncSession, tenant_id: uuid.UUID, scan_id: uuid.UUID
+) -> bool:
+    found = await session.scalar(
+        select(DocumentEvent.id).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.idempotency_key == f"wms631-kiz-bound-scan:{scan_id}",
+        )
+    )
+    return found is not None

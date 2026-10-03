@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from typing import Any
 
@@ -46,6 +47,8 @@ async def upsert_imported_cards(
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
     cards: list[Any],
+    *,
+    before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
 ) -> int:
     """Upsert card rows from WB API ``cards`` array. Returns number of rows written/updated."""
     seller = await session.get(Seller, seller_id)
@@ -86,6 +89,8 @@ async def upsert_imported_cards(
             row.raw_json = raw
             row.updated_at = now
         n += 1
+    if before_commit is not None:
+        await before_commit(session)
     await session.commit()
     return n
 

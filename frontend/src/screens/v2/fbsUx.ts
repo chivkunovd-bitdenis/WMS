@@ -735,6 +735,14 @@ export function fbsMarkingPresentation(
   return { tone: 'neutral', label: `${provider} ещё не подтвердил ЧЗ`, reason: null }
 }
 
+/**
+ * WMS-636: заказ WB с непринятым КИЗ — ровно та строка, чья подпись ЧЗ сейчас
+ * красная (то же состояние и то же правило, что рисует строку упаковки WB).
+ */
+export function fbsOrderKizRejectedByWb(order: { metadata: FbsOrderMetadata }): boolean {
+  return fbsMarkingPresentation(order.metadata.states.find((state) => state.kind === 'sgtin')).tone === 'error'
+}
+
 // Same scanner normalization as fbs_kiz_service.sticker_scan_candidates.
 const stickerKeyboardMap: Record<string, string> = Object.fromEntries(
   [

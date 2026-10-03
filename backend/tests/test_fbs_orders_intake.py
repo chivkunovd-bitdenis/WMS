@@ -20,7 +20,6 @@ from app.models.fbs_order import (
     MAPPING_STATUS_MAPPED,
     MAPPING_STATUS_MISSING,
     RESERVE_STATUS_NO_STOCK,
-    RESERVE_STATUS_NOT_PUBLISHED,
     RESERVE_STATUS_RELEASED,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
@@ -520,11 +519,10 @@ async def test_fbs_order_reserve_and_no_stock(
         assert int(res.scalar_one()) == 1
 
 
-# TC-S17-030: a WB order for a mapped product with physical
-# stock but no enabled publication rule is recorded as an integration mismatch
-# and never receives an invented reservation.
+# TC-S17-030 / WMS-632 R7: a WB order for a mapped product with free stock
+# is reserved even when stock publication is not enabled for the product.
 @pytest.mark.asyncio
-async def test_fbs_order_without_publication_does_not_reserve(
+async def test_fbs_order_without_publication_still_reserves(
     async_client: AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -593,13 +591,13 @@ async def test_fbs_order_without_publication_does_not_reserve(
             select(FbsOrder).where(FbsOrder.wb_order_id == 800203)
         )
         assert order is not None
-        assert order.reserve_status == RESERVE_STATUS_NOT_PUBLISHED
+        assert order.reserve_status == RESERVE_STATUS_RESERVED
         reservation_count = await session.scalar(
             select(func.count())
             .select_from(FbsOrderReservation)
             .where(FbsOrderReservation.fbs_order_id == order.id)
         )
-    assert reservation_count == 0
+    assert reservation_count == 1
 
 
 @pytest.mark.asyncio

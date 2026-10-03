@@ -1,4 +1,6 @@
 const API_DETAIL_MESSAGES_RU: Record<string, string> = {
+  wb_validation_unavailable: 'Не удалось проверить ключ Wildberries. Попробуйте ещё раз позже.',
+  ozon_catalog_unavailable: 'Не удалось загрузить каталог Ozon. Повторите загрузку позже.',
   // Инвентаризация: находки и пересчёт.
   count_not_found: 'Документ пересчёта не найден.',
   count_not_editable: 'Документ уже проведён или отменён — правки закрыты.',

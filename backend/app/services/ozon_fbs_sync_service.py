@@ -88,16 +88,16 @@ OZON_REQUIREMENTS_KEY = "ozon_requirements"
 #   на верхнем уровне и заказ Ozon не доходил до «завершён» никогда.
 # * `arbitration` и `client_arbitration` — это спор по доставке, а не отмена.
 #   Считать их отменой опасно: отмена разворачивает отгрузку и снимает резерв.
-_OZON_NEW_STATUSES = frozenset({"new", "awaiting_packaging"})
-_OZON_ASSEMBLED_STATUSES = frozenset({"awaiting_deliver"})
-_OZON_DELIVERY_STATUSES = frozenset({"delivering", "driver_pickup", "sent_by_seller"})
+OZON_NEW_STATUSES = frozenset({"new", "awaiting_packaging"})
+OZON_ASSEMBLED_STATUSES = frozenset({"awaiting_deliver"})
+OZON_DELIVERY_STATUSES = frozenset({"delivering", "driver_pickup", "sent_by_seller"})
 # «Идёт приёмка» — это Ozon подтвердил, что забрал отправление в пункте приёма.
 # Ближайший аналог вайлдберрисовского `sorted`, и точно так же это момент, когда
 # работа склада по заказу считается сделанной и попадает в счёт.
-_OZON_ACCEPTED_STATUSES = frozenset({"acceptance_in_progress"})
-_OZON_DONE_STATUSES = frozenset({"delivered", "done"})
-_OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
-_OZON_CANCELLED_STATUSES = frozenset({"cancelled", "canceled", "cancelled_from_split_pending"})
+OZON_ACCEPTED_STATUSES = frozenset({"acceptance_in_progress"})
+OZON_DONE_STATUSES = frozenset({"delivered", "done"})
+OZON_DONE_SUBSTATUSES = frozenset({"posting_delivered", "posting_received"})
+OZON_CANCELLED_STATUSES = frozenset({"cancelled", "canceled", "cancelled_from_split_pending"})
 
 # Этапы, которые ставит наш собственный процесс. Опрос Ozon не имеет права
 # затирать их своим «отправление ещё не собрано»: заказ, взятый в поставку,
@@ -259,19 +259,19 @@ def _legacy_numeric_order_id(external_order_id: str) -> int:
 def _local_status(raw_status: str | None, raw_substatus: str | None = None) -> str:
     normalized = (raw_status or "").strip().lower()
     substatus = (raw_substatus or "").strip().lower()
-    if normalized in _OZON_CANCELLED_STATUSES:
+    if normalized in OZON_CANCELLED_STATUSES:
         return FBS_ORDER_STATUS_CANCELLED
-    if normalized in _OZON_DONE_STATUSES or substatus in _OZON_DONE_SUBSTATUSES:
+    if normalized in OZON_DONE_STATUSES or substatus in OZON_DONE_SUBSTATUSES:
         return FBS_ORDER_STATUS_DONE
-    if normalized in _OZON_ACCEPTED_STATUSES:
+    if normalized in OZON_ACCEPTED_STATUSES:
         return FBS_ORDER_STATUS_SORTED
-    if normalized in _OZON_DELIVERY_STATUSES:
+    if normalized in OZON_DELIVERY_STATUSES:
         return FBS_ORDER_STATUS_IN_DELIVERY
-    if normalized in _OZON_NEW_STATUSES:
+    if normalized in OZON_NEW_STATUSES:
         return FBS_ORDER_STATUS_NEW
     # `awaiting_deliver` (уже собрано) и всё остальное — работа маркетплейса,
     # а не приглашение оператору собрать отправление ещё раз.
-    if normalized in _OZON_ASSEMBLED_STATUSES:
+    if normalized in OZON_ASSEMBLED_STATUSES:
         return FBS_ORDER_STATUS_EXTERNAL_PROCESSING
     return FBS_ORDER_STATUS_EXTERNAL_PROCESSING
 
@@ -766,11 +766,16 @@ async def _apply_status(
                 reverse_fbs_order_billing,
                 reverse_fbs_shipment_if_needed,
             )
+            from app.services.fbs_picking_service import release_picks_of_cancelled_order
 
             await reverse_fbs_shipment_if_needed(
                 session,
                 order,
                 actor_user_id=None,
+            )
+            # Подобранная штука возвращается в ячейку/тару, как при отмене подбора.
+            await release_picks_of_cancelled_order(
+                session, order.tenant_id, order, actor_user_id=None,
             )
             # Ozon отменил заказ, за который уже начислили. Деньги снимаем
             # здесь: опрос — единственный путь, которым подтверждённый заказ

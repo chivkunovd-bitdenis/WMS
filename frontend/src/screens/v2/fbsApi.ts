@@ -454,6 +454,7 @@ export type FbsOrderPrintTape = {
 }
 
 export type FbsScanAutoPrintRequest = {
+  order_id?: string
   await_honest_sign?: boolean
   barcode: string
   idempotency_key: string
@@ -477,6 +478,8 @@ export type FbsScanAutoPrintResult = {
   printed_codes: FbsOrderPrintTapeOrder['printed_codes']
   shortage: number
   order_errors: FbsPrintBatch['order_errors']
+  /** WMS-631: the pool KIZ in printed_codes was bound by this very scan. */
+  chz_issued_by_scan?: boolean
 }
 
 export type FbsScanAutoPrintTarget = 'qr' | 'chz'
@@ -1177,6 +1180,21 @@ export function markFbsScanAutoPrintTargetStarted(
   )
 }
 
+/** WMS-631 R20: release one unfinished product-scan selection (Escape). */
+export async function cancelFbsScanAutoPrintSelection(
+  token: string,
+  ah: AuthHeaders,
+  supplyId: string,
+  scanId: string,
+): Promise<void> {
+  const res = await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/cancel`), {
+    method: 'POST',
+    headers: jsonHeaders(token, ah),
+  })
+  if (res.status === 204) return
+  await jsonOrThrow<unknown>(res)
+}
+
 export function releaseFbsScanAutoPrintTargetClaim(
   token: string,
   ah: AuthHeaders,
@@ -1542,6 +1560,8 @@ export type FbsKizLookup = {
   needs_confirmation: boolean
   can_bind: boolean
   block_reason: string | null
+  /** WMS-631: the server's order-tape KIZ rule for this order. */
+  requires_honest_sign?: boolean
 }
 
 export type FbsKizPair = {
@@ -1600,13 +1620,43 @@ export async function commitFbsKiz(
   ah: (t: string) => Record<string, string>,
   pairs: FbsKizPair[],
   idempotencyKey: string,
+  /** WMS-635 Q1: a packing scan waits for WB only briefly; the server reconciles later. */
+  scanNoWbWait = false,
 ): Promise<FbsKizCommitResult[]> {
   const res = await fetch(apiUrl('/operations/fbs-orders/kiz/commit'), {
     method: 'POST',
     headers: { ...ah(token), 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pairs, idempotency_key: idempotencyKey }),
+    body: JSON.stringify({
+      pairs, idempotency_key: idempotencyKey, ...(scanNoWbWait ? { scan_no_wb_wait: true } : {}),
+    }),
   })
   return jsonOrThrow<FbsKizCommitResult[]>(res)
+}
+
+export type FbsScanUndoRequest = {
+  order_id: string
+  scan_id?: string | null
+  pack_idempotency_key?: string | null
+  box_id?: string | null
+  release_selection: boolean
+  /** Identities of this scan's KIZ actions; the server returns the replaced code. */
+  kiz_keys?: string[]
+}
+
+/** WMS-631 R19: undo one packing scan — KIZ first, then unit, box and selection. */
+export async function undoFbsPackingScan(
+  token: string,
+  ah: (t: string) => Record<string, string>,
+  supplyId: string,
+  body: FbsScanUndoRequest,
+): Promise<{ warning: string | null }> {
+  return jsonOrThrow<{ warning: string | null }>(
+    await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-undo`), {
+      method: 'POST',
+      headers: { ...ah(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+  )
 }
 
 export async function deleteFbsOrderKiz(

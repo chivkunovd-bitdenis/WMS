@@ -1,8 +1,10 @@
 import { createPortal } from 'react-dom'
-import { createPackingScanController, makePackingScanDeps } from './fbsSequentialPacking'
+import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
+import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type ReactNode } from 'react'
 import {
   Alert,
   Box,
@@ -79,6 +81,7 @@ import {
   fbsOrderMarkingAccepted,
   fbsMarkingPresentation,
   fbsMarkingVerdictsSummary,
+  fbsOrderKizRejectedByWb,
   fbsBoxEditingDisabled,
   fbsBoxProductProgress,
   fbsBoxOperationsDisabled,
@@ -558,6 +561,9 @@ export function FfFbsSupplyWorkspace({
   const [kizScanNotice, setKizScanNotice] = useState<string | null>(null)
   const [kizConfirmTarget, setKizConfirmTarget] = useState<FbsKizLookup | null>(null)
   const kizScanInputRef = useRef<HTMLInputElement | null>(null)
+  const kizRowInputRef = useRef<HTMLInputElement | null>(null)
+  const kizRowTargetRef = useRef<FbsKizLookup | null>(null)
+  const kizRowCommitGateRef = useRef<Promise<void> | null>(null)
   const kizSelectedStickerRef = useRef('')
   const activeProductScanBarcodeRef = useRef<string | null>(null)
   const kizAutoPrintQueueRef = useRef(new FbsKizAutoPrintQueue())
@@ -630,9 +636,17 @@ export function FfFbsSupplyWorkspace({
     setAddOrdersOpen(false)
   }
 
-  const useSequentialPacking = Boolean(assemblyFrame?.registerScanner) && workspace?.supply.marketplace === 'wb'
+  // WMS-631 R4: WB packing scans go through one mechanism in the supply and in the assembly.
+  const useSequentialPacking = workspace?.supply.marketplace === 'wb'
+    && (Boolean(assemblyFrame?.registerScanner) || !assemblyFrame)
+  const assemblyWbPacking = useSequentialPacking && Boolean(assemblyFrame?.registerScanner)
+  // The ordinary supply card (no assembly frame at all); the assembly always registers its scanner.
+  const ordinaryWbPacking = useSequentialPacking && !assemblyFrame
   const sequentialOpenRef = useRef(false)
-  sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing' && Boolean(assemblyFrame?.visible)
+  sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing'
+    && (assemblyFrame?.registerScanner ? Boolean(assemblyFrame.visible) : true)
+  const scanPrintPreferencesRef = useRef(scanPrintPreferences)
+  scanPrintPreferencesRef.current = scanPrintPreferences
   useEffect(() => () => { sequentialOpenRef.current = false }, [])
   const sequentialWorkspaceRef = useRef(workspace)
   sequentialWorkspaceRef.current = workspace
@@ -642,7 +656,7 @@ export function FfFbsSupplyWorkspace({
   const sequentialRefreshRef = useRef<() => void>(() => undefined)
   const sequentialScanner = useMemo(() => {
     if (!workspace || !useSequentialPacking) return null
-    return createPackingScanController(makePackingScanDeps(token, authHeaders,
+    const controller = createPackingScanController(makePackingScanDeps(token, authHeaders,
       () => sequentialWorkspaceRef.current!,
       () => { setSequentialScanVersion((version) => version + 1); sequentialFrameRef.current?.onScanChange?.() },
       () => sequentialRefreshRef.current(),
@@ -654,10 +668,63 @@ export function FfFbsSupplyWorkspace({
         const selectedSupplyId = sequentialWorkspaceRef.current?.supply.id
         if (selectedSupplyId) sequentialFrameRef.current?.onPromotePackingOrder?.(selectedSupplyId, orderId)
       },
+      // R3: the assembly bar saves the shared checkboxes; the supply keeps them in its state too.
+      () => (sequentialFrameRef.current?.registerScanner
+        ? loadFbsScanPrintPreferences(token)
+        : scanPrintPreferencesRef.current),
+      // WMS-636 R11: the undone KIZ tail leaves the row at once, the reload brings the rest.
+      (orderId) => setKizCommittedTails((current) => {
+        if (!(orderId in current)) return current
+        const next = { ...current }
+        delete next[orderId]
+        return next
+      }),
     ))
+    return {
+      ...controller,
+      hasSelectedRow: () => Boolean(kizRowInputRef.current && kizRowTargetRef.current),
+      hasPending: () => Boolean(kizRowInputRef.current && kizRowTargetRef.current) || controller.hasPending(),
+      view: () => kizRowInputRef.current && kizRowTargetRef.current
+        ? { orderId: kizRowTargetRef.current.order_id, name: kizRowTargetRef.current.product.name, needsKiz: true, target: kizRowTargetRef.current }
+        : controller.view(),
+      // R20: Escape in the row field leaves it; otherwise it drops the started scan.
+      canCancel: () => Boolean(kizRowInputRef.current && kizRowTargetRef.current) || Boolean(controller.canCancel?.()),
+      cancel: async () => {
+        if (kizRowInputRef.current && kizRowTargetRef.current) {
+          kizRowInputRef.current.blur()
+          return true
+        }
+        return controller.cancel!()
+      },
+      scan: async (raw: string) => {
+        const target = kizRowInputRef.current && kizRowTargetRef.current
+        if (!target) return controller.scan(raw)
+        setKizScanValue('')
+        const field = kizRowInputRef.current
+        // The accepted scan releases the row at once, even when the field is
+        // already disabled by the busy scan and its blur event does not fire.
+        kizRowInputRef.current = null
+        kizRowTargetRef.current = null
+        setKizScanActive(null)
+        field?.blur()
+        // The same bind -> native WMS Print -> pack sequence as product scans.
+        await controller.scanOrder!(target.order_id, raw, target)
+        // Blur already released the explicit selection. A later focus belongs
+        // to the next scan and must not be cleared by this completed request.
+        sequentialFrameRef.current?.onScanChange?.()
+      },
+    }
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, supplyId, workspace?.supply.id, open, useSequentialPacking])
+  const ordinaryWbPackingRef = useRef(false)
+  ordinaryWbPackingRef.current = ordinaryWbPacking
+  const runUnifiedScanRef = useRef<(raw: string) => Promise<void>>(async () => undefined)
+  const cancelUnifiedScanRef = useRef<() => Promise<void>>(async () => undefined)
+  const undoUnifiedScanRef = useRef<() => Promise<void>>(async () => undefined)
+  // The supply bar shows the row field target or the selection waiting for its KIZ.
+  const unifiedView = ordinaryWbPacking ? sequentialScanner?.view() ?? null : null
+  const shownKizTarget = kizScanActive ?? (unifiedView?.needsKiz ? unifiedView.target ?? null : null)
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
   useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
@@ -786,6 +853,7 @@ export function FfFbsSupplyWorkspace({
     setSkipHonestSignOpen(false)
     setSkipHonestSignBusy(false)
     setKizScanActive(null)
+    kizRowInputRef.current = null
     kizSelectedStickerRef.current = ''
     activeProductScanBarcodeRef.current = null
     queuedPackingScansRef.current = []
@@ -1551,10 +1619,20 @@ export function FfFbsSupplyWorkspace({
       preferences: FbsScanPrintPreferences = scanPrintPreferences,
     ) => {
       if (!kizScanActive) return
+      if (kizRowCommitGateRef.current) return
+      // Прямой выбор строки заменяет только выбор заказа стикером. Подтверждение
+      // прежнего КИЗ и запись остаются в общем сценарии validate/commit.
+      if (kizRowInputRef.current && kizScanActive.current_kiz && !confirmed) {
+        setKizConfirmValue(raw)
+        setKizConfirmTarget(kizScanActive)
+        return
+      }
       const productBarcode = activeProductScanBarcodeRef.current
       const pendingProductAttempt = productBarcode && workspace?.supply.id
         ? peekFbsPendingProductScan(token, workspace.supply.id, productBarcode)
         : null
+      // Выбор конкретной строки меняет только способ выбора заказа. Настройки
+      // печати остаются теми же, что и в штатном сценарии сканирования.
       const effectivePreferences = pendingProductAttempt?.preferences ?? preferences
       const scan = {
         attemptId: createFbsIdempotencyKey(),
@@ -1575,9 +1653,18 @@ export function FfFbsSupplyWorkspace({
       setKizScanHints([])
       setKizScanDebugOpen(false)
       setKizScanNotice(null)
+      let releaseRowCommit: (() => void) | undefined
+      if (kizRowInputRef.current) {
+        kizRowCommitGateRef.current = new Promise<void>((resolve) => { releaseRowCommit = resolve })
+      }
       try {
         const validated = await validateFbsKiz(token, authHeaders, kizScanActive.order_id, raw)
         setKizScanHints(validated.hints)
+        if (assemblyWbPacking && workspace && !workspace.supply.packaging_task_id) {
+          const started = await startFbsSupplyWork(token, authHeaders, workspace.supply.id)
+          if (!started.supply.packaging_task_id) throw new Error('Не удалось начать работу с поставкой. Повторите скан.')
+          setWorkspace(started)
+        }
         const results = await commitFbsKiz(
           token,
           authHeaders,
@@ -1706,6 +1793,10 @@ export function FfFbsSupplyWorkspace({
           }
           activeProductScanBarcodeRef.current = null
         }
+        if (kizRowInputRef.current) {
+          kizRowInputRef.current.blur()
+          kizRowInputRef.current = null
+        }
         setKizScanActive(null)
         kizSelectedStickerRef.current = ''
         const savedOrderId = kizScanActive.order_id
@@ -1740,13 +1831,16 @@ export function FfFbsSupplyWorkspace({
         playScanError()
         void load(true)
       } finally {
+        if (releaseRowCommit) {
+          kizRowCommitGateRef.current = null
+          releaseRowCommit()
+        }
         setKizScanBusy(false)
         refocusKizInput()
       }
     },
-    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName, scanPrintPreferences, workspace?.supply.id],
+    [kizScanActive, token, authHeaders, refocusKizInput, load, isOzonSupply, providerName, scanPrintPreferences, workspace, assemblyWbPacking],
   )
-
   // WMS-403: keep the original scanner reset; WMS-514 additionally closes only
   // its own pending product attempt so a later physical scan is a new action.
   const dropKizScanActive = useCallback(() => {
@@ -1757,6 +1851,8 @@ export function FfFbsSupplyWorkspace({
       // of reviving the cancelled attempt forever.
       completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
     }
+    kizRowInputRef.current?.blur()
+    kizRowInputRef.current = null
     setKizScanActive(null)
     kizSelectedStickerRef.current = ''
     activeProductScanBarcodeRef.current = null
@@ -1770,7 +1866,16 @@ export function FfFbsSupplyWorkspace({
     refocusKizInput(true)
   }, [refocusKizInput, token, workspace?.supply.id])
 
+  useLayoutEffect(() => {
+    kizRowTargetRef.current = kizScanActive
+  }, [kizScanActive])
+  useEffect(() => { sequentialFrameRef.current?.onScanChange?.() }, [kizScanActive])
+
   const dismissKizConfirmation = useCallback(() => {
+    if (kizRowInputRef.current) {
+      dropKizScanActive()
+      return
+    }
     const productBarcode = activeProductScanBarcodeRef.current
     if (productBarcode && workspace?.supply.id) {
       completeFbsPendingProductScan(token, workspace.supply.id, productBarcode)
@@ -1778,10 +1883,18 @@ export function FfFbsSupplyWorkspace({
     }
     setKizConfirmTarget(null)
     refocusKizInput(true)
-  }, [refocusKizInput, token, workspace?.supply.id])
+  }, [dropKizScanActive, refocusKizInput, token, workspace?.supply.id])
 
   const onKizScanEnter = useCallback(
     (event: KeyboardEvent<HTMLInputElement>) => {
+      if (event.key === 'Escape' && ordinaryWbPacking) {
+        if (packingSerialBusy() || sequentialScanner?.canCancel?.()) {
+          event.preventDefault()
+          event.stopPropagation()
+          void cancelUnifiedScanRef.current()
+        }
+        return
+      }
       if (event.key === 'Escape' && kizScanActive) {
         event.preventDefault()
         event.stopPropagation()
@@ -1792,6 +1905,17 @@ export function FfFbsSupplyWorkspace({
       event.preventDefault()
       const raw = kizScanValue.replace(/[ \t\r\n\v\f]+$/, '')
       if (!raw) return
+      if (assemblyWbPacking) {
+        document.dispatchEvent(new CustomEvent('fbs-packing-row-scan', { detail: raw }))
+        setKizScanValue('')
+        return
+      }
+      if (ordinaryWbPacking) {
+        // The row target is read synchronously by the controller before any blur.
+        setKizScanValue('')
+        acceptPackingScanRef.current(raw)
+        return
+      }
       // Detach the accepted hardware payload synchronously. No async branch is
       // allowed to clear this state later, otherwise a fast following scan is
       // concatenated with or erased by the previous request.
@@ -1800,8 +1924,9 @@ export function FfFbsSupplyWorkspace({
         document.activeElement == null
         || document.activeElement === document.body
         || document.activeElement === kizScanInputRef.current
+        || document.activeElement === kizRowInputRef.current
       )
-      const scanInput = kizScanInputRef.current
+      const scanInput = kizRowInputRef.current ?? kizScanInputRef.current
       if (scanInput && document.activeElement === scanInput) {
         // Move the hardware target to body before the busy render disables the
         // original field. The document buffer can then receive every byte of
@@ -1810,8 +1935,74 @@ export function FfFbsSupplyWorkspace({
       }
       acceptPackingScanRef.current(raw)
     },
-    [kizScanValue, kizScanActive, dropKizScanActive],
+    [kizScanValue, kizScanActive, dropKizScanActive, assemblyWbPacking, ordinaryWbPacking, sequentialScanner],
   )
+
+  // WMS-631 R4: the ordinary WB supply sends every scan to the assembly mechanism.
+  runUnifiedScanRef.current = async (raw: string) => {
+    if (!sequentialScanner) return
+    setKizScanBusy(true)
+    setKizScanError(null)
+    setKizScanHints([])
+    setKizScanNotice(null)
+    setKizScanDebugOpen(false)
+    try {
+      await routePackingScan([sequentialScanner], raw, 'поставке')
+      playScanSuccess()
+    } catch (cause) {
+      setKizScanError({
+        text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось обработать скан.',
+        debug: kizScannerDebug(cause),
+      })
+      playScanError()
+    } finally {
+      setKizScanBusy(false)
+      refocusKizInput()
+    }
+  }
+  // R19: «Назад» undoes the newest scan; a failure stays in the history.
+  undoUnifiedScanRef.current = async () => {
+    if (!sequentialScanner?.undo) return
+    setKizScanBusy(true)
+    setKizScanError(null)
+    try {
+      const scanner = sequentialScanner
+      // Д21: a partial undo (the replaced KIZ unknown) reports in the same error line.
+      const warning = await runPackingSerial(() => scanner.undo!())
+      if (warning) setKizScanError({ text: warning, debug: null })
+    } catch (cause) {
+      setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось отменить скан.', debug: null })
+      playScanError()
+    } finally {
+      setKizScanBusy(false)
+      refocusKizInput(true)
+    }
+  }
+  // R20: Escape (or «Сбросить») drops the started scan and frees its order.
+  cancelUnifiedScanRef.current = async () => {
+    if (!sequentialScanner?.cancel) return
+    setKizScanError(null)
+    try {
+      const scanner = sequentialScanner
+      await runPackingSerial(() => scanner.cancel!())
+    } catch (cause) {
+      setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Не удалось снять выбор.', debug: null })
+      playScanError()
+    } finally {
+      refocusKizInput(true)
+    }
+  }
+  useEffect(() => {
+    if (!ordinaryWbPacking || !open || stage !== 'packing') return
+    const onKeyDown = (event: globalThis.KeyboardEvent) => {
+      if (event.key !== 'Escape' || !(packingSerialBusy() || sequentialScanner?.canCancel?.())) return
+      event.preventDefault()
+      event.stopPropagation()
+      void cancelUnifiedScanRef.current()
+    }
+    document.addEventListener('keydown', onKeyDown, true)
+    return () => document.removeEventListener('keydown', onKeyDown, true)
+  }, [ordinaryWbPacking, open, stage, sequentialScanner])
 
   // Один приём кода для поля скана и для слушателя всей вкладки (WMS-575):
   // что делает скан, решает прежняя логика — ожидание ЧЗ, поиск стикера,
@@ -1819,6 +2010,11 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScan = useCallback(
     (raw: string) => {
       const preferences = { ...scanPrintPreferences }
+      if (ordinaryWbPacking) {
+        // N4: straight into the one packing queue, in reading order.
+        void runUnifiedScanRef.current(raw)
+        return
+      }
       if (kizScanBusy) {
         queuedPackingScansRef.current.push({ raw, preferences })
         setQueuedPackingScanVersion((current) => current + 1)
@@ -1832,7 +2028,7 @@ export function FfFbsSupplyWorkspace({
       if (kizScanActive) void scanKizCode(raw, false, preferences)
       else void scanIdleCode(raw, preferences)
     },
-    [kizScanBusy, kizScanActive, scanKizCode, scanIdleCode, dropKizScanActive, scanPrintPreferences],
+    [kizScanBusy, kizScanActive, scanKizCode, scanIdleCode, dropKizScanActive, scanPrintPreferences, ordinaryWbPacking],
   )
   useLayoutEffect(() => {
     acceptPackingScanRef.current = acceptPackingScan
@@ -1849,8 +2045,14 @@ export function FfFbsSupplyWorkspace({
       active == null
       || active === document.body
       || active === kizScanInputRef.current
+      || active === kizRowInputRef.current
       || isWorkspaceFocusFallback(active)
     )
+    if (active === kizRowInputRef.current) {
+      setKizScanValue('')
+      // WMS-631: the unified controller reads the row target first and blurs it itself.
+      if (!ordinaryWbPackingRef.current) kizRowInputRef.current?.blur()
+    }
     acceptPackingScanRef.current(raw)
   }, [])
 
@@ -1859,6 +2061,10 @@ export function FfFbsSupplyWorkspace({
     const next = queuedPackingScansRef.current.shift()
     if (!next) return
     setQueuedPackingScanVersion((current) => current + 1)
+    if (ordinaryWbPacking) {
+      void runUnifiedScanRef.current(next.raw)
+      return
+    }
     // WMS-575: код из очереди разбирается по состоянию на момент обработки,
     // как обычный скан. Сканер дважды прочитал стикер, пока шёл поиск: первый
     // выбрал заказ, второй — тот же стикер — снимает выбор, а не уходит как ЧЗ.
@@ -1869,7 +2075,7 @@ export function FfFbsSupplyWorkspace({
     }
     if (kizScanActive) void scanKizCode(next.raw, false, next.preferences)
     else void scanIdleCode(next.raw, next.preferences)
-  }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode, dropKizScanActive])
+  }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode, dropKizScanActive, ordinaryWbPacking])
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
@@ -2592,6 +2798,27 @@ export function FfFbsSupplyWorkspace({
     })
   }, [workspace, recentlyScannedOrderId])
 
+  // WMS-636: фильтр «Не принятые WB КИЗ». Выключен — лента ровно как раньше.
+  // В карточке поставки он свой, в окне сборки — общий (assemblyFrame.rejectedFilter).
+  const [ownRejectedFilter, setOwnRejectedFilter] = useState(false)
+  const ownRejectedCount = useMemo(() => (
+    workspace && workspace.supply.marketplace === 'wb' ? workspace.orders.filter(fbsOrderKizRejectedByWb).length : 0
+  ), [workspace])
+  useEffect(() => { setOwnRejectedFilter(false) }, [open, supplyId])
+  useEffect(() => { if (ownRejectedCount === 0) setOwnRejectedFilter(false) }, [ownRejectedCount])
+  const ownRejectedToggle: FbsRejectedKizFilter = {
+    count: ownRejectedCount,
+    active: ownRejectedFilter && ownRejectedCount > 0,
+    onToggle: () => setOwnRejectedFilter((current) => !current),
+  }
+  const rejectedFilterOn = !isOzonSupply && (assemblyFrame
+    ? Boolean(assemblyFrame.rejectedFilter?.active)
+    : ownRejectedToggle.active)
+  const rejectedCountShown = assemblyFrame ? assemblyFrame.rejectedFilter?.count ?? 0 : ownRejectedCount
+  const rejectedHeaderHere = rejectedFilterOn && (!assemblyFrame || assemblyFrame.rejectedFilter?.headerSupplyId === supplyId)
+  // Зелёная строка в сборке — только у поставки последнего скана (она и так наверху).
+  const rejectedGreenHere = !assemblyFrame || assemblyFrame.promotedSupplyId === supplyId
+
   // WB ставит ЧЗ в optional, поэтому после «Очистить ЧЗ» проверка «метки приняты»
   // проходит по пустому списку. Без кода заказ не напечатан, иначе «Печать всего»
   // уходит в перепечатку, и сервер молча отвечает nothing_to_reprint.
@@ -2682,11 +2909,11 @@ export function FfFbsSupplyWorkspace({
   }, [])
   const packingScanIntake = useScanIntake({
     enabled: open
-      && !useSequentialPacking
+      && !assemblyWbPacking
       && stage === 'packing'
       && Boolean(workspace)
       && Boolean(packagingTask)
-      && anyOrderNeedsHonestSign
+      && (ordinaryWbPacking || anyOrderNeedsHonestSign)
       && packagingEditable
       // WMS-574: в окне сборки сканер слушает только активная рамка на открытой вкладке.
       && (!assemblyFrame || (assemblyFrame.active && assemblyFrame.visible)),
@@ -3077,12 +3304,20 @@ export function FfFbsSupplyWorkspace({
     </>
   )
 
+  /** WMS-636 R4: шапка «Не принятые WB КИЗ · N» сразу под зелёной строкой (или первой, если её нет). */
+  const withRejectedKizHeader = (rows: ReactNode[]): ReactNode[] => {
+    if (!rejectedHeaderHere) return rows
+    const header = <FbsRejectedKizHeader key="wms636-rejected-kiz-header" count={rejectedCountShown} />
+    const greenFirst = rejectedGreenHere && packingOrders[0]?.id === recentlyScannedOrderId && recentlyScannedOrderId != null
+    return greenFirst ? [rows[0], header, ...rows.slice(1)] : [header, ...rows]
+  }
+
   const packingRows = workspace ? (
                   <Stack
-                    divider={<Divider flexItem />}
+                    divider={rejectedFilterOn ? undefined : <Divider flexItem />}
                     sx={{ order: assemblyFrame?.promotedSupplyId === supplyId ? -1 : 0 }}
                   >
-                    {packingOrders.map((order) => {
+                    {withRejectedKizHeader(packingOrders.map((order) => {
                       const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
                       const printed = orderPrintDone(order)
                       const needsHonestSign = requiresOrderHonestSign(order)
@@ -3122,12 +3357,20 @@ export function FfFbsSupplyWorkspace({
                       const tail = kizCommittedTails[order.id] ?? markingState?.value_tail ?? null
                       const stickerParts = stickerCodeParts(order.sticker.code)
                       const rowSizes = packingShowsSize ? fbsPackingSizes(order, isOzonSupply) : []
+                      // WMS-636 R4: в фильтре видны зелёная строка и непринятые; остальные только скрыты.
+                      const rejectedHidden = rejectedFilterOn && !kizRowActive
+                        && !(rejectedGreenHere && recentlyScannedOrderId === order.id) && !fbsOrderKizRejectedByWb(order)
                       return (
                         <Stack
                           key={order.id}
                           direction="row"
                           spacing={1.5}
                           sx={{
+                            ...(rejectedFilterOn ? {
+                              display: rejectedHidden ? 'none' : undefined,
+                              borderBottom: '1px solid',
+                              borderBottomColor: 'divider',
+                            } : {}),
                             alignItems: 'center',
                             px: 2,
                             py: 1.25,
@@ -3242,7 +3485,7 @@ export function FfFbsSupplyWorkspace({
                               <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
                             )}
                           </Box>
-                          <Box sx={{ width: 118, flexShrink: 0, textAlign: 'right' }}>
+                          <Box sx={{ width: !isOzonSupply && packagingEditable ? 150 : 118, flexShrink: 0, textAlign: 'right' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
                               ЧЗ
                             </Typography>
@@ -3260,7 +3503,52 @@ export function FfFbsSupplyWorkspace({
                                   </IconButton>
                                 </Tooltip>
                               ) : null}
-                              {tail ? (
+                              {!isOzonSupply && packagingEditable ? (
+                                <TextField
+                                  variant="standard"
+                                  size="small"
+                                  autoComplete="off"
+                                  disabled={busy || kizScanBusy}
+                                  value={kizRowActive && kizRowInputRef.current === document.activeElement ? kizScanValue : tail ?? ''}
+                                  placeholder={tail ?? '—'}
+                                  onFocus={(event) => {
+                                    const previousProduct = activeProductScanBarcodeRef.current
+                                    if (previousProduct) completeFbsPendingProductScan(token, workspace.supply.id, previousProduct)
+                                    activeProductScanBarcodeRef.current = null
+                                    kizSelectedStickerRef.current = ''
+                                    kizRowInputRef.current = event.target as HTMLInputElement
+                                    setKizScanValue('')
+                                    setKizScanError(null)
+                                    setKizScanHints([])
+                                    setKizScanNotice(null)
+                                    setKizScanActive({
+                                      order_id: order.id,
+                                      wb_order_id: order.wb_order_id,
+                                      product: order.product,
+                                      current_kiz: tail ? { masked: tail, meta_status: markingState?.status ?? '', from_pool: markingState?.source === 'pool' } : null,
+                                      needs_confirmation: false,
+                                      can_bind: true,
+                                      block_reason: null,
+                                    })
+                                  }}
+                                  onChange={(event) => setKizScanValue(event.target.value)}
+                                  onBlur={(event) => {
+                                    // В единой упаковке выбор строки действует только
+                                    // пока курсор в поле. Принятый скан уже держит свой target.
+                                    if (useSequentialPacking || (event.relatedTarget instanceof HTMLInputElement
+                                      && (event.relatedTarget.dataset.testid === 'fbs-kiz-row-input'
+                                        || event.relatedTarget.dataset.packingScan === 'true'))) {
+                                      kizRowInputRef.current = null
+                                      kizRowTargetRef.current = null
+                                      setKizScanActive(null)
+                                      setKizScanValue('')
+                                    }
+                                  }}
+                                  onKeyDown={onKizScanEnter}
+                                  slotProps={{ htmlInput: { 'aria-label': `КИЗ заказа ${order.wb_order_id}`, 'data-testid': 'fbs-kiz-row-input', 'data-packing-scan': assemblyWbPacking ? 'true' : undefined } }}
+                                  sx={{ minWidth: 0, flex: 1, '& input': { fontFamily: 'monospace', fontWeight: 700, fontSize: 15, textAlign: 'right', color: markingColor } }}
+                                />
+                              ) : tail ? (
                                 <Typography
                                   sx={{ fontFamily: 'monospace', fontWeight: 700, fontSize: 15, color: markingColor }}
                                   data-testid="fbs-kiz-tail"
@@ -3322,13 +3610,13 @@ export function FfFbsSupplyWorkspace({
                           </Stack>
                         </Stack>
                       )
-                    })}
+                    }))}
                   </Stack>
   ) : null
 
   const packingPanel = workspace ? (
     <>
-              {packagingTask || deliveryConfirmed || useSequentialPacking ? (
+              {packagingTask || deliveryConfirmed || assemblyWbPacking ? (
                 <Paper variant="outlined" sx={assemblyFrame ? { overflow: 'hidden', border: 0, borderRadius: 0 } : { overflow: 'hidden' }}>
                   <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
@@ -3392,9 +3680,9 @@ export function FfFbsSupplyWorkspace({
                           </Button>
                         ) : null}
 
-                        {!useSequentialPacking ? <Button variant="contained" disabled={!packagingEditable || busy} onClick={() => void packEverything()}>
+                        <Button variant="contained" disabled={!packagingEditable || busy || (assemblyWbPacking && !packagingTask)} onClick={() => void packEverything()}>
                           Всё упаковано
-                        </Button> : null}
+                        </Button>
                         {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
                           <Button
                             color="warning"
@@ -3415,7 +3703,7 @@ export function FfFbsSupplyWorkspace({
                       </Typography>
                     </Box>
                   ) : null}
-                  {!useSequentialPacking && anyOrderNeedsHonestSign ? (
+                  {!assemblyWbPacking && (ordinaryWbPacking || anyOrderNeedsHonestSign) ? (
                     // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
                     // строку активной, следующий скан (Честный знак) привязывает код к
                     // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
@@ -3438,7 +3726,7 @@ export function FfFbsSupplyWorkspace({
                           autoComplete="off"
                           value={kizScanValue}
                           disabled={!packagingEditable || kizScanBusy}
-                          placeholder={kizScanActive ? 'Сканируйте Честный знак' : (isOzonSupply ? 'Номер отправления или штрихкод Ozon' : 'Сканируйте QR стикера заказа')}
+                          placeholder={shownKizTarget ? 'Сканируйте Честный знак' : (isOzonSupply ? 'Номер отправления или штрихкод Ozon' : 'Сканируйте QR стикера заказа')}
                           onChange={(event) => setKizScanValue(event.target.value)}
                           onKeyDown={onKizScanEnter}
                           data-testid="fbs-kiz-scan-input"
@@ -3449,76 +3737,37 @@ export function FfFbsSupplyWorkspace({
                                   <QrCodeScannerOutlined fontSize="small" color="action" />
                                 </InputAdornment>
                               ),
+                              // WMS-635 Д4: inside the field, so nothing in the bar moves.
+                              endAdornment: ordinaryWbPacking && ownRejectedToggle.count > 0 ? (
+                                <InputAdornment position="end">
+                                  <FbsRejectedKizTriangle filter={ownRejectedToggle} />
+                                </InputAdornment>
+                              ) : undefined,
                             },
                           }}
                           sx={{ '& input': { fontFamily: 'monospace' } }}
                         />
                         {!isOzonSupply ? (
-                          <>
-                            <FormControlLabel
-                              data-testid="fbs-scan-print-qr-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.printQr}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, printQr: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Печатать QR"
-                            />
-                            <FormControlLabel
-                              data-testid="fbs-scan-print-chz-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.printChz}
-                                  disabled={scanPrintPreferences.reprintChz}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, printChz: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Печатать ЧЗ"
-                            />
-                            <FormControlLabel
-                              data-testid="fbs-kiz-auto-reprint-toggle"
-                              sx={{ m: 0, flexShrink: 0, whiteSpace: 'nowrap' }}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={scanPrintPreferences.reprintChz}
-                                  disabled={scanPrintPreferences.printChz}
-                                  onChange={(event) => {
-                                    const next = { ...scanPrintPreferences, reprintChz: event.target.checked }
-                                    setScanPrintPreferences(next)
-                                    saveFbsScanPrintPreferences(token, next)
-                                  }}
-                                />
-                              }
-                              label="Перепечатывать ЧЗ"
-                            />
-                          </>
+                          <FbsScanPrintToggles value={scanPrintPreferences} onChange={(next) => {
+                            setScanPrintPreferences(next)
+                            saveFbsScanPrintPreferences(token, next)
+                          }} undo={ordinaryWbPacking ? {
+                            disabled: kizScanBusy || sequentialScanner?.lastStep?.() == null,
+                            onClick: () => void undoUnifiedScanRef.current(),
+                          } : undefined} />
                         ) : null}
-                        {kizScanActive ? (
+                        {shownKizTarget ? (
                           <Stack direction="row" spacing={1} sx={{ alignItems: 'center', flexShrink: 0 }} data-testid="fbs-kiz-scan-active">
-                            <ProductPhotoThumb src={kizScanActive.product.image_url} alt={kizScanActive.product.name} size={32} previewSize={220} />
+                            <ProductPhotoThumb src={shownKizTarget.product.image_url} alt={shownKizTarget.product.name} size={32} previewSize={220} />
                             <Box sx={{ minWidth: 0 }}>
                               <Typography variant="body2" noWrap sx={{ fontWeight: 700 }}>
-                                {kizScanActive.product.name}
+                                {shownKizTarget.product.name}
                               </Typography>
                               <Typography variant="caption" color="text.secondary">
-                                {providerName} № {fbsKizOrderNumber(kizScanActive)}
+                                {providerName} № {fbsKizOrderNumber(shownKizTarget)}
                               </Typography>
                             </Box>
-                            <Button size="small" startIcon={<CloseIcon fontSize="small" />} onClick={dropKizScanActive}
+                            <Button size="small" startIcon={<CloseIcon fontSize="small" />} onClick={ordinaryWbPacking ? () => void cancelUnifiedScanRef.current() : dropKizScanActive}
                               disabled={kizScanBusy} data-testid="fbs-kiz-scan-reset">
                               Сбросить
                             </Button>
@@ -3531,8 +3780,8 @@ export function FfFbsSupplyWorkspace({
                         sx={{ display: 'block', mt: 0.75 }}
                         data-testid="fbs-kiz-scan-message"
                       >
-                        {kizScanActive
-                          ? `Заказ ${providerName} № ${fbsKizOrderNumber(kizScanActive)} активен — сканируйте Честный знак, код уйдёт на проверку в ${providerName}.`
+                        {shownKizTarget
+                          ? `Заказ ${providerName} № ${fbsKizOrderNumber(shownKizTarget)} активен — сканируйте Честный знак, код уйдёт на проверку в ${providerName}.`
                           : isOzonSupply ? 'Введите номер отправления или сканируйте штрихкод Ozon, затем Честный знак каждой единицы товара.' : 'Сканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.'}
                       </Typography>
                       {kizScanNotice ? <Typography variant="caption" sx={{ display: 'block' }} data-testid="fbs-kiz-scan-result">{kizScanNotice}</Typography> : null}
@@ -4350,6 +4599,7 @@ export function FfFbsSupplyWorkspace({
       return <>
         {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
         {frameMessages}
+        {kizScanError ? <Alert severity="error">{kizScanError.text}</Alert> : null}
         {workspaceDialogs}
       </>
     }
@@ -4639,9 +4889,8 @@ export function FfFbsSupplyWorkspace({
                   Печать листа подбора
                 </Button>
               </Stack>
-              {/* Тот же экран подбора, что в документе отгрузки: строка идёт от
-                  товара, видно где он лежит и сколько снять. Владелец требовал
-                  одинаковый инструмент в обоих подборах. */}
+              {/* Тот же экран подбора, что в документе отгрузки, но список идёт
+                  от ячейки, как в окне «Сборка» (WMS-637): ячейка → тара → товар. */}
               {supplyId ? (
                 <Box data-testid="fbs-pick-unified">
                   <FfUnloadPickPage

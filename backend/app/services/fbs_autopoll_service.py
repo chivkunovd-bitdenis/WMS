@@ -13,7 +13,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 
 import httpx
-from sqlalchemy import exists, or_, select, text
+from sqlalchemy import and_, exists, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -32,6 +32,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
+from app.models.fbs_wb_operation import WB_OPERATION_STATE_PENDING_CONFIRMATION, FbsWbOperation
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -1008,8 +1009,10 @@ async def sync_marking_verdicts_for_seller(
     а не ради полной пересверки всех кодов поставки.
     """
     from app.services.fbs_marking_service import (
+        OPERATION_KIND_ORDER_KIZ_BIND,
         MarkingVerdictsSyncResult,
         require_marketplace_token,
+        resend_pending_kiz_bindings,
         sync_marking_verdicts_batch,
     )
 
@@ -1036,16 +1039,49 @@ async def sync_marking_verdicts_for_seller(
         .order_by(FbsOrder.id.asc())
     )
     orders = list((await session.execute(stmt)).scalars().all())
-    if not orders:
+    # WMS-635 R4.2 / WMS-642: a KIZ write still pending (queued by the scan, a
+    # temporary WB answer or a lost one) is sent here for any supply of the
+    # seller, also one already handed over, so a scanned code never stays local.
+    queued_keys = [
+        (row.id, row.tenant_id)
+        for row in (
+            await session.execute(
+                select(FbsOrder.id, FbsOrder.tenant_id)
+                .join(FbsOrderMarking, FbsOrderMarking.order_id == FbsOrder.id)
+                .join(
+                    FbsWbOperation,
+                    and_(
+                        FbsWbOperation.local_entity_id == FbsOrderMarking.id,
+                        FbsWbOperation.local_entity_type == "fbs_order_marking",
+                        FbsWbOperation.operation_kind == OPERATION_KIND_ORDER_KIZ_BIND,
+                        FbsWbOperation.state == WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                    ),
+                )
+                .where(
+                    FbsOrder.tenant_id == target.tenant_id,
+                    FbsOrder.seller_id == target.seller_id,
+                    FbsOrder.marketplace == "wb",
+                )
+                .distinct()
+            )
+        ).all()
+    ]
+    if not orders and not queued_keys:
         return MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
     token = await require_marketplace_token(session, target.tenant_id, target.seller_id)
-    return await sync_marking_verdicts_batch(
-        session,
-        orders,
-        http_client,
-        token,
-        actor_user_id=None,
-    )
+    result = MarkingVerdictsSyncResult(orders_checked=0, orders_updated=0)
+    if orders:
+        result = await sync_marking_verdicts_batch(
+            session,
+            orders,
+            http_client,
+            token,
+            actor_user_id=None,
+        )
+    await session.commit()
+    # Read first, never blind; the worker locks nothing while WB answers.
+    await resend_pending_kiz_bindings(session, queued_keys, http_client, token)
+    return result
 
 
 async def sync_fbs_marking_verdicts_all_sellers() -> FbsMarkingVerdictsCycleResult:

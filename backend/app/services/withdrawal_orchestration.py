@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -23,7 +22,7 @@ from app.db.withdrawal_repository import (
     lock_seller,
 )
 from app.models.billing import BillingProfile
-from app.models.fbs_order import FbsOrder, FbsOrderMarking
+from app.models.fbs_order import FbsOrderMarking
 from app.models.marking_withdrawal import (
     WithdrawalDocument,
     WithdrawalItem,
@@ -38,11 +37,7 @@ from app.services.true_api_withdrawal import (
     TrueApiError,
     safe_provider_error,
 )
-from app.services.wb_order_price_service import (
-    WbPriceDataError,
-    fetch_statistics_order_prices,
-)
-from app.services.wildberries_credentials_service import get_decrypted_marketplace_token
+from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
 from app.services.withdrawal_document_builder import WithdrawalProduct, build_withdrawal_documents
 from app.services.withdrawal_mod_service import (
     DISTANCE_MOD_GROUPS,
@@ -561,88 +556,6 @@ async def authenticate_and_build(
             lease,
             WithdrawalError("withdrawal_auth_or_provider_data_invalid"),
         )
-
-    group_ids: dict[str, set[int | None]] = {}
-    for group_info in by_cis.values():
-        if group_info.product_group:
-            group_ids.setdefault(group_info.product_group, set()).add(
-                group_info.product_group_id
-            )
-    required_items = [
-        item
-        for item in items
-        if (info := by_cis.get(item.provider_cis or "")) is not None
-        and info.product_group in DISTANCE_GROUPS
-        and cis_error(
-            info,
-            inn=inn,
-            traceability_mode=runtime.traceability_mode(info.product_group),
-        )
-        is None
-        and len(group_ids.get(info.product_group, set())) == 1
-        and info.product_group not in discovery_errors
-    ]
-    price_errors: dict[uuid.UUID, WbPriceDataError] = {}
-    required_order_ids = {item.order_id for item in required_items}
-    statistics_prices: dict[uuid.UUID, int] = {}
-    if required_order_ids:
-        orders = list(
-            await session.scalars(
-                select(FbsOrder).where(
-                    FbsOrder.id.in_(required_order_ids),
-                    FbsOrder.tenant_id == scope.tenant_id,
-                    FbsOrder.seller_id == scope.seller_id,
-                    FbsOrder.marketplace == "wb",
-                )
-            )
-        )
-        orders_by_id = {order.id: order for order in orders}
-        token = await get_decrypted_marketplace_token(
-            session, scope.tenant_id, scope.seller_id
-        )
-        await session.commit()
-        requestable = {
-            order.wb_rid: order
-            for order in orders
-            if order.wb_rid and order.created_at_wb is not None
-        }
-        for order_id in required_order_ids:
-            order = orders_by_id.get(order_id)
-            if order is None or not order.wb_rid:
-                price_errors[order_id] = WbPriceDataError(
-                    "wb_order_rid_missing",
-                    "WB: у заказа отсутствует идентификатор rid для поиска фактической цены",
-                )
-            elif token is None:
-                price_errors[order_id] = WbPriceDataError(
-                    "missing_marketplace_token",
-                    "WB: отсутствует сохранённый ключ для получения цены заказа",
-                )
-        if token is not None and requestable:
-            earliest = min(aware(order.created_at_wb) for order in requestable.values())
-            date_from = max(earliest, datetime.now(UTC) - timedelta(days=89))
-            try:
-                async with httpx.AsyncClient(timeout=30.0) as http:
-                    by_rid = await fetch_statistics_order_prices(
-                        http,
-                        api_token=token,
-                        date_from=date_from,
-                        rids=set(requestable),
-                    )
-            except WbPriceDataError as exc:
-                for order in requestable.values():
-                    price_errors[order.id] = exc
-            else:
-                for rid, order in requestable.items():
-                    fetched_price = by_rid.get(rid)
-                    if fetched_price is None:
-                        price_errors[order.id] = WbPriceDataError(
-                            "wb_order_price_not_found",
-                            "WB Statistics: фактическая цена заказа не найдена",
-                        )
-                    else:
-                        statistics_prices[order.id] = fetched_price
-
     await lock_seller(session, scope)
     operation = await get_operation(session, scope, operation_id, lock=True)
     if operation.workflow_lease_id != lease:
@@ -659,6 +572,10 @@ async def authenticate_and_build(
         )
     prepared: list[WithdrawalProduct] = []
     current = await current_items(session, scope, operation.id)
+    group_ids: dict[str, set[int | None]] = {}
+    for group_info in by_cis.values():
+        if group_info.product_group:
+            group_ids.setdefault(group_info.product_group, set()).add(group_info.product_group_id)
     for item in current:
         if item.state != "pending":
             continue
@@ -690,13 +607,13 @@ async def authenticate_and_build(
             item.state, item.error = "failed", discovery_errors[info.product_group]
             continue
         try:
-            product_cost = statistics_prices.get(item.order_id)
-            if product_cost is None:
-                raise price_errors.get(item.order_id) or WbPriceDataError(
-                    "wb_order_price_not_found",
-                    "WB: фактическая цена заказа не найдена",
-                )
-            item.product_cost = product_cost
+            price = await resolve_wb_product_cost(
+                session,
+                tenant_id=scope.tenant_id,
+                seller_id=scope.seller_id,
+                order_id=item.order_id,
+            )
+            item.price_snapshot_id, item.product_cost = price.snapshot_id, price.product_cost
             fias, kpp = required_external_mod(
                 inn=inn,
                 pg=info.product_group,
@@ -708,12 +625,7 @@ async def authenticate_and_build(
             continue
         prepared.append(
             WithdrawalProduct(
-                item.id,
-                item.provider_cis or "",
-                product_cost,
-                info.product_group,
-                fias,
-                kpp,
+                item.id, item.provider_cis or "", price.product_cost, info.product_group, fias, kpp
             )
         )
     built = build_withdrawal_documents(

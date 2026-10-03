@@ -23,6 +23,9 @@ from app.core.roles import FULFILLMENT_SELLER
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
+from app.schemas.catalog_sync import CatalogSyncJobOut, catalog_sync_job_out
+from app.services import background_job_service as job_svc
+from app.services.background_job_service import JOB_TYPE_SELLER_WB_CATALOG_SYNC
 from app.services.seller_marketplace_requisites_service import (
     autofill_requisites_after_key_saved,
 )
@@ -41,19 +44,13 @@ from app.services.wildberries_credentials_service import (
 )
 from app.services.wildberries_import_cards_service import (
     list_imported_cards_for_seller,
-    upsert_imported_cards,
 )
 from app.services.wildberries_import_supplies_service import list_imported_supplies_for_seller
-from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 from app.services.wildberries_product_link_service import (
     WildberriesLinkError,
     link_product_to_wb_card,
 )
-from app.services.wildberries_product_sync_service import (
-    filter_wb_cards_to_selected,
-    get_selected_wb_nm_ids,
-)
-from app.services.wildberries_sync_service import fetch_all_cards
+from app.services.wildberries_sync_service import validate_content_token
 
 router = APIRouter(prefix="/integrations/wildberries", tags=["integrations"])
 logger = logging.getLogger(__name__)
@@ -131,25 +128,13 @@ class WildberriesSelfTokenSaveOut(BaseModel):
     duplicate_chrt_id: int = 0
     barcode_conflicts: int = 0
     barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
+    catalog_job: CatalogSyncJobOut
 
 
 class WildberriesSelfTokenSaveErrorOut(BaseModel):
     code: Literal["token_save_failed", "product_conflict"]
     message: str
     ref: str
-
-
-class WildberriesSelfSyncOut(BaseModel):
-    ok: bool = True
-    cards_received: int
-    cards_saved: int
-    products_created: int
-    products_updated: int
-    products_skipped: int
-    sizes_missing_chrt_id: int = 0
-    duplicate_chrt_id: int = 0
-    barcode_conflicts: int = 0
-    barcode_conflict_details: list[dict[str, object]] = Field(default_factory=list)
 
 
 def _self_token_save_error_response(
@@ -179,6 +164,40 @@ def _self_token_save_error_response(
         ref=incident_ref,
     )
     return JSONResponse(status_code=status_code, content=body.model_dump())
+
+
+async def _queue_wb_catalog_sync(
+    background_tasks: BackgroundTasks,
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> CatalogSyncJobOut:
+    job, created = await job_svc.create_or_get_seller_catalog_sync_job(
+        session,
+        tenant_id,
+        seller_id,
+        job_type=JOB_TYPE_SELLER_WB_CATALOG_SYNC,
+        marketplace="wildberries",
+    )
+    if created:
+        try:
+            if settings.celery_broker_url:
+                from app.tasks.background_jobs import run_wildberries_cards_sync_task
+
+                run_wildberries_cards_sync_task.delay(str(job.id))
+            else:
+                background_tasks.add_task(job_svc.run_wildberries_cards_sync_job, job.id)
+        except Exception:
+            logger.exception(
+                "WB catalog job dispatch failed job=%s tenant_id=%s seller_id=%s",
+                job.id,
+                tenant_id,
+                seller_id,
+            )
+            job = await job_svc.mark_job_dispatch_failed(
+                session, job, error_code="catalog_job_dispatch_failed"
+            )
+    return catalog_sync_job_out(job, marketplace="wildberries")
 
 
 def _parse_token_merge_patch(
@@ -499,12 +518,11 @@ async def save_and_validate_self_content_token(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="token_empty",
         )
-    total_cards: list[object] = []
     validation_error: str | None = None
     marketplace_validation_ok = False
     try:
         async with httpx.AsyncClient() as client:
-            total_cards, _cursor_present = await fetch_all_cards(client, api_token=token)
+            await validate_content_token(client, api_token=token)
             try:
                 await fetch_marketplace_seller_warehouses(client, api_token=token)
                 marketplace_validation_ok = True
@@ -520,17 +538,22 @@ async def save_and_validate_self_content_token(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
                 detail="invalid_wb_token",
             ) from None
-        if exc.code == "invalid_json":
+        if exc.code in {"invalid_json", "invalid_response"}:
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail=exc.code,
             ) from None
-        suffix = f"_{exc.status_code}" if exc.status_code else ""
-        validation_error = f"{exc.code}{suffix}"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="wb_validation_unavailable",
+        ) from None
     except httpx.HTTPError:
-        validation_error = "transport_error"
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="wb_validation_unavailable",
+        ) from None
 
-    n = len(total_cards)
+    n = 0
     saved = 0
     prod_stats: dict[str, Any] = {
         "products_created": 0,
@@ -552,29 +575,29 @@ async def save_and_validate_self_content_token(
             marketplace_api_token=token if marketplace_validation_ok else SKIP,
             marketplace_scope_ok=marketplace_validation_ok,
         )
-        # WMS-547 R5: ключ сохранён — метод сведений о продавце принимает
-        # токен любой категории, поэтому пробуем и когда нет прав "Маркетплейс"
-        # (validation_error != None). Не трогает уже существующую запись (R6).
-        background_tasks.add_task(
-            autofill_requisites_after_key_saved, tenant_id, seller_id, marketplace="wb"
+        catalog_job = await _queue_wb_catalog_sync(
+            background_tasks, session, tenant_id, seller_id
         )
-        if validation_error is None:
-            saved = await upsert_imported_cards(
-                session, tenant_id, seller_id, total_cards
-            )
-            # WMS-548 R4: сохранение ключа обновляет снимок карточек, но не заводит
-            # товары WMS для карточек, которых ещё нет на фулфилменте.
-            selected_nm_ids = await get_selected_wb_nm_ids(session, tenant_id, seller_id)
-            prod_stats = await upsert_products_from_wb_cards(
-                session,
+        try:
+            # Реквизиты и склады — вспомогательные фоновые чтения. Сбой их
+            # регистрации не должен маскировать уже сохранённый ключ и durable job.
+            background_tasks.add_task(
+                autofill_requisites_after_key_saved,
                 tenant_id,
                 seller_id,
-                filter_wb_cards_to_selected(total_cards, selected_nm_ids),
+                marketplace="wb",
             )
-            from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
+            if marketplace_validation_ok:
+                from app.services.wb_mp_warehouse_service import run_wb_mp_warehouses_sync_task
 
-            background_tasks.add_task(
-                run_wb_mp_warehouses_sync_task,
+                background_tasks.add_task(
+                    run_wb_mp_warehouses_sync_task,
+                    tenant_id,
+                    seller_id,
+                )
+        except Exception:
+            logger.exception(
+                "WB auxiliary task dispatch failed tenant_id=%s seller_id=%s",
                 tenant_id,
                 seller_id,
             )
@@ -621,59 +644,30 @@ async def save_and_validate_self_content_token(
         duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
         barcode_conflicts=prod_stats["barcode_conflicts"],
         barcode_conflict_details=prod_stats["barcode_conflict_details"],
+        catalog_job=catalog_job,
     )
 
 
-@router.post("/self/sync-products", response_model=WildberriesSelfSyncOut)
+@router.post(
+    "/self/sync-products",
+    response_model=CatalogSyncJobOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def sync_products_now(
+    background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
-) -> WildberriesSelfSyncOut:
-    """Seller-click sync: fetch all WB cards, persist snapshots, and upsert Product rows."""
+) -> CatalogSyncJobOut:
+    """Queue the seller's complete WB catalog refresh."""
     await assert_seller_permission(session, user, PERM_SETTINGS)
     if user.role != FULFILLMENT_SELLER or effective_seller_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     pair = await get_decrypted_tokens_for_seller(session, user.tenant_id, effective_seller_id)
     if pair is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="seller_not_found")
-    content_token, _supplies = pair
-    if not content_token:
+    if not pair[0]:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="missing_content_token")
-
-    async with httpx.AsyncClient() as client:
-        try:
-            total_cards, _cursor_present = await fetch_all_cards(client, api_token=content_token)
-        except WildberriesClientError as exc:
-            if exc.code == "upstream_error" and exc.status_code in (401, 403):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-                    detail="invalid_wb_token",
-                ) from None
-            raise HTTPException(
-                status_code=status.HTTP_502_BAD_GATEWAY,
-                detail=exc.code,
-            ) from None
-
-    n = len(total_cards)
-    saved = await upsert_imported_cards(session, user.tenant_id, effective_seller_id, total_cards)
-    # WMS-548 R5: ручная синхронизация обновляет только уже выбранные карточки,
-    # новые и невыбранные товарами WMS не становятся.
-    selected_nm_ids = await get_selected_wb_nm_ids(session, user.tenant_id, effective_seller_id)
-    prod_stats = await upsert_products_from_wb_cards(
-        session,
-        user.tenant_id,
-        effective_seller_id,
-        filter_wb_cards_to_selected(total_cards, selected_nm_ids),
-    )
-    return WildberriesSelfSyncOut(
-        cards_received=n,
-        cards_saved=saved,
-        products_created=prod_stats["products_created"],
-        products_updated=prod_stats["products_updated"],
-        products_skipped=prod_stats["products_skipped"],
-        sizes_missing_chrt_id=prod_stats["sizes_missing_chrt_id"],
-        duplicate_chrt_id=prod_stats["duplicate_chrt_id"],
-        barcode_conflicts=prod_stats["barcode_conflicts"],
-        barcode_conflict_details=prod_stats["barcode_conflict_details"],
+    return await _queue_wb_catalog_sync(
+        background_tasks, session, user.tenant_id, effective_seller_id
     )

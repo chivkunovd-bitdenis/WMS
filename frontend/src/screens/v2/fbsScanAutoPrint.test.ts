@@ -6,6 +6,7 @@ import {
   fbsScanPrintPreferencesStorageKey,
   loadFbsScanPrintPreferences,
   mergeFbsBufferedHardwareScan,
+  normalizeFbsChzCopies,
   peekFbsPendingProductScan,
   productScanPrintPlan,
   saveFbsScanPrintPreferences,
@@ -48,9 +49,9 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
     }
   })
 
-  it('defaults off and persists separately by tenant and operator', () => {
+  it('defaults to QR only (WMS-631 Д2) and persists separately by tenant and operator', () => {
     expect(loadFbsScanPrintPreferences(token())).toEqual({
-      printQr: false,
+      printQr: true,
       printChz: false,
       reprintChz: false,
     })
@@ -64,8 +65,8 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
       printChz: true,
       reprintChz: false,
     })
-    expect(loadFbsScanPrintPreferences(token('ff-a', 'operator-b')).printQr).toBe(false)
-    expect(loadFbsScanPrintPreferences(token('ff-b')).printQr).toBe(false)
+    expect(loadFbsScanPrintPreferences(token('ff-a', 'operator-b')).printChz).toBe(false)
+    expect(loadFbsScanPrintPreferences(token('ff-b')).printChz).toBe(false)
     expect(fbsScanPrintPreferencesStorageKey(token()))
       .not.toBe(fbsScanPrintPreferencesStorageKey(token('ff-a', 'operator-b')))
   })
@@ -176,5 +177,41 @@ describe('WMS-514 · FBS product-scan print preferences', () => {
     )
     expect(next.idempotencyKey).toBe('request-b')
     expect(next.preferences).toEqual({ printQr: false, printChz: true, reprintChz: false })
+  })
+})
+
+describe('WMS-633 · number of KIZ copies in the saved checkboxes', () => {
+  it('saves the counts for KIZ and for its copy separately and restores them', () => {
+    saveFbsScanPrintPreferences(token(), { printQr: true, printChz: true, reprintChz: false, printChzCopies: 3, reprintChzCopies: 2 })
+    expect(loadFbsScanPrintPreferences(token())).toEqual({
+      printQr: true, printChz: true, reprintChz: false, printChzCopies: 3, reprintChzCopies: 2,
+    })
+    expect(loadFbsScanPrintPreferences(token('ff-a', 'operator-b')).printChzCopies).toBeUndefined()
+  })
+
+  it('old saved preferences without a count mean one copy', () => {
+    local.set(fbsScanPrintPreferencesStorageKey(token()), JSON.stringify({ printQr: true, printChz: true, reprintChz: false }))
+    const loaded = loadFbsScanPrintPreferences(token())
+    expect(loaded).toEqual({ printQr: true, printChz: true, reprintChz: false })
+    expect(normalizeFbsChzCopies(loaded.printChzCopies)).toBe(1)
+    expect(normalizeFbsChzCopies(loaded.reprintChzCopies)).toBe(1)
+  })
+
+  it('a corrupt count is clamped to 1…10', () => {
+    local.set(fbsScanPrintPreferencesStorageKey(token()), JSON.stringify({
+      printQr: false, printChz: true, reprintChz: false, printChzCopies: 99, reprintChzCopies: 'abc',
+    }))
+    expect(loadFbsScanPrintPreferences(token())).toMatchObject({ printChzCopies: 10, reprintChzCopies: 1 })
+    expect(normalizeFbsChzCopies(0)).toBe(1)
+    expect(normalizeFbsChzCopies('4')).toBe(4)
+  })
+
+  it('an unfinished scan keeps the count it was made with after a reload', () => {
+    const original = { printQr: true, printChz: true, reprintChz: false, printChzCopies: 3 }
+    claimFbsPendingProductScan(token(), 'supply-a', '4600123', original, () => 'request-a')
+    const recovered = claimFbsPendingProductScan(token(), 'supply-a', '4600123',
+      { printQr: true, printChz: true, reprintChz: false, printChzCopies: 7 }, () => 'must-not-be-used')
+    expect(recovered.preferences.printChzCopies).toBe(3)
+    expect(peekFbsPendingProductScan(token(), 'supply-a', '4600123')?.preferences.printChzCopies).toBe(3)
   })
 })

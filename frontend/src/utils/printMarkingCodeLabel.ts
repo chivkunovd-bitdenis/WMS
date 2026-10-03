@@ -18,7 +18,7 @@ import { escapeLabelHtml } from './productLabelText'
 import type { PrintLayout } from './printTemplate'
 import { renderBarcodeDataUrl } from './renderBarcodeDataUrl'
 
-function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
+export function buildTapePageCss(size: LabelSize = DEFAULT_LABEL_SIZE): string {
   const k = labelScale(size)
   // Drivers can expose a printable page slightly shorter than the selected stock.
   // Keep a physical allowance instead of relying on viewport units or an

@@ -7,7 +7,7 @@ from collections import defaultdict
 from dataclasses import dataclass, replace
 from typing import cast
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderProductPick
@@ -124,7 +124,110 @@ async def active_fbs_picks_by_source(
             assigned[
                 (position_pick.product_id, position_pick.sorting_storage_location_id, None, None)
             ] += 1
+    fbo_staged = await _active_fbo_staged_by_source(session, tenant_id, product_ids)
+    for fbo_key, fbo_count in fbo_staged.items():
+        assigned[fbo_key] += fbo_count
     return dict(assigned), dict(unlocated)
+
+
+async def _active_fbo_staged_by_source(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[SourceKey, int]:
+    """Штуки незавершённых документов FBO, снятые подбором, но лежащие на складе.
+
+    WMS-632: подбор FBO переносит штуку на сортировку, остаток цел. Эта штука уже
+    занята документом и не может быть подобрана повторно (ни FBO, ни FBS).
+    Документы, начатые до выкладки, списали подобранное сразу: эта часть
+    (движения marketplace_unload) уже вычтена из остатка и здесь не считается.
+    """
+    from app.models.inventory_movement import MOVEMENT_TYPE_MARKETPLACE_UNLOAD, InventoryMovement
+    from app.models.marketplace_unload import (
+        MarketplaceUnloadPickAllocation,
+        MarketplaceUnloadRequest,
+    )
+    from app.services.marketplace_unload_status import RESERVE_STATUSES
+
+    alloc_rows = (
+        await session.execute(
+            select(
+                MarketplaceUnloadPickAllocation.request_id,
+                MarketplaceUnloadPickAllocation.product_id,
+                MarketplaceUnloadPickAllocation.storage_location_id,
+                MarketplaceUnloadPickAllocation.container_kind,
+                MarketplaceUnloadPickAllocation.container_id,
+                MarketplaceUnloadPickAllocation.quantity,
+                MarketplaceUnloadRequest.warehouse_id,
+            )
+            .join(
+                MarketplaceUnloadRequest,
+                MarketplaceUnloadRequest.id == MarketplaceUnloadPickAllocation.request_id,
+            )
+            .where(
+                MarketplaceUnloadRequest.tenant_id == tenant_id,
+                MarketplaceUnloadRequest.status.in_(RESERVE_STATUSES),
+                MarketplaceUnloadPickAllocation.product_id.in_(product_ids),
+                MarketplaceUnloadPickAllocation.quantity > 0,
+            )
+            .order_by(MarketplaceUnloadPickAllocation.created_at)
+        )
+    ).all()
+    if not alloc_rows:
+        return {}
+    request_ids = {row[0] for row in alloc_rows}
+    warehouse_ids = {row[6] for row in alloc_rows}
+    sorting_by_warehouse = {
+        wid: lid
+        for lid, wid in (
+            await session.execute(
+                select(StorageLocation.id, StorageLocation.warehouse_id).where(
+                    StorageLocation.tenant_id == tenant_id,
+                    StorageLocation.warehouse_id.in_(warehouse_ids),
+                    StorageLocation.code == SORTING_LOCATION_CODE,
+                )
+            )
+        ).all()
+    }
+    written: dict[tuple[uuid.UUID, uuid.UUID], int] = {
+        (rid, pid): max(0, -int(total or 0))
+        for rid, pid, total in (
+            await session.execute(
+                select(
+                    InventoryMovement.marketplace_unload_request_id,
+                    InventoryMovement.product_id,
+                    func.coalesce(func.sum(InventoryMovement.quantity_delta), 0),
+                )
+                .where(
+                    InventoryMovement.tenant_id == tenant_id,
+                    InventoryMovement.marketplace_unload_request_id.in_(request_ids),
+                    InventoryMovement.movement_type == MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+                    InventoryMovement.product_id.in_(product_ids),
+                )
+                .group_by(
+                    InventoryMovement.marketplace_unload_request_id,
+                    InventoryMovement.product_id,
+                )
+            )
+        ).all()
+    }
+    staged: dict[SourceKey, int] = defaultdict(int)
+    for row in alloc_rows:
+        request_id, product_id, location_id, kind, container_id, quantity, warehouse_id = row
+        legacy = min(int(quantity), written.get((request_id, product_id), 0))
+        written[(request_id, product_id)] = written.get((request_id, product_id), 0) - legacy
+        remaining = int(quantity) - legacy
+        if remaining < 1:
+            continue
+        sorting_id = sorting_by_warehouse.get(warehouse_id)
+        if sorting_id is not None and location_id != sorting_id:
+            staged[(product_id, sorting_id, None, None)] += remaining
+        else:
+            # Подбор прямо с сортировки: штука осталась на своём месте и в таре.
+            staged[(product_id, location_id, cast(ContainerKind | None, kind), container_id)] += (
+                remaining
+            )
+    return dict(staged)
 
 
 def source_available(
@@ -138,6 +241,59 @@ def source_available(
     if warehouse_ceiling is not None:
         ceiling = min(ceiling, warehouse_ceiling)
     return max(0, ceiling)
+
+
+async def staged_unload_quantities(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> dict[uuid.UUID, int]:
+    """Штуки документа FBO, уже снятые подбором, но ещё числящиеся на складе.
+
+    После WMS-632 подбор FBO остаток не списывает (штука уходит на сортировку),
+    поэтому потолок «Доступно» надо уменьшать на уже подобранное самим
+    документом. Документы, начатые раньше, списали подобранное сразу —
+    эта часть уже вычтена из остатка и здесь не учитывается.
+    """
+    from app.models.inventory_movement import MOVEMENT_TYPE_MARKETPLACE_UNLOAD, InventoryMovement
+    from app.models.marketplace_unload import MarketplaceUnloadPickAllocation
+
+    picked = {
+        pid: int(qty or 0)
+        for pid, qty in (
+            await session.execute(
+                select(
+                    MarketplaceUnloadPickAllocation.product_id,
+                    func.coalesce(func.sum(MarketplaceUnloadPickAllocation.quantity), 0),
+                )
+                .where(
+                    MarketplaceUnloadPickAllocation.request_id == request_id,
+                    MarketplaceUnloadPickAllocation.product_id.in_(product_ids),
+                )
+                .group_by(MarketplaceUnloadPickAllocation.product_id)
+            )
+        ).all()
+    }
+    written = {
+        pid: max(0, -int(qty or 0))
+        for pid, qty in (
+            await session.execute(
+                select(
+                    InventoryMovement.product_id,
+                    func.coalesce(func.sum(InventoryMovement.quantity_delta), 0),
+                )
+                .where(
+                    InventoryMovement.tenant_id == tenant_id,
+                    InventoryMovement.marketplace_unload_request_id == request_id,
+                    InventoryMovement.movement_type == MOVEMENT_TYPE_MARKETPLACE_UNLOAD,
+                    InventoryMovement.product_id.in_(product_ids),
+                )
+                .group_by(InventoryMovement.product_id)
+            )
+        ).all()
+    }
+    return {pid: max(0, qty - written.get(pid, 0)) for pid, qty in picked.items()}
 
 
 async def available_pick_source_quantity(
@@ -190,6 +346,10 @@ async def available_pick_source_quantity(
         )
         total = totals.get(product_id)
         ceiling = total.available_for_checks if total is not None else 0
+        staged = await staged_unload_quantities(
+            session, tenant_id, marketplace_unload_request_id, [product_id]
+        )
+        ceiling = max(0, ceiling - staged.get(product_id, 0))
     return source_available(on_hand, source_assigned, place_free, place_assigned + unknown, ceiling)
 
 
@@ -267,9 +427,13 @@ async def list_pick_option_locations(
             product_ids,
             exclude_mp_unload_request_id=marketplace_unload_request_id,
         )
+        staged_by_product = await staged_unload_quantities(
+            session, tenant_id, marketplace_unload_request_id, product_ids
+        )
         for pid in product_ids:
             total = totals.get(pid)
-            warehouse_ceilings[pid] = total.available_for_checks if total is not None else 0
+            free = total.available_for_checks if total is not None else 0
+            warehouse_ceilings[pid] = max(0, free - staged_by_product.get(pid, 0))
     container_refs: set[tuple[ContainerKind, uuid.UUID]] = set()
     for _product_id, _location_id, _quantity, raw_kind, container_id in source_rows:
         if raw_kind is None and container_id is None:

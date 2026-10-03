@@ -28,10 +28,8 @@ from app.services.wb_order_price_service import (
     WB_ORDERS_SOURCE,
     WbPriceDataError,
     capture_wb_price_snapshot,
-    fetch_statistics_order_prices,
     product_cost_from_snapshot,
     resolve_wb_product_cost,
-    statistics_finished_price_to_kopecks,
 )
 
 
@@ -74,52 +72,6 @@ def test_invalid_price_is_a_typed_error(fields: dict[str, Any], code: str) -> No
         product_cost_from_snapshot(snapshot)
     assert error.value.code == code
     assert error.value.snapshot_id == snapshot.id
-
-
-@pytest.mark.parametrize(
-    ("value", "expected"),
-    [("123.45", 12_345), (123, 12_300), (123.4, 12_340)],
-)
-def test_statistics_finished_price_uses_exact_kopecks(value: object, expected: int) -> None:
-    assert statistics_finished_price_to_kopecks(value) == expected
-
-
-@pytest.mark.parametrize(
-    ("value", "code"),
-    [
-        (0, "wb_statistics_price_not_ready"),
-        (True, "invalid_wb_statistics_price"),
-        ("1.001", "invalid_wb_statistics_price"),
-        ("not-a-price", "invalid_wb_statistics_price"),
-    ],
-)
-def test_statistics_finished_price_rejects_unusable_values(value: object, code: str) -> None:
-    with pytest.raises(WbPriceDataError) as error:
-        statistics_finished_price_to_kopecks(value)
-    assert error.value.code == code
-
-
-async def test_statistics_report_matches_only_exact_non_cancelled_srid() -> None:
-    def upstream(request: httpx.Request) -> httpx.Response:
-        assert request.headers["Authorization"] == "fixture-token"
-        assert request.url.params["flag"] == "0"
-        return httpx.Response(
-            200,
-            json=[
-                {"srid": "wanted", "finishedPrice": 123.45, "isCancel": False},
-                {"srid": "cancelled", "finishedPrice": 999.99, "isCancel": True},
-                {"srid": "other", "finishedPrice": 777.77, "isCancel": False},
-            ],
-        )
-
-    async with httpx.AsyncClient(transport=httpx.MockTransport(upstream)) as client:
-        prices = await fetch_statistics_order_prices(
-            client,
-            api_token="fixture-token",
-            date_from=datetime(2026, 9, 1, tzinfo=UTC),
-            rids={"wanted", "cancelled"},
-        )
-    assert prices == {"wanted": 12_345}
 
 
 async def _seed(session: AsyncSession) -> tuple[uuid.UUID, uuid.UUID]:
@@ -247,8 +199,20 @@ async def test_missing_and_bad_fields_never_use_legacy_price(db_session: AsyncSe
         db_session, tenant, seller, row, preserve_unmapped_warehouse=True,
     )
     order_id = order.id
-    for value, code in [(None, "missing_rub_final_price"),
-                        (10**30, "rub_price_out_of_range"), (12.5, "invalid_rub_price")]:
+    # A later feed without any price (/api/v3/orders never has finalPrice) keeps the
+    # price WB already sent; it never falls back to the legacy FbsOrder.price.
+    row["finalPrice"] = row["convertedFinalPrice"] = None
+    await orders.upsert_order_from_wb_row(
+        db_session, tenant, seller, row, preserve_unmapped_warehouse=True,
+    )
+    await db_session.commit()
+    db_session.expire_all()
+    kept = await resolve_wb_product_cost(
+        db_session, tenant_id=tenant, seller_id=seller, order_id=order_id,
+    )
+    assert kept.product_cost == 12345
+    assert await db_session.scalar(select(func.count(WbOrderPriceSnapshot.id))) == 2
+    for value, code in [(10**30, "rub_price_out_of_range"), (12.5, "invalid_rub_price")]:
         row["finalPrice"] = row["convertedFinalPrice"] = value
         await orders.upsert_order_from_wb_row(
             db_session, tenant, seller, row, preserve_unmapped_warehouse=True,

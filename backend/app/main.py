@@ -25,6 +25,7 @@ from app.api.deps import (
     require_marking_section_resource_if_staff,
     require_storage_section_if_staff,
 )
+from app.api.developer_requests import router as developer_requests_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
 from app.api.fbs_assembly_tasks import router as fbs_assembly_tasks_router
@@ -57,12 +58,14 @@ from app.api.reports import router as reports_router
 from app.api.scan_resolver import router as scan_resolver_router
 from app.api.seller_billing import router as seller_billing_router
 from app.api.seller_catalog import router as seller_catalog_router
+from app.api.seller_fbs import router as seller_fbs_router
 from app.api.seller_staff_accounts import router as seller_staff_accounts_router
 from app.api.sellers import router as sellers_router
 from app.api.staff_accounts import router as staff_accounts_router
 from app.api.stock_transfer import router as stock_transfer_router
 from app.api.storage import router as storage_router
 from app.api.subscription import router as subscription_router
+from app.api.support_agent import router as support_agent_router
 from app.api.tenant_settings import router as tenant_settings_router
 from app.api.warehouse_print import router as warehouse_print_router
 from app.api.warehouses import router as warehouses_router
@@ -170,6 +173,8 @@ def create_app() -> FastAPI:
     )
     app.include_router(health_router)
     app.include_router(auth_router)
+    app.include_router(developer_requests_router)
+    app.include_router(support_agent_router)
     app.include_router(client_errors_router)
     app.include_router(staff_accounts_router)
     app.include_router(seller_staff_accounts_router)
@@ -179,6 +184,7 @@ def create_app() -> FastAPI:
     app.include_router(warehouses_router)
     app.include_router(products_router)
     app.include_router(seller_catalog_router)
+    app.include_router(seller_fbs_router)
     app.include_router(inbound_intake_router)
     app.include_router(inbound_marking_router)
     app.include_router(kiz_reprints_router)

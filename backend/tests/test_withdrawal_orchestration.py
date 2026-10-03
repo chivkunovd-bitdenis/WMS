@@ -9,11 +9,9 @@ import uuid
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from unittest.mock import AsyncMock
 
 import httpx
 import pytest
-from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from test_withdrawal_ledger import INN, seed  # type: ignore[import-not-found]
 
@@ -22,8 +20,6 @@ from app.celery_app import celery_app
 from app.db.session import SessionLocal
 from app.db.withdrawal_repository import WithdrawalError, current_items, get_operation
 from app.models.billing import BillingProfile
-from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
-from app.services import withdrawal_orchestration
 from app.services.true_api_withdrawal import (
     CisInfo,
     Environment,
@@ -52,20 +48,6 @@ FIAS = str(uuid.uuid4())
 MOD = {"inn": INN, "productGroups": ["lp"], "fiasId": FIAS, "kpp": "770101001"}
 
 
-@pytest.fixture(autouse=True)
-def _stub_wb_statistics(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(
-        withdrawal_orchestration,
-        "get_decrypted_marketplace_token",
-        AsyncMock(return_value="fixture-token"),
-    )
-
-    async def prices(*_: object, rids: set[str], **__: object) -> dict[str, int]:
-        return {rid: 99_999_999_999_999_999 for rid in rids}
-
-    monkeypatch.setattr(withdrawal_orchestration, "fetch_statistics_order_prices", prices)
-
-
 class FixtureLimiter:
     async def acquire(self, environment: Environment, participant_inn: str) -> None:
         assert environment == Environment.SANDBOX
@@ -73,16 +55,9 @@ class FixtureLimiter:
 
 
 class Emulator:
-    def __init__(
-        self,
-        rows: list[dict[str, Any]],
-        *,
-        lose_create: bool = False,
-        product_group: str = "lp",
-    ) -> None:
+    def __init__(self, rows: list[dict[str, Any]], *, lose_create: bool = False) -> None:
         self.rows = rows
         self.lose_create = lose_create
-        self.product_group = product_group
         self.calls: list[str] = []
         self.identifier = str(uuid.uuid4())
         self.challenge = str(uuid.uuid4())
@@ -122,7 +97,7 @@ class Emulator:
                         "cisInfo": {
                             "requestedCis": cis,
                             "cis": cis,
-                            "productGroup": self.product_group,
+                            "productGroup": "lp",
                             "productGroupId": 1,
                             "ownerInn": INN,
                             "status": "INTRODUCED",
@@ -155,7 +130,7 @@ class Emulator:
                 json=[
                     {
                         "number": self.identifier,
-                        "productGroup": [self.product_group],
+                        "productGroup": ["lp"],
                         "status": "CHECKED_OK",
                         "type": "LK_RECEIPT",
                         "body": self.payload,
@@ -256,62 +231,6 @@ def test_builder_group_split_exact_bytes_and_moscow_date() -> None:
         max_bytes=maximum,
     )
     assert len(split) == 4
-
-
-@pytest.mark.asyncio
-async def test_missing_local_price_fetches_exact_order_price_from_wb_statistics(
-    db_session: AsyncSession,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    scope, marking, order, _ = await seed(db_session)
-    order.wb_rid = "exact-order-srid"
-    db_session.add(
-        BillingProfile(
-            tenant_id=scope.tenant_id,
-            seller_id=scope.seller_id,
-            legal_name="Fixture",
-            inn=INN,
-        )
-    )
-    await db_session.commit()
-    snapshot_count = await db_session.scalar(select(func.count(WbOrderPriceSnapshot.id)))
-    token = AsyncMock(return_value="fixture-token")
-    prices = AsyncMock(return_value={order.wb_rid: 12_345})
-    monkeypatch.setattr(withdrawal_orchestration, "get_decrypted_marketplace_token", token)
-    monkeypatch.setattr(withdrawal_orchestration, "fetch_statistics_order_prices", prices)
-    emulator = Emulator([MOD])
-    async with httpx.AsyncClient(transport=httpx.MockTransport(emulator.handle)) as http:
-        runtime = emulator.runtime(http)
-        operation = await create_operation(
-            db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
-        )
-        await db_session.commit()
-        operation = await prepare_challenge(
-            db_session,
-            scope,
-            operation.id,
-            CertificateSelection("fixture-thumb", datetime.now(UTC) + timedelta(hours=2)),
-            runtime,
-        )
-        operation = await authenticate_and_build(
-            db_session,
-            scope,
-            operation.id,
-            thumbprint="fixture-thumb",
-            challenge_uuid=uuid.UUID(emulator.challenge),
-            expected_attempt=1,
-            signature=SIGNATURE,
-            runtime=runtime,
-        )
-    document = (await scoped_documents(db_session, scope, operation))[0]
-    assert json.loads(document.exact_payload)["products"] == [
-        {"cis": marking.value, "product_cost": 12_345}
-    ]
-    item = (await current_items(db_session, scope, operation.id))[0]
-    assert item.product_cost == 12_345 and item.price_snapshot_id is None
-    assert await db_session.scalar(select(func.count(WbOrderPriceSnapshot.id))) == snapshot_count
-    token.assert_awaited_once_with(db_session, scope.tenant_id, scope.seller_id)
-    assert prices.await_args.kwargs["rids"] == {order.wb_rid}
 
 
 @pytest.mark.asyncio

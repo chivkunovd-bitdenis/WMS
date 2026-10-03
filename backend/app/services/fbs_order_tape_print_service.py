@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from typing import Any
@@ -45,6 +46,7 @@ from app.services.fbs_print_asset_service import (
     request_supply_print_batch,
 )
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
+from app.services.wildberries_client import kiz_scan_skips_wb_readback
 from app.services.wildberries_errors import WildberriesClientError
 
 
@@ -117,6 +119,8 @@ async def print_fbs_order_tape(
     actor_user_id: uuid.UUID,
     http_client: httpx.AsyncClient,
     reprint_marking_ids: list[uuid.UUID] | None = None,
+    on_new_binding: Callable[[FbsOrder, FbsOrderMarking], Awaitable[None]] | None = None,
+    scan_no_wb_wait: bool = False,
 ) -> FbsOrderTapePrintResult:
     if not order_ids:
         raise FbsOrderTapePrintError("empty_order_set")
@@ -498,6 +502,9 @@ async def print_fbs_order_tape(
             bindings_to_send[order.id] = marking.id
             if not printed.is_reprint:
                 ordinary_print_orders.add(order.id)
+                if on_new_binding is not None:
+                    # WMS-631: the caller's receipt joins this binding's transaction.
+                    await on_new_binding(order, marking)
         result_orders.append(
             FbsOrderTapeOrder(
                 order_id=order.id,
@@ -554,7 +561,11 @@ async def print_fbs_order_tape(
                 ordinary_print=order_id in ordinary_print_orders,
             )
         except marking_svc.FbsMarkingError as exc:
-            if _wb_accepted_code_without_echo(exc):
+            if _wb_accepted_code_without_echo(exc) or (
+                # WMS-635 Д2: the packing scan does not wait for WB either; the
+                # code is bound and its pending operation reconciles WB later.
+                scan_no_wb_wait and exc.code == "wb_pending_confirmation"
+            ):
                 # WMS-560: WB answered the write, only its readback has not echoed
                 # the value yet. The code is already bound to this order and the
                 # pending operation keeps tracking the WB result, so the label
@@ -600,6 +611,9 @@ async def _send_or_reconcile_printed_marking(
     ordinary_print: bool,
 ) -> None:
     operation = await marking_svc.pending_kiz_operation(session, marking)
+    if operation is not None and kiz_scan_skips_wb_readback():
+        # WMS-642: the scan never calls WB for a queued code; the worker sends it.
+        raise marking_svc.FbsMarkingError("wb_pending_confirmation")
     if (order.marketplace == "wb" and operation is None
             and marking.meta_status in marking_svc._META_DELIVERY_OK):
         # Reprinting the same accepted binding does not change WB metadata.
@@ -939,6 +953,11 @@ def _order_requires_sgtin(order: FbsOrder) -> bool:
     return MARKING_KIND_SGTIN in required or bool(
         order.product and order.product.requires_honest_sign
     )
+
+
+def order_requires_sgtin(order: FbsOrder) -> bool:
+    """Public form of the order-tape KIZ rule (WMS-631 packing scan)."""
+    return _order_requires_sgtin(order)
 
 
 async def _mark_printed_sgtin_not_sent(

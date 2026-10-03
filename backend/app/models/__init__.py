@@ -18,6 +18,7 @@ from app.models.billing import (
     BillingTariffVersion,
     BillingTariffVersionV2,
 )
+from app.models.developer_request import DeveloperRequest
 from app.models.discrepancy_act import DiscrepancyAct, DiscrepancyActLine
 from app.models.document_event import DocumentEvent
 from app.models.document_sequence import DocumentDisplaySequence, DocumentSequence
@@ -132,6 +133,7 @@ __all__ = [
     "BillingTariffServiceState",
     "BillingTariffVersion",
     "BillingTariffVersionV2",
+    "DeveloperRequest",
     "DiscrepancyAct",
     "DiscrepancyActLine",
     "DocumentDisplaySequence",

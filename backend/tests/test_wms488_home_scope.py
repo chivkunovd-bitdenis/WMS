@@ -166,6 +166,7 @@ async def test_delegated_token_enqueues_active_and_worker_uses_active(
 ):
     from app.core.settings import settings
     from app.services import background_job_service as jobs
+    from app.services import wildberries_product_sync_service as wb_product_sync
     from app.tasks.background_jobs import run_wildberries_cards_sync_task
 
     users, products, _ = await _seed()
@@ -173,11 +174,11 @@ async def test_delegated_token_enqueues_active_and_worker_uses_active(
     called = []
     queued = []
 
-    async def sync(session, tenant_id, seller_id, http_client):
+    async def sync(session, tenant_id, seller_id, http_client, **_kwargs):
         called.append((tenant_id, seller_id))
         return {"processed": 1}
 
-    monkeypatch.setattr(jobs.wb_sync, "sync_cards_list", sync)
+    monkeypatch.setattr(wb_product_sync, "sync_wb_products_for_seller", sync)
     monkeypatch.setattr(settings, "celery_broker_url", "redis://unused" if celery else None)
     monkeypatch.setattr(
         run_wildberries_cards_sync_task, "delay", lambda job_id: queued.append(job_id)
@@ -190,7 +191,10 @@ async def test_delegated_token_enqueues_active_and_worker_uses_active(
     job_id = uuid.UUID(response.json()["id"])
     async with SessionLocal() as session:
         job = await session.get(BackgroundJob, job_id)
-        assert job.payload_json == {"seller_id": str(users["b"].seller_id)}
+        assert job.payload_json is not None
+        assert job.payload_json["seller_id"] == str(users["b"].seller_id)
+        assert job.payload_json["marketplace"] == "wildberries"
+        assert isinstance(job.payload_json["credentials_generation"], str)
     if celery:
         assert queued == [str(job_id)]
         await jobs.run_wildberries_cards_sync_job(job_id)
@@ -290,38 +294,88 @@ async def test_own_job_failure_hides_raw_diagnostics_and_mismatched_result(async
 async def test_direct_marketplace_sync_uses_active(async_client, monkeypatch):
     from app.api import ozon_integration as ozon
     from app.api import wildberries_integration as wb
+    from app.core.settings import settings
+    from app.services import background_job_service as jobs
+    from app.services import ozon_product_import_service as ozon_import_service
+    from app.services import wildberries_product_sync_service as wb_product_sync
     from app.services.ozon_product_import_service import OzonProductImportResult
+    from app.tasks.background_jobs import (
+        run_ozon_catalog_sync_task,
+        run_wildberries_cards_sync_task,
+    )
 
     users, products, _ = await _seed()
     await enable_avpack_manager(users, products)
-    seen = []
+    seen: list[tuple[str, uuid.UUID]] = []
+    queued: list[tuple[str, str]] = []
 
     async def wb_credentials(session, tenant_id, seller_id):
-        seen.append(("wb", seller_id))
         return "fixture", None
 
-    async def cards(*args, **kwargs):
-        return [], False
+    async def wb_sync(session, tenant_id, seller_id, http_client, **_kwargs):
+        seen.append(("wb", seller_id))
+        return {"cards_received": 0, "cards_saved": 0}
 
     async def ozon_credentials(self, tenant_id, seller_id):
-        seen.append(("ozon", seller_id))
         return "fixture", "fixture"
 
     async def ozon_import(session, tenant_id, seller_id, *args, **kwargs):
         seen.append(("ozon-import", seller_id))
         return OzonProductImportResult()
 
+    async def ozon_sync_succeeded(self, tenant_id, seller_id, **_kwargs):
+        return None
+
     monkeypatch.setattr(wb, "get_decrypted_tokens_for_seller", wb_credentials)
-    monkeypatch.setattr(wb, "fetch_all_cards", cards)
+    monkeypatch.setattr(wb_product_sync, "sync_wb_products_for_seller", wb_sync)
     monkeypatch.setattr(ozon.MarketplaceAccountService, "stored_credentials", ozon_credentials)
-    monkeypatch.setattr(ozon, "import_ozon_product_cards", ozon_import)
+    monkeypatch.setattr(
+        ozon.MarketplaceAccountService,
+        "mark_catalog_sync_succeeded",
+        ozon_sync_succeeded,
+    )
+    monkeypatch.setattr(ozon_import_service, "import_ozon_product_cards", ozon_import)
+    monkeypatch.setattr(settings, "celery_broker_url", "redis://configured")
+    monkeypatch.setattr(
+        run_wildberries_cards_sync_task,
+        "delay",
+        lambda job_id: queued.append(("wb", job_id)),
+    )
+    monkeypatch.setattr(
+        run_ozon_catalog_sync_task,
+        "delay",
+        lambda job_id: queued.append(("ozon", job_id)),
+    )
+    jobs_by_marketplace: dict[str, uuid.UUID] = {}
     for marketplace in ("wildberries", "ozon"):
         response = await async_client.post(
             f"/integrations/{marketplace}/self/sync-products",
             headers=_headers(users["a"], active_seller=users["b"].seller_id),
         )
-        assert response.status_code == 200, response.text
-    assert seen == [(key, users["b"].seller_id) for key in ("wb", "ozon", "ozon-import")]
+        assert response.status_code == 202, response.text
+        jobs_by_marketplace[marketplace] = uuid.UUID(response.json()["id"])
+
+    assert queued == [
+        ("wb", str(jobs_by_marketplace["wildberries"])),
+        ("ozon", str(jobs_by_marketplace["ozon"])),
+    ]
+    async with SessionLocal() as session:
+        for job_id in jobs_by_marketplace.values():
+            job = await session.get(BackgroundJob, job_id)
+            assert job is not None
+            assert job.payload_json is not None
+            assert job.payload_json["seller_id"] == str(users["b"].seller_id)
+            assert job.payload_json["marketplace"] == (
+                "wildberries" if job_id == jobs_by_marketplace["wildberries"] else "ozon"
+            )
+            assert isinstance(job.payload_json["credentials_generation"], str)
+
+    await jobs.run_wildberries_cards_sync_job(jobs_by_marketplace["wildberries"])
+    await jobs.run_ozon_catalog_sync_job(jobs_by_marketplace["ozon"])
+    assert seen == [
+        ("wb", users["b"].seller_id),
+        ("ozon-import", users["b"].seller_id),
+    ]
 
 
 async def test_active_token_marking_reads_print_and_ff_catalog(async_client):

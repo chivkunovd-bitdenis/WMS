@@ -10,8 +10,24 @@ import pytest
 from httpx import AsyncClient
 
 from app.api.ozon_integration import OzonValidationResult
+from app.services.marketplace_provider import (
+    FakeMarketplaceTransport,
+    MarketplaceProviderError,
+    OzonMarketplaceProvider,
+)
+from app.services.ozon_product_import_service import PRODUCT_ATTRIBUTES_PATH
 
 ACCOUNT = "/integrations/ozon/self/account"
+
+
+def _catalog_provider(response: object) -> OzonMarketplaceProvider:
+    if isinstance(response, MarketplaceProviderError):
+        transport = FakeMarketplaceTransport(errors={PRODUCT_ATTRIBUTES_PATH: response})
+    else:
+        transport = FakeMarketplaceTransport(
+            endpoint_responses={PRODUCT_ATTRIBUTES_PATH: response}
+        )
+    return OzonMarketplaceProvider(transport=transport)
 
 
 @pytest.fixture
@@ -84,6 +100,54 @@ async def test_wms506_save_and_recheck_use_roles_without_additional_permission_g
 
 
 @pytest.mark.asyncio
+async def test_wms615_catalog_job_reports_failure_and_retry_clears_error(
+    async_client: AsyncClient,
+    roles_provider: tuple[list[httpx.Request], dict[str, object]],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _calls, _provider = roles_provider
+    failing = _catalog_provider(MarketplaceProviderError("ozon", 500))
+    monkeypatch.setattr(
+        "app.services.ozon_provider_factory.build_ozon_provider", lambda: failing
+    )
+    headers = await _seller_headers(async_client)
+
+    saved = await async_client.put(
+        ACCOUNT,
+        headers=headers,
+        json={"client_id": "job-client", "api_key": "job-key"},
+    )
+
+    assert saved.status_code == 200
+    job_id = saved.json()["catalog_job"]["id"]
+    failed_job = await async_client.get(
+        f"/operations/background-jobs/{job_id}", headers=headers
+    )
+    assert failed_job.status_code == 200
+    assert failed_job.json()["state"] == "failed"
+    assert "job-key" not in failed_job.text
+    failed_status = await async_client.get(ACCOUNT, headers=headers)
+    assert failed_status.json()["last_synced_at"] is None
+    assert failed_status.json()["last_sync_error"] == "ozon_catalog_unavailable"
+
+    success = _catalog_provider({"result": [{"id": "15000"}], "last_id": ""})
+    monkeypatch.setattr(
+        "app.services.ozon_provider_factory.build_ozon_provider", lambda: success
+    )
+    retried = await async_client.post(
+        "/integrations/ozon/self/sync-products", headers=headers
+    )
+    assert retried.status_code == 202
+    succeeded_job = await async_client.get(
+        f"/operations/background-jobs/{retried.json()['id']}", headers=headers
+    )
+    assert succeeded_job.json()["state"] == "succeeded"
+    recovered_status = await async_client.get(ACCOUNT, headers=headers)
+    assert recovered_status.json()["last_synced_at"] is not None
+    assert recovered_status.json()["last_sync_error"] is None
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("provider_status", "error", "expected_status", "code", "validation_error"),
     [
@@ -112,6 +176,7 @@ async def test_wms506_roles_failure_preserves_credentials_and_allows_retry(
         ACCOUNT, headers=headers, json={"client_id": "working-client", "api_key": "working-key"}
     )
     assert saved.status_code == 200
+    saved_public = (await async_client.get(ACCOUNT, headers=headers)).json()
     provider.update(status=provider_status, error=error)
     rejected = await async_client.put(
         ACCOUNT, headers=headers, json={"client_id": "candidate-client", "api_key": "candidate-key"}
@@ -119,7 +184,7 @@ async def test_wms506_roles_failure_preserves_credentials_and_allows_retry(
     assert rejected.status_code == expected_status
     assert rejected.json()["code"] == code
     current = await async_client.get(ACCOUNT, headers=headers)
-    assert current.json() == saved.json()
+    assert current.json() == saved_public
 
     checked = await async_client.post(f"{ACCOUNT}/test-connection", headers=headers)
     assert checked.status_code == expected_status
@@ -128,7 +193,7 @@ async def test_wms506_roles_failure_preserves_credentials_and_allows_retry(
     assert calls[-1].headers["Api-Key"] == "working-key"
     current = await async_client.get(ACCOUNT, headers=headers)
     assert current.json()["last_validation_error"] == validation_error
-    assert current.json()["credentials_updated_at"] == saved.json()["credentials_updated_at"]
+    assert current.json()["credentials_updated_at"] == saved_public["credentials_updated_at"]
 
     provider.update(status=200, error=None)
     retried = await async_client.put(
@@ -344,7 +409,7 @@ async def test_tc_s32_ozon_003_invalid_replacement_preserves_working_public_stat
         ACCOUNT, headers=headers, json={"client_id": "working-client", "api_key": "working-key"}
     )
     assert created.status_code == 200
-    public_before = created.json()
+    public_before = (await async_client.get(ACCOUNT, headers=headers)).json()
 
     async def invalid_validator(*_args: object, **_kwargs: object) -> OzonValidationResult:
         return OzonValidationResult.http(403)

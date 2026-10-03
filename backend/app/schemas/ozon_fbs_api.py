@@ -38,8 +38,25 @@ class OzonFbsModel(BaseModel):
         ошибку — только теперь честную, про отсутствующее поле.
         """
         if isinstance(data, dict):
-            return {key: value for key, value in data.items() if value is not None}
+            return {
+                key: _sku_list_as_text(key, value)
+                for key, value in data.items()
+                if value is not None
+            }
         return data
+
+
+def _sku_list_as_text(key: str, value: Any) -> Any:
+    """Ozon шлёт SKU в `requirements.products_requiring_*` числами, а в
+    спеке они строки. 1 и 2 октября 2026 сборка заказов с требованием ГТД падала
+    на «Ozon вернул ответ неизвестного формата» и блокировала всю поставку.
+    """
+    if key.startswith("products_requiring_") and isinstance(value, list):
+        return [
+            str(item) if isinstance(item, int) and not isinstance(item, bool) else item
+            for item in value
+        ]
+    return value
 
 
 class OzonPostingV4PostingFbsUnfulfilledListRequest(OzonFbsModel):
