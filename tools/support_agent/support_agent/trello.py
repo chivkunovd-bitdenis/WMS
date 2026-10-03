@@ -87,7 +87,10 @@ class TrelloClient:
             params["before"] = cursor
 
     def get_card(self, card_id: str) -> dict[str, Any]:
-        card = self._request("GET", f"cards/{card_id}", params={"fields": "id,idList,desc,shortUrl"})
+        card = self._request(
+            "GET", f"cards/{card_id}",
+            params={"fields": "id,idBoard,idList,name,desc,shortUrl,closed"},
+        )
         if not isinstance(card, dict) or not card.get("id"):
             raise TrelloError("invalid_card")
         return card

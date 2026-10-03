@@ -14,7 +14,8 @@ from support_agent.store import Store
 @pytest.fixture
 def tools(tmp_path):
     cfg = config_from_dict({"repo": str(tmp_path), "telegram": {
-        "owner_user_id": 42, "owner_chat_id": 900, "chats": {"100": {"role": "client"}}}})
+        "owner_user_id": 42, "owner_chat_id": 900, "chats": {"100": {"role": "client"}}},
+        "trello": {"board_id": "board"}})
     store = Store(":memory:")
     def say_owner(key, text, ticket_id=None, purpose="notice"):
         store.queue_message(key=key, chat_id=900, text=text, ticket_id=ticket_id,
@@ -154,3 +155,20 @@ def test_read_data_uses_actual_chat_binding_and_readonly_query(tools, monkeypatc
     assert result["status"] == "ok" and observed["role"] == "wms_agent_s_" + seller_id.replace("-", "")
     with pytest.raises(ToolDenied, match="cross_chat"):
         api.dispatch("read_data", {"chat_id": 200, "sql": "SELECT 1"}, ctx(source, 100, 5))
+
+
+def test_owner_reads_external_board_card_without_local_ticket(tools):
+    api, store = tools
+    owner = message(store, 900, "owner", 42, "card")
+    client = message(store, 100, "client", 5, "card")
+    api.p.trello.get_card = lambda card_id: {"id": card_id, "idBoard": "board",
+        "name": "WMS-700", "desc": "Описание", "shortUrl": "https://trello.com/c/Abc12345",
+        "idList": "ready", "closed": False}
+    card = api.dispatch("read_trello_card", {"card_id_or_url":
+        "https://trello.com/c/Abc12345/wms-700"}, ctx(owner, 900, 42))
+    assert card["name"] == "WMS-700" and card["desc"] == "Описание"
+    with pytest.raises(ToolDenied, match="tool_unavailable"):
+        api.dispatch("read_trello_card", {"card_id_or_url": "Abc12345"}, ctx(client, 100, 5))
+    api.p.trello.get_card = lambda card_id: {"id": card_id, "idBoard": "other"}
+    with pytest.raises(ToolDenied, match="outside"):
+        api.dispatch("read_trello_card", {"card_id_or_url": "Abc12345"}, ctx(owner, 900, 42))

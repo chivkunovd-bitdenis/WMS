@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
+from urllib.parse import urlparse
 
 from .canonical_tasks import CanonicalTaskError, persist_task
 from .prod_sql import ProdSqlSettings, SqlRefused, role_for_scope, run_query
@@ -97,6 +99,11 @@ class AgentTools:
                         {"ticket_id": "integer", "action": "string"},
                     ),
                     self._spec(
+                        "read_trello_card",
+                        "Read a card on the configured WMS board by card ID or Trello card URL.",
+                        {"card_id_or_url": "string"},
+                    ),
+                    self._spec(
                         "request_mockup",
                         "Queue Sonnet mockup for a confirmed frontend task.",
                         {"ticket_id": "integer"},
@@ -124,6 +131,21 @@ class AgentTools:
             for card in cards
             if card.get("idList") == list_id
         ]
+
+    def _tool_read_trello_card(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+        raw = str(args.get("card_id_or_url") or "").strip()
+        if raw.startswith("https://"):
+            url = urlparse(raw)
+            parts = url.path.strip("/").split("/")
+            if url.hostname not in {"trello.com", "www.trello.com"} or len(parts) < 2 or parts[0] != "c":
+                raise ToolDenied("invalid_trello_card_url")
+            raw = parts[1]
+        if not re.fullmatch(r"[0-9A-Za-z]{8,24}", raw):
+            raise ToolDenied("invalid_trello_card_id")
+        card = self.p.trello.get_card(raw)
+        if str(card.get("idBoard") or "") != self.p.cfg.trello.board_id:
+            raise ToolDenied("card_outside_configured_board")
+        return {key: card.get(key) for key in ("id", "name", "desc", "shortUrl", "idList", "closed")}
 
     @staticmethod
     def _spec(name: str, description: str, fields: dict[str, str]) -> dict[str, Any]:
