@@ -14,8 +14,8 @@ from typing import Any
 
 import httpx
 
-from .config import Config
 from .agent_coordinator import AgentCoordinator
+from .config import Config
 from .hotfix import HotfixRunner
 from .llm import LlmRouter
 from .mockups import MockupRunner
