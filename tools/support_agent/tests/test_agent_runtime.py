@@ -156,6 +156,7 @@ def test_full_project_mode_requires_trusted_owner(tmp_path: Path) -> None:
 def test_explicit_opus_uses_claude_without_fallback(tmp_path: Path) -> None:
     cfg = make_config(tmp_path)
     calls: list[list[str]] = []
+    progress: list[str] = []
 
     def execute(argv: list[str], cwd: str | None, timeout: int,
                 stdin: str | None) -> ExecResult:
@@ -165,7 +166,39 @@ def test_explicit_opus_uses_claude_without_fallback(tmp_path: Path) -> None:
 
     llm = LlmRouter(cfg, Store(cfg.db_path), exec_fn=execute)
     result = llm.agent_turn("Do it", session_key="owner", model="opus", provider="claude",
-                            mode="owner", owner_authorized=True, cwd=str(tmp_path))
+                            mode="owner", owner_authorized=True, cwd=str(tmp_path),
+                            effort="medium", progress_callback=progress.append)
     assert result.model == "opus" and result.cli == "claude"
     assert calls[0][calls[0].index("--model") + 1] == "opus"
+    assert calls[0][calls[0].index("--effort") + 1] == "medium"
+    assert progress == ["Claude: ход модели начат."]
     assert "codex" not in calls[0]
+
+
+def test_claude_service_tool_reports_actual_stage_before_handler(tmp_path: Path) -> None:
+    cfg = make_config(tmp_path)
+    progress: list[str] = []
+    seen: list[str] = []
+    results = iter([{"result": '{"tool":"lookup","arguments":{}}',
+                     "session_id": "claude-thread", "is_error": False},
+                    {"result": '{"final":"done"}', "session_id": "claude-thread",
+                     "is_error": False}])
+
+    def execute(argv: list[str], cwd: str | None, timeout: int,
+                stdin: str | None) -> ExecResult:
+        return ExecResult(0, json.dumps(next(results)), "")
+
+    def handle(name: str, args: dict[str, Any]) -> dict[str, Any]:
+        seen.append(name)
+        assert progress[-1] == "Claude: вызван сервисный инструмент lookup."
+        return {"found": True}
+
+    result = LlmRouter(cfg, Store(cfg.db_path), exec_fn=execute).agent_turn(
+        "Inspect", session_key="owner", model="opus", provider="claude", mode="owner",
+        owner_authorized=True, cwd=str(tmp_path),
+        tools=[{"name": "lookup", "description": "synthetic lookup",
+                "inputSchema": {"type": "object", "properties": {}}}],
+        tool_handler=handle, progress_callback=progress.append)
+    assert result.text == "done" and seen == ["lookup"]
+    assert progress == ["Claude: ход модели начат.",
+                        "Claude: вызван сервисный инструмент lookup."]

@@ -254,6 +254,7 @@ class LlmRouter:
                 prompt, session_key=session_key, model=model, system=system,
                 tools=tools or [], tool_handler=tool_handler, mode=mode,
                 cwd=work_cwd, timeout=timeout, cancelled=cancelled,
+                effort=effort, progress_callback=progress_callback,
             )
         signature = agent_capability_signature(tools, work_cwd)
         key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
@@ -322,8 +323,16 @@ class LlmRouter:
         tool_handler: Callable[[str, dict[str, Any]], dict[str, Any]] | None,
         mode: str, cwd: str, timeout: int,
         cancelled: Callable[[], bool] | None,
+        effort: str | None,
+        progress_callback: Callable[[str], None] | None,
     ) -> LlmResult:
-        """Claude CLI keeps native tools; JSON tool requests bridge service tools."""
+        """Claude CLI keeps native tools; JSON tool requests bridge service tools.
+
+        The existing JSON CLI call is blocking, so callback stages report actual
+        start and service-tool calls, not invented model reasoning.
+        """
+        if effort is not None and effort not in {"low", "medium", "high", "xhigh", "max"}:
+            raise ValueError("unsupported Claude effort")
         key = f"agent_session:{session_key}:claude:{model}:{mode}"
         saved = self.store.kv_get(key, {})
         state = saved if isinstance(saved, dict) else {}
@@ -332,6 +341,8 @@ class LlmRouter:
         handoff = str(state.get("handoff") or "")
         if state.get("rollover") and session_id:
             argv = self.build_claude(model, "text", (session_id, True), system_text, cwd)
+            if effort is not None:
+                argv += ["--effort", effort]
             transfer = self.exec(
                 argv, cwd, min(timeout, 300),
                 "Сохрани передачу следующей сессии: цель, подтверждённые факты и источники, "
@@ -362,12 +373,16 @@ class LlmRouter:
                             + json.dumps(names, ensure_ascii=False))
         allowed = {name for name, _, _ in names}
         current = prompt
-        for _ in range(20):
+        for turn_number in range(20):
             if cancelled is not None and cancelled():
                 raise LlmUnavailable("Claude turn cancelled; external outcome must be verified")
             session = (str(session_id), True) if session_id else (str(uuid.uuid4()), False)
             claude_mode = "text" if mode == "readonly" else mode
             argv = self.build_claude(model, claude_mode, session, system_text, cwd)
+            if effort is not None:
+                argv += ["--effort", effort]
+            if turn_number == 0 and progress_callback is not None:
+                progress_callback("Claude: ход модели начат.")
             result = self.exec(argv, cwd, timeout, current)
             answer, new_id, is_error = _parse_claude(result)
             if cancelled is not None and cancelled():
@@ -399,6 +414,8 @@ class LlmRouter:
                     or not isinstance(args, dict) or tool_handler is None):
                 current = "Сервисный инструмент недоступен или аргументы неверны; исправь вызов."
                 continue
+            if progress_callback is not None:
+                progress_callback(f"Claude: вызван сервисный инструмент {name}.")
             try:
                 output = tool_handler(name, args)
             except Exception as exc:  # noqa: BLE001 - let model recover from tool failure
