@@ -304,7 +304,10 @@ class AgentTools:
             if agent.get("document_version") != version or not agent.get("document_sha") or not agent.get("wms_number"):
                 raise ToolDenied("canonical_document_required")
             cfg = self.p.cfg.trello
-            list_id = cfg.client_list_id if self.store.ticket(tid)["kind"] != "partner_task" else cfg.partner_list_id
+            chat_id = self.store.ticket(tid)["chat_id"]
+            chat_cfg = self.p.cfg.telegram.chats.get(chat_id)
+            list_id = (cfg.partner_list_id if chat_cfg and chat_cfg.role == "partner"
+                       else cfg.client_list_id)
             result = ensure_card(self.store, self.p.trello, key=f"agent:{tid}", ticket_id=tid,
                                  list_id=list_id, name=f"{agent['title']} [WMS-{agent.get('wms_number', '?')}]",
                                  body=f"{agent['description']}\n\nВерсия: {version}\nИсточник: чат {self.store.ticket(tid)['chat_id']}")
