@@ -465,9 +465,22 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(rowTail('order-a')).toBe('OLD0000A')
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
+    // WMS-630 R18: the row update can precede completion of the scan
+    // operation. Wait for the actual enabled scan bar before dispatching the
+    // next sticker; waiting after a rejected scan cannot recover it.
+    const scanBarInput = () =>
+      document.querySelector<HTMLInputElement>('[data-testid="fbs-kiz-scan-input"] input')
+    await settleUntil(() => scanBarInput()?.disabled === false)
+    expect(scanBarInput()?.disabled, 'scan bar must be ready before the next hardware scan').toBe(false)
     scan(STICKER_A)
     await settleUntil(() => activeRow() === 'order-a')
-    expect(activeRow()).toBe('order-a')
+    expect(
+      activeRow(),
+      `STICKER_A was dispatched but no order became active; ` +
+        `scanBarDisabled=${scanBarInput()?.disabled}, ` +
+        `activeTag=${document.activeElement?.tagName ?? 'null'}, ` +
+        `kizCalls=[${kizCalls().map((call) => call.path).join(', ')}]`,
+    ).toBe('order-a')
   })
 
   it('при смене поля и ручном вводе с Enter берёт последнюю выбранную строку', async () => {
