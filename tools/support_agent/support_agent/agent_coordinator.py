@@ -189,6 +189,13 @@ class AgentCoordinator:
             material = {"event_id": context["event_id"], "request": request,
                         "run_at": run_at if name == "schedule_project_job" else None,
                         "task_ids": args.get("task_ids") or []}
+            task_ids = args.get("task_ids") or []
+            if not isinstance(task_ids, list) or any(not isinstance(x, str) for x in task_ids):
+                return {"error": "invalid_task_ids"}
+            snapshot = self._task_snapshot(task_ids)
+            scope_error = self._task_scope_error(task_ids, snapshot)
+            if scope_error:
+                return {"error": "task_not_ready", "reason": scope_error}
             material_json = json.dumps(material, sort_keys=True, ensure_ascii=False)
             job_id = hashlib.sha256(material_json.encode()).hexdigest()[:16]
             key = f"agent_job:{job_id}"
@@ -204,7 +211,7 @@ class AgentCoordinator:
                                    or self.cfg.agent.owner_provider),
                    "release_authorized": bool(args.get("release_authorized", False)),
                    "base_ref": str(args.get("base_ref") or ""),
-                   "task_snapshot": self._task_snapshot(args.get("task_ids") or []),
+                   "task_snapshot": snapshot,
                    "created_at": self.clock(), "run_at": run_at, "deadline_at": deadline,
                    "preflight_at": deadline - 75 * 60 if deadline else None,
                    "preflight_status": "pending" if deadline else None,
@@ -273,12 +280,38 @@ class AgentCoordinator:
             agent = data.get("agent") or {}
             identifiers = {str(ticket["id"]), f"WMS-{agent.get('wms_number')}"}
             for task_id in wanted & identifiers:
-                result[task_id] = {"ticket_id": int(ticket["id"]), "updated_at": ticket["updated_at"],
+                mockup = agent.get("mockup") or {}
+                mockup_approval = mockup.get("owner_approval") or {}
+                result[task_id] = {"ticket_id": int(ticket["id"]),
                                    "approved_version": (agent.get("owner_approval") or {}).get("version"),
                                    "description_version": agent.get("version"),
-                                   "mockup_version": (agent.get("mockup") or {}).get("version"),
-                                   "mockup_status": (agent.get("mockup") or {}).get("status")}
+                                   "is_frontend": bool(agent.get("is_frontend")),
+                                   "document_version": agent.get("document_version"),
+                                   "mockup_version": mockup.get("version"),
+                                   "mockup_status": mockup.get("status"),
+                                   "mockup_url": mockup.get("url"),
+                                   "mockup_approved_version": mockup_approval.get("version"),
+                                   "mockup_approved_url": mockup_approval.get("url")}
         return result
+
+    @staticmethod
+    def _task_scope_error(task_ids: list[str], snapshot: dict[str, Any]) -> str | None:
+        for task_id in map(str, task_ids):
+            state = snapshot.get(task_id)
+            if not state:
+                return f"selected task {task_id} is not linked to a current ticket"
+            version = state.get("description_version")
+            if not version or state.get("approved_version") != version:
+                return f"description for {task_id} lacks current owner approval"
+            if state.get("document_version") != version:
+                return f"canonical requirements for {task_id} are not saved"
+            if state.get("is_frontend") and (state.get("mockup_status") != "published"
+                                             or state.get("mockup_version") != version
+                                             or not state.get("mockup_url")
+                                             or state.get("mockup_approved_version") != version
+                                             or state.get("mockup_approved_url") != state.get("mockup_url")):
+                return f"published mockup for {task_id} lacks current owner approval"
+        return None
 
     def _submit_job(self, job_id: str) -> None:
         with self.job_lock:
@@ -334,6 +367,11 @@ class AgentCoordinator:
         finalizing = job.get("phase") == "finalize"
         try:
             current_snapshot = self._task_snapshot(job.get("task_ids") or [])
+            scope_error = self._task_scope_error(job.get("task_ids") or [], current_snapshot)
+            if scope_error:
+                job.update(status="needs_owner_review", error=scope_error)
+                self._save_job(job)
+                return
             if job.get("task_snapshot") != current_snapshot:
                 job.update(status="needs_owner_review",
                            error="Task version or approval changed after selection")

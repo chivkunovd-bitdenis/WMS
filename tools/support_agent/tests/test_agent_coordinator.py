@@ -143,3 +143,29 @@ def test_arbitrary_job_uses_native_owner_mode_and_exact_source(tmp_path):
     assert kwargs["mode"] == "owner" and kwargs["owner_authorized"] is True
     assert "Export the table" in prompt and "Сделай выгрузку" in prompt
     assert kwargs["cwd"] == str(worktree)
+
+
+def test_selected_frontend_task_needs_current_description_and_mockup_approval(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "Запусти WMS-700")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    tid = store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
+                           seller="client", stage="agent_discussion",
+                           data={"agent": {"wms_number": 700, "version": "v2",
+                                           "document_version": "v2", "is_frontend": True,
+                                           "owner_approval": {"version": "v2"},
+                                           "mockup": {"version": "v2", "status": "published",
+                                                      "url": "https://mock.test/v2"}}})
+    args = {"request": "Develop selected task", "task_ids": ["WMS-700"]}
+    context = agent._context(source, owner=True)
+    refused = agent._owner_tool("project_job", args, context)
+    assert refused["error"] == "task_not_ready" and "mockup" in refused["reason"]
+    data = store.data(tid)
+    data["agent"]["mockup"]["owner_approval"] = {"version": "v2", "url": "https://mock.test/v2"}
+    store.patch_data(tid, **data)
+    agent._submit_job = lambda _: None
+    accepted = agent._owner_tool("project_job", args, context)
+    assert accepted["status"] == "queued"
+    assert accepted["task_ids"] == ["WMS-700"]
