@@ -277,8 +277,10 @@ async def undo_sorting_action(
             )
         ).all()
     )
-    for row in movements:
-        await inventory_service.lock_stock_product(session, tenant_id, row.product_id)
+    # Товары блокируем в одном порядке на всех путях (как _container_balances),
+    # чтобы две одновременные операции не ждали друг друга по кругу.
+    for product_id in sorted({row.product_id for row in movements}, key=str):
+        await inventory_service.lock_stock_product(session, tenant_id, product_id)
     lines = {line.id: line for line in request.lines}
     owned = await warehouse_map.sorting_document_containers(
         session, tenant_id, warehouse_id, inbound_request_id
@@ -328,10 +330,6 @@ async def undo_sorting_action(
     for line_id, change in line_change.items():
         line = lines[line_id]
         if not 0 <= line.posted_qty - change <= intake._accepted_qty_for_line(line):
-            raise WarehouseMapError("undo_target_moved")
-    for content_key, change in content_change.items():
-        content_row = inbound_contents[content_key]
-        if not 0 <= content_row.posted_qty - change <= content_row.quantity:
             raise WarehouseMapError("undo_target_moved")
 
     # То, что действие положило, должно лежать там же.
@@ -412,13 +410,20 @@ async def undo_sorting_action(
         if where != source_location:
             raise WarehouseMapError("undo_target_moved")
 
-    await _reverse_movements(
-        session,
-        tenant_id,
-        movements=movements,
-        receipt_id=receipt_id,
-        actor_user_id=actor_user_id,
-    )
+    try:
+        await _reverse_movements(
+            session,
+            tenant_id,
+            movements=movements,
+            receipt_id=receipt_id,
+            actor_user_id=actor_user_id,
+        )
+    except ValueError as exc:
+        # Штук там, куда их положило действие, уже нет — их кто-то сдвинул
+        # между проверкой и записью. Отменять нечего, а не «ошибка сервера».
+        if str(exc) == "insufficient stock":
+            raise WarehouseMapError("undo_target_moved") from exc
+        raise
     if moved_container is not None and from_holder is not None:
         kind, container_id = moved_container
         holder_kind, pallet_id, location_id = from_holder
@@ -436,7 +441,12 @@ async def undo_sorting_action(
     for line_id, change in line_change.items():
         lines[line_id].posted_qty -= change
     for content_key, change in content_change.items():
-        inbound_contents[content_key].posted_qty -= change
+        # «Разложено» короба — в пределах самого короба, как и при снятии: в
+        # короб могли доложить сканом штуки сверх его состава.
+        content_row = inbound_contents[content_key]
+        content_row.posted_qty = max(
+            0, min(int(content_row.quantity), int(content_row.posted_qty) - change)
+        )
     await _restore_distribution(
         session,
         request=request,
@@ -472,55 +482,85 @@ async def _restore_distribution(
     target_operation_id: uuid.UUID,
     receipt_id: uuid.UUID,
 ) -> None:
-    """Строки распределения документа — как до действия."""
+    """Строки распределения документа (квитанции раскладки, Д2) — как до действия.
+
+    Строки делятся по коробу приёмки (или «без короба»), как их делит само
+    распределение: сумма по коробу и по товару должна совпадать с «разложено».
+    Отмена постановки снимает строки того же набора (квитанция действия —
+    первой, без отбора по месту: брак мог уйти в зону брака, а строка записана
+    на ячейку скана). Отмена снятия возвращает ровно снятое количество туда,
+    где штуки снова стоят.
+    """
+    changed_lines = {line_id for line_id, change in line_change.items() if change}
     lines = {line.id: line for line in request.lines}
-    inbound_boxes = {box.id for box in request.boxes}
-    for line_id, change in line_change.items():
-        line = lines[line_id]
-        placed = [
-            row for row in movements
-            if row.inbound_intake_line_id == line_id
-            and row.storage_location_id != sorting_location_id
-        ]
-        if change > 0:
-            # Отменяем постановку: снимаем строки распределения там, куда её
-            # записали (квитанция самого действия — первой).
-            source_box = next(
+    for row in movements:
+        if row.inbound_intake_line_id not in changed_lines:
+            continue
+        line = lines[row.inbound_intake_line_id]
+        box_id = warehouse_map.distribution_box_id(request, row.container_kind, row.container_id)
+        if row.storage_location_id == sorting_location_id and row.quantity_delta < 0:
+            # Действие разложило эти штуки из «Сортировки» — снимаем их строки.
+            placed_at = next(
                 (
-                    row.container_id for row in movements
-                    if row.inbound_intake_line_id == line_id
-                    and row.quantity_delta < 0
-                    and row.container_id in inbound_boxes
+                    one.storage_location_id for one in movements
+                    if one.quantity_delta > 0
+                    and one.product_id == row.product_id
+                    and one.storage_location_id != sorting_location_id
                 ),
                 None,
             )
-            left = change
-            for row in placed:
-                if left <= 0:
-                    break
-                if row.quantity_delta <= 0:
-                    continue
-                left = await warehouse_map.release_distribution(
-                    session,
-                    request_id=request.id,
-                    product_id=line.product_id,
-                    quantity=left,
-                    location_id=row.storage_location_id,
-                    box_id=source_box,
-                    prefer_id=target_operation_id,
+            await warehouse_map.release_distribution(
+                session,
+                request_id=request.id,
+                product_id=line.product_id,
+                quantity=-row.quantity_delta,
+                box_id=box_id,
+                prefer_location_id=placed_at,
+                prefer_id=target_operation_id,
+            )
+        elif row.storage_location_id != sorting_location_id and row.quantity_delta < 0:
+            # Действие сняло эти штуки с места — возвращаем строки туда же:
+            # в строки короба не больше, чем в нём помещается (снятие брало их
+            # первыми), остальное — строкой без короба, как было при скане.
+            quantity = -row.quantity_delta
+            in_box = 0
+            if box_id is not None:
+                await session.flush()
+                capacity = next(
+                    (
+                        content.quantity
+                        for box in request.boxes
+                        if box.id == box_id
+                        for content in box.lines
+                        if content.product_id == line.product_id
+                    ),
+                    0,
                 )
-        elif change < 0:
-            # Отменяем снятие: строки распределения там, откуда снимали.
-            for row in placed:
-                if row.quantity_delta >= 0:
+                used = int(
+                    await session.scalar(
+                        select(func.coalesce(func.sum(InboundIntakeDistributionLine.quantity), 0))
+                        .where(
+                            InboundIntakeDistributionLine.request_id == request.id,
+                            InboundIntakeDistributionLine.product_id == line.product_id,
+                            InboundIntakeDistributionLine.box_id == box_id,
+                        )
+                    )
+                    or 0
+                )
+                in_box = max(0, min(quantity, int(capacity) - used))
+            for part, part_box, name in (
+                (in_box, box_id, "box"),
+                (quantity - in_box, None, "loose"),
+            ):
+                if part <= 0:
                     continue
                 session.add(
                     InboundIntakeDistributionLine(
-                        id=uuid.uuid5(receipt_id, str(row.id)),
+                        id=uuid.uuid5(receipt_id, f"{row.id}:{name}"),
                         request_id=request.id,
                         product_id=line.product_id,
                         storage_location_id=row.storage_location_id,
-                        quantity=-row.quantity_delta,
-                        box_id=row.container_id if row.container_id in inbound_boxes else None,
+                        quantity=part,
+                        box_id=part_box,
                     )
                 )

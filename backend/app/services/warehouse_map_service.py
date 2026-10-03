@@ -2144,14 +2144,22 @@ async def _replayed_sorting_action(
     tenant_id: uuid.UUID,
     warehouse_id: uuid.UUID,
     operation_id: uuid.UUID,
+    kind: ObjectKind,
+    object_id: uuid.UUID,
     destination_kind: DestinationKind,
     destination_id: uuid.UUID | None,
 ) -> dict[str, Any] | None:
-    """Повтор того же действия (потерян ответ, очередь после обновления): ответ без изменений."""
+    """Повтор того же действия (потерян ответ, очередь после обновления): ответ без изменений.
+
+    Повтор — это тот же объект в то же место. Тот же operation_id для другого
+    объекта или другого места — ошибка клиента: ``operation_conflict``.
+    """
     event = await session.get(WarehouseMapEvent, operation_id)
     if event is None:
         return None
     if event.tenant_id != tenant_id or event.warehouse_id != warehouse_id:
+        raise WarehouseMapError("operation_conflict")
+    if event.subject != await _sorting_subject(session, tenant_id, warehouse_id, kind, object_id):
         raise WarehouseMapError("operation_conflict")
     expected = await _expected_destination_labels(
         session, tenant_id, warehouse_id, destination_kind, destination_id
@@ -2161,13 +2169,40 @@ async def _replayed_sorting_action(
     return {"id": str(operation_id), "moved_qty": event.quantity}
 
 
+async def _sorting_subject(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ObjectKind,
+    object_id: uuid.UUID,
+) -> str | None:
+    """Как журнал называет объект действия: товар — по названию, тара — по номеру."""
+    if kind == "product":
+        balance = await session.get(InventoryBalance, object_id)
+        if balance is None or balance.tenant_id != tenant_id:
+            return None
+        product = await session.get(Product, balance.product_id)
+        return product.name if product is not None else None
+    try:
+        code = await _container_code(session, tenant_id, warehouse_id, kind, object_id)
+    except WarehouseMapError:
+        return None
+    return _container_title(kind, code)
+
+
 async def linked_location_quantity(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     inbound_line_id: uuid.UUID,
     location_id: uuid.UUID,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
 ) -> int:
-    """Сколько штук строки документа стоит в месте по связанным движениям."""
+    """Сколько штук строки документа лежит именно здесь (место + тара) по его движениям.
+
+    Считается по месту и таре вместе: россыпь другого документа на той же
+    ячейке и чужой короб на палете документа сюда не попадают (R18).
+    """
     from app.models.inventory_movement import InventoryMovement
 
     return int(
@@ -2176,6 +2211,12 @@ async def linked_location_quantity(
                 InventoryMovement.tenant_id == tenant_id,
                 InventoryMovement.inbound_intake_line_id == inbound_line_id,
                 InventoryMovement.storage_location_id == location_id,
+                InventoryMovement.container_kind.is_(None)
+                if container_kind is None
+                else InventoryMovement.container_kind == container_kind,
+                InventoryMovement.container_id.is_(None)
+                if container_id is None
+                else InventoryMovement.container_id == container_id,
             )
         )
         or 0
@@ -2188,11 +2229,19 @@ async def release_distribution(
     request_id: uuid.UUID,
     product_id: uuid.UUID,
     quantity: int,
-    location_id: uuid.UUID,
     box_id: uuid.UUID | None,
+    prefer_location_id: uuid.UUID | None = None,
     prefer_id: uuid.UUID | None = None,
 ) -> int:
-    """Уменьшить строки распределения документа на снятое с места; вернуть остаток."""
+    """Уменьшить строки распределения документа на снятое; вернуть, сколько не нашлось.
+
+    Строка распределения помнит, откуда штука пришла (короб приёмки или «без
+    короба»), и место, куда её положили впервые. Снимаем по порядку:
+    квитанция самого действия (``prefer_id``), строки этого короба, строки без
+    короба (товар, доложенный в короб сканом), и только затем строки других
+    коробов. Место после переноса может отличаться от текущего, поэтому оно
+    задаёт порядок, а не отбор.
+    """
     from app.models.inbound_intake import InboundIntakeDistributionLine
 
     rows = list(
@@ -2202,7 +2251,6 @@ async def release_distribution(
                 .where(
                     InboundIntakeDistributionLine.request_id == request_id,
                     InboundIntakeDistributionLine.product_id == product_id,
-                    InboundIntakeDistributionLine.storage_location_id == location_id,
                 )
                 .order_by(
                     InboundIntakeDistributionLine.created_at.desc(),
@@ -2211,7 +2259,13 @@ async def release_distribution(
             )
         ).all()
     )
-    rows.sort(key=lambda row: (row.id != prefer_id, row.box_id != box_id))
+    rows.sort(
+        key=lambda row: (
+            row.id != prefer_id,
+            0 if row.box_id == box_id else 1 if row.box_id is None else 2,
+            row.storage_location_id != prefer_location_id,
+        )
+    )
     left = quantity
     for row in rows:
         if left <= 0:
@@ -2237,14 +2291,20 @@ async def _return_balance_to_sorting(
     group_id: uuid.UUID,
     actor_user_id: uuid.UUID,
     release_container_line: bool,
+    only_document_units: bool = False,
 ) -> None:
     """Вернуть штуки документа с ячейки в «Сортировку» (R15).
 
     Возвращается только расположение и прогресс раскладки этого документа:
     остаток не меняется — это пара перемещений внутри фулфилмента (R14).
     «Разложено» уменьшается ровно на штуки, которые этот документ туда
-    положил (связанные движения), поэтому повторная постановка снова пройдёт
-    и увеличит его ровно на возвращённое — без двойного учёта.
+    положил (связанные движения в этом месте и в этой таре), поэтому повторная
+    постановка снова пройдёт и увеличит его ровно на возвращённое.
+
+    ``only_document_units`` — товар снимают сам по себе (не вместе с тарой):
+    тогда снять можно только штуки, положенные этим документом. Чужую россыпь
+    на той же ячейке (другой документ, другой селлер) ручка документа не
+    трогает — отказ ``qty_exceeds_accepted``, как до WMS-650 (R18).
     """
     line = next((row for row in request.lines if row.product_id == balance.product_id), None)
     source_kind = cast(ContainerKind | None, balance.container_kind)
@@ -2252,8 +2312,12 @@ async def _return_balance_to_sorting(
     location_id = balance.storage_location_id
     linked = 0
     if line is not None:
-        proven = await linked_location_quantity(session, request.tenant_id, line.id, location_id)
+        proven = await linked_location_quantity(
+            session, request.tenant_id, line.id, location_id, source_kind, source_id
+        )
         linked = max(0, min(quantity, proven, int(line.posted_qty)))
+    if only_document_units and (line is None or linked != quantity):
+        raise WarehouseMapError("qty_exceeds_accepted")
     for part, line_id in ((linked, line.id if line else None), (quantity - linked, None)):
         if part <= 0:
             continue
@@ -2310,9 +2374,18 @@ async def _return_balance_to_sorting(
         request_id=request.id,
         product_id=balance.product_id,
         quantity=linked,
-        location_id=location_id,
-        box_id=source_id if source_kind == "box" else None,
+        box_id=distribution_box_id(request, source_kind, source_id),
+        prefer_location_id=location_id,
     )
+
+
+def distribution_box_id(
+    request: InboundIntakeRequest, kind: str | None, container_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Короб приёмки, к которому относится строка распределения, иначе None."""
+    if kind == "box" and any(box.id == container_id for box in request.boxes):
+        return container_id
+    return None
 
 
 async def _relocate_sorting_container(
@@ -2420,17 +2493,7 @@ async def place_sorting_object(
         destination_kind = "unassigned"
         destination_id = None
     if inbound_request_id is None:
-        if operation_id is not None:
-            replay = await _replayed_sorting_action(
-                session,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                operation_id=operation_id,
-                destination_kind=destination_kind,
-                destination_id=destination_id,
-            )
-            if replay is not None:
-                return replay
+        # Склад целиком, без документа: как до WMS-650 — обычный перенос.
         return await move_object(
             session,
             tenant_id=tenant_id,
@@ -2441,8 +2504,6 @@ async def place_sorting_object(
             to_kind=destination_kind,
             to_id=destination_id,
             quantity=quantity,
-            transfer_group_id=operation_id,
-            event_id=operation_id,
         )
 
     from app.services import inbound_intake_service as intake
@@ -2468,6 +2529,8 @@ async def place_sorting_object(
             tenant_id=tenant_id,
             warehouse_id=warehouse_id,
             operation_id=operation_id,
+            kind=kind,
+            object_id=object_id,
             destination_kind=destination_kind,
             destination_id=destination_id,
         )
@@ -2659,6 +2722,7 @@ async def _return_product_to_sorting(
         group_id=op_id,
         actor_user_id=actor_user_id,
         release_container_line=False,
+        only_document_units=True,
     )
     session.add(
         WarehouseMapEvent(

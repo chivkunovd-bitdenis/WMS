@@ -159,6 +159,8 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     operationId?: string
   }): Promise<string> {
     if (!warehouseId) throw new Error('Склад не выбран')
+    // Плашка прошлой неудачи («состав не обновлён») не должна висеть после нового действия.
+    setError(null)
     let operationId = payload.operationId ?? randomId()
     try {
       const body = {
@@ -199,6 +201,7 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
 
   async function undo(targetOperationId: string, undoOperationId: string) {
     if (!warehouseId || !inboundRequestId) throw new Error('Откройте документ приёмки')
+    setError(null)
     const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects/undo`), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...headers(token) },
