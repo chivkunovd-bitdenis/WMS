@@ -182,8 +182,15 @@ class AgentDispatcher:
                         )
                     continue
                 parts = route.get("topics")
-                if not isinstance(parts, list) or not parts or len(parts) > 8:
+                if not isinstance(parts, list) or len(parts) > 8:
                     raise ValueError("invalid topic routes")
+                if not parts:
+                    if event["kind"] == "input":
+                        current = self.store.row("SELECT revision FROM messages WHERE id=?",
+                                                 (event["source_id"],))
+                        if current and int(current["revision"]) == int(event["revision"]):
+                            self.store.set_message(event["source_id"], status="handled")
+                    self.store.kv_set(f"agent_event_done:{event['id']}", True)
                 for position, part in enumerate(parts):
                     topic_id = str(part.get("topic_id") or "")
                     if event["kind"] != "input":

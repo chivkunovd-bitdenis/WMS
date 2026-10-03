@@ -92,3 +92,66 @@ def test_edited_message_is_new_event_with_same_source_id(tmp_path: Path) -> None
     agent.dispatcher.accept(edited)
     assert store.kv_get("agent_dispatch_queue", []) == [f"in:{initial['id']}:1",
                                                        f"in:{initial['id']}:2"]
+
+
+def test_finished_worker_atomically_queues_moderator_event(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "a", "Нужно проверить")
+    dispatcher = agent.dispatcher
+    dispatcher.accept(source)
+    dispatcher._route_once()
+    event_id = f"in:{source['id']}:1"
+    dispatcher._finish_event(f"topic-{source['id']}", event_id,
+                             {"summary": "Проверено", "result": "Готово"})
+    saved = store.row("SELECT status FROM messages WHERE id=?", (source["id"],))
+    assert saved is not None and saved["status"] == "handled"
+    queue = store.kv_get("agent_dispatch_queue", [])
+    assert len(queue) == 1 and queue[0].startswith("internal:")
+    assert store.kv_get(f"agent_event:{queue[0]}")["kind"] == "worker_done"
+
+
+def test_owner_cannot_inherit_client_topic_session(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    client = _message(store, -10, "a", "Вопрос")
+    agent.dispatcher.accept(client)
+    agent.dispatcher._route_once()
+    owner_id = store.add_message(source="telegram", chat_id=4242, msg_id="owner",
+                                 role="owner", author_id="42", author_name="Owner", ts=101,
+                                 kind="text", text="Посмотри эту задачу", file_id=None,
+                                 reply_to=None)
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    agent.dispatcher.accept(owner)
+
+    def wrong_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"],
+                              "topics": [{"topic_id": f"topic-{client['id']}"}]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = wrong_route  # type: ignore[method-assign]
+    try:
+        agent.dispatcher._route_once()
+    except ValueError as exc:
+        assert "chat boundary" in str(exc)
+    else:
+        raise AssertionError("owner event inherited client session")
+    assert f"in:{owner_id}:1" in store.kv_get("agent_dispatch_queue", [])
+
+
+def test_background_message_can_be_acknowledged_without_topic(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "hello", "Спасибо")
+    agent.dispatcher.accept(source)
+
+    def no_topic(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        return LlmResult(json.dumps({"routes": [{"event_id": event["id"], "topics": []}]}),
+                         "codex", "sol", "session")
+
+    agent.llm.agent_turn = no_topic  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    saved = store.row("SELECT status FROM messages WHERE id=?", (source["id"],))
+    assert saved is not None and saved["status"] == "handled"
+    assert store.kv_get("agent_dispatch_queue", []) == []
+    assert store.kv_get("agent_topic_index", []) == []
