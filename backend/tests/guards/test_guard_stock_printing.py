@@ -8,6 +8,7 @@ import httpx
 import pytest
 from sqlalchemy import select
 
+from app.models.fbs_order import FbsOrder
 from app.models.fbs_order_pick import FbsOrderPick
 from app.services import fbs_kiz_service as kiz
 from app.services import fbs_marking_service as marking
@@ -106,5 +107,15 @@ async def test_g_stock_6_print_reprint_failure_recovery_and_clear_kiz(db_session
     monkeypatch.setattr(kiz, "delete_marketplace_order_meta", AsyncMock(return_value=None))
     async with httpx.AsyncClient() as client:
         await kiz.cancel_order_kiz(db_session, tenant_id, actor_id, order_id, client)
+    # WMS-609: require the operation to really clear the saved code, so an
+    # ineffective cleanup cannot pass merely because stock stayed unchanged.
+    saved_meta = await db_session.scalar(
+        select(FbsOrder.meta_details_json).where(FbsOrder.id == order_id)
+    )
+    check(
+        (saved_meta or {}).get("sgtin"),
+        None,
+        "очистка КИЗ действительно удаляет сохранённый sgtin (WMS-609)",
+    )
     check(await reserved(db_session, product_id), before[1], "очистка КИЗ не снимает резерв заказа")
     check(await snapshot(), before, "очистка КИЗ сохраняет остаток, резерв и подбор")
