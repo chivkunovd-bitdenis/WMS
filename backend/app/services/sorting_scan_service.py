@@ -143,18 +143,37 @@ async def scan_product(
     req = await intake.get_request(session, tenant_id, inbound_request_id, for_update=True)
     if req is None or req.warehouse_id != warehouse_id:
         raise error("inbound_request_not_found")
-    # Bind the movement group to the complete intent. The existing distribution
-    # primary key serializes retries; no additional receipt table is necessary.
-    group_id = uuid.uuid5(
+    # WMS-650 Д2: movements of one scan carry the scanner's operation id, the
+    # receipt «назад» reverses. Scans recorded before that release used a group
+    # derived from the whole intent; their replays are still recognised.
+    group_id = operation_id
+    legacy_group_id = uuid.uuid5(
         operation_id, f"sorting-scan:{inbound_request_id}:{barcode}:{cell_id}:{to_id}"
     )
     prior = await session.get(InboundIntakeDistributionLine, operation_id)
     if prior is not None:
-        evidence = await session.scalar(select(InventoryMovement.id).where(
+        if prior.request_id != req.id:
+            raise error("operation_conflict")
+        if await session.scalar(select(InventoryMovement.id).where(
+            InventoryMovement.tenant_id == tenant_id,
+            InventoryMovement.transfer_group_id == legacy_group_id,
+        ).limit(1)) is not None:
+            return {"id": str(operation_id), "moved_qty": 1, "reload": True}
+        evidence = list((await session.scalars(select(InventoryMovement).where(
             InventoryMovement.tenant_id == tenant_id,
             InventoryMovement.transfer_group_id == group_id,
-        ).limit(1))
-        if prior.request_id != req.id or evidence is None:
+        ))).all())
+        # The same operation id must replay the same intent: product, cell and
+        # target container of the original scan.
+        placed = [row for row in evidence
+                  if row.quantity_delta > 0 and row.storage_location_id == cell_id]
+        replayed_lines = await matching_scan_lines(session, req, barcode)
+        if (
+            not evidence
+            or prior.storage_location_id != cell_id
+            or any(row.container_id != to_id for row in placed)
+            or [row.product_id for row in replayed_lines] != [prior.product_id]
+        ):
             raise error("operation_conflict")
         return {"id": str(operation_id), "moved_qty": 1, "reload": True}
     if await session.get(WarehouseMapEvent, operation_id) is not None:
