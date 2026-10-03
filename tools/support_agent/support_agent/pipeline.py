@@ -1665,7 +1665,7 @@ class Pipeline:
             if intent == "edit":
                 if d.get("last_edit_msg") == m["msg_id"]:
                     return  # повтор обработки того же сообщения
-                edits = list(d.get("edits", [])) + [str(res.get("edit") or m["text"])]
+                edits = list(d.get("edits", [])) + [str(m["text"])]
                 self.store.set_stage(tid, "task_draft", edits=edits, last_edit_msg=m["msg_id"],
                                      version=int(d.get("version", 1)) + 1)
                 return
@@ -1682,7 +1682,7 @@ class Pipeline:
             self.store.add_ticket(
                 kind="partner_task", source="telegram", chat_id=m["chat_id"], seller=chat.seller,
                 stage="task_draft", author_id=m["author_id"], category="task", now=self.clock(),
-                data={"raw": str(res.get("task") or m["text"]), "msg_id": m["msg_id"],
+                data={"raw": str(m["text"]), "msg_id": m["msg_id"],
                       "author_name": m["author_name"], "version": 1, "edits": []},
             )
 
@@ -1692,11 +1692,40 @@ class Pipeline:
                 f"Что должно получиться: {draft.get('expected', '')}\n"
                 f"Что понял неочевидного: {'; '.join(draft.get('notes') or [])}")
 
+    @staticmethod
+    def _grounded_partner_draft(raw: str, edits: list[str], draft: dict[str, Any]) -> dict[str, Any]:
+        """Неподтверждённые ограничения не становятся требованиями даже после ответа модели."""
+        source = raw + ("\nУточнения автора:\n" + "\n".join(edits) if edits else "")
+        normalized = " ".join(re.findall(r"\w+", source.casefold()))
+        fields = [str(draft.get(key) or "") for key in ("title", "essence", "expected")]
+        notes = draft.get("notes") or []
+        if isinstance(notes, list):
+            fields.extend(str(note) for note in notes)
+        else:
+            fields.append(str(notes))
+        restrictions = re.compile(
+            r"\b(?:лимит\w*|огранич\w*|максим\w*|миним\w*|запрет\w*|запрещ\w*|блокир\w*|"
+            r"валидац\w*|обязательн\w*|не\s+(?:более|больше|меньше)|до\s+\d+|только\s+после|"
+            r"limit\w*|maximum|minimum|cap|at\s+most)\b", re.IGNORECASE,
+        )
+        ungrounded = any(
+            restrictions.search(part) and " ".join(re.findall(r"\w+", part.casefold())) not in normalized
+            for field in fields for part in re.split(r"[.!?;\n]+", field) if part.strip()
+        )
+        references = lambda text: set(re.findall(r"\bWMS-\d+\b", text.upper()))  # noqa: E731
+        if not ungrounded and references("\n".join(fields)) <= references(source):
+            return draft
+        # Сохраняем просьбу и все правки дословно, без удаления чисел и без ещё одного вызова модели.
+        return {"title": raw[:120], "essence": raw, "expected": source, "notes": [],
+                "is_ui": draft.get("is_ui") is True}
+
     def stage_task_draft(self, tid: int) -> None:
         d = self.store.data(tid)
+        edits = list(d.get("edits", []))
         draft, _ = self.llm.ask_json(
-            "routine", prompts.partner_draft_prompt(d["raw"], list(d.get("edits", []))), ticket_id=tid
+            "routine", prompts.partner_draft_prompt(d["raw"], edits), ticket_id=tid
         )
+        draft = self._grounded_partner_draft(d["raw"], edits, draft)
         version = int(d.get("version", 1))
         t = self.store.ticket(tid)
         self.store.patch_data(tid, draft=draft)
