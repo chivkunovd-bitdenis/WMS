@@ -167,6 +167,11 @@ class NativeRuntimeTest(unittest.TestCase):
             self.assertEqual(value["context"]["wbOrderId"], 654)
             self.assertEqual(request("/print", body)[1]["receipt"], "test-printer-1")
             self.assertEqual((directory / "submission-count").read_text(), "1")
+            # WMS-625: the job is also in the v2026.09.30.4 journal, so that older
+            # program, started again, returns this receipt instead of a second label.
+            older = json.loads((directory / "direct-jobs.json").read_text())
+            self.assertEqual(older["scan/key"]["receipt"], "test-printer-1")
+            self.assertEqual(older["scan/key"]["hash"], value["hash"])
             with urlopen(base + "/jobs/scan%2Fkey/image") as r:
                 self.assertEqual(r.read(), PNG)
             legacy = {**body, "idempotencyKey": "legacy"}

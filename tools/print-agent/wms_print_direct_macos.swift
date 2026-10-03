@@ -136,6 +136,14 @@ private struct StoredJob: Codable, Equatable {
     var observations:[String] = []
     var queueObservation:[String:String] = [:]
 }
+/// The record format of v2026.09.30.4 (`StoredJob { hash; receipt? }` in direct-jobs.json).
+/// `v2` marks this program's own mirrored jobs; .4 ignores the field (and drops it when it
+/// rewrites the file), so an entry without it was written or rewritten by the older program.
+private struct LegacyEntry: Codable, Equatable {
+    var hash:String
+    var receipt:String?
+    var v2:Bool?
+}
 private func printArguments(queue:String,label:String,width:Double,height:Double,title:String) -> [String] {
     ["-d",queue,"-t",title,"-o","media=Custom.\(millimeters(width))x\(millimeters(height))mm","-o","fit-to-page","-o","copies=1","--",label]
 }
@@ -161,11 +169,20 @@ private final class Printer {
     private let submit:(StoredJob,URL) throws -> String
     private let queue:() throws -> String
     private let write:(Data,URL) throws -> Void
+    /// The older journal is written the way v2026.09.30.4 wrote it (atomic replace, no full
+    /// fsync): it is a rollback safety net and must not slow every label down.
+    private let legacyWrite:(Data,URL) throws -> Void
     private let beforeRelease:() -> Void
     private let observe:(StoredJob) throws -> [String:Any]
     private let worker=DispatchQueue(label:"wms-print-submit")
     private let observer=DispatchQueue(label:"wms-print-observe")
     private var jobs:[String:StoredJob]=[:]
+    /// WMS-625: the journal of v2026.09.30.4 (direct-jobs.json, key -> hash and receipt).
+    /// Every job this program hands to the queue is mirrored there before lp, so the
+    /// older program, if it is started again, returns the same receipt or refuses
+    /// a repeat of the key instead of printing a second label.
+    private var legacyEntries:[String:LegacyEntry]=[:]
+    private let legacyURL:URL
     private var active=Set<String>()
     private var observing=Set<String>()
     private var blocked=Set<String>()
@@ -178,13 +195,14 @@ private final class Printer {
          submit:@escaping (StoredJob,URL) throws -> String=submitToDefaultPrinter,
          queue:@escaping () throws -> String=defaultPrinter,
          write:@escaping (Data,URL) throws -> Void=durableWrite,
+         legacyWrite:@escaping (Data,URL) throws -> Void={ data,url in try data.write(to:url,options:.atomic) },
          beforeRelease:@escaping () -> Void={},
          observe:@escaping (StoredJob) throws -> [String:Any]=observeQueue) throws {
-        self.directory=directory; self.records=directory.appendingPathComponent("jobs-v2"); self.submit=submit;self.queue=queue;self.write=write;self.beforeRelease=beforeRelease;self.observe=observe;self.autoWork=autoWork
+        self.directory=directory; self.records=directory.appendingPathComponent("jobs-v2"); self.legacyURL=directory.appendingPathComponent("direct-jobs.json"); self.submit=submit;self.queue=queue;self.write=write;self.legacyWrite=legacyWrite;self.beforeRelease=beforeRelease;self.observe=observe;self.autoWork=autoWork
         try FileManager.default.createDirectory(at:records,withIntermediateDirectories:true,attributes:[.posixPermissions:0o700])
         lockFD=Darwin.open(directory.appendingPathComponent("runtime.lock").path,O_CREAT|O_RDWR,mode_t(0o600))
         guard lockFD>=0,flock(lockFD,LOCK_EX|LOCK_NB)==0 else { if lockFD>=0 { Darwin.close(lockFD);lockFD = -1 };throw PrintError.message("Журнал уже открыт другой программой WMS Print") }
-        let legacy=directory.appendingPathComponent("direct-jobs.json")
+        let legacy=legacyURL
         if FileManager.default.fileExists(atPath:legacy.path) {
             do {
                 let map=try JSONSerialization.jsonObject(with:Data(contentsOf:legacy)) as? [String:[String:Any]]
@@ -192,6 +210,10 @@ private final class Printer {
                 for (key,value) in map {
                     guard let hash=value["hash"] as? String else { throw PrintError.message("Некорректная старая запись") }
                     let receipt=value["receipt"] as? String
+                    let mirrored=value["v2"] as? Bool == true
+                    legacyEntries[key]=LegacyEntry(hash:hash,receipt:receipt,v2:mirrored ? true:nil)
+                    // This program's own job lives in jobs-v2; its mirror is not an older-program record.
+                    if mirrored { continue }
                     let queue=receipt.flatMap { value in value.lastIndex(of:"-").map { String(value[..<$0]) } }
                     jobs[key]=StoredJob(idempotencyKey:key,hash:hash,receipt:receipt,queue:queue,createdAt:"unknown",updatedAt:now(),status:receipt == nil ? "unknown":"accepted",reason:"Старый журнал: изображение, размер и физический результат отсутствуют",legacy:true)
                 }
@@ -210,9 +232,19 @@ private final class Printer {
                 jobs[job.idempotencyKey]=job
             } catch { blocked.insert(file.deletingPathExtension().lastPathComponent);diagnostics.append("Повреждена запись \(file.lastPathComponent); исходник сохранён") }
         }
+        // WMS-625: the older program may have run between two runs of this one and printed
+        // a job this one had only saved. Its own receipt (or its unfinished attempt) wins:
+        // a saved job is never handed to the queue a second time.
+        for (key,job) in jobs where !job.legacy && job.status == "saved" {
+            guard let old=legacyEntries[key],old.v2 != true,old.hash==job.hash else { continue }
+            let merged = old.receipt.map { receipt -> StoredJob in var accepted=job;accepted.receipt=receipt;return change(accepted,status:"accepted",reason:"Задание приняла предыдущая версия WMS Print; бумага не подтверждена") }
+                ?? change(job,status:"unknown",reason:"Предыдущая версия WMS Print начала передачу и не записала результат; требуется сверка очереди")
+            do { try persist(merged) } catch { blocked.insert(digest(Data(key.utf8)));diagnostics.append("Не удалось сохранить итог предыдущей версии для \(key); повтор защищён") }
+        }
         // An orphan image may be an interrupted enqueue OR a lost metadata file from
         // an already submitted job. After restart those cases cannot be distinguished.
-        let knownFiles=Set(jobs.keys.map { digest(Data($0.utf8)) })
+        // A key known only from the older journal (mirrored there before lp) does not explain its v2 PNG.
+        let knownFiles=Set(jobs.values.filter { !$0.legacy }.map { digest(Data($0.idempotencyKey.utf8)) })
         for file in try FileManager.default.contentsOfDirectory(at:records,includingPropertiesForKeys:nil) where file.pathExtension == "png" {
             let name=file.deletingPathExtension().lastPathComponent
             if !knownFiles.contains(name) && !blocked.contains(name) {
@@ -225,6 +257,17 @@ private final class Printer {
     }
     deinit { if lockFD>=0 { flock(lockFD,LOCK_UN);Darwin.close(lockFD) } }
     private func imageURL(_ key:String) -> URL { records.appendingPathComponent(digest(Data(key.utf8))+".png") }
+    /// Written before memory; .4 decodes [key: {hash, receipt?}].
+    private func mirrorLegacy(_ key:String,hash:String,receipt:String?) throws {
+        var next=legacyEntries;next[key]=LegacyEntry(hash:hash,receipt:receipt,v2:true)
+        try legacyWrite(JSONEncoder().encode(next),legacyURL)
+        legacyEntries=next
+    }
+    private func forgetLegacy(_ key:String) {
+        guard legacyEntries[key] != nil else { return }
+        var next=legacyEntries;next.removeValue(forKey:key)
+        do { try legacyWrite(JSONEncoder().encode(next),legacyURL);legacyEntries=next } catch { diagnostics.append("Не удалось убрать неотправленное задание \(key) из журнала старой версии") }
+    }
     private func persist(_ job:StoredJob) throws {
         try write(JSONEncoder().encode(job),records.appendingPathComponent(digest(Data(job.idempotencyKey.utf8))+".json"))
         jobs[job.idempotencyKey]=job
@@ -325,22 +368,29 @@ private final class Printer {
             // Nothing external has started yet: failures here remain safely retryable.
             _=try image(key);job.queue=try queue()
             lock.lock()
-            do { try ensureParentIntent(job);job=change(job,status:"submitting",reason:"Начата передача в системную очередь");try persist(job) } catch { lock.unlock();throw PrintError.beforeSubmit(String(describing:error)) }
+            do {
+                try ensureParentIntent(job);job=change(job,status:"submitting",reason:"Начата передача в системную очередь");try persist(job)
+                try mirrorLegacy(key,hash:job.hash,receipt:nil)
+            } catch { lock.unlock();throw PrintError.beforeSubmit(String(describing:error)) }
             lock.unlock()
             do {
                 let receipt=try submit(job,imageURL(key))
                 lock.lock();defer{lock.unlock()}
                 job.receipt=receipt;job=change(job,status:"accepted",reason:"Системная очередь приняла задание; бумага не подтверждена")
-                do { try persist(job) } catch { storageError="Не удалось сохранить результат отправки: \(error)";diagnostics.append(storageError!);jobs[key]=change(job,status:"unknown",reason:storageError!) }
+                do {
+                    try persist(job)
+                    do { try mirrorLegacy(key,hash:job.hash,receipt:receipt) } catch { diagnostics.append("Квитанция \(key) не записана в журнал старой версии: \(error)") }
+                } catch { storageError="Не удалось сохранить результат отправки: \(error)";diagnostics.append(storageError!);jobs[key]=change(job,status:"unknown",reason:storageError!) }
             } catch {
                 lock.lock();defer{lock.unlock()}
                 let status:String
                 if case PrintError.beforeSubmit = error { status="failed_before_submit" } else { status="unknown" }
                 do { try persist(change(job,status:status,reason:String(describing:error))) } catch { storageError="Не удалось сохранить ошибку отправки: \(error)";diagnostics.append(storageError!) }
+                if status == "failed_before_submit" && storageError == nil { forgetLegacy(key) }
             }
         } catch {
             lock.lock();defer{lock.unlock()}
-            do { try persist(change(job,status:"failed_before_submit",reason:String(describing:error))) } catch { storageError="Запись задания недоступна: \(error)";diagnostics.append(storageError!) }
+            do { try persist(change(job,status:"failed_before_submit",reason:String(describing:error)));forgetLegacy(key) } catch { storageError="Запись задания недоступна: \(error)";diagnostics.append(storageError!) }
         }
     }
     func retry(_ key:String) throws -> [String:Any] {
@@ -381,6 +431,9 @@ private final class Printer {
         }
         for (k,v) in observation { updated.queueObservation[k]=String(describing:v) }
         do { try persist(updated) } catch { diagnostics.append("Не удалось сохранить наблюдение: \(error)");throw error }
+        if !updated.legacy,let receipt=updated.receipt,let old=legacyEntries[key],old.v2 == true,old.receipt == nil {
+            do { try mirrorLegacy(key,hash:updated.hash,receipt:receipt) } catch { diagnostics.append("Квитанция \(key) не записана в журнал старой версии: \(error)") }
+        }
         return try detail(key)!
     }
     func poll() {
@@ -554,7 +607,18 @@ private func runSelfTest() throws {
         return "test-printer-\(submissions)"
     },queue:{"test-printer"},observe:{job in ["matches":1,"receipt":job.receipt ?? "test-printer-999","jobState":9,"jobStateReasons":["queued-in-device"]]})
     try check(try printer!.printJob(body("one"))["status"] as? String == "saved","durable handoff")
+    func olderJournal(_ directory:URL) throws -> [String:LegacyEntry] {
+        guard FileManager.default.fileExists(atPath:directory.appendingPathComponent("direct-jobs.json").path) else { return [:] }
+        return try JSONDecoder().decode([String:LegacyEntry].self,from:Data(contentsOf:directory.appendingPathComponent("direct-jobs.json")))
+    }
+    try check(try olderJournal(root)["one"]==nil,"a saved job is not in the older journal before lp")
     printer!.process("one");_=try printer!.printJob(body("one"));try check(submissions==1,"one submission")
+    // WMS-625: the older program started again finds the key with the same hash and receipt.
+    try check(try olderJournal(root)["one"]==LegacyEntry(hash:try printer!.detail("one")!["hash"] as! String,receipt:"test-printer-1",v2:true),"accepted job mirrored for the older program")
+    // The decoder of v2026.09.30.4 (hash, optional receipt) reads the mirrored file as is.
+    struct Release4Entry: Codable { let hash:String; var receipt:String? }
+    let release4=try JSONDecoder().decode([String:Release4Entry].self,from:Data(contentsOf:root.appendingPathComponent("direct-jobs.json")))
+    try check(release4["one"]?.receipt=="test-printer-1","v2026.09.30.4 decodes the mirrored journal")
     _=try printer!.reconcile("one");try check(try printer!.detail("one")?["status"] as? String == "completed","observed completed")
     try check(try printer!.detail("one")?["paperStatus"] as? String == "unconfirmed","paper distinct")
     var changed=body("one");changed["widthMm"]=60
@@ -565,11 +629,14 @@ private func runSelfTest() throws {
     printer=try Printer(directory:root,autoWork:false,submit:{_,_ in throw PrintError.message("lost OS response")},queue:{"test-printer"},observe:{_ in ["matches":1,"receipt":"test-printer-999","jobState":5]})
     try check(try printer!.image("one")==png,"image survives restart")
     printer!.process("batch-0");try check(try printer!.detail("batch-0")?["status"] as? String == "unknown","unknown preserved")
+    try check(try olderJournal(root)["batch-0"]?.receipt==nil && olderJournal(root)["batch-0"] != nil,"unknown outcome mirrored as begun: the older program refuses a repeat")
     _=try printer!.printJob(body("batch-0"));_=try printer!.reconcile("batch-0")
     try check(try printer!.detail("batch-0")?["receipt"] as? String == "test-printer-999","lost receipt reconciles")
+    try check(try olderJournal(root)["batch-0"]?.receipt=="test-printer-999","reconciled receipt mirrored")
     printer=nil
     printer=try Printer(directory:root,autoWork:false,submit:{_,_ in throw PrintError.beforeSubmit("launch failed")},queue:{"test-printer"})
     printer!.process("batch-1");try check(try printer!.detail("batch-1")?["status"] as? String == "failed_before_submit","known pre-submit failure")
+    try check(try olderJournal(root)["batch-1"]==nil,"a proven unsent job is not left in the older journal")
     _=try printer!.retry("batch-1");try check(try printer!.detail("batch-1")?["status"] as? String == "saved","safe explicit retry")
     try check(parseReceipt("id запроса Test_Printer-42 (файлов 1)",queue:"Test_Printer")=="Test_Printer-42","localized receipt")
     try check(parseReceipt("other-Test_Printer-42",queue:"Test_Printer")==nil,"receipt boundaries")
@@ -649,6 +716,27 @@ private func runSelfTest() throws {
     linked=try Printer(directory:linkedPath,autoWork:false)
     do { _=try linked!.printJob(body("child"));throw PrintError.message("orphan PNG accepted") }
     catch PrintError.message(let message) { try check(message.contains("повреждена"),"orphan PNG cannot cause duplicate after restart") }
+    // WMS-625: if the older journal cannot be written, the job does not reach lp.
+    var mirrorCalls=0
+    let mirrorFails=try Printer(directory:root.appendingPathComponent("older-unwritable"),autoWork:false,submit:{_,_ in mirrorCalls+=1;return "test-printer-6"},queue:{"test-printer"},legacyWrite:{_,_ in throw PrintError.message("read-only older journal")})
+    _=try mirrorFails.printJob(body("mirror"));mirrorFails.process("mirror")
+    try check(mirrorCalls==0 && (try mirrorFails.detail("mirror")?["status"] as? String)=="failed_before_submit","older journal is written before lp or nothing is submitted")
+    // WMS-625: the older program ran between two runs of this one and printed a job this
+    // one had only saved: its receipt completes the job, nothing goes to the queue again.
+    let olderRanPath=root.appendingPathComponent("older-ran")
+    var olderRanCalls=0
+    var olderRan:Printer?=try Printer(directory:olderRanPath,autoWork:false,submit:{_,_ in olderRanCalls+=1;return "test-printer-5"},queue:{"test-printer"})
+    let printedHash=try olderRan!.printJob(body("older-printed"))["hash"] as! String
+    let begunHash=try olderRan!.printJob(body("older-begun"))["hash"] as! String
+    olderRan=nil
+    // Exactly what v2026.09.30.4 writes: its StoredJob has no v2 field.
+    try durableWrite(JSONEncoder().encode(["older-printed":LegacyEntry(hash:printedHash,receipt:"old-7"),"older-begun":LegacyEntry(hash:begunHash,receipt:nil)]),olderRanPath.appendingPathComponent("direct-jobs.json"))
+    olderRan=try Printer(directory:olderRanPath,autoWork:false,submit:{_,_ in olderRanCalls+=1;return "test-printer-5"},queue:{"test-printer"})
+    olderRan!.process("older-printed");olderRan!.process("older-begun")
+    try check(olderRanCalls==0,"jobs the older program took are never submitted again")
+    try check(try olderRan!.detail("older-printed")?["status"] as? String == "accepted" && olderRan!.detail("older-printed")?["receipt"] as? String == "old-7","older receipt completes the saved job")
+    try check(try olderRan!.detail("older-begun")?["status"] as? String == "unknown","older unfinished attempt is unknown, not resent")
+    olderRan=nil
     let legacyPath=root.appendingPathComponent("legacy")
     try FileManager.default.createDirectory(at:legacyPath,withIntermediateDirectories:true)
     var identity=png;identity.append(Data("|58.0x40.0".utf8))
