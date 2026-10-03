@@ -104,6 +104,40 @@ class TrelloClient:
     def move_card(self, card_id: str, list_id: str) -> None:
         self._request("PUT", f"cards/{card_id}", data={"idList": list_id})
 
+    def list_named(self, name: str) -> str | None:
+        lists = self._request("GET", f"boards/{self.cfg.board_id}/lists",
+                              params={"filter": "all", "fields": "id,name,closed"})
+        if not isinstance(lists, list):
+            raise TrelloError("invalid_response")
+        matches = [str(item["id"]) for item in lists
+                   if isinstance(item, dict) and item.get("name") == name and not item.get("closed")]
+        if len(matches) > 1:
+            raise TrelloError("duplicate_list")
+        return matches[0] if matches else None
+
+    def create_list(self, name: str) -> str:
+        value = self._request("POST", "lists", data={"name": name, "idBoard": self.cfg.board_id})
+        if not isinstance(value, dict) or not value.get("id"):
+            raise TrelloError("invalid_list")
+        return str(value["id"])
+
+    def board_cards(self) -> list[dict[str, Any]]:
+        params = {"filter": "visible", "fields": "id,name,idList,desc,shortUrl", "limit": "1000"}
+        result: list[dict[str, Any]] = []
+        seen: set[str] = set()
+        while True:
+            cards = self._request("GET", f"boards/{self.cfg.board_id}/cards", params=params)
+            if not isinstance(cards, list):
+                raise TrelloError("invalid_response")
+            result.extend(card for card in cards if isinstance(card, dict))
+            if len(cards) < 1000:
+                return result
+            cursor = str(cards[-1].get("id") or "")
+            if not cursor or cursor in seen:
+                raise TrelloError("paging_not_advancing")
+            seen.add(cursor)
+            params["before"] = cursor
+
     def update_description(self, card_id: str, desc: str) -> None:
         self._request("PUT", f"cards/{card_id}", data={"desc": self.redact(desc)})
 
