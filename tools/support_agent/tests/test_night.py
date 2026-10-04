@@ -8,7 +8,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from support_agent.llm import ExecResult
+from support_agent.llm import ExecResult, LlmUnavailable
 from support_agent.night import NightRunner
 
 from .conftest import ok
@@ -373,6 +373,34 @@ def test_frontend_developer_never_falls_back_from_claude_to_codex(
     runner._save(tid, state)
     env.llm.on("frontend", "Ты разработчик WMS-700", {"summary": "ok", "contradiction": ""})
     runner.development(tid)
+    assert env.llm.calls[-1]["cli_only"] == "claude"
+
+
+def test_unavailable_required_frontend_developer_stops_only_that_task(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="developer", frontend=True, tests=[], contract_hashes={})
+    state["tasks"]["WMS-701"] = {
+        "id": "WMS-701", "number": 701, "step": "worktree", "status": "working",
+        "ticket_id": None, "frontend": False, "contract_changed": False,
+    }
+    runner._save(tid, state)
+
+    def unavailable(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        raise LlmUnavailable("explicit Claude model unavailable or turn failed")
+
+    env.llm.on("frontend", "Ты разработчик WMS-700", unavailable)
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]
+    assert saved["WMS-700"]["status"] == "stopped"
+    assert saved["WMS-700"]["step"] == "stopped"
+    assert "Opus недоступен" in saved["WMS-700"]["reason"]
+    assert "не передана другой модели" in saved["WMS-700"]["reason"]
+    assert saved["WMS-701"]["status"] == "working"
     assert env.llm.calls[-1]["cli_only"] == "claude"
 
 

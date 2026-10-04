@@ -111,7 +111,19 @@ class NightRunner:
                     self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
                 return
             getattr(self, f"_task_{task['step']}")(tid, state, task)
-        except (LlmUnavailable, LlmError):
+        except LlmUnavailable as exc:
+            task = self._task(state)
+            if task is not None and task.get("step") == "developer" and task.get("frontend"):
+                self._stop_task(
+                    tid,
+                    state,
+                    task,
+                    "обязательный frontend-разработчик Opus недоступен; "
+                    f"задача не передана другой модели: {exc}",
+                )
+                return
+            raise
+        except LlmError:
             raise
         except StepFailed as exc:
             self._stop_task(tid, state, self._task(state), str(exc))
