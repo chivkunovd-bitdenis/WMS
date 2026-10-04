@@ -214,8 +214,8 @@ def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
         assert blocked in denied
 
 
-def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path) -> None:
-    """F2: у Sol-разработчика отключены shell и прочие инструменты; он только правит файлы worktree."""
+def test_codex_dev_has_readonly_project_reader_and_only_file_edits(tmp_path: Path) -> None:
+    """Sol читает worktree через изолированный MCP, а меняет только файлы через apply_patch."""
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
@@ -229,10 +229,13 @@ def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path
     assert "--ignore-user-config" in argv and "--ignore-rules" in argv
     assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
     assert "sandbox_workspace_write.network_access=false" in argv
+    assert 'mcp_servers.wms.default_tools_approval_mode="approve"' in argv
+    assert any(a.startswith("mcp_servers.wms.args=") for a in argv)
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
     resume = script.full[-1]
     assert resume[:3] == ["codex", "exec", "--ephemeral"] and "shell_tool" in resume
     assert resume[resume.index("-s") + 1] == "workspace-write" and "--ignore-user-config" in resume
+    assert any(a.startswith("mcp_servers.wms.args=") for a in resume)
 
 
 def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Path) -> None:

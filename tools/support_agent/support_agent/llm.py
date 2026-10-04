@@ -640,15 +640,16 @@ class LlmRouter:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
         # Пользовательские настройки Codex (MCP, хуки, плагины) не подгружаем. У Codex ВО ВСЕХ
         # режимах отключены командная оболочка и внешние инструменты (проверено вживую). Разработчик
-        # (write) только правит файлы через apply_patch в worktree; аналитик (readonly) читает проект
-        # лишь через доверенный MCP-читатель readonly_mcp (только чтение внутри корня, под
-        # строгим sandbox-exec); проверки делает диспетчер. Модельных команд у Codex нет.
+        # (write) читает проект лишь через доверенный MCP-читатель readonly_mcp и правит файлы через
+        # apply_patch в worktree; аналитик (readonly) использует тот же читатель. Сам читатель допускает
+        # только чтение внутри корня под строгим sandbox-exec; проверки делает диспетчер. Модельных
+        # команд у Codex нет.
         argv += ["--ignore-user-config", "--ignore-rules"]
         for feature in CODEX_DISABLED_FEATURES:
             argv += ["--disable", feature]
         for setting in CODEX_EXTRA_CONFIG:
             argv += ["-c", setting]
-        if mode == "readonly" and cwd:
+        if mode in ("readonly", "write") and cwd:
             argv += self.mcp_args(cwd, with_db=self.with_prod_db(role, mode, db_role), db_log=db_log,
                                   db_role=db_role)
         sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
