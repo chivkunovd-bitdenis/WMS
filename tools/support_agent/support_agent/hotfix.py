@@ -608,7 +608,10 @@ class HotfixRunner:
 
     def _s_merge(self, tid: int, h: dict[str, Any]) -> None:
         pr = str(h["pr"])
-        view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"], h["path"]))
+        view = json.loads(self.must_gh(
+            ["gh", "pr", "view", pr, "--json", "state,mergeCommit,headRefOid"], h["path"]))
+        if h.get("expected_head") and view.get("headRefOid") != h["expected_head"]:
+            raise StepFailed("версия PR изменилась после проверок; слияние запрещено")
         if view.get("state") != "MERGED":
             if h.get("merge_intent"):
                 if view.get("state") != "OPEN":
@@ -635,7 +638,9 @@ class HotfixRunner:
                 return
             # После durable intent код выхода не доказывает исход: сначала перечитываем PR и не
             # повторяем merge вслепую при потерянном ответе GitHub.
-            self.run_gh(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}"], h["path"])
+            match_head = ["--match-head-commit", h["expected_head"]] if h.get("expected_head") else []
+            self.run_gh(["gh", "pr", "merge", pr, f"--{self.cfg.hotfix.merge_method}", *match_head],
+                        h["path"])
             view = json.loads(self.must_gh(["gh", "pr", "view", pr, "--json", "state,mergeCommit"],
                                         h["path"]))
             if view.get("state") != "MERGED":

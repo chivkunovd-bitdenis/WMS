@@ -56,6 +56,9 @@ class FakeHotfix:
     def fetch(self) -> None:
         self.calls.append(("git", ["fetch"]))
 
+    def deployed_sha(self) -> str:
+        return "a" * 40
+
     def ensure_worktree(self, branch: str, path: str | Path,
                         base: str = "origin/etalon") -> Path:
         self.calls.append(("git", ["worktree", branch, str(path), base]))
@@ -274,10 +277,80 @@ def test_release_calls_existing_hotfix_merge_deploy_verify(env: Any) -> None:
                                               "candidate": {"included": ["WMS-700"]}},
                         hotfix={"step": "merge", "pr": 9, "path": "/fake"})
     runner.release(tid)
+    assert runner._state(tid)["step"] == "merged_ci"
+    runner.hotfix.run_gh = lambda *args, **kwargs: ok(out=json.dumps([{
+        "databaseId": 1, "headSha": "c" * 40, "status": "completed", "conclusion": "success",
+    }]))  # type: ignore[method-assign]
+    runner._failed_run_check = lambda run: ""  # type: ignore[method-assign]
+    runner.release(tid)
     runner.release(tid)
     runner.release(tid)
     assert runner.hotfix.release_calls == ["merge", "deploy", "verify"]
     assert env.store.data(tid)["night"]["step"] == "promote"
+
+
+def test_owner_cancellation_stops_before_any_model_or_release(env: Any) -> None:
+    runner, tid = make_night(env)
+    job = env.store.kv_get("agent_job:job1")
+    env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+    runner.development(tid)
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert not env.llm.calls and not runner.hotfix.release_calls
+
+
+def test_red_exact_merge_ci_never_dispatches_deploy(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state.update(step="merged_ci", release_sha="c" * 40, merged_ci_started=env.clock.now,
+                 candidate={"included": ["WMS-700"]})
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.run_gh = lambda *args, **kwargs: ok(out=json.dumps([{
+        "databaseId": 1, "headSha": "c" * 40, "status": "completed", "conclusion": "failure",
+    }]))  # type: ignore[method-assign]
+    runner.release(tid)
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert not runner.hotfix.release_calls
+
+
+def test_control_plane_cannot_be_changed_to_make_tests_green(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    workflow = root / ".github/workflows/ci.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("run: pytest\n")
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={})
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+    workflow.write_text("run: echo success\n")
+    runner.development(tid)
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
+    assert not env.llm.calls
+
+
+def test_helper_only_contract_is_not_a_test(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(*args: Any) -> dict[str, Any]:
+        (root / "backend/tests/conftest.py").write_text("SEED = 1\n")
+        return {"tests": ["backend/tests/conftest.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    assert "исполняемых тестов нет" in runner._state(tid)["tasks"]["WMS-700"]["reason"]
+
+
+def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "candidate"
+    state["tasks"]["WMS-700"]["status"] = "ready"
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.run = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")
+    runner.release(tid)
+    assert "потерял бы хотфикс" in runner._state(tid)["release_error"]
+    assert not any(call[0] == "gh" for call in runner.hotfix.calls)
+    assert not runner.hotfix.release_calls
 
 
 def test_interrupted_promote_is_not_repeated(env: Any) -> None:

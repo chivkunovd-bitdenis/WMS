@@ -20,6 +20,8 @@ CONTRADICTION_RE = re.compile(r"\bC\d+\b.*\bR\d+\b|\bR\d+\b.*\bC\d+\b", re.IGNOR
 REQUIRED_CHECKS = {"baseline", "backlog", "backend", "frontend-build", "охрана"}
 SKILLS_ROOT = "docs/reviews/2026-09-11-analyst-draft/skills"
 TEST_PATH_RE = re.compile(r"(^|/)(tests?|guards|__snapshots__|fixtures)/|(^|/)conftest\.py$|\.test\.[jt]sx?$")
+CONTROL_PATHS = (".github", "scripts/ci", "scripts/deploy", "guards", "backend/tests/guards",
+                 "frontend/src/guards", "tools/support_agent", "AGENTS.md", "CLAUDE.md")
 
 
 class NightRunner:
@@ -75,6 +77,8 @@ class NightRunner:
     # -- development ----------------------------------------------------------------
     def development(self, tid: int) -> None:
         state = self._state(tid)
+        if self._cancelled(tid, state):
+            return
         if self.p.clock() < float(state.get("next_poll", 0)):
             return
         try:
@@ -174,6 +178,7 @@ class NightRunner:
         if task.get("frontend"):
             self.hotfix.link_node_modules(str(path))
         task.update(step="analyst", branch=branch, path=str(path))
+        task["control_hashes"] = self._control_hashes(task)
         self._commit(task, f"{task['id']}: согласованная постановка", paths=[doc_rel])
         self._save(tid, state)
 
@@ -216,6 +221,8 @@ class NightRunner:
         if not tests or any(not TEST_PATH_RE.search(path)
                             or not (Path(task["path"]) / path).is_file() for path in tests):
             raise StepFailed("тестировщик не создал контрактные тесты")
+        if not any(self._executable_test(path) for path in tests):
+            raise StepFailed("контракт содержит только вспомогательные файлы, исполняемых тестов нет")
         doc_rel = f"docs/requirements/{task['id']}.md"
         # Helper files the tests need (fixtures, conftest, seeds) belong to the contract too;
         # only changes outside test code stop the task.
@@ -377,6 +384,8 @@ class NightRunner:
     # -- release --------------------------------------------------------------------
     def release(self, tid: int) -> None:
         state = self._state(tid)
+        if self._cancelled(tid, state):
+            return
         if self.p.clock() < float(state.get("next_poll", 0)):
             return
         try:
@@ -387,6 +396,8 @@ class NightRunner:
                 self._candidate_ci(tid, state)
             elif step == "candidate_attribute":
                 self._candidate_attribute(tid, state)
+            elif step == "merged_ci":
+                self._merged_ci(tid, state)
             elif step in ("merge", "deploy", "verify"):
                 self._release_hotfix_step(tid, state, step)
             elif step == "promote":
@@ -412,10 +423,19 @@ class NightRunner:
         attempt = int(state.get("candidate_attempt", 0)) + 1
         if attempt > 2:
             raise StepFailed("два прогона CI кандидата исчерпаны")
-        branch = f"night/release-{state['job_id'][:8]}-{attempt}"
+        self.hotfix.fetch()
+        base = self.hotfix.git("rev-parse", "origin/etalon").strip()
+        deployed = self.hotfix.deployed_sha()
+        if self.hotfix.run(["git", "merge-base", "--is-ancestor", deployed, base]).rc:
+            raise StepFailed("рабочая версия содержит исправления вне etalon; выпуск потерял бы хотфикс")
+        branch = f"codex/night-release-{state['job_id'][:8]}-{attempt}"
         path = Path(self.cfg.repo) / ".worktrees" / f"night-release-{state['job_id'][:8]}-{attempt}"
-        self.hotfix.ensure_worktree(branch, path)
+        self.hotfix.ensure_worktree(branch, path, base=base)
         for task in included:
+            self._assert_contract(task)
+            actual = self.hotfix.git("rev-parse", f"origin/{task['branch']}").strip()
+            if actual != task.get("head_sha"):
+                raise StepFailed(f"версия {task['id']} изменилась после приёмки и CI")
             present = self.hotfix.run(["git", "merge-base", "--is-ancestor",
                                        f"origin/{task['branch']}", "HEAD"], path)
             if present.rc != 0:
@@ -428,6 +448,7 @@ class NightRunner:
         )
         self._save(tid, state, step="candidate_ci", candidate_attempt=attempt,
                    candidate={"branch": branch, "path": str(path), "pr": found["number"],
+                              "head": self._head({"path": str(path)}), "base": base,
                               "included": [task["id"] for task in included],
                               "started": self.p.clock()}, next_poll=0)
 
@@ -445,8 +466,12 @@ class NightRunner:
             self._save(tid, state, step="candidate_attribute", candidate_failures=names)
             return
         if self._required_ci_passed(checks):
+            view = self._pr_view(candidate["pr"])
+            if view.get("headRefOid") != candidate["head"] or view.get("baseRefOid") != candidate["base"]:
+                raise StepFailed("состав кандидата или etalon изменился после сборки; нужен новый прогон")
             self.store.patch_data(tid, hotfix={"step": "merge", "pr": candidate["pr"],
-                                                "path": candidate["path"]})
+                                                "path": candidate["path"],
+                                                "expected_head": candidate["head"]})
             self._save(tid, state, step="merge")
             return
         if self.p.clock() - float(candidate["started"]) > self.cfg.limits.ci_timeout_sec:
@@ -486,8 +511,53 @@ class NightRunner:
         if next_step == "report":
             for task_id in state["candidate"]["included"]:
                 state["tasks"][task_id].update(status="released", release_sha=current.get("merge_sha"))
+        if step == "merge" and next_step == "deploy":
+            next_step = "merged_ci"
+            state["merged_ci_started"] = self.p.clock()
         self._save(tid, state, step="promote" if next_step == "report" else next_step,
                    release_sha=current.get("merge_sha"), next_poll=current.get("next_poll", 0))
+
+    def _merged_ci(self, tid: int, state: dict[str, Any]) -> None:
+        sha = state["release_sha"]
+        response = self.hotfix.run_gh([
+            "gh", "run", "list", "--workflow", "ci.yml", "--branch", "etalon",
+            "--commit", sha, "--event", "push", "--limit", "1", "--json",
+            "databaseId,headSha,status,conclusion",
+        ])
+        if response.rc:
+            raise StepFailed("не удалось прочитать CI коммита слияния")
+        runs = json.loads(response.out or "[]")
+        if runs and runs[0].get("status") == "completed":
+            run = runs[0]
+            if run.get("headSha") != sha or run.get("conclusion") != "success" or self._failed_run_check(run):
+                raise StepFailed("CI точного коммита слияния не зелёный; deploy не запускается")
+            self._save(tid, state, step="deploy", next_poll=0)
+            return
+        if self.p.clock() - state["merged_ci_started"] > self.cfg.limits.ci_timeout_sec:
+            raise StepFailed("CI коммита слияния не завершился в срок; deploy не запускается")
+        self._save(tid, state, next_poll=self.p.clock() + 30)
+
+    def _pr_view(self, pr: int) -> dict[str, Any]:
+        response = self.hotfix.run_gh(["gh", "pr", "view", str(pr), "--json", "headRefOid,baseRefOid,state"])
+        if response.rc:
+            raise StepFailed("не удалось проверить точную версию PR")
+        return json.loads(response.out)
+
+    def _cancelled(self, tid: int, state: dict[str, Any]) -> bool:
+        job = self.store.kv_get(f"agent_job:{state['job_id']}", {})
+        if not job.get("cancel_requested"):
+            return False
+        hotfix = self.store.data(tid).get("hotfix") or {}
+        # An already dispatched external action must be reconciled, not abandoned.
+        if hotfix.get("deploy_intent") and state.get("step") in ("deploy", "verify"):
+            return False
+        if hotfix.get("merge_intent") and state.get("step") == "merge":
+            return False
+        for task in state["tasks"].values():
+            if task["status"] != "released":
+                task.update(status="stopped", reason="остановлено владельцем")
+        self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+        return True
 
     def _promote(self, tid: int, state: dict[str, Any]) -> None:
         promotion = state.get("promotion")
@@ -628,15 +698,36 @@ class NightRunner:
         result: dict[str, str] = {}
         for rel in paths:
             path = Path(task["path"]) / rel
+            if path.is_symlink() or Path(task["path"]).resolve() not in path.resolve().parents:
+                raise StepFailed("контракт тестов содержит ссылку за пределы рабочей копии")
             if path.is_file():
                 result[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
 
     def _assert_contract(self, task: dict[str, Any]) -> None:
+        if "control_hashes" in task and self._control_hashes(task) != task["control_hashes"]:
+            raise StepFailed("изменены CI, правила выпуска или защищённые проверки; автопубликация запрещена")
         changed = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {})
         task["contract_changed"] = changed
         if changed:
             raise StepFailed("разработчик изменил зафиксированный контракт тестов")
+
+    def _control_hashes(self, task: dict[str, Any]) -> dict[str, str]:
+        root = Path(task["path"])
+        paths = []
+        for name in CONTROL_PATHS:
+            path = root / name
+            for item in ([path] if path.is_file() or path.is_symlink() else path.rglob("*")):
+                if item.is_file() or item.is_symlink():
+                    if "__pycache__" not in item.parts and item.suffix != ".pyc":
+                        paths.append(item.relative_to(root).as_posix())
+        return self._hashes(task, paths)
+
+    @staticmethod
+    def _executable_test(path: str) -> bool:
+        return (path.startswith("backend/tests/") and Path(path).name.startswith("test_")
+                and path.endswith(".py")) or bool(
+                    path.startswith("frontend/src/") and re.search(r"\.test\.tsx?$", path))
 
     def _run_contract(self, task: dict[str, Any]) -> list[str]:
         root = Path(task["path"])
