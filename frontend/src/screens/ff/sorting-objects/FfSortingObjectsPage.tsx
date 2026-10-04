@@ -213,7 +213,12 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     })
     if (!res.ok) {
       const { detail, message } = await readSortingFailure(res)
-      if ([400, 404, 409, 422].includes(res.status)) throw new RejectedUndo(detail, message)
+      if ([400, 404, 409, 422].includes(res.status)) {
+        // Отменить нельзя, потому что склад уже другой (например, тару
+        // переставили): показываем, где всё стоит сейчас.
+        await load(false)
+        throw new RejectedUndo(detail, message)
+      }
       throw new Error(message)
     }
     await onPlacedRef.current?.()

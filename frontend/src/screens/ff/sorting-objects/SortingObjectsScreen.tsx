@@ -203,7 +203,12 @@ export function SortingObjectsScreen({
   const [focus, setFocus] = useState<string | null>(null)
   const [inflightCount, setInflightCount] = useState(0)
   const [undoing, setUndoing] = useState(false)
+  /** Каждый новый отказ — повод вернуть поле сканера в окно, даже с тем же текстом. */
+  const [errorTick, setErrorTick] = useState(0)
   const root = useRef<HTMLDivElement>(null)
+  const field = useRef<HTMLDivElement>(null)
+  const panelScroll = useRef<HTMLDivElement>(null)
+  const dialogWasOpen = useRef(false)
   const [asking, setAsking] = useState<Carried | null>(null)
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
@@ -348,7 +353,11 @@ export function SortingObjectsScreen({
         try { if (scanStorageKey) sessionStorage.setItem(scanStorageKey, JSON.stringify(next)) } catch { /* Optional UI context. */ }
       },
       notice: (message) => { setScanError(null); setScanNotice(message) },
-      error: (error) => { setScanNotice(null); setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.') },
+      error: (error) => {
+        setScanNotice(null)
+        setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.')
+        setErrorTick((tick) => tick + 1)
+      },
     })
   }
   useEffect(() => { void scannerRef.current?.resume() }, [])
@@ -357,9 +366,39 @@ export function SortingObjectsScreen({
   const openKey = scanContext.objectId ? `o-${scanContext.objectId}` : null
   useEffect(() => {
     const key = openKey ?? focusKey
-    const row = key ? root.current?.querySelector(`[data-row-key="${key}"]`) : null
-    row?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+    if (!key) return
+    // Строка основного списка — прокручиваем страницу к ней. Строка панели
+    // ячеек — только саму панель: она прилипает к верху экрана, и прокрутка
+    // страницы к ней уводила оператора с места действия к началу списка.
+    const inMain = root.current?.querySelector(`[data-testid="objects-tree"] [data-row-key="${key}"]`)
+    if (inMain) {
+      inMain.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+      return
+    }
+    const box = panelScroll.current
+    const inPanel = box?.querySelector<HTMLElement>(`[data-row-key="${key}"]`)
+    if (!box || !inPanel) return
+    const row = inPanel.getBoundingClientRect()
+    const frame = box.getBoundingClientRect()
+    if (row.top < frame.top || row.bottom > frame.bottom) {
+      box.scrollTop += row.top - frame.top - (box.clientHeight - row.height) / 2
+    }
   }, [openKey, focusKey])
+  // Отказ и любой результат пишутся под полем сканера (R16): на длинном списке
+  // поле должно оказаться в окне, иначе «нажал — ничего не произошло».
+  useEffect(() => {
+    if (errorTick) field.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+  }, [errorTick])
+  // После окна «Куда положить» сканер снова слушает: фокус — в поле сканера.
+  // Ждём, пока окно закроется и вернёт фокус кнопке, которой его открыли.
+  useEffect(() => {
+    if (asking !== null || !dialogWasOpen.current) return
+    dialogWasOpen.current = false
+    const timer = setTimeout(() => {
+      field.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [asking])
 
   /** Выполнить действие «+»/перетаскивания/снятия: экран двигает сразу, сервер подтверждает. */
   function run(key: string, action: () => Promise<void>) {
@@ -417,6 +456,7 @@ export function SortingObjectsScreen({
         setFocus(`l-${line.id}`)
         setScanNotice(null)
         setScanError(`${name}: ${errorText(error)}`)
+        setErrorTick((tick) => tick + 1)
       }
     })
   }
@@ -451,6 +491,7 @@ export function SortingObjectsScreen({
         setFocus(key)
         setScanNotice(null)
         setScanError(`${title}: ${errorText(error)}`)
+        setErrorTick((tick) => tick + 1)
       }
     })
   }
@@ -559,6 +600,7 @@ export function SortingObjectsScreen({
   /** Нажали плюс: то же самое, только место выбирается в диалоге. */
   function openDialog(what: Carried, target?: Holder) {
     confirming.current = false
+    dialogWasOpen.current = true
     setAsking(what)
     setAskTarget(target === undefined ? (activeCell ? cellRef(activeCell.id) : '') : (target ?? 'none'))
     setAskQty(what.kind === 'goods' ? what.line.qty : null)
@@ -622,7 +664,7 @@ export function SortingObjectsScreen({
         {/* Стрелка «назад» — как «Отменить последний скан» упаковки FBS: значок
             с подсказкой рядом с полем сканирования, без окна подтверждения. */}
         <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
-          <Box sx={{ flexGrow: 1, minWidth: 0 }}>
+          <Box ref={field} sx={{ flexGrow: 1, minWidth: 0 }}>
             <ScannerField
               onScan={handleScan}
               expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
@@ -752,7 +794,7 @@ export function SortingObjectsScreen({
                 размещено {(totalQty - leftQty).toLocaleString('ru-RU')} шт
               </Typography>
             </Stack>
-            <Box sx={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', borderTop: '1px solid', borderColor: 'divider' }}>
+            <Box ref={panelScroll} sx={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', borderTop: '1px solid', borderColor: 'divider' }}>
               <PlacedByCells
                 cells={cells}
                 objects={objects}

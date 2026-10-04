@@ -9,6 +9,7 @@ import WidgetsOutlined from '@mui/icons-material/WidgetsOutlined'
 import { IconAction, QtyCell } from '../../../ui-kit'
 import { ProductPhotoThumb } from '../../../components/ProductPhotoThumb'
 import {
+  KIND_TITLE,
   cellRef,
   type Cell,
   type GoodsLine,
@@ -200,10 +201,17 @@ export function PlacedByCells({
                       sx={{
                         fontWeight: row.kind === 'object' ? 600 : 400,
                         whiteSpace: 'normal',
-                        overflowWrap: 'break-word',
+                        // Название товара переносится по словам; номер тары не
+                        // разрывается посередине — переносится только целиком.
+                        overflowWrap: row.kind === 'object' ? 'normal' : 'break-word',
                       }}
                     >
-                      {title}
+                      {row.kind === 'object' ? (
+                        <>
+                          {KIND_TITLE[row.object.kind]}{' '}
+                          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{row.object.code}</Box>
+                        </>
+                      ) : title}
                     </Typography>
                     {row.kind === 'object' ? (
                       <Typography variant="caption" color="text.secondary">
