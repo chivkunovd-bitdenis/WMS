@@ -442,6 +442,7 @@ class AgentCoordinator:
                                    "approved_version": (agent.get("owner_approval") or {}).get("version"),
                                    "description_version": agent.get("version"),
                                    "is_frontend": bool(agent.get("is_frontend")),
+                                   "mockup_required": bool(agent.get("mockup_required")),
                                    "document_version": agent.get("document_version"),
                                    "mockup_version": mockup.get("version"),
                                    "mockup_status": mockup.get("status"),
@@ -461,7 +462,7 @@ class AgentCoordinator:
                 return f"description for {task_id} lacks current owner approval"
             if state.get("document_version") != version:
                 return f"canonical requirements for {task_id} are not saved"
-            if state.get("is_frontend") and (state.get("mockup_status") != "published"
+            if state.get("mockup_required") and (state.get("mockup_status") != "published"
                                              or state.get("mockup_version") != version
                                              or not state.get("mockup_url")
                                              or state.get("mockup_approved_version") != version

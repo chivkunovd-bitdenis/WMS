@@ -161,7 +161,7 @@ def test_arbitrary_job_uses_native_owner_mode_and_exact_source(tmp_path):
     assert kwargs["cwd"] == str(worktree)
 
 
-def test_selected_frontend_task_needs_current_description_and_mockup_approval(tmp_path):
+def test_selected_task_marked_for_mockup_needs_current_mockup_approval(tmp_path):
     now = [100.0]
     agent, store, _, _ = coordinator(tmp_path, now=now)
     source_id = message(store, 4242, "42", "Запусти WMS-700")
@@ -171,6 +171,7 @@ def test_selected_frontend_task_needs_current_description_and_mockup_approval(tm
                            seller="client", stage="agent_discussion",
                            data={"agent": {"wms_number": 700, "version": "v2",
                                            "document_version": "v2", "is_frontend": True,
+                                           "mockup_required": True,
                                            "owner_approval": {"version": "v2"},
                                            "mockup": {"version": "v2", "status": "published",
                                                       "url": "https://mock.test/v2"}}})
@@ -185,6 +186,25 @@ def test_selected_frontend_task_needs_current_description_and_mockup_approval(tm
     accepted = agent._owner_tool("project_job", args, context)
     assert accepted["status"] == "queued"
     assert accepted["task_ids"] == ["WMS-700"]
+
+
+def test_frontend_defect_without_product_mockup_can_enter_night_job(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    source_id = message(store, 4242, "42", "Запусти исправление WMS-701")
+    source = store.row("SELECT * FROM messages WHERE id=?", (source_id,))
+    assert source
+    store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
+                     seller="client", stage="agent_discussion",
+                     data={"agent": {"wms_number": 701, "version": "v1",
+                                     "document_version": "v1", "is_frontend": True,
+                                     "owner_approval": {"version": "v1"}}})
+    agent._submit_job = lambda _: None
+    accepted = agent._owner_tool(
+        "project_job", {"request": "Fix the approved defect", "task_ids": ["WMS-701"]},
+        agent._context(source, owner=True),
+    )
+    assert accepted["status"] == "queued"
 
 
 def test_night_job_rechecks_owner_approval_before_start(tmp_path):
