@@ -491,6 +491,8 @@ export type FbsScanAutoPrintTargetClaim = {
 
 export type FbsScanAutoPrintReprintClaim = FbsScanAutoPrintTargetClaim & {
   kiz: string | null
+  code_id?: string | null
+  has_label_artifact?: boolean
 }
 
 export type FbsDirectKizReprint = {
@@ -500,6 +502,8 @@ export type FbsDirectKizReprint = {
   created_at: string
   print_started_at: string | null
   replayed?: boolean
+  code_id?: string | null
+  has_label_artifact?: boolean
 }
 
 export type FbsDirectKizPrintClaim = {
