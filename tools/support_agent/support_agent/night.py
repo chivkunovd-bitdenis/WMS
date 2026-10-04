@@ -253,6 +253,7 @@ class NightRunner:
             "frontend" if task.get("frontend") else "routine", prompt,
             ticket_id=task.get("ticket_id"),
             session_key=f"night:{state['job_id']}:{task['id']}:developer", mode="write",
+            cli_only="claude" if task.get("frontend") else None,
             cwd=task["path"], timeout=3600,
         )
         task.update(dev_cli=execution.cli, dev_model=execution.model)

@@ -340,6 +340,19 @@ def test_helper_only_contract_is_not_a_test(env: Any, tmp_path: Path) -> None:
     assert "исполняемых тестов нет" in runner._state(tid)["tasks"]["WMS-700"]["reason"]
 
 
+def test_frontend_developer_never_falls_back_from_claude_to_codex(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="developer", frontend=True, tests=[], contract_hashes={})
+    runner._save(tid, state)
+    env.llm.on("frontend", "Ты разработчик WMS-700", {"summary": "ok", "contradiction": ""})
+    runner.development(tid)
+    assert env.llm.calls[-1]["cli_only"] == "claude"
+
+
 def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
     runner, tid = make_night(env)
     state = runner._state(tid)
