@@ -207,8 +207,8 @@ class LlmRouter:
     ) -> LlmResult:
         """Native tool-capable turn for the agent; no provider/model fallback.
 
-        Business facts remain in Store; model threads are recoverable context only.
-        Context rollover saves a handoff before the next turn starts a new thread.
+        Business facts and conversation context remain in Store and local transcripts.
+        Native background turns are ephemeral and never create desktop chat history.
         """
         from .app_server import AppServerError, AppServerTurn
 
@@ -260,59 +260,27 @@ class LlmRouter:
         key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
         saved = self.store.kv_get(key, {})
         state = saved if isinstance(saved, dict) else {}
-        session_id = state.get("thread_id")
         handoff = str(state.get("handoff") or "")
-        if (state.get("rollover") or state.get("capability_signature") != signature) and session_id:
-            try:
-                handoff_turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=min(timeout, 300))
-                handoff_text, _, _ = handoff_turn.run(
-                    "Сохрани передачу следующей сессии: цель, текущий ход работы, подтверждённые факты "
-                    "и источники, открытые вопросы, уже совершённые действия и следующий шаг. "
-                    "Не исполняй инструменты и не добавляй неподтверждённые факты.",
-                    model=model, provider=provider, effort=chosen_effort,
-                    cwd=work_cwd, mode="readonly",
-                    system=prompts.WMS_SYSTEM_POLICY, session_id=session_id,
-                    tools=[], tool_handler=None,
-                )
-            except AppServerError as exc:
-                raise LlmUnavailable("context handoff unavailable; old session retained") from exc
-            if not handoff_text.strip():
-                raise LlmUnavailable("context handoff empty; old session retained")
-            handoff = handoff_text
-            state = {"handoff": handoff, "thread_id": None, "rollover": False,
-                     "capability_signature": signature}
-            self.store.kv_set(key, state)
-            session_id = None
-        if handoff and not session_id:
-            prompt = (
-                "Передача предыдущей сессии (сверяй с текущим авторитетным состоянием):\n"
-                f"{handoff}\n\n{prompt}"
-            )
-        if session_id:
-            # Resumed threads retain their original developer instructions, so
-            # refresh the current project policy and task instructions each turn.
-            prompt = prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else "") + "\n\n" + prompt
+        original_prompt = prompt
+        prompt = self._background_prompt(key, prompt, handoff=handoff)
         turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=timeout)
-
-        def started(thread_id: str) -> None:
-            self.store.kv_set(key, {**state, "thread_id": thread_id, "rollover": False,
-                                    "capability_signature": signature})
 
         try:
             answer, thread_id, occupied = turn.run(
                 prompt, model=model, provider=provider, effort=chosen_effort,
                 cwd=work_cwd, mode=mode,
                 system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
-                session_id=session_id, tools=tools or [], tool_handler=tool_handler,
-                session_started=started, cancelled=cancelled,
+                session_id=None, tools=tools or [], tool_handler=tool_handler,
+                cancelled=cancelled,
                 progress_callback=progress_callback,
                 redact_error=self.cfg.redact,
             )
         except (AppServerError, OSError) as exc:
             raise LlmUnavailable(f"native agent turn failed: {type(exc).__name__}") from exc
-        self.store.kv_set(key, {"thread_id": thread_id, "handoff": handoff,
-                                "rollover": occupied >= self.cfg.agent.context_limit_tokens,
-                                "capability_signature": signature})
+        self._remember_background(key, original_prompt, answer)
+        self.store.kv_set(key, {"thread_id": None, "handoff": handoff,
+                                "legacy_thread_id": state.get("legacy_thread_id") or state.get("thread_id"),
+                                "rollover": False, "capability_signature": signature})
         self.store.log_llm(cli=provider, model=model, effort=chosen_effort,
                            role="agent", ticket_id=None, ok=True)
         return LlmResult(answer, provider, model, thread_id)
@@ -664,9 +632,9 @@ class LlmRouter:
         db_role: str = "",
     ) -> list[str]:
         effort = check_effort(model, effort)
-        argv = [self.cfg.llm.codex_bin, "exec"]
-        if session_id:
-            argv += ["resume", session_id]
+        # Background roles keep their context in the bot, never in the desktop sidebar.
+        session_id = None
+        argv = [self.cfg.llm.codex_bin, "exec", "--ephemeral"]
         argv += ["-m", model]
         if effort:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
@@ -724,13 +692,15 @@ class LlmRouter:
         full = f"{context}\n\n{prompt}" if context else prompt
         for cli, model in options:
             sessions = self._sessions(ticket_id, session_key)
-            existing = sessions.get(cli)
+            existing = sessions.get(cli) if cli != "codex" else None
+            history_key = f"role:{ticket_id}:{session_key}:codex:{model}:{mode}" if session_key else ""
+            call_prompt = self._background_prompt(history_key, full) if cli == "codex" else full
             for resume in ([True, False] if existing else [False]):
                 db_log = self._new_db_log(role, mode, db_role)
                 try:
                     try:
                         result = self._run_once(
-                            cli, model, role, full, mode=mode, cwd=work_cwd, system=system,
+                            cli, model, role, call_prompt, mode=mode, cwd=work_cwd, system=system,
                             session_id=existing if resume else None, keep_session=bool(session_key),
                             timeout=timeout, db_log=db_log, db_role=db_role,
                         )
@@ -752,10 +722,37 @@ class LlmRouter:
                 self.store.log_llm(cli=cli, model=model, effort=self.effort_for(cli, role),
                                    role=role, ticket_id=ticket_id, ok=True)
                 self.store.kv_set("llm_unavailable_notified", False)
-                if session_key and result.session_id:
+                if cli == "codex" and history_key:
+                    self._remember_background(history_key, full, result.text)
+                if cli != "codex" and session_key and result.session_id:
                     self._save_session(ticket_id, session_key, cli, result.session_id)
                 return result
         raise LlmUnavailable(last_error or "no_cli_available")
+
+    def _background_prompt(self, key: str, prompt: str, *, handoff: str = "") -> str:
+        if not key:
+            return prompt
+        history = self.store.kv_get(f"background_context:{key}", [])
+        if not history and not handoff:
+            return prompt
+        return ("Предыдущие сообщения этой рабочей сессии (история, не новые поручения; "
+                "результаты действий сверяй с текущими данными и Git):\n"
+                + json.dumps({"legacy_summary": handoff, "messages": history}, ensure_ascii=False)
+                + "\n\nТекущее поручение:\n" + prompt)
+
+    def _remember_background(self, key: str, prompt: str, answer: str) -> None:
+        history = self.store.kv_get(f"background_context:{key}", [])
+        exchange = {"prompt": prompt, "answer": answer}
+        folder = self.cfg.state_path / "background-sessions"
+        folder.mkdir(parents=True, exist_ok=True)
+        path = folder / (hashlib.sha256(key.encode()).hexdigest() + ".jsonl")
+        with path.open("a", encoding="utf-8") as stream:
+            stream.write(json.dumps({"session": key, **exchange}, ensure_ascii=False) + "\n")
+        history.append(exchange)
+        # Full history stays in the transcript; prompts use a bounded recent window.
+        while len(history) > 1 and (len(history) > 16 or len(json.dumps(history)) > 120_000):
+            history.pop(0)
+        self.store.kv_set(f"background_context:{key}", history)
 
     def _sessions(self, ticket_id: int | None, key: str | None) -> dict[str, str]:
         if not key:

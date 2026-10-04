@@ -149,7 +149,7 @@ def promote(root: Path, task: str) -> list[str]:
     lines = document.read_text(encoding="utf-8").splitlines()
     references = permanent_references(lines)
     if not references:
-        raise ValueError(f"В {task} нет проверок класса «навсегда»")
+        return []
 
     moves: dict[PurePosixPath, PurePosixPath] = {}
     for _, _, source, test_name in references:

@@ -13,6 +13,13 @@
     "backend/tests/guards/test_guard_stock_reservation.py": "f98397ac454882d993f2ed5226394bbab362fd2655805ac2790f6793c1417304",
     "backend/tests/guards/test_guard_stock_shipment.py": "9dd53849db6990875cbf8b49e6f01795cf64b03fc9b17438c37780a89ebe7044",
     "backend/tests/guards/test_guard_stock_tracking.py": "968b6cf5631e0062f3b2611bb049d298b55d04cd556e370214c8cee8d6718286",
-    "frontend/src/guards/README.md": "0296dbe18f64cf69e054d982cab3587a11912cfa162c0815254510ea40ae6e6f"
+    "frontend/src/guards/README.md": "0296dbe18f64cf69e054d982cab3587a11912cfa162c0815254510ea40ae6e6f",
+    "frontend/src/guards/scan-print/FbsScanPrintToggles.dom.test.tsx": "c29dbe28726ea897ca740ad6fef46f41c0aade097d033e4aa7900eed305a2eda",
+    "frontend/src/guards/scan-print/fbsScanAutoPrint.test.ts": "212a5bf8d86cf30079d9cc4a30a7b5f3bc90cb7d00c51512699d279b8de9f28d",
+    "frontend/src/guards/scan-print/fbsSequentialPacking.binding.test.ts": "4a473d660451b90174386833442cdbe37cd7e0785756368f145c00096e738cd8",
+    "frontend/src/guards/scan-print/fbsSequentialPacking.copies.test.ts": "a3ad5db122ace9a689b6789ebd1e52cf2f3e8c25e63b9de4ea900442411298c4",
+    "frontend/src/guards/scan-print/fbsSequentialPacking.fullLabel.test.ts": "8c342345d250b462ceeb727686a6feb9ea3c77c95973d7187fb5b8819e064a51",
+    "frontend/src/guards/scan-print/fbsSequentialPacking.recovery.test.ts": "a3bc47ada2a5b53efa6a5eb9a92dbd59fc4e18e0305855d4c78a4457c0228774",
+    "frontend/src/guards/scan-print/fbsSequentialPacking.test.ts": "d6fd589bc08ab13bd4c2543e43dfbfe259f9903281a8f1343e88a968a79d6786"
   }
 }

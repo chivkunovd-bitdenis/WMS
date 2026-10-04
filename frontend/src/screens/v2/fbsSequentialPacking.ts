@@ -682,7 +682,9 @@ export function makePackingScanDeps(
       const sizeId = resolveLabelSize(saved.labelSizeId as LabelSizeId).id
       // The claim key is the label key: a lost claim answer is re-claimed by the same attempt (N10).
       await startClaimedAutomaticPrint(printKey, async () => {
-        await send(await renderCzLabelPng({ cis: row.kiz }, resolveLabelSize(sizeId)), printKey, sizeId)
+        await send(await renderCzLabelPng(
+          { cis: row.kiz, codeId: row.code_id, hasLabelArtifact: row.has_label_artifact },
+          resolveLabelSize(sizeId), token), printKey, sizeId)
       }, {
         claim: async (attemptKey) => {
           const claim = await claimFbsDirectKizPrint(token, authHeaders, supplyId, row.id, attemptKey)
@@ -775,7 +777,9 @@ export function makePackingScanDeps(
       const key = `${result.scan_id}:copy`
       await startClaimedAutomaticPrint<FbsScanAutoPrintReprintClaim>(key, async (claim) => {
         if (!claim.kiz) throw new Error('Сервер не подтвердил канонический ЧЗ для перепечати.')
-        await sendCopies(await renderCzLabelPng({ cis: claim.kiz }, resolveLabelSize(sizeId)), key, sizeId, copies)
+        await sendCopies(await renderCzLabelPng(
+          { cis: claim.kiz, codeId: claim.code_id, hasLabelArtifact: claim.has_label_artifact },
+          resolveLabelSize(sizeId), token), key, sizeId, copies)
       }, {
         claim: (attemptKey) => claimFbsScanAutoPrintReprint(token, authHeaders, supplyId, result.scan_id, attemptKey),
         markStarted: (attemptKey) => markFbsScanAutoPrintTargetStarted(token, authHeaders, supplyId, result.scan_id, 'chz', attemptKey),

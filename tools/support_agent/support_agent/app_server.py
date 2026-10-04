@@ -220,11 +220,10 @@ class AppServerTurn:
                 ):
                     raise AppServerError("readonly MCP tools are not fully disabled")
             if session_id:
-                # A thread may have been compacted or moved; failure is reported
-                # rather than silently losing its context.
-                thread = rpc("thread/resume", {"threadId": session_id}).get("thread") or {}
+                raise AppServerError("background turns require bot-owned context, not a desktop thread")
             else:
                 thread_response = rpc("thread/start", {
+                    "ephemeral": True,
                     "model": model,
                     "allowProviderModelFallback": False,
                     "cwd": cwd, "sandbox": {"readonly": "read-only", "write": "workspace-write",

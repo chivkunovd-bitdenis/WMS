@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from typing import Any
 
 from .llm import extract_json
@@ -37,7 +38,7 @@ class SemanticAuthorization:
         prior = self._prior_context(source)
         # The exact source revision, target and proposed effect define this
         # authorization. A model rewrite of the same Telegram event cannot widen it.
-        material = json.dumps({"event_id": event["id"], "revision": event["revision"],
+        material = json.dumps({"evidence_version": 2, "event_id": event["id"], "revision": event["revision"],
                                "source_text": event["text"], "action": action,
                                "arguments": args, "proposal": proposal,
                                "prior": prior},
@@ -48,6 +49,7 @@ class SemanticAuthorization:
             return cached
         prompt = json.dumps({
             "actual_source": {"id": event["id"], "revision": event["revision"],
+                              "message_id": source["msg_id"],
                               "role": event["role"], "chat_id": event["chat_id"],
                               "author_id": event["author_id"], "text": event["text"],
                               "reply_to": event["reply_to"],
@@ -65,8 +67,12 @@ class SemanticAuthorization:
             "the source must have verified_owner_private=true (this fact is checked by "
             "service identity configuration). Do not infer consent "
             "from the first model's tool call. Return JSON {authorized:boolean,"
-            "source_quote:string,reason:string}. Quote an exact nonempty substring of "
-            "actual_source.text when authorized; if ambiguous, authorized=false.",
+            "source_quote:string,reason:string}. Copy one SHORT exact nonempty substring of "
+            "actual_source.text when authorized. Do not concatenate separated sentences. "
+            "Preparing a requested draft for the owner does not require approval of the "
+            "draft that has not been created yet. Prior messages include event_id (internal) "
+            "and msg_id (Telegram); do not confuse these identifiers. "
+            "If ambiguous, authorized=false.",
         }, ensure_ascii=False, default=str)
         result = self.agent.llm.agent_turn(
             prompt, session_key=f"auth:{key[-20:]}", model=self.agent.cfg.agent.owner_model,
@@ -76,17 +82,41 @@ class SemanticAuthorization:
         )
         parsed = extract_json(result.text)
         quote = str(parsed.get("source_quote") or "")
-        authorized = bool(parsed.get("authorized") is True and quote and quote in str(event["text"]))
-        decision = {"authorized": authorized, "source_quote": quote if authorized else "",
-                    "reason": str(parsed.get("reason") or "")[:300]}
+        spans = self._quote_spans(str(source["text"]), quote)
+        authorized = bool(parsed.get("authorized") is True and spans)
+        reason = str(parsed.get("reason") or "")[:300]
+        if parsed.get("authorized") is True and not spans:
+            reason = "Проверяющая модель подтвердила поручение, но неверно процитировала источник; " \
+                     "это ошибка проверки цитаты, а не отсутствие разрешения владельца."
+        decision = {"authorized": authorized, "source_quote": spans[0] if authorized else "",
+                    "source_quotes": spans if authorized else [], "reason": reason}
         store.kv_set(key, decision)
         return decision
+
+    @staticmethod
+    def _quote_spans(source: str, quote: str) -> list[str]:
+        if not quote:
+            return []
+        if quote in source:
+            return [quote]
+        # Voice transcripts contain interjections between sentences. A model may
+        # join exact sentences; validate every span in order, without fuzzy matching.
+        spans = re.split(r"(?<=[.!?])\s+", quote.strip())
+        if len(spans) < 2:
+            return []
+        cursor = 0
+        for span in spans:
+            found = source.find(span, cursor)
+            if not span or found < 0:
+                return []
+            cursor = found + len(span)
+        return spans
 
     def _prior_context(self, source: Any) -> list[dict[str, Any]]:
         store = self.agent.store
         chat_id, ts = int(source["chat_id"]), float(source["ts"])
         incoming = store.rows(
-            "SELECT msg_id,author_id,text,reply_to,ts,revision FROM messages "
+            "SELECT id AS event_id,msg_id,author_id,text,reply_to,ts,revision FROM messages "
             "WHERE chat_id=? AND (ts<? OR (ts=? AND id<?)) ORDER BY ts DESC,id DESC LIMIT 8",
             (chat_id, ts, ts, int(source["id"])),
         )
@@ -100,7 +130,7 @@ class SemanticAuthorization:
         reply_to = str(source["reply_to"] or "")
         if reply_to and not any(str(x.get("msg_id")) == reply_to for x in items):
             target_in = store.row(
-                "SELECT msg_id,author_id,text,reply_to,ts,revision FROM messages "
+                "SELECT id AS event_id,msg_id,author_id,text,reply_to,ts,revision FROM messages "
                 "WHERE chat_id=? AND msg_id=? AND ts<=?", (chat_id, reply_to, ts),
             )
             target_out = store.row(
