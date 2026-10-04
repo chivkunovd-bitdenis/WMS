@@ -133,6 +133,29 @@ def test_night_stages_are_registered_and_job_is_durable(env: Any) -> None:
     assert env.store.ticket(tid)["stage"] == "development"
 
 
+def test_task_backlog_entry_is_copied_without_stale_neighbour_sections() -> None:
+    current = "# Backlog\n\n## WMS-699 · old\n\nKeep old.\n\n## WMS-701 · neighbour\n\nKeep neighbour.\n"
+    approved = (
+        "# Backlog\n\n## WMS-700 · approved\n\nUse this exact entry.\n\n"
+        "## WMS-701 · stale neighbour\n\nMust not be copied.\n"
+    )
+    merged = NightRunner._replace_backlog_section(current, approved, "WMS-700")
+    assert "## WMS-700 · approved" in merged
+    assert "Use this exact entry." in merged
+    assert "## WMS-701 · neighbour" in merged
+    assert "stale neighbour" not in merged
+
+
+def test_task_backlog_entry_replaces_previous_wording() -> None:
+    current = "## WMS-700 · old\n\nOld text.\n\n## WMS-701 · next\n\nNext text.\n"
+    approved = "## WMS-700 · new\n\nNew text.\n"
+    merged = NightRunner._replace_backlog_section(current, approved, "WMS-700")
+    assert "## WMS-700 · new" in merged
+    assert "New text." in merged
+    assert "old" not in merged
+    assert "## WMS-701 · next" in merged
+
+
 def test_red_etalon_stops_before_any_task_or_model_call(env: Any) -> None:
     runner, tid = make_night(env, etalon="red")
     runner.development(tid)
@@ -338,6 +361,19 @@ def test_helper_only_contract_is_not_a_test(env: Any, tmp_path: Path) -> None:
     env.llm.on("routine", "Ты тестировщик WMS-700", tester)
     runner.development(tid)
     assert "исполняемых тестов нет" in runner._state(tid)["tasks"]["WMS-700"]["reason"]
+
+
+def test_frontend_developer_never_falls_back_from_claude_to_codex(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="developer", frontend=True, tests=[], contract_hashes={})
+    runner._save(tid, state)
+    env.llm.on("frontend", "Ты разработчик WMS-700", {"summary": "ok", "contradiction": ""})
+    runner.development(tid)
+    assert env.llm.calls[-1]["cli_only"] == "claude"
 
 
 def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
