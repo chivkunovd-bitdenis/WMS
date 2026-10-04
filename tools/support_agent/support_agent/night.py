@@ -168,19 +168,54 @@ class NightRunner:
         # The approved document may still live on its task branch, not in etalon.
         source = self.store.data(task["ticket_id"]).get("agent", {}) if task.get("ticket_id") else {}
         doc_rel = f"docs/requirements/{task['id']}.md"
+        backlog_rel = "docs/KANONICHESKIY_BACKLOG.md"
         if source.get("document_sha"):
             content = self.hotfix.git("show", f"{source['document_sha']}:{doc_rel}")
             doc = path / doc_rel
             doc.parent.mkdir(parents=True, exist_ok=True)
             doc.write_text(content + "\n", encoding="utf-8")
+            source_backlog = self.hotfix.git(
+                "show", f"{source['document_sha']}:{backlog_rel}"
+            )
+            backlog = path / backlog_rel
+            if not backlog.is_file():
+                raise StepFailed("нет канонического бэклога в рабочей копии")
+            backlog.write_text(
+                self._replace_backlog_section(
+                    backlog.read_text(encoding="utf-8"), source_backlog, task["id"]
+                ),
+                encoding="utf-8",
+            )
         elif not (path / doc_rel).is_file():
             raise StepFailed("нет согласованного документа задачи; аналитик не должен придумывать постановку")
         if task.get("frontend"):
             self.hotfix.link_node_modules(str(path))
         task.update(step="analyst", branch=branch, path=str(path))
         task["control_hashes"] = self._control_hashes(task)
-        self._commit(task, f"{task['id']}: согласованная постановка", paths=[doc_rel])
+        self._commit(task, f"{task['id']}: согласованная постановка", paths=[doc_rel, backlog_rel])
         self._save(tid, state)
+
+    @staticmethod
+    def _replace_backlog_section(current: str, approved: str, task_id: str) -> str:
+        header = re.compile(rf"(?m)^## {re.escape(task_id)}(?:\s|$)")
+
+        def bounds(text: str) -> tuple[int, int] | None:
+            match = header.search(text)
+            if match is None:
+                return None
+            following = re.search(r"(?m)^## WMS-\d+(?:\s|$)", text[match.end():])
+            end = match.end() + following.start() if following else len(text)
+            return match.start(), end
+
+        approved_bounds = bounds(approved)
+        if approved_bounds is None:
+            raise StepFailed(f"{task_id}: в согласованном коммите нет записи канонического бэклога")
+        section = approved[slice(*approved_bounds)].strip()
+        current_bounds = bounds(current)
+        if current_bounds is None:
+            return current.rstrip() + "\n\n" + section + "\n"
+        start, end = current_bounds
+        return current[:start].rstrip() + "\n\n" + section + "\n\n" + current[end:].lstrip()
 
     def _task_analyst(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
         prompt = (
