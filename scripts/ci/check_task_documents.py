@@ -159,16 +159,29 @@ def commit_changed_paths(root: Path, commit: str) -> set[str]:
 
 
 def contract_change_errors(root: Path, base: str) -> list[str]:
+    # Сравниваем содержимое файлов контракта в его коммите и в HEAD, а не пути
+    # каждого последующего коммита: на pull_request HEAD — служебный merge-коммит
+    # PR, его diff к первому родителю содержит весь PR, и контракт ложно считался
+    # изменённым. Документ требований входит в коммит контракта (столбец «Тест»),
+    # но вердикты и заключение в нём по процессу заполняет аналитик на приёмке,
+    # поэтому он не замораживается.
     commits = git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
-    changes = [commit_changed_paths(root, commit) for commit in commits]
     errors = []
-    for index, commit in enumerate(commits):
+    for commit in commits:
         subject = git(root, "show", "-s", "--format=%s", commit)
         match = re.fullmatch(r"(WMS-\d+): контракт тестов", subject)
         if not match:
             continue
-        changed_later = set().union(*changes[index + 1:]) if index + 1 < len(changes) else set()
-        overlap = sorted(changes[index] & changed_later)
+        frozen = sorted(
+            path for path in commit_changed_paths(root, commit)
+            if not path.startswith("docs/requirements/")
+        )
+        if not frozen:
+            continue
+        overlap = sorted(set(
+            git(root, "diff", "--no-renames", "--name-only", commit, "HEAD", "--", *frozen)
+            .splitlines()
+        ))
         if overlap:
             errors.append(
                 f"изменён контракт тестов {match[1]} после его фиксации: "

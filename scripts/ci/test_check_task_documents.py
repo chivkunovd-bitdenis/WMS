@@ -196,6 +196,62 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-701 implementation")
         self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
 
+    def test_pull_request_merge_commit_is_not_a_contract_change(self):
+        # На pull_request CI проверяет служебный merge-коммит PR в базу: его diff
+        # к первому родителю содержит весь PR, включая файлы контракта.
+        rollout = self.rollout()
+        trunk = self.git("rev-parse", "--abbrev-ref", "HEAD")
+        self.git("checkout", "-q", "-b", "feature")
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-703: контракт тестов")
+        self.write("app.py", "implementation\n")
+        self.commit("WMS-703 implementation")
+        self.git("checkout", "-q", trunk)
+        self.write("other.txt", "trunk moved on\n")
+        self.commit("WMS-704 unrelated")
+        self.git("merge", "-q", "--no-ff", "--no-edit", "feature")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_merging_base_into_branch_after_contract_is_allowed(self):
+        rollout = self.rollout()
+        trunk = self.git("rev-parse", "--abbrev-ref", "HEAD")
+        self.git("checkout", "-q", "-b", "feature")
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-705: контракт тестов")
+        self.git("checkout", "-q", trunk)
+        self.write("other.txt", "trunk moved on\n")
+        self.commit("WMS-706 unrelated")
+        self.git("checkout", "-q", "feature")
+        self.git("merge", "-q", "--no-ff", "--no-edit", trunk)
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_merge_commit_that_edits_contract_is_still_a_change(self):
+        rollout = self.rollout()
+        trunk = self.git("rev-parse", "--abbrev-ref", "HEAD")
+        self.git("checkout", "-q", "-b", "feature")
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.commit("WMS-707: контракт тестов")
+        self.git("checkout", "-q", trunk)
+        self.write("other.txt", "trunk moved on\n")
+        self.commit("WMS-708 unrelated")
+        self.git("checkout", "-q", "feature")
+        self.git("merge", "-q", "--no-ff", "--no-commit", trunk)
+        self.write("backend/tests/test_contract.py", "def test_contract(): assert False\n")
+        self.git("add", ".")
+        self.git("commit", "-q", "--no-edit")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("backend/tests/test_contract.py", errors[0])
+
+    def test_acceptance_verdicts_in_requirements_after_contract_are_allowed(self):
+        rollout = self.rollout()
+        self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
+        self.write("docs/requirements/WMS-709.md", "| Проверка | Тест | Вердикт |\n")
+        self.commit("WMS-709: контракт тестов")
+        self.write("docs/requirements/WMS-709.md", "| Проверка | Тест | Вердикт |\n| C1 | x | Подтверждено |\n")
+        self.commit("WMS-709 acceptance")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
     def test_renaming_frozen_contract_file_is_a_change(self):
         rollout = self.rollout()
         self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")
