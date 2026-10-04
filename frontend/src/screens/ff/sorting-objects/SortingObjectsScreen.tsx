@@ -399,11 +399,17 @@ export function SortingObjectsScreen({
       if (!input) return
       // Не забираем фокус, если за это время открылось другое окно или
       // оператор уже печатает в другом поле.
+      // «Другое окно» — не то, внутри которого стоит сам экран (окно документа
+      // приёмки), и не закрывающееся «Куда положить».
+      const ours = (element: Element) =>
+        element.contains(input) || Boolean(element.closest('[data-testid="objects-qty-dialog"]'))
       const otherDialog = Array.from(document.querySelectorAll('[role="dialog"]'))
-        .some((dialog) => !dialog.closest('[data-testid="objects-qty-dialog"]'))
+        .some((dialog) => !ours(dialog))
       if (otherDialog) return
       const active = document.activeElement as HTMLElement | null
-      if (active && active !== input && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName))) return
+      const typing = active && active !== input && !ours(active)
+        && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName))
+      if (typing) return
       input.focus({ preventScroll: true })
     }, 350)
     return () => clearTimeout(timer)
@@ -796,10 +802,10 @@ export function SortingObjectsScreen({
           <Paper variant="outlined" data-testid="objects-cells">
             <Stack
               direction="row"
-              sx={{ alignItems: 'baseline', justifyContent: 'space-between', px: 2, pt: 2, pb: 1 }}
+              sx={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 1, px: 2, pt: 2, pb: 1 }}
             >
-              <Typography variant="subtitle1">Ячейки склада</Typography>
-              <Typography variant="caption" color="text.secondary" data-testid="objects-placed-qty">
+              <Typography variant="subtitle1" sx={{ whiteSpace: 'nowrap' }}>Ячейки склада</Typography>
+              <Typography variant="caption" color="text.secondary" data-testid="objects-placed-qty" sx={{ whiteSpace: 'nowrap' }}>
                 размещено {(totalQty - leftQty).toLocaleString('ru-RU')} шт
               </Typography>
             </Stack>
