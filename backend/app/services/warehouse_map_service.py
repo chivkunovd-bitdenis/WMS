@@ -2293,10 +2293,46 @@ async def rebalance_distribution(
     переносится в недостающий набор с тем же местом строки, лишнее
     снимается. Тогда ни одна строка не будет проведена второй раз, а проверка
     завершения распределения не откажет на перекосе наборов.
+
+    Строки-квитанции (id строки — идентификатор операции, по нему записаны
+    движения) трогаются в последнюю очередь: по ним узнаются повторы действия.
+    Все строки документа читаются одним запросом.
     """
     from app.models.inbound_intake import InboundIntakeDistributionLine
+    from app.models.inventory_movement import InventoryMovement
 
     await session.flush()
+    all_rows = list(
+        (
+            await session.scalars(
+                select(InboundIntakeDistributionLine)
+                .where(InboundIntakeDistributionLine.request_id == request.id)
+                .order_by(
+                    InboundIntakeDistributionLine.created_at.desc(),
+                    InboundIntakeDistributionLine.id.desc(),
+                )
+            )
+        ).all()
+    )
+    by_product: dict[uuid.UUID, list[Any]] = defaultdict(list)
+    for row in all_rows:
+        by_product[row.product_id].append(row)
+    receipts: set[uuid.UUID] = set()
+    if all_rows:
+        receipts = {
+            group_id
+            for group_id in (
+                await session.scalars(
+                    select(InventoryMovement.transfer_group_id)
+                    .where(
+                        InventoryMovement.tenant_id == request.tenant_id,
+                        InventoryMovement.transfer_group_id.in_([row.id for row in all_rows]),
+                    )
+                    .distinct()
+                )
+            ).all()
+            if group_id is not None
+        }
     for line in request.lines:
         box_targets: dict[uuid.UUID | None, int] = {
             box.id: int(content.posted_qty)
@@ -2308,21 +2344,7 @@ async def rebalance_distribution(
             **box_targets,
             None: max(0, int(line.posted_qty) - sum(box_targets.values())),
         }
-        rows = list(
-            (
-                await session.scalars(
-                    select(InboundIntakeDistributionLine)
-                    .where(
-                        InboundIntakeDistributionLine.request_id == request.id,
-                        InboundIntakeDistributionLine.product_id == line.product_id,
-                    )
-                    .order_by(
-                        InboundIntakeDistributionLine.created_at.desc(),
-                        InboundIntakeDistributionLine.id.desc(),
-                    )
-                )
-            ).all()
-        )
+        rows = by_product.get(line.product_id, [])
         totals: dict[uuid.UUID | None, int] = defaultdict(int)
         for row in rows:
             totals[row.box_id] += int(row.quantity)
@@ -2330,10 +2352,10 @@ async def rebalance_distribution(
             pool in targets for pool in totals
         ):
             continue
-        # Излишек наборов: снимаем с самых новых строк, запоминая их место.
+        # Излишек наборов: сначала с обычных строк (самых новых), квитанции — последними.
         surplus: list[tuple[uuid.UUID, int]] = []
         deleted: set[int] = set()
-        for row in rows:
+        for row in sorted(rows, key=lambda one: one.id in receipts):
             excess = totals[row.box_id] - targets.get(row.box_id, 0)
             if excess <= 0:
                 continue

@@ -37,6 +37,7 @@ from tests.wms650_sorting_seed import (
     full_snapshot,
     holder_of,
     map_move,
+    movement_ids,
     ok,
     place,
     posted,
@@ -387,3 +388,38 @@ async def test_take_out_scanned_unit_keeps_pools(async_client: AsyncClient) -> N
     ok(await place(world, kind="product", object_id=inside, qty=1), "Вынуть 1 шт")
     await _assert_distribution_matches_progress(world)
     assert await _complete_distribution(world) == 200
+
+
+@pytest.mark.asyncio
+async def test_scan_replay_after_take_out_is_recognised(async_client: AsyncClient) -> None:
+    """Повтор скана с тем же operation_id после потери ответа — 200 без изменений (R13, R17).
+
+    «Вынуть» из короба, затем скан товара: выравнивание строк распределения не
+    должно отнимать у скана его квитанцию, по которой узнаётся повтор.
+    """
+    world = await seed_world(async_client)
+    k2 = world.a.boxes["К2"]
+    ok(await place(world, kind="box", object_id=world.a.boxes["К1"], cell="Б 1.1"), "К1")
+    ok(await place(world, kind="box", object_id=k2, cell="А 1.1"), "К2 на А 1.1")
+    inside = await balance_id(world, product_id=world.t1, location_id=world.cells["А 1.1"],
+                              container_id=k2)
+    ok(await place(world, kind="product", object_id=inside, qty=1), "Вынуть 1 шт Т1")
+    op = uuid.uuid4()
+    ok(await scan(world, barcode=world.t1_barcode, cell="А 1.2", op=op), "скан Т1 в А 1.2")
+    await _assert_distribution_matches_progress(world)
+    moves = await movement_ids(world)
+    snapshot = await full_snapshot(world)
+    rows = await _distribution(world)
+
+    replay = await scan(world, barcode=world.t1_barcode, cell="А 1.2", op=op)
+    assert replay.status_code == 200, replay.text
+    assert await movement_ids(world) == moves
+    assert await full_snapshot(world) == snapshot
+    assert await _distribution(world) == rows
+
+    conflict = await scan(world, barcode=world.t1_barcode, cell="Б 1.1", op=op)
+    assert conflict.status_code == 409, conflict.text
+    assert conflict.json()["detail"] == "operation_conflict"
+
+    ok(await undo(world, op), "назад: скан")
+    await _assert_distribution_matches_progress(world)
