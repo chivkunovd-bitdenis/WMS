@@ -204,6 +204,7 @@ def test_analyst_document_and_tester_contract_are_separate_commits(
 
     def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
         test_file.write_text("def test_contract():\n    assert True\n", encoding="utf-8")
+        doc.write_text(doc.read_text() + "| навсегда | backend/tests/test_wms_700_contract.py::test_contract |\n")
         return {"summary": "контракт добавлен", "tests": [
             "backend/tests/test_wms_700_contract.py",
         ]}
@@ -222,7 +223,7 @@ def test_analyst_document_and_tester_contract_are_separate_commits(
         check=True, capture_output=True, text=True,
     ).stdout.splitlines()
     assert analyst_files == ["docs/requirements/WMS-700.md"]
-    assert contract_files == ["backend/tests/test_wms_700_contract.py"]
+    assert contract_files == ["backend/tests/test_wms_700_contract.py", "docs/requirements/WMS-700.md"]
     assert subprocess.run(
         ["git", "log", "-2", "--format=%s"], cwd=root,
         check=True, capture_output=True, text=True,
@@ -269,7 +270,8 @@ def test_required_ci_rejects_missing_or_skipped_jobs() -> None:
 
 def test_release_calls_existing_hotfix_merge_deploy_verify(env: Any) -> None:
     runner, tid = make_night(env)
-    env.store.set_stage(tid, "release", night={**env.store.data(tid)["night"], "step": "merge"},
+    env.store.set_stage(tid, "release", night={**env.store.data(tid)["night"], "step": "merge",
+                                              "candidate": {"included": ["WMS-700"]}},
                         hotfix={"step": "merge", "pr": 9, "path": "/fake"})
     runner.release(tid)
     runner.release(tid)
@@ -286,7 +288,7 @@ def test_interrupted_promote_is_not_repeated(env: Any) -> None:
     state["tasks"]["WMS-700"].update(status="ready", promote_intent=True)
     env.store.set_stage(tid, "release", night=state)
     runner.release(tid)
-    assert "исход неизвестен" in env.store.data(tid)["night"]["tasks"]["WMS-700"]["promote"]
+    assert "перенос в охрану прерван" in env.store.data(tid)["night"]["tasks"]["WMS-700"]["promote"]
     assert not [call for call in runner.hotfix.calls if call[0] == "run"]
 
 
@@ -357,3 +359,95 @@ def test_tester_touching_product_code_stops_task(env: Any, tmp_path: Path) -> No
     task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
     assert task["status"] == "stopped"
     assert "backend/app/svc.py" in task["reason"]
+
+
+def test_modified_contract_stops_before_tests_review_or_publication(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    test = root / "backend/tests/test_frozen.py"
+    test.write_text("def test_rule(): assert 2 == 2\n")
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=["backend/tests/test_frozen.py"])
+    task["contract_hashes"] = runner._hashes(task, task["tests"])
+    test.write_text("def test_rule(): assert True\n")
+    runner._save(tid, state)
+    runner.development(tid)
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["status"] == "stopped" and saved["contract_changed"] is True
+    assert "контракт" in saved["reason"] and not env.llm.calls
+
+
+def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", branch="task", tests=[], contract_hashes={},
+                dev_cli="codex", dev_model="gpt-5.6-sol")
+    runner._save(tid, state)
+    doc = root / "docs/requirements/WMS-700.md"
+
+    def accept(_: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert kwargs["mode"] == "write"
+        assert kwargs["session_key"] == "night:job1:WMS-700:analyst"
+        doc.write_text(doc.read_text() + "\n## Заключение\nПроверки подтверждены.\n")
+        return {"accepted": True, "summary": "принято"}
+
+    env.llm.on("review", "Проверь реализацию", {"accepted": True, "summary": "дефектов нет"})
+    env.llm.on("analyst", "Проведи приёмку", accept)
+    runner.development(tid)  # local checks
+    assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "review"
+    runner.development(tid)  # review
+    assert env.llm.calls[-1]["exclude_cli"] is None  # Astra can review Sol in the same provider
+    runner.development(tid)  # acceptance saved before PR/CI
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["step"] == "pr" and task["status"] == "working"
+    assert runner.hotfix.git("log", "-1", "--format=%s", cwd=root).strip() == "WMS-700: приёмка"
+    runner.development(tid)  # publish
+    runner.hotfix.pr_checks = lambda pr: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")]
+    runner.development(tid)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["status"] == "ready" and task["head_sha"] == task["accepted_sha"] == task["ci_head"]
+
+
+def test_review_defect_returns_to_developer(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    state["tasks"]["WMS-700"].update(step="review", dev_cli="claude", dev_model="sonnet")
+    runner._save(tid, state)
+    env.llm.on("review", "Проверь реализацию", {"accepted": False, "summary": "C1: повтор списывает дважды"})
+    runner.development(tid)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["step"] == "developer" and "C1" in task["feedback"]
+    assert env.llm.calls[-1]["exclude_cli"] == "claude"
+
+
+def test_promotion_commits_and_publishes_before_claiming_protection(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    state.update(step="promote", release_sha=runner._head({"path": str(root)}),
+                 candidate={"included": ["WMS-700"]},
+                 promotion={"branch": "guards", "path": str(root)})
+    state["tasks"]["WMS-700"].update(status="released")
+    env.store.set_stage(tid, "release", night=state)
+
+    def promote(argv: list[str], cwd: Any = None, timeout: int = 300) -> ExecResult:
+        target = root / "backend/tests/guards/test_saved.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def test_permanent(): assert 1 == 1\n")
+        return ok()
+
+    runner.hotfix.run = promote  # type: ignore[method-assign]
+    runner.release(tid)
+    assert "WMS-700: постоянные проверки" in runner.hotfix.git("log", "-1", "--format=%s", cwd=root)
+    runner.release(tid)
+    state = runner._state(tid)
+    assert state["step"] == "promote_ci"
+    assert state["promotion"]["pr"] == 9
+    assert ("git", ["push", "guards"]) in runner.hotfix.calls
+    assert "ожидает CI" in state["tasks"]["WMS-700"]["promote"]
+    runner.release(tid)  # fake CI is red
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "released"
+    assert "не завершено" in runner._state(tid)["tasks"]["WMS-700"]["promote"]

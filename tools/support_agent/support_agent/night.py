@@ -113,6 +113,7 @@ class NightRunner:
             self._stop_task(tid, state, self._task(state), str(exc))
 
     def _etalon_ci(self, tid: int, state: dict[str, Any]) -> None:
+        self.hotfix.fetch()
         sha = self.hotfix.git("rev-parse", "origin/etalon").strip()
         res = self.hotfix.run_gh([
             "gh", "run", "list", "--workflow", "ci.yml", "--branch", "etalon",
@@ -159,10 +160,21 @@ class NightRunner:
     def _task_worktree(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
         branch = f"night/{task['id'].lower()}-{state['job_id'][:8]}"
         path = Path(self.cfg.repo) / ".worktrees" / f"night-{task['id'].lower()}-{state['job_id'][:8]}"
-        self.hotfix.ensure_worktree(branch, path)
+        self.hotfix.ensure_worktree(branch, path, base=state["etalon_sha"])
+        # The approved document may still live on its task branch, not in etalon.
+        source = self.store.data(task["ticket_id"]).get("agent", {}) if task.get("ticket_id") else {}
+        doc_rel = f"docs/requirements/{task['id']}.md"
+        if source.get("document_sha"):
+            content = self.hotfix.git("show", f"{source['document_sha']}:{doc_rel}")
+            doc = path / doc_rel
+            doc.parent.mkdir(parents=True, exist_ok=True)
+            doc.write_text(content + "\n", encoding="utf-8")
+        elif not (path / doc_rel).is_file():
+            raise StepFailed("нет согласованного документа задачи; аналитик не должен придумывать постановку")
         if task.get("frontend"):
             self.hotfix.link_node_modules(str(path))
         task.update(step="analyst", branch=branch, path=str(path))
+        self._commit(task, f"{task['id']}: согласованная постановка", paths=[doc_rel])
         self._save(tid, state)
 
     def _task_analyst(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
@@ -171,7 +183,8 @@ class NightRunner:
             f"{SKILLS_ROOT}/wms-product-analyst/SKILL.md. "
             f"Дополни docs/requirements/{task['id']}.md конкретными проверками. "
             "Таблица проверок обязана содержать столбцы «Класс» и «Тест». "
-            'Измени только документ. Верни JSON {"summary":"...","checks":["C1"]}.'
+            'Сохрани согласованные требования. Измени только документ, Git-коммиты делает контроллер. '
+            'Верни JSON {"summary":"...","checks":["C1"]}.'
         )
         self.p.llm.ask_json("analyst", prompt, ticket_id=task.get("ticket_id"),
                             session_key=f"night:{state['job_id']}:{task['id']}:analyst",
@@ -181,8 +194,9 @@ class NightRunner:
         if "Класс" not in text or "Тест" not in text:
             raise StepFailed("аналитик не добавил столбцы «Класс» и «Тест»")
         doc_rel = f"docs/requirements/{task['id']}.md"
-        if not self._commit(task, f"{task['id']}: проверки аналитика", paths=[doc_rel]):
-            raise StepFailed("аналитик не изменил документ")
+        if self._changed_outside(task, [doc_rel]):
+            raise StepFailed("аналитик изменил файлы вне документа требований")
+        self._commit(task, f"{task['id']}: проверки аналитика", paths=[doc_rel])
         task["step"] = "tester"
         self._save(tid, state)
 
@@ -190,7 +204,7 @@ class NightRunner:
         prompt = (
             f"Ты тестировщик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
             f"и {SKILLS_ROOT}/wms-test-writer/SKILL.md. Напиши контрактные тесты до кода реализации; "
-            "ожидания не подгоняй. "
+            "ожидания не подгоняй. Заполни столбец «Тест»; Git-коммит делает контроллер. "
             'Верни JSON {"summary":"...","tests":["relative/path"]}.'
         )
         result, _ = self.p.llm.ask_json(
@@ -199,17 +213,20 @@ class NightRunner:
             cwd=task["path"], timeout=3600,
         )
         tests = [str(item) for item in result.get("tests") or [] if self._safe_rel(str(item))]
-        if not tests or any(not (Path(task["path"]) / path).is_file() for path in tests):
+        if not tests or any(not TEST_PATH_RE.search(path)
+                            or not (Path(task["path"]) / path).is_file() for path in tests):
             raise StepFailed("тестировщик не создал контрактные тесты")
+        doc_rel = f"docs/requirements/{task['id']}.md"
         # Helper files the tests need (fixtures, conftest, seeds) belong to the contract too;
         # only changes outside test code stop the task.
-        support = [item for item in self._changed_outside(task, tests) if TEST_PATH_RE.search(item)]
+        support = [item for item in self._changed_outside(task, tests + [doc_rel])
+                   if TEST_PATH_RE.search(item)]
         tests = tests + [item for item in support if self._safe_rel(item)]
-        unrelated = self._changed_outside(task, tests)
+        unrelated = self._changed_outside(task, tests + [doc_rel])
         if unrelated:
             raise StepFailed("тестировщик изменил файлы вне контракта тестов: "
                              + ", ".join(unrelated))
-        if not self._commit(task, f"{task['id']}: контракт тестов", paths=tests):
+        if not self._commit(task, f"{task['id']}: контракт тестов", paths=tests + [doc_rel]):
             raise StepFailed("контракт тестов не изменил Git")
         task.update(step="developer", tests=tests, contract_commit=self._head(task),
                     contract_hashes=self._hashes(task, tests))
@@ -225,12 +242,13 @@ class NightRunner:
             f"Замечание предыдущей попытки: {feedback or 'нет'}. "
             'Верни JSON {"summary":"...","contradiction":"" или "C1 противоречит R2"}.'
         )
-        result, _ = self.p.llm.ask_json(
+        result, execution = self.p.llm.ask_json(
             "frontend" if task.get("frontend") else "routine", prompt,
             ticket_id=task.get("ticket_id"),
             session_key=f"night:{state['job_id']}:{task['id']}:developer", mode="write",
             cwd=task["path"], timeout=3600,
         )
+        task.update(dev_cli=execution.cli, dev_model=execution.model)
         contradiction = str(result.get("contradiction") or "").strip()
         if contradiction and CONTRADICTION_RE.search(contradiction):
             task.update(status="waiting_owner", reason=contradiction, step="owner_decision")
@@ -247,6 +265,7 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_checks(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
+        self._assert_contract(task)
         failures = self._run_contract(task)
         if failures:
             reason = "\n".join(failures)[-1800:]
@@ -258,7 +277,37 @@ class NightRunner:
             self._save(tid, state)
             return
         task["contract_changed"] = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes")
-        task["step"] = "pr"
+        task["step"] = "review"
+        self._save(tid, state)
+
+    def _task_review(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
+        head = self._head(task)
+        if task.get("reviewed_sha") != head:
+            prompt = (
+                f"Проверь реализацию {task['id']}. Прочитай AGENTS.md, "
+                f"docs/requirements/{task['id']}.md, diff, результаты тестов, "
+                f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
+                "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
+                'Верни JSON {"accepted":true|false,"summary":"конкретные дефекты или результат"}.'
+            )
+            result, execution = self.p.llm.ask_json(
+                "review", prompt, ticket_id=task.get("ticket_id"), mode="readonly",
+                exclude_cli=("codex" if "astra" in str(task.get("dev_model", "")).lower()
+                             else "claude" if task.get("dev_cli") == "claude" else None),
+                cwd=task["path"], timeout=1800,
+                session_key=f"night:{state['job_id']}:{task['id']}:review",
+            )
+            if self._head(task) != head or self._changed_outside(task, []):
+                raise StepFailed("ревью изменило проверяемую версию")
+            if result.get("accepted") is not True:
+                reason = str(result.get("summary") or "ревью не пройдено")
+                if self._failure(tid, state, task, hashlib.sha256(reason.encode()).hexdigest(), reason):
+                    return
+                task.update(step="developer", feedback=reason)
+                self._save(tid, state)
+                return
+            task.update(reviewed_sha=head, review_by=execution.model)
+        task["step"] = "acceptance"
         self._save(tid, state)
 
     def _task_pr(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
@@ -286,7 +335,10 @@ class NightRunner:
             self._save(tid, state)
             return
         if self._required_ci_passed(checks):
-            task["step"] = "acceptance"
+            self._assert_contract(task)
+            if self._head(task) != task.get("ci_head") or task.get("accepted_sha") != task.get("ci_head"):
+                raise StepFailed("CI и приёмка относятся к другой версии задачи")
+            task.update(status="ready", step="ready", head_sha=task["ci_head"])
             self._save(tid, state)
             return
         if self.p.clock() - float(task.get("ci_started", self.p.clock())) > self.cfg.limits.ci_timeout_sec:
@@ -297,22 +349,29 @@ class NightRunner:
         prompt = (
             f"Проведи приёмку {task['id']} как аналит по "
             f"{SKILLS_ROOT}/wms-product-analyst/SKILL.md. "
-            "Прочитай requirements, diff и результаты тестов. Ничего не меняй: CI уже прошёл на точном SHA. "
+            "Прочитай requirements, diff, ревью и результаты тестов. Проверь сценарии. "
+            "Заполни только вердикты и заключение в документе; требования и тесты не меняй. "
+            "Git-коммит делает контроллер. Полный CI выполнится после фиксации приёмки. "
             'Верни JSON {"accepted":true|false,"summary":"..."}.'
         )
         result, _ = self.p.llm.ask_json(
             "analyst", prompt, ticket_id=task.get("ticket_id"),
-            session_key=f"night:{state['job_id']}:{task['id']}:analyst", mode="readonly",
+            session_key=f"night:{state['job_id']}:{task['id']}:analyst", mode="write",
             cwd=task["path"], timeout=1800,
         )
+        doc_rel = f"docs/requirements/{task['id']}.md"
+        if self._changed_outside(task, [doc_rel]):
+            raise StepFailed("приёмка изменила файлы вне документа требований")
+        self._assert_contract(task)
+        self._commit(task, f"{task['id']}: приёмка", paths=[doc_rel])
         if result.get("accepted") is not True:
-            self._stop_task(tid, state, task,
-                            str(result.get("summary") or "приёмка не пройдена"))
+            reason = str(result.get("summary") or "приёмка не пройдена")
+            if self._failure(tid, state, task, hashlib.sha256(reason.encode()).hexdigest(), reason):
+                return
+            task.update(step="developer", feedback=reason)
+            self._save(tid, state)
             return
-        task.update(status="ready", step="ready", accepted=str(result.get("summary") or ""),
-                    head_sha=self._head(task),
-                    contract_changed=(self._hashes(task, task.get("tests") or [])
-                                      != task.get("contract_hashes")))
+        task.update(step="pr", accepted=str(result.get("summary") or ""), accepted_sha=self._head(task))
         self._save(tid, state)
 
     # -- release --------------------------------------------------------------------
@@ -332,10 +391,15 @@ class NightRunner:
                 self._release_hotfix_step(tid, state, step)
             elif step == "promote":
                 self._promote(tid, state)
+            elif step == "promote_ci":
+                self._promote_ci(tid, state)
         except (LlmUnavailable, LlmError):
             raise
         except StepFailed as exc:
             state["release_error"] = str(exc)
+            if state.get("release_sha"):
+                for task_id in state["candidate"]["included"]:
+                    state["tasks"][task_id]["promote"] = f"не завершено: {exc}"
             self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
 
     def _candidate(self, tid: int, state: dict[str, Any]) -> None:
@@ -419,30 +483,81 @@ class NightRunner:
             self.hotfix._s_verify(tid, hotfix)
         current = dict(self.store.data(tid).get("hotfix") or {})
         next_step = str(current.get("step"))
+        if next_step == "report":
+            for task_id in state["candidate"]["included"]:
+                state["tasks"][task_id].update(status="released", release_sha=current.get("merge_sha"))
         self._save(tid, state, step="promote" if next_step == "report" else next_step,
                    release_sha=current.get("merge_sha"), next_poll=current.get("next_poll", 0))
 
     def _promote(self, tid: int, state: dict[str, Any]) -> None:
-        path = state["candidate"]["path"]
+        promotion = state.get("promotion")
+        if not promotion:
+            branch = f"codex/night-guards-{state['job_id'][:8]}"
+            path = Path(self.cfg.repo) / ".worktrees" / f"night-guards-{state['job_id'][:8]}"
+            self.hotfix.ensure_worktree(branch, path, base=state["release_sha"])
+            promotion = {"branch": branch, "path": str(path)}
+            self._save(tid, state, promotion=promotion)
+        path = promotion["path"]
         for task_id in state["candidate"]["included"]:
             task = state["tasks"][task_id]
             if task.get("promote"):
                 continue
             if task.get("promote_intent"):
-                task["promote"] = "исход неизвестен после перезапуска; не повторялось"
-                self._save(tid, state)
-                return
+                raise StepFailed("перенос в охрану прерван; рабочая копия сохранена, повтор не запускался")
             task["promote_intent"] = True
             self._save(tid, state)
             res = self.hotfix.run(["python3", "scripts/ci/promote_guards.py", task_id], path, 1800)
-            missing = res.rc != 0 and ("No such file" in res.err or "can't open file" in res.err)
-            task["promote"] = "пропущено: нет скрипта" if missing else (
-                "выполнено" if res.rc == 0 else f"ошибка: {(res.out + res.err)[-300:]}")
+            if res.rc != 0:
+                raise StepFailed(f"{task_id}: перенос в охрану: {(res.out + res.err)[-300:]}")
+            changed = self._commit(promotion, f"{task_id}: постоянные проверки в охране")
+            if changed:
+                promotion["changed"] = True
+            task["promote"] = "сохранено, ожидает CI" if changed else "перенос не требуется"
             self._save(tid, state)
             return
-        for task_id in state["candidate"]["included"]:
-            state["tasks"][task_id].update(status="released", release_sha=state.get("release_sha"))
+        if promotion.get("changed"):
+            self.hotfix.push_branch(promotion["branch"])
+            found = self.hotfix.ensure_pr(
+                promotion["branch"], base="etalon", title="Постоянная охрана после ночного выпуска",
+                body="Перенос принятых проверок класса «навсегда» после выпуска.\n\n"
+                     + "\n".join(state["candidate"]["included"]),
+            )
+            promotion.update(pr=found["number"], url=found.get("url"), head=self._head(promotion),
+                             started=self.p.clock())
+            self._save(tid, state, step="promote_ci", promotion=promotion, next_poll=0)
+            return
         self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+
+    def _promote_ci(self, tid: int, state: dict[str, Any]) -> None:
+        promotion = state["promotion"]
+        checks = self.hotfix.pr_checks(promotion["pr"])
+        if any(check.get("bucket") == "fail" for check in checks):
+            raise StepFailed(f"CI постоянной охраны красный: {promotion.get('url')}")
+        if self.p.clock() - promotion["started"] > self.cfg.limits.ci_timeout_sec:
+            raise StepFailed(f"постоянная охрана ожидает CI/слияния: {promotion.get('url')}")
+        if not self._required_ci_passed(checks):
+            self._save(tid, state, next_poll=self.p.clock() + 30)
+            return
+        pr = str(promotion["pr"])
+        response = self.hotfix.run_gh(["gh", "pr", "view", pr, "--json", "state,headRefOid,mergeCommit"])
+        if response.rc:
+            raise StepFailed("не удалось проверить публикацию постоянной охраны")
+        view = json.loads(response.out)
+        if view.get("headRefOid") != promotion["head"]:
+            raise StepFailed("версия PR постоянной охраны изменилась")
+        if view.get("state") == "MERGED":
+            for task_id in state["candidate"]["included"]:
+                state["tasks"][task_id]["promote"] = f"в etalon: {promotion.get('url')}"
+            self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+            return
+        if view.get("state") != "OPEN":
+            raise StepFailed("PR постоянной охраны закрыт без слияния")
+        if not promotion.get("merge_intent"):
+            promotion["merge_intent"] = True
+            self._save(tid, state)
+            self.hotfix.run_gh(["gh", "pr", "merge", pr, "--merge",
+                               "--match-head-commit", promotion["head"]])
+        self._save(tid, state, next_poll=self.p.clock() + 30)
 
     # -- report ---------------------------------------------------------------------
     def report(self, tid: int) -> None:
@@ -517,12 +632,19 @@ class NightRunner:
                 result[rel] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
 
+    def _assert_contract(self, task: dict[str, Any]) -> None:
+        changed = self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {})
+        task["contract_changed"] = changed
+        if changed:
+            raise StepFailed("разработчик изменил зафиксированный контракт тестов")
+
     def _run_contract(self, task: dict[str, Any]) -> list[str]:
         root = Path(task["path"])
         backend = [path.removeprefix("backend/") for path in task.get("tests") or []
-                   if path.startswith("backend/")]
+                   if path.startswith("backend/") and Path(path).name.startswith("test_")
+                   and path.endswith(".py")]
         frontend = [path.removeprefix("frontend/") for path in task.get("tests") or []
-                    if path.startswith("frontend/")]
+                    if path.startswith("frontend/") and re.search(r"\.(test|spec)\.[jt]sx?$", path)]
         problems: list[str] = []
         backend_guards = (["tests/guards"]
                           if (root / "backend" / "tests" / "guards").exists() else [])

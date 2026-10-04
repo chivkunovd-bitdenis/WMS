@@ -31,6 +31,7 @@ for line in sys.stdin:
         send({'id': msg['id'], 'result': {'config': {'mcp_servers': {}}}})
     elif method == 'thread/start':
         params = msg['params']
+        assert params.get('ephemeral') is True, 'background thread must not persist'
         has_project = any(t.get('name') == 'project' for t in params.get('dynamicTools', []))
         send({'id': msg['id'], 'result': {'model': params['model'], 'thread': {'id': 'thread-1'}}})
     elif method == 'thread/resume':
@@ -79,7 +80,7 @@ def test_real_agent_specs_and_owner_style_use_one_native_format() -> None:
     assert {spec["name"] for spec in normalized} >= {"project_job", plain[0]["name"]}
 
 
-def test_capability_change_rolls_thread_but_identical_tools_resume(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def test_background_context_survives_tool_changes_without_handoff_threads(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     from support_agent.app_server import AppServerTurn
 
     cfg = make_config(tmp_path)
@@ -104,11 +105,17 @@ def test_capability_change_rolls_thread_but_identical_tools_resume(tmp_path: Pat
                               "cwd": str(tmp_path), "tool_handler": lambda name, args: {}}
     llm.agent_turn("a", tools=first, **kwargs)
     llm.agent_turn("b", tools=first, **kwargs)
-    assert len(calls) == 2 and calls[1]["session_id"] == "thread-1"
+    assert len(calls) == 2 and calls[1]["session_id"] is None
+    assert '"prompt": "a"' in str(calls[1]["prompt"])
     llm.agent_turn("c", tools=second, **kwargs)
-    assert len(calls) == 4
-    assert calls[2]["session_id"] == "thread-1"  # handoff in old session
-    assert calls[3]["session_id"] is None  # new thread gets changed tools
+    assert len(calls) == 3
+    assert all(call["session_id"] is None for call in calls)
+    assert '"prompt": "b"' in str(calls[2]["prompt"])
+    assert not any("Сохрани передачу" in str(call["prompt"]) for call in calls)
+    # Restart does not lose the logical session or create a desktop resume.
+    LlmRouter(cfg, store).agent_turn("d", tools=second, **kwargs)
+    assert '"prompt": "c"' in str(calls[3]["prompt"])
+    assert len(list((cfg.state_path / "background-sessions").glob("*.jsonl"))) == 1
 
 
 def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> None:
@@ -125,7 +132,9 @@ def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> No
     assert "project facts" in json.loads(result.text)["text"]
     assert result.session_id == "thread-1"
     state = store.kv_get("agent_session:owner:codex:gpt-5.6-sol:readonly")
-    assert state["thread_id"] == "thread-1" and state["rollover"] is True
+    assert state["thread_id"] is None and state["rollover"] is False
+    history = store.kv_get("background_context:agent_session:owner:codex:gpt-5.6-sol:readonly")
+    assert history[0]["prompt"] == "Read project" and "project facts" in history[0]["answer"]
     assert "900000" not in str(state)
 
 

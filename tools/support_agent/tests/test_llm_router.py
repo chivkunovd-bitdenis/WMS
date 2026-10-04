@@ -121,7 +121,7 @@ def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_res
                     cli_only=cli, system=rules)
     assert first.session_id and store.rows("SELECT * FROM tickets") == []
     saved = store.kv_get("llm_sessions:owner_conversation")
-    assert saved == {cli: first.session_id}
+    assert saved == ({cli: first.session_id} if cli == "claude" else None)
     restarted = LlmRouter(llm.cfg, store, exec_fn=script)
     current = "История: первый ход. Теперь обращение №1 закрыто; новое обращение №2 в разборе."
     updated_rules = rules + "\nИспользуй актуальный снимок обращений в каждом ходе."
@@ -132,9 +132,11 @@ def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_res
             assert argv[argv.index("--system-prompt") + 1] == f"{policy}\n\n{expected}"
         assert script.stdin[-1] == current
     else:
-        assert script.calls[-1][:4] == ["codex", "exec", "resume", first.session_id]
+        assert script.calls[-1][:3] == ["codex", "exec", "--ephemeral"]
+        assert "первый ход: обращение №1 в разборе" in (script.stdin[-1] or "")
         assert script.stdin[0] == f"{policy}\n\n{rules}\n\nпервый ход: обращение №1 в разборе"
-        assert script.stdin[-1] == f"{policy}\n\n{updated_rules}\n\n{current}"
+        assert (script.stdin[-1] or "").startswith(f"{policy}\n\n{updated_rules}\n\n")
+        assert (script.stdin[-1] or "").endswith(current)
     assert store.kv_get("llm_sessions:owner_conversation") == saved
     assert store.rows("SELECT * FROM tickets") == []
 
@@ -229,8 +231,8 @@ def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path
     assert "sandbox_workspace_write.network_access=false" in argv
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
     resume = script.full[-1]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and "shell_tool" in resume
-    assert 'sandbox_mode="workspace-write"' in resume and "--ignore-user-config" in resume
+    assert resume[:3] == ["codex", "exec", "--ephemeral"] and "shell_tool" in resume
+    assert resume[resume.index("-s") + 1] == "workspace-write" and "--ignore-user-config" in resume
 
 
 def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Path) -> None:
@@ -294,9 +296,9 @@ def test_codex_analyst_resume_keeps_mcp_and_disabled_tools(tmp_path: Path) -> No
     for text in ("a", "b"):
         llm.ask("analyst", text, mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
     resume = script.full[-1]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"]
+    assert resume[:3] == ["codex", "exec", "--ephemeral"]
     assert "shell_tool" in resume and any(a.startswith("mcp_servers.wms.args=") for a in resume)
-    assert 'sandbox_mode="read-only"' in resume
+    assert resume[resume.index("-s") + 1] == "read-only"
 
 
 def test_no_codex_home_copy_or_auth_sync_code_exists() -> None:
@@ -387,21 +389,28 @@ def test_resumed_analyst_receives_current_rules_history_and_state_after_restart(
         assert "--session-id" in first and "--resume" in second
         assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
     else:
-        assert second[:4] == ["codex", "exec", "resume", first_result.session_id]
+        assert second[:3] == ["codex", "exec", "--ephemeral"]
+        assert "Старые правила. Клиент: короб не сканируется." in (script.stdin[-1] or "")
     policy = f"{prompts.WMS_SYSTEM_POLICY}\n\n" if cli == "codex" else ""
     assert script.stdin[0] == policy + "Старые правила. Клиент: короб не сканируется.\n\nразбери"
-    assert script.stdin[1] == f"{policy}{current}\n\n{note}"
-    assert store.data(tid)["sessions"]["analyst"][cli] == first_result.session_id
+    assert (script.stdin[1] or "").startswith(policy)
+    assert (script.stdin[1] or "").endswith(f"{current}\n\n{note}")
+    if cli == "claude":
+        assert store.data(tid)["sessions"]["analyst"][cli] == first_result.session_id
+    else:
+        assert "sessions" not in store.data(tid)
 
 
-def test_codex_session_id_is_saved_and_resumed(tmp_path: Path) -> None:
+def test_codex_context_is_saved_without_persistent_session(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
     llm.ask("analyst", "a", ticket_id=tid, session_key="analyst", mode="readonly")
     llm.ask("analyst", "b", ticket_id=tid, session_key="analyst", mode="readonly")
-    assert script.calls[1][:4] == ["codex", "exec", "resume", "T-1"]
+    assert script.calls[1][:3] == ["codex", "exec", "--ephemeral"]
+    assert '"prompt": "a"' in (script.stdin[1] or "")
+    assert "sessions" not in store.data(tid)
 
 
 def test_ask_json_retries_once_and_calls_are_logged(tmp_path: Path) -> None:
