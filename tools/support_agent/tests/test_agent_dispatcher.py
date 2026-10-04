@@ -226,3 +226,31 @@ def test_authorization_sees_only_prior_same_chat_and_reply_target(tmp_path: Path
     assert seen["actual_source"]["reply_to"] == "proposal-7"
     assert any(x.get("msg_id") == "proposal-7" for x in seen["prior_same_chat"])
     assert "Другая клиентская переписка" not in json.dumps(seen, ensure_ascii=False)
+
+
+def test_authorization_accepts_exact_ordered_sentences_from_voice_source(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    text = "Упакуй это всё в вордовский документ. Без лишних заголовков. И пришли мне на утверждение."
+    mid = store.add_message(source="telegram", chat_id=4242, msg_id="152", role="owner",
+                            author_id="42", author_name="Owner", ts=100, kind="text",
+                            text=text, file_id=None, reply_to=None)
+    source = store.row("SELECT * FROM messages WHERE id=?", (mid,))
+    quote = "Упакуй это всё в вордовский документ. И пришли мне на утверждение."
+
+    def audit(prompt: str, **kwargs: Any) -> LlmResult:
+        return LlmResult(json.dumps({"authorized": True, "source_quote": quote,
+                                     "reason": "владелец прямо поручил"}), "codex", "sol", None)
+
+    agent.llm.agent_turn = audit  # type: ignore[method-assign]
+    decision = agent.semantic_verifier.check(source, "project_job", {"request": "подготовить DOCX"})
+    assert decision["authorized"] is True
+    assert len(decision["source_quotes"]) == 2
+    assert all(span in text for span in decision["source_quotes"])
+
+
+def test_authorization_does_not_accept_paraphrase_or_reordered_quote() -> None:
+    source = "Подготовь документ. Сначала покажи мне. Клиенту не отправляй."
+    assert SemanticAuthorization._quote_spans(source, "Создай документ.") == []
+    assert SemanticAuthorization._quote_spans(source, "Клиенту не отправляй. Подготовь документ.") == []
+    assert SemanticAuthorization._quote_spans(source, "Подготовь документ. Отправь клиенту.") == []
+    assert SemanticAuthorization._quote_spans(source, "") == []
