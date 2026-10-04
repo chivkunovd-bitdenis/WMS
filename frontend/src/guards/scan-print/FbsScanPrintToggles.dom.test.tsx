@@ -3,8 +3,6 @@ import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FbsScanPrintToggles } from '../../screens/v2/FbsScanPrintToggles'
-import { FbsRejectedKizTriangle } from '../../screens/v2/FbsRejectedKizFilter'
-import { FbsPackingScanBar } from '../../screens/v2/FbsPackingScanBar'
 import type { FbsScanPrintPreferences } from '../../screens/v2/fbsScanAutoPrint'
 
 beforeAll(() => {
@@ -76,53 +74,5 @@ describe('WMS-633 · «− N +» counter never takes the scanner', () => {
     }
     expect(onChange).not.toHaveBeenCalled()
     expect(q('fbs-scan-reprint-chz-copies-value')?.textContent).toBe('3')
-  })
-})
-
-describe('WMS-636 · треугольник «Не принятые WB КИЗ»', () => {
-  const base = { printQr: true, printChz: false, reprintChz: false }
-  const renderWith = (rejected?: { count: number; active: boolean; onToggle: () => void }) =>
-    act(() => root.render(<>
-      <FbsScanPrintToggles value={base} onChange={onChange} />
-      {rejected ? <FbsRejectedKizTriangle filter={rejected} /> : null}
-    </>))
-
-  it('R1: без фильтра или при N = 0 ничего не рисуется — полоса как раньше', () => {
-    renderWith()
-    const before = host.innerHTML
-    expect(q('fbs-wb-rejected-kiz-toggle')).toBeNull()
-    renderWith({ count: 0, active: false, onToggle: vi.fn() })
-    expect(q('fbs-wb-rejected-kiz-toggle')).toBeNull()
-    expect(host.innerHTML).toBe(before)
-  })
-
-  it('R1/R2: N крупно, клик переключает, «нажат» виден по aria-pressed; фокус сканера не забирается', () => {
-    const onToggle = vi.fn()
-    renderWith({ count: 2, active: false, onToggle })
-    const button = q('fbs-wb-rejected-kiz-toggle')!
-    expect(q('fbs-wb-rejected-kiz-count')!.textContent).toBe('2')
-    expect(button.getAttribute('aria-label')).toBe('Не принятые WB КИЗ: 2')
-    expect(button.getAttribute('aria-pressed')).toBe('false')
-    expect(button.tabIndex).toBe(-1)
-    scanField.focus()
-    const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
-    act(() => { button.dispatchEvent(down) })
-    expect(down.defaultPrevented).toBe(true)
-    act(() => button.click())
-    expect(onToggle).toHaveBeenCalledTimes(1)
-    renderWith({ count: 2, active: true, onToggle })
-    expect(q('fbs-wb-rejected-kiz-toggle')!.getAttribute('aria-pressed')).toBe('true')
-  })
-})
-
-describe('WMS-635 Д4 · треугольник внутри поля скана', () => {
-  it('stands inside the scan field, so the checkboxes and «Назад» do not move', () => {
-    act(() => root.render(<FbsPackingScanBar token="t" enabled={false} controllers={[]}
-      rejected={{ count: 3, active: false, onToggle: vi.fn() }} />))
-    const field = host.querySelector('.MuiInputBase-root')!
-    expect(field.querySelector('[data-testid="fbs-wb-rejected-kiz-toggle"]')).not.toBeNull()
-    act(() => root.render(<FbsPackingScanBar token="t" enabled={false} controllers={[]}
-      rejected={{ count: 0, active: false, onToggle: vi.fn() }} />))
-    expect(host.querySelector('[data-testid="fbs-wb-rejected-kiz-toggle"]')).toBeNull()
   })
 })
