@@ -209,7 +209,24 @@ export function PlacedByCells({
                       {row.kind === 'object' ? (
                         <>
                           {KIND_TITLE[row.object.kind]}{' '}
-                          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>{row.object.code}</Box>
+                          {/* Номер тары целиком на одной строке; не влез в узкую
+                              панель — обрезается многоточием (полный номер в
+                              подсказке), но не налезает на количество и кнопки. */}
+                          <Box
+                            component="span"
+                            title={row.object.code}
+                            data-testid={`placed-code-${row.object.id}`}
+                            sx={{
+                              display: 'inline-block',
+                              maxWidth: '100%',
+                              verticalAlign: 'bottom',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                            }}
+                          >
+                            {row.object.code}
+                          </Box>
                         </>
                       ) : title}
                     </Typography>
@@ -219,7 +236,7 @@ export function PlacedByCells({
                       </Typography>
                     ) : null}
                   </Stack>
-                  <Box sx={{ minWidth: 34, textAlign: 'right', flexShrink: 0 }}>
+                  <Box data-testid={`placed-qty-${row.key}`} sx={{ minWidth: 34, textAlign: 'right', flexShrink: 0 }}>
                     <QtyCell value={row.qty} muted={row.qty === 0} />
                   </Box>
                   <Box sx={{ width: 34, display: 'flex', justifyContent: 'center', flexShrink: 0 }}>

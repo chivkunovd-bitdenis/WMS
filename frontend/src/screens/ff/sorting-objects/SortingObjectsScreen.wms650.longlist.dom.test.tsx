@@ -121,3 +121,51 @@ describe('WMS-650 · длинный список: отказ виден, стр�
     expect(document.activeElement).toBe(scannerInput())
   })
 })
+
+describe('WMS-650 · узкая панель: длинный номер тары не налезает на количество', () => {
+  it('C27/R20: номер тары целиком с многоточием и подсказкой, количество не сжимается', async () => {
+    const code = 'INB-N98WC9V0Y3MT9C'
+    const doc: DocState = {
+      objects: [{ id: 'long', kind: 'box', code, barcode: '2200000099999', holder: `cell:${CELLS.a11.id}` }],
+      lines: [{ id: 'l-long', productId: PRODUCTS.t1.id, qty: 7, holder: 'obj:long' }],
+    }
+    const server = new FakeSortingServer({ [DOC_A]: doc })
+    restoreFetch = installFetch(server)
+    page = mountPage()
+    await settle()
+
+    const label = must('placed-code-long')
+    expect(label.textContent).toBe(code)
+    expect(label.getAttribute('title')).toBe(code)
+    const text = getComputedStyle(label)
+    expect(text.whiteSpace).toBe('nowrap')
+    expect(text.overflow).toBe('hidden')
+    expect(text.textOverflow).toBe('ellipsis')
+    expect(text.maxWidth).toBe('100%')
+    expect(text.display).toBe('inline-block')
+    // Колонка названия может сжиматься до нуля, количество и кнопка — нет.
+    const nameColumn = label.closest('p')?.parentElement as HTMLElement
+    expect(getComputedStyle(nameColumn).minWidth).toBe('0')
+    const qty = must('placed-qty-o-long')
+    expect(getComputedStyle(qty).flexShrink).toBe('0')
+    expect(qty.textContent).toContain('7')
+    expect(getComputedStyle(must('placed-minus-o-long').parentElement!.parentElement!).flexShrink).toBe('0')
+  })
+})
+
+describe('WMS-650 · фокус после окна не отбирается у другого поля', () => {
+  it('таймер возврата фокуса не забирает его у поля, где оператор уже печатает', async () => {
+    const server = new FakeSortingServer({ [DOC_A]: thirtyBoxes() })
+    restoreFetch = installFetch(server)
+    page = mountPage()
+    await settle()
+    await click(placedCellHeader(CELLS.a11))
+    await click(must('objects-tree-place-o-b30'))
+    await click(must('objects-qty-confirm'))
+    const other = document.createElement('input')
+    document.body.appendChild(other)
+    act(() => other.focus())
+    await settle(80)
+    expect(document.activeElement).toBe(other)
+  })
+})

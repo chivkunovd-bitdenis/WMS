@@ -395,7 +395,16 @@ export function SortingObjectsScreen({
     if (asking !== null || !dialogWasOpen.current) return
     dialogWasOpen.current = false
     const timer = setTimeout(() => {
-      field.current?.querySelector<HTMLInputElement>('input')?.focus({ preventScroll: true })
+      const input = field.current?.querySelector<HTMLInputElement>('input')
+      if (!input) return
+      // Не забираем фокус, если за это время открылось другое окно или
+      // оператор уже печатает в другом поле.
+      const otherDialog = Array.from(document.querySelectorAll('[role="dialog"]'))
+        .some((dialog) => !dialog.closest('[data-testid="objects-qty-dialog"]'))
+      if (otherDialog) return
+      const active = document.activeElement as HTMLElement | null
+      if (active && active !== input && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName))) return
+      input.focus({ preventScroll: true })
     }, 350)
     return () => clearTimeout(timer)
   }, [asking])
