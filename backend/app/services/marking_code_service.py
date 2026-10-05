@@ -1266,6 +1266,12 @@ async def _try_insert_imported_code(
             cis_code=cis_code,
             gtin=gtin,
             status=STATUS_AVAILABLE,
+            # SQLite's CURRENT_TIMESTAMP has only second precision.  Imports
+            # commonly add several codes in one second, while exact-result
+            # printing uses created_at as the stable source order.  Record the
+            # insertion instant in Python so UUID ordering can never reshuffle
+            # labels from one upload.
+            created_at=datetime.now(UTC),
         )
         .on_conflict_do_nothing(index_elements=["tenant_id", "cis_code"])
         .returning(MarkingCode.id)
@@ -1505,7 +1511,56 @@ async def _code_filter_for_product(
     return code_filter, product
 
 
+def _manual_import_lock_id(
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    files: list[tuple[str, bytes]],
+    pool_specs: list[PoolImportSpec],
+) -> uuid.UUID:
+    spec_rows = sorted(
+        (
+            (spec.gtin or "").strip(),
+            spec.title.strip(),
+            tuple(sorted(str(product_id) for product_id in set(spec.product_ids))),
+        )
+        for spec in pool_specs
+    )
+    signature = json.dumps(spec_rows, ensure_ascii=False, separators=(",", ":"))
+    files_fingerprint = _import_files_fingerprint(files)
+    return uuid.uuid5(
+        uuid.NAMESPACE_URL,
+        f"wms-marking-manual:{tenant_id}:{seller_id}:{files_fingerprint}:{signature}",
+    )
+
+
 async def import_marking_codes(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    files: list[tuple[str, bytes]],
+    pool_specs: list[PoolImportSpec],
+    uploaded_by_user_id: uuid.UUID | None,
+) -> MarkingImportResult:
+    """Serialize identical manual uploads and keep every write atomic."""
+    lock_id = _manual_import_lock_id(tenant_id, seller_id, files, pool_specs)
+    async with _serialize_import_request(lock_id):
+        try:
+            await _lock_import_request_in_database(session, tenant_id, lock_id)
+            return await _import_marking_codes_locked(
+                session,
+                tenant_id,
+                seller_id,
+                files=files,
+                pool_specs=pool_specs,
+                uploaded_by_user_id=uploaded_by_user_id,
+            )
+        except Exception:
+            await session.rollback()
+            raise
+
+
+async def _import_marking_codes_locked(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     seller_id: uuid.UUID,
@@ -1867,15 +1922,18 @@ async def auto_import_marking_codes(
     files: list[tuple[str, bytes]],
     uploaded_by_user_id: uuid.UUID | None,
 ) -> AutoMarkingImportResult:
-    seller = await session.get(Seller, seller_id)
-    if seller is None or seller.tenant_id != tenant_id:
-        raise MarkingCodeServiceError("seller_not_found")
     if not files:
         raise MarkingCodeServiceError("empty_file")
     fingerprint = _import_files_fingerprint(files)
 
     async with _serialize_import_request(request_id):
         await _lock_import_request_in_database(session, tenant_id, request_id)
+        # Do not start a read transaction before waiting for the in-process
+        # lock.  In SQLite that would pin the second concurrent attempt to a
+        # snapshot created before the first attempt commits.
+        seller = await session.get(Seller, seller_id)
+        if seller is None or seller.tenant_id != tenant_id:
+            raise MarkingCodeServiceError("seller_not_found")
         existing, metadata = await _existing_idempotent_batch(
             session,
             tenant_id=tenant_id,
@@ -1885,12 +1943,17 @@ async def auto_import_marking_codes(
             fingerprint=fingerprint,
         )
         if existing is not None:
-            return AutoMarkingImportResult(
+            result = AutoMarkingImportResult(
                 import_id=existing.id,
                 document_number=existing.document_number or "",
                 groups=await _auto_import_groups(session, tenant_id, existing.id),
                 unmatched=_unmatched_from_json(metadata.get("unmatched")),
             )
+            # The PostgreSQL advisory lock is transaction-scoped.  This path
+            # is read-only, so finish its transaction before returning the
+            # already committed result to a retry.
+            await session.rollback()
+            return result
 
         parsed_rows = await asyncio.to_thread(_parse_import_files, files)
         if not parsed_rows:
@@ -2073,7 +2136,11 @@ async def auto_import_marking_codes(
             },
             ensure_ascii=False,
         )
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         return AutoMarkingImportResult(
             import_id=batch.id,
             document_number=document_number,
@@ -2095,13 +2162,6 @@ async def assign_import_rows_to_product(
 ) -> AssignMarkingCodesResult:
     if not files or not row_keys:
         raise MarkingCodeServiceError("no_codes")
-    product = await session.get(Product, product_id)
-    if (
-        product is None
-        or product.tenant_id != tenant_id
-        or product.seller_id not in (None, seller_id)
-    ):
-        raise MarkingCodeServiceError("product_not_found")
     fingerprint = _import_files_fingerprint(files)
     selected_key_list = list(dict.fromkeys(row_keys))
     selected_signature = hashlib.sha256(
@@ -2111,6 +2171,15 @@ async def assign_import_rows_to_product(
 
     async with _serialize_import_request(request_id):
         await _lock_import_request_in_database(session, tenant_id, request_id)
+        # As with auto import, load the scoped product only after this request
+        # owns the lock so a retry observes the committed idempotency record.
+        product = await session.get(Product, product_id)
+        if (
+            product is None
+            or product.tenant_id != tenant_id
+            or product.seller_id not in (None, seller_id)
+        ):
+            raise MarkingCodeServiceError("product_not_found")
         existing, metadata = await _existing_idempotent_batch(
             session,
             tenant_id=tenant_id,
@@ -2137,12 +2206,14 @@ async def assign_import_rows_to_product(
                 if isinstance(stored_assigned_keys, list)
                 else []
             )
-            return AssignMarkingCodesResult(
+            result = AssignMarkingCodesResult(
                 import_id=existing.id,
                 document_number=existing.document_number or "",
                 product=group,
                 assigned_keys=assigned_keys,
             )
+            await session.rollback()
+            return result
 
         parsed_rows = await asyncio.to_thread(_parse_import_files, files)
         selected: list[tuple[str, dict[str, str | bytes]]] = []
@@ -2239,7 +2310,11 @@ async def assign_import_rows_to_product(
             },
             ensure_ascii=False,
         )
-        await session.commit()
+        try:
+            await session.commit()
+        except Exception:
+            await session.rollback()
+            raise
         groups = await _auto_import_groups(session, tenant_id, batch.id)
         group = groups[0] if groups else AutoImportProductGroup(
             product_id=product.id,
