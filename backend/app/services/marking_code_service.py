@@ -864,8 +864,6 @@ async def _legacy_pdf_payloads_for_import(
     """
     filename = (batch.filename or "").casefold()
     expected_pdf_count = filename.count(".pdf")
-    if expected_pdf_count == 0:
-        return set()
     source_files = list(
         (
             await session.scalars(
@@ -878,7 +876,20 @@ async def _legacy_pdf_payloads_for_import(
             )
         ).all()
     )
+    # The combined filename was historically cut at 512 characters. Once it
+    # reaches that boundary, an omitted suffix may have belonged to a PDF, so
+    # the absence of ".pdf" is not evidence that a replacement label is safe.
+    if len(filename) >= 512:
+        return None
     if len(source_files) < expected_pdf_count:
+        return None
+    if not source_files:
+        if expected_pdf_count:
+            return None
+        # Only an explicit, fully retained text extension proves that this
+        # legacy batch never needed an original seller label.
+        if any(filename.endswith(ext) for ext in (".csv", ".txt", ".tsv")):
+            return set()
         return None
 
     sources = [
@@ -970,9 +981,13 @@ async def build_import_result_pdf(
         ):
             raise MarkingCodeServiceError("code_not_found")
         artifact_required = code.label_artifact_required
-        if code.label_artifact_pdf is None and not artifact_required:
-            code_import_id = code.import_batch_id
-            assert code_import_id is not None
+        code_import_id = code.import_batch_id
+        assert code_import_id is not None
+        if (
+            code.label_artifact_pdf is None
+            and not artifact_required
+            and not batches[code_import_id].label_artifact_provenance_complete
+        ):
             if code_import_id not in legacy_pdf_payloads:
                 legacy_pdf_payloads[code_import_id] = await _legacy_pdf_payloads_for_import(
                     session,

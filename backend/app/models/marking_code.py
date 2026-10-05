@@ -163,6 +163,9 @@ class MarkingCodeImport(Base):
     accepted_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skip_reasons_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    label_artifact_provenance_complete: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
