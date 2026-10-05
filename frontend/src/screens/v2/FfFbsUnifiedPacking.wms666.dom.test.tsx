@@ -43,6 +43,7 @@ const authHeaders = () => ({ Authorization: 'Bearer wms-666' })
 type RecordedCall = { method: string; path: string; body: unknown }
 let calls: RecordedCall[]
 let state: Record<string, FbsWorkspace>
+let wbScanOrderQueue: Record<string, string[]>
 let root: Root
 let host: HTMLDivElement
 const originalFetch = globalThis.fetch
@@ -167,11 +168,14 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
     if (!supplyId.startsWith('wb') || barcode !== WB_BARCODE) {
       return json({ detail: { code: 'scan_product_not_found', message: 'Товар не найден' } }, 404)
     }
+    const queuedOrderId = wbScanOrderQueue[supplyId]?.shift()
+    const selectedOrder = state[supplyId]!.orders.find((one) => one.id === queuedOrderId)
+      ?? state[supplyId]!.orders[0]!
     return json({
-      scan_id: `scan-${calls.length}`, order_id: `${supplyId}-order`, wb_order_id: 666001,
+      scan_id: `scan-${calls.length}`, order_id: selectedOrder.id, wb_order_id: selectedOrder.wb_order_id,
       replayed: false, binding_target: null, reprint_recovery: null, requires_honest_sign: false,
       qr_asset: {
-        id: `qr-${supplyId}`, kind: 'order_sticker', status: 'ready', content_type: 'image/png',
+        id: `qr-${selectedOrder.id}`, kind: 'order_sticker', status: 'ready', content_type: 'image/png',
         width_mm: 58, height_mm: 40, preview_url: '/assets/wms666-wb.png', download_url: null,
         checksum: null, applied_at: null, error: null,
       },
@@ -220,6 +224,7 @@ beforeAll(() => {
 
 beforeEach(() => {
   calls = []
+  wbScanOrderQueue = {}
   state = {
     'wb-a': workspace('wb-a', 'wb'),
     'wb-b': workspace('wb-b', 'wb'),
@@ -393,6 +398,13 @@ describe('WMS-666 C4/C8: real Ozon workspace inside FfFbsSupplyAssembly', () => 
 
 describe('WMS-666 C5: mixed WB and Ozon scan ownership', () => {
   it('processes WB → Ozon → WB once each, prints QR only for WB, and never needs an active frame', async () => {
+    const secondWbOrder = clone(state['wb-a']!.orders[0]!)
+    secondWbOrder.id = 'wb-a-order-2'
+    secondWbOrder.wb_order_id = 666002
+    secondWbOrder.sticker.code = '666002 0001'
+    state['wb-a']!.orders.push(secondWbOrder)
+    state['wb-a']!.progress = { ...state['wb-a']!.progress, picked: 2, stickers_ready: 2, total: 2 }
+    wbScanOrderQueue['wb-a'] = ['wb-a-order', 'wb-a-order-2']
     saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
     await renderAssembly(['wb-a', 'ozon-a'])
 
@@ -414,6 +426,7 @@ describe('WMS-666 C5: mixed WB and Ozon scan ownership', () => {
     ])
     expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(1)
     expect(dispatchPreparedQr).toHaveBeenCalledTimes(2)
+    expect(new Set(dispatchPreparedQr.mock.calls.map(([request]) => request.idempotencyKey)).size).toBe(2)
     expect(textCount('Начать работу с поставкой')).toBe(0)
     expect(document.querySelector('[role="alert"]')?.textContent ?? '').not.toContain('QR')
   })
