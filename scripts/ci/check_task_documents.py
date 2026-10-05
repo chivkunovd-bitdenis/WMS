@@ -195,12 +195,20 @@ def reviewed_contract_correction(
         return None, set(), [
             f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"
         ]
+    if not isinstance(ledger, dict):
+        return None, set(), [
+            f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
+        ]
+    if ledger.get("task") == task_id and ledger.get("contract_commit") != contract_commit:
+        # One task may acquire several independent contract commits.  Its one
+        # correction ledger applies only to the exact contract named there;
+        # every other contract remains frozen against its own commit.
+        return None, set(), []
     correction = str(ledger.get("correction_commit") or "")
     files = ledger.get("files")
     review = ledger.get("review")
     if (
         ledger.get("task") != task_id
-        or ledger.get("contract_commit") != contract_commit
         or not re.fullmatch(r"[0-9a-f]{40}", correction)
         or not isinstance(files, list)
         or not files
