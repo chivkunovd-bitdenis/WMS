@@ -27,6 +27,9 @@ vi.mock('../../utils/printPreparedQr', async (importOriginal) => ({
   ...await importOriginal<typeof import('../../utils/printPreparedQr')>(),
   dispatchPreparedQrInKiosk: dispatchPreparedQr,
 }))
+vi.mock('../../utils/czLabelPng', () => ({
+  renderCzLabelPng: vi.fn(async () => 'data:image/png;base64,WMS666'),
+}))
 vi.mock('./FfFbsAssemblyPick', () => ({ FfFbsAssemblyPick: () => null }))
 vi.mock('./FbsSupplyHistoryDialog', () => ({ FbsSupplyHistoryDialog: () => null }))
 vi.mock('./FbsPrintPreviewDialog', () => ({ FbsPrintPreviewDialog: () => null }))
@@ -44,11 +47,16 @@ type RecordedCall = { method: string; path: string; body: unknown }
 let calls: RecordedCall[]
 let state: Record<string, FbsWorkspace>
 let wbScanOrderQueue: Record<string, string[]>
+let wbScanNeedsKiz: boolean
+let ozonLookupOrderIds: Record<string, string>
+let deferredStartSupplyIds: Set<string>
+let releaseDeferredStart: Record<string, (() => void) | undefined>
 let root: Root
 let host: HTMLDivElement
 const originalFetch = globalThis.fetch
 
 const clone = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+const ozonLookupKey = (supplyId: string, code: string) => `${supplyId}\u0000${code}`
 
 function order(supplyId: string, marketplace: 'wb' | 'ozon') {
   const ozon = marketplace === 'ozon'
@@ -157,8 +165,16 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   const start = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/start-work$/)
   if (start) {
     const next = state[start[1]!]!
-    next.supply.packaging_task_id ??= `task-${start[1]}`
-    return json(clone(next))
+    const complete = () => {
+      next.supply.packaging_task_id ??= `task-${start[1]}`
+      return json(clone(next))
+    }
+    if (deferredStartSupplyIds.has(start[1]!)) {
+      return new Promise<Response>((resolve) => {
+        releaseDeferredStart[start[1]!] = () => resolve(complete())
+      })
+    }
+    return complete()
   }
 
   const scan = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/scan-auto-print$/)
@@ -173,23 +189,28 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       ?? state[supplyId]!.orders[0]!
     return json({
       scan_id: `scan-${calls.length}`, order_id: selectedOrder.id, wb_order_id: selectedOrder.wb_order_id,
-      replayed: false, binding_target: null, reprint_recovery: null, requires_honest_sign: false,
+      replayed: false, binding_target: null, reprint_recovery: null, requires_honest_sign: wbScanNeedsKiz,
       qr_asset: {
         id: `qr-${selectedOrder.id}`, kind: 'order_sticker', status: 'ready', content_type: 'image/png',
         width_mm: 58, height_mm: 40, preview_url: '/assets/wms666-wb.png', download_url: null,
         checksum: null, applied_at: null, error: null,
       },
-      codes: [], printed_codes: [], shortage: 0, order_errors: [],
+      codes: [], printed_codes: wbScanNeedsKiz ? [{
+        id: `code-${selectedOrder.id}`, cis_code: `cis-${selectedOrder.id}`,
+        has_label_artifact: false, order_product_id: null,
+      }] : [], shortage: 0, order_errors: [],
     })
   }
 
   if (path === '/operations/fbs-orders/kiz/lookup') {
     const supplyId = url.searchParams.get('supply_id')!
     const sticker = url.searchParams.get('sticker')!
-    if (supplyId.startsWith('ozon') && sticker === OZON_POSITION_BARCODE) {
+    const orderId = ozonLookupOrderIds[ozonLookupKey(supplyId, sticker)]
+    const found = state[supplyId]?.orders.find((one) => one.id === orderId)
+    if (supplyId.startsWith('ozon') && found) {
       return json({
-        order_id: `${supplyId}-order`, wb_order_id: -666,
-        product: { name: 'Футболка Ozon, позиция A', image_url: null, barcode: OZON_POSITION_BARCODE, seller_article: 'OZ-A' },
+        order_id: found.id, wb_order_id: found.wb_order_id,
+        product: { name: found.product.name, image_url: null, barcode: found.product.barcode, seller_article: found.product.seller_article },
         current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
         requires_honest_sign: false,
       })
@@ -225,12 +246,19 @@ beforeAll(() => {
 beforeEach(() => {
   calls = []
   wbScanOrderQueue = {}
+  wbScanNeedsKiz = false
+  ozonLookupOrderIds = {}
+  deferredStartSupplyIds = new Set()
+  releaseDeferredStart = {}
   state = {
     'wb-a': workspace('wb-a', 'wb'),
     'wb-b': workspace('wb-b', 'wb'),
     'wb-new': workspace('wb-new', 'wb', null as unknown as string),
     'ozon-a': workspace('ozon-a', 'ozon'),
+    'ozon-b': workspace('ozon-b', 'ozon'),
   }
+  ozonLookupOrderIds[ozonLookupKey('ozon-a', OZON_POSITION_BARCODE)] = 'ozon-a-order'
+  ozonLookupOrderIds[ozonLookupKey('ozon-b', OZON_POSITION_BARCODE)] = 'ozon-b-order'
   state['wb-new']!.supply.packaging_task_id = null
   fetchWorkspace.mockReset().mockImplementation(async (_token, _headers, id: string) => clone(state[id]!))
   openMarkingPrint.mockReset().mockResolvedValue(undefined)
@@ -429,5 +457,99 @@ describe('WMS-666 C5: mixed WB and Ozon scan ownership', () => {
     expect(new Set(dispatchPreparedQr.mock.calls.map(([request]) => request.idempotencyKey)).size).toBe(2)
     expect(textCount('Начать работу с поставкой')).toBe(0)
     expect(document.querySelector('[role="alert"]')?.textContent ?? '').not.toContain('QR')
+  })
+})
+
+describe('WMS-666 review regressions: live settings and Ozon routing', () => {
+  it('uses the visible standalone WB settings changed immediately before the physical scan', async () => {
+    saveFbsScanPrintPreferences(TOKEN, {
+      printQr: false, printChz: false, reprintChz: false, printChzCopies: 1,
+    })
+    wbScanNeedsKiz = true
+    await renderSupply('wb-a')
+
+    const scanBar = document.querySelector<HTMLElement>('[data-testid="fbs-unified-scan"]')!
+    const qr = scanBar.querySelector<HTMLInputElement>('[data-testid="fbs-scan-print-qr-toggle"] input')!
+    const chz = scanBar.querySelector<HTMLInputElement>('[data-testid="fbs-scan-print-chz-toggle"] input')!
+    await act(async () => qr.click())
+    await act(async () => chz.click())
+    await settleUntil(() => Boolean(scanBar.querySelector('[data-testid="fbs-scan-print-chz-copies-plus"]')))
+    await act(async () => scanBar.querySelector<HTMLButtonElement>('[data-testid="fbs-scan-print-chz-copies-plus"]')!.click())
+    expect(qr.checked).toBe(true)
+    expect(chz.checked).toBe(true)
+    expect(scanBar.querySelector('[data-testid="fbs-scan-print-chz-copies-value"]')?.textContent).toBe('2')
+
+    physicalScan(WB_BARCODE)
+    await settleUntil(() => calls.some((call) => call.path.endsWith('/scan-auto-print')), 1_000)
+    const request = calls.find((call) => call.path.endsWith('/scan-auto-print'))
+    expect(request?.body).toEqual(expect.objectContaining({
+      barcode: WB_BARCODE, print_qr: true, print_chz: true,
+    }))
+    await settleUntil(() => dispatchPreparedQr.mock.calls.length === 3, 1_000)
+    expect(dispatchPreparedQr).toHaveBeenCalledTimes(3)
+  })
+
+  it('maps an Ozon position barcode to the posting lookup while boxing only the scanned position', async () => {
+    delete ozonLookupOrderIds[ozonLookupKey('ozon-a', OZON_POSITION_BARCODE)]
+    ozonLookupOrderIds[ozonLookupKey('ozon-a', 'OZON-POSTING-666')] = 'ozon-a-order'
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
+    await renderAssembly(['ozon-a'])
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => calls.some((call) => /\/boxes\/[^/]+\/orders$/.test(call.path)), 750)
+
+    const lookups = calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))
+    expect(lookups.map((call) => new URL(call.path, 'http://wms.test').searchParams.get('sticker')))
+      .toEqual(['OZON-POSTING-666'])
+    expect(calls.find((call) => /\/boxes\/[^/]+\/orders$/.test(call.path))?.body).toEqual({
+      order_ids: [], order_product_ids: ['ozon-a-position-a'],
+    })
+    expect(dispatchPreparedQr).not.toHaveBeenCalled()
+  })
+
+  it('drops a delayed Ozon start-work continuation when the standalone screen has moved from A to B', async () => {
+    state['ozon-a']!.supply.packaging_task_id = null
+    deferredStartSupplyIds.add('ozon-a')
+    await renderSupply('ozon-a')
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => Boolean(releaseDeferredStart['ozon-a']), 750)
+    await renderSupply('ozon-b')
+    await act(async () => {
+      releaseDeferredStart['ozon-a']?.()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-b'))).toHaveLength(0)
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-supplies/ozon-b/boxes/'))).toHaveLength(0)
+  })
+
+  it('lets an unknown child Ozon posting number reach the server lookup and complete its order action', async () => {
+    const childPosting = 'OZON-CHILD-POSTING-666'
+    ozonLookupOrderIds[ozonLookupKey('ozon-a', childPosting)] = 'ozon-a-order'
+    await renderAssembly(['ozon-a'])
+
+    physicalScan(childPosting)
+    await settleUntil(() => calls.some((call) => /\/boxes\/[^/]+\/orders$/.test(call.path)), 750)
+
+    const lookup = calls.find((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))
+    expect(lookup && new URL(lookup.path, 'http://wms.test').searchParams.get('sticker')).toBe(childPosting)
+    expect(calls.some((call) => /\/operations\/fbs-supplies\/ozon-a\/boxes\/[^/]+\/orders$/.test(call.path))).toBe(true)
+  })
+
+  it('releases an unmarked boxless Ozon scan so the next mixed physical scan reaches WB without Escape', async () => {
+    state['ozon-a']!.boxes = []
+    saveFbsScanPrintPreferences(TOKEN, { printQr: false, printChz: false, reprintChz: false })
+    await renderAssembly(['ozon-a', 'wb-a'])
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => calls.some((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a')), 750)
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
+    physicalScan(WB_BARCODE)
+    await settleUntil(() => calls.some((call) => call.path.endsWith('/scan-auto-print')), 750)
+
+    expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(1)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).toBeNull()
+    expect(document.body.textContent).not.toContain('Откройте или создайте короб.')
   })
 })
