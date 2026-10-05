@@ -1,0 +1,95 @@
+{
+  "checked_at_utc": "2026-10-05T09:26:15.559338+00:00",
+  "job": "21079e59afb9acdb",
+  "analyst_model": "gpt-6-astra",
+  "analyst_effort": "high",
+  "source_chat_id": 689889703,
+  "source_range": [
+    109,
+    145
+  ],
+  "telegram_range": [
+    197,
+    233
+  ],
+  "request_sources": [
+    {
+      "id": 108,
+      "chat_id": 689889703,
+      "msg_id": "196",
+      "author_id": "689889703",
+      "ts": 1791190386.0,
+      "text": "Короче \nЭто длинный список сообщений от ФФ бамбук \nЯ тебя тегну щас в чате запомни их \nВыбери модель астра \nТранскриьируй это все \nСведи в кучу проанализируй скрины и текст \nИ пойми что за проблемы у клиента \nВ чат пока ничего не пиши \nПринеси мне список проблем и как их решать"
+    },
+    {
+      "id": 148,
+      "chat_id": 689889703,
+      "msg_id": "238",
+      "author_id": "689889703",
+      "ts": 1791190450.0,
+      "text": "Я тееб выше прислал всю переписку которую надо анализировать \nВ чате ее не ищи том \nСмотри в данный чат - оно все выше тут"
+    }
+  ],
+  "jobs_inventory": [
+    {
+      "id": "c07267557a1adfe1",
+      "source_event_id": 31,
+      "status": "needs_review"
+    },
+    {
+      "id": "6d3c39dc9335f117",
+      "source_event_id": 55,
+      "status": "done"
+    },
+    {
+      "id": "7b12c58a57b8be4b",
+      "source_event_id": 71,
+      "status": "done"
+    },
+    {
+      "id": "1d7feb233e526a20",
+      "source_event_id": 86,
+      "status": "done"
+    },
+    {
+      "id": "6f3e370ab6217c51",
+      "source_event_id": 89,
+      "status": "done"
+    },
+    {
+      "id": "5beb52dad9529727",
+      "source_event_id": 90,
+      "status": "running"
+    },
+    {
+      "id": "430daea97c0b69d5",
+      "source_event_id": 91,
+      "status": "done"
+    },
+    {
+      "id": "c6e81dff38ff470b",
+      "source_event_id": 91,
+      "status": "done"
+    },
+    {
+      "id": "21079e59afb9acdb",
+      "source_event_id": 108,
+      "status": "running"
+    }
+  ],
+  "bot_statement_to_verify": {
+    "text": "Нашлось прямое совпадение с расследованием WMS-632: две поставки Ozon «Бамбука» на те же 30 заказов уже получили внешние статусы доставки, но в WMS не были проведены — остаток не списался и резерв не снялся. Это известный незавершённый сценарий ручной сборки вне WMS, поэтому новую задачу-дубль не создаём.",
+    "status": "sent",
+    "tg_message_id": "241"
+  },
+  "current_db_check": {
+    "status": "denied",
+    "reason": "ToolDenied: choose_bound_client_chat",
+    "other_chat_selected": false,
+    "bypassed": false
+  },
+  "code_sha": "65a9b28e91e25e90d2a78b2becbdcce417404c8b",
+  "branch": "codex/agent-job-21079e59afb9acdb",
+  "media_access": "normal support-agent TelegramClient getFile/download, only file_ids from authorized source rows",
+  "original_authors_dates": "forward metadata not retained; sender identity and ts belong to forwarding"
+}

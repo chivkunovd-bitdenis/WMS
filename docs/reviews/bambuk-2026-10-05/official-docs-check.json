@@ -1,0 +1,14 @@
+[
+  {
+    "url": "https://docs.ozon.ru/api/seller/",
+    "status": 403,
+    "length": 9624,
+    "gtd_present": false
+  },
+  {
+    "url": "https://docs.ozon.ru/api/seller/#operation/PostingAPI_FbsPostingProductExemplarSetV6",
+    "status": 403,
+    "length": 9652,
+    "gtd_present": false
+  }
+]

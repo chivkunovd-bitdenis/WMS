@@ -1,0 +1,27 @@
+{
+  "analyst": "gpt-6-astra",
+  "effort": "high",
+  "additional_audio_method": "local speech decoder, not alternate analyst",
+  "speech_model": "mlx-community/whisper-base-mlx",
+  "model_snapshot": [
+    "1e3e249fb8d01c655324bd6841b1deadffd6d04c"
+  ],
+  "speech_parameters": {
+    "language": "ru",
+    "temperature": 0,
+    "condition_on_previous_text": false
+  },
+  "processed_sources": [
+    115,
+    116,
+    129,
+    133,
+    138,
+    140,
+    142,
+    143,
+    144
+  ],
+  "external_audio_upload": false,
+  "human_listening_claimed": false
+}

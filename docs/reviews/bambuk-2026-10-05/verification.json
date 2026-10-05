@@ -1,0 +1,19 @@
+{
+  "checked_at_utc": "2026-10-05T09:29:28.296437+00:00",
+  "sources_exact": true,
+  "messages": 37,
+  "photos_viewed": 6,
+  "audio_originals": 17,
+  "independent_machine_audio_checks": 9,
+  "media_hashes_verified": 23,
+  "full_original_transcript_preserved": true,
+  "local_markdown_links_valid": true,
+  "json_valid": true,
+  "schema_old_reproduction_and_current_parse": "passed; see schema-check.json",
+  "live_db": "denied by bound-chat scope; no bypass",
+  "product_tests": "not run: report only; offline schema check performed",
+  "production_deploy_verification": "not performed",
+  "telegram_sends": 0,
+  "new_tasks": 0,
+  "product_changes": false
+}

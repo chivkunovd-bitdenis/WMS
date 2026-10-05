@@ -1,0 +1,29 @@
+{
+  "type": "offline schema verification; no provider calls",
+  "prior_list_str": [
+    {
+      "loc": [
+        "products_requiring_gtd",
+        0
+      ],
+      "type": "string_type"
+    }
+  ],
+  "current_requirements": [
+    "1695134284"
+  ],
+  "absent_flag_schema": {
+    "posting_number": "synthetic-no-call",
+    "products": [
+      {
+        "exemplars": [
+          {
+            "exemplar_id": 1,
+            "is_gtd_absent": true
+          }
+        ],
+        "product_id": 1
+      }
+    ]
+  }
+}
