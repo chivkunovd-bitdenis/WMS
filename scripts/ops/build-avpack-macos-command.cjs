@@ -37,6 +37,8 @@ if (!launcher || typeof launcher.launch !== 'function') {
 
 const chromeApp = Application('Google Chrome');
 const targetUrl = 'https://sellerfocus.pro/seller/honest-sign/withdrawals';
+const focusFailureMessage = 'Не удалось безопасно показать подготовленную вкладку Chrome. Подпись и отправка не выполнялись.';
+let originalTargetTabId = null;
 
 function isTargetChromeUrl(value) {
   return value === targetUrl || value === targetUrl + '/' ||
@@ -84,7 +86,11 @@ const result = launcher.launch({
   chrome: {
     running: () => chromeApp.running(),
     tabs: chromeTabs,
-    evaluate: (tabId, source) => findChromeTab(tabId).tab.execute({ javascript: source }),
+    evaluate: (tabId, source) => {
+      if (originalTargetTabId === null) originalTargetTabId = String(tabId);
+      if (String(tabId) !== originalTargetTabId) throw new Error('Идентификатор целевой вкладки изменился.');
+      return findChromeTab(tabId).tab.execute({ javascript: source });
+    },
   },
   helperSource,
   maxPolls: 120,
@@ -97,9 +103,15 @@ if (
 ) {
   throw new Error('Запуск не подтвердил безопасное открытие окна сертификата.');
 }
-const readyTabs = chromeTabs().filter((tab) => isTargetChromeUrl(tab.url));
-if (readyTabs.length !== 1) throw new Error('Целевая вкладка изменилась после подготовки.');
-focusChromeTab(readyTabs[0].id);
+try {
+  const readyTabs = chromeTabs().filter((tab) => isTargetChromeUrl(tab.url));
+  if (originalTargetTabId === null || readyTabs.length !== 1 || String(readyTabs[0].id) !== originalTargetTabId) {
+    throw new Error('Целевая вкладка изменилась после подготовки.');
+  }
+  focusChromeTab(originalTargetTabId);
+} catch (_) {
+  throw new Error(focusFailureMessage);
+}
 console.log('Готово: выбраны ровно 80 проверенных КИЗ и открыто штатное окно сертификата. Скрипт ничего не подписывал и не отправлял.');
 WMS665_JXA
 `;
