@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import subprocess
 import tempfile
 import unittest
@@ -187,6 +188,55 @@ class GitTests(unittest.TestCase):
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertEqual(len(errors), 1)
         self.assertIn("изменён контракт тестов WMS-700 после его фиксации", errors[0])
+
+    def test_reviewed_contract_correction_becomes_new_frozen_baseline(self):
+        rollout = self.rollout()
+        path = "backend/tests/test_contract.py"
+        self.write(path, "def test_contract(): assert rendered_column('size')\n")
+        contract = self.commit("WMS-710: контракт тестов")
+        self.write(path, "def test_contract(): assert rendered_cell('size')\n")
+        correction = self.commit("WMS-710: исправить ложную PDF-проверку контракта")
+        ledger = {
+            "task": "WMS-710",
+            "contract_commit": contract,
+            "correction_commit": correction,
+            "files": [path],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            "docs/reviews/contract-corrections/WMS-710.json",
+            json.dumps(ledger, ensure_ascii=False) + "\n",
+        )
+        self.commit("WMS-710: зафиксировать проверенную коррекцию контракта")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+        self.write(path, "def test_contract(): assert True\n")
+        self.commit("WMS-710 weaken corrected contract")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("изменён контракт тестов WMS-710", errors[0])
+
+    def test_contract_correction_ledger_rejects_unreviewed_or_extra_files(self):
+        rollout = self.rollout()
+        path = "backend/tests/test_contract.py"
+        self.write(path, "def test_contract(): pass\n")
+        contract = self.commit("WMS-711: контракт тестов")
+        self.write(path, "def test_contract(): assert True\n")
+        correction = self.commit("WMS-711: correction")
+        ledger = {
+            "task": "WMS-711",
+            "contract_commit": contract,
+            "correction_commit": correction,
+            "files": [path, "app.py"],
+            "review": {"model": "gpt-6-astra", "effort": "medium", "verdict": "PASS"},
+        }
+        self.write(
+            "docs/reviews/contract-corrections/WMS-711.json",
+            json.dumps(ledger) + "\n",
+        )
+        self.commit("WMS-711 invalid correction ledger")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("реестр коррекции" in error for error in errors))
 
     def test_similarly_named_commit_does_not_freeze_files(self):
         rollout = self.rollout()
