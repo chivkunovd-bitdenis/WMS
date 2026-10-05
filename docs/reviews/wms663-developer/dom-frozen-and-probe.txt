@@ -1,0 +1,59 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms662-663-priority/frontend
+
+stdout | src/screens/v2/OzonExemplarDocuments.wms663.developer.dom.test.tsx > developer probe: contextual Save preserves input, error and current version
+Unscoped frozen helper selects shipment Save: shipment-save disabled: true
+
+ ✓ src/screens/v2/OzonExemplarDocuments.wms663.developer.dom.test.tsx > developer probe: contextual Save preserves input, error and current version 225ms
+ × src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx > WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется 560ms
+   → expected [ { method: 'GET', …(2) }, …(1) ] to deep equally contain { method: 'PUT', …(2) }
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx > WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется
+AssertionError: expected [ { method: 'GET', …(2) }, …(1) ] to deep equally contain { method: 'PUT', …(2) }
+
+- Expected:
+{
+  "body": {
+    "exemplar_id": 81,
+    "expected_version": 4,
+    "gtd": "001/ABC-09",
+    "is_gtd_absent": false,
+    "is_rnpt_absent": false,
+    "product_id": 663001,
+    "rnpt": null,
+  },
+  "method": "PUT",
+  "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+}
+
++ Received:
+[
+  {
+    "body": null,
+    "method": "GET",
+    "path": "/operations/packaging-tasks/task-wms663",
+  },
+  {
+    "body": null,
+    "method": "GET",
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+  },
+]
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx:279:22
+    277|     await settle()
+    278|
+    279|     expect(requests).toContainEqual({
+       |                      ^
+    280|       method: 'PUT',
+    281|       path: DOCUMENTS_PATH,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 1 passed (2)
+   Start at  01:34:59
+   Duration  105.65s (transform 772ms, setup 0ms, collect 105.32s, tests 786ms, environment 1.52s, prepare 253ms)

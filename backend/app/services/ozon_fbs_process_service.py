@@ -48,11 +48,22 @@ from app.schemas.ozon_fbs_api import (
     OzonV5FbsPostingProductExemplarValidateV5RequestProductExemplar,
     OzonV5FbsPostingProductExemplarValidateV5RequestProductExemplarMark,
     OzonV5FbsPostingProductExemplarValidateV5Response,
-    OzonV6FbsPostingProductExemplarCreateOrGetV6Request,
     OzonV6FbsPostingProductExemplarCreateOrGetV6Response,
-    OzonV6FbsPostingProductExemplarSetV6Request,
 )
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
+from app.services.ozon_exemplar_documents_service import (
+    apply_saved_documents,
+    checkpoint,
+    claim_exemplar_write,
+    document_data,
+    fetch_exemplar_snapshot,
+    get_exemplar_documents,
+    resume_exemplar_document_check,
+    save_exemplar_documents,
+    send_exemplar_payload,
+    snapshot_products,
+    validate_exemplar_snapshot,
+)
 from app.services.ozon_fbs_errors import OzonFbsProcessError
 from app.services.ozon_fbs_errors import decode_file as _decode_file
 from app.services.ozon_marking_position_service import (
@@ -68,8 +79,11 @@ __all__ = [
     "OzonFbsProcessError",
     "OzonHandoffProgress",
     "cancel_posting",
+    "get_exemplar_documents",
     "handoff_supply",
     "read_marking_status",
+    "resume_exemplar_document_check",
+    "save_exemplar_documents",
     "submit_marking",
 ]
 
@@ -322,92 +336,81 @@ async def _ship_products(session: AsyncSession, order: FbsOrder) -> list[dict[st
 _MARK_TYPES: dict[str, str] = {"sgtin": "mandatory_mark", "uin": "jw_uin", "imei": "imei"}
 
 
-async def _full_exemplar_products(
+async def merge_local_exemplar_marks(
     session: AsyncSession,
     order: FbsOrder,
+    products: list[dict[str, object]],
     *,
-    current_marking: FbsOrderMarking,
-    current_product_id: int,
-    current_exemplar_id: int,
-    current_mark_type: str,
-) -> list[dict[str, object]]:
-    """Собрать полный набор экземпляров отправления, а не один последний код.
+    current_marking: FbsOrderMarking | None = None,
+    current_product_id: int | None = None,
+    current_exemplar_id: int | None = None,
+    current_mark_type: str | None = None,
+) -> None:
+    """Overlay current local codes by exemplar/type, keeping other remote fields."""
+    from typing import Any, cast
 
-    Спецификация метода `/v6/fbs/posting/product/exemplar/set` требует прямо:
-    «Всегда передавайте полный набор данных по экземплярам и продуктам».
-    Мы же слали ровно один только что отсканированный код, поэтому на
-    отправлении из трёх единиц у Ozon оставался бы только последний из них, а
-    два предыдущих терялись при каждой следующей отправке.
-    """
     positions = {
-        position.id: position
-        for position in (
-            await session.execute(
+        row.id: row.ozon_sku
+        for row in (
+            await session.scalars(
                 select(FbsOrderProduct).where(FbsOrderProduct.order_id == order.id)
             )
-        )
-        .scalars()
-        .all()
+        ).all()
     }
-    markings = list(
+    rows = list(
         (
-            await session.execute(
+            await session.scalars(
                 select(FbsOrderMarking)
                 .where(FbsOrderMarking.order_id == order.id)
                 .order_by(FbsOrderMarking.created_at)
             )
-        )
-        .scalars()
-        .all()
+        ).all()
     )
-    # ключ — (product_id Ozon, exemplar_id); значение — коды этого экземпляра
-    grouped: dict[tuple[int, int], list[dict[str, str]]] = {}
-
-    def _add(product_id: int, exemplar_id: int, value: str, mark_type: str) -> None:
-        marks = grouped.setdefault((product_id, exemplar_id), [])
-        if not any(mark["mark"] == value and mark["mark_type"] == mark_type for mark in marks):
-            marks.append({"mark": value, "mark_type": mark_type})
-
-    for row in markings:
-        if row.id == current_marking.id:
+    local: dict[tuple[int, int, str], list[dict[str, str]]] = {}
+    for row in rows:
+        if current_marking is None and row.meta_status != "accepted":
             continue
-        if row.meta_status in {"rejected", "replacement_required"}:
+        kind = _MARK_TYPES.get(row.kind)
+        sku = positions.get(row.order_product_id) if row.order_product_id else None
+        exemplar = (row.meta_details_json or {}).get("exemplar_id")
+        if row.id == getattr(current_marking, "id", None) or row.meta_status in {
+            "rejected",
+            "replacement_required",
+        }:
             continue
-        mark_type = _MARK_TYPES.get(row.kind)
-        if mark_type is None:
+        if kind and sku is not None and isinstance(exemplar, int):
+            local.setdefault((int(sku), exemplar, kind), []).append(
+                {"mark": row.value, "mark_type": kind}
+            )
+    if (
+        current_marking is not None
+        and current_product_id is not None
+        and current_exemplar_id is not None
+        and current_mark_type is not None
+    ):
+        local[(current_product_id, current_exemplar_id, current_mark_type)] = [
+            {"mark": current_marking.value, "mark_type": current_mark_type}
+        ]
+    typed_products = cast(list[dict[str, Any]], products)
+    for (sku, exemplar_id, kind), marks in local.items():
+        product = next((item for item in typed_products if item["product_id"] == sku), None)
+        if product is None:
             continue
-        details = row.meta_details_json if isinstance(row.meta_details_json, dict) else {}
-        exemplar_id = details.get("exemplar_id")
-        if not isinstance(exemplar_id, int):
+        exemplar = next(
+            (item for item in product["exemplars"] if item["exemplar_id"] == exemplar_id), None
+        )
+        if exemplar is None:
             continue
-        position = positions.get(row.order_product_id) if row.order_product_id else None
-        sku = position.ozon_sku if position is not None else None
-        if sku is None:
-            # Экземпляр без позиции нельзя отнести к товару; молча приписать его
-            # к чужому product_id — хуже, чем не отправить.
-            continue
-        if (
-            int(sku) == current_product_id
-            and exemplar_id == current_exemplar_id
-            and mark_type == current_mark_type
-        ):
-            # A replacement supplies the new value for this exact exemplar/type.
-            # Other exemplars and other kinds on this exemplar remain in the full set.
-            continue
-        _add(int(sku), exemplar_id, row.value, mark_type)
-
-    _add(current_product_id, current_exemplar_id, current_marking.value, current_mark_type)
-
-    products: dict[int, list[dict[str, object]]] = {}
-    for (product_id, exemplar_id), marks in grouped.items():
-        products.setdefault(product_id, []).append({"exemplar_id": exemplar_id, "marks": marks})
-    return [
-        {
-            "product_id": product_id,
-            "exemplars": sorted(exemplars, key=lambda item: int(str(item["exemplar_id"]))),
-        }
-        for product_id, exemplars in sorted(products.items())
-    ]
+        exemplar["marks"] = [
+            mark for mark in exemplar.get("marks", []) or [] if mark.get("mark_type") != kind
+        ] + marks
+    # Preserve all remote exemplars, including those with no code yet.
+    for product in typed_products:
+        for exemplar in product["exemplars"]:
+            exemplar.setdefault("marks", [])
+    typed_products.sort(
+        key=lambda item: (item["product_id"] != current_product_id, item["product_id"])
+    )
 
 
 async def submit_marking(
@@ -428,15 +431,29 @@ async def submit_marking(
     if mark_type is None:
         return OzonMarkingResult(False, False, "unsupported_mark_type", {})
 
-    exemplars = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v6/fbs/posting/product/exemplar/create-or-get",
-        request=OzonV6FbsPostingProductExemplarCreateOrGetV6Request(posting_number=posting_number),
-        response_type=OzonV6FbsPostingProductExemplarCreateOrGetV6Response,
-        read=False,
+    pending = document_data(order)
+    if pending.get("state") in {"checking", "unknown"}:
+        await resume_exemplar_document_check(
+            session,
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            provider=provider,
+            client_id=client_id,
+            api_key=api_key,
+        )
+    write_data = await claim_exemplar_write(
+        session, order, None, kind="marking", choice={"marking_id": str(marking.id)}
     )
+    try:
+        snapshot = await fetch_exemplar_snapshot(
+            provider, posting_number=posting_number, client_id=client_id, api_key=api_key
+        )
+        await validate_exemplar_snapshot(session, order, snapshot)
+    except (MarketplaceProviderError, OzonFbsProcessError) as exc:
+        write_data.update(state="editable", in_flight=False, errors=[exc.code])
+        await checkpoint(session, order.tenant_id, order.id, write_data)
+        raise
+    exemplars = OzonV6FbsPostingProductExemplarCreateOrGetV6Response.model_validate(snapshot)
     # `products` — необязательное поле ответа. Пустой ответ (в том числе от
     # локального фейка) давал здесь `None`, итерация по нему бросала TypeError,
     # который никто не ловил до самой ручки, и оператор получал 500 вместо
@@ -490,6 +507,8 @@ async def submit_marking(
                 for checked_mark in item.marks or []:
                     errors.extend(checked_mark.errors or [])
         reason = "; ".join(dict.fromkeys(errors)) or "ozon_mark_rejected"
+        write_data.update(state="rejected", in_flight=False, errors=errors)
+        await checkpoint(session, order.tenant_id, order.id, write_data)
         return OzonMarkingResult(
             False,
             False,
@@ -497,45 +516,43 @@ async def submit_marking(
             {"exemplar_id": exemplar_id, "validation_errors": list(dict.fromkeys(errors))},
         )
 
-    set_request = OzonV6FbsPostingProductExemplarSetV6Request.model_validate(
-        {
-            "posting_number": posting_number,
-            "products": await _full_exemplar_products(
-                session,
-                order,
-                current_marking=marking,
-                current_product_id=product_id,
-                current_exemplar_id=exemplar_id,
-                current_mark_type=mark_type,
-            ),
-        }
+    products = snapshot_products(snapshot)
+    apply_saved_documents(products, write_data)
+    await merge_local_exemplar_marks(
+        session,
+        order,
+        products,
+        current_marking=marking,
+        current_product_id=product_id,
+        current_exemplar_id=exemplar_id,
+        current_mark_type=mark_type,
     )
-    await provider.call(
-        client_id=client_id,
-        api_key=api_key,
-        path="/v6/fbs/posting/product/exemplar/set",
-        payload=_payload(set_request),
+    write_data["snapshot"] = snapshot
+    write_data["choice"].update(
+        product_id=product_id, exemplar_id=exemplar_id, mark=marking.value, mark_type=mark_type
     )
-    status = await _call(
-        provider,
-        client_id=client_id,
-        api_key=api_key,
-        path="/v5/fbs/posting/product/exemplar/status",
-        request=OzonV5FbsPostingProductExemplarStatusV5Request(posting_number=posting_number),
-        response_type=OzonV5FbsPostingProductExemplarStatusV5Response,
-        read=True,
+    payload = {"posting_number": posting_number, "products": products}
+    if snapshot.get("multi_box_qty") is not None:
+        payload["multi_box_qty"] = snapshot["multi_box_qty"]
+    await send_exemplar_payload(
+        session, order, write_data, payload, provider=provider, client_id=client_id, api_key=api_key
+    )
+    latest = document_data(order)
+    status = OzonV5FbsPostingProductExemplarStatusV5Response.model_validate(
+        latest.get("last_status", {})
     )
     details = {"status": status.status, "exemplar_id": exemplar_id}
+    if latest.get("state") == "unknown" and not latest.get("set_acknowledged"):
+        return OzonMarkingResult(False, True, None, details)
+    if latest.get("state") == "rejected" and latest.get("errors"):
+        return OzonMarkingResult(False, False, "; ".join(latest["errors"]), details)
     if status.status == "ship_available":
         return OzonMarkingResult(True, False, None, details)
     if status.status == "validation_in_process":
         return OzonMarkingResult(False, True, None, details)
     if status.status in {"ship_not_available", "update_not_available"}:
         return OzonMarkingResult(False, False, status.status, details)
-    raise OzonFbsProcessError(
-        "ozon_exemplar_unknown_status",
-        f"Ozon вернул неизвестный статус маркировки: {status.status or 'пусто'}.",
-    )
+    return OzonMarkingResult(False, True, None, details)
 
 
 async def read_marking_status(

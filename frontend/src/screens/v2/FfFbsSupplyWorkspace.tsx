@@ -1,3 +1,4 @@
+import { OzonExemplarDocuments } from './OzonExemplarDocuments'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
@@ -3433,6 +3434,7 @@ export function FfFbsSupplyWorkspace({
                                 {markingView.label}{markingView.reason ? `: ${markingView.reason}` : ''}
                               </Typography>
                             ) : null}
+                            {isOzonSupply ? <OzonExemplarDocuments key={`${workspace.supply.id}:${order.id}`} orderId={order.id} token={token} authHeaders={authHeaders} /> : null}
                           </Box>
                           {packingShowsMarkingAvailable ? (
                             <Box
