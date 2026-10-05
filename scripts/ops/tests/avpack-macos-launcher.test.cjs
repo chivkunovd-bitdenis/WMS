@@ -5,6 +5,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const vm = require('node:vm');
+const fs = require('node:fs');
+const path = require('node:path');
 const { launch } = require('../avpack-macos-launcher.js');
 
 const URL_EXACT = 'https://sellerfocus.pro/seller/honest-sign/withdrawals';
@@ -211,4 +213,27 @@ test('does not accept malformed browser status as readiness', async () => {
   const f = fixture({ malformedStatus: true });
   await rejectsSafely(f);
   assert.ok(f.sandbox.__executions.length <= 1);
+});
+
+test('one executable macOS command embeds exact reviewed sources and needs only system JXA', () => {
+  const commandPath = path.join(__dirname, '../avpack-sold-kiz.command');
+  const command = fs.readFileSync(commandPath, 'utf8');
+  assert.ok((fs.statSync(commandPath).mode & 0o111) !== 0, 'the command must be executable');
+  assert.match(command, /^#!\/bin\/zsh\r?\n/);
+  assert.match(command, /\/usr\/bin\/osascript -l JavaScript\b/);
+  for (const [symbol, filename] of [
+    ['HELPER_BASE64', 'avpack-sold-kiz-filter.js'],
+    ['LAUNCHER_BASE64', 'avpack-macos-launcher.js'],
+  ]) {
+    const declarations = [...command.matchAll(new RegExp(`^const ${symbol} = '([A-Za-z0-9+/]+={0,2})';$`, 'gm'))];
+    assert.equal(declarations.length, 1, `exactly one unambiguous ${symbol} source is required`);
+    const encoded = declarations[0][1];
+    const decoded = Buffer.from(encoded, 'base64');
+    assert.equal(decoded.toString('base64'), encoded, 'base64 must be canonical and complete');
+    assert.deepEqual(decoded, fs.readFileSync(path.join(__dirname, '..', filename)));
+  }
+  // Source is embedded, never downloaded at launch. The wrapper must not
+  // install runtimes or modify the user's permissions or keychain.
+  assert.doesNotMatch(command, /\b(?:curl|wget|node|nodejs|npm|npx|python\d*|pip\d*|brew)\b/i);
+  assert.doesNotMatch(command, /\b(?:tccutil|sudo|security)\b|defaults\s+write|doShellScript|fetch\s*\(|XMLHttpRequest|NSURLSession|NSURLConnection/i);
 });
