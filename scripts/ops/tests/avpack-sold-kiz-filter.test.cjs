@@ -157,6 +157,7 @@ test('the temporary filter never intercepts POST or operation URLs', async () =>
   await h.helper.run({ mode: 'execute' });
   const post = await h.root.fetch(`${REGISTRY}/operations`, { method: 'POST', body: '{}' });
   assert.equal(post.status, 202);
+  assert.equal(h.root.fetch, h.originalFetch, 'the first operation POST must remove the stale registry filter');
   const operationCalls = h.calls.filter(call => call.url.pathname.endsWith('/operations'));
   assert.equal(operationCalls.length, 1);
   assert.equal(operationCalls[0].method, 'POST');
@@ -202,4 +203,3 @@ test('wrong origin or route aborts without a request', async () => {
   await assert.rejects(() => h.helper.run({ mode: 'execute' }));
   assert.equal(h.calls.length, 0);
 });
-
