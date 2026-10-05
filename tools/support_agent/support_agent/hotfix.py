@@ -94,9 +94,20 @@ class HotfixRunner:
     def git(self, *args: str, cwd: str | Path | None = None) -> str:
         """Git в рабочей копии, которую правил недоверенный код, запускается с жёсткими настройками:
         без fsmonitor и хуков, без внешних драйверов diff, без системного конфига (N1)."""
+        result = self.git_result(*args, cwd=cwd)
+        if result.rc != 0:
+            raise StepFailed((result.err or result.out or "git failed")[-1000:])
+        return result.out
+
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        """Return a hardened Git result when a caller must inspect a conflict exit code."""
         if self._in_worktree(cwd):
-            return self.must(["/usr/bin/env", "GIT_CONFIG_NOSYSTEM=1", "git", *GIT_HARDEN, *args], cwd)
-        return self.must(["git", *args], cwd)
+            return self.run(
+                ["/usr/bin/env", "GIT_CONFIG_NOSYSTEM=1", "git", *GIT_HARDEN, *args],
+                cwd, timeout,
+            )
+        return self.run(["git", *args], cwd, timeout)
 
     def trusted_admin_dir(self, path: str | Path) -> Path:
         """Каталог метаданных worktree берём из ДОВЕРЕННОГО основного .git (недоступен песочнице)."""
@@ -297,7 +308,8 @@ class HotfixRunner:
         with self.store.transaction():
             d = self.store.data(tid)
             current = dict(d.get("hotfix") or {})
-            if current.get("hold_requested"):
+            if (current.get("hold_requested")
+                    or (d.get("night") and not d["night"].get("release_authorized"))):
                 h.clear()
                 h.update(current)
                 return False
@@ -543,7 +555,8 @@ class HotfixRunner:
         try:
             res, result = self.p.llm.ask_json(
                 "review", prompt, ticket_id=tid, mode="readonly", cwd=h["path"],
-                exclude_cli=h.get("dev_cli"),
+                cli_only="codex" if h.get("frontend") else None,
+                exclude_cli=None if h.get("frontend") else h.get("dev_cli"),
             )
         except LlmError:
             raise StepFailed(

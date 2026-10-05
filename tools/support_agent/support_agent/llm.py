@@ -400,6 +400,12 @@ class LlmRouter:
 
     def model_for(self, cli: str, role: str) -> str | None:
         model = self.cfg.llm.models.get(cli, {}).get(role)
+        if role in ("frontend", "mockup") and model:
+            required = {"claude": "sonnet", "codex": "gpt-5.6-sol"}.get(cli)
+            if model != required:
+                raise ValueError(f"{role} on {cli} must use {required}, got {model!r}")
+        if role == "review" and cli == "codex" and model != "gpt-6-astra":
+            raise ValueError(f"Codex review must use gpt-6-astra, got {model!r}")
         if model and "astra" in model.lower() and role != "review":
             # Astra — только ревьюер (решение владельца); ошибка в конфиге не должна её запустить.
             raise ValueError(f"Astra is reviewer-only, but configured for role {role!r}")
@@ -408,13 +414,18 @@ class LlmRouter:
     def effort_for(self, cli: str, role: str) -> str | None:
         if cli != "codex":
             return None
+        if role == "review":
+            return "high"
         return "low" if role == "filter" else self.cfg.llm.codex_effort
 
     def candidates(
         self, role: str, cli_only: str | None, exclude_cli: str | None
     ) -> list[tuple[str, str]]:
         result = []
-        for cli in self.available_clis():
+        available = self.available_clis()
+        ordered = ([cli for cli in ("claude", "codex") if cli in available]
+                   if role in ("frontend", "mockup") else available)
+        for cli in ordered:
             if cli_only and cli != cli_only:
                 continue
             if exclude_cli and cli == exclude_cli:
@@ -640,15 +651,16 @@ class LlmRouter:
             argv += ["-c", f'model_reasoning_effort="{effort}"']
         # Пользовательские настройки Codex (MCP, хуки, плагины) не подгружаем. У Codex ВО ВСЕХ
         # режимах отключены командная оболочка и внешние инструменты (проверено вживую). Разработчик
-        # (write) только правит файлы через apply_patch в worktree; аналитик (readonly) читает проект
-        # лишь через доверенный MCP-читатель readonly_mcp (только чтение внутри корня, под
-        # строгим sandbox-exec); проверки делает диспетчер. Модельных команд у Codex нет.
+        # (write) читает проект лишь через доверенный MCP-читатель readonly_mcp и правит файлы через
+        # apply_patch в worktree; аналитик (readonly) использует тот же читатель. Сам читатель допускает
+        # только чтение внутри корня под строгим sandbox-exec; проверки делает диспетчер. Модельных
+        # команд у Codex нет.
         argv += ["--ignore-user-config", "--ignore-rules"]
         for feature in CODEX_DISABLED_FEATURES:
             argv += ["--disable", feature]
         for setting in CODEX_EXTRA_CONFIG:
             argv += ["-c", setting]
-        if mode == "readonly" and cwd:
+        if mode in ("readonly", "write") and cwd:
             argv += self.mcp_args(cwd, with_db=self.with_prod_db(role, mode, db_role), db_log=db_log,
                                   db_role=db_role)
         sbx_mode = {"text": "read-only", "readonly": "read-only", "write": "workspace-write"}[mode]
