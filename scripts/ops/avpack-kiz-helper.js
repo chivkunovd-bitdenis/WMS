@@ -37,11 +37,10 @@
     }),
   ]);
 
-  const KNOWN_BLOCKER = Object.freeze({
-    code: 'seller_billing_inn_missing_or_invalid',
+  const PROFILE_PREFLIGHT = Object.freeze({
     observedAt: '2026-10-05',
-    source: 'production read-only billing_profiles',
-    requiresNewVerification: true,
+    source: 'WB seller-info and production billing_profiles readback',
+    inn: '132608771877',
   });
 
   class HelperError extends Error {
@@ -64,17 +63,68 @@
   const normalizedText = (node) => String(node?.textContent ?? '').replace(/\s+/g, ' ').trim();
 
   function createDomAdapter(document) {
+    const pageAndTable = () => {
+      if (!document || typeof document.querySelectorAll !== 'function') {
+        throw new HelperError('Не удалось проверить экран: DOM браузера недоступен.');
+      }
+      const pages = [...document.querySelectorAll('[data-testid="seller-kiz-withdrawal-page"]')];
+      if (pages.length !== 1) {
+        throw new HelperError('Ожидался ровно один экран вывода КИЗ.');
+      }
+      const page = pages[0];
+      const tables = [...page.querySelectorAll('table[aria-label="КИЗ для вывода из оборота"]')];
+      if (tables.length !== 1) {
+        throw new HelperError('Таблица КИЗ не найдена или отображается неоднозначно.');
+      }
+      return { page, table: tables[0] };
+    };
+
+    const targetCheckbox = (table, target) => {
+      const bodyRows = [...table.querySelectorAll('tbody tr')];
+      const matchingRows = bodyRows.filter((row) =>
+        [...row.querySelectorAll('a, button')].some(
+          (link) => normalizedText(link) === target.wb_order_id,
+        ),
+      );
+      if (matchingRows.length !== 1) return null;
+      const row = matchingRows[0];
+      const codes = [...row.querySelectorAll('code')].filter(
+        (code) => normalizedText(code) === compactKiz(target.cis),
+      );
+      const checkboxes = [...row.querySelectorAll('input[type="checkbox"]')];
+      const hasExpectedStatus = [...row.querySelectorAll('*')].some(
+        (element) => normalizedText(element) === 'Не выведен',
+      );
+      if (
+        codes.length !== 1 ||
+        checkboxes.length !== 1 ||
+        checkboxes[0].disabled ||
+        !hasExpectedStatus
+      ) {
+        return null;
+      }
+      return checkboxes[0];
+    };
+
+    const actionButton = (page) => {
+      const buttons = [...page.querySelectorAll('button')].filter((button) =>
+        /^\u0412\u044b\u0432\u0435\u0441\u0442\u0438 \u0438\u0437 \u043e\u0431\u043e\u0440\u043e\u0442\u0430 \(\d+\)$/.test(normalizedText(button)),
+      );
+      return buttons.length === 1 ? buttons[0] : null;
+    };
+
+    const waitFor = async (predicate, message) => {
+      for (let attempt = 0; attempt < 50; attempt += 1) {
+        const value = predicate();
+        if (value) return value;
+        await new Promise((resolve) => root?.setTimeout(resolve, 100));
+      }
+      throw new HelperError(message);
+    };
+
     return {
       async inspectSelection(targets) {
-        if (!document || typeof document.querySelectorAll !== 'function') {
-          throw new HelperError('Не удалось проверить экран: DOM браузера недоступен.');
-        }
-
-        const pages = [...document.querySelectorAll('[data-testid="seller-kiz-withdrawal-page"]')];
-        if (pages.length !== 1) {
-          throw new HelperError('Ожидался ровно один экран вывода КИЗ.');
-        }
-        const page = pages[0];
+        const { page, table } = pageAndTable();
 
         if (document.querySelector('[role="dialog"]')) {
           throw new HelperError('Закройте открытый диалог перед проверкой.');
@@ -89,57 +139,51 @@
           throw new HelperError('Установите период «Передано WB» 18–19.09.2026.');
         }
 
-        const tables = [...page.querySelectorAll('table[aria-label="КИЗ для вывода из оборота"]')];
-        if (tables.length !== 1) {
-          throw new HelperError('Таблица КИЗ не найдена или отображается неоднозначно.');
-        }
-        const table = tables[0];
-        const bodyRows = [...table.querySelectorAll('tbody tr')];
         const checkedRows = table.querySelectorAll('tbody input[type="checkbox"]:checked').length;
 
-        const actionButtons = [...page.querySelectorAll('button')].filter((button) =>
-          /^\u0412\u044b\u0432\u0435\u0441\u0442\u0438 \u0438\u0437 \u043e\u0431\u043e\u0440\u043e\u0442\u0430 \(\d+\)$/.test(normalizedText(button)),
-        );
-        if (actionButtons.length !== 1) {
+        const action = actionButton(page);
+        if (!action) {
           throw new HelperError('Кнопка вывода из оборота не найдена или имеет неожиданную подпись.');
         }
-        const actionMatch = normalizedText(actionButtons[0]).match(/\((\d+)\)$/);
+        const actionMatch = normalizedText(action).match(/\((\d+)\)$/);
         const actionCount = Number(actionMatch?.[1]);
-
-        let targetsReady = true;
-        for (const target of targets) {
-          const matchingRows = bodyRows.filter((row) =>
-            [...row.querySelectorAll('a, button')].some(
-              (link) => normalizedText(link) === target.wb_order_id,
-            ),
-          );
-          if (matchingRows.length !== 1) {
-            targetsReady = false;
-            continue;
-          }
-
-          const row = matchingRows[0];
-          const codes = [...row.querySelectorAll('code')].filter(
-            (code) => normalizedText(code) === compactKiz(target.cis),
-          );
-          const checkboxes = [...row.querySelectorAll('input[type="checkbox"]')];
-          const hasExpectedStatus = [...row.querySelectorAll('*')].some(
-            (element) => normalizedText(element) === 'Не выведен',
-          );
-          if (
-            codes.length !== 1 ||
-            checkboxes.length !== 1 ||
-            checkboxes[0].disabled ||
-            !hasExpectedStatus
-          ) {
-            targetsReady = false;
-          }
-        }
 
         return {
           selectedCount: Math.max(checkedRows, Number.isFinite(actionCount) ? actionCount : 0),
-          targetsReady,
+          targetsReady: targets.every((target) => Boolean(targetCheckbox(table, target))),
         };
+      },
+
+      async selectAndOpen(targets) {
+        const { page, table } = pageAndTable();
+        const checkboxes = targets.map((target) => targetCheckbox(table, target));
+        if (checkboxes.some((checkbox) => !checkbox)) {
+          throw new HelperError('Строки изменились перед выделением. Запустите dry-run заново.');
+        }
+        const clicked = [];
+        try {
+          for (const checkbox of checkboxes) {
+            checkbox.click();
+            clicked.push(checkbox);
+          }
+          const action = await waitFor(() => {
+            const button = actionButton(page);
+            const count = Number(normalizedText(button).match(/\((\d+)\)$/)?.[1]);
+            return button && !button.disabled && count === targets.length ? button : null;
+          }, 'Не удалось подтвердить точное выделение КИЗ на экране.');
+          action.click();
+          await waitFor(
+            () => [...document.querySelectorAll('[role="dialog"]')].some(
+              (dialog) => normalizedText(dialog).includes('Выберите сертификат'),
+            ),
+            'Штатный диалог выбора сертификата не открылся.',
+          );
+        } catch (error) {
+          for (const checkbox of clicked) {
+            if (checkbox.checked) checkbox.click();
+          }
+          throw error;
+        }
       },
     };
   }
@@ -330,18 +374,6 @@
       validateIdentity(await requestJson('/api/auth/me', token));
       verifyTargets(await readRegistry(token), targets);
 
-      if (mode === 'execute') {
-        throw new HelperError(
-          `Выполнение остановлено: ${KNOWN_BLOCKER.code}. Нужны новая production-проверка и новая версия помощника.`,
-          KNOWN_BLOCKER.code,
-        );
-      }
-
-      const sessionTokenNow = readToken();
-      if (sessionTokenNow !== token) {
-        throw new HelperError('Сессия seller-кабинета изменилась во время проверки. Запустите dry-run заново.');
-      }
-
       let inspection;
       try {
         inspection = await ui.inspectSelection(targets.map(cloneTarget));
@@ -350,21 +382,45 @@
         throw new HelperError('Не удалось безопасно проверить видимый реестр КИЗ.');
       }
       if (!inspection || inspection.selectedCount !== 0) {
-        throw new HelperError('Перед dry-run снимите все ранее выбранные КИЗ.');
+        throw new HelperError('Перед запуском снимите все ранее выбранные КИЗ.');
       }
       if (inspection.targetsReady !== true) {
         throw new HelperError('Не все проверенные КИЗ однозначно видны и доступны в таблице.');
       }
 
+      const sessionTokenNow = readToken();
+      if (sessionTokenNow !== token) {
+        throw new HelperError('Сессия seller-кабинета изменилась во время проверки. Запустите dry-run заново.');
+      }
+
+      if (mode === 'execute') {
+        try {
+          await ui.selectAndOpen(targets.map(cloneTarget));
+        } catch (error) {
+          if (error instanceof HelperError) throw error;
+          throw new HelperError('Не удалось безопасно выделить КИЗ и открыть диалог сертификата.');
+        }
+        return {
+          mode,
+          status: 'certificate_dialog_open',
+          verifiedTargets: targets.map(cloneTarget),
+          profilePreflight: PROFILE_PREFLIGHT,
+          noSend: true,
+          signed: false,
+          sent: false,
+          message: 'Точные КИЗ выделены. Проверьте сертификат и нажмите штатную кнопку вручную.',
+        };
+      }
+
       return {
-        mode: 'dry-run',
-        status: 'blocked',
+        mode,
+        status: 'ready',
         verifiedTargets: targets.map(cloneTarget),
-        blocker: KNOWN_BLOCKER,
+        profilePreflight: PROFILE_PREFLIGHT,
         noSend: true,
         signed: false,
         sent: false,
-        message: 'Строки проверены без изменений. Execute заблокирован до новой production-проверки.',
+        message: 'Строки и реквизиты проверены. Execute может открыть штатный диалог сертификата.',
       };
     };
 

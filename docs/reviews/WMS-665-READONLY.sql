@@ -31,7 +31,10 @@ WHERE m.tenant_id = 'd6e1ad21-8afa-4acf-8d0b-907b9f2adcfe'
 ORDER BY sp.delivered_at ASC, m.created_at ASC, m.id
 LIMIT 4;
 
--- Empty result confirmed. The role's billing_profiles RLS policy agent_ro_all is true.
+-- До прямого поручения владельца запрос возвращал пусто. После штатного
+-- автозаполнения из WB seller-info 05.10.2026 он подтверждает профиль
+-- «ИП Горячкина Татьяна Ивановна», ИНН 132608771877. Политика read-only роли
+-- billing_profiles.agent_ro_all равна true.
 SELECT seller_id, inn FROM billing_profiles
 WHERE tenant_id = 'd6e1ad21-8afa-4acf-8d0b-907b9f2adcfe'
   AND seller_id = '0b8da5d8-f43a-42f5-a2ec-43173ea844bd';
