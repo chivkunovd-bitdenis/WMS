@@ -335,3 +335,87 @@ test('successful JXA preparation brings the exact target tab and its background 
   assert.equal(activations, 1, 'Chrome must be brought in front of Terminal after readiness');
   assert.equal(frontWindow.activeTabIndex, 1, 'the unrelated window selection must stay untouched');
 });
+
+function runJxaFocusScenario({ replaceAfterReady = false, failAt } = {}) {
+  const command = fs.readFileSync(path.join(__dirname, '../avpack-sold-kiz.command'), 'utf8');
+  const jxa = command.split("<<'WMS665_JXA'\n")[1]?.split('\nWMS665_JXA')[0];
+  assert.ok(jxa);
+  let ready = false;
+  const executions = [];
+  const focus = [];
+  const messages = [];
+  const target = {
+    id: () => 42,
+    url: () => ready && replaceAfterReady ? 'https://foreign.example/' : URL_EXACT,
+    execute({ javascript }) {
+      executions.push({ id: 42, source: javascript });
+      if (executions.length === 1) return 'null';
+      if (executions.length === 2) return JSON.stringify({ status: 'running', signed: false, sent: false });
+      ready = true;
+      return JSON.stringify(READY);
+    },
+  };
+  const replacement = {
+    id: () => 41,
+    url: () => ready && replaceAfterReady ? URL_EXACT : 'https://example.org/',
+    execute({ javascript }) { executions.push({ id: 41, source: javascript }); return JSON.stringify(READY); },
+  };
+  const targetWindow = {
+    tabs() {
+      if (ready && failAt === 'tabs') throw new Error(SECRET);
+      return [replacement, target];
+    },
+    set activeTabIndex(value) {
+      if (failAt === 'activeTabIndex') throw new Error(SECRET);
+      focus.push({ kind: 'tab', value });
+    },
+    set index(value) {
+      if (failAt === 'index') throw new Error(SECRET);
+      focus.push({ kind: 'window', value });
+    },
+  };
+  const objc = (value) => value;
+  objc.NSData = { alloc: { initWithBase64EncodedStringOptions: (value) => Buffer.from(value, 'base64') } };
+  objc.NSString = { alloc: { initWithDataEncoding: (data) => data.toString('utf8') } };
+  objc.NSUTF8StringEncoding = 4;
+  objc.NSThread = { sleepForTimeInterval() {} };
+  const context = vm.createContext({
+    $: objc,
+    ObjC: { import() {}, unwrap: (value) => value },
+    Application: () => ({
+      running: () => true, windows: () => [targetWindow],
+      activate() {
+        if (failAt === 'activate') throw new Error(SECRET);
+        focus.push({ kind: 'activate' });
+      },
+    }),
+    console: { log: (message) => messages.push(message) },
+  });
+  let error;
+  try { vm.runInContext(jxa, context, { timeout: 1000 }); } catch (caught) { error = caught; }
+  return { error, executions, focus, messages };
+}
+
+test('JXA refuses a replacement matching tab after readiness instead of focusing a different identity', () => {
+  const result = runJxaFocusScenario({ replaceAfterReady: true });
+  assert.ok(result.error, 'replacement of the prepared tab must stop the command');
+  assert.deepEqual(result.focus, [], 'neither replacement tab nor any window may be focused');
+  assert.deepEqual(result.messages, [], 'a replacement tab must never produce a success message');
+  assert.deepEqual(result.executions.map(({ id }) => id), [42, 42, 42]);
+});
+
+test('JXA redacts focus setters activation and repeated tab lookup failures without another execute', () => {
+  const outcomes = ['activeTabIndex', 'index', 'activate', 'tabs'].map((failAt) => ({
+    failAt, ...runJxaFocusScenario({ failAt }),
+  }));
+  for (const outcome of outcomes) {
+    assert.ok(outcome.error, `${outcome.failAt} must report a safe failure`);
+    assert.ok(String(outcome.error.message).length > 0 && String(outcome.error.message).length < 1000);
+    assert.deepEqual(outcome.messages, [], `${outcome.failAt} must not print success`);
+    assert.deepEqual(outcome.executions.map(({ id }) => id), [42, 42, 42], 'focus errors must never retry execution');
+  }
+  assert.ok(outcomes.every(({ error }) => !`${String(error)} ${JSON.stringify(error)}`.includes(SECRET)),
+    'no raw exception from focus or repeated enumeration may escape');
+  assert.equal(new Set(outcomes.map(({ error }) => error.message)).size, 1,
+    'all focus failures must use one fixed safe diagnostic');
+});
