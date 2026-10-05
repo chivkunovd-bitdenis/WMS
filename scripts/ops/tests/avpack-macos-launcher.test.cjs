@@ -287,3 +287,51 @@ for (const redirectAfterExecutions of [0, 1, 2]) {
       'no probe, helper or poll JavaScript may be passed to Chrome on a foreign URL');
   });
 }
+
+test('successful JXA preparation brings the exact target tab and its background window to the front', () => {
+  const command = fs.readFileSync(path.join(__dirname, '../avpack-sold-kiz.command'), 'utf8');
+  const jxa = command.split("<<'WMS665_JXA'\n")[1]?.split('\nWMS665_JXA')[0];
+  assert.ok(jxa);
+  const executedIds = [];
+  let activations = 0;
+  let targetExecutions = 0;
+  const makeTab = (id, url) => ({
+    id: () => id,
+    url: () => url,
+    execute() {
+      executedIds.push(id);
+      assert.equal(id, 42, 'unrelated tabs must never receive JavaScript');
+      targetExecutions += 1;
+      if (targetExecutions === 1) return 'null';
+      if (targetExecutions === 2) return JSON.stringify({ status: 'running', signed: false, sent: false });
+      return JSON.stringify(READY);
+    },
+  });
+  const frontTab = makeTab(10, 'https://example.org/');
+  const unrelatedBackgroundTab = makeTab(41, 'https://example.net/');
+  const targetTab = makeTab(42, URL_EXACT);
+  const frontWindow = { id: () => 100, index: 1, activeTabIndex: 1, tabs: () => [frontTab] };
+  const targetWindow = { id: () => 200, index: 2, activeTabIndex: 1, tabs: () => [unrelatedBackgroundTab, targetTab] };
+  const objc = (value) => value;
+  objc.NSData = { alloc: { initWithBase64EncodedStringOptions: (value) => Buffer.from(value, 'base64') } };
+  objc.NSString = { alloc: { initWithDataEncoding: (data) => data.toString('utf8') } };
+  objc.NSUTF8StringEncoding = 4;
+  objc.NSThread = { sleepForTimeInterval() {} };
+  const context = vm.createContext({
+    $: objc,
+    ObjC: { import() {}, unwrap: (value) => value },
+    Application: () => ({
+      running: () => true,
+      windows: () => [frontWindow, targetWindow],
+      activate() { activations += 1; },
+    }),
+    console: { log() {} },
+  });
+  vm.runInContext(jxa, context, { timeout: 1000 });
+  assert.ok(targetExecutions >= 3, 'the ready result must come from the target tab');
+  assert.ok(executedIds.every((id) => id === 42));
+  assert.equal(targetWindow.activeTabIndex, 2, 'the target is the second tab, not the old active tab');
+  assert.equal(targetWindow.index, 1, 'the previously background target window must be brought forward');
+  assert.equal(activations, 1, 'Chrome must be brought in front of Terminal after readiness');
+  assert.equal(frontWindow.activeTabIndex, 1, 'the unrelated window selection must stay untouched');
+});
