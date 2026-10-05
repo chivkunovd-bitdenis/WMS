@@ -17,7 +17,16 @@ export function intakeStorageKey(token: string, document: string): string {
   return `wms440:${apiUrl('')}:${claims.tenant_id}:${claims.sub}:${document}`
 }
 export function readIntake(token: string, document: string): SavedIntake {
-  const raw = localStorage.getItem(intakeStorageKey(token, document))
+  // Read-only screens do not need draft persistence. Keep them renderable when
+  // authentication is represented by a non-JWT token (for example in an
+  // isolated UI harness), while preserving strict persistence for real edits.
+  let storageKey: string
+  try {
+    storageKey = intakeStorageKey(token, document)
+  } catch {
+    return {}
+  }
+  const raw = localStorage.getItem(storageKey)
   return raw ? JSON.parse(raw) as SavedIntake : {}
 }
 function writeIntake(token: string, document: string, value: SavedIntake) {

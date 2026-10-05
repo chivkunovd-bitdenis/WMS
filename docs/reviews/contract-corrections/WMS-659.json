@@ -1,0 +1,13 @@
+{
+  "task": "WMS-659",
+  "contract_commit": "bba98140e6464a71fc41ba5ef602162e14280421",
+  "correction_commit": "7f8b419cffdc39223bd55463a326dfe357da618f",
+  "files": [
+    "backend/tests/test_wms659_bulk_inbound_boxes.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS"
+  }
+}
