@@ -18,21 +18,21 @@ def _ensure_ci_etalon_history() -> None:
 
     The backend job uses actions/checkout with its default shallow history, while
     WMS scope contracts compare the branch with ``origin/etalon``.  Fetch the
-    history only on GitHub Actions and only when that tracking ref is absent;
-    local test runs remain offline and unchanged.
+    history only on GitHub Actions and only when the tracking ref has no common
+    ancestor with ``HEAD``; local test runs remain offline and unchanged.
     """
     if os.environ.get("GITHUB_ACTIONS") != "true":
         return
 
     root = Path(__file__).resolve().parents[2]
-    verify = subprocess.run(
-        ["git", "rev-parse", "--verify", "origin/etalon"],
+    merge_base = subprocess.run(
+        ["git", "merge-base", "origin/etalon", "HEAD"],
         cwd=root,
         capture_output=True,
         text=True,
         check=False,
     )
-    if verify.returncode == 0:
+    if merge_base.returncode == 0:
         return
 
     shallow = subprocess.run(
@@ -59,6 +59,14 @@ def _ensure_ci_etalon_history() -> None:
         ],
         cwd=root,
         check=True,
+    )
+
+    subprocess.run(
+        ["git", "merge-base", "origin/etalon", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
     )
 
 
