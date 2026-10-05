@@ -40,7 +40,10 @@ from app.services.inbound_intake_service import (
     InboundIntakeError,
     effective_actual_qty,
 )
-from app.services.marking_code_service import extract_gtin_from_cis
+from app.services.marking_code_service import (
+    extract_gtin_from_cis,
+    find_marking_code_by_cis_identity,
+)
 from app.services.seller_marking_credentials_service import (
     get_cz_token_for_seller,
     get_public_credentials,
@@ -219,13 +222,11 @@ async def attach_code(
     product = await session.get(Product, line.product_id)
     if product is None or product.tenant_id != tenant_id or product.seller_id is None:
         raise InboundIntakeError("product_not_found")
-    code = await session.scalar(
-        select(MarkingCode)
-        .where(
-            MarkingCode.tenant_id == tenant_id,
-            MarkingCode.cis_code == code_text,
-        )
-        .with_for_update()
+    code = await find_marking_code_by_cis_identity(
+        session,
+        tenant_id,
+        code_text,
+        for_update=True,
     )
     if code is not None:
         if code.seller_id != product.seller_id or code.product_id not in (None, product.id):

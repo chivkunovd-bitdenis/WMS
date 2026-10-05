@@ -878,13 +878,12 @@ async def _get_marking_code_by_cis(
     *,
     for_update: bool = False,
 ) -> MarkingCode | None:
-    stmt = select(MarkingCode).where(
-        MarkingCode.tenant_id == tenant_id,
-        MarkingCode.cis_code == value,
+    return await marking_code_svc.find_marking_code_by_cis_identity(
+        session,
+        tenant_id,
+        value,
+        for_update=for_update,
     )
-    if for_update:
-        stmt = stmt.execution_options(populate_existing=True).with_for_update()
-    return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def _ensure_kiz_not_occupied_in_pool(

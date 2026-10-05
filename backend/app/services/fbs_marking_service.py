@@ -62,7 +62,10 @@ from app.services.marketplace_provider import (
     OzonMarketplaceProvider,
 )
 from app.services.marketplace_scope import is_wildberries
-from app.services.marking_code_service import normalize_cis, record_event
+from app.services.marking_code_service import (
+    find_marking_code_by_cis_identity,
+    record_event,
+)
 from app.services.ozon_fbs_process_service import (
     OzonFbsProcessError,
     read_marking_status,
@@ -586,16 +589,11 @@ async def _lookup_marking_code_in_tenant(
     tenant_id: uuid.UUID,
     cis_code: str,
 ) -> MarkingCode | None:
-    lookup_values = [cis_code]
-    normalized = normalize_cis(cis_code)
-    if normalized and normalized not in lookup_values:
-        lookup_values.append(normalized)
-    stmt = select(MarkingCode).where(
-        MarkingCode.tenant_id == tenant_id,
-        MarkingCode.cis_code.in_(lookup_values),
+    return await find_marking_code_by_cis_identity(
+        session,
+        tenant_id,
+        cis_code,
     )
-    result = await session.execute(stmt)
-    return result.scalar_one_or_none()
 
 
 async def _claim_pool_code_if_present(

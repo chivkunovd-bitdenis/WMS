@@ -580,6 +580,63 @@ def normalize_cis(raw: str) -> str | None:
     return text
 
 
+async def find_marking_code_by_cis_identity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    cis_code: str,
+    *,
+    for_update: bool = False,
+) -> MarkingCode | None:
+    """Find a stored code by normalized identity without changing its payload.
+
+    WMS-658 keeps the exact imported value in ``cis_code``.  Scanner-driven
+    processes still remove transport whitespace and edge GS characters, so an
+    exact database comparison would miss the imported row and could create a
+    second code.  GTIN narrows the candidate set; Python then applies the same
+    identity normalization used by imports.  Seller/product ownership remains
+    the responsibility of the calling process and is checked after this lookup.
+    """
+    normalized = normalize_cis(cis_code)
+    if normalized is None:
+        return None
+
+    lookup_values = {cis_code, normalized}
+    predicates: list[ColumnElement[bool]] = [MarkingCode.cis_code.in_(lookup_values)]
+    gtin = extract_gtin_from_cis(normalized)
+    if gtin:
+        predicates.append(MarkingCode.gtin.in_(_gtin_lookup_variants(gtin)))
+
+    stmt = (
+        select(MarkingCode.id, MarkingCode.cis_code)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            or_(*predicates),
+        )
+        .order_by(MarkingCode.created_at, MarkingCode.id)
+    )
+    candidates = (await session.execute(stmt)).all()
+    code_id = next(
+        (
+            candidate_id
+            for candidate_id, stored in candidates
+            if normalize_cis(stored) == normalized
+        ),
+        None,
+    )
+    if code_id is None:
+        return None
+    selected = select(MarkingCode).where(
+        MarkingCode.id == code_id,
+        MarkingCode.tenant_id == tenant_id,
+    )
+    if for_update:
+        selected = selected.execution_options(populate_existing=True).with_for_update()
+    code = await session.scalar(selected)
+    if code is None or normalize_cis(code.cis_code) != normalized:
+        return None
+    return code
+
+
 def extract_gtin_from_cis(cis: str) -> str | None:
     gs1_match = _GS1_GTIN_AI01_RE.search(cis)
     if gs1_match:
