@@ -10,8 +10,9 @@ import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { loadFbsScanPrintPreferences, saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
-export function FbsPackingScanBar({ controllers, enabled, token, rejected }: {
+export function FbsPackingScanBar({ controllers, enabled, token, rejected, qrDisabled = false }: {
   controllers: PackingScanController[]; enabled: boolean; token: string
+  qrDisabled?: boolean
   /** WMS-636: the filter of the whole assembly (N summed over its WB supplies). */
   rejected?: FbsRejectedKizFilter
 }) {
@@ -104,7 +105,7 @@ export function FbsPackingScanBar({ controllers, enabled, token, rejected }: {
         }}
         onKeyDown={(event) => { if (event.key === 'Enter') { event.preventDefault(); intake.submit(value); setValue('') } }} />
       {/* WB only: an Ozon-only assembly keeps its bar exactly as before (R16). */}
-      {controllers.length > 0 ? <FbsScanPrintToggles value={printPreferences} onChange={(next) => {
+      {controllers.length > 0 ? <FbsScanPrintToggles value={printPreferences} qrDisabled={qrDisabled} onChange={(next) => {
         setPrintPreferences(next)
         saveFbsScanPrintPreferences(token, next)
       }} undo={{ disabled: !enabled || undoing || !undoTarget, onClick: undoLast }} /> : null}

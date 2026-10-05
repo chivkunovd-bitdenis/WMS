@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
+import { FbsPackingScanBar } from './FbsPackingScanBar'
 import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
@@ -584,7 +585,7 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScanRef = useRef<(raw: string) => void>(() => undefined)
   // WMS-574: действия рамки окна сборки внутри приёма скана. В обычной карточке
   // они пустые, и приём скана идёт ровно как раньше.
-  const assemblyPlaceOrderRef = useRef<((orderId: string, releaseKizWait: boolean, boxId: string | null) => Promise<void>) | null>(null)
+  const assemblyPlaceOrderRef = useRef<((orderId: string, releaseKizWait: boolean, boxId: string | null, scannedCode?: string) => Promise<void>) | null>(null)
   const assemblyScanErrorTextRef = useRef<((cause: unknown, raw: string) => string | null) | null>(null)
   // Короб, открытый в момент скана: код несёт его с собой до назначения, даже
   // если оператор тем временем переключил короб или завершил работу (R22).
@@ -736,7 +737,7 @@ export function FfFbsSupplyWorkspace({
   const unifiedStickerAttempts = useRef(new Set<string>())
   useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
   useEffect(() => {
-    if (!supplyId || !registerSequentialScanner) return
+    if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
     return () => registerSequentialScanner(supplyId, null)
   }, [supplyId, sequentialScanner, registerSequentialScanner])
@@ -1179,7 +1180,7 @@ export function FfFbsSupplyWorkspace({
   }, [])
 
   const scanIdleCode = useCallback(
-    async (raw: string, preferences: FbsScanPrintPreferences) => {
+    async (raw: string, preferences: FbsScanPrintPreferences, propagateNotFound = false) => {
       if (!workspace) return
       // WMS-574 R22: в рамке окна сборки — короб, открытый в момент этого скана.
       const assemblyBoxAtScan = assemblyTakeScanBoxRef.current?.(raw) ?? null
@@ -1212,7 +1213,7 @@ export function FfFbsSupplyWorkspace({
           // WMS-575: строка заказа ожила — звук сразу, по ответу lookup.
           playScanSuccess()
           // WMS-574 Д8, Д9: в рамке окна сборки найденный заказ ложится в открытый короб.
-          if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(found.order_id, !found.needs_confirmation, assemblyBoxAtScan)
+          if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(found.order_id, !found.needs_confirmation, assemblyBoxAtScan, raw)
           return
         } catch (cause) {
           if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
@@ -1322,7 +1323,7 @@ export function FfFbsSupplyWorkspace({
         // Печать идёт своей очередью ниже; её сбой даст сигнал ошибки отдельно.
         playScanSuccess()
         // WMS-574 Д8: в рамке окна сборки выбранный заказ ложится в открытый короб.
-        if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(result.order_id, false, assemblyBoxAtScan)
+        if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(result.order_id, false, assemblyBoxAtScan, raw)
 
         const qrStartedBefore = attempt.qrStarted
         const chzStartedBefore = attempt.chzStarted
@@ -1577,6 +1578,10 @@ export function FfFbsSupplyWorkspace({
         // Перечитывание поставки догоняет в фоне и не держит следующий скан (Д5).
         if (plan.printChz) void load(true)
       } catch (cause) {
+        if (propagateNotFound && cause instanceof FbsApiError
+          && ['sticker_not_found', 'scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) {
+          throw cause
+        }
         setKizScanError({
           // WMS-574 R16: код не из активной поставки окна сборки называет её номер WB.
           text: assemblyScanErrorTextRef.current?.(cause, raw) ?? kizErrorText(cause, providerName),
@@ -2055,6 +2060,79 @@ export function FfFbsSupplyWorkspace({
     if (kizScanActive) void scanKizCode(next.raw, false, next.preferences)
     else void scanIdleCode(next.raw, next.preferences)
   }, [kizScanBusy, kizScanActive, queuedPackingScanVersion, scanIdleCode, scanKizCode, dropKizScanActive, ordinaryWbPacking])
+
+  // Ozon keeps its proven lookup/KIZ/label path, but exposes it to the same
+  // group router as WB. The saved WB QR preference is only masked here.
+  const ozonScanIdleRef = useRef(scanIdleCode)
+  const ozonScanKizRef = useRef(scanKizCode)
+  const ozonKizTargetRef = useRef(kizScanActive)
+  const ozonScanBusyRef = useRef(kizScanBusy)
+  const ozonDropSelectionRef = useRef(dropKizScanActive)
+  ozonScanIdleRef.current = scanIdleCode
+  ozonScanKizRef.current = scanKizCode
+  ozonKizTargetRef.current = kizScanActive
+  ozonScanBusyRef.current = kizScanBusy
+  ozonDropSelectionRef.current = dropKizScanActive
+  const ozonPackingScanner = useMemo(() => {
+    if (!isOzonSupply || !supplyId) return null
+    let startPromise: Promise<FbsWorkspace> | null = null
+    const ensureStarted = async () => {
+      const current = sequentialWorkspaceRef.current
+      if (!current || current.supply.packaging_task_id) return current
+      startPromise ??= startFbsSupplyWork(token, authHeaders, supplyId)
+      try {
+        const started = await startPromise
+        if (!started.supply.packaging_task_id) throw new Error('Не удалось начать работу с поставкой. Повторите скан.')
+        if (sequentialWorkspaceRef.current?.supply.id === started.supply.id) setWorkspace(started)
+        return started
+      } finally {
+        startPromise = null
+      }
+    }
+    const belongsToOzonSupply = (raw: string) => {
+      const current = sequentialWorkspaceRef.current
+      if (!current) return false
+      const clean = raw.trim()
+      return fbsCodeBelongsToSupply(clean, current)
+        || current.orders.some((order) => order.external_order_id === clean || order.sticker.code === clean)
+    }
+    return {
+      hasSelectedRow: () => Boolean(ozonKizTargetRef.current),
+      hasPending: () => Boolean(ozonKizTargetRef.current || ozonScanBusyRef.current),
+      hasSavedAttempt: () => false,
+      view: () => ozonKizTargetRef.current ? {
+        orderId: ozonKizTargetRef.current.order_id,
+        name: ozonKizTargetRef.current.product.name,
+        needsKiz: true,
+        target: ozonKizTargetRef.current,
+      } : null,
+      canCancel: () => Boolean(ozonKizTargetRef.current),
+      cancel: async () => {
+        if (!ozonKizTargetRef.current) return false
+        ozonDropSelectionRef.current()
+        return true
+      },
+      lastStep: () => null,
+      scan: async (raw: string) => {
+        const preferences = { ...loadFbsScanPrintPreferences(token), printQr: false }
+        if (ozonKizTargetRef.current) {
+          await ensureStarted()
+          await ozonScanKizRef.current(raw, false, preferences)
+          return
+        }
+        if (!belongsToOzonSupply(raw)) {
+          throw new FbsApiError('sticker_not_found', 'Стикер не найден', null, false, 404)
+        }
+        await ensureStarted()
+        await ozonScanIdleRef.current(raw, preferences, true)
+      },
+    }
+  }, [isOzonSupply, supplyId, token, authHeaders])
+  useEffect(() => {
+    if (!supplyId || !registerSequentialScanner || !ozonPackingScanner) return
+    registerSequentialScanner(supplyId, ozonPackingScanner)
+    return () => registerSequentialScanner(supplyId, null)
+  }, [supplyId, registerSequentialScanner, ozonPackingScanner])
 
   const requestPrintBatch = async (orderIds?: string[], retryMissing = false) => {
     if (!workspace) return
@@ -2830,13 +2908,6 @@ export function FfFbsSupplyWorkspace({
   // WMS-477: пока ни у одного заказа нет кода, спрашивать WB не о чем.
   const packingOrdersWithCode = fbsMarkingVerdictsSummary(packingOrders).withCode
   const markingShortOrderIds = new Set(workspace?.marking_pool?.orders_without_code ?? [])
-  // Строка скана КИЗ доступна на любой поставке и любом товаре, без оглядки на
-  // признак маркировки в карточке и на requiredMeta от WB. Если Честный знак
-  // физически наклеен на товаре — значит товар маркированный, и спрашивать об
-  // этом систему незачем: раньше признак не доезжал (он читается из строки
-  // задания упаковки), строка скана не появлялась и КИЗ не уходили в WB вовсе.
-  const anyOrderNeedsHonestSign = packingOrders.length > 0
-
   const stageBlockers = useMemo(() => {
     if (stage === 'packing') {
       return workspace?.blockers.filter((blocker) => blocker.stage === 'packing' || blocker.stage === 'order_stickers') ?? []
@@ -2888,15 +2959,9 @@ export function FfFbsSupplyWorkspace({
     ]
   }, [])
   const packingScanIntake = useScanIntake({
-    enabled: open
-      && !assemblyWbPacking
-      && stage === 'packing'
-      && Boolean(workspace)
-      && Boolean(packagingTask)
-      && (ordinaryWbPacking || anyOrderNeedsHonestSign)
-      && packagingEditable
-      // WMS-574: в окне сборки сканер слушает только активная рамка на открытой вкладке.
-      && (!assemblyFrame || (assemblyFrame.active && assemblyFrame.visible)),
+    // WMS-666: all entries use FbsPackingScanBar; this retained intake only
+    // supplies helpers to the legacy markup while that code is phased out.
+    enabled: false,
     onScan: acceptHardwarePackingScan,
     // На сервер — те же символы, что легли бы в поле скана, с разделителем GS:
     // раскладку ЧЗ и стикера чинит сервер полной таблицей, как до WMS-575.
@@ -3103,6 +3168,15 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
+  useEffect(() => {
+    if (!assemblyFrame?.registerScanner || !workspace) return
+    const last = [...workspace.boxes].sort((a, b) => b.box_number - a.box_number)[0]
+    setAssemblyOpenBoxId(last?.id ?? null)
+    setAssemblyBoxHint(null)
+  // Initialize the supply once when it joins the unified packing surface.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assemblyFrame?.registerScanner, workspace?.supply.id])
+
   // R13, R17: start-work — только если у поставки нет задания упаковки (Д6);
   // затем открывается последний короб, а если коробов нет — создаётся первый.
   const startAssemblyWork = async () => {
@@ -3135,9 +3209,14 @@ export function FfFbsSupplyWorkspace({
   }
 
   /** Ответ назначения в короб ложится так же, как ответы других действий карточки. */
-  const assignToAssemblyBox = async (current: FbsWorkspace, boxId: string, orderIds: string[]) => {
+  const assignToAssemblyBox = async (
+    current: FbsWorkspace,
+    boxId: string,
+    orderIds: string[],
+    orderProductIds?: string[],
+  ) => {
     const write = beginWorkspaceWrite()
-    const next = await assignFbsPackingBoxOrders(token, authHeaders, current.supply.id, boxId, orderIds)
+    const next = await assignFbsPackingBoxOrders(token, authHeaders, current.supply.id, boxId, orderIds, orderProductIds)
     if (!write.isCurrent() || !write.matchesShownSupply(next)) return null
     if (write.isLatest()) setWorkspace(next)
     else refreshAfterLostRace()
@@ -3172,17 +3251,35 @@ export function FfFbsSupplyWorkspace({
     // Д8, Д9, R22–R24: заказ, найденный сканом, — в короб, открытый в момент
     // скана, если ещё ни в каком коробе не лежит; заказу без обязательного ЧЗ
     // ждать ЧЗ незачем.
-    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId) => {
+    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId, scannedCode) => {
       if (!current) return
       let orders = current.orders
-      const alreadyBoxed = current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
+      const order = current.orders.find((one) => one.id === orderId)
+      const scannedPositionIds = isOzonSupply
+        ? (order?.positions ?? []).filter((position) => {
+          if (!position.id) return false
+          if (!scannedCode) return true
+          return productBarcodeOptionsForPosition(position, 'ozon').some((option) => option.barcode === scannedCode.trim())
+        }).map((position) => position.id!)
+        : []
+      const positionIds = isOzonSupply && scannedPositionIds.length === 0
+        ? (order?.positions ?? []).flatMap((position) => position.id ? [position.id] : [])
+        : scannedPositionIds
+      const alreadyBoxed = isOzonSupply
+        ? positionIds.length > 0 && positionIds.every((positionId) => current.boxes.some((box) => box.assigned_order_product_ids?.includes(positionId)))
+        : current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
       if (!alreadyBoxed) {
         if (!boxId || !current.boxes.some((box) => box.id === boxId)) {
           setAssemblyBoxHint('Откройте или создайте короб.')
           return
         }
         try {
-          const next = await assignToAssemblyBox(current, boxId, [orderId])
+          const next = await assignToAssemblyBox(
+            current,
+            boxId,
+            isOzonSupply ? [] : [orderId],
+            isOzonSupply ? positionIds : undefined,
+          )
           if (next) orders = next.orders
         } catch (cause) {
           setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Заказ не положен в короб.', debug: null })
@@ -3192,8 +3289,8 @@ export function FfFbsSupplyWorkspace({
       }
       setAssemblyBoxHint(null)
       if (!releaseKizWait) return
-      const order = orders.find((one) => one.id === orderId)
-      if (order && !requiresOrderHonestSign(order)) dropKizScanActive()
+      const refreshedOrder = orders.find((one) => one.id === orderId)
+      if (refreshedOrder && !requiresOrderHonestSign(refreshedOrder)) dropKizScanActive()
     }
     // R16, Д19: «Этого товара нет в поставке» — только если сервер не нашёл
     // код в поставке и это не ШК товара её заказа и не ЧЗ такого товара;
@@ -3209,10 +3306,14 @@ export function FfFbsSupplyWorkspace({
       const fresh = snapshot ?? current
       if (!fresh || !openBoxId || !fresh.boxes.some((box) => box.id === openBoxId)) return
       const boxed = new Set(fresh.boxes.flatMap((box) => box.assigned_order_ids))
-      const orderIds = fbsOrdersAvailableForBox(fresh.orders, boxed).map((order) => order.id)
-      if (orderIds.length === 0) return
+      const available = fbsOrdersAvailableForBox(fresh.orders, boxed)
+      const orderIds = isOzonSupply ? [] : available.map((order) => order.id)
+      const positionIds = isOzonSupply
+        ? available.flatMap((order) => order.positions.flatMap((position) => position.id ? [position.id] : []))
+        : undefined
+      if (orderIds.length === 0 && !positionIds?.length) return
       try {
-        await assignToAssemblyBox(fresh, openBoxId, orderIds)
+        await assignToAssemblyBox(fresh, openBoxId, orderIds, positionIds)
       } catch (cause) {
         setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Заказы не положены в короб.')
       }
@@ -3596,8 +3697,17 @@ export function FfFbsSupplyWorkspace({
 
   const packingPanel = workspace ? (
     <>
-              {packagingTask || deliveryConfirmed || assemblyWbPacking ? (
+              {packagingTask || deliveryConfirmed || useSequentialPacking || ozonPackingScanner || Boolean(assemblyFrame?.registerScanner) ? (
                 <Paper variant="outlined" sx={assemblyFrame ? { overflow: 'hidden', border: 0, borderRadius: 0 } : { overflow: 'hidden' }}>
+                  {!assemblyFrame ? (
+                    <FbsPackingScanBar
+                      token={token}
+                      enabled={open && stage === 'packing' && packagingEditable && Boolean(sequentialScanner || ozonPackingScanner)}
+                      controllers={(sequentialScanner ?? ozonPackingScanner) ? [sequentialScanner ?? ozonPackingScanner!] : []}
+                      qrDisabled={isOzonSupply}
+                      rejected={isOzonSupply ? undefined : ownRejectedToggle}
+                    />
+                  ) : null}
                   <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
                     <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
                       <Box>
@@ -3683,7 +3793,7 @@ export function FfFbsSupplyWorkspace({
                       </Typography>
                     </Box>
                   ) : null}
-                  {!assemblyWbPacking && (ordinaryWbPacking || anyOrderNeedsHonestSign) ? (
+                  {packingScanIntake.listening ? (
                     // KIZ-01: скан живёт прямо на вкладке — стикер заказа подсвечивает
                     // строку активной, следующий скан (Честный знак) привязывает код к
                     // ней и сразу уходит в WB. Окно «Внести КИЗ» для этого больше не нужно.
@@ -4562,9 +4672,21 @@ export function FfFbsSupplyWorkspace({
         {workspaceDialogs}
       </Stack>
     }
-    if (assemblyFrame.registerScanner && !isOzonSupply) {
+    if (assemblyFrame.registerScanner) {
       return <>
-        {assemblyFrame.packingHost ? createPortal(packingRows, assemblyFrame.packingHost) : null}
+        {assemblyFrame.packingHost ? createPortal(<>
+          {isOzonSupply ? (
+            <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-end' }}>
+              <Button
+                disabled={busy || packingOrders.length === 0}
+                onClick={() => openBulkOrderMarkingPrint(printPackingOrders, printPackingOrders.every(orderPrintDone))}
+              >
+                Печать всего ({packingOrders.length})
+              </Button>
+            </Box>
+          ) : null}
+          {packingRows}
+        </>, assemblyFrame.packingHost) : null}
         {frameMessages}
         {kizScanError ? <Alert severity="error">{kizScanError.text}</Alert> : null}
         {workspaceDialogs}
@@ -4830,20 +4952,7 @@ export function FfFbsSupplyWorkspace({
                   </TableBody>
                 </Table>
               </Paper>
-              {/* Кнопка нужна, пока у поставки нет задания упаковки, — а не пока она
-                  в статусе draft. Поставки, зазеркаленные из кабинета WB, рождаются
-                  сразу в assembling, минуя draft: раньше кнопка им не показывалась
-                  вовсе, задание не создавалось, и вкладка упаковки на них навсегда
-                  оставалась заглушкой «Сначала начните работу с поставкой». */}
-              {!workspace.supply.packaging_task_id ? (
-                <Stack direction="row" sx={{ justifyContent: 'flex-end' }}>
-                  <Button variant="contained" size="large" onClick={() => void run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), 'Задание создано. Можно переходить к следующему этапу.')}>
-                    Начать работу с поставкой
-                  </Button>
-                </Stack>
-              ) : (
-                nextStageControl('composition')
-              )}
+              {nextStageControl('composition')}
             </Stack>
           ) : null}
 
@@ -4877,7 +4986,7 @@ export function FfFbsSupplyWorkspace({
           {workspace && stage === 'packing' ? (
             <Stack spacing={2}>
               {!packagingEditable ? <Alert severity="success">Поставка уже передана в WB. Состав менять нельзя, печать этикеток и стикеров доступна.</Alert> : null}
-              {packingPanel}
+              <Box data-testid="fbs-unified-packing-rows">{packingPanel}</Box>
               {nextStageControl('packing')}
             </Stack>
           ) : null}
