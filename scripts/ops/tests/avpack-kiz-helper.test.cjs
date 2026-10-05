@@ -12,7 +12,6 @@ const SELLER = '0b8da5d8-f43a-42f5-a2ec-43173ea844bd';
 const TOKEN = 'synthetic-test-token-do-not-return';
 const ORIGIN = 'https://sellerfocus.pro';
 const REGISTRY = '/api/operations/marking-codes/self/withdrawals';
-const BILLING_BLOCKER = 'seller_billing_inn_missing_or_invalid';
 const EXPECTED = [
   { row_id: 'c9391ebe-21f5-4b1a-89c4-1607563e341a', wb_order_id: '5803306927', cis: '0104630726321651215a0cGXmjtLjxb\u001d91EE12\u001d92lFBvJUaWv6uayEvcOEBE6q/Rlg8WDCxojleoRlHA+uE=' },
   { row_id: 'd79b900c-7bdb-4cbf-840c-3abe6efb9299', wb_order_id: '5800165076', cis: '0104630726321637215G0(VhN1qGejx\u001d91EE12\u001d92zWp5IYlZWPYukhvkOJoKjtO1gO9qgBvrdHWJOoy6oF4=' },
@@ -82,8 +81,9 @@ function targetIdentity(targets) {
   return targets.map(({ row_id, wb_order_id, cis }) => ({ row_id, wb_order_id: String(wb_order_id), cis }));
 }
 
-function assertBlockedDryRun(result, verifiedTargets) {
-  assert.equal(result.blocker.code, BILLING_BLOCKER);
+function assertReadyDryRun(result, verifiedTargets) {
+  assert.equal(result.status, 'ready');
+  assert.equal(result.noSend, true);
   const serialized = JSON.stringify(result);
   assert.ok(!serialized.includes(TOKEN));
   // The result must report verified identities without prescribing its layout.
@@ -92,17 +92,6 @@ function assertBlockedDryRun(result, verifiedTargets) {
       assert.ok(serialized.includes(JSON.stringify(value)), `missing verified value for ${target.wb_order_id}`);
     }
   }
-}
-
-async function assertBillingBlocked(h, input) {
-  await assert.rejects(() => h.helper.run(input), error => {
-    assert.ok(error.code === BILLING_BLOCKER || error.message.includes(BILLING_BLOCKER));
-    assert.ok(!String(error.stack).includes(TOKEN));
-    return true;
-  });
-  assert.deepEqual(h.events, ['/api/auth/me', REGISTRY]);
-  assert.equal(h.inspections.length, 0, 'known blocker stops before any UI access');
-  assert.equal(h.mutations.length, 0);
 }
 
 async function failsSafely(h, input) {
@@ -138,7 +127,7 @@ test('default run is read-only and inspects only the first target, never all fou
   assert.deepEqual(h.calls.map(call => call.url.pathname), ['/api/auth/me', REGISTRY]);
   assert.equal(h.inspections.length, 1);
   assert.deepEqual(targetIdentity(h.inspections[0]), [EXPECTED[0]]);
-  assertBlockedDryRun(result, [EXPECTED[0]]);
+  assertReadyDryRun(result, [EXPECTED[0]]);
 });
 
 test('explicit dry-run for multiple allowed orders never selects or opens anything', async () => {
@@ -146,7 +135,7 @@ test('explicit dry-run for multiple allowed orders never selects or opens anythi
   const result = await h.helper.run({ mode: 'dry-run', orderIds: EXPECTED.map(target => target.wb_order_id) });
   assert.equal(h.mutations.length, 0);
   assert.deepEqual(targetIdentity(h.inspections[0]), EXPECTED);
-  assertBlockedDryRun(result, EXPECTED);
+  assertReadyDryRun(result, EXPECTED);
 });
 
 for (const [field, value] of Object.entries({
@@ -201,19 +190,49 @@ test('a target absent from the visible selectable UI fails dry-run verification'
   await failsSafely(h, { mode: 'dry-run' });
 });
 
-test('execute reports the confirmed missing-INN blocker after verification and before any UI', async () => {
+test('execute selects exactly the requested verified targets and opens only the certificate dialog', async () => {
   const h = harness();
-  await assertBillingBlocked(h, { mode: 'execute', orderIds: [EXPECTED[2].wb_order_id] });
+  const result = await h.helper.run({
+    mode: 'execute',
+    orderIds: [EXPECTED[2].wb_order_id, EXPECTED[0].wb_order_id],
+  });
+  assert.deepEqual(h.events, ['/api/auth/me', REGISTRY, 'inspect', 'selectAndOpen']);
+  assert.equal(h.inspections.length, 1);
+  assert.deepEqual(targetIdentity(h.inspections[0]), [EXPECTED[2], EXPECTED[0]]);
+  assert.equal(h.mutations.length, 1);
+  assert.deepEqual(targetIdentity(h.mutations[0]), [EXPECTED[2], EXPECTED[0]]);
+  assert.equal(result.mode, 'execute');
+  assert.equal(result.status, 'certificate_dialog_open');
+  assert.equal(result.signed, false);
+  assert.equal(result.sent, false);
+  assert.deepEqual(targetIdentity(result.verifiedTargets), [EXPECTED[2], EXPECTED[0]]);
+  assert.ok(!JSON.stringify(result).includes(TOKEN));
 });
 
-test('a run input cannot bypass the confirmed blocker', async () => {
-  const h = harness();
-  await assertBillingBlocked(h, { mode: 'execute', ignoreBlocker: true });
+test('execute stops when the seller session changes before UI mutation', async () => {
+  let reads = 0;
+  const h = harness({ extraDeps: {
+    storage: { getItem() { reads += 1; return reads === 1 ? TOKEN : 'changed-session'; } },
+  } });
+  await failsSafely(h, { mode: 'execute' });
+  assert.equal(h.inspections.length, 1);
 });
 
-test('a dependency flag cannot bypass the confirmed blocker', async () => {
-  const h = harness({ extraDeps: { ignoreBlocker: true } });
-  await assertBillingBlocked(h, { mode: 'execute' });
+test('execute never selects after a failed UI preflight', async () => {
+  const h = harness({ selection: { selectedCount: 1 } });
+  await failsSafely(h, { mode: 'execute' });
+  assert.equal(h.inspections.length, 1);
+  assert.equal(h.mutations.length, 0);
+});
+
+test('execute surfaces a dialog-opening failure without retrying or signing', async () => {
+  const h = harness({ extraDeps: {
+    ui: {
+      async inspectSelection() { return { selectedCount: 0, targetsReady: true }; },
+      async selectAndOpen() { throw new Error('synthetic UI failure'); },
+    },
+  } });
+  await failsSafely(h, { mode: 'execute' });
 });
 
 for (const path of ['/api/auth/me', REGISTRY]) {
@@ -249,7 +268,7 @@ test('pagination finds an allowed target beyond the first 250 rows', async () =>
   assert.deepEqual(h.calls.filter(call => call.url.pathname === REGISTRY).map(call => call.url.searchParams.get('offset')), ['0', '250']);
   assert.equal(h.mutations.length, 0);
   assert.deepEqual(targetIdentity(h.inspections[0]), [EXPECTED[0]]);
-  assertBlockedDryRun(result, [EXPECTED[0]]);
+  assertReadyDryRun(result, [EXPECTED[0]]);
 });
 
 test('a duplicate on the second page is detected before opening the dialog', async () => {
