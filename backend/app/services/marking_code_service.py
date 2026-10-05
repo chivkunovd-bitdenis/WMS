@@ -1852,8 +1852,11 @@ async def _lock_import_request_in_database(
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
 ) -> None:
-    connection = await session.connection()
-    if connection.dialect.name != "postgresql":
+    # Inspect the configured bind without checking out a connection.  Calling
+    # ``session.connection()`` starts a transaction even on SQLite, where this
+    # advisory lock is a no-op.  A waiter would then keep an unnecessary read
+    # transaction around while another request is finishing its commit.
+    if session.get_bind().dialect.name != "postgresql":
         return
     key = int.from_bytes(
         hashlib.sha256(f"marking-import:{tenant_id}:{request_id}".encode()).digest()[:8],
@@ -2141,12 +2144,19 @@ async def auto_import_marking_codes(
         except Exception:
             await session.rollback()
             raise
-        return AutoMarkingImportResult(
+        groups = await _auto_import_groups(session, tenant_id, batch.id)
+        result = AutoMarkingImportResult(
             import_id=batch.id,
             document_number=document_number,
-            groups=await _auto_import_groups(session, tenant_id, batch.id),
+            groups=groups,
             unmatched=unmatched,
         )
+        # The result query above starts a new read transaction after commit.
+        # End it before releasing the per-request lock, otherwise a waiting
+        # SQLite attempt can hit a stale snapshot/database lock even though the
+        # import itself has already committed successfully.
+        await session.rollback()
+        return result
 
 
 async def assign_import_rows_to_product(
@@ -2324,12 +2334,16 @@ async def assign_import_rows_to_product(
             barcode=product.wb_barcode,
             loaded_count=0,
         )
-        return AssignMarkingCodesResult(
+        result = AssignMarkingCodesResult(
             import_id=batch.id,
             document_number=document_number,
             product=group,
             assigned_keys=assigned_keys,
         )
+        # As in auto import, the post-commit result query opens a fresh read
+        # transaction.  Release it while this request still owns the lock.
+        await session.rollback()
+        return result
 
 
 async def build_unmatched_import_pdf(
