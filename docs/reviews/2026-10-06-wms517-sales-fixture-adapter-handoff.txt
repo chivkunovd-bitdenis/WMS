@@ -31,3 +31,16 @@ fixed fixture broker isolation only, not forbidden assert or product code.
 Earlier disk-full interrupted run (exit120) is not counted as test evidence.
 Ruff/diff-check PASS. No production/signature/marketplace/physical proof claimed.
 Independent Astra high review of fixture adaptation remains the parent's step.
+
+Follow-up boundary correction: seed activates the fake broker URL only when
+synthetic sales are actually seeded. The shared fixture initially sets None;
+gate-only tests create no sale and keep it None. Fixture monkeypatch restores
+the previous value after each test. This preserves the production-mode sales
+limiter condition as well as the unchanged no-DB/no-HTTP integration gate.
+Reason: ledger production-mode API test needs synthetic shared sales Redis;
+with unconditional None it correctly refused wb_sales_shared_limiter_not_configured.
+No assertions changed to hide that failure; only the test boundary was corrected.
+Combined rerun, ledger + two authorized positive-source cases + six consumers:
+135 passed, 4 skipped, 6 warnings in11.52s. Four PostgreSQL-only checks skipped.
+This is an execution result on dirty developer product code, not an independent
+review verdict for the legitimate three-test migration.

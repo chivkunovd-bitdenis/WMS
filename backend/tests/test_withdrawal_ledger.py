@@ -173,6 +173,13 @@ async def seed(
     session.add(order)
     await session.flush()
     if _LEGACY_SALES_ENABLED.get() if sales_evidence is None else sales_evidence:
+        if _LEGACY_SALES_ENABLED.get():
+            from app.core.settings import settings
+
+            # Activate the fake sales broker only when synthetic sale data is
+            # seeded. Gate-only tests create no sales and keep broker=None.
+            # The shared fixture's monkeypatch restores the original setting.
+            settings.celery_broker_url = "redis://legacy-fixture.invalid/0"
         order.wb_rid = f"legacy-fixture-{order.id}"
         token = f"legacy-fixture-{seller.id}"
         session.add(
