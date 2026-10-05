@@ -418,8 +418,8 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_checks(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
+        self._sync_task_base(tid, state, task)
         self._assert_contract(task)
-        self._sync_task_base(task)
         failures = self._run_contract(task)
         if failures:
             reason = "\n".join(failures)[-1800:]
@@ -474,10 +474,11 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_pr(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
+        self.hotfix.guard_gitdir(task["path"])
         self.hotfix.fetch()
         etalon = self.hotfix.git("rev-parse", "origin/etalon", cwd=task["path"]).strip()
-        if self.hotfix.run(
-            ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], task["path"]
+        if self.hotfix.git_result(
+            "merge-base", "--is-ancestor", etalon, "HEAD", cwd=task["path"]
         ).rc != 0:
             self._clear_stale_validation(task)
             task["step"] = "checks"
@@ -923,28 +924,73 @@ class NightRunner:
         ):
             task.pop(key, None)
 
-    def _sync_task_base(self, task: dict[str, Any]) -> None:
+    def _sync_task_base(
+        self, tid: int, state: dict[str, Any], task: dict[str, Any],
+    ) -> None:
         """Merge the latest trusted etalon before tests, review, acceptance and task CI."""
+        self.hotfix.guard_gitdir(task["path"])
         self.hotfix.fetch()
         etalon = self.hotfix.git("rev-parse", "origin/etalon", cwd=task["path"]).strip()
-        if self.hotfix.run(
-            ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], task["path"]
+        intent = task.get("base_sync_intent")
+        if self.hotfix.git_result(
+            "merge-base", "--is-ancestor", etalon, "HEAD", cwd=task["path"]
         ).rc == 0:
+            if intent == etalon:
+                if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
+                    raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
+                task["control_hashes"] = self._control_hashes(task)
+                self._clear_stale_validation(task)
+                task.pop("base_sync_intent", None)
+            else:
+                self._assert_contract(task)
             task["base_sha"] = etalon
+            self._save(tid, state)
             return
+        self._assert_contract(task)
         if self._changed_outside(task, []):
             raise StepFailed("нельзя обновить базу задачи с несохранёнными изменениями")
-        result = self.hotfix.run(
-            ["git", "merge", "--no-ff", "--no-edit", etalon], task["path"], 1800
+        backlog_rel = "docs/KANONICHESKIY_BACKLOG.md"
+        task_backlog = (Path(task["path"]) / backlog_rel).read_text(encoding="utf-8")
+        task["base_sync_intent"] = etalon
+        self._save(tid, state)
+        result = self.hotfix.git_result(
+            "-c", "user.name=WMS support agent", "-c", "user.email=noreply@openai.com",
+            "merge", "--no-ff", "--no-edit", etalon, cwd=task["path"], timeout=1800,
         )
         if result.rc != 0:
-            self.hotfix.run(["git", "merge", "--abort"], task["path"])
-            raise StepFailed("актуальный etalon конфликтует с веткой задачи; нужна ручная интеграция")
+            conflicts = self.hotfix.git(
+                "diff", "--name-only", "--diff-filter=U", cwd=task["path"]
+            ).splitlines()
+            if conflicts == [backlog_rel]:
+                fresh_backlog = self.hotfix.git(
+                    "show", f"{etalon}:{backlog_rel}", cwd=task["path"]
+                )
+                (Path(task["path"]) / backlog_rel).write_text(
+                    self._replace_backlog_section(fresh_backlog, task_backlog, task["id"]),
+                    encoding="utf-8",
+                )
+                self.hotfix.git("add", "--", backlog_rel, cwd=task["path"])
+                finish = self.hotfix.git_result(
+                    "-c", "user.name=WMS support agent", "-c",
+                    "user.email=noreply@openai.com", "commit", "--no-edit",
+                    cwd=task["path"],
+                )
+                if finish.rc == 0:
+                    result = finish
+            if result.rc != 0:
+                self.hotfix.git_result("merge", "--abort", cwd=task["path"])
+                task.pop("base_sync_intent", None)
+                self._save(tid, state)
+                raise StepFailed(
+                    "актуальный etalon конфликтует с веткой задачи; нужна ручная интеграция"
+                )
         if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
             raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
         task["control_hashes"] = self._control_hashes(task)
         task["base_sha"] = etalon
+        task.pop("base_sync_intent", None)
         self._clear_stale_validation(task)
+        self._save(tid, state)
 
     def _control_hashes(self, task: dict[str, Any]) -> dict[str, str]:
         root = Path(task["path"])

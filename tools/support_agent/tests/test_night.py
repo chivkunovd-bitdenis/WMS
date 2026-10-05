@@ -36,6 +36,11 @@ class FakeHotfix:
             return ""
         return ""
 
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        return ok()
+
     def run_gh(self, argv: list[str], cwd: str | Path | None = None,
                timeout: int = 300) -> ExecResult:
         self.calls.append(("gh", argv))
@@ -118,6 +123,15 @@ class RealGitHotfix(FakeHotfix):
         self.calls.append(("run", argv))
         result = subprocess.run(
             argv, cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
+            check=False, capture_output=True, text=True,
+        )
+        return ExecResult(result.returncode, result.stdout, result.stderr)
+
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
             check=False, capture_output=True, text=True,
         )
         return ExecResult(result.returncode, result.stdout, result.stderr)
@@ -914,14 +928,22 @@ def test_checks_merge_fresh_etalon_before_review_and_refresh_control_hashes(
         ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
     ).stdout.strip()
     (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
-    subprocess.run(["git", "add", "backend/app/svc.py"], cwd=root, check=True)
+    backlog = root / "docs/KANONICHESKIY_BACKLOG.md"
+    backlog.write_text("# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
     subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
     task_branch = subprocess.run(
         ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
     ).stdout.strip()
     subprocess.run(["git", "checkout", "-qb", "etalon-fixture", baseline], cwd=root, check=True)
     (root / "AGENTS.md").write_text("trusted etalon rules\n", encoding="utf-8")
-    subprocess.run(["git", "add", "AGENTS.md"], cwd=root, check=True)
+    backlog.write_text("# Backlog\n\n## WMS-699 · etalon\n\nKeep etalon.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "docs/KANONICHESKIY_BACKLOG.md"], cwd=root, check=True,
+    )
     subprocess.run(["git", "commit", "-qm", "WMS-699: trusted etalon advance"], cwd=root, check=True)
     etalon = subprocess.run(
         ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
@@ -940,10 +962,53 @@ def test_checks_merge_fresh_etalon_before_review_and_refresh_control_hashes(
     saved = runner._state(tid)["tasks"]["WMS-700"]
     assert saved["step"] == "review" and saved["base_sha"] == etalon
     assert (root / "AGENTS.md").read_text(encoding="utf-8") == "trusted etalon rules\n"
+    merged_backlog = backlog.read_text(encoding="utf-8")
+    assert "## WMS-699 · etalon" in merged_backlog and "## WMS-700 · task" in merged_backlog
     assert saved["control_hashes"] == runner._control_hashes(saved)
     assert subprocess.run(
         ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], cwd=root,
     ).returncode == 0
+
+
+def test_checks_recover_saved_etalon_merge_intent_after_interruption(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
+    subprocess.run(["git", "add", "backend/app/svc.py"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
+    task_branch = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-qb", "etalon-interrupted", baseline], cwd=root, check=True)
+    (root / "AGENTS.md").write_text("new trusted rules\n", encoding="utf-8")
+    subprocess.run(["git", "add", "AGENTS.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "WMS-699: etalon advance"], cwd=root, check=True)
+    etalon = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/etalon", etalon], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+    runner.hotfix.fetch = lambda: None  # type: ignore[method-assign]
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={}, base_sync_intent=etalon)
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "merge", "--no-ff", "--no-edit", etalon], cwd=root, check=True,
+    )
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["base_sha"] == etalon
+    assert "base_sync_intent" not in saved
+    assert saved["control_hashes"] == runner._control_hashes(saved)
 
 
 def test_pr_rechecks_base_and_returns_stale_acceptance_to_checks(env: Any) -> None:
@@ -957,7 +1022,7 @@ def test_pr_rechecks_base_and_returns_stale_acceptance_to_checks(env: Any) -> No
         accepted_sha="b" * 40,
     )
     runner._save(tid, state)
-    runner.hotfix.run = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")  # type: ignore[method-assign]
+    runner.hotfix.git_result = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")  # type: ignore[method-assign]
 
     runner.development(tid)
 
