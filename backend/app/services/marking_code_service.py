@@ -1651,7 +1651,8 @@ async def _existing_import_cis_codes(
             for value in normalized
             if (gtin := extract_gtin_from_cis(value)) is not None
         }
-        conditions: list[ColumnElement[bool]] = [MarkingCode.cis_code.in_(chunk)]
+        lookup_values = set(chunk) | normalized
+        conditions: list[ColumnElement[bool]] = [MarkingCode.cis_code.in_(lookup_values)]
         if gtins:
             conditions.append(MarkingCode.gtin.in_(gtins))
         stmt = select(MarkingCode.cis_code).where(

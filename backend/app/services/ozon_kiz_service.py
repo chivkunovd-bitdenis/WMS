@@ -87,11 +87,11 @@ async def _claim_or_create_code(
     value: str,
     line: PackagingTaskLine,
 ) -> tuple[MarkingCode, bool]:
-    code = await session.scalar(
-        select(MarkingCode)
-        .where(MarkingCode.tenant_id == order.tenant_id, MarkingCode.cis_code == value)
-        .execution_options(populate_existing=True)
-        .with_for_update()
+    code = await marking_code_svc.find_marking_code_by_cis_identity(
+        session,
+        order.tenant_id,
+        value,
+        for_update=True,
     )
     if code is not None:
         if code.seller_id != order.seller_id:
