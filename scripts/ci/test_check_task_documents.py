@@ -238,6 +238,33 @@ class GitTests(unittest.TestCase):
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("реестр коррекции" in error for error in errors))
 
+    def test_correction_does_not_absorb_an_earlier_change_to_another_frozen_file(self):
+        rollout = self.rollout()
+        corrected = "backend/tests/test_pdf.py"
+        untouched = "backend/tests/test_atomicity.py"
+        self.write(corrected, "def test_pdf(): assert column_text()\n")
+        self.write(untouched, "def test_atomicity(): assert rollback()\n")
+        contract = self.commit("WMS-712: контракт тестов")
+        self.write(untouched, "def test_atomicity(): assert True\n")
+        self.commit("WMS-712 weaken unrelated frozen test")
+        self.write(corrected, "def test_pdf(): assert cell_text()\n")
+        correction = self.commit("WMS-712: исправить PDF-проверку контракта")
+        ledger = {
+            "task": "WMS-712",
+            "contract_commit": contract,
+            "correction_commit": correction,
+            "files": [corrected],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            "docs/reviews/contract-corrections/WMS-712.json",
+            json.dumps(ledger) + "\n",
+        )
+        self.commit("WMS-712 correction ledger")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertEqual(len(errors), 1)
+        self.assertIn(untouched, errors[0])
+
     def test_similarly_named_commit_does_not_freeze_files(self):
         rollout = self.rollout()
         self.write("backend/tests/test_contract.py", "def test_contract(): pass\n")

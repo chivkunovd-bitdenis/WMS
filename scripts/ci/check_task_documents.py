@@ -162,7 +162,7 @@ def commit_changed_paths(root: Path, commit: str) -> set[str]:
 
 def reviewed_contract_correction(
     root: Path, task_id: str, contract_commit: str, frozen: list[str]
-) -> tuple[str | None, list[str]]:
+) -> tuple[str | None, set[str], list[str]]:
     """Return the reviewed correction SHA, or explain why its ledger is invalid.
 
     A correction is deliberately stricter than an ordinary follow-up commit: it
@@ -174,11 +174,13 @@ def reviewed_contract_correction(
     ledger_rel = f"{CONTRACT_CORRECTIONS_DIR}/{task_id}.json"
     ledger_path = root / ledger_rel
     if not ledger_path.is_file():
-        return None, []
+        return None, set(), []
     try:
         ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
-        return None, [f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"]
+        return None, set(), [
+            f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"
+        ]
     correction = str(ledger.get("correction_commit") or "")
     files = ledger.get("files")
     review = ledger.get("review")
@@ -194,7 +196,9 @@ def reviewed_contract_correction(
         or review.get("effort") != "high"
         or review.get("verdict") != "PASS"
     ):
-        return None, [f"{task_id}: реестр коррекции контракта заполнен не полностью"]
+        return None, set(), [
+            f"{task_id}: реестр коррекции контракта заполнен не полностью"
+        ]
     for older, newer, label in (
         (contract_commit, correction, "коррекция не следует за исходным контрактом"),
         (correction, "HEAD", "коррекция отсутствует в текущей версии"),
@@ -203,16 +207,18 @@ def reviewed_contract_correction(
             ["git", "merge-base", "--is-ancestor", older, newer], cwd=root,
             check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         ).returncode != 0:
-            return None, [f"{task_id}: {label}"]
+            return None, set(), [f"{task_id}: {label}"]
     expected = set(files)
     if not expected.issubset(frozen):
-        return None, [f"{task_id}: коррекция затрагивает файл вне исходного контракта"]
+        return None, set(), [
+            f"{task_id}: коррекция затрагивает файл вне исходного контракта"
+        ]
     changed = commit_changed_paths(root, correction)
     if changed != expected:
-        return None, [
+        return None, set(), [
             f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"
         ]
-    return correction, []
+    return correction, expected, []
 
 
 def contract_change_errors(root: Path, base: str) -> list[str]:
@@ -235,17 +241,26 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
         )
         if not frozen:
             continue
-        baseline, correction_errors = reviewed_contract_correction(
+        correction, corrected, correction_errors = reviewed_contract_correction(
             root, match[1], commit, frozen
         )
         errors.extend(correction_errors)
         if correction_errors:
             continue
-        baseline = baseline or commit
-        overlap = sorted(set(
-            git(root, "diff", "--no-renames", "--name-only", baseline, "HEAD", "--", *frozen)
-            .splitlines()
-        ))
+        overlap = set()
+        untouched = sorted(set(frozen) - corrected)
+        if untouched:
+            overlap.update(
+                git(root, "diff", "--no-renames", "--name-only", commit, "HEAD", "--", *untouched)
+                .splitlines()
+            )
+        if corrected:
+            assert correction is not None
+            overlap.update(
+                git(root, "diff", "--no-renames", "--name-only", correction, "HEAD", "--", *sorted(corrected))
+                .splitlines()
+            )
+        overlap = sorted(overlap)
         if overlap:
             errors.append(
                 f"изменён контракт тестов {match[1]} после его фиксации: "
