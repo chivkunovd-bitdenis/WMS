@@ -32,6 +32,7 @@ import {
 import { apiUrl } from '../../api'
 import { useSellerAsyncScope } from './useSellerAsyncScope'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
+import { ProductBarcodeCell } from '../../components/ProductBarcodeCell'
 import { ProductStockLines } from '../../components/ProductStockLines'
 import { formatStockQty } from '../../utils/formatStockQty'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
@@ -1397,24 +1398,10 @@ export function SellerProductsStockScreen({
                     </Typography>
                   </TableCell>
                   <TableCell>
-                    <Typography
-                      variant="caption"
-                      sx={{ fontSize: '0.7rem' }}
-                      // F8 (ревью Astra №2): у товара на ФФ подсказка — как в
-                      // etalon, тот же код, что и в самой ячейке. Список всех
-                      // ШК в наведении — только у новой ветки «не на ФФ» (там
-                      // одна строка отвечает сразу за несколько ШК карточки).
-                      title={
-                        onFulfillment
-                          ? primaryBarcode ?? '—'
-                          : allBarcodes.length > 0
-                            ? allBarcodes.join(', ')
-                            : undefined
-                      }
-                      noWrap
-                    >
-                      {primaryBarcode ?? '—'}
-                    </Typography>
+                    <ProductBarcodeCell
+                      barcode={primaryBarcode}
+                      barcodes={allBarcodes}
+                    />
                   </TableCell>
                   <TableCell>
                     <Typography variant="body2" title={itemSizeLabel(row)} noWrap>

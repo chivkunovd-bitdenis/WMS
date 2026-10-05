@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
-import { ProductBarcodeCell, normalizeProductBarcodes } from './ProductBarcodeCell'
+import { ProductBarcodeCell } from './ProductBarcodeCell'
+import { normalizeProductBarcodes } from '../utils/productBarcodes'
 
 describe('WMS-660 product barcode cell', () => {
   it('keeps the primary barcode first and removes blank and duplicate values', () => {
