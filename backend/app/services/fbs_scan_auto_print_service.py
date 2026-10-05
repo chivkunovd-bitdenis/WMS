@@ -33,6 +33,7 @@ from app.models.fbs_order import (
     FbsOrderMarking,
 )
 from app.models.fbs_supply import FbsSupply
+from app.models.product_barcode import ProductBarcode
 from app.services.document_event_service import record_document_event
 from app.services.fbs_picking_order_service import picking_list_order_key
 
@@ -206,6 +207,20 @@ async def select_order_for_product_scan(
             )
         ).all()
     )
+    alias_product_ids: set[uuid.UUID] = set()
+    if order_id is None:
+        supply_product_ids = {order.product_id for order in orders if order.product_id is not None}
+        if supply_product_ids:
+            alias_product_ids = set(
+                await session.scalars(
+                    select(ProductBarcode.product_id).where(
+                        ProductBarcode.tenant_id == tenant_id,
+                        ProductBarcode.seller_id == supply.seller_id,
+                        ProductBarcode.product_id.in_(supply_product_ids),
+                        ProductBarcode.barcode == raw_barcode,
+                    )
+                )
+            )
     matching = [
         order
         for order in orders
@@ -217,14 +232,18 @@ async def select_order_for_product_scan(
                 and order.status not in FBS_ORDER_MARKING_FROZEN_STATUSES
             )
         )
-        and (order.id == order_id if order_id is not None else raw_barcode in {
-            value
-            for value in (
-                order.wb_barcode,
-                order.product.wb_barcode if order.product is not None else None,
-            )
-            if value
-        })
+        and (
+            order.id == order_id
+            if order_id is not None
+            else order.product_id in alias_product_ids or raw_barcode in {
+                value
+                for value in (
+                    order.wb_barcode,
+                    order.product.wb_barcode if order.product is not None else None,
+                )
+                if value
+            }
+        )
     ]
     if not matching:
         raise FbsScanAutoPrintError("scan_product_not_found")
