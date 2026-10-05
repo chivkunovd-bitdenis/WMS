@@ -191,6 +191,54 @@ def test_existing_topic_before_first_new_subtopic_is_valid(tmp_path: Path) -> No
         f"agent_topic:topic-{followup['id']}-1")["pending"]
 
 
+def test_split_message_emits_one_completion_after_all_parts(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    owner_id = store.add_message(
+        source="telegram", chat_id=4242, msg_id="owner-split", role="owner",
+        author_id="42", author_name="Owner", ts=100, kind="text",
+        text="Проверь две связанные части", file_id=None, reply_to=None,
+    )
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    assert owner is not None
+    agent.dispatcher.accept(owner)
+
+    def split_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": f"topic-{owner_id}-1", "subrequest": "Первая часть"},
+            {"topic_id": f"topic-{owner_id}-2", "subrequest": "Вторая часть"},
+        ]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = split_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    root_event = f"in:{owner_id}:1"
+    first_event = f"{root_event}:part1"
+    second_event = f"{root_event}:part2"
+
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-1", first_event,
+        {"summary": "Первая проверена", "result": "Первая часть готова",
+         "answer_queued": False},
+    )
+    assert store.kv_get("agent_dispatch_queue", []) == []
+
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-2", second_event,
+        {"summary": "Вторая проверена", "result": "Вторая часть готова",
+         "answer_queued": False},
+    )
+    queue = store.kv_get("agent_dispatch_queue", [])
+    assert len(queue) == 1
+    completion = store.kv_get(f"agent_event:{queue[0]}")
+    assert completion["kind"] == "worker_done"
+    assert completion["source_event"] == root_event
+    assert completion["split_complete"] is True
+    assert "Первая часть готова" in completion["text"]
+    assert "Вторая часть готова" in completion["text"]
+
+
 def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
     agent, store = _agent(tmp_path)
     source = _message(store, -10, "unsafe", "Создай тему")

@@ -161,6 +161,37 @@ def test_arbitrary_job_uses_native_owner_mode_and_exact_source(tmp_path):
     assert kwargs["cwd"] == str(worktree)
 
 
+def test_project_job_reuses_active_job_with_overlapping_task_id(tmp_path):
+    now = [100.0]
+    agent, store, _, _ = coordinator(tmp_path, now=now)
+    first_source_id = message(store, 4242, "42", "Запусти WMS-700")
+    second_source_id = message(store, 4242, "42", "Ещё раз запусти WMS-700")
+    first_source = store.row("SELECT * FROM messages WHERE id=?", (first_source_id,))
+    second_source = store.row("SELECT * FROM messages WHERE id=?", (second_source_id,))
+    assert first_source and second_source
+    store.add_ticket(
+        kind="agent_task", source="telegram", chat_id=-100, seller="client",
+        stage="agent_discussion",
+        data={"agent": {"wms_number": 700, "version": "v1",
+                         "document_version": "v1", "is_frontend": False,
+                         "mockup_required": False,
+                         "owner_approval": {"version": "v1"}}},
+    )
+    agent._submit_job = lambda _: None
+    first = agent._owner_tool(
+        "project_job", {"request": "Исправь первый дефект", "task_ids": ["WMS-700"]},
+        agent._context(first_source, owner=True),
+    )
+    second = agent._owner_tool(
+        "project_job", {"request": "Исправь тот же дефект иначе", "task_ids": ["WMS-700"]},
+        agent._context(second_source, owner=True),
+    )
+
+    assert second["id"] == first["id"]
+    assert second["deduplicated"] is True
+    assert store.kv_get("agent_job_index", []) == [first["id"]]
+
+
 def test_selected_task_marked_for_mockup_needs_current_mockup_approval(tmp_path):
     now = [100.0]
     agent, store, _, _ = coordinator(tmp_path, now=now)
