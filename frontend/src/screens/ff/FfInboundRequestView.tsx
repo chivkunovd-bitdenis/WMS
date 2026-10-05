@@ -525,6 +525,10 @@ export function FfInboundRequestView({
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const [packagesExpanded, setPackagesExpanded] = useState(false)
+  const [boxDialogOpen, setBoxDialogOpen] = useState(false)
+  const [boxCount, setBoxCount] = useState('1')
+  const [boxCreateError, setBoxCreateError] = useState<string | null>(null)
+  const [boxMutationId, setBoxMutationId] = useState<string | null>(null)
   const [cargoDialogOpen, setCargoDialogOpen] = useState(false)
   const [cargoCount, setCargoCount] = useState('1')
   const [cargoError, setCargoError] = useState<string | null>(null)
@@ -588,6 +592,7 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
+      !boxDialogOpen &&
       clearBoxTarget == null &&
       !distOpen &&
       !kizReprintOpen,
@@ -606,6 +611,7 @@ export function FfInboundRequestView({
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null &&
+      !boxDialogOpen &&
       clearBoxTarget == null &&
       !kizReprintOpen,
     onScan: (code) => {
@@ -1745,25 +1751,39 @@ export function FfInboundRequestView({
     }
   }
 
-  const createInboundBox = async (): Promise<string | null> => {
+  const openBoxCreateDialog = () => {
+    setBoxCount('1')
+    setBoxCreateError(null)
+    setBoxMutationId(crypto.randomUUID())
+    setBoxDialogOpen(true)
+  }
+
+  const createInboundBoxes = async (): Promise<void> => {
+    if (!/^\d+$/.test(boxCount) || Number(boxCount) < 1 || Number(boxCount) > 1000) {
+      setBoxCreateError('Укажите целое количество коробов от 1 до 1000.')
+      return
+    }
+    const mutationId = boxMutationId ?? crypto.randomUUID()
+    if (boxMutationId == null) setBoxMutationId(mutationId)
     setBusy(true)
-    setError(null)
+    setBoxCreateError(null)
     try {
       const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes`), {
         method: 'POST',
-        headers: authHeaders,
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: Number(boxCount), mutation_id: mutationId }),
       })
       if (!res.ok) {
-        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
-        return null
+        setBoxCreateError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        return
       }
-      const box = (await res.json()) as { id: string }
       await loadDetail()
       setPackagesExpanded(true)
-      return box.id
+      setBoxDialogOpen(false)
+      setBoxCount('1')
+      setBoxMutationId(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось создать короб.')
-      return null
+      setBoxCreateError(e instanceof Error ? e.message : 'Не удалось создать короба.')
     } finally {
       setBusy(false)
     }
@@ -1775,10 +1795,6 @@ export function FfInboundRequestView({
 
   const openBoxAddDialog = (boxId: string) => {
     setBoxAddDialogBoxId(boxId)
-  }
-
-  const handleCreateBox = async () => {
-    await createInboundBox()
   }
 
   const createCargoPlaces = async () => {
@@ -2190,6 +2206,9 @@ export function FfInboundRequestView({
   )
 
   const actualEditable = isFulfillmentAdmin && (receivingActive || ffDraft)
+  const boxCreationEditable =
+    isFulfillmentAdmin &&
+    (receivingActive || ffDraft || (detail?.status === 'draft' && isReturnOperation))
 
   const hasPostedPartial = useMemo(
     () => (detail?.lines ?? []).some((ln) => (ln.posted_qty ?? 0) > 0),
@@ -2969,8 +2988,8 @@ export function FfInboundRequestView({
                   >
                     <Button
                       variant="contained"
-                      disabled={busy || !(receivingActive || ffDraft)}
-                      onClick={() => void handleCreateBox()}
+                      disabled={busy || !boxCreationEditable}
+                      onClick={openBoxCreateDialog}
                       data-testid="ff-inbound-add-to-box"
                     >
                       Создать короба
@@ -3841,6 +3860,59 @@ export function FfInboundRequestView({
           </Typography>
         </Stack>
       </AppDialog>
+
+      <Dialog
+        open={boxDialogOpen}
+        onClose={() => {
+          if (!busy) setBoxDialogOpen(false)
+        }}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-boxes-create-dialog"
+      >
+        <DialogTitle>Создать короба</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {boxCreateError ? (
+              <Alert severity="error" data-testid="ff-inbound-boxes-create-error">
+                {boxCreateError}
+              </Alert>
+            ) : null}
+            <TextField
+              size="small"
+              label="Количество коробов"
+              type="number"
+              value={boxCount}
+              disabled={busy}
+              onChange={(event) => {
+                setBoxCount(event.target.value)
+                setBoxCreateError(null)
+              }}
+              slotProps={{
+                htmlInput: {
+                  min: 1,
+                  max: 1000,
+                  step: 1,
+                  'data-testid': 'ff-inbound-boxes-create-count',
+                },
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setBoxDialogOpen(false)}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={() => void createInboundBoxes()}
+            data-testid="ff-inbound-boxes-create-submit"
+          >
+            Создать
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       <Dialog
         open={cargoDialogOpen}
