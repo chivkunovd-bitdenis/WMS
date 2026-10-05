@@ -978,7 +978,13 @@ def test_checks_recover_saved_etalon_merge_intent_after_interruption(
         ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
     ).stdout.strip()
     (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
-    subprocess.run(["git", "add", "backend/app/svc.py"], cwd=root, check=True)
+    (root / "docs/KANONICHESKIY_BACKLOG.md").write_text(
+        "# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
     subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
     task_branch = subprocess.run(
         ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
@@ -1002,11 +1008,24 @@ def test_checks_recover_saved_etalon_merge_intent_after_interruption(
         ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
          "merge", "--no-ff", "--no-edit", etalon], cwd=root, check=True,
     )
+    subprocess.run(["git", "checkout", "-q", "etalon-interrupted"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "commit", "--allow-empty", "-qm", "WMS-699: etalon advances again"],
+        cwd=root, check=True,
+    )
+    etalon_next = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/etalon", etalon_next], cwd=root, check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
 
     runner.development(tid)
 
     saved = runner._state(tid)["tasks"]["WMS-700"]
-    assert saved["step"] == "review" and saved["base_sha"] == etalon
+    assert saved["step"] == "review" and saved["base_sha"] == etalon_next
     assert "base_sync_intent" not in saved
     assert saved["control_hashes"] == runner._control_hashes(saved)
 

@@ -932,17 +932,21 @@ class NightRunner:
         self.hotfix.fetch()
         etalon = self.hotfix.git("rev-parse", "origin/etalon", cwd=task["path"]).strip()
         intent = task.get("base_sync_intent")
-        if self.hotfix.git_result(
-            "merge-base", "--is-ancestor", etalon, "HEAD", cwd=task["path"]
-        ).rc == 0:
-            if intent == etalon:
+        if intent:
+            if self.hotfix.git_result(
+                "merge-base", "--is-ancestor", str(intent), "HEAD", cwd=task["path"]
+            ).rc == 0:
                 if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
                     raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
                 task["control_hashes"] = self._control_hashes(task)
                 self._clear_stale_validation(task)
-                task.pop("base_sync_intent", None)
-            else:
-                self._assert_contract(task)
+                task["base_sha"] = intent
+            task.pop("base_sync_intent", None)
+            self._save(tid, state)
+        if self.hotfix.git_result(
+            "merge-base", "--is-ancestor", etalon, "HEAD", cwd=task["path"]
+        ).rc == 0:
+            self._assert_contract(task)
             task["base_sha"] = etalon
             self._save(tid, state)
             return
