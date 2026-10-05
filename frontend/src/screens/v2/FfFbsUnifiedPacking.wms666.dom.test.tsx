@@ -216,7 +216,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
           order_id: found.id, wb_order_id: found.wb_order_id,
           product: { name: found.product.name, image_url: null, barcode: found.product.barcode, seller_article: found.product.seller_article },
           current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
-          requires_honest_sign: false,
+          requires_honest_sign: found.metadata.required.includes('sgtin'),
         })
       }
       return json({ detail: { code: 'sticker_not_found', message: 'Стикер не найден' } }, 404)
@@ -640,5 +640,42 @@ describe('WMS-666 second review regressions: exhausted and stale Ozon scans', ()
     expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(2)
     expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
     expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).toBeNull()
+  })
+})
+
+describe('WMS-666 third review regressions: exact Ozon position identity', () => {
+  it('yields an exhausted exact position to the next supply without substituting another position', async () => {
+    const firstOrder = state['ozon-a']!.orders[0]!
+    state['ozon-a']!.boxes[0]!.assigned_order_ids = [firstOrder.id]
+    state['ozon-a']!.boxes[0]!.assigned_order_product_ids = ['ozon-a-position-a']
+    await renderAssembly(['ozon-a', 'ozon-b'])
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => calls.some((call) => call.path.startsWith('/operations/fbs-supplies/ozon-b/boxes/')), 750)
+
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-supplies/ozon-a/boxes/'))).toHaveLength(0)
+    expect(state['ozon-a']!.boxes[0]!.assigned_order_product_ids).toEqual(['ozon-a-position-a'])
+    expect(calls.find((call) => call.path.startsWith('/operations/fbs-supplies/ozon-b/boxes/'))?.body).toEqual({
+      order_ids: [], order_product_ids: ['ozon-b-position-a'],
+    })
+  })
+
+  it('keeps an explicit posting selectable for KIZ when its only position is boxed but the order is not packed', async () => {
+    const markedOrder = state['ozon-a']!.orders[0]!
+    markedOrder.positions = [markedOrder.positions[0]!]
+    markedOrder.metadata.required = ['sgtin']
+    state['ozon-a']!.boxes[0]!.assigned_order_ids = [markedOrder.id]
+    state['ozon-a']!.boxes[0]!.assigned_order_product_ids = ['ozon-a-position-a']
+    await renderSupply('ozon-a')
+
+    physicalScan('OZON-POSTING-666')
+    await settleUntil(() => (
+      calls.some((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))
+      || Boolean(document.querySelector('[role="alert"]'))
+    ), 750)
+
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(1)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).not.toBeNull()
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
   })
 })
