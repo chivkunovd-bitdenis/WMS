@@ -62,7 +62,7 @@ async def confirmed_order_handover_dates(
             FbsWbOperation.seller_id.in_(
                 {order.seller_id for order in own_orders if order.seller_id}
             ),
-            FbsWbOperation.operation_kind == "supply_deliver",
+            FbsWbOperation.operation_kind.in_({"supply_deliver", "observed_handoff"}),
             FbsWbOperation.state == "confirmed",
             FbsWbOperation.local_entity_type == "fbs_supply",
             FbsWbOperation.confirmed_at.is_not(None),
@@ -97,17 +97,24 @@ async def confirmed_order_handover_dates(
     operation_by_id = {op.id: op for op in operations}
     ledger_orders: dict[uuid.UUID, list[uuid.UUID]] = {}
     if operation_by_id:
-        for op_id, order_id in await session.execute(
-            select(
-                FbsShipmentReversalLedger.wb_operation_id,
-                FbsShipmentReversalLedger.fbs_order_id,
-            )
+        for ledger in await session.scalars(
+            select(FbsShipmentReversalLedger)
             .where(
                 FbsShipmentReversalLedger.tenant_id == tenant_id,
                 FbsShipmentReversalLedger.fbs_order_id.in_(by_id),
                 FbsShipmentReversalLedger.wb_operation_id.in_(operation_by_id),
             )
         ):
+            op_id = ledger.wb_operation_id
+            order_id = ledger.fbs_order_id
+            if op_id is None:
+                continue
+            operation = operation_by_id[op_id]
+            if operation.operation_kind == "observed_handoff" and (
+                ledger.shipment_movement_id is None or ledger.reversed_at is not None
+                or any(not row.get("movement_id") for row in ledger.ozon_positions_json or [])
+            ):
+                continue
             ledger_orders.setdefault(op_id, []).append(order_id)
     proven_orders: set[uuid.UUID] = set()
     for op in operations:

@@ -51,7 +51,11 @@ from app.services.fbs_stock_sync_service import (
 from app.services.marketplace_account_service import MarketplaceAccountService
 from app.services.marketplace_provider import MarketplaceProviderError, OzonMarketplaceProvider
 from app.services.marketplace_stock_sync_result import SellerStockSyncResult
-from app.services.wb_marketplace_orders_service import _release_reservation, _try_reserve_order
+from app.services.wb_marketplace_orders_service import (
+    _is_wms_supply_order,
+    _release_reservation,
+    _try_reserve_order,
+)
 
 OZON_FBS_DEADLINE_HOURS = 120
 
@@ -739,6 +743,13 @@ async def _apply_status(
 ) -> bool:
     normalized = (raw_status or "").strip().lower() or None
     substatus = (raw_substatus or "").strip().lower() or None
+    if order.status == FBS_ORDER_STATUS_CANCELLED:
+        return False
+    if normalized == "cancelled_from_split_pending" and await _is_wms_supply_order(session, order):
+        # A split parent transfers its obligation to exact children; it does not
+        # cancel those units or release their still outstanding reservations.
+        order.wb_status = normalized
+        return False
     local = _local_status(normalized, substatus)
     previous = order.status
     previous_wb_status = order.wb_status
@@ -781,7 +792,9 @@ async def _apply_status(
             # здесь: опрос — единственный путь, которым подтверждённый заказ
             # уходит в отмену.
             await reverse_fbs_order_billing(session, order)
-        await _release_reservation(session, order)
+        if (order.status == FBS_ORDER_STATUS_CANCELLED
+                or not await _is_wms_supply_order(session, order)):
+            await _release_reservation(session, order)
     return changed
 
 
@@ -798,6 +811,10 @@ async def _charge_confirmed_order(session: AsyncSession, order: FbsOrder) -> Non
     опроса его не задваивает.
     """
     if order.status not in _BILLABLE_STATUSES:
+        return
+    if await _is_wms_supply_order(session, order):
+        # Imported statuses can precede local accounting or cover only a split
+        # subset. The handover path charges after the exact expense is persisted.
         return
     from app.services.fbs_order_billing_service import record_fbs_order_confirmed
 
@@ -991,6 +1008,34 @@ async def sync_ozon_orders(
         created += 1
         upserted += 1
     await session.commit()
+    # The intake path also sees cards for existing WMS orders. Reconcile those
+    # exact rows even when their status did not change, without a second poll of
+    # unrelated orders or another external handover.
+    from app.services import fbs_observed_handoff_service as observed
+    from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
+    by_number = {str(row.get("posting_number")): row for row in rows}
+    imported_orders = list(await session.scalars(select(FbsOrder).where(
+        FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
+        FbsOrder.marketplace == "ozon", FbsOrder.supply_id.is_not(None),
+        FbsOrder.external_order_id.in_(by_number),
+    ).options(selectinload(FbsOrder.product_positions))))
+    observations = {}
+    for order in imported_orders:
+        targets = await observed.ozon_targets(
+            order, by_number.get(order.external_order_id or ""), provider, client_id, api_key,
+        )
+        observations[order.id] = observed.make_observation(
+            order, targets, by_number.get(order.external_order_id or ""),
+        )
+    if observations:
+        await observed.save_observations(session, tenant_id, seller_id, observations)
+        await lock_order_batch_packaging_rows(session, tenant_id, list(observations))
+        for supply_id in sorted({o.supply_id for o in imported_orders if o.supply_id}, key=str):
+            supply = await session.scalar(select(FbsSupply).where(FbsSupply.id == supply_id)
+                                          .execution_options(populate_existing=True))
+            if supply is not None:
+                await observed.conduct_supply(session, supply)
+        await session.commit()
     return {
         "orders_upserted": upserted,
         "orders_created": created,
@@ -1021,6 +1066,7 @@ async def sync_ozon_order_statuses(
     порцией и по кругу — первыми те, кого дольше всех не спрашивали, — так что
     ни один заказ не остаётся без опроса навсегда.
     """
+    from app.services import fbs_observed_handoff_service as observed
     orders = list(
         (
             await session.execute(
@@ -1031,7 +1077,8 @@ async def sync_ozon_order_statuses(
                     FbsOrder.seller_id == seller_id,
                     FbsOrder.marketplace == "ozon",
                     FbsOrder.external_order_id.isnot(None),
-                    FbsOrder.status.notin_(OZON_STATUS_SYNC_TERMINAL_STATUSES),
+                    or_(FbsOrder.status.notin_(OZON_STATUS_SYNC_TERMINAL_STATUSES),
+                        observed.terminal_repair_condition(session)),
                 )
                 .order_by(
                     FbsOrder.last_wb_sync_at.asc().nulls_first(),
@@ -1049,16 +1096,50 @@ async def sync_ozon_order_statuses(
     external_ids = [
         order.external_order_id for order in orders if order.external_order_id is not None
     ]
-    rows = await provider.fetch_statuses(
-        client_id=client_id,
-        api_key=api_key,
-        order_ids=external_ids,
-    )
+    try:
+        rows = await provider.fetch_statuses(
+            client_id=client_id, api_key=api_key, order_ids=external_ids,
+        )
+    except (MarketplaceProviderError, httpx.HTTPError, ValueError):
+        rows = []
     by_external = {
         external_id: row
         for row in rows
         if (external_id := _text(row, "posting_number", "order_id", "id")) is not None
     }
+    observations = {}
+    for order in orders:
+        row = by_external.get(order.external_order_id or "")
+        try:
+            targets = await observed.ozon_targets(order, row, provider, client_id, api_key)
+        except (MarketplaceProviderError, httpx.HTTPError, ValueError):
+            targets = {}
+        observations[order.id] = observed.make_observation(order, targets, row)
+    # A saved ordinary approve checkpoint is already external evidence. Read
+    # recovery must never execute ship/create/approve again.
+    from app.models.fbs_wb_operation import FbsWbOperation
+    for operation in await session.scalars(select(FbsWbOperation).where(
+        FbsWbOperation.tenant_id == tenant_id, FbsWbOperation.seller_id == seller_id,
+        FbsWbOperation.operation_kind == "supply_deliver",
+        FbsWbOperation.local_entity_id.in_({o.supply_id for o in orders if o.supply_id}),
+    )):
+        progress = (operation.request_summary_json or {}).get("ozon_handoff_progress") or {}
+        if not progress.get("carriage_approved") or not progress.get("carriage_id"):
+            continue
+        for order in orders:
+            assembly = (order.meta_details_json or {}).get("ozon_assembly") or {}
+            if (order.supply_id == operation.local_entity_id
+                    and assembly.get("posting_numbers") == [order.external_order_id]):
+                targets = observed.expected_quantities(order)
+                observations[order.id]["targets"] = {str(pid): qty for pid, qty in targets.items()}
+    await observed.save_observations(session, tenant_id, seller_id, observations)
+    from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
+    order_ids = [o.id for o in orders]
+    await lock_order_batch_packaging_rows(session, tenant_id, order_ids)
+    orders = list(await session.scalars(select(FbsOrder).where(
+        FbsOrder.id.in_(order_ids), FbsOrder.tenant_id == tenant_id,
+        FbsOrder.seller_id == seller_id,
+    ).options(selectinload(FbsOrder.product_positions)).execution_options(populate_existing=True)))
     updated = 0
     polled_at = datetime.now(tz=UTC)
     for order in orders:
@@ -1087,5 +1168,10 @@ async def sync_ozon_order_statuses(
             )
         )
         await _charge_confirmed_order(session, order)
+    for supply_id in sorted({o.supply_id for o in orders if o.supply_id}, key=str):
+        supply = await session.scalar(select(FbsSupply).where(FbsSupply.id == supply_id)
+                                      .execution_options(populate_existing=True))
+        if supply is not None:
+            await observed.conduct_supply(session, supply)
     await session.commit()
     return updated

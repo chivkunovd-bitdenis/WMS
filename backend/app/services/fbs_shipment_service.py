@@ -1273,9 +1273,17 @@ async def _write_off_delivered_orders_once(
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
         if order.marketplace == "ozon" and (
-            ledger is None or (ledger.shipment_movement_id is None and ledger.ozon_positions_json)
+            ledger is None or ledger.ozon_positions_json
         ):
             try:
+                # A historical partial recipe may contain only completed rows.
+                # Stage the remaining units before the regular button consumes
+                # them, reusing all locations and movements already persisted.
+                prepared = await prepare_ozon_shipment_sources(
+                    session, tenant_id=supply.tenant_id, warehouse_id=supply.warehouse_id,
+                    orders=[order],
+                )
+                ledger = prepared[0]
                 ledger = await write_off_ozon_order(
                     session,
                     tenant_id=supply.tenant_id,
@@ -2208,6 +2216,21 @@ async def deliver_supply(
     supply_read = await _get_supply_read(session, tenant_id, supply_id, with_trbxes=True)
     if supply_read is None:
         raise FbsShipmentError("supply_not_found")
+
+    # A prior read-only reconciliation already completed this physical handover.
+    # A new browser key cannot authorize a second marketplace mutation.
+    if supply_read.delivered_at is not None:
+        from app.models.fbs_wb_operation import FbsWbOperation
+
+        observed = await session.scalar(select(FbsWbOperation.id).where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == supply_read.seller_id,
+            FbsWbOperation.local_entity_id == supply_id,
+            FbsWbOperation.operation_kind == "observed_handoff",
+            FbsWbOperation.state == WB_OPERATION_STATE_CONFIRMED,
+        ))
+        if observed is not None:
+            return supply_read
 
     request_hash = request_hash_for_deliver(
         supply_id=supply_id,

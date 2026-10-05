@@ -172,7 +172,7 @@ async def plan_shipment_sources(
         if ledger is not None:
             if ledger.reversed_at is not None:
                 raise OzonPackagingError("fbs_shipment_already_reversed")
-            if ledger.shipment_movement_id is not None:
+            if ledger.shipment_movement_id is not None and not ledger.ozon_positions_json:
                 continue
         positions = order.product_positions
         if positions and any(position.product_id is None for position in positions):
@@ -187,12 +187,28 @@ async def plan_shipment_sources(
             expected[order.product_id] = 1
         if not expected:
             raise OzonPackagingError("fbs_shipment_product_missing")
+        completed: Counter[uuid.UUID] = Counter()
+        if ledger is not None:
+            for completed_row in ledger.ozon_positions_json or []:
+                if completed_row.get("movement_id"):
+                    completed[uuid.UUID(str(completed_row["product_id"]))] += int(
+                        str(completed_row["quantity"]),
+                    )
+        if any(qty > expected.get(pid, 0) for pid, qty in completed.items()):
+            raise OzonPackagingError("fbs_shipment_composition_changed")
+        expected.subtract(completed)
+        expected = +expected
+        if not expected:
+            continue
         if ledger is not None and ledger.ozon_positions_json:
             staged: Counter[uuid.UUID] = Counter()
             for staged_row in ledger.ozon_positions_json:
+                if staged_row.get("movement_id"):
+                    continue
                 staged[uuid.UUID(str(staged_row["product_id"]))] += int(str(staged_row["quantity"]))
             if staged == expected:
-                recipes[order.id] = list(ledger.ozon_positions_json)
+                recipes[order.id] = [dict(row) for row in ledger.ozon_positions_json
+                                     if not row.get("movement_id")]
                 continue
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
@@ -328,8 +344,9 @@ async def prepare_shipment_sources(
         })
     for order_id, recipe in recipes.items():
         ledger = ledgers.get(order_id)
-        if ledger is not None and ledger.shipment_movement_id is not None:
-            continue
+        completed_rows = [dict(row) for row in (ledger.ozon_positions_json or [])
+                          if row.get("movement_id")] if ledger is not None else []
+        recipe = completed_rows + recipe
         first = recipe[0]
         if ledger is None:
             ledger = FbsShipmentReversalLedger(tenant_id=tenant_id, fbs_order_id=order_id)
@@ -353,6 +370,7 @@ async def write_off_order(
     order: FbsOrder,
     actor_user_id: uuid.UUID | None,
     ledger: FbsShipmentReversalLedger | None = None,
+    proved_quantities: dict[uuid.UUID, int] | None = None,
 ) -> FbsShipmentReversalLedger:
     """Apply the saved source recipe only after confirmed marketplace handoff."""
     if ledger is None:
@@ -365,13 +383,35 @@ async def write_off_order(
             orders=[order],
         )
         ledger = prepared[0]
-    if ledger.shipment_movement_id is not None:
+    if ledger.reversed_at is not None:
+        raise OzonPackagingError("fbs_shipment_already_reversed")
+    if ledger.shipment_movement_id is not None and not ledger.ozon_positions_json:
         return ledger
     if not ledger.ozon_positions_json:
         raise OzonPackagingError("fbs_shipment_source_missing")
-    completed_recipe = [dict(row) for row in ledger.ozon_positions_json]
-    for row in completed_recipe:
-        quantity = int(str(row["quantity"]))
+    completed_recipe: list[dict[str, object]] = []
+    remaining = Counter(proved_quantities) if proved_quantities is not None else None
+    if remaining is not None:
+        for row in ledger.ozon_positions_json:
+            if row.get("movement_id"):
+                remaining[uuid.UUID(str(row["product_id"]))] -= int(str(row["quantity"]))
+    for original in ledger.ozon_positions_json:
+        row = dict(original)
+        completed_recipe.append(row)
+        if row.get("movement_id"):
+            continue
+        product_id = uuid.UUID(str(row["product_id"]))
+        original_quantity = int(str(row["quantity"]))
+        quantity = original_quantity if remaining is None else min(
+            original_quantity, max(0, remaining[product_id]),
+        )
+        if not quantity:
+            continue
+        if remaining is not None:
+            remaining[product_id] -= quantity
+        row["quantity"] = quantity
+        if quantity < original_quantity:
+            completed_recipe.append(dict(original, quantity=original_quantity - quantity))
         allow_negative = int(str(row.get("negative_quantity", 0))) > 0
         values: dict[str, Any] = {
             "fbs_order_id": order.id,
