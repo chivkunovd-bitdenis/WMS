@@ -905,6 +905,7 @@ async def import_marking_codes(
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     files: Annotated[list[UploadFile], File(...)],
     pools_json: Annotated[str, Form(...)],
+    request_id: Annotated[uuid.UUID | None, Form()] = None,
     seller_id: Annotated[uuid.UUID | None, Form()] = None,
 ) -> MarkingImportOut:
     if user.role == FULFILLMENT_SELLER:
@@ -978,6 +979,7 @@ async def import_marking_codes(
             files=file_payloads,
             pool_specs=pool_specs,
             uploaded_by_user_id=user.id,
+            request_id=request_id,
         )
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc

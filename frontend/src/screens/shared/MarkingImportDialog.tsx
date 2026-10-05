@@ -359,6 +359,7 @@ function MarkingImportDialogContent({
   const [pendingAssignmentAttempt, setPendingAssignmentAttempt] = useState<AssignmentAttempt | null>(null)
   const previewAbortRef = useRef<AbortController | null>(null)
   const autoRequestIdRef = useRef(newRequestId())
+  const manualRequestIdRef = useRef(newRequestId())
   const appliedAssignmentRequestIdsRef = useRef(new Set<string>())
 
   const sellerCatalogProducts = useMemo(
@@ -389,6 +390,7 @@ function MarkingImportDialogContent({
     setPendingAssignmentAttempt(null)
     appliedAssignmentRequestIdsRef.current.clear()
     autoRequestIdRef.current = newRequestId()
+    manualRequestIdRef.current = newRequestId()
   }, [poolContext])
 
   useEffect(() => {
@@ -412,6 +414,7 @@ function MarkingImportDialogContent({
     setAutoResult(null)
     setStage('picker')
     autoRequestIdRef.current = newRequestId()
+    manualRequestIdRef.current = newRequestId()
     try {
       const form = new FormData()
       form.append('seller_id', sellerId)
@@ -468,6 +471,7 @@ function MarkingImportDialogContent({
       }))
       const form = new FormData()
       form.append('seller_id', sellerId)
+      form.append('request_id', manualRequestIdRef.current)
       form.append('pools_json', JSON.stringify(poolsJson))
       appendFiles(form, files)
       const res = await fetch(apiUrl('/operations/marking-codes/import'), {
