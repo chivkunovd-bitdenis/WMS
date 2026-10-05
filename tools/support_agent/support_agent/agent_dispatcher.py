@@ -40,6 +40,19 @@ def _safe_new_topic_id(topic_id: str, source_id: int) -> bool:
     return suffix.isdigit() and suffix == str(int(suffix)) and 1 <= int(suffix) <= 8
 
 
+def _safe_new_topic_for_batch(topic_id: str, event: dict[str, Any],
+                              events: list[dict[str, Any]]) -> bool:
+    """Allow a shared new topic only when its anchor is in the same-chat input batch."""
+    if _safe_new_topic_id(topic_id, int(event["source_id"])):
+        return True
+    return any(
+        candidate.get("kind") == "input"
+        and int(candidate.get("chat_id", 0)) == int(event.get("chat_id", 0))
+        and _safe_new_topic_id(topic_id, int(candidate["source_id"]))
+        for candidate in events
+    )
+
+
 class AgentDispatcher:
     def __init__(self, coordinator: Any) -> None:
         self.agent = coordinator
@@ -206,7 +219,9 @@ class AgentDispatcher:
             "instruction": "Route each event semantically to one or several independent "
                              "topics. Return JSON {routes:[{event_id,topics:[{topic_id,subrequest,"
                              "priority}],owner_reply?}]}. New topic_id is 'topic-' plus source numeric id "
-                             "and optional '-N' for several tasks in one owner message. Explicit owner "
+                             "and optional '-N' for several tasks in one owner message. Several input "
+                             "events from the same chat may share one new topic anchored to any of those "
+                             "same-batch events. Explicit owner "
                              "control can include controls:[{action:'set_priority'|'cancel_topic'|"
                              "'cancel_job',target,value?}]. Internal events "
                              "retain their topic_id. Owner_reply is a short immediate truthful response "
@@ -285,9 +300,11 @@ class AgentDispatcher:
                     if event["kind"] != "input":
                         if topic_id != event.get("topic_id") or len(parts) != 1:
                             raise ValueError("internal event changed topic")
-                    elif topic_id not in index and not _safe_new_topic_id(
-                            topic_id, int(event["source_id"])):
-                        raise ValueError("invalid new topic id")
+                    elif topic_id not in index and not _safe_new_topic_for_batch(
+                            topic_id, event, events):
+                        raise ValueError(
+                            f"invalid new topic id {topic_id!r} for event {event['id']!r}"
+                        )
                     topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
                     if topic and event["kind"] == "input" \
                             and int(topic.get("chat_id", 0)) != int(event["chat_id"]):
