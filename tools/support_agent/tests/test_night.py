@@ -481,7 +481,7 @@ def test_owner_cancellation_stops_before_any_model_or_release(env: Any) -> None:
     job = env.store.kv_get("agent_job:job1")
     env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
     runner.development(tid)
-    assert env.store.ticket(tid)["stage"] == "report"
+    assert env.store.ticket(tid)["stage"] == "done"
     assert not env.llm.calls and not runner.hotfix.release_calls
 
 
@@ -745,7 +745,7 @@ def test_etalon_network_does_not_lock_store_and_respects_cancel(env: Any) -> Non
         finish.set()
         thread.join(timeout=5)
     assert not thread.is_alive()
-    assert env.store.ticket(tid)["stage"] == "report"
+    assert env.store.ticket(tid)["stage"] == "done"
     assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
 
 

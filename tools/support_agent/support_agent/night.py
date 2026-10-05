@@ -176,9 +176,11 @@ class NightRunner:
                 if (current["status"] == "working"
                         and self.p.clock() >= float(current.get("next_poll", 0))):
                     task_id = current["id"]
+                    def develop_selected(selected_id: str = task_id) -> None:
+                        self._develop_task(tid, selected_id)
                     self.task_pool.submit(
                         f"night:{tid}:{task_id}",
-                        lambda task_id=task_id: self._develop_task(tid, task_id),
+                        develop_selected,
                     )
         except (LlmUnavailable, LlmError):
             self._save(tid, state, next_poll=self.p.clock() + 60)
@@ -751,7 +753,10 @@ class NightRunner:
         for task in state["tasks"].values():
             if task["status"] != "released":
                 task.update(status="stopped", reason="остановлено владельцем")
-        self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+        job.update(status="cancelled", cancel_requested=True, finished_at=self.p.clock())
+        with self.store.transaction():
+            self.store.kv_set(f"agent_job:{state['job_id']}", job)
+            self.store.set_stage(tid, "done", night={**state, "step": "done"})
         return True
 
     def _promote(self, tid: int, state: dict[str, Any]) -> None:
