@@ -146,7 +146,7 @@ def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) ->
     store.kv_set("cooldown:claude", time.time() + 999)
     llm.ask("review", "x", mode="readonly")
     argv = script.calls[-1]
-    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
+    assert argv[argv.index("-m") + 1] == "gpt-6-astra"
     assert 'model_reasoning_effort="high"' in argv
     for bad in ("xhigh", "max", "ultra", None):
         with pytest.raises(ValueError):
@@ -180,9 +180,9 @@ def test_allowed_roles_fall_back_to_sol_automatically_never_astra(tmp_path: Path
     assert models == ["gpt-6.1-sol"] * 5
     assert llm.cfg.llm.models["claude"]["frontend"] == "sonnet"
     assert llm.cfg.llm.models["claude"]["mockup"] == "sonnet"
-    assert llm.cfg.llm.models["codex"]["review"] == "gpt-6.1-sol"
+    assert llm.cfg.llm.models["codex"]["review"] == "gpt-6-astra"
     assert {r for r, m in ((r, llm.model_for("codex", r)) for r in ("filter", "routine", "analyst",
-            "frontend", "mockup", "review")) if m and "astra" in m} == set()
+            "frontend", "mockup", "review")) if m and "astra" in m} == {"review"}
 
 
 def test_stale_astra_config_cannot_override_sol61(tmp_path: Path) -> None:
@@ -203,7 +203,7 @@ def test_frontend_models_and_review_are_fixed(tmp_path: Path) -> None:
     llm.cfg.llm.codex_effort = "xhigh"
     assert llm.effort_for("codex", "review") == "high"
     llm.cfg.llm.models["codex"]["review"] = "gpt-5.6-sol"
-    assert llm.model_for("codex", "review") == "gpt-6.1-sol"
+    assert llm.model_for("codex", "review") == "gpt-6-astra"
 
 
 def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:

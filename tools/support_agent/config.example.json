@@ -47,7 +47,7 @@
     "claude_bin": "claude",
     "codex_bin": "codex",
     "models": {
-      "codex": {"filter": "gpt-6.1-sol", "routine": "gpt-6.1-sol", "analyst": "gpt-6.1-sol", "frontend": "gpt-6.1-sol", "mockup": "gpt-6.1-sol", "review": "gpt-6.1-sol"}
+      "codex": {"filter": "gpt-6.1-sol", "routine": "gpt-6.1-sol", "analyst": "gpt-6.1-sol", "frontend": "gpt-6.1-sol", "mockup": "gpt-6.1-sol", "review": "gpt-6-astra"}
     },
     "codex_effort": "high",
     "analyst_data_hint": ""

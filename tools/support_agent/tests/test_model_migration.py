@@ -26,8 +26,9 @@ def test_stale_config_cannot_select_an_old_model(tmp_path: Path, monkeypatch: An
         return LlmResult("ok", cli, model)
 
     monkeypatch.setattr(llm, "_run_once", run)
-    assert llm.ask(role, "continue").model == "gpt-6.1-sol"
-    assert calls == [("codex", "gpt-6.1-sol")]
+    expected = "gpt-6-astra" if role == "review" else "gpt-6.1-sol"
+    assert llm.ask(role, "continue").model == expected
+    assert calls == [("codex", expected)]
     assert llm.model_for("claude", role) is None
 
 
@@ -140,3 +141,36 @@ def test_history_migration_uses_literal_task_boundaries(tmp_path: Path, monkeypa
     monkeypatch.setattr(llm, "_run_once", run)
     llm.ask("routine", "current task", session_key="job_%", mode="text")
     assert seen == ["current task"]
+
+
+def test_astra_review_high_never_falls_back_to_sol(tmp_path: Path, monkeypatch: Any) -> None:
+    llm = LlmRouter(make_config(tmp_path), Store(str(tmp_path / "state.db")))
+    calls = []
+
+    def fail(cli: str, model: str, role: str, *args: Any, **kwargs: Any) -> None:
+        calls.append((cli, model, llm.effort_for(cli, role)))
+        raise _CallFailed("Astra unavailable")
+
+    monkeypatch.setattr(llm, "_run_once", fail)
+    with pytest.raises(LlmUnavailable):
+        llm.ask("review", "review", session_key="review")
+    assert calls == [("codex", "gpt-6-astra", "high")]
+
+
+def test_native_review_uses_astra_high_despite_stale_sol_choice(
+    tmp_path: Path, monkeypatch: Any,
+) -> None:
+    cfg = make_config(tmp_path, llm={"codex_effort": "xhigh"})
+    calls = []
+
+    def run(self: Any, prompt: str, **kwargs: Any) -> tuple[str, str, int]:
+        calls.append(kwargs)
+        return "review result", "ephemeral-review", 0
+
+    monkeypatch.setattr(AppServerTurn, "run", run)
+    result = LlmRouter(cfg, Store(cfg.db_path)).agent_turn(
+        "review", session_key="job:review", role="review", model="gpt-6.1-sol",
+        provider="claude", mode="readonly", cwd=str(tmp_path), include_project_tools=False,
+    )
+    assert result.model == "gpt-6-astra"
+    assert calls[0]["model"] == "gpt-6-astra" and calls[0]["effort"] == "high"

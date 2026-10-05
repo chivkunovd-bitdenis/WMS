@@ -20,6 +20,7 @@ APP = STATE / 'app'
 LABEL = 'pro.sellerfocus.wms-support-agent'
 PLIST = Path('/Users/deniscivkunov/Library/LaunchAgents') / f'{LABEL}.plist'
 MODEL = 'gpt-6.1-sol'
+REVIEW_MODEL = 'gpt-6-astra'
 BACKUP: Path | None = None
 STOPPED = False
 
@@ -83,7 +84,10 @@ def main() -> None:
     cfg = json.loads(cfg_path.read_text())
     original = json.loads(json.dumps(cfg))
     cfg['llm']['cli_order'] = ['codex']
-    cfg['llm']['models']['codex'] = {role: MODEL for role in cfg['llm']['models']['codex']}
+    cfg['llm']['models']['codex'] = {
+        role: REVIEW_MODEL if role == 'review' else MODEL
+        for role in cfg['llm']['models']['codex']
+    }
     cfg['agent']['owner_model'] = MODEL
     cfg['agent']['owner_provider'] = 'codex'
     # All values outside the four model-selection settings remain identical.
@@ -124,6 +128,7 @@ def main() -> None:
         heartbeat = json.loads(db.execute("SELECT value FROM kv WHERE key='heartbeat'").fetchone()[0])
     assert time.time() - float(heartbeat) < 30
     report = {'installed_sha': sha, 'published_branch': branch, 'model': MODEL,
+              'review_model': REVIEW_MODEL, 'review_effort': 'high',
               'previous_package_sha': base,
               'files': hashes, 'state_preserved_during_install': True,
               'all_package_modules_match_commit': True,

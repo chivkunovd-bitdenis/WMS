@@ -100,9 +100,9 @@ class LlmCfg:
                 "mockup": "sonnet",
                 "frontend": "sonnet",
             },
-            # WMS-676: все новые этапы выполняет Sol 6.1, включая отдельное ревью.
+            # WMS-676: рабочие этапы Sol 6.1; независимое ревью строго Astra high.
             "codex": {
-                role: "gpt-6.1-sol"
+                role: "gpt-6-astra" if role == "review" else "gpt-6.1-sol"
                 for role in ("filter", "routine", "analyst", "frontend", "mockup", "review")
             },
         }
