@@ -119,7 +119,9 @@ async def test_alias_collision_with_another_product_is_ambiguous_but_row_scan_st
 ) -> None:
     headers, supply_id, _ = await _seed_wb_supply(async_client)
     async with SessionLocal() as session:
-        orders = list((await session.scalars(select(FbsOrder).order_by(FbsOrder.wb_order_id))).all())
+        orders = list(
+            (await session.scalars(select(FbsOrder).order_by(FbsOrder.wb_order_id))).all()
+        )
         first = orders[0]
         other = Product(
             tenant_id=first.tenant_id, seller_id=first.seller_id, name="Second product",
