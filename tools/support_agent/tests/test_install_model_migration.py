@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import os
 import signal
 import sqlite3
 import subprocess
@@ -56,7 +57,8 @@ def installation(tmp_path: Path, monkeypatch: Any) -> Any:
     harness = SimpleNamespace(module=installer, state=state, app=app, cfg=cfg, package=package,
                               old_main=old_main, old_worker=old_worker, events=[],
                               term=False, alive=True, child=False, parked=False, polls=0,
-                              timeout=False, elapsed=0.0, bootstrapped=False, allow_old_bootout=False)
+                              timeout=False, elapsed=0.0, bootstrapped=False, allow_old_bootout=False,
+                              orphan=False, finish_state=False, fail_config=False, real_kill=os.kill)
     monkeypatch.setattr(installer, 'ROOT', root)
     monkeypatch.setattr(installer, 'STATE', state)
     monkeypatch.setattr(installer, 'APP', app)
@@ -70,12 +72,19 @@ def installation(tmp_path: Path, monkeypatch: Any) -> Any:
         if not harness.term:
             return
         harness.polls += 1
-        if harness.polls >= 3 and not harness.timeout:
+        if harness.orphan and harness.polls == 2:
+            harness.alive = False
+            harness.parked = True
+        if harness.polls >= (4 if harness.orphan else 3) and not harness.timeout:
             # The final tick has completed naturally, including its model child.
             harness.child = False
             harness.alive = False
             harness.parked = True
             harness.events.append('old_process_and_model_completed')
+            if harness.finish_state:
+                with sqlite3.connect(state / 'state.db') as db:
+                    db.execute("UPDATE tickets SET stage='report' WHERE id=21")
+                    db.execute("UPDATE kv SET value='42' WHERE key='tg_offset:intake'")
 
     def command(*args: str) -> str:
         if args[:2] == ('git', 'rev-parse'):
@@ -95,7 +104,7 @@ def installation(tmp_path: Path, monkeypatch: Any) -> Any:
             if '-axo' in args:
                 rows = ['100 1'] if harness.alive else ['200 1']
                 if harness.child:
-                    rows += ['101 100']
+                    rows += ['101 ' + ('100' if harness.alive else '1')]
                 return '\n'.join(rows)
             if '-p' in args:
                 pid = args[args.index('-p') + 1]
@@ -127,12 +136,17 @@ def installation(tmp_path: Path, monkeypatch: Any) -> Any:
         elif args[:2] == ['launchctl', 'bootstrap']:
             assert (package / '__main__.py').read_bytes() == old_main, 'Temporary gate must be removed'
             harness.bootstrapped = True
+            harness.events.append('service_bootstrap')
+        elif 'check-config' in args and harness.fail_config:
+            raise subprocess.CalledProcessError(1, args)
         elif args[:2] != ['git', 'merge-base'] and 'check-config' not in args:
             raise AssertionError(f'unexpected subprocess: {args}')
         return subprocess.CompletedProcess(args, 0)
 
     def check_output(args: list[str], **kwargs: Any) -> bytes:
         assert args[:2] == ['git', 'show']
+        if args[-1].startswith(sha + ':'):
+            return old_main if args[-1].endswith('__main__.py') else b'# reviewed Sol migration worker\n'
         return old_main if args[-1].endswith('__main__.py') else old_worker
 
     def sleep(delay: float) -> None:
@@ -202,3 +216,69 @@ def test_wrong_installed_baseline_is_rejected_before_stop(installation: Any) -> 
         installation.module.main()
     assert not installation.term
     assert installation.events == []
+
+
+def test_orphaned_descendant_also_finishes_before_bootout(installation: Any) -> None:
+    installation.orphan = True
+    installation.module.main()
+    assert installation.polls >= 4
+    assert installation.events.index('old_process_and_model_completed') < installation.events.index('bootout_after_drain')
+
+
+def test_backup_and_install_preserve_the_final_tick_outcome(installation: Any) -> None:
+    installation.finish_state = True
+    installation.module.main()
+    for db_path in [installation.state / 'state.db', installation.module.BACKUP / 'state.db']:
+        with sqlite3.connect(db_path) as db:
+            assert db.execute('SELECT id,stage FROM tickets').fetchall() == [(21, 'report')]
+            assert db.execute("SELECT value FROM kv WHERE key='tg_offset:intake'").fetchone()[0] == '42'
+
+
+def test_config_failure_rolls_back_only_while_service_is_absent(installation: Any) -> None:
+    installation.fail_config = True
+    with pytest.raises(subprocess.CalledProcessError):
+        installation.module.main()
+    assert json.loads((installation.state / 'config.json').read_text()) == installation.cfg
+    assert (installation.package / 'worker.py').read_bytes() == installation.old_worker
+    assert installation.events.count('bootout_after_drain') == 1
+    assert installation.events.count('service_bootstrap') == 1
+
+
+def test_failed_startup_verification_never_kills_newly_started_work(installation: Any) -> None:
+    with sqlite3.connect(installation.state / 'state.db') as db:
+        db.execute("UPDATE kv SET value='0' WHERE key='heartbeat'")
+    with pytest.raises(AssertionError):
+        installation.module.main()
+    assert installation.bootstrapped
+    assert installation.events.count('bootout_after_drain') == 1
+    assert installation.events.count('service_bootstrap') == 1
+    # Keep consistent installed code/config once a start may have done real work.
+    assert json.loads((installation.state / 'config.json').read_text())['llm']['codex_bin'] == BUNDLED_CODEX
+    assert (installation.package / 'worker.py').read_bytes() != installation.old_worker
+
+
+def test_respawn_gate_waits_without_importing_worker_code(installation: Any, monkeypatch: Any) -> None:
+    fake_kill = installation.module.os.kill
+
+    def kill_and_test_gate(pid: int, sig: int) -> None:
+        gate = installation.package / '__main__.py'
+        proc = subprocess.Popen([sys.executable, '-I', '-S', str(gate)])
+        try:
+            with pytest.raises(subprocess.TimeoutExpired):
+                proc.wait(timeout=0.05)
+        finally:
+            installation.real_kill(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=3)
+        fake_kill(pid, sig)
+
+    monkeypatch.setattr(installation.module.os, 'kill', kill_and_test_gate)
+    installation.module.main()
+
+
+def test_dirty_checkout_cannot_install_unpublished_worker_bytes(installation: Any) -> None:
+    source = installation.module.ROOT / 'tools/support_agent/support_agent/worker.py'
+    source.write_bytes(b'# unpublished unrelated work\n')
+    with pytest.raises(AssertionError, match='published SHA'):
+        installation.module.main()
+    assert installation.events == []
+    assert not installation.term
