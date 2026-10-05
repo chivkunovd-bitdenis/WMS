@@ -1,0 +1,13 @@
+{
+  "task": "WMS-665",
+  "contract_commit": "9c0aa2028f33a049e50a9d63ab554fb08815ab69",
+  "correction_commit": "86d7af1b6db088033a94bbd1c2ef1f45a41052ae",
+  "files": ["scripts/ops/tests/avpack-kiz-helper.test.cjs"],
+  "reason": "R8 replaced the temporary INN blocker after the owner explicitly authorized the existing WB seller-info path to create the production billing profile. The final correction adds real DOM regressions for session and exact-selection races before their implementation fix.",
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "evidence": "docs/reviews/WMS-665-REVIEW.md"
+  }
+}
