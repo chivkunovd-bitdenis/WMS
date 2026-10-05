@@ -3867,8 +3867,9 @@ export function FfInboundRequestView({
         </Stack>
       </AppDialog>
 
+      {boxDialogOpen ? (
       <Dialog
-        open={boxDialogOpen}
+        open
         onClose={() => {
           if (!busy) setBoxDialogOpen(false)
         }}
@@ -3919,6 +3920,7 @@ export function FfInboundRequestView({
           </Button>
         </DialogActions>
       </Dialog>
+      ) : null}
 
       <Dialog
         open={cargoDialogOpen}
