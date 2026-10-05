@@ -735,6 +735,26 @@ def test_frontend_checks_use_readonly_config_loader_and_preserve_all_filters(
         assert command[0] == "npx"
 
 
+def test_check_logs_preserve_full_failure_and_stay_out_of_git(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task["tests"] = ["backend/tests/test_contract.py"]
+    output = "ROOT_CAUSE_MissingGreenlet\n" + "details\n" * 1000 + "FAILED summary"
+    runner.hotfix.run_untrusted = lambda *a, **kw: ExecResult(1, output, "stderr-marker")  # type: ignore[method-assign]
+    assert runner._run_contract(task)
+    report = (root / task["check_logs"]["backend"]).read_text()
+    assert "ROOT_CAUSE_MissingGreenlet" in report and "stderr-marker" in report
+    assert "Exit: 1" in report and runner._head(task) in report
+    assert runner._changed_outside(task, []) == []
+
+
+def test_check_log_rejects_directory_escape(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    (root / ".agent-runs").symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(Exception, match="вне рабочей копии"):
+        runner._save_check_log(runner._state(tid)["tasks"]["WMS-700"], "backend", 1, "failure")
+
+
 def test_interrupted_promote_is_not_repeated(env: Any) -> None:
     runner, tid = make_night(env)
     state = env.store.data(tid)["night"]
@@ -770,6 +790,7 @@ def _tester_repo(env: Any, tmp_path: Path) -> tuple[Any, int, Path]:
     (root / "backend" / "app").mkdir(parents=True)
     (root / "backend" / "tests").mkdir(parents=True)
     (root / "backend" / "app" / "svc.py").write_text("X = 1\n", encoding="utf-8")
+    (root / ".gitignore").write_text(".agent-runs/\n", encoding="utf-8")
     doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
     subprocess.run(["git", "init", "-q"], cwd=root, check=True)
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)

@@ -390,6 +390,7 @@ class NightRunner:
             "Локально запусти контракт и tests/guards. Если проверка Cn противоречит Rm, "
             "не пиши код и укажи точное противоречие. "
             f"Замечание предыдущей попытки: {feedback or 'нет'}. "
+            f"Полные журналы последних проверок (прочитай до исправления): {task.get('check_logs', {})}. "
             'Верни JSON {"summary":"...","contradiction":"" или "C1 противоречит R2"}.'
         )
         result, execution = self.p.llm.ask_json(
@@ -438,6 +439,7 @@ class NightRunner:
             prompt = (
                 f"Проверь реализацию {task['id']}. Прочитай AGENTS.md, "
                 f"docs/requirements/{task['id']}.md, diff, результаты тестов, "
+                f"полные журналы {task.get('check_logs', {})}, "
                 f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
                 "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
                 "Прямое решение владельца для этого запуска: Sonnet или gpt-5.6-sol реализует, "
@@ -927,6 +929,7 @@ class NightRunner:
                 if self.cfg.hotfix.backend_bin else "python3"
             res = self.hotfix.run_untrusted([python, "-m", "pytest", "-n", "auto", "-q",
                                              *backend, *backend_guards], root, root / "backend", 1800)
+            self._save_check_log(task, "backend", res.rc, res.out + res.err)
             if res.rc != 0:
                 problems.append((res.out + res.err)[-1400:])
         frontend_guards = [path for path in ("tests/guards", "src/guards", "tests-guards")
@@ -939,9 +942,23 @@ class NightRunner:
                     raise StepFailed("настроенный тестовый Chromium не найден")
                 command = ["/usr/bin/env", f"WMS_PRINT_CHROMIUM={chromium}", *command]
             res = self.hotfix.run_untrusted(command, root, root / "frontend", 1800)
+            self._save_check_log(task, "frontend", res.rc, res.out + res.err)
             if res.rc != 0:
                 problems.append((res.out + res.err)[-1400:])
         return problems
+
+    def _save_check_log(self, task: dict[str, Any], suite: str, rc: int, output: str) -> None:
+        root = Path(task["path"]).resolve()
+        folder = root / ".agent-runs" / "night-checks"
+        if root not in folder.resolve().parents:
+            raise StepFailed("каталог журнала проверок находится вне рабочей копии")
+        folder.mkdir(parents=True, exist_ok=True)
+        head = self._head(task)
+        path = folder / f"{suite}-{head}.log"
+        if path.is_symlink():
+            raise StepFailed("журнал проверок не должен быть символической ссылкой")
+        path.write_text(f"SHA: {head}\nSuite: {suite}\nExit: {rc}\n\n{output}", encoding="utf-8")
+        task.setdefault("check_logs", {})[suite] = str(path.relative_to(root))
 
     def _failure(self, tid: int, state: dict[str, Any], task: dict[str, Any],
                  fingerprint: str, reason: str) -> bool:
