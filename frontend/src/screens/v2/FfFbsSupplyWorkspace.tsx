@@ -3373,7 +3373,7 @@ export function FfFbsSupplyWorkspace({
               <Alert
                 severity="error"
                 sx={{ mb: 2 }}
-                action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}
+                action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
               >
                 <Typography variant="subtitle2">{group.title}</Typography>
                 <Typography variant="body2">{deliveryError.message}</Typography>
@@ -3388,7 +3388,7 @@ export function FfFbsSupplyWorkspace({
             <Alert
               severity="error"
               sx={{ mb: 2 }}
-              action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}
+              action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
             >
               <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
                 <IconButton
