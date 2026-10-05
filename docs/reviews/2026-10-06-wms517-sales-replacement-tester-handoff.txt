@@ -1,0 +1,33 @@
+Замена независимого тестировщика WMS-517: исходная tester session недоступна
+из-за nativecap (по прямому поручению владельца). SKILL.md не читались;
+новые agents/threads не запускались. Product code developer517 не менялся.
+
+SC10 fixture correction commit: 042d9dbac5da202050ba165574a3c471e143af62.
+До correction: pytest -q tests/test_wms517_sales_contract.py -k exact_cost
+--tb=short -p no:cacheprovider => 2 failed, 49 deselected, 8.25s.
+Обе ошибки MissingGreenlet именно на operation.id после rollback.
+После correction сохранён scalar UUID до rollback, assertions/51 cases неизменны.
+Полный SQLite прогон: pytest -q -n 2 tests/test_wms517_sales_contract.py
+--tb=line -p no:cacheprovider => 51 passed, 18 warnings, 67.58s.
+Результат относится к рабочему дереву с незакоммиченным кодом developer517,
+а не к опубликованной product-версии. Отдельное Astra high ревью correction
+frozen contract обязательно и ещё не выполнено; self-PASS не заявляется.
+
+Дополнительный test-before-correction commit:
+a5db96c3c05bc1163b33f0b508a46de43311df26
+backend/tests/test_wms517_sales_regressions.py, 6 cases.
+Результат до дополнительных product fixes: 1 failed, 5 passed, 1.53s.
+RED: .1234567 -> .1234568 cursor запросы точны, но сохранённая wb_sale evidence
+ошибочно оставляет .1234567. Новый timestamp test ловит потерю седьмой цифры
+при выборе последнего update. Исправить код после контрактного SHA, не ожидания.
+GREEN: два public callers/отдельные Redis clients используют общий seller slot;
+другой seller изолирован; Retry-After 120 соблюдён; completed cache/products,
+fresh create bypass/cache preservation/expiration; failed fresh build не меняет
+точные bytes/hash/evidence старой попытки и не вызывает create POST; pending/
+reconciling новая request-id продолжает ту же claim без свежего sales.
+Redis/HTTP подменены только на границах I/O; SQLite, public entrypoints,
+операции/items/docs реальные. Redis Lua на настоящем Redis не исполнялся.
+
+PG cluster developer517 127.0.0.1:56517 не трогался; production/WB/CRPT сеть,
+подпись, кабинеты секретов, deploy не вызывались. Исходные 51 tests нельзя
+объявлять полной приёмкой с красной дополнительной регрессией.
