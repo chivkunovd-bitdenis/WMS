@@ -97,11 +97,11 @@ class LlmCfg:
                 "routine": "sonnet",
                 "analyst": "opus",
                 "review": "opus",
-                "mockup": "opus",
-                "frontend": "opus",
+                "mockup": "sonnet",
+                "frontend": "sonnet",
             },
-            # Sol 5.6 — рабочая модель Codex и запасная при недоступности Claude (разбор, хотфикс,
-            # интерфейс, макеты); Astra — только ревью и перекрёстная проверка.
+            # Sol 5.6 — рабочая модель Codex и запасная для ролей, где подмена разрешена.
+            # Интерфейс и макеты: Sonnet, затем Sol 5.6; Astra — только ревью и перекрёстная проверка.
             "codex": {
                 "filter": "gpt-5.6-sol",
                 "routine": "gpt-5.6-sol",
@@ -166,6 +166,7 @@ class SandboxCfg:
 @dataclass
 class HotfixCfg:
     backend_bin: str = ""
+    frontend_chromium: str = ""
     merge_method: str = "merge"
     deployed_sha_cmd: str = ""
     preflight_cmd: str = ""
