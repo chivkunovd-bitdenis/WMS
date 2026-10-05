@@ -563,8 +563,9 @@ async def test_sc10_exact_cost_and_immutable_source_survive_later_wb_change(
         for value in ("supplier/sales", order.wb_rid, "S1", "123.45", "lastChangeDate"):
             assert value in evidence, "Immutable attempt must retain the exact WB source"
         sales_http.rows = [sale(order.wb_rid, price="777.77")]
+        operation_id = operation.id
         await db_session.rollback()
-        reloaded = await get_operation(db_session, scope, operation.id)
+        reloaded = await get_operation(db_session, scope, operation_id)
         assert (await scoped_documents(db_session, scope, reloaded))[0].exact_payload == exact
 
 
