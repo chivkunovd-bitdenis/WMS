@@ -152,7 +152,8 @@ export function PreviewHarness() {
             const target = event.target
             if (
               target instanceof Element
-              && target.closest('[data-testid="warehouse-map-create-cell"]')
+              && (target.closest('[data-testid="warehouse-map-create-cell"]')
+                || target.closest('[data-testid="warehouse-map-create-first-cell"]'))
             ) {
               event.stopPropagation()
               setCellPreviewOpen(true)

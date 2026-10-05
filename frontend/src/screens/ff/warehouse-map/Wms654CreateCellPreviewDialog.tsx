@@ -1,4 +1,4 @@
-import { Stack, Typography } from '@mui/material'
+import { Box, Stack, Typography } from '@mui/material'
 import { useMemo, useState } from 'react'
 import {
   ActionGroup,
@@ -153,16 +153,27 @@ function Wms654CreateCellPreviewDialogBody({
           />
         ) : null}
 
-        <NumberInput
-          label="Позиция"
-          value={position}
-          onChange={setManualPosition}
-          min={1}
-          helperText={`Следующая свободная позиция для контекста: ${context}`}
-          testId="warehouse-map-cell-position"
-        />
+        <Box
+          sx={{
+            minWidth: 0,
+            '& .MuiFormHelperText-root': { overflowWrap: 'anywhere' },
+          }}
+        >
+          <NumberInput
+            label="Позиция"
+            value={position}
+            onChange={setManualPosition}
+            min={1}
+            helperText={`Следующая свободная позиция для контекста: ${context}`}
+            testId="warehouse-map-cell-position"
+          />
+        </Box>
 
-        <Typography variant="subtitle2" data-testid="warehouse-map-cell-preview">
+        <Typography
+          variant="subtitle2"
+          sx={{ overflowWrap: 'anywhere' }}
+          data-testid="warehouse-map-cell-preview"
+        >
           Код ячейки: {code || 'появится после стеллажа'}
         </Typography>
       </Stack>
