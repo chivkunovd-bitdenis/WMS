@@ -1,5 +1,6 @@
 """One-time architectural boundary for WMS-653 (C12)."""
 
+# Final corrected C12 contract after Ruff formatting; expectations are unchanged.
 from __future__ import annotations
 
 import subprocess
