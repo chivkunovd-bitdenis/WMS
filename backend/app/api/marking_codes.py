@@ -527,6 +527,7 @@ def _http_from_mc_error(exc: mc_svc.MarkingCodeServiceError) -> HTTPException:
         "task_not_found",
         "reprint_request_not_found",
         "label_artifact_missing",
+        "import_not_found",
     )
     if code in not_found_codes:
         status_code = status.HTTP_404_NOT_FOUND
@@ -999,6 +1000,38 @@ async def import_marking_codes(
             )
             for p in result.pools
         ],
+    )
+
+
+@router.get("/imports/{import_id}/result.pdf")
+async def download_marking_import_result(
+    import_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+    copies: Annotated[int, Query(ge=1, le=100)] = 1,
+) -> Response:
+    from app.models.marking_code import MarkingCodeImport
+
+    batch = await session.get(MarkingCodeImport, import_id)
+    if batch is None or batch.tenant_id != user.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="import_not_found")
+    await _assert_pool_access(user, batch.seller_id, effective_seller_id)
+    try:
+        pdf_bytes = await mc_svc.build_import_result_pdf(
+            session,
+            user.tenant_id,
+            import_id,
+            copies=copies,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        raise _http_from_mc_error(exc) from exc
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="marking-import-{import_id}.pdf"',
+        },
     )
 
 

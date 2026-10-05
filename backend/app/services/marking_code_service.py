@@ -824,6 +824,81 @@ async def build_label_artifact_tape_pdf(
     )
 
 
+def _materialize_import_result_pdf(
+    codes: list[tuple[bytes | None, str]],
+    *,
+    source_requires_artifact: bool,
+    copies: int,
+) -> bytes:
+    from app.services.marking_label_artifact_service import build_datamatrix_label_pdf
+
+    artifacts: list[tuple[bytes | None, str] | None] = []
+    for label_pdf, cis_code in codes:
+        if label_pdf is None:
+            if source_requires_artifact:
+                raise MarkingCodeServiceError("label_artifact_missing")
+            label_pdf = build_datamatrix_label_pdf(cis_code)
+        artifact = (label_pdf, cis_code)
+        artifacts.extend([artifact] * copies)
+    return _validated_label_artifact_tape(artifacts, None, None)
+
+
+async def build_import_result_pdf(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    import_id: uuid.UUID,
+    *,
+    code_ids: list[uuid.UUID] | None = None,
+    copies: int = 1,
+) -> bytes:
+    """Build a print file only from codes accepted by one exact import."""
+    if copies < 1 or copies > 100:
+        raise MarkingCodeServiceError("invalid_copies")
+    batch = await session.get(MarkingCodeImport, import_id)
+    if batch is None or batch.tenant_id != tenant_id:
+        raise MarkingCodeServiceError("import_not_found")
+
+    selected_ids = code_ids
+    if selected_ids is None:
+        selected_ids = list(
+            (
+                await session.scalars(
+                    select(MarkingCode.id)
+                    .where(
+                        MarkingCode.tenant_id == tenant_id,
+                        MarkingCode.import_batch_id == import_id,
+                    )
+                    .order_by(MarkingCode.created_at, MarkingCode.id)
+                )
+            ).all()
+        )
+    if not selected_ids:
+        raise MarkingCodeServiceError("no_codes")
+    if len(selected_ids) * copies > _MAX_LABEL_ARTIFACT_TAPE:
+        raise MarkingCodeServiceError("too_many_codes")
+
+    exact_codes: list[tuple[bytes | None, str]] = []
+    for code_id in selected_ids:
+        code = await session.get(MarkingCode, code_id)
+        if (
+            code is None
+            or code.tenant_id != tenant_id
+            or code.import_batch_id != import_id
+        ):
+            raise MarkingCodeServiceError("code_not_found")
+        exact_codes.append((code.label_artifact_pdf, code.cis_code))
+
+    source_requires_artifact = any(
+        name.strip().casefold().endswith(".pdf") for name in batch.filename.split(",")
+    )
+    return await asyncio.to_thread(
+        _materialize_import_result_pdf,
+        exact_codes,
+        source_requires_artifact=source_requires_artifact,
+        copies=copies,
+    )
+
+
 def _parse_pdf_text_rows(content: bytes) -> list[dict[str, str]]:
     return [
         {
@@ -921,7 +996,7 @@ async def _validate_pool_products(
     if len(products) != len(unique_ids):
         raise MarkingCodeServiceError("product_not_found")
     for product in products:
-        if product.seller_id != seller_id:
+        if product.seller_id not in (None, seller_id):
             raise MarkingCodeServiceError("product_seller_mismatch")
 
 
@@ -1174,6 +1249,7 @@ async def _try_insert_imported_code(
     cis_code: str,
     gtin: str,
     label_pdf: bytes | None = None,
+    mark_product_ids: tuple[uuid.UUID, ...] = (),
 ) -> MarkingCode | None:
     conn = await session.connection()
     insert_cls = sqlite_insert if conn.dialect.name == "sqlite" else pg_insert
@@ -1203,6 +1279,18 @@ async def _try_insert_imported_code(
         raise MarkingCodeServiceError("import_insert_failed")
     if label_pdf:
         code.label_artifact_pdf = label_pdf
+    # The code and the monotonic product flag are one transaction.  All three
+    # import entry points go through this function, so a duplicate (no inserted
+    # row) cannot enable the flag on its own.
+    for product_id_to_mark in dict.fromkeys(mark_product_ids):
+        product = await session.get(Product, product_id_to_mark)
+        if (
+            product is None
+            or product.tenant_id != tenant_id
+            or product.seller_id not in (None, seller_id)
+        ):
+            raise MarkingCodeServiceError("product_not_found")
+        product.requires_honest_sign = True
     return code
 
 
@@ -1512,6 +1600,7 @@ async def import_marking_codes(
                 cis_code=cis,
                 gtin=gtin,
                 label_pdf=label_pdf_by_cis.get(cis),
+                mark_product_ids=tuple(product_ids),
             )
             if code is None:
                 pool_duplicates += 1
@@ -1812,7 +1901,6 @@ async def auto_import_marking_codes(
                     select(Product).where(
                         Product.tenant_id == tenant_id,
                         Product.seller_id == seller_id,
-                        Product.requires_honest_sign.is_(True),
                     )
                 )
             ).all()
@@ -1942,6 +2030,7 @@ async def auto_import_marking_codes(
                 cis_code=cis,
                 gtin=gtin,
                 label_pdf=label_pdf if isinstance(label_pdf, bytes) else None,
+                mark_product_ids=(product.id,),
             )
             if code is None:
                 unmatched.append(
@@ -2010,8 +2099,7 @@ async def assign_import_rows_to_product(
     if (
         product is None
         or product.tenant_id != tenant_id
-        or product.seller_id != seller_id
-        or not product.requires_honest_sign
+        or product.seller_id not in (None, seller_id)
     ):
         raise MarkingCodeServiceError("product_not_found")
     fingerprint = _import_files_fingerprint(files)
@@ -2118,6 +2206,7 @@ async def assign_import_rows_to_product(
                 cis_code=cis,
                 gtin=gtin,
                 label_pdf=label_pdf if isinstance(label_pdf, bytes) else None,
+                mark_product_ids=(product.id,),
             )
             if code is None:
                 continue

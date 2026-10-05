@@ -16,6 +16,7 @@ from app.models.background_job import BackgroundJob
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
+from app.services.wb_honest_sign_service import WbCategoryCatalog, fetch_category_catalog
 from app.services.wildberries_client import WildberriesClientError
 from app.services.wildberries_credentials_service import get_decrypted_tokens_for_seller
 from app.services.wildberries_import_cards_service import upsert_imported_cards
@@ -117,12 +118,28 @@ async def sync_wb_products_for_seller(
     except WildberriesClientError as exc:
         suffix = f"_{exc.status_code}" if exc.status_code else ""
         raise WildberriesSyncError(f"wb_{exc.code}{suffix}") from exc
+    marking_catalog: WbCategoryCatalog | None = None
+    marking_catalog_error: str | None = None
+    try:
+        marking_catalog = await fetch_category_catalog(http_client, api_token=content_token)
+    except Exception:
+        # Product/card synchronization remains useful when the category
+        # dictionaries are temporarily unavailable. needKiz evidence can still
+        # be applied by the importer; clothing inference is retried next sync.
+        marking_catalog_error = "wb_category_catalog_unavailable"
+        logger.warning(
+            "wb category catalog unavailable seller=%s; marking inference deferred",
+            seller_id,
+            exc_info=True,
+        )
     result = await _save_wb_cards(
         session,
         tenant_id,
         seller_id,
         cards,
         before_commit=before_commit,
+        marking_catalog=marking_catalog,
+        marking_catalog_error=marking_catalog_error,
     )
     result["cursor_present"] = cursor_present
     return result
@@ -135,6 +152,8 @@ async def _save_wb_cards(
     cards: list[dict[str, Any]],
     *,
     before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
+    marking_catalog: WbCategoryCatalog | None = None,
+    marking_catalog_error: str | None = None,
 ) -> dict[str, Any]:
     # Снимок обновляется по всем карточкам всегда; товары WMS — только по тем,
     # что уже выбраны (см. get_selected_wb_nm_ids). WMS-548 R5: синхронизация не
@@ -153,6 +172,8 @@ async def _save_wb_cards(
         seller_id,
         filter_wb_cards_to_selected(list(cards), selected_nm_ids),
         before_commit=before_commit,
+        marking_catalog=marking_catalog,
+        marking_catalog_error=marking_catalog_error,
     )
     return {
         "seller_id": str(seller_id),

@@ -49,7 +49,12 @@ type PreviewResponse = {
   invalid_count: number
   duplicates_in_file: number
 }
-type ImportResponse = { accepted_count: number; skipped_count: number }
+type ImportResponse = {
+  import_id: string
+  document_number: string
+  accepted_count: number
+  skipped_count: number
+}
 type AutoProductGroup = {
   product_id: string
   sku: string
@@ -91,7 +96,7 @@ type GroupDraft = PreviewGroup & {
   productIds: Set<string>
   productSearch: string
 }
-type Stage = 'picker' | 'auto-result' | 'auto-error' | 'assign'
+type Stage = 'picker' | 'manual-result' | 'auto-result' | 'auto-error' | 'assign'
 
 export const PRODUCT_SEARCH_INITIAL_LIMIT = 8
 
@@ -107,6 +112,13 @@ export function filterProductsBySearch(
     const hay = `${row.sku_code} ${row.wb_vendor_code ?? ''} ${row.name} ${nm} ${barcodes}`.toLowerCase()
     return hay.includes(needle)
   })
+}
+
+export function selectImportCatalogProducts(
+  products: ImportCatalogRow[],
+  sellerId: string,
+): ImportCatalogRow[] {
+  return products.filter((row) => row.seller_id == null || row.seller_id === sellerId)
 }
 
 export function paginateProductSearchResults<T>(
@@ -339,6 +351,8 @@ function MarkingImportDialogContent({
   const [actionBusy, setActionBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [autoResult, setAutoResult] = useState<AutoImportResponse | null>(null)
+  const [manualResult, setManualResult] = useState<ImportResponse | null>(null)
+  const [printImportId, setPrintImportId] = useState<string | null>(null)
   const [selectedUnmatchedKeys, setSelectedUnmatchedKeys] = useState<Set<string>>(new Set())
   const [assignmentProductId, setAssignmentProductId] = useState<string | null>(null)
   const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null)
@@ -348,13 +362,10 @@ function MarkingImportDialogContent({
   const appliedAssignmentRequestIdsRef = useRef(new Set<string>())
 
   const sellerCatalogProducts = useMemo(
-    () => catalog.filter((row) => row.seller_id == null || row.seller_id === sellerId),
+    () => selectImportCatalogProducts(catalog, sellerId),
     [catalog, sellerId],
   )
-  const sellerProducts = useMemo(
-    () => sellerCatalogProducts.filter((row) => row.requires_honest_sign),
-    [sellerCatalogProducts],
-  )
+  const sellerProducts = sellerCatalogProducts
 
   const reset = useCallback(() => {
     previewAbortRef.current?.abort()
@@ -370,6 +381,8 @@ function MarkingImportDialogContent({
     setActionBusy(false)
     setError(null)
     setAutoResult(null)
+    setManualResult(null)
+    setPrintImportId(null)
     setSelectedUnmatchedKeys(new Set())
     setAssignmentProductId(null)
     setAssignmentRequestId(null)
@@ -465,7 +478,8 @@ function MarkingImportDialogContent({
       const message = data.skipped_count > 0
         ? `Загружено ${data.accepted_count}, пропущено ${data.skipped_count} (дубликаты/ошибки)`
         : `Загружено ${data.accepted_count}`
-      onError?.(null); onImported(message); onClose()
+      setManualResult(data); setPrintImportId(data.import_id); setStage('manual-result')
+      onError?.(null); onImported(message)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось загрузить коды.'
       setError(message); onError?.(message)
@@ -485,7 +499,8 @@ function MarkingImportDialogContent({
     })
     if (outcome?.stage === 'auto-result') {
       const data = outcome.data
-      setAutoResult(data); setSelectedUnmatchedKeys(new Set()); setStage('auto-result')
+      setAutoResult(data); setPrintImportId(data.import_id)
+      setSelectedUnmatchedKeys(new Set()); setStage('auto-result')
       onError?.(null)
       onImported(`Загружено ${data.groups.reduce((sum, row) => sum + row.loaded_count, 0)} КИЗ`)
     } else if (outcome?.stage === 'auto-error') {
@@ -526,6 +541,7 @@ function MarkingImportDialogContent({
       const assigned = new Set(data.assigned_keys)
       if (markAssignmentResponseApplied(appliedAssignmentRequestIdsRef.current, data.import_id)) {
         setAutoResult((prev) => prev ? mergeAssignmentResponse(prev, data) : prev)
+        setPrintImportId(data.import_id)
         onImported(`Добавлено к товару: ${data.assigned_keys.length} КИЗ`)
       }
       setSelectedUnmatchedKeys((prev) => new Set([...prev].filter((key) => !assigned.has(key))))
@@ -586,6 +602,24 @@ function MarkingImportDialogContent({
     } finally { setActionBusy(false) }
   }
 
+  const downloadImportResult = async () => {
+    if (!printImportId) return
+    setActionBusy(true); setError(null)
+    try {
+      const res = await fetch(apiUrl(`/operations/marking-codes/imports/${printImportId}/result.pdf`), {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (!res.ok) throw new Error(await readApiErrorMessage(res))
+      const url = URL.createObjectURL(await res.blob())
+      const anchor = document.createElement('a')
+      anchor.href = url; anchor.download = `marking-import-${printImportId}.pdf`
+      document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Не удалось подготовить печать загрузки.'
+      setError(message); onError?.(message)
+    } finally { setActionBusy(false) }
+  }
+
   const busy = parseBusy || actionBusy
   const pickerReady = files.length > 0 && previewComplete && !parseBusy
 
@@ -632,7 +666,23 @@ function MarkingImportDialogContent({
           {stage === 'auto-result' && autoResult ? (
             <AutoResult result={autoResult} selectedKeys={selectedUnmatchedKeys} busy={actionBusy}
               onToggle={toggleUnmatched} onToggleAll={toggleAllUnmatched} onAssign={beginAssignment}
-              onDownload={() => void downloadUnmatched()} error={error} testIdPrefix={testIdPrefix} />
+              onDownload={() => void downloadUnmatched()}
+              onPrint={() => void downloadImportResult()} error={error} testIdPrefix={testIdPrefix} />
+          ) : null}
+          {stage === 'manual-result' && manualResult ? (
+            <>
+              <Alert severity="success">
+                <strong>Загружено {manualResult.accepted_count} КИЗ</strong>
+                {manualResult.skipped_count > 0 ? ` · пропущено ${manualResult.skipped_count}` : ''}
+              </Alert>
+              {error ? <Alert severity="error">{error}</Alert> : null}
+              <Paper variant="outlined" sx={{ p: 2 }}>
+                <Button variant="contained" disabled={busy || manualResult.accepted_count === 0}
+                  onClick={() => void downloadImportResult()}>
+                  Печать результата загрузки
+                </Button>
+              </Paper>
+            </>
           ) : null}
           {stage === 'assign' ? (
             <>
@@ -678,6 +728,10 @@ function MarkingImportDialogContent({
           <Button variant="outlined" onClick={reset} disabled={busy}>Загрузить ещё</Button>
           <Button variant="contained" onClick={onClose} disabled={busy}>Готово</Button>
         </> : null}
+        {stage === 'manual-result' ? <>
+          <Button variant="outlined" onClick={reset} disabled={busy}>Загрузить ещё</Button>
+          <Button variant="contained" onClick={onClose} disabled={busy}>Готово</Button>
+        </> : null}
         {stage === 'assign' ? <>
           <Button variant="outlined" disabled={busy}
             onClick={() => void returnFromAssignment()}>Назад</Button>
@@ -719,13 +773,22 @@ function ProductPicker({ products, allCatalogProducts, search, showAll, selected
         data-testid={`${testIdPrefix}-product-row-${row.id}`}>
         <TableCell padding="checkbox"><Checkbox checked={selectedIds.has(row.id)}
           slotProps={{ input: { 'aria-label': `${row.sku_code} ${row.name}` } }} /></TableCell>
-        <TableCell><Typography variant="body2" sx={{ fontWeight: 700 }}>{row.sku_code}</Typography>
-          <Typography variant="caption" color="text.secondary">{row.name}</Typography></TableCell>
+        <TableCell sx={{ minWidth: 0, wordBreak: 'break-word' }}>
+          <Typography variant="body2" sx={{ fontWeight: 700, wordBreak: 'break-all' }}>
+            {row.sku_code}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>
+            {row.name}
+          </Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ wordBreak: 'break-all' }}>
+            WB · {row.wb_size ?? 'без размера'} · {row.wb_primary_barcode ?? 'без штрихкода'}
+          </Typography>
+        </TableCell>
       </TableRow>)}
       {visible.length === 0 ? <TableRow><TableCell colSpan={2}><Typography variant="body2" color="text.secondary">
         {products.length === 0 && allCatalogProducts.length > 0
-          ? 'У этого селлера нет товаров с признаком «Нужен Честный знак при упаковке».'
-          : products.length === 0 ? 'У этого селлера нет товаров для привязки.'
+          ? 'У этого селлера нет товаров для привязки.'
+          : products.length === 0 ? 'В каталоге нет товаров для привязки.'
             : 'По поиску товары не найдены. Измените запрос или очистите поиск.'}
       </Typography></TableCell></TableRow> : null}
     </TableBody></Table></TableContainer>
@@ -738,7 +801,7 @@ function ProductPicker({ products, allCatalogProducts, search, showAll, selected
 }
 
 function AutoResult({ result, selectedKeys, busy, onToggle, onToggleAll, onAssign,
-  onDownload, error, testIdPrefix }: {
+  onDownload, onPrint, error, testIdPrefix }: {
   result: AutoImportResponse
   selectedKeys: Set<string>
   busy: boolean
@@ -746,6 +809,7 @@ function AutoResult({ result, selectedKeys, busy, onToggle, onToggleAll, onAssig
   onToggleAll: () => void
   onAssign: () => void
   onDownload: () => void
+  onPrint: () => void
   error: string | null
   testIdPrefix: string
 }) {
@@ -755,7 +819,10 @@ function AutoResult({ result, selectedKeys, busy, onToggle, onToggleAll, onAssig
   const canDownload = result.unmatched.length > 0
     && result.unmatched.every((row) => row.has_label_artifact)
   return <>
-    <Alert severity="success"><strong>Загружено {loaded} КИЗ</strong> · привязано к {result.groups.length} товарам.</Alert>
+    <Alert severity="success" action={loaded > 0 ? <Button color="inherit" size="small"
+      disabled={busy} onClick={onPrint}>Печать результата</Button> : undefined}>
+      <strong>Загружено {loaded} КИЗ</strong> · привязано к {result.groups.length} товарам.
+    </Alert>
     {error ? <Alert severity="error">{error}</Alert> : null}
     <TableContainer component={Paper} variant="outlined"><Table size="small" data-testid={`${testIdPrefix}-auto-groups`}>
       <TableHead><TableRow><TableCell>Артикул</TableCell><TableCell>Размер</TableCell>
