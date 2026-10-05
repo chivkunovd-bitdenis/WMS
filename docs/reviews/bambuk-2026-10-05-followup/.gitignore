@@ -1,0 +1,9 @@
+# Background CLI journal stays in the local job; summaries and requirements are committed.
+*-events.jsonl
+*-stderr.log
+# Source report is already durable at 8be6c608f806904a2c222f466b8ec65f8a3cd954.
+prior-REPORT.md
+prior-TRANSCRIPT.md
+# Rejected public documentation response; result is in official-live-check.json.
+wb-official.html
+ozon-official.html

@@ -1,0 +1,22 @@
+[
+  {
+    "url": "https://docs.ozon.ru/api/seller/",
+    "error": "<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: self-signed certificate in certificate chain (_ssl.c:1081)>",
+    "checked_at": "2026-10-05T09:42:47.682033+00:00"
+  },
+  {
+    "url": "https://dev.wildberries.ru/openapi/orders-fbs",
+    "error": "<urlopen error [SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: unable to get local issuer certificate (_ssl.c:1081)>",
+    "checked_at": "2026-10-05T09:42:47.996112+00:00"
+  },
+  {
+    "url": "https://docs.ozon.ru/api/seller/",
+    "client": "system curl, certificate verification enabled",
+    "result": "HTTP 307 redirect loop; curl exit 47 after 50 redirects; no API contract obtained"
+  },
+  {
+    "url": "https://dev.wildberries.ru/openapi/orders-fbs",
+    "client": "system curl, certificate verification enabled",
+    "result": "HTTP 498; no API contract obtained"
+  }
+]
