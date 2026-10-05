@@ -170,6 +170,22 @@ def commit_changed_paths(root: Path, commit: str) -> set[str]:
     )
 
 
+def is_task_contract_commit(root: Path, commit: str, task_id: str) -> bool:
+    """Return whether commit is this task's real contract in current history."""
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=root,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+    if not exists:
+        return False
+    if git(root, "show", "-s", "--format=%s", commit) != f"{task_id}: контракт тестов":
+        return False
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=root,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
 def reviewed_contract_correction(
     root: Path,
     task_id: str,
@@ -227,7 +243,9 @@ def reviewed_contract_correction(
         # correction ledger applies only to the exact existing contract named
         # there; an absent or invented source commit must not disappear merely
         # because this invocation is currently checking another contract.
-        if ledger_contract in task_contracts:
+        if ledger_contract in task_contracts or is_task_contract_commit(
+            root, ledger_contract, task_id
+        ):
             return None, set(), []
         return None, set(), [
             f"{task_id}: реестр ссылается на неизвестный исходный контракт"

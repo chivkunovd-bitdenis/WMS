@@ -314,6 +314,33 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-717 correction ledger")
         self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
 
+    def test_prior_reviewed_contract_does_not_block_later_contract_for_same_task(self):
+        rollout = self.rollout()
+        task = "WMS-721"
+        first = "backend/tests/test_first.py"
+        second = "backend/tests/test_second.py"
+        self.write(first, "def test_first(): assert column_text()\n")
+        first_contract = self.commit(f"{task}: контракт тестов")
+        self.write(first, "def test_first(): assert cell_text()\n")
+        correction = self.commit(f"{task}: correct first contract")
+        ledger = {
+            "task": task,
+            "contract_commit": first_contract,
+            "correction_commit": correction,
+            "files": [first],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            f"docs/reviews/contract-corrections/{task}.json",
+            json.dumps(ledger) + "\n",
+        )
+        self.commit(f"{task} correction ledger")
+        later_rollout = self.git("rev-parse", "HEAD")
+        self.write(second, "def test_second(): assert rollback()\n")
+        self.commit(f"{task}: контракт тестов")
+        self.assertEqual(checker.contract_change_errors(self.root, later_rollout), [])
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
     def test_correction_ledger_rejects_missing_or_unknown_contract_commit(self):
         for task, ledger_contract, expected in (
             ("WMS-718", None, "заполнен не полностью"),
