@@ -7,6 +7,7 @@ export function wms666ScopeViolations(paths: string[]): string[] {
   return paths.filter((path) => {
     if (!path) return false
     if (path === 'docs/KANONICHESKIY_BACKLOG.md' || path === 'docs/requirements/WMS-666.md') return false
+    if (path === 'docs/reviews/contract-corrections/WMS-666.json') return false
     if (path.startsWith('frontend/src/screens/v2/')) return false
     if (path === 'frontend/src/components/LabelSizeSelect.tsx' || path === 'frontend/src/utils/labelSize.ts') return false
     if (path.startsWith('frontend/src/') && /\.test\.[cm]?[jt]sx?$/.test(path)) return false
@@ -32,7 +33,15 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       'frontend/src/screens/v2/FfFbsSupplyAssembly.tsx',
       'frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx',
       'docs/requirements/WMS-666.md',
+      'docs/reviews/contract-corrections/WMS-666.json',
     ])).toEqual([])
+    expect(wms666ScopeViolations([
+      'docs/reviews/contract-corrections/WMS-667.json',
+      'docs/reviews/contract-corrections/WMS-666.md',
+    ])).toEqual([
+      'docs/reviews/contract-corrections/WMS-667.json',
+      'docs/reviews/contract-corrections/WMS-666.md',
+    ])
   })
 
   it('keeps the actual task diff inside the approved packing UI/test/document boundary', () => {
