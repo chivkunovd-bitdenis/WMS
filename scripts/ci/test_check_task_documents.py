@@ -238,6 +238,52 @@ class GitTests(unittest.TestCase):
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("реестр коррекции" in error for error in errors))
 
+    def test_uncommitted_contract_correction_ledger_is_ignored(self):
+        rollout = self.rollout()
+        path = "backend/tests/test_contract.py"
+        self.write(path, "def test_contract(): pass\n")
+        contract = self.commit("WMS-713: контракт тестов")
+        self.write(path, "def test_contract(): assert True\n")
+        correction = self.commit("WMS-713: correction")
+        ledger = {
+            "task": "WMS-713",
+            "contract_commit": contract,
+            "correction_commit": correction,
+            "files": [path],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            "docs/reviews/contract-corrections/WMS-713.json",
+            json.dumps(ledger) + "\n",
+        )
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("изменён контракт тестов WMS-713", errors[0])
+
+    def test_correction_cannot_replace_a_multi_file_contract_wholesale(self):
+        rollout = self.rollout()
+        paths = ["backend/tests/test_a.py", "backend/tests/test_b.py"]
+        for path in paths:
+            self.write(path, "def test_contract(): pass\n")
+        contract = self.commit("WMS-714: контракт тестов")
+        for path in paths:
+            self.write(path, "def test_contract(): assert True\n")
+        correction = self.commit("WMS-714: replace all contract files")
+        ledger = {
+            "task": "WMS-714",
+            "contract_commit": contract,
+            "correction_commit": correction,
+            "files": paths,
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            "docs/reviews/contract-corrections/WMS-714.json",
+            json.dumps(ledger) + "\n",
+        )
+        self.commit("WMS-714 correction ledger")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("только часть исходного контракта" in error for error in errors))
+
     def test_correction_does_not_absorb_an_earlier_change_to_another_frozen_file(self):
         rollout = self.rollout()
         corrected = "backend/tests/test_pdf.py"

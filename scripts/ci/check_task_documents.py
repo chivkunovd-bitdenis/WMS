@@ -172,12 +172,16 @@ def reviewed_contract_correction(
     and recording the review before the ledger is committed.
     """
     ledger_rel = f"{CONTRACT_CORRECTIONS_DIR}/{task_id}.json"
-    ledger_path = root / ledger_rel
-    if not ledger_path.is_file():
+    ledger_result = subprocess.run(
+        ["git", "show", f"HEAD:{ledger_rel}"], cwd=root, check=False,
+        capture_output=True, text=True,
+    )
+    if ledger_result.returncode != 0:
         return None, set(), []
+    ledger_text = ledger_result.stdout.strip()
     try:
-        ledger = json.loads(ledger_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+        ledger = json.loads(ledger_text)
+    except json.JSONDecodeError:
         return None, set(), [
             f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"
         ]
@@ -209,9 +213,12 @@ def reviewed_contract_correction(
         ).returncode != 0:
             return None, set(), [f"{task_id}: {label}"]
     expected = set(files)
-    if not expected.issubset(frozen):
+    frozen_set = set(frozen)
+    if not expected.issubset(frozen_set) or (
+        len(frozen_set) > 1 and expected == frozen_set
+    ):
         return None, set(), [
-            f"{task_id}: коррекция затрагивает файл вне исходного контракта"
+            f"{task_id}: коррекция должна менять только часть исходного контракта"
         ]
     changed = commit_changed_paths(root, correction)
     if changed != expected:
