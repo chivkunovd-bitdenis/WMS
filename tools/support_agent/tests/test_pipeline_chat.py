@@ -2,13 +2,14 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 
-from support_agent.llm import LlmUnavailable
+from support_agent.llm import ExecResult, LlmRouter, LlmUnavailable
 from support_agent.pipeline import FORBIDDEN_IN_SUMMARY
 from support_agent.telegram import Inbound, flush_outbox, normalize_update
 
@@ -198,7 +199,9 @@ def test_hotfix_verdict_needs_crosscheck_and_migration_means_no(env: Any) -> Non
     assert data["verdict"] == "hotfix" and data["hotfix_ok"] is True
     assert data["cross"]["verdict"] == "safe"
     review_calls = [c for c in env.llm.calls if c["role"] == "review"]
-    assert len(review_calls) == 1 and review_calls[0]["exclude_cli"] == "claude"
+    assert len(review_calls) == 1 and review_calls[0]["cli_only"] == "codex"
+    assert review_calls[0]["session_key"] == "review"
+    assert review_calls[0].get("exclude_cli") is None
     # миграция схемы или несколько процессов -> «нельзя коротким» (R15), даже если модель сказала safe
     env.say(CLIENT_CHAT, "[новая] другая проблема")
     migr = dict(ANALYSIS_BUG, hotfix={**ANALYSIS_BUG["hotfix"], "needs_migration": True})
@@ -228,6 +231,54 @@ def test_crosscheck_unavailable_is_stated_honestly(env: Any) -> None:
     env.clock.advance(60)
     env.pipe.tick()
     assert "Перекрёстная проверка не проведена" in env.store.data(1)["report"]["body"]
+
+
+def test_codex_analyst_crosscheck_reaches_astra_high_in_separate_session(env: Any) -> None:
+    tid = env.store.add_ticket(kind="chat", source="telegram", chat_id=CLIENT_CHAT,
+                               seller="seller", stage="analysis", data={"analyst_cli": "codex"})
+    env.store.kv_set(f"background_context:role:{tid}:analyst:shared:readonly",
+                     [{"prompt": "private analyst turn", "answer": "analyst hypothesis"}])
+    calls = []
+
+    def execute(argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
+        calls.append((argv, stdin))
+        Path(argv[argv.index("-o") + 1]).write_text(json.dumps({
+            "verdict": "safe", "risks": [], "affected": ["передача поставки"],
+        }))
+        return ExecResult(0, "", "")
+
+    env.pipe.llm = LlmRouter(env.cfg, env.store, exec_fn=execute)
+    result = env.pipe._crosscheck(tid, ANALYSIS_BUG, "codex")
+    assert result["verdict"] == "safe" and result["by"] == "gpt-6-astra"
+    assert len(calls) == 1
+    argv, prompt = calls[0]
+    assert argv[0] == "codex" and argv[argv.index("-m") + 1] == "gpt-6-astra"
+    assert 'model_reasoning_effort="high"' in argv
+    assert "private analyst turn" not in (prompt or "")
+    history = env.store.kv_get(f"background_context:role:{tid}:review:shared:readonly")
+    assert len(history) == 1 and "что ещё сломается" in history[0]["prompt"]
+
+
+@pytest.mark.parametrize("failure", ["model_error", "cooldown"])
+def test_codex_analyst_crosscheck_never_falls_back_when_astra_unavailable(
+    env: Any, failure: str,
+) -> None:
+    tid = env.store.add_ticket(kind="chat", source="telegram", chat_id=CLIENT_CHAT,
+                               seller="seller", stage="analysis")
+    calls = []
+
+    def execute(argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
+        calls.append(argv)
+        return ExecResult(1, "", "Astra unavailable")
+
+    env.pipe.llm = LlmRouter(env.cfg, env.store, exec_fn=execute)
+    if failure == "cooldown":
+        env.store.kv_set("cooldown:codex", 10**12)
+    result = env.pipe._crosscheck(tid, ANALYSIS_BUG, "codex")
+    assert result["verdict"] == "not_done"
+    assert len(calls) == (1 if failure == "model_error" else 0)
+    assert all(argv[0] == "codex" and argv[argv.index("-m") + 1] == "gpt-6-astra"
+               and 'model_reasoning_effort="high"' in argv for argv in calls)
 
 
 def test_ask_for_data_once_answer_joins_same_ticket_and_session(env: Any) -> None:
