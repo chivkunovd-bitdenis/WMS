@@ -8,8 +8,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder, FbsOrderMarking, FbsOrderProduct
-from app.models.marking_code import MarkingCode
 from app.models.product import Product
+from app.services import marking_code_service as marking_code_svc
 
 
 @dataclass(frozen=True)
@@ -100,13 +100,16 @@ async def resolve_marking_position(
             "В отправлении Ozon нет товарных позиций для маркировки.",
         )
 
-    code = await session.scalar(
-        select(MarkingCode).where(
-            MarkingCode.tenant_id == order.tenant_id,
-            MarkingCode.cis_code == value,
-        )
+    code = await marking_code_svc.find_marking_code_by_cis_identity(
+        session,
+        order.tenant_id,
+        value,
     )
-    if code is not None and code.product_id is not None:
+    if (
+        code is not None
+        and code.seller_id == order.seller_id
+        and code.product_id is not None
+    ):
         matches = [position for position in positions if position.product_id == code.product_id]
         if len(matches) == 1:
             return matches[0]
