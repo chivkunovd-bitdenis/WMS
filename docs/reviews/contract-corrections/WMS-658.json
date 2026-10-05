@@ -1,0 +1,13 @@
+{
+  "task": "WMS-658",
+  "contract_commit": "9fb5a817f0435c52818c604deb2320c997c5c11c",
+  "correction_commit": "ce1c0b9a3fa05b8a8f4e722d98b0bd5fa602b03e",
+  "files": [
+    "backend/tests/test_wms658_marking_import_contract.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS"
+  }
+}
