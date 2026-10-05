@@ -291,6 +291,9 @@ class NightRunner:
         prompt = (
             f"Ты разработчик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
             f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Реализуй требования, не меняя контракт тестов. "
+            "Актуальное прямое решение владельца: frontend/дизайн выполняет Sonnet, при его "
+            "недоступности gpt-5.6-sol; ревью выполняет Astra high. Это решение имеет приоритет "
+            "над старым упоминанием Opus в файлах этой рабочей ветки. "
             "Локально запусти контракт и tests/guards. Если проверка Cn противоречит Rm, "
             "не пиши код и укажи точное противоречие. "
             f"Замечание предыдущей попытки: {feedback or 'нет'}. "
@@ -697,7 +700,9 @@ class NightRunner:
             changed = "да" if task.get("contract_changed") else "нет"
             lines.append(f"{task['id']}: контракт тестов менялся: {changed}")
         body = "\n".join(lines)
-        self.p.say_owner(f"night_report:{state['job_id']}", body[:4000], tid, "night_report")
+        generation = state.get("resume_generation", 0)
+        suffix = f":resume-{generation}" if generation else ""
+        self.p.say_owner(f"night_report:{state['job_id']}{suffix}", body[:4000], tid, "night_report")
         job = self.store.kv_get(f"agent_job:{state['job_id']}", {})
         job.update(status="done", result=body, finished_at=self.p.clock())
         self.store.kv_set(f"agent_job:{state['job_id']}", job)
