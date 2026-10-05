@@ -176,9 +176,11 @@ class NightRunner:
                 if (current["status"] == "working"
                         and self.p.clock() >= float(current.get("next_poll", 0))):
                     task_id = current["id"]
+                    def develop_selected(selected_id: str = task_id) -> None:
+                        self._develop_task(tid, selected_id)
                     self.task_pool.submit(
                         f"night:{tid}:{task_id}",
-                        lambda task_id=task_id: self._develop_task(tid, task_id),
+                        develop_selected,
                     )
         except (LlmUnavailable, LlmError):
             self._save(tid, state, next_poll=self.p.clock() + 60)
@@ -200,9 +202,7 @@ class NightRunner:
         except (LlmUnavailable, LlmError) as exc:
             task = self._task(state)
             if task is not None:
-                route = ("Sonnet или Sol 5.6"
-                         if task.get("step") == "developer" and task.get("frontend")
-                         else "модели текущего шага")
+                route = "Sol 6.1"
                 task["reason"] = f"ожидает доступности {route}: {exc}"
                 task["model_retries"] = int(task.get("model_retries", 0)) + 1
             self._save(tid, state, next_poll=self.p.clock() + 60)
@@ -379,9 +379,10 @@ class NightRunner:
         prompt = (
             f"Ты разработчик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
             f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Реализуй требования, не меняя контракт тестов. "
-            "Актуальное прямое решение владельца: frontend/дизайн выполняет Sonnet, при его "
-            "недоступности gpt-5.6-sol; ревью выполняет Astra high. Это решение имеет приоритет "
-            "над старым упоминанием Opus в файлах этой рабочей ветки. "
+            "Актуальное прямое решение владельца: все новые этапы, включая frontend/дизайн, "
+            "выполняет только gpt-6.1-sol через Codex, без подмены другой моделью. "
+            "Ревью выполняет отдельная сессия Sol 6.1. Это правило имеет приоритет "
+            "над прежними назначениями моделей в файлах этой рабочей ветки. "
             "Ты уже отдельный разработчик внутри цепочки: аналитик и тестировщик завершили свои этапы. "
             "Выполни реализацию сам, не запускай вложенных агентов и не создавай чаты. "
             "Ревью, приёмку, commit, push и выпуск выполнит контроллер после твоего ответа. "
@@ -443,16 +444,13 @@ class NightRunner:
                 f"полные журналы {task.get('check_logs', {})}, "
                 f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
                 "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
-                "Прямое решение владельца для этого запуска: Sonnet или gpt-5.6-sol реализует, "
-                "Astra high проверяет; оно отменяет старое требование Opus в рабочей ветке. "
+                "Прямое решение владельца: новый этап ревью выполняет отдельная сессия "
+                "gpt-6.1-sol через Codex, без подмены; прежние назначения моделей отменены. "
                 'Верни JSON {"accepted":true|false,"summary":"конкретные дефекты или результат"}.'
             )
             result, execution = self.p.llm.ask_json(
                 "review", prompt, ticket_id=task.get("ticket_id"), mode="readonly",
-                cli_only="codex" if task.get("frontend") else None,
-                exclude_cli=(None if task.get("frontend") else
-                             "codex" if "astra" in str(task.get("dev_model", "")).lower()
-                             else "claude" if task.get("dev_cli") == "claude" else None),
+                cli_only="codex",
                 cwd=task["path"], timeout=1800,
                 session_key=f"night:{state['job_id']}:{task['id']}:review",
             )
@@ -527,8 +525,9 @@ class NightRunner:
             f"SHA {task.get('reviewed_sha') or 'не указан'}, заключение: "
             f"{task.get('review_summary') or 'нет сохранённого текста'}. "
             f"Дополнительные материалы приёмки от ведущего: {task.get('feedback') or 'нет'}. "
-            "Владелец утвердил Sonnet с резервом gpt-5.6-sol и ревью Astra high; "
-            "это актуальное правило вместо старого требования Opus в рабочей ветке. "
+            "Владелец назначил только gpt-6.1-sol через Codex для всех новых этапов. "
+            "Аналитик, разработчик и ревьюер остаются отдельными сессиями; "
+            "это актуальное правило вместо прежних назначений моделей в рабочей ветке. "
             "Заполни только вердикты и заключение в документе; требования и тесты не меняй. "
             "Git-коммит делает контроллер. Полный CI выполнится после фиксации приёмки. "
             'Верни JSON {"accepted":true|false,"summary":"..."}.'
@@ -751,7 +750,10 @@ class NightRunner:
         for task in state["tasks"].values():
             if task["status"] != "released":
                 task.update(status="stopped", reason="остановлено владельцем")
-        self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+        job.update(status="cancelled", cancel_requested=True, finished_at=self.p.clock())
+        with self.store.transaction():
+            self.store.kv_set(f"agent_job:{state['job_id']}", job)
+            self.store.set_stage(tid, "done", night={**state, "step": "done"})
         return True
 
     def _promote(self, tid: int, state: dict[str, Any]) -> None:

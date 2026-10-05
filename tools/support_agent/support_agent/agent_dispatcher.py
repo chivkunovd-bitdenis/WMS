@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import threading
@@ -11,6 +12,8 @@ from typing import Any
 from .llm import extract_json
 
 log = logging.getLogger(__name__)
+
+_ROUTE_RETRY_DELAYS = (5, 30, 300, 600)
 
 
 def _priority(value: Any) -> int:
@@ -23,6 +26,31 @@ def _priority(value: Any) -> int:
         return max(0, min(10, int(value)))
     except (TypeError, ValueError):
         return 5
+
+
+def _safe_new_topic_id(topic_id: str, source_id: int) -> bool:
+    """Accept only topics owned by this source, independent of list position."""
+    base = f"topic-{source_id}"
+    if topic_id == base:
+        return True
+    prefix = f"{base}-"
+    if not topic_id.startswith(prefix):
+        return False
+    suffix = topic_id[len(prefix):]
+    return suffix.isdigit() and suffix == str(int(suffix)) and 1 <= int(suffix) <= 8
+
+
+def _safe_new_topic_for_batch(topic_id: str, event: dict[str, Any],
+                              events: list[dict[str, Any]]) -> bool:
+    """Allow a shared new topic only when its anchor is in the same-chat input batch."""
+    if _safe_new_topic_id(topic_id, int(event["source_id"])):
+        return True
+    return any(
+        candidate.get("kind") == "input"
+        and int(candidate.get("chat_id", 0)) == int(event.get("chat_id", 0))
+        and _safe_new_topic_id(topic_id, int(candidate["source_id"]))
+        for candidate in events
+    )
 
 
 class AgentDispatcher:
@@ -64,8 +92,6 @@ class AgentDispatcher:
         # Stable identity is supplied by caller for replayable effects; repeated
         # completion after a crash enters the dispatcher only once.
         identity = str(payload.get("event_key") or f"{topic_id}:{kind}:{payload.get('job_id', '')}")
-        import hashlib
-
         event_id = "internal:" + hashlib.sha256(identity.encode()).hexdigest()[:20]
         if not self.store.kv_get(f"agent_event:{event_id}"):
             self.store.kv_set(f"agent_event:{event_id}", {
@@ -107,14 +133,16 @@ class AgentDispatcher:
 
     def _submit_route(self) -> None:
         with self.lock:
-            if self.routing or not self.store.kv_get("agent_dispatch_queue", []):
+            if (self.routing or not self.store.kv_get("agent_dispatch_queue", [])
+                    or not self._route_retry_ready()):
                 return
             self.routing = True
 
         def run() -> None:
             try:
                 self._route_once()
-            except Exception:
+            except Exception as exc:
+                self._record_route_failure(exc)
                 log.exception("agent dispatcher turn failed; queue retained")
             finally:
                 with self.lock:
@@ -122,14 +150,64 @@ class AgentDispatcher:
 
         self.router.submit(run)
 
-    def _route_once(self) -> None:
+    def _queued_events(self) -> list[dict[str, Any]]:
         ids = list(self.store.kv_get("agent_dispatch_queue", []))
-        events = [self.store.kv_get(f"agent_event:{eid}", {}) for eid in ids]
-        events = [e for e in events if e]
+        events = [self.store.kv_get(f"agent_event:{event_id}", {}) for event_id in ids]
+        events = [event for event in events if event]
+        events.sort(key=lambda event: (not event.get("owner", False), event.get("ts", 0)))
+        return events[:12]
+
+    def _route_signature(self, events: list[dict[str, Any]]) -> str:
+        # The oldest selected event is the one that keeps the queue blocked. New
+        # arrivals must not reset its backoff and recreate a tight retry loop.
+        head = str(events[0].get("id") or "") if events else ""
+        return hashlib.sha256(head.encode()).hexdigest()[:20] if head else ""
+
+    def _route_retry_ready(self) -> bool:
+        retry = self.store.kv_get("agent_dispatch_retry")
+        if not isinstance(retry, dict):
+            return True
+        events = self._queued_events()
+        if not events or retry.get("signature") != self._route_signature(events):
+            return True
+        return float(retry.get("next_at") or 0) <= float(self.agent.clock())
+
+    def _record_route_failure(self, exc: Exception) -> None:
+        events = self._queued_events()
         if not events:
             return
-        events.sort(key=lambda e: (not e.get("owner", False), e.get("ts", 0)))
-        events = events[:12]
+        signature = self._route_signature(events)
+        event_ids = [str(event.get("id") or "") for event in events]
+        with self.store.transaction():
+            previous = self.store.kv_get("agent_dispatch_retry", {})
+            attempts = int(previous.get("attempts", 0)) + 1 \
+                if previous.get("signature") == signature else 1
+            delay = _ROUTE_RETRY_DELAYS[min(attempts - 1, len(_ROUTE_RETRY_DELAYS) - 1)]
+            retry = {
+                "signature": signature,
+                "attempts": attempts,
+                "next_at": float(self.agent.clock()) + delay,
+                "event_ids": event_ids,
+                "last_error": f"{type(exc).__name__}: {exc}"[:1000],
+                "updated_at": float(self.agent.clock()),
+            }
+            self.store.kv_set("agent_dispatch_retry", retry)
+            if attempts == 3:
+                self.store.queue_message(
+                    key=f"agent_dispatch_failure:{signature}",
+                    chat_id=self.agent.cfg.telegram.owner_chat_id,
+                    text=("Маршрутизатор трижды не смог разобрать сохранённые сообщения. "
+                          "Очередь не потеряна; автоматические повторы замедлены минимум "
+                          "до пяти минут, требуется проверка диспетчера."),
+                    purpose="agent_dispatch_failure",
+                    repeat_ok=False,
+                )
+        log.warning("agent dispatcher retry %s delayed for %s seconds", attempts, delay)
+
+    def _route_once(self) -> None:
+        events = self._queued_events()
+        if not events:
+            return
         topics = [self.store.kv_get(f"agent_topic:{tid}", {})
                   for tid in self.store.kv_get("agent_topic_index", [])[-80:]]
         compact = [{k: t.get(k) for k in ("id", "chat_id", "summary", "next_action",
@@ -141,7 +219,9 @@ class AgentDispatcher:
             "instruction": "Route each event semantically to one or several independent "
                              "topics. Return JSON {routes:[{event_id,topics:[{topic_id,subrequest,"
                              "priority}],owner_reply?}]}. New topic_id is 'topic-' plus source numeric id "
-                             "and optional '-N' for several tasks in one owner message. Explicit owner "
+                             "and optional '-N' for several tasks in one owner message. Several input "
+                             "events from the same chat may share one new topic anchored to any of those "
+                             "same-batch events. Explicit owner "
                              "control can include controls:[{action:'set_priority'|'cancel_topic'|"
                              "'cancel_job',target,value?}]. Internal events "
                              "retain their topic_id. Owner_reply is a short immediate truthful response "
@@ -200,6 +280,14 @@ class AgentDispatcher:
                 parts = route.get("topics")
                 if not isinstance(parts, list) or len(parts) > 8:
                     raise ValueError("invalid topic routes")
+                split_ids = ([f"{event['id']}:part{position + 1}"
+                              for position in range(len(parts))]
+                             if len(parts) > 1 else [])
+                if split_ids:
+                    self.store.kv_set(f"agent_split_group:{event['id']}", {
+                        "source_event": event["id"], "part_ids": split_ids,
+                        "results": {}, "complete": False,
+                    })
                 if not parts:
                     if event["kind"] == "input":
                         current = self.store.row("SELECT revision FROM messages WHERE id=?",
@@ -212,10 +300,11 @@ class AgentDispatcher:
                     if event["kind"] != "input":
                         if topic_id != event.get("topic_id") or len(parts) != 1:
                             raise ValueError("internal event changed topic")
-                    elif topic_id not in index and topic_id not in (
-                        f"topic-{event['source_id']}", f"topic-{event['source_id']}-{position + 1}"
-                    ):
-                        raise ValueError("invalid new topic id")
+                    elif topic_id not in index and not _safe_new_topic_for_batch(
+                            topic_id, event, events):
+                        raise ValueError(
+                            f"invalid new topic id {topic_id!r} for event {event['id']!r}"
+                        )
                     topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
                     if topic and event["kind"] == "input" \
                             and int(topic.get("chat_id", 0)) != int(event["chat_id"]):
@@ -229,7 +318,8 @@ class AgentDispatcher:
                     routed_id = f"{event['id']}:part{position + 1}" if len(parts) > 1 else event["id"]
                     if routed_id != event["id"] and not self.store.kv_get(f"agent_event:{routed_id}"):
                         self.store.kv_set(f"agent_event:{routed_id}", {
-                            **event, "id": routed_id, "subrequest": str(part.get("subrequest") or "")[:2000],
+                            **event, "id": routed_id, "parent_event_id": event["id"],
+                            "subrequest": str(part.get("subrequest") or "")[:2000],
                         })
                     if routed_id not in topic["pending"]:
                         topic["pending"].append(routed_id)
@@ -283,6 +373,7 @@ class AgentDispatcher:
             remaining = [eid for eid in self.store.kv_get("agent_dispatch_queue", [])
                          if eid not in mapping]
             self.store.kv_set("agent_dispatch_queue", remaining)
+            self.store.execute("DELETE FROM kv WHERE key='agent_dispatch_retry'")
 
     def _submit_topic(self, topic_id: str) -> None:
         with self.lock:
@@ -342,15 +433,53 @@ class AgentDispatcher:
             topic["status"] = "queued" if topic["pending"] else "waiting"
             self.store.kv_set(f"agent_topic:{topic_id}", topic)
             self.store.kv_set(f"agent_event_done:{event_id}", True)
-            self._emit_internal_locked(topic_id, "worker_done", {
-                "event_key": f"done:{event_id}",
-                "source_event": event_id, "summary": topic.get("summary", ""),
-                "text": result.get("result", "")[:2500],
-                "answer_queued": bool(result.get("answer_queued")),
-                "affected_areas": topic.get("affected_areas", []),
-                "task_ids": topic.get("task_ids", []),
-            })
             event = self.store.kv_get(f"agent_event:{event_id}", {})
+            parent_event_id = str(event.get("parent_event_id") or "")
+            if parent_event_id:
+                group_key = f"agent_split_group:{parent_event_id}"
+                group = self.store.kv_get(group_key, {})
+                results = dict(group.get("results") or {})
+                results[event_id] = {
+                    "summary": str(result.get("summary") or topic.get("summary") or "")[:1500],
+                    "text": str(result.get("result") or "")[:2500],
+                    "affected_areas": topic.get("affected_areas", []),
+                    "task_ids": topic.get("task_ids", []),
+                }
+                group["results"] = results
+                part_ids = [str(item) for item in group.get("part_ids") or []]
+                complete = bool(part_ids) and all(part_id in results for part_id in part_ids)
+                group["complete"] = complete
+                self.store.kv_set(group_key, group)
+                if complete:
+                    ordered = [results[part_id] for part_id in part_ids]
+                    texts: list[str] = []
+                    for item in ordered:
+                        text = str(item.get("text") or "").strip()
+                        if text and text not in texts:
+                            texts.append(text)
+                    self._emit_internal_locked(topic_id, "worker_done", {
+                        "event_key": f"split_done:{parent_event_id}",
+                        "source_event": parent_event_id,
+                        "summary": "\n".join(str(item.get("summary") or "")
+                                              for item in ordered)[:2500],
+                        "text": "\n\n".join(texts)[:6000],
+                        "answer_queued": False, "split_complete": True,
+                        "affected_areas": list(dict.fromkeys(
+                            area for item in ordered for area in item.get("affected_areas", [])
+                        ))[:50],
+                        "task_ids": list(dict.fromkeys(
+                            task_id for item in ordered for task_id in item.get("task_ids", [])
+                        ))[:50],
+                    })
+            else:
+                self._emit_internal_locked(topic_id, "worker_done", {
+                    "event_key": f"done:{event_id}",
+                    "source_event": event_id, "summary": topic.get("summary", ""),
+                    "text": result.get("result", "")[:2500],
+                    "answer_queued": bool(result.get("answer_queued")),
+                    "affected_areas": topic.get("affected_areas", []),
+                    "task_ids": topic.get("task_ids", []),
+                })
             if event.get("kind") == "input":
                 source = self.store.row("SELECT revision FROM messages WHERE id=?",
                                         (event["source_id"],))

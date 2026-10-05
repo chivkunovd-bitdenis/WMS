@@ -1,4 +1,4 @@
-"""Интерактивные макеты выполняет Sonnet и публикует с проверкой открытой ссылки."""
+"""Интерактивные макеты выполняет Sol 6.1; публикация проверяет открытую ссылку."""
 
 from __future__ import annotations
 
@@ -42,23 +42,16 @@ class MockupRunner:
             prompt = prompts.mockup_prompt(task, str(tid))
             previous_review = d.get("mockup_review") or {}
             if previous_review.get("version") == version and previous_review.get("feedback"):
-                prompt += "\n\nИсправь замечания Astra по этому макету: " + previous_review["feedback"]
+                prompt += ("\n\nИсправь замечания отдельного ревью по этому макету: "
+                           + previous_review["feedback"])
             if mockup.get("recovery_note"):
                 prompt += ("\n\nPrevious run was interrupted. Inspect the existing worktree and "
                            "already published URL before changing files or publishing. "
                            "Reuse the completed artifact if valid; do not delete or duplicate it.")
-            try:
-                turn = self.p.llm.agent_turn(
-                    prompt,
-                    session_key=f"mockup:{tid}", model="sonnet", provider="claude",
-                    mode="write", cwd=str(path), timeout=3600,
-                )
-            except LlmUnavailable:
-                turn = self.p.llm.agent_turn(
-                    prompt,
-                    session_key=f"mockup:{tid}", model="gpt-5.6-sol", provider="codex",
-                    effort="high", mode="write", cwd=str(path), timeout=3600,
-                )
+            turn = self.p.llm.agent_turn(
+                prompt, session_key=f"mockup:{tid}", model="gpt-6.1-sol", provider="codex",
+                effort="high", mode="write", cwd=str(path), timeout=3600,
+            )
             res = extract_json(turn.text)
             out = (path / str(res.get("dir", ""))).resolve()
             if not out.is_dir() or path.resolve() not in out.parents:
@@ -94,7 +87,7 @@ class MockupRunner:
                 if (previous_review.get("version") == version
                         and previous_review.get("fingerprint") == fingerprint
                         and previous_review.get("feedback") == feedback):
-                    raise StepFailed("макет не исправлен после замечаний Astra: " + feedback)
+                    raise StepFailed("макет не исправлен после замечаний ревью: " + feedback)
                 self.p.store.patch_data(tid, mockup_review={
                     "version": version, "feedback": feedback, "fingerprint": fingerprint,
                 })

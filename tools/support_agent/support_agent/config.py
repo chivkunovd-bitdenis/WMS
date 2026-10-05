@@ -86,7 +86,7 @@ class LimitsCfg:
 
 @dataclass
 class LlmCfg:
-    cli_order: list[str] = field(default_factory=lambda: ["claude", "codex"])
+    cli_order: list[str] = field(default_factory=lambda: ["codex"])
     cooldown_sec: int = 1800
     claude_bin: str = "claude"
     codex_bin: str = "codex"
@@ -100,15 +100,10 @@ class LlmCfg:
                 "mockup": "sonnet",
                 "frontend": "sonnet",
             },
-            # Sol 5.6 — рабочая модель Codex и запасная для ролей, где подмена разрешена.
-            # Интерфейс и макеты: Sonnet, затем Sol 5.6; Astra — только ревью и перекрёстная проверка.
+            # WMS-676: все новые этапы выполняет Sol 6.1, включая отдельное ревью.
             "codex": {
-                "filter": "gpt-5.6-sol",
-                "routine": "gpt-5.6-sol",
-                "analyst": "gpt-5.6-sol",
-                "frontend": "gpt-5.6-sol",
-                "mockup": "gpt-5.6-sol",
-                "review": "gpt-6-astra",
+                role: "gpt-6.1-sol"
+                for role in ("filter", "routine", "analyst", "frontend", "mockup", "review")
             },
         }
     )
@@ -121,7 +116,7 @@ class AgentCfg:
     """The conversational agent is opt-in while the legacy pipeline remains available."""
 
     enabled: bool = False
-    owner_model: str = "gpt-5.6-sol"
+    owner_model: str = "gpt-6.1-sol"
     owner_provider: str = "codex"
     context_limit_tokens: int = 120_000
     hourly_interval_sec: int = 3600

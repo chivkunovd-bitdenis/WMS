@@ -9,6 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from support_agent.agent_authorization import SemanticAuthorization
 from support_agent.agent_coordinator import AgentCoordinator
 from support_agent.agent_dispatcher import _priority
@@ -158,6 +160,201 @@ def test_background_message_can_be_acknowledged_without_topic(tmp_path: Path) ->
     assert saved is not None and saved["status"] == "handled"
     assert store.kv_get("agent_dispatch_queue", []) == []
     assert store.kv_get("agent_topic_index", []) == []
+
+
+def test_existing_topic_before_first_new_subtopic_is_valid(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    initial = _message(store, -10, "initial", "Первая тема")
+    agent.dispatcher.accept(initial)
+    agent.dispatcher._route_once()
+    existing_topic = f"topic-{initial['id']}"
+
+    followup = _message(store, -10, "followup", "Продолжи и проверь отдельно")
+    agent.dispatcher.accept(followup)
+
+    def mixed_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": existing_topic, "subrequest": "Продолжить", "priority": 8},
+            {"topic_id": f"topic-{followup['id']}-1", "subrequest": "Проверить отдельно",
+             "priority": 8},
+        ]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = mixed_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+
+    assert store.kv_get("agent_dispatch_queue", []) == []
+    assert f"in:{followup['id']}:1:part1" in store.kv_get(
+        f"agent_topic:{existing_topic}")["pending"]
+    assert f"in:{followup['id']}:1:part2" in store.kv_get(
+        f"agent_topic:topic-{followup['id']}-1")["pending"]
+
+
+def test_split_message_emits_one_completion_after_all_parts(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    owner_id = store.add_message(
+        source="telegram", chat_id=4242, msg_id="owner-split", role="owner",
+        author_id="42", author_name="Owner", ts=100, kind="text",
+        text="Проверь две связанные части", file_id=None, reply_to=None,
+    )
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    assert owner is not None
+    agent.dispatcher.accept(owner)
+
+    def split_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": f"topic-{owner_id}-1", "subrequest": "Первая часть"},
+            {"topic_id": f"topic-{owner_id}-2", "subrequest": "Вторая часть"},
+        ]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = split_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    root_event = f"in:{owner_id}:1"
+    first_event = f"{root_event}:part1"
+    second_event = f"{root_event}:part2"
+
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-1", first_event,
+        {"summary": "Первая проверена", "result": "Первая часть готова",
+         "answer_queued": False},
+    )
+    assert store.kv_get("agent_dispatch_queue", []) == []
+
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-2", second_event,
+        {"summary": "Вторая проверена", "result": "Вторая часть готова",
+         "answer_queued": False},
+    )
+    queue = store.kv_get("agent_dispatch_queue", [])
+    assert len(queue) == 1
+    completion = store.kv_get(f"agent_event:{queue[0]}")
+    assert completion["kind"] == "worker_done"
+    assert completion["payload"]["source_event"] == root_event
+    assert completion["payload"]["split_complete"] is True
+    assert "Первая часть готова" in completion["payload"]["text"]
+    assert "Вторая часть готова" in completion["payload"]["text"]
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-2", second_event,
+        {"summary": "Вторая проверена", "result": "Вторая часть готова",
+         "answer_queued": False},
+    )
+    assert store.kv_get("agent_dispatch_queue", []) == queue
+
+
+def test_split_message_suppresses_part_answers_and_progress(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    owner_id = store.add_message(
+        source="telegram", chat_id=4242, msg_id="owner-split-live", role="owner",
+        author_id="42", author_name="Owner", ts=100, kind="text",
+        text="Проверь две связанные части", file_id=None, reply_to=None,
+    )
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    assert owner is not None
+    agent.dispatcher.accept(owner)
+
+    def split_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        return LlmResult(json.dumps({"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": f"topic-{owner_id}-1", "subrequest": "Первая часть"},
+            {"topic_id": f"topic-{owner_id}-2", "subrequest": "Вторая часть"},
+        ]}]}), "codex", "sol", "session")
+
+    agent.llm.agent_turn = split_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+
+    def part_turn(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["event"]
+        kwargs["progress_callback"](f"Промежуточно {event['id']}")
+        return LlmResult(json.dumps({
+            "answer": f"Отдельный ответ {event['id']}",
+            "summary": f"Завершено {event['id']}",
+            "next_action": "",
+        }), "codex", "sol", "session")
+
+    agent.llm.agent_turn = part_turn  # type: ignore[method-assign]
+    agent.dispatcher._work_topic(f"topic-{owner_id}-1")
+    assert store.rows("SELECT * FROM outbox") == []
+    assert store.kv_get("agent_dispatch_queue", []) == []
+
+    agent.dispatcher._work_topic(f"topic-{owner_id}-2")
+    queued = store.kv_get("agent_dispatch_queue", [])
+    assert len(queued) == 1
+    completion = store.kv_get(f"agent_event:{queued[0]}")
+    assert completion["kind"] == "worker_done"
+    assert completion["payload"]["split_complete"] is True
+
+    def moderate(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        return LlmResult(json.dumps({"routes": [{
+            "event_id": event["id"], "owner_reply": "Один сводный ответ",
+        }]}), "codex", "sol", "session")
+
+    agent.llm.agent_turn = moderate  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    messages = store.rows("SELECT * FROM outbox")
+    assert len(messages) == 1
+    assert messages[0]["purpose"] == "agent_moderator"
+    assert messages[0]["text"] == "Один сводный ответ"
+    assert store.kv_get("agent_dispatch_queue", []) == []
+    agent.dispatcher._route_once()
+    assert len(store.rows("SELECT * FROM outbox")) == 1
+
+
+def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "unsafe", "Создай тему")
+    agent.dispatcher.accept(source)
+
+    def unsafe_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"],
+                              "topics": [{"topic_id": "topic-999-1"}]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = unsafe_route  # type: ignore[method-assign]
+    with pytest.raises(ValueError, match="invalid new topic id"):
+        agent.dispatcher._route_once()
+    assert f"in:{source['id']}:1" in store.kv_get("agent_dispatch_queue", [])
+
+
+def test_repeated_router_failure_is_backed_off(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    now = [100.0]
+    agent.clock = lambda: now[0]  # type: ignore[method-assign]
+    source = _message(store, -10, "retry", "Не потеряй меня")
+    agent.dispatcher.accept(source)
+
+    for expected_attempt in range(1, 4):
+        agent.dispatcher._record_route_failure(RuntimeError("same invalid route"))
+        retry = store.kv_get("agent_dispatch_retry")
+        assert retry["attempts"] == expected_attempt
+        assert retry["event_ids"] == [f"in:{source['id']}:1"]
+        if expected_attempt < 3:
+            now[0] = float(retry["next_at"])
+
+    retry = store.kv_get("agent_dispatch_retry")
+    assert float(retry["next_at"]) - now[0] >= 300
+    assert agent.dispatcher._route_retry_ready() is False
+
+
+def test_successful_route_clears_retry_state(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "recover", "Обработай после сбоя")
+    agent.dispatcher.accept(source)
+    store.kv_set("agent_dispatch_retry", {
+        "signature": "old", "attempts": 3, "next_at": 999,
+        "event_ids": [f"in:{source['id']}:1"], "last_error": "old failure",
+    })
+
+    agent.dispatcher._route_once()
+
+    assert store.kv_get("agent_dispatch_retry") is None
+    assert store.kv_get("agent_dispatch_queue", []) == []
 
 
 def test_model_priority_names_are_tolerated() -> None:
