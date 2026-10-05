@@ -115,6 +115,8 @@ async def _serialize_import_request(request_id: uuid.UUID) -> AsyncIterator[None
                 _IMPORT_REQUEST_LOCKS.pop(request_id, None)
             else:
                 _IMPORT_REQUEST_LOCKS[request_id] = (stored_lock, users - 1)
+
+
 # Human-readable seller labels often print the GS1 element string as
 # "(01) <gtin>" and "(21) <serial>" — with parens, a space after each AI
 # marker, and sometimes wrapped onto two separate lines on narrow labels
@@ -1952,9 +1954,6 @@ async def auto_import_marking_codes(
                 groups=await _auto_import_groups(session, tenant_id, existing.id),
                 unmatched=_unmatched_from_json(metadata.get("unmatched")),
             )
-            # The PostgreSQL advisory lock is transaction-scoped.  This path
-            # is read-only, so finish its transaction before returning the
-            # already committed result to a retry.
             await session.rollback()
             return result
 
@@ -2151,10 +2150,6 @@ async def auto_import_marking_codes(
             groups=groups,
             unmatched=unmatched,
         )
-        # The result query above starts a new read transaction after commit.
-        # End it before releasing the per-request lock, otherwise a waiting
-        # SQLite attempt can hit a stale snapshot/database lock even though the
-        # import itself has already committed successfully.
         await session.rollback()
         return result
 
@@ -2222,7 +2217,7 @@ async def assign_import_rows_to_product(
                 product=group,
                 assigned_keys=assigned_keys,
             )
-            await session.rollback()
+            await session.commit()
             return result
 
         parsed_rows = await asyncio.to_thread(_parse_import_files, files)
@@ -2340,8 +2335,6 @@ async def assign_import_rows_to_product(
             product=group,
             assigned_keys=assigned_keys,
         )
-        # As in auto import, the post-commit result query opens a fresh read
-        # transaction.  Release it while this request still owns the lock.
         await session.rollback()
         return result
 
