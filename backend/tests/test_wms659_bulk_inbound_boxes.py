@@ -14,7 +14,6 @@ from app.db.session import SessionLocal, engine
 from app.models.inbound_intake import InboundIntakeRequest
 from app.services import inbound_intake_service as intake_svc
 
-
 BASE = "/operations/inbound-intake-requests"
 
 
