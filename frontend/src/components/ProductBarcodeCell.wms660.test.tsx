@@ -39,4 +39,12 @@ describe('WMS-660 product barcode cell', () => {
     expect(markup.match(/data-barcode-line=/g)).toHaveLength(1)
     expect(markup).toContain('2055629421109')
   })
+
+  it('uses an Ozon fallback only when the row has no WB barcode', () => {
+    expect(normalizeProductBarcodes(null, [' ', ''], ' OZN-123 ')).toEqual(['OZN-123'])
+    expect(normalizeProductBarcodes('WB-primary', ['WB-second'], 'OZN-123')).toEqual([
+      'WB-primary',
+      'WB-second',
+    ])
+  })
 })

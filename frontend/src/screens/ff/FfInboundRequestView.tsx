@@ -199,7 +199,11 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
   printTestId,
   markingControl,
 }: InboundProductLineCellProps) {
-  const barcodes = normalizeProductBarcodes(meta.wb_primary_barcode, meta.wb_barcodes)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
   const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : undefined
 
   return (
@@ -288,7 +292,11 @@ type InboundBoxContentLineProps = {
 
 /** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
 const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
-  const barcodes = normalizeProductBarcodes(meta.wb_primary_barcode, meta.wb_barcodes)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
   const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : '—'
 
   return (
