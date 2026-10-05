@@ -285,3 +285,47 @@ def test_unverified_replacement_after_drain_never_boots_out(processes: Any,
     assert h.bootouts == []
     assert h.signals == [(parent.pid, signal.SIGTERM)]
     assert (h.package / '__main__.py').read_text() == WORKER
+
+
+def test_pid_replacement_during_atomic_gate_aborts_without_signal(processes: Any,
+                                                                monkeypatch: Any) -> None:
+    h = processes
+    parent = h.start()
+    original = h.m.atomic_bytes
+
+    def atomic(path: Path, value: bytes) -> None:
+        if value != WORKER.encode() and not hasattr(h, 'replacement'):
+            # Exit/reap original, then start a worker which has read OLD bytes,
+            # before the installer commits the atomic gate replacement.
+            h.kill(parent.pid, signal.SIGTERM)
+            parent.wait(timeout=5)
+            (h.app / 'ready').unlink()
+            (h.app / 'done').unlink()
+            h.replacement = h.start()
+        original(path, value)
+
+    monkeypatch.setattr(h.m, 'atomic_bytes', atomic)
+    with pytest.raises(RuntimeError, match='changed|identity|replacement'):
+        h.m.drain_and_bootout(parent.pid)
+    assert h.replacement.poll() is None
+    assert h.signals == [] and h.bootouts == []
+    assert (h.package / '__main__.py').read_text() == WORKER
+
+
+def test_installed_bytes_changed_after_bootstrap_cannot_report_exact_sha(source_installation: Any,
+                                                                       monkeypatch: Any) -> None:
+    h = source_installation
+    original = h.module.command
+
+    def command(*args: str) -> str:
+        if args[:2] == ('launchctl', 'print') and h.bootstrapped:
+            (h.package / 'worker.py').write_bytes(b'# concurrent installed mutation\n')
+        return original(*args)
+
+    monkeypatch.setattr(h.module, 'command', command)
+    with pytest.raises(AssertionError, match='published|commit'):
+        h.module.main()
+    assert h.bootstrapped
+    assert h.events.count('bootout_after_drain') == 1
+    assert h.events.count('service_bootstrap') == 1
+    assert not (h.module.ROOT / 'docs/reviews/artifacts/wms-676/local-install.json').exists()
