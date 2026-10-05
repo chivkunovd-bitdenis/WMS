@@ -1,0 +1,15 @@
+{
+  "task": "WMS-664",
+  "contract_commit": "9e7404119a2e3b07ac8463a41d8db774b10242d3",
+  "correction_commit": "af70ab248456e7cf95376b362ba2d834e0ca5086",
+  "files": [
+    "tools/support_agent/tests/test_agent_dispatcher.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "reviewed_at": "2026-10-05T18:03:00+04:00",
+    "summary": "C1-C4 unchanged; both C6 tests pass and fail when either split progress or split answer suppression is removed"
+  }
+}
