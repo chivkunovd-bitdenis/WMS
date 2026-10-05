@@ -201,6 +201,20 @@ test('session change while the UI is being prepared restores original fetch', as
   assert.deepEqual(h.events, ['inspect', 'open', 'rollback']);
 });
 
+test('session change after successful preparation restores the original transport', async () => {
+  const h = harness();
+  await h.helper.run({ mode: 'execute' });
+  h.setToken('changed-token');
+  await assert.rejects(() => h.root.fetch(`${REGISTRY}?limit=50&offset=0`), /сесси/i);
+  assert.equal(h.root.fetch, h.originalFetch);
+});
+
+test('a second helper cannot accept the already installed snapshot as backend truth', async () => {
+  const h = harness();
+  await h.helper.run({ mode: 'execute' });
+  assert.throws(() => createHelper({ root: h.root, ui: { inspectSelection() {} } }), /уже установлен|перезагруз/i);
+});
+
 test('wrong origin or route aborts without a request', async () => {
   const h = harness();
   h.root.location.pathname = '/seller/orders';
