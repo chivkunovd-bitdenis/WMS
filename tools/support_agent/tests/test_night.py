@@ -36,6 +36,11 @@ class FakeHotfix:
             return ""
         return ""
 
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        return ok()
+
     def run_gh(self, argv: list[str], cwd: str | Path | None = None,
                timeout: int = 300) -> ExecResult:
         self.calls.append(("gh", argv))
@@ -112,6 +117,24 @@ class RealGitHotfix(FakeHotfix):
             check=True, capture_output=True, text=True,
         )
         return result.stdout
+
+    def run(self, argv: list[str], cwd: str | Path | None = None,
+            timeout: int = 300) -> ExecResult:
+        self.calls.append(("run", argv))
+        result = subprocess.run(
+            argv, cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
+            check=False, capture_output=True, text=True,
+        )
+        return ExecResult(result.returncode, result.stdout, result.stderr)
+
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
+            check=False, capture_output=True, text=True,
+        )
+        return ExecResult(result.returncode, result.stdout, result.stderr)
 
 
 def make_night(env: Any, *, etalon: str = "green", release: bool = True) -> tuple[NightRunner, int]:
@@ -796,6 +819,9 @@ def _tester_repo(env: Any, tmp_path: Path) -> tuple[Any, int, Path]:
     subprocess.run(["git", "add", "-A"], cwd=root, check=True)
     subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
                     "commit", "-qm", "baseline"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/etalon", "HEAD"], cwd=root, check=True,
+    )
     hotfix = RealGitHotfix()
     hotfix.p = env.pipe
     runner.hotfix = hotfix  # type: ignore[assignment]
@@ -858,13 +884,18 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     state = runner._state(tid)
     task = state["tasks"]["WMS-700"]
     task.update(step="checks", branch="task", tests=[], contract_hashes={},
-                dev_cli="codex", dev_model="gpt-5.6-sol")
+                dev_cli="codex", dev_model="gpt-5.6-sol",
+                feedback="C7 вручную проверен в системном предпросмотре дважды")
     runner._save(tid, state)
     doc = root / "docs/requirements/WMS-700.md"
 
-    def accept(_: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    def accept(prompt: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         assert kwargs["mode"] == "write"
         assert kwargs["session_key"] == "night:job1:WMS-700:analyst"
+        assert "Дополнительные материалы приёмки от ведущего" in prompt
+        assert "C7 вручную проверен в системном предпросмотре дважды" in prompt
+        assert "Перекрёстное ревью: модель" in prompt
+        assert "дефектов нет" in prompt
         doc.write_text(doc.read_text() + "\n## Заключение\nПроверки подтверждены.\n")
         return {"accepted": True, "summary": "принято"}
 
@@ -874,6 +905,8 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "review"
     runner.development(tid)  # review
     assert env.llm.calls[-1]["exclude_cli"] is None  # Astra can review Sol in the same provider
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["review_summary"] == "дефектов нет"
     runner.development(tid)  # acceptance saved before PR/CI
     task = runner._state(tid)["tasks"]["WMS-700"]
     assert task["step"] == "pr" and task["status"] == "working"
@@ -885,6 +918,137 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     runner.development(tid)
     task = runner._state(tid)["tasks"]["WMS-700"]
     assert task["status"] == "ready" and task["head_sha"] == task["accepted_sha"] == task["ci_head"]
+
+
+def test_checks_merge_fresh_etalon_before_review_and_refresh_control_hashes(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
+    backlog = root / "docs/KANONICHESKIY_BACKLOG.md"
+    backlog.write_text("# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
+    task_branch = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-qb", "etalon-fixture", baseline], cwd=root, check=True)
+    (root / "AGENTS.md").write_text("trusted etalon rules\n", encoding="utf-8")
+    backlog.write_text("# Backlog\n\n## WMS-699 · etalon\n\nKeep etalon.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "docs/KANONICHESKIY_BACKLOG.md"], cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-699: trusted etalon advance"], cwd=root, check=True)
+    etalon = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/etalon", etalon], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+    runner.hotfix.fetch = lambda: None  # type: ignore[method-assign]
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={})
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["base_sha"] == etalon
+    assert (root / "AGENTS.md").read_text(encoding="utf-8") == "trusted etalon rules\n"
+    merged_backlog = backlog.read_text(encoding="utf-8")
+    assert "## WMS-699 · etalon" in merged_backlog and "## WMS-700 · task" in merged_backlog
+    assert saved["control_hashes"] == runner._control_hashes(saved)
+    assert subprocess.run(
+        ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], cwd=root,
+    ).returncode == 0
+
+
+def test_checks_recover_saved_etalon_merge_intent_after_interruption(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
+    (root / "docs/KANONICHESKIY_BACKLOG.md").write_text(
+        "# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
+    task_branch = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-qb", "etalon-interrupted", baseline], cwd=root, check=True)
+    (root / "AGENTS.md").write_text("new trusted rules\n", encoding="utf-8")
+    subprocess.run(["git", "add", "AGENTS.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "WMS-699: etalon advance"], cwd=root, check=True)
+    etalon = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/etalon", etalon], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+    runner.hotfix.fetch = lambda: None  # type: ignore[method-assign]
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={}, base_sync_intent=etalon)
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "merge", "--no-ff", "--no-edit", etalon], cwd=root, check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", "etalon-interrupted"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "commit", "--allow-empty", "-qm", "WMS-699: etalon advances again"],
+        cwd=root, check=True,
+    )
+    etalon_next = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/etalon", etalon_next], cwd=root, check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["base_sha"] == etalon_next
+    assert "base_sync_intent" not in saved
+    assert saved["control_hashes"] == runner._control_hashes(saved)
+
+
+def test_pr_rechecks_base_and_returns_stale_acceptance_to_checks(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    task = state["tasks"]["WMS-700"]
+    task.update(
+        step="pr", status="working", path="/fake", branch="night/wms-700", reviewed_sha="r" * 40,
+        review_by="gpt-6-astra", review_summary="PASS", accepted="принято",
+        accepted_sha="b" * 40,
+    )
+    runner._save(tid, state)
+    runner.hotfix.git_result = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")  # type: ignore[method-assign]
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "checks" and saved["status"] == "working"
+    assert "reviewed_sha" not in saved and "accepted_sha" not in saved
+    assert not [call for call in runner.hotfix.calls if call[0] == "git" and call[1][:1] == ["push"]]
 
 
 def test_review_defect_returns_to_developer(env: Any, tmp_path: Path) -> None:
