@@ -12,6 +12,7 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -29,6 +30,8 @@ from app.services.seller_fulfillment_catalog_service import (
 )
 from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS
+from app.services.wb_honest_sign_service import WbCategoryCatalog, fetch_category_catalog
+from app.services.wildberries_credentials_service import get_decrypted_tokens_for_seller
 
 router = APIRouter(prefix="/seller-catalog", tags=["seller-catalog"])
 
@@ -195,12 +198,31 @@ async def post_add_to_fulfillment(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="too_many_ids"
         )
+    marking_catalog: WbCategoryCatalog | None = None
+    marking_catalog_error: str | None = None
+    if body.wb_nm_ids:
+        try:
+            tokens = await get_decrypted_tokens_for_seller(session, user.tenant_id, seller_id)
+            content_token = tokens[0] if tokens is not None else None
+            if content_token:
+                async with httpx.AsyncClient() as http_client:
+                    marking_catalog = await fetch_category_catalog(
+                        http_client, api_token=content_token
+                    )
+            else:
+                marking_catalog_error = "wb_category_catalog_unavailable"
+        except Exception:
+            # Adding the card remains available; needKiz is still applied,
+            # while clothing inference is diagnosed and retried next sync.
+            marking_catalog_error = "wb_category_catalog_unavailable"
     added, skipped = await add_cards_to_fulfillment(
         session,
         user.tenant_id,
         seller_id,
         wb_nm_ids=body.wb_nm_ids,
         ozon_product_ids=body.ozon_product_ids,
+        marking_catalog=marking_catalog,
+        marking_catalog_error=marking_catalog_error,
     )
     return AddToFulfillmentOut(
         added=[AddToFulfillmentEntryOut(**a) for a in added],

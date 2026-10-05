@@ -352,7 +352,7 @@ function MarkingImportDialogContent({
   const [error, setError] = useState<string | null>(null)
   const [autoResult, setAutoResult] = useState<AutoImportResponse | null>(null)
   const [manualResult, setManualResult] = useState<ImportResponse | null>(null)
-  const [printImportId, setPrintImportId] = useState<string | null>(null)
+  const [printImportIds, setPrintImportIds] = useState<string[]>([])
   const [selectedUnmatchedKeys, setSelectedUnmatchedKeys] = useState<Set<string>>(new Set())
   const [assignmentProductId, setAssignmentProductId] = useState<string | null>(null)
   const [assignmentRequestId, setAssignmentRequestId] = useState<string | null>(null)
@@ -382,7 +382,7 @@ function MarkingImportDialogContent({
     setError(null)
     setAutoResult(null)
     setManualResult(null)
-    setPrintImportId(null)
+    setPrintImportIds([])
     setSelectedUnmatchedKeys(new Set())
     setAssignmentProductId(null)
     setAssignmentRequestId(null)
@@ -478,7 +478,7 @@ function MarkingImportDialogContent({
       const message = data.skipped_count > 0
         ? `Загружено ${data.accepted_count}, пропущено ${data.skipped_count} (дубликаты/ошибки)`
         : `Загружено ${data.accepted_count}`
-      setManualResult(data); setPrintImportId(data.import_id); setStage('manual-result')
+      setManualResult(data); setPrintImportIds([data.import_id]); setStage('manual-result')
       onError?.(null); onImported(message)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось загрузить коды.'
@@ -499,7 +499,7 @@ function MarkingImportDialogContent({
     })
     if (outcome?.stage === 'auto-result') {
       const data = outcome.data
-      setAutoResult(data); setPrintImportId(data.import_id)
+      setAutoResult(data); setPrintImportIds([data.import_id])
       setSelectedUnmatchedKeys(new Set()); setStage('auto-result')
       onError?.(null)
       onImported(`Загружено ${data.groups.reduce((sum, row) => sum + row.loaded_count, 0)} КИЗ`)
@@ -541,7 +541,8 @@ function MarkingImportDialogContent({
       const assigned = new Set(data.assigned_keys)
       if (markAssignmentResponseApplied(appliedAssignmentRequestIdsRef.current, data.import_id)) {
         setAutoResult((prev) => prev ? mergeAssignmentResponse(prev, data) : prev)
-        setPrintImportId(data.import_id)
+        setPrintImportIds((current) => current.includes(data.import_id)
+          ? current : [...current, data.import_id])
         onImported(`Добавлено к товару: ${data.assigned_keys.length} КИЗ`)
       }
       setSelectedUnmatchedKeys((prev) => new Set([...prev].filter((key) => !assigned.has(key))))
@@ -603,16 +604,20 @@ function MarkingImportDialogContent({
   }
 
   const downloadImportResult = async () => {
-    if (!printImportId) return
+    const [primaryImportId, ...additionalImportIds] = printImportIds
+    if (!primaryImportId) return
     setActionBusy(true); setError(null)
     try {
-      const res = await fetch(apiUrl(`/operations/marking-codes/imports/${printImportId}/result.pdf`), {
+      const query = new URLSearchParams()
+      additionalImportIds.forEach((importId) => query.append('additional_import_id', importId))
+      const suffix = additionalImportIds.length > 0 ? `?${query.toString()}` : ''
+      const res = await fetch(apiUrl(`/operations/marking-codes/imports/${primaryImportId}/result.pdf${suffix}`), {
         headers: { Authorization: `Bearer ${token}` },
       })
       if (!res.ok) throw new Error(await readApiErrorMessage(res))
       const url = URL.createObjectURL(await res.blob())
       const anchor = document.createElement('a')
-      anchor.href = url; anchor.download = `marking-import-${printImportId}.pdf`
+      anchor.href = url; anchor.download = `marking-import-${primaryImportId}.pdf`
       document.body.appendChild(anchor); anchor.click(); anchor.remove(); URL.revokeObjectURL(url)
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Не удалось подготовить печать загрузки.'

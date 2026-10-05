@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -260,6 +261,9 @@ class MarkingCode(Base):
     )
     gtin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     label_artifact_pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    label_artifact_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     serial: Mapped[str | None] = mapped_column(String(128), nullable=True)
     crypto_tail: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=STATUS_AVAILABLE)

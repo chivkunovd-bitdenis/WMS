@@ -1010,6 +1010,7 @@ async def download_marking_import_result(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
     copies: Annotated[int, Query(ge=1, le=100)] = 1,
+    additional_import_id: Annotated[list[uuid.UUID] | None, Query()] = None,
 ) -> Response:
     from app.models.marking_code import MarkingCodeImport
 
@@ -1017,11 +1018,19 @@ async def download_marking_import_result(
     if batch is None or batch.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="import_not_found")
     await _assert_pool_access(user, batch.seller_id, effective_seller_id)
+    for additional_id in dict.fromkeys(additional_import_id or []):
+        additional_batch = await session.get(MarkingCodeImport, additional_id)
+        if additional_batch is None or additional_batch.tenant_id != user.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="import_not_found"
+            )
+        await _assert_pool_access(user, additional_batch.seller_id, effective_seller_id)
     try:
         pdf_bytes = await mc_svc.build_import_result_pdf(
             session,
             user.tenant_id,
             import_id,
+            additional_import_ids=additional_import_id,
             copies=copies,
         )
     except mc_svc.MarkingCodeServiceError as exc:

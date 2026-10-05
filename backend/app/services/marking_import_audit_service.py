@@ -61,9 +61,15 @@ async def audit_marking_import(
     else:
         for source_file in source_files:
             try:
-                source_payloads.extend(_decode_pdf(read_source_pdf(source_file.storage_key)))
+                decoded_source = _decode_pdf(read_source_pdf(source_file.storage_key))
+                if not decoded_source:
+                    evidence_gaps.append("source_pdf")
+                    evidence_gaps.append(f"source_pdf:{source_file.id}")
+                    break
+                source_payloads.extend(decoded_source)
             except Exception:
                 evidence_gaps.append("source_pdf")
+                evidence_gaps.append(f"source_pdf:{source_file.id}")
                 break
 
     codes = list(
@@ -88,9 +94,16 @@ async def audit_marking_import(
             try:
                 decoded_artifact = _decode_pdf(code.label_artifact_pdf)
             except Exception:
-                pass
+                evidence_gaps.append(f"label_artifact_pdf:{code.id}")
+                artifact_mismatch = True
+            else:
+                if not decoded_artifact:
+                    evidence_gaps.append(f"label_artifact_pdf:{code.id}")
+                    artifact_mismatch = True
         else:
-            evidence_gaps.append(f"label_artifact_pdf:{code.id}")
+            if code.label_artifact_required:
+                evidence_gaps.append(f"label_artifact_pdf:{code.id}")
+                artifact_mismatch = True
         artifact_payloads.extend(decoded_artifact)
         if decoded_artifact and decoded_artifact != [code.cis_code]:
             artifact_mismatch = True
@@ -105,18 +118,29 @@ async def audit_marking_import(
         )
 
     final_payloads: list[str] | None = None
+    final_artifact_invalid = False
     if final_print_pdf is not None:
         try:
             final_payloads = _decode_pdf(final_print_pdf)
         except Exception:
             evidence_gaps.append("final_print_pdf")
+            final_artifact_invalid = True
+        else:
+            if not final_payloads:
+                evidence_gaps.append("final_print_pdf")
+                final_artifact_invalid = True
 
     first_divergence: str | None = None
-    if source_payloads and source_payloads != saved_payloads:
+    source_evidence_complete = not any(
+        gap == "source_pdf" or gap.startswith("source_pdf:") for gap in evidence_gaps
+    )
+    if source_evidence_complete and source_payloads and source_payloads != saved_payloads:
         first_divergence = "saved_cis"
     elif artifact_mismatch:
         first_divergence = "label_artifact_pdf"
-    elif final_payloads is not None and final_payloads != saved_payloads:
+    elif final_artifact_invalid or (
+        final_payloads is not None and final_payloads != saved_payloads
+    ):
         first_divergence = "final_print_pdf"
 
     return {
