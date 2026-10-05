@@ -14,6 +14,7 @@ from typing import Any
 
 from .hotfix import HotfixRunner, StepFailed
 from .llm import LlmError, LlmUnavailable
+from .pipeline import InlinePool, ThreadPool
 
 TASK_RE = re.compile(r"^WMS-(\d+)$")
 CONTRADICTION_RE = re.compile(r"\bC\d+\b.*\bR\d+\b|\bR\d+\b.*\bC\d+\b", re.IGNORECASE)
@@ -30,6 +31,7 @@ class NightRunner:
     def __init__(self, pipe: Any, hotfix: HotfixRunner) -> None:
         self.p, self.store, self.cfg = pipe, pipe.store, pipe.cfg
         self.hotfix = hotfix
+        self.task_pool = InlinePool() if isinstance(pipe.pool, InlinePool) else ThreadPool(5)
 
     def ensure_job(self, job_id: str) -> int:
         job = self.store.kv_get(f"agent_job:{job_id}", {})
@@ -67,15 +69,55 @@ class NightRunner:
         return dict(self.store.data(tid).get("night") or {})
 
     def _save(self, tid: int, state: dict[str, Any], **changes: Any) -> None:
+        task_id = state.get("_active_task_id")
+        if task_id:
+            # Each lane owns one task. Never write a stale snapshot of its siblings.
+            task = state["tasks"][task_id]
+            if "next_poll" in changes:
+                task["next_poll"] = changes["next_poll"]
+            with self.store.transaction():
+                fresh = self._state(tid)
+                current = fresh["tasks"].get(task_id, {})
+                job = self.store.kv_get(f"agent_job:{fresh['job_id']}", {})
+                if (self.store.ticket(tid)["stage"] != "development"
+                        or current.get("status") != "working" or job.get("cancel_requested")):
+                    return
+                fresh["tasks"][task_id] = task
+                self.store.patch_data(tid, night=fresh)
+            return
         state.update(changes)
         self.store.patch_data(tid, night=state)
 
     def _task(self, state: dict[str, Any]) -> dict[str, Any] | None:
+        if state.get("_active_task_id"):
+            return state["tasks"][state["_active_task_id"]]
         return next((task for task in state["tasks"].values()
                      if task["status"] == "working"), None)
 
     # -- development ----------------------------------------------------------------
     def development(self, tid: int) -> None:
+        state = self._state(tid)
+        if state.get("step") == "etalon_ci":
+            with self.store.lock:
+                if self._cancelled(tid, self._state(tid)):
+                    return
+            if self.p.clock() < float(state.get("next_poll", 0)):
+                return
+            try:
+                self._etalon_ci(tid, state)
+            except StepFailed as exc:
+                with self.store.lock:
+                    fresh = self._state(tid)
+                    if fresh.get("step") == "etalon_ci" and not self._cancelled(tid, fresh):
+                        self._stop_task(tid, fresh, self._task(fresh), str(exc))
+            return
+        # The controller's snapshot and global transitions are indivisible with
+        # respect to lane saves, cancellation and owner messages in this process.
+        # Worker/model calls use their own threads and do not hold this lock.
+        with self.store.lock:
+            self._schedule_development(tid)
+
+    def _schedule_development(self, tid: int) -> None:
         state = self._state(tid)
         if self._cancelled(tid, state):
             return
@@ -97,7 +139,6 @@ class NightRunner:
                 self._save(tid, state)
         try:
             if state.get("step") == "etalon_ci":
-                self._etalon_ci(tid, state)
                 return
             deadline = state.get("deadline_at")
             if deadline and self.p.clock() >= float(deadline):
@@ -124,6 +165,30 @@ class NightRunner:
                 else:
                     self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
                 return
+            for current in state["tasks"].values():
+                if (current["status"] == "working"
+                        and self.p.clock() >= float(current.get("next_poll", 0))):
+                    task_id = current["id"]
+                    self.task_pool.submit(
+                        f"night:{tid}:{task_id}",
+                        lambda task_id=task_id: self._develop_task(tid, task_id),
+                    )
+        except (LlmUnavailable, LlmError):
+            self._save(tid, state, next_poll=self.p.clock() + 60)
+        except StepFailed as exc:
+            self._stop_task(tid, state, self._task(state), str(exc))
+
+    def _develop_task(self, tid: int, task_id: str) -> None:
+        state = self._state(tid)
+        task = state["tasks"][task_id]
+        job = self.store.kv_get(f"agent_job:{state['job_id']}", {})
+        if (self.store.ticket(tid)["stage"] != "development"
+                or task["status"] != "working" or job.get("cancel_requested")
+                or self.p.clock() < float(task.get("next_poll", 0))):
+            return
+        state["_active_task_id"] = task_id
+        task.pop("next_poll", None)
+        try:
             getattr(self, f"_task_{task['step']}")(tid, state, task)
         except (LlmUnavailable, LlmError) as exc:
             task = self._task(state)
@@ -152,20 +217,26 @@ class NightRunner:
             raise StepFailed("не удалось прочитать CI etalon") from exc
         if res.rc != 0 or not isinstance(runs, list):
             raise StepFailed("не удалось прочитать CI etalon")
-        if not runs or runs[0].get("status") != "completed":
-            self._save(tid, state, next_poll=self.p.clock() + 30)
-            return
-        check = self._failed_run_check(runs[0])
-        if runs[0].get("conclusion") != "success" or check:
-            check = check or str(runs[0].get("displayTitle") or "CI")
-            self.p.say_owner(f"night_etalon_red:{state['job_id']}:{sha}",
-                             f"etalon красный: {check}, ночь не запускаю",
-                             tid, "night")
-            for task in state["tasks"].values():
-                task.update(status="stopped", reason=f"etalon красный: {check}")
-            self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
-            return
-        self._save(tid, state, step="tasks", etalon_sha=sha, next_poll=0)
+        completed = bool(runs and runs[0].get("status") == "completed")
+        check = self._failed_run_check(runs[0]) if completed else ""
+        with self.store.lock:
+            state = self._state(tid)
+            if (self.store.ticket(tid)["stage"] != "development"
+                    or state.get("step") != "etalon_ci" or self._cancelled(tid, state)):
+                return
+            if not completed:
+                self._save(tid, state, next_poll=self.p.clock() + 30)
+                return
+            if runs[0].get("conclusion") != "success" or check:
+                check = check or str(runs[0].get("displayTitle") or "CI")
+                self.p.say_owner(f"night_etalon_red:{state['job_id']}:{sha}",
+                                 f"etalon красный: {check}, ночь не запускаю",
+                                 tid, "night")
+                for task in state["tasks"].values():
+                    task.update(status="stopped", reason=f"etalon красный: {check}")
+                self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+                return
+            self._save(tid, state, step="tasks", etalon_sha=sha, next_poll=0)
 
     def _failed_run_check(self, run: dict[str, Any]) -> str:
         run_id = run.get("databaseId")
@@ -735,9 +806,9 @@ class NightRunner:
                 *, paths: list[str] | None = None) -> bool:
         path = task["path"]
         self.hotfix.guard_gitdir(path)
-        pathspecs = [f":(literal){item}" for item in paths] if paths else [
-            ".", ":(exclude)frontend/node_modules",
-        ]
+        # `git add .` respects .gitignore; naming the ignored node_modules
+        # symlink even as an exclusion can make Git return an error.
+        pathspecs = [f":(literal){item}" for item in paths] if paths else ["."]
         self.hotfix.git("add", "-A", "--", *pathspecs, cwd=path)
         staged = self.hotfix.git("diff", "--cached", "--name-only", "--", *pathspecs,
                                  cwd=path)

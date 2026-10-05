@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +13,7 @@ import pytest
 
 from support_agent.llm import ExecResult, LlmError, LlmUnavailable
 from support_agent.night import NightRunner
+from support_agent.pipeline import ThreadPool
 
 from .conftest import ok
 
@@ -387,10 +389,6 @@ def test_unavailable_frontend_models_wait_and_preserve_developer_step(
     state["deadline_at"] = None
     task = state["tasks"]["WMS-700"]
     task.update(step="developer", frontend=True, tests=[], contract_hashes={})
-    state["tasks"]["WMS-701"] = {
-        "id": "WMS-701", "number": 701, "step": "worktree", "status": "working",
-        "ticket_id": None, "frontend": False, "contract_changed": False,
-    }
     runner._save(tid, state)
 
     def unavailable(_: str, __: dict[str, Any]) -> dict[str, Any]:
@@ -405,7 +403,6 @@ def test_unavailable_frontend_models_wait_and_preserve_developer_step(
     assert saved["WMS-700"]["status"] == "working"
     assert saved["WMS-700"]["step"] == "developer"
     assert "ожидает доступности Sonnet или Sol 5.6" in saved["WMS-700"]["reason"]
-    assert saved["WMS-701"]["status"] == "working"
     assert saved["WMS-700"]["feedback"] == "исправь повторное списание"
     assert env.llm.calls[-1].get("cli_only") is None
     calls = len(env.llm.calls)
@@ -469,6 +466,113 @@ def test_legacy_provider_stop_resumes_without_reopening_safety_failure(env: Any)
     assert "исправь кнопку" in tasks["WMS-700"]["feedback"]
     assert "уже написанный код" in tasks["WMS-700"]["feedback"]
     assert tasks["WMS-701"]["status"] == "stopped"
+
+
+def test_five_lanes_start_together_and_do_not_overwrite_siblings(env: Any) -> None:
+    runner, tid = make_night(env)
+    runner.task_pool = ThreadPool(5)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"] = {f"WMS-{i}": {"id": f"WMS-{i}", "status": "working", "step": "developer"}
+                      for i in range(700, 705)}
+    runner._save(tid, state)
+    started = threading.Barrier(6)
+    finish = threading.Event()
+    seen: list[str] = []
+
+    def developer(ticket: int, snapshot: dict[str, Any], task: dict[str, Any]) -> None:
+        seen.append(task["id"])
+        started.wait(timeout=5)
+        assert finish.wait(timeout=5)
+        task.update(step="checks", summary=task["id"])
+        runner._save(ticket, snapshot)
+
+    runner._task_developer = developer
+    try:
+        runner.development(tid)
+        started.wait(timeout=5)  # impossible if workers run sequentially
+        runner.development(tid)  # repeated tick must not duplicate any lane
+        assert len(seen) == 5
+        assert env.store.ticket(tid)["stage"] == "development"
+    finally:
+        finish.set()
+        runner.task_pool.executor.shutdown(wait=True)
+    tasks = runner._state(tid)["tasks"]
+    assert all(task["step"] == "checks" and task["summary"] == task_id
+               for task_id, task in tasks.items())
+    assert "_active_task_id" not in runner._state(tid)
+
+
+def test_lane_retry_does_not_block_sibling_or_resurrect_cancelled_task(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="developer", frontend=True)
+    state["tasks"]["WMS-701"] = {"id": "WMS-701", "status": "working", "step": "developer"}
+    runner._save(tid, state)
+
+    def developer(ticket: int, snapshot: dict[str, Any], task: dict[str, Any]) -> None:
+        if task["id"] == "WMS-700":
+            raise LlmUnavailable("at capacity")
+        task["step"] = "checks"
+        runner._save(ticket, snapshot)
+
+    runner._task_developer = developer
+    runner.development(tid)
+    saved = runner._state(tid)
+    assert saved.get("next_poll", 0) == 0
+    assert saved["tasks"]["WMS-700"]["next_poll"] == env.clock.now + 60
+    assert saved["tasks"]["WMS-701"]["step"] == "checks"
+    saved["_active_task_id"] = "WMS-701"
+    job = env.store.kv_get("agent_job:job1")
+    env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+    runner.development(tid)
+    saved["tasks"]["WMS-701"].update(status="ready", step="ready")
+    runner._save(tid, saved)
+    assert runner._state(tid)["tasks"]["WMS-701"]["status"] == "stopped"
+
+
+def test_commit_ignores_node_modules_symlink(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    (root / ".gitignore").write_text("frontend/node_modules\n", encoding="utf-8")
+    (root / "frontend").mkdir()
+    deps = tmp_path / "dependencies"
+    deps.mkdir()
+    (root / "frontend" / "node_modules").symlink_to(deps, target_is_directory=True)
+    (root / "backend" / "app" / "svc.py").write_text("X = 2\n", encoding="utf-8")
+    assert runner._commit(task, "WMS-700: реализация")
+    tracked = runner.hotfix.git("ls-files", cwd=root).splitlines()
+    assert "frontend/node_modules" not in tracked
+    assert runner.hotfix.git("status", "--porcelain", cwd=root) == ""
+
+
+def test_etalon_network_does_not_lock_store_and_respects_cancel(env: Any) -> None:
+    runner, tid = make_night(env)
+    entered = threading.Event()
+    finish = threading.Event()
+
+    def fetch() -> None:
+        entered.set()
+        assert finish.wait(timeout=5)
+
+    runner.hotfix.fetch = fetch
+    thread = threading.Thread(target=runner.development, args=(tid,))
+    thread.start()
+    try:
+        assert entered.wait(timeout=5)
+        assert env.store.lock.acquire(timeout=1)
+        try:
+            job = env.store.kv_get("agent_job:job1")
+            env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+        finally:
+            env.store.lock.release()
+    finally:
+        finish.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
 
 
 def test_interrupted_promote_is_not_repeated(env: Any) -> None:
