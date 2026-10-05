@@ -97,7 +97,10 @@ def legacy_sales_http(monkeypatch):
         async def aclose(self):
             pass
 
-    monkeypatch.setattr(settings, "celery_broker_url", "redis://legacy-fixture.invalid/0")
+    # The legacy boundary needs no real broker. Injecting a fake broker URL here
+    # also made unrelated runtime gate tests construct a CRPT HTTP client.
+    # Shared Redis/rate/cache contracts have their own explicit Redis fixture.
+    monkeypatch.setattr(settings, "celery_broker_url", None)
     monkeypatch.setattr(wb_sales_report, "Redis", SimpleNamespace(
         from_url=lambda *args, **kwargs: RedisBoundary()))
 
