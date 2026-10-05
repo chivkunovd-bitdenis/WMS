@@ -535,7 +535,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .number { width: 28px; text-align: center; }
       .image { width: 54px; text-align: center; }
       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
-      .size { width: 78px; text-align: center; white-space: nowrap; }
+      .size { width: 78px; text-align: center; }
       td.size { font-size: 20px; font-weight: 700; }
       .quantity { width: 62px; text-align: center; font-weight: 700; }
       .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
