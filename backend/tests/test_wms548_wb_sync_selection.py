@@ -12,6 +12,7 @@ R5 — синхронизация (self/sync-products и почасовой пр
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from functools import partial
 
 import httpx
@@ -293,23 +294,39 @@ async def test_hourly_sync_selection_is_isolated_per_seller_and_tenant(
     }])
     await db_session.commit()
 
-    calls: list[str] = []
+    calls: list[tuple[str, str]] = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
         token = request.headers["Authorization"]
-        calls.append(token)
-        return httpx.Response(200, json={"cards": [{
-            "nmID": 900, "vendorCode": "WMS548-900",
-            "title": "Совпадающий артикул (обновлён)",
-            "sizes": [{"chrtID": 90, "techSize": "0", "skus": ["9000000000001"]}],
-        }]})
+        path = request.url.path
+        calls.append((token, path))
+        if path == "/content/v2/get/cards/list":
+            return httpx.Response(200, json={"cards": [{
+                "nmID": 900, "vendorCode": "WMS548-900",
+                "title": "Совпадающий артикул (обновлён)",
+                "sizes": [{"chrtID": 90, "techSize": "0", "skus": ["9000000000001"]}],
+            }]})
+        if path == "/content/v2/object/parent/all":
+            return httpx.Response(200, json={"data": [{"id": 10, "name": "Одежда"}]})
+        if path == "/content/v2/object/all":
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB route: {path}")
 
     monkeypatch.setattr(sync_module.httpx, "AsyncClient", partial(
         httpx.AsyncClient, transport=httpx.MockTransport(upstream),
     ))
     summary = await sync_module.run_wb_products_sync_all_sellers()
     assert summary["sellers_ok"] == 3
-    assert sorted(calls) == ["tokA", "tokB", "tokC"]
+    expected_routes = {
+        "/content/v2/get/cards/list",
+        "/content/v2/object/parent/all",
+        "/content/v2/object/all",
+    }
+    assert Counter(calls) == Counter(
+        (token, path)
+        for token in ("tokA", "tokB", "tokC")
+        for path in expected_routes
+    )
 
     assert await _product_count(db_session, tenant1.id, seller_a.id) == 1
     assert await _product_count(db_session, tenant1.id, seller_b.id) == 0
@@ -347,23 +364,42 @@ async def test_hourly_sync_fully_selected_seller_matches_pre_wms548_result(
     await db_session.commit()
     assert await _product_count(db_session, tenant.id, seller.id) == 2
 
+    calls: list[tuple[str, str]] = []
+
     def upstream(request: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"cards": [
-            {
-                "nmID": 950, "vendorCode": "WMS548-950", "title": "Товар 950 (обновлён)",
-                "sizes": [{"chrtID": 95, "techSize": "0", "skus": ["9500000000001"]}],
-            },
-            {
-                "nmID": 951, "vendorCode": "WMS548-951", "title": "Товар 951",
-                "sizes": [{"chrtID": 96, "techSize": "0", "skus": ["9510000000001"]}],
-            },
-        ]})
+        token = request.headers["Authorization"]
+        path = request.url.path
+        calls.append((token, path))
+        if path == "/content/v2/get/cards/list":
+            return httpx.Response(200, json={"cards": [
+                {
+                    "nmID": 950, "vendorCode": "WMS548-950",
+                    "title": "Товар 950 (обновлён)",
+                    "sizes": [{"chrtID": 95, "techSize": "0", "skus": ["9500000000001"]}],
+                },
+                {
+                    "nmID": 951, "vendorCode": "WMS548-951", "title": "Товар 951",
+                    "sizes": [{"chrtID": 96, "techSize": "0", "skus": ["9510000000001"]}],
+                },
+            ]})
+        if path == "/content/v2/object/parent/all":
+            return httpx.Response(200, json={"data": [{"id": 10, "name": "Одежда"}]})
+        if path == "/content/v2/object/all":
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB route: {path}")
 
     monkeypatch.setattr(sync_module.httpx, "AsyncClient", partial(
         httpx.AsyncClient, transport=httpx.MockTransport(upstream),
     ))
     summary = await sync_module.run_wb_products_sync_all_sellers()
     assert summary["sellers_ok"] == 1
+    assert Counter(calls) == Counter(
+        {
+            ("tokFull", "/content/v2/get/cards/list"): 1,
+            ("tokFull", "/content/v2/object/parent/all"): 1,
+            ("tokFull", "/content/v2/object/all"): 1,
+        }
+    )
     result = summary["ok"][0]
     # Ни одна карточка не исключена — весь каталог селлера уже выбран, поэтому
     # результат такой же, как до задачи: обе карточки уже были товарами, значит
