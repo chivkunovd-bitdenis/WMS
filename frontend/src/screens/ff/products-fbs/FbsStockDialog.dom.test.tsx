@@ -341,7 +341,7 @@ describe('WMS-469 F5: перечитывание после сбоя не уда
   })
 })
 
-describe('WMS-666: точная область товар × склад', () => {
+describe('WMS-670: точная область товар × склад', () => {
   it('C1/C2: served=false не скрывает строку, а сохранение WB не трогает binding, Ozon и другие товары', async () => {
     const initial = data(
       [{ ...wb, served: false }, ozon],

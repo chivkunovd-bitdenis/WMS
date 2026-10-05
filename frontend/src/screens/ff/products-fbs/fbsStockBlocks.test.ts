@@ -205,7 +205,7 @@ describe('WMS-469 черновики и суммы блока', () => {
   })
 })
 
-describe('WMS-666 R3 тело сохранения', () => {
+describe('WMS-670 R3 тело сохранения', () => {
   it('served=false не исключает изменённую пару, а непереданная соседняя пара не попадает в by_binding', () => {
     const notServed: StockBinding = { ...wb, served: false }
     const drafts = {

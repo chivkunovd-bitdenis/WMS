@@ -167,7 +167,7 @@ describe('WMS-454 C28: Ozon-блок только у товара с карто�
   })
 })
 
-describe('WMS-666: приём заказов не является товарной настройкой', () => {
+describe('WMS-670: приём заказов не является товарной настройкой', () => {
   it('C2: served=false не скрывает передачу остатка, а глобальной галки в товарном окне нет', () => {
     const markup = render({ bindings: [{ ...wb, served: false }] })
     expect(markup).not.toContain('data-testid="fbs-stock-served-b-wb"')
