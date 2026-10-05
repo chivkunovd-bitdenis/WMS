@@ -669,13 +669,11 @@ describe('WMS-666 third review regressions: exact Ozon position identity', () =>
     await renderSupply('ozon-a')
 
     physicalScan('OZON-POSTING-666')
-    await settleUntil(() => (
-      calls.some((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))
-      || Boolean(document.querySelector('[role="alert"]'))
-    ), 750)
+    const selectedStateVisible = () => document.body.textContent?.includes('Футболка Ozon, позиция A · сканируйте ЧЗ') === true
+    await settleUntil(selectedStateVisible, 750)
 
     expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(1)
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).not.toBeNull()
+    expect(selectedStateVisible()).toBe(true)
     expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
   })
 })
