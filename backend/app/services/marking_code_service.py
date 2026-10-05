@@ -1647,9 +1647,10 @@ async def _existing_import_cis_codes(
         chunk = cis_codes[offset : offset + _IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE]
         normalized = {value for cis in chunk if (value := normalize_cis(cis)) is not None}
         gtins = {
-            gtin
+            variant
             for value in normalized
             if (gtin := extract_gtin_from_cis(value)) is not None
+            for variant in _gtin_lookup_variants(gtin)
         }
         lookup_values = set(chunk) | normalized
         conditions: list[ColumnElement[bool]] = [MarkingCode.cis_code.in_(lookup_values)]

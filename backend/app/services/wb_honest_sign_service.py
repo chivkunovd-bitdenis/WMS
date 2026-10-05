@@ -228,6 +228,56 @@ async def build_backfill_plan(
     }
 
 
+async def _lock_backfill_evidence(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+) -> dict[uuid.UUID, Product]:
+    """Lock and refresh the product/card evidence used by a backfill apply."""
+    products = list(
+        (
+            await session.scalars(
+                select(Product)
+                .where(
+                    Product.tenant_id == tenant_id,
+                    Product.seller_id == seller_id,
+                    Product.wb_nm_id.is_not(None),
+                )
+                .order_by(Product.wb_nm_id, Product.id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
+            )
+        ).all()
+    )
+    nm_ids = [int(product.wb_nm_id) for product in products if product.wb_nm_id is not None]
+    if nm_ids:
+        # Product rows are locked first in the same stable order used by the
+        # plan. Existing WB evidence is then locked and refreshed before the
+        # fingerprint is rebuilt. A concurrent evidence update either commits
+        # before this read and changes the fingerprint, or waits until apply
+        # has committed; it can never race between validation and the flag
+        # write.
+        list(
+            (
+                await session.scalars(
+                    select(SellerWildberriesImportedCard)
+                    .where(
+                        SellerWildberriesImportedCard.tenant_id == tenant_id,
+                        SellerWildberriesImportedCard.seller_id == seller_id,
+                        SellerWildberriesImportedCard.nm_id.in_(nm_ids),
+                    )
+                    .order_by(
+                        SellerWildberriesImportedCard.nm_id,
+                        SellerWildberriesImportedCard.id,
+                    )
+                    .execution_options(populate_existing=True)
+                    .with_for_update()
+                )
+            ).all()
+        )
+    return {product.id: product for product in products}
+
+
 async def apply_backfill_plan(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -237,6 +287,7 @@ async def apply_backfill_plan(
     fingerprint: str,
     product_ids: list[str],
 ) -> dict[str, object]:
+    locked_products = await _lock_backfill_evidence(session, tenant_id, seller_id)
     current = await build_backfill_plan(session, tenant_id, seller_id, catalog=catalog)
     current_apply = current.get("apply")
     if not isinstance(current_apply, list) or not all(
@@ -249,21 +300,11 @@ async def apply_backfill_plan(
         raise BackfillPlanChanged("backfill_plan_changed")
 
     parsed_ids = [uuid.UUID(value) for value in current_ids]
-    products = list(
-        (
-            await session.scalars(
-                select(Product)
-                .where(
-                    Product.tenant_id == tenant_id,
-                    Product.seller_id == seller_id,
-                    Product.id.in_(parsed_ids),
-                )
-                .order_by(Product.wb_nm_id, Product.id)
-                .with_for_update()
-            )
-        ).all()
-    )
-    by_id = {product.id: product for product in products}
+    by_id = {
+        product_id: locked_products[product_id]
+        for product_id in parsed_ids
+        if product_id in locked_products
+    }
     if set(by_id) != set(parsed_ids):
         raise BackfillPlanChanged("backfill_product_scope_changed")
     changed: list[str] = []
