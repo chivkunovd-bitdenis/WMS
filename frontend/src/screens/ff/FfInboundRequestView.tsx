@@ -110,6 +110,7 @@ import {
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import { randomId } from '../../utils/randomId'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
 import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
@@ -1754,7 +1755,7 @@ export function FfInboundRequestView({
   const openBoxCreateDialog = () => {
     setBoxCount('1')
     setBoxCreateError(null)
-    setBoxMutationId(crypto.randomUUID())
+    setBoxMutationId(randomId())
     setBoxDialogOpen(true)
   }
 
@@ -1763,7 +1764,7 @@ export function FfInboundRequestView({
       setBoxCreateError('Укажите целое количество коробов от 1 до 1000.')
       return
     }
-    const mutationId = boxMutationId ?? crypto.randomUUID()
+    const mutationId = boxMutationId ?? randomId()
     if (boxMutationId == null) setBoxMutationId(mutationId)
     setBusy(true)
     setBoxCreateError(null)
@@ -1778,6 +1779,7 @@ export function FfInboundRequestView({
         return
       }
       const created = (await res.json()) as InboundBox[]
+      ++loadDetailSeq.current
       setDetail((current) => {
         if (!current || current.id !== requestId) return current
         const boxesById = new Map(current.boxes.map((box) => [box.id, box]))
