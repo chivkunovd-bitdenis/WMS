@@ -75,13 +75,36 @@ function chromeExecutable() {
 
 type GeometryReport = {
   allCellContentFits: boolean
+  columnBounds: Array<{ left: number; right: number }>
   headersAligned: boolean
   neighboringCellsDoNotOverlap: boolean
   rowCellCounts: number[]
   rowsDoNotOverlap: boolean
+  tableBounds: { left: number; right: number }
   tableWithinPage: boolean
   sizeCells: Array<{ lineCount: number; linesWithinCell: boolean; text: string }>
 }
+
+type PdfWord = {
+  pageIndex: number
+  text: string
+  xMin: number
+  yMin: number
+  xMax: number
+  yMax: number
+}
+
+type PdfPageText = {
+  width: number
+  height: number
+  words: PdfWord[]
+}
+
+type PdfTextReport = { pages: PdfPageText[] }
+type PdfColumn = { left: number; right: number; words: PdfWord[] }
+type PdfTablePage = PdfPageText & { columns: PdfColumn[] }
+type PdfTable = { pages: PdfTablePage[] }
+type PdfTextMatch = { pageIndex: number; words: PdfWord[] }
 
 const geometryProbe = String.raw`<script>
   (() => {
@@ -106,6 +129,8 @@ const geometryProbe = String.raw`<script>
     });
     const report = {
       tableWithinPage: tableRect.left >= bodyRect.left - 1 && tableRect.right <= bodyRect.right + 1 && document.body.scrollWidth <= document.body.clientWidth + 1,
+      tableBounds: { left: tableRect.left, right: tableRect.right },
+      columnBounds: headers.map((header) => ({ left: rect(header).left, right: rect(header).right })),
       rowCellCounts: rows.map((item) => item.children.length),
       allCellContentFits: rows.every((item) => Array.from(item.children).every((cell) => cell.scrollWidth <= cell.clientWidth + 1)),
       neighboringCellsDoNotOverlap: rows.every((item) => Array.from(item.children).every((cell, index, cells) => !cells[index + 1] || rect(cell).right <= rect(cells[index + 1]).left + 1)),
@@ -147,6 +172,148 @@ function commandAvailable(command: string) {
   }
 }
 
+function decodeXmlText(value: string) {
+  const named: Record<string, string> = { amp: '&', apos: "'", gt: '>', lt: '<', quot: '"' }
+  return value.replace(/&(#x[0-9a-f]+|#\d+|amp|apos|gt|lt|quot);/gi, (_match, entity: string) => {
+    if (entity[0] !== '#') return named[entity.toLowerCase()] ?? _match
+    const radix = entity[1]?.toLowerCase() === 'x' ? 16 : 10
+    const digits = radix === 16 ? entity.slice(2) : entity.slice(1)
+    return String.fromCodePoint(Number.parseInt(digits, radix))
+  })
+}
+
+function parsePdfTextReport(xml: string): PdfTextReport {
+  const pages: PdfPageText[] = []
+  const pagePattern = /<page\b[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"[^>]*>([\s\S]*?)<\/page>/g
+  for (const [pageIndex, match] of [...xml.matchAll(pagePattern)].entries()) {
+    const words: PdfWord[] = []
+    const wordPattern = /<word\b[^>]*xMin="([\d.-]+)"[^>]*yMin="([\d.-]+)"[^>]*xMax="([\d.-]+)"[^>]*yMax="([\d.-]+)"[^>]*>([\s\S]*?)<\/word>/g
+    for (const word of match[3]!.matchAll(wordPattern)) {
+      words.push({
+        pageIndex,
+        text: decodeXmlText(word[5]!),
+        xMin: Number(word[1]),
+        yMin: Number(word[2]),
+        xMax: Number(word[3]),
+        yMax: Number(word[4]),
+      })
+    }
+    pages.push({ width: Number(match[1]), height: Number(match[2]), words })
+  }
+  if (!pages.length) throw new Error('pdftotext не вернул страницы с координатами')
+  return { pages }
+}
+
+// `pdftotext -layout` interleaves wrapped baselines from neighboring columns.
+// Coordinates keep every fragment tied to its actual PDF column and row.
+function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
+  const geometryWidth = geometry.tableBounds.right - geometry.tableBounds.left
+  if (geometryWidth <= 0 || geometry.columnBounds.length !== 10) {
+    throw new Error('Браузер не вернул границы десяти колонок таблицы')
+  }
+  const marginPoints = 10 * 72 / 25.4
+  return {
+    pages: report.pages.map((page) => {
+      const printableWidth = page.width - marginPoints * 2
+      const columns = geometry.columnBounds.map((bounds) => ({
+        left: marginPoints + (bounds.left - geometry.tableBounds.left) / geometryWidth * printableWidth,
+        right: marginPoints + (bounds.right - geometry.tableBounds.left) / geometryWidth * printableWidth,
+        words: [] as PdfWord[],
+      }))
+      const header = page.words.find((word) => word.text === 'РАЗМЕР')
+      if (!header) throw new Error(`На странице ${(page.words[0]?.pageIndex ?? 0) + 1} PDF нет заголовка «РАЗМЕР»`)
+      const footerTop = page.words.find((word) => word.text === 'Сформировано')?.yMin ?? Number.POSITIVE_INFINITY
+      for (const word of page.words) {
+        const centerX = (word.xMin + word.xMax) / 2
+        if (word.yMin <= header.yMax + 1 || word.yMax >= footerTop - 1) continue
+        const column = columns.find((bounds) => centerX >= bounds.left - 0.5 && centerX <= bounds.right + 0.5)
+        if (column) column.words.push(word)
+      }
+      for (const column of columns) column.words.sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin)
+      return { ...page, columns }
+    }),
+  }
+}
+
+function compactPdfText(value: string) {
+  return value.replace(/\s+/g, '')
+}
+
+function pdfTextMatches(table: PdfTable, columnIndex: number, expected: string): PdfTextMatch[] {
+  const target = compactPdfText(expected)
+  const matches: PdfTextMatch[] = []
+  for (const page of table.pages) {
+    const words = page.columns[columnIndex]?.words ?? []
+    for (let start = 0; start < words.length; start += 1) {
+      let value = ''
+      for (let end = start; end < words.length; end += 1) {
+        value += compactPdfText(words[end]!.text)
+        if (value === target) {
+          matches.push({ pageIndex: words[start]!.pageIndex, words: words.slice(start, end + 1) })
+          break
+        }
+        if (!target.startsWith(value)) break
+      }
+    }
+  }
+  return matches
+}
+
+function pdfText(table: PdfTable, columnIndex: number, expected: string, occurrence = 0) {
+  const matches = pdfTextMatches(table, columnIndex, expected)
+  if (matches.length <= occurrence) {
+    throw new Error(`PDF потерял «${expected}» в колонке ${columnIndex + 1}: найдено ${matches.length}, ожидалось не меньше ${occurrence + 1}`)
+  }
+  return matches[occurrence]!
+}
+
+function pdfWord(table: PdfTable, columnIndex: number, expected: string, occurrence = 0) {
+  const matches = table.pages.flatMap((page) => page.columns[columnIndex]!.words
+    .filter((word) => compactPdfText(word.text) === compactPdfText(expected))
+    .map((word) => ({ pageIndex: word.pageIndex, words: [word] })))
+  if (matches.length <= occurrence) {
+    throw new Error(`PDF потерял отдельное значение «${expected}» в колонке ${columnIndex + 1}`)
+  }
+  return matches[occurrence]!
+}
+
+function textBounds(matches: PdfTextMatch[]) {
+  const words = matches.flatMap((match) => match.words)
+  return {
+    pageIndex: matches[0]!.pageIndex,
+    yMin: Math.min(...words.map((word) => word.yMin)),
+    yMax: Math.max(...words.map((word) => word.yMax)),
+  }
+}
+
+function assertSamePdfRow(anchorParts: PdfTextMatch[], values: Array<{ label: string; match: PdfTextMatch }>) {
+  const anchor = textBounds(anchorParts)
+  const anchorCenter = (anchor.yMin + anchor.yMax) / 2
+  for (const { label, match } of values) {
+    const bounds = textBounds([match])
+    if (bounds.pageIndex !== anchor.pageIndex) throw new Error(`${label} перешло на другую страницу PDF`)
+    const center = (bounds.yMin + bounds.yMax) / 2
+    if (Math.abs(center - anchorCenter) > 4) {
+      throw new Error(`${label} смещено в другую строку PDF: центр ${center}, ожидаемый центр ${anchorCenter}`)
+    }
+  }
+}
+
+function assertPdfTableWithinColumns(table: PdfTable) {
+  for (const page of table.pages) {
+    for (const [columnIndex, column] of page.columns.entries()) {
+      for (const word of column.words) {
+        if (word.xMin < column.left - 1 || word.xMax > column.right + 1) {
+          throw new Error(`«${word.text}» вышло за границу колонки ${columnIndex + 1} PDF`)
+        }
+        if (word.xMin < -1 || word.xMax > page.width + 1 || word.yMin < -1 || word.yMax > page.height + 1) {
+          throw new Error(`«${word.text}» вышло за границу страницы PDF`)
+        }
+      }
+    }
+  }
+}
+
 async function waitForPdf(chrome: string, input: string, output: string, profile: string) {
   const printing = spawn(chrome, [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage',
@@ -165,7 +332,8 @@ async function waitForPdf(chrome: string, input: string, output: string, profile
   try {
     const deadline = Date.now() + 30_000
     while (!existsSync(output) || !readFileSync(output).subarray(-32).includes(Buffer.from('%%EOF'))) {
-      if (processError) throw new Error(`Chrome spawn failed: ${processError.message}\n${stderr}`)
+      const chromeError = processError as Error | null
+      if (chromeError) throw new Error(`Chrome spawn failed: ${chromeError.message}\n${stderr}`)
       if (exited && !existsSync(output)) throw new Error(`Chrome exited without PDF: ${JSON.stringify(exited)}\n${stderr}\n${stdout}`)
       if (Date.now() >= deadline) throw new Error(`Chrome did not produce a complete PDF in 30s\n${stderr}\n${stdout}`)
       await new Promise((resolve) => setTimeout(resolve, 100))
@@ -196,8 +364,8 @@ async function renderPdf(html: string) {
     await waitForPdf(chrome!, input, output, join(dir, 'profile'))
     const bytes = readFileSync(output)
     const pdf = await PDFDocument.load(bytes)
-    const text = execFileSync('pdftotext', ['-layout', output, '-'], { encoding: 'utf8' })
-    return { pdf, text }
+    const textReport = parsePdfTextReport(execFileSync('pdftotext', ['-bbox-layout', output, '-'], { encoding: 'utf8' }))
+    return { pdf, textReport }
   } finally {
     rmSync(dir, { recursive: true, force: true })
   }
@@ -283,26 +451,56 @@ describe('WMS-657 · перенос размера в листе подбора 
     expect(geometry.tableWithinPage).toBe(true)
     expect(geometry.allCellContentFits).toBe(true)
     expect(geometry.neighboringCellsDoNotOverlap).toBe(true)
-    const { pdf, text } = await renderPdf(html)
+    const { pdf, textReport } = await renderPdf(html)
     expect(pdf.getPageCount()).toBe(1)
     const { width, height } = pdf.getPage(0).getSize()
     expect(width).toBeGreaterThan(height)
     expect(width).toBeCloseTo(841.89, 0)
     expect(height).toBeCloseTo(595.28, 0)
-    const compact = text.replace(/\s+/g, '')
-    for (const value of ['Универсальный', 'PDF-PRODUCT-LONG-WMS-657', 'PDF-IDENTIFIER-WMS-657', 'PDF-LOCATION-LONG-WMS-657', 'PDF-ORDER-657', 'S657', 'PDF-MARKING-WMS-657']) {
-      expect(compact).toContain(value)
+    const table = pdfTable(textReport, geometry)
+    assertPdfTableWithinColumns(table)
+    const name = pdfText(table, 2, 'PDF-PRODUCT-LONG-WMS-657')
+    const identifier = pdfText(table, 2, 'PDF-IDENTIFIER-WMS-657')
+    const size = pdfText(table, 3, 'Универсальный')
+    const cells = [
+      { label: 'номер позиции', match: pdfWord(table, 0, '1') },
+      { label: 'фото', match: pdfText(table, 1, '—') },
+      { label: 'размер', match: size },
+      { label: 'ячейка / тара', match: pdfText(table, 4, 'PDF-LOCATION-LONG-WMS-657') },
+      { label: 'заказ', match: pdfText(table, 5, '№PDF-ORDER-657') },
+      { label: 'стикер', match: pdfText(table, 6, 'S657') },
+      { label: 'взять', match: pdfText(table, 7, '1') },
+      { label: 'подобрано', match: pdfText(table, 8, '0/1') },
+      { label: 'маркировка', match: pdfText(table, 9, 'PDF-MARKING-WMS-657') },
+    ]
+    assertSamePdfRow([name, identifier], cells)
+
+    const lostFragment = size.words.at(-1)!
+    const textLossCopy: PdfTextReport = {
+      pages: textReport.pages.map((page) => ({ ...page, words: page.words.filter((word) => word !== lostFragment) })),
     }
+    expect(() => pdfText(pdfTable(textLossCopy, geometry), 3, 'Универсальный'), 'координатная проверка должна ловить потерю части размера').toThrow(/PDF потерял/)
+
+    const sizeColumn = table.pages[size.pageIndex]!.columns[3]!
+    const overflowingWord = size.words[0]!
+    const overflowCopy: PdfTextReport = {
+      pages: textReport.pages.map((page) => ({
+        ...page,
+        words: page.words.map((word) => word === overflowingWord ? { ...word, xMax: sizeColumn.right + 2 } : word),
+      })),
+    }
+    expect(() => assertPdfTableWithinColumns(pdfTable(overflowCopy, geometry)), 'координатная проверка должна ловить выход текста за колонку').toThrow(/вышло за границу колонки/)
   }, 60_000)
 
   it('C6: многострочный HTML/PDF не смешивает строки и варианты размера', async () => {
     const rows = Array.from({ length: 34 }, (_, index) => row({
       name: `ROW-${String(index + 1).padStart(3, '0')}`,
-      size: index === 1 ? '46' : index === 2 ? null : index === 0 || index === 16 || index === 33 ? 'Универсальный' : '48',
+      size: index === 1 ? '46' : index === 2 ? null : index === 0 || index === 16 || index === 33 ? 'Универсальный' : `S${String(index + 1).padStart(2, '0')}`,
       identifiers: index === 16 ? ['ДЛИННЫЙ-ИДЕНТИФИКАТОР-СОСЕДНЕЙ-КОЛОНКИ-WMS-657-123456789'] : [`ID-${index + 1}`],
       locations: index === 16 ? ['ДЛИННЫЙ-ПУТЬ-ЯЧЕЙКИ-И-ТАРЫ-WMS-657-123456789: 1'] : [`A-${index + 1}: 1`],
       wbOrders: [657000 + index],
       stickerCodes: [`S${String(index).padStart(3, '0')}`],
+      marking: `MARK-${String(index + 1).padStart(3, '0')}`,
     }))
     const html = documentFor(rows)
     const report = renderGeometry(html)
@@ -321,12 +519,41 @@ describe('WMS-657 · перенос размера в листе подбора 
     expect(report.sizeCells[33]).toMatchObject({ text: 'Универсальный', linesWithinCell: true })
     expect(report.sizeCells[33]!.lineCount).toBeGreaterThanOrEqual(2)
 
-    const { pdf, text } = await renderPdf(html)
+    const { pdf, textReport } = await renderPdf(html)
     expect(pdf.getPageCount()).toBeGreaterThan(1)
-    const compact = text.replace(/\s+/g, '')
-    for (const value of ['ROW-001', 'ROW-002', 'ROW-003', 'ROW-017', 'ROW-034', '46', '—', 'ДЛИННЫЙ-ИДЕНТИФИКАТОР-СОСЕДНЕЙ-КОЛОНКИ-WMS-657-123456789']) {
-      expect(compact).toContain(value)
+    for (const page of pdf.getPages()) {
+      const { width, height } = page.getSize()
+      expect(width).toBeGreaterThan(height)
+      expect(width).toBeCloseTo(841.89, 0)
+      expect(height).toBeCloseTo(595.28, 0)
     }
-    expect(compact.match(/Универсальный/g)).toHaveLength(3)
+    const table = pdfTable(textReport, report)
+    assertPdfTableWithinColumns(table)
+    expect(pdfTextMatches(table, 3, 'Универсальный')).toHaveLength(3)
+    let longSizeOccurrence = 0
+    for (const [index] of rows.entries()) {
+      const rowNumber = index + 1
+      const name = pdfText(table, 2, `ROW-${String(rowNumber).padStart(3, '0')}`)
+      const identifierValue = index === 16
+        ? 'ДЛИННЫЙ-ИДЕНТИФИКАТОР-СОСЕДНЕЙ-КОЛОНКИ-WMS-657-123456789'
+        : `ID-${rowNumber}`
+      const identifier = pdfText(table, 2, identifierValue)
+      const expectedSize = index === 1 ? '46' : index === 2 ? '—' : index === 0 || index === 16 || index === 33 ? 'Универсальный' : `S${String(rowNumber).padStart(2, '0')}`
+      const sizeOccurrence = expectedSize === 'Универсальный' ? longSizeOccurrence++ : 0
+      const location = index === 16
+        ? 'ДЛИННЫЙ-ПУТЬ-ЯЧЕЙКИ-И-ТАРЫ-WMS-657-123456789: 1'
+        : `A-${rowNumber}: 1`
+      assertSamePdfRow([name, identifier], [
+        { label: `номер позиции строки ${rowNumber}`, match: pdfWord(table, 0, String(rowNumber)) },
+        { label: `фото строки ${rowNumber}`, match: pdfText(table, 1, '—', index) },
+        { label: `размер строки ${rowNumber}`, match: pdfText(table, 3, expectedSize, sizeOccurrence) },
+        { label: `ячейка строки ${rowNumber}`, match: pdfText(table, 4, location) },
+        { label: `заказ строки ${rowNumber}`, match: pdfText(table, 5, `№${657000 + index}`) },
+        { label: `стикер строки ${rowNumber}`, match: pdfText(table, 6, `S${String(index).padStart(3, '0')}`) },
+        { label: `взять строки ${rowNumber}`, match: pdfText(table, 7, '1', index) },
+        { label: `подобрано строки ${rowNumber}`, match: pdfText(table, 8, '0/1', index) },
+        { label: `маркировка строки ${rowNumber}`, match: pdfText(table, 9, `MARK-${String(rowNumber).padStart(3, '0')}`) },
+      ])
+    }
   }, 60_000)
 })
