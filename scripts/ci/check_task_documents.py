@@ -2,11 +2,13 @@
 """Check that new tasks have filled acceptance documents, not whether they passed."""
 
 import argparse
+import json
 import re
 import subprocess
 from pathlib import Path, PurePosixPath
 
 SCRIPT_PATH = "scripts/ci/check_task_documents.py"
+CONTRACT_CORRECTIONS_DIR = "docs/reviews/contract-corrections"
 
 
 def git(root: Path, *args: str) -> str:
@@ -56,6 +58,15 @@ def plain(value: str) -> str:
 
 def test_reference(value: str) -> str:
     return re.sub(r"\s+", " ", value.translate(str.maketrans("", "", "*`"))).strip()
+
+
+def test_references(value: str) -> list[str]:
+    """Validate every test link stored in one Markdown table cell."""
+    return [
+        reference
+        for part in re.split(r"<br\s*/?>", value, flags=re.IGNORECASE)
+        if (reference := test_reference(part))
+    ]
 
 
 def test_reference_errors(root: Path, reference: str) -> list[str]:
@@ -116,14 +127,15 @@ def document_errors(text: str, root: Path | None = None) -> list[str]:
                 errors.append(f"Нет вердикта у проверки: {values[check_col]}")
             if class_col is not None and test_col is not None:
                 check_class = plain(values[class_col]).casefold()
-                reference = test_reference(values[test_col])
+                references = test_references(values[test_col])
                 if check_class in {"навсегда", "разово"}:
-                    if not reference:
+                    if not references:
                         errors.append(
                             f"У автоматической проверки {values[check_col]} нет ссылки на тест."
                         )
                     elif root is not None:
-                        errors.extend(test_reference_errors(root, reference))
+                        for reference in references:
+                            errors.extend(test_reference_errors(root, reference))
     if not checks:
         errors.append("Нет проверок в таблице с колонками «Проверка» и «Вердикт».")
 
@@ -158,6 +170,115 @@ def commit_changed_paths(root: Path, commit: str) -> set[str]:
     )
 
 
+def is_task_contract_commit(root: Path, commit: str, task_id: str) -> bool:
+    """Return whether commit is this task's real contract in current history."""
+    exists = subprocess.run(
+        ["git", "cat-file", "-e", f"{commit}^{{commit}}"], cwd=root,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+    if not exists:
+        return False
+    if git(root, "show", "-s", "--format=%s", commit) != f"{task_id}: контракт тестов":
+        return False
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", commit, "HEAD"], cwd=root,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def reviewed_contract_correction(
+    root: Path,
+    task_id: str,
+    contract_commit: str,
+    task_contracts: set[str],
+    frozen: list[str],
+) -> tuple[str | None, set[str], list[str]]:
+    """Return the reviewed correction SHA, or explain why its ledger is invalid.
+
+    A correction is deliberately stricter than an ordinary follow-up commit: it
+    may touch only files frozen by the original contract and must have a separate
+    machine-readable ledger recording the independent Astra-high PASS.  CI can
+    validate the Git facts; the controller remains responsible for obtaining
+    and recording the review before the ledger is committed.
+    """
+    ledger_rel = f"{CONTRACT_CORRECTIONS_DIR}/{task_id}.json"
+    ledger_result = subprocess.run(
+        ["git", "show", f"HEAD:{ledger_rel}"], cwd=root, check=False,
+        capture_output=True, text=True,
+    )
+    if ledger_result.returncode != 0:
+        return None, set(), []
+    ledger_text = ledger_result.stdout.strip()
+    try:
+        ledger = json.loads(ledger_text)
+    except json.JSONDecodeError:
+        return None, set(), [
+            f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"
+        ]
+    if not isinstance(ledger, dict):
+        return None, set(), [
+            f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
+        ]
+    ledger_contract = str(ledger.get("contract_commit") or "")
+    correction = str(ledger.get("correction_commit") or "")
+    files = ledger.get("files")
+    review = ledger.get("review")
+    if (
+        ledger.get("task") != task_id
+        or not re.fullmatch(r"[0-9a-f]{40}", ledger_contract)
+        or not re.fullmatch(r"[0-9a-f]{40}", correction)
+        or not isinstance(files, list)
+        or not files
+        or any(not isinstance(path, str) or not path for path in files)
+        or not isinstance(review, dict)
+        or review.get("model") != "gpt-6-astra"
+        or review.get("effort") != "high"
+        or review.get("verdict") != "PASS"
+    ):
+        return None, set(), [
+            f"{task_id}: реестр коррекции контракта заполнен не полностью"
+        ]
+    if ledger_contract != contract_commit:
+        # One task may acquire several independent contract commits.  Its one
+        # correction ledger applies only to the exact existing contract named
+        # there; an absent or invented source commit must not disappear merely
+        # because this invocation is currently checking another contract.
+        if ledger_contract in task_contracts or is_task_contract_commit(
+            root, ledger_contract, task_id
+        ):
+            return None, set(), []
+        return None, set(), [
+            f"{task_id}: реестр ссылается на неизвестный исходный контракт"
+        ]
+    if correction == contract_commit:
+        return None, set(), [
+            f"{task_id}: коррекция должна быть отдельным последующим коммитом"
+        ]
+    for older, newer, label in (
+        (contract_commit, correction, "коррекция не следует за исходным контрактом"),
+        (correction, "HEAD", "коррекция отсутствует в текущей версии"),
+    ):
+        if subprocess.run(
+            ["git", "merge-base", "--is-ancestor", older, newer], cwd=root,
+            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        ).returncode != 0:
+            return None, set(), [f"{task_id}: {label}"]
+    expected = set(files)
+    frozen_set = set(frozen)
+    if not expected.issubset(frozen_set) or (
+        len(frozen_set) > 1 and expected == frozen_set
+    ):
+        return None, set(), [
+            f"{task_id}: коррекция должна менять только часть исходного контракта"
+        ]
+    changed = commit_changed_paths(root, correction)
+    if changed != expected:
+        return None, set(), [
+            f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"
+        ]
+    return correction, expected, []
+
+
 def contract_change_errors(root: Path, base: str) -> list[str]:
     # Сравниваем содержимое файлов контракта в его коммите и в HEAD, а не пути
     # каждого последующего коммита: на pull_request HEAD — служебный merge-коммит
@@ -167,6 +288,8 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
     # поэтому он не замораживается.
     commits = git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
     errors = []
+    contracts = []
+    contracts_by_task: dict[str, set[str]] = {}
     for commit in commits:
         subject = git(root, "show", "-s", "--format=%s", commit)
         match = re.fullmatch(r"(WMS-\d+): контракт тестов", subject)
@@ -178,13 +301,33 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
         )
         if not frozen:
             continue
-        overlap = sorted(set(
-            git(root, "diff", "--no-renames", "--name-only", commit, "HEAD", "--", *frozen)
-            .splitlines()
-        ))
+        task_id = match[1]
+        contracts.append((commit, task_id, frozen))
+        contracts_by_task.setdefault(task_id, set()).add(commit)
+    for commit, task_id, frozen in contracts:
+        correction, corrected, correction_errors = reviewed_contract_correction(
+            root, task_id, commit, contracts_by_task[task_id], frozen
+        )
+        errors.extend(correction_errors)
+        if correction_errors:
+            continue
+        overlap = set()
+        untouched = sorted(set(frozen) - corrected)
+        if untouched:
+            overlap.update(
+                git(root, "diff", "--no-renames", "--name-only", commit, "HEAD", "--", *untouched)
+                .splitlines()
+            )
+        if corrected:
+            assert correction is not None
+            overlap.update(
+                git(root, "diff", "--no-renames", "--name-only", correction, "HEAD", "--", *sorted(corrected))
+                .splitlines()
+            )
+        overlap = sorted(overlap)
         if overlap:
             errors.append(
-                f"изменён контракт тестов {match[1]} после его фиксации: "
+                f"изменён контракт тестов {task_id} после его фиксации: "
                 + ", ".join(overlap)
             )
     return errors
