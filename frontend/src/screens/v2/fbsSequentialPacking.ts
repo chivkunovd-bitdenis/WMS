@@ -94,6 +94,8 @@ export function packingSerialBusy(): boolean {
 }
 
 export type PackingScanController = {
+  /** Called synchronously when the physical scan arrives, before the shared queue. */
+  onReceived?: (raw: string) => void
   hasSelectedRow?: () => boolean
   /** True only when the visible rows prove that this code belongs to the controller. */
   matches?: (raw: string) => boolean
@@ -562,7 +564,7 @@ export function makePackingScanDeps(
   changed: () => void,
   refreshed: () => void,
   active: () => boolean = () => true,
-  currentBox: () => string | null = () => null,
+  currentBox: (raw?: string) => string | null = () => null,
   onBound: (orderId: string, value: string) => void = () => undefined,
   onSelected: (orderId: string) => void = () => undefined,
   preferences: () => FbsScanPrintPreferences = () => ({ printQr: true, printChz: false, reprintChz: false }),
@@ -617,7 +619,7 @@ export function makePackingScanDeps(
       let dirty = false
       // Capture the operator's box before the request: an uncertain selection
       // and a later remount must never substitute the newly opened box.
-      if (attempt.packingBoxId === undefined) { attempt.packingBoxId = currentBox(); dirty = true }
+      if (attempt.packingBoxId === undefined) { attempt.packingBoxId = currentBox(raw); dirty = true }
       // The label size is frozen for every label (and every retry) of this attempt.
       if (!attempt.labelSizeId) { attempt.labelSizeId = loadLabelSizeId(); dirty = true }
       if (explicit && !attempt.explicit) { attempt.explicit = true; dirty = true }

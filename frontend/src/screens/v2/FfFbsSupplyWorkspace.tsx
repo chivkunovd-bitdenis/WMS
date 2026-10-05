@@ -621,6 +621,18 @@ export function FfFbsSupplyWorkspace({
   const [assemblyStarting, setAssemblyStarting] = useState(false)
   const [assemblyBoxCreating, setAssemblyBoxCreating] = useState(false)
   const packingScanListeningRef = useRef(false)
+  // Capture the open box when the physical scan arrives, before it waits in
+  // the shared serial queue. FIFO entries keep identical rapid scans distinct.
+  const rememberAssemblyScanBox = useCallback((code: string) => {
+    const raw = code.replace(/[ \t\r\n\v\f]+$/, '')
+    const now = Date.now()
+    const state = assemblyScanStateRef.current
+    if (state.active && !state.busy && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) return
+    assemblyScanBoxesRef.current = [
+      ...assemblyScanBoxesRef.current.filter((entry) => now - entry.at < 60_000),
+      { code: raw, boxId: assemblyOpenBoxIdRef.current, at: now },
+    ]
+  }, [])
   // Хвост ЧЗ, сохранённого ответом commit, — пока перечитывание поставки не
   // принесло его в строку. Ключ — заказ.
   const [kizCommittedTails, setKizCommittedTails] = useState<Record<string, string>>({})
@@ -685,7 +697,7 @@ export function FfFbsSupplyWorkspace({
       () => { setSequentialScanVersion((version) => version + 1); sequentialFrameRef.current?.onScanChange?.() },
       () => sequentialRefreshRef.current(),
       () => sequentialOpenRef.current && sequentialWorkspaceRef.current?.supply.id === supplyId,
-      () => assemblyOpenBoxIdRef.current,
+      (raw) => assemblyTakeScanBoxRef.current?.(raw ?? '') ?? assemblyOpenBoxIdRef.current,
       (orderId, value) => setKizCommittedTails((current) => ({ ...current, [orderId]: kizValueTail(value) })),
       (orderId) => {
         setRecentlyScannedOrderId(orderId)
@@ -729,22 +741,31 @@ export function FfFbsSupplyWorkspace({
         return controller.cancel!()
       },
       scan: async (raw: string) => {
-        const target = kizRowInputRef.current && kizRowTargetRef.current
-        if (!target) return controller.scan(raw)
-        setKizScanValue('')
-        const field = kizRowInputRef.current
-        // The accepted scan releases the row at once, even when the field is
-        // already disabled by the busy scan and its blur event does not fire.
-        kizRowInputRef.current = null
-        kizRowTargetRef.current = null
-        setKizScanActive(null)
-        field?.blur()
-        // The same bind -> native WMS Print -> pack sequence as product scans.
-        await controller.scanOrder!(target.order_id, raw, target)
-        // Blur already released the explicit selection. A later focus belongs
-        // to the next scan and must not be cleared by this completed request.
-        sequentialFrameRef.current?.onScanChange?.()
+        try {
+          const target = kizRowInputRef.current && kizRowTargetRef.current
+          if (!target) return await controller.scan(raw)
+          setKizScanValue('')
+          const field = kizRowInputRef.current
+          // The accepted scan releases the row at once, even when the field is
+          // already disabled by the busy scan and its blur event does not fire.
+          kizRowInputRef.current = null
+          kizRowTargetRef.current = null
+          setKizScanActive(null)
+          field?.blur()
+          // The same bind -> native WMS Print -> pack sequence as product scans.
+          await controller.scanOrder!(target.order_id, raw, target)
+          // Blur already released the explicit selection. A later focus belongs
+          // to the next scan and must not be cleared by this completed request.
+          sequentialFrameRef.current?.onScanChange?.()
+        } catch (cause) {
+          if (sequentialFrameRef.current && cause instanceof FbsApiError) {
+            const message = assemblyScanErrorTextRef.current?.(cause, raw) ?? kizErrorText(cause, 'WB')
+            throw new FbsApiError(cause.code, message, cause.context, cause.retryable, cause.status)
+          }
+          throw cause
+        }
       },
+      onReceived: assemblyFrame ? rememberAssemblyScanBox : undefined,
     }
   // The controller owns one immutable supply; refreshed rows do not discard a pending KIZ.
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2209,6 +2230,7 @@ export function FfFbsSupplyWorkspace({
     }
     return {
       matches: belongsToOzonSupply,
+      onReceived: assemblyFrame ? rememberAssemblyScanBox : undefined,
       hasSelectedRow: () => Boolean(ozonKizTargetRef.current),
       hasPending: () => Boolean(ozonKizTargetRef.current || ozonScanBusyRef.current),
       hasSavedAttempt: () => false,
@@ -2436,6 +2458,7 @@ export function FfFbsSupplyWorkspace({
     const count = Math.min(100, Math.max(1, Number(boxCount) || 1))
     const boxMode = !isOzonSupply && boxesWithoutDistribution ? 'no-distribution' : 'distribution'
     const key = persistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
+    const before = new Set(workspace.boxes.map((box) => box.id))
     const next = await run(
       () => createFbsPackingBoxes(token, authHeaders, workspace.supply.id, {
         count,
@@ -2447,6 +2470,14 @@ export function FfFbsSupplyWorkspace({
     if (next) {
       clearPersistentOperationKey(workspace.supply.id, 'box-create', `${boxMode}:${count}`)
       setBoxCount('1')
+      if (assemblyFrame) {
+        const byNumber = [...next.boxes].sort((a, b) => b.box_number - a.box_number)
+        const created = byNumber.find((box) => !before.has(box.id)) ?? byNumber[0]
+        if (created) {
+          setAssemblyOpenBoxId(created.id)
+          setAssemblyBoxHint(null)
+        }
+      }
     }
   }
 
@@ -3101,19 +3132,6 @@ export function FfFbsSupplyWorkspace({
   const packagingEditable = !deliveryConfirmed
   // WMS-575: вкладка «Упаковка и маркировка» принимает скан, где бы ни стоял
   // курсор, — ровно тогда, когда на ней есть рабочее поле скана.
-  // WMS-574 R22: код со сканера пришёл — запоминаем, какой короб рамки был открыт.
-  // Записи идут по порядку прихода: у каждого принятого скана свой короб, даже
-  // если коды одинаковые (три одинаковые вещи подряд). Старые записи — по возрасту.
-  const rememberAssemblyScanBox = useCallback((code: string) => {
-    const raw = code.replace(/[ \t\r\n\v\f]+$/, '')
-    const now = Date.now()
-    const state = assemblyScanStateRef.current
-    if (state.active && !state.busy && fbsSameStickerScan(raw, kizSelectedStickerRef.current)) return
-    assemblyScanBoxesRef.current = [
-      ...assemblyScanBoxesRef.current.filter((entry) => now - entry.at < 60_000),
-      { code: raw, boxId: assemblyOpenBoxIdRef.current, at: now },
-    ]
-  }, [])
   const packingScanIntake = useScanIntake({
     // WMS-666: all entries use FbsPackingScanBar; this retained intake only
     // supplies helpers to the legacy markup while that code is phased out.
@@ -4794,7 +4812,10 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
                 </Box>
                 <Stack divider={<Divider flexItem />}>
-                  {workspace.boxes.map((box) => renderBoxRow(workspace, box))}
+                  {workspace.boxes.map((box) => renderBoxRow(workspace, box, assemblyFrame ? {
+                    open: assemblyOpenBoxId === box.id,
+                    onToggle: () => toggleAssemblyBox(box.id),
+                  } : undefined))}
                 </Stack>
               </Paper>
               {!deliveryConfirmed ? (

@@ -51,6 +51,9 @@ export function FbsPackingScanBar({ controllers, enabled, token, rejected, qrDis
     emitRaw: true,
     onScan: (raw) => {
       setError(null)
+      // Snapshot supply-local context before this scan waits behind earlier
+      // work in the shared serial queue.
+      for (const controller of controllers) controller.onReceived?.(raw)
       // N4: the scan joins the one packing queue at once, in the order it was read,
       // so a later Escape or «Назад» never overtakes it.
       void routePackingScan(controllers, raw)
