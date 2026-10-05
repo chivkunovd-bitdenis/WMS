@@ -89,6 +89,23 @@ class DocumentTests(unittest.TestCase):
             )
             self.assertEqual(checker.document_errors(CLASSIFIED_DOCUMENT, root), [])
 
+    def test_one_check_can_reference_several_tests_with_html_breaks(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            test = root / "backend/tests/test_contract.py"
+            test.parent.mkdir(parents=True)
+            test.write_text(
+                "def test_saved_result(): pass\ndef test_second_guard(): pass\n"
+                "def test_migration(): pass\n",
+                encoding="utf-8",
+            )
+            doc = CLASSIFIED_DOCUMENT.replace(
+                "backend/tests/test_contract.py::test_saved_result",
+                "backend/tests/test_contract.py::test_saved_result"
+                "<br>backend/tests/test_contract.py::test_second_guard",
+            )
+            self.assertEqual(checker.document_errors(doc, root), [])
+
     def test_automated_class_requires_test_reference(self):
         doc = CLASSIFIED_DOCUMENT.replace(
             "backend/tests/test_contract.py::test_saved_result", ""

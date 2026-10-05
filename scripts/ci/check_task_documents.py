@@ -60,6 +60,15 @@ def test_reference(value: str) -> str:
     return re.sub(r"\s+", " ", value.translate(str.maketrans("", "", "*`"))).strip()
 
 
+def test_references(value: str) -> list[str]:
+    """Validate every test link stored in one Markdown table cell."""
+    return [
+        reference
+        for part in re.split(r"<br\s*/?>", value, flags=re.IGNORECASE)
+        if (reference := test_reference(part))
+    ]
+
+
 def test_reference_errors(root: Path, reference: str) -> list[str]:
     path_text, separator, test_name = test_reference(reference).partition("::")
     pure = PurePosixPath(path_text)
@@ -118,14 +127,15 @@ def document_errors(text: str, root: Path | None = None) -> list[str]:
                 errors.append(f"Нет вердикта у проверки: {values[check_col]}")
             if class_col is not None and test_col is not None:
                 check_class = plain(values[class_col]).casefold()
-                reference = test_reference(values[test_col])
+                references = test_references(values[test_col])
                 if check_class in {"навсегда", "разово"}:
-                    if not reference:
+                    if not references:
                         errors.append(
                             f"У автоматической проверки {values[check_col]} нет ссылки на тест."
                         )
                     elif root is not None:
-                        errors.extend(test_reference_errors(root, reference))
+                        for reference in references:
+                            errors.extend(test_reference_errors(root, reference))
     if not checks:
         errors.append("Нет проверок в таблице с колонками «Проверка» и «Вердикт».")
 
