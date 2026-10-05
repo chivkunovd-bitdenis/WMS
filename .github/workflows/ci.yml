@@ -75,6 +75,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+        with:
+          # WMS-653 C12 compares the task diff with the trusted etalon branch.
+          # The default one-commit checkout does not create origin/etalon for a
+          # pull-request merge ref, so the contract cannot run without history.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
