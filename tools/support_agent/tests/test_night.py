@@ -485,6 +485,20 @@ def test_owner_cancellation_stops_before_any_model_or_release(env: Any) -> None:
     assert not env.llm.calls and not runner.hotfix.release_calls
 
 
+def test_owner_cancellation_is_silent_and_final(env: Any) -> None:
+    runner, tid = make_night(env)
+    job = env.store.kv_get("agent_job:job1")
+    env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+
+    runner.development(tid)
+
+    assert env.store.ticket(tid)["stage"] == "done"
+    cancelled = env.store.kv_get("agent_job:job1")
+    assert cancelled["status"] == "cancelled"
+    assert cancelled["cancel_requested"] is True
+    assert env.store.rows("SELECT * FROM outbox WHERE purpose='night_report'") == []
+
+
 def test_red_exact_merge_ci_never_dispatches_deploy(env: Any) -> None:
     runner, tid = make_night(env)
     state = runner._state(tid)
