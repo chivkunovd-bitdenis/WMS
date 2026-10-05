@@ -81,9 +81,30 @@ async def _product(
     size: str = "M",
     required: bool = False,
 ) -> Product:
+    return await _product_ids(
+        session,
+        tenant.id,
+        seller.id,
+        sku=sku,
+        barcode=barcode,
+        size=size,
+        required=required,
+    )
+
+
+async def _product_ids(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    *,
+    sku: str,
+    barcode: str = "04601234567890",
+    size: str = "M",
+    required: bool = False,
+) -> Product:
     row = Product(
-        tenant_id=tenant.id,
-        seller_id=seller.id,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
         name=f"Product {sku}",
         sku_code=sku,
         wb_vendor_code=sku,
@@ -124,16 +145,35 @@ async def _manual(
     *,
     suffix: str = "csv",
 ) -> marking.MarkingImportResult:
-    return await marking.import_marking_codes(
+    return await _manual_ids(
         session,
         tenant.id,
         seller.id,
+        product.id,
+        cis,
+        suffix=suffix,
+    )
+
+
+async def _manual_ids(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_id: uuid.UUID,
+    cis: str,
+    *,
+    suffix: str = "csv",
+) -> marking.MarkingImportResult:
+    return await marking.import_marking_codes(
+        session,
+        tenant_id,
+        seller_id,
         files=[(f"codes.{suffix}", f"cis\n{cis}".encode())],
         pool_specs=[
             marking.PoolImportSpec(
                 gtin="04601234567890",
                 title="WMS-658 exact upload",
-                product_ids=[product.id],
+                product_ids=[product_id],
             )
         ],
         uploaded_by_user_id=None,
@@ -194,7 +234,9 @@ async def test_c2_manual_import_enables_unmarked_selected_product(db_session: As
 
 
 @pytest.mark.asyncio
-async def test_c3_assign_import_accepts_unmarked_product_and_enables_it(db_session: AsyncSession) -> None:
+async def test_c3_assign_import_accepts_unmarked_product_and_enables_it(
+    db_session: AsyncSession,
+) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C3")
     cis = _full_cis("C3")
@@ -213,7 +255,9 @@ async def test_c3_assign_import_accepts_unmarked_product_and_enables_it(db_sessi
 
     await db_session.refresh(product)
     assert result.assigned_keys == ["0"]
-    assert [code.cis_code for code in await _codes_for_import(db_session, result.import_id)] == [cis]
+    assert [
+        code.cis_code for code in await _codes_for_import(db_session, result.import_id)
+    ] == [cis]
     assert product.requires_honest_sign is True
 
 
@@ -248,10 +292,15 @@ def test_c6_auto_match_rejects_missing_size_conflict_and_ambiguity() -> None:
         name="Two", sku_code="SAME", wb_vendor_code="V-TWO",
         wb_barcode="04601234567891", wb_size="M", requires_honest_sign=False,
     )
+    gtin_conflict = Product(
+        id=uuid.uuid4(), tenant_id=tenant_id, seller_id=seller_id,
+        name="GTIN conflict", sku_code="OTHER", wb_vendor_code="V-OTHER",
+        wb_barcode="04601234567891", wb_size="M", requires_honest_sign=False,
+    )
     cases = [
         ([one], "UNKNOWN", "M", "04601234567890", "Не найден"),
         ([one], "SAME", "L", "04601234567890", "размер"),
-        ([one], "SAME", "M", "04601234567891", "указывают на разные"),
+        ([one, gtin_conflict], "SAME", "M", "04601234567891", "указывают на разные"),
         ([one, two], "SAME", "M", "09999999999999", "неоднозначно"),
     ]
     for products, article, size, gtin, expected_reason in cases:
@@ -262,6 +311,7 @@ def test_c6_auto_match_rejects_missing_size_conflict_and_ambiguity() -> None:
         assert expected_reason.casefold() in reason.casefold()
     assert one.requires_honest_sign is False
     assert two.requires_honest_sign is False
+    assert gtin_conflict.requires_honest_sign is False
 
 
 @pytest.mark.asyncio
@@ -270,17 +320,18 @@ async def test_c7_duplicates_create_no_pool_and_do_not_enable_product(
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C7")
+    tenant_id, seller_id, product_id = tenant.id, seller.id, product.id
     cis = _full_cis("C7")
     pool = MarkingPool(
-        tenant_id=tenant.id, seller_id=seller.id, gtin="04601234567890", title="existing"
+        tenant_id=tenant_id, seller_id=seller_id, gtin="04601234567890", title="existing"
     )
     db_session.add(pool)
     await db_session.flush()
     db_session.add_all([
-        MarkingPoolProduct(tenant_id=tenant.id, pool_id=pool.id, product_id=product.id),
+        MarkingPoolProduct(tenant_id=tenant_id, pool_id=pool.id, product_id=product_id),
         MarkingCode(
-            tenant_id=tenant.id, seller_id=seller.id, pool_id=pool.id,
-            product_id=product.id, cis_code=cis, gtin="04601234567890",
+            tenant_id=tenant_id, seller_id=seller_id, pool_id=pool.id,
+            product_id=product_id, cis_code=cis, gtin="04601234567890",
             status=STATUS_AVAILABLE,
         ),
     ])
@@ -290,9 +341,9 @@ async def test_c7_duplicates_create_no_pool_and_do_not_enable_product(
     manual = await _manual(db_session, tenant, seller, product, cis)
     auto = await _auto(db_session, tenant, seller, product, cis)
     assigned = await marking.assign_import_rows_to_product(
-        db_session, tenant.id, seller.id, request_id=uuid.uuid4(),
+        db_session, tenant_id, seller_id, request_id=uuid.uuid4(),
         files=[("labels.pdf", _label_pdf(cis, article="UNKNOWN"))], row_keys=["0"],
-        product_id=product.id, uploaded_by_user_id=None,
+        product_id=product_id, uploaded_by_user_id=None,
     )
 
     await db_session.refresh(product)
@@ -313,6 +364,7 @@ async def test_c8_each_import_path_rolls_back_code_pool_link_and_flag_on_commit_
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku=f"WMS658-C8-{mode}")
+    tenant_id, seller_id, product_id = tenant.id, seller.id, product.id
     cis = _full_cis(f"C8-{mode}")
     original_commit: Callable[..., Any] = db_session.commit
 
@@ -327,24 +379,24 @@ async def test_c8_each_import_path_rolls_back_code_pool_link_and_flag_on_commit_
             await _manual(db_session, tenant, seller, product, cis)
         else:
             await marking.assign_import_rows_to_product(
-                db_session, tenant.id, seller.id, request_id=uuid.uuid4(),
+                db_session, tenant_id, seller_id, request_id=uuid.uuid4(),
                 files=[("labels.pdf", _label_pdf(cis, article="UNKNOWN"))],
-                row_keys=["0"], product_id=product.id, uploaded_by_user_id=None,
+                row_keys=["0"], product_id=product_id, uploaded_by_user_id=None,
             )
     monkeypatch.setattr(db_session, "commit", original_commit)
     await db_session.rollback()
 
     async with SessionLocal() as check:
-        saved_product = await check.get(Product, product.id)
+        saved_product = await check.get(Product, product_id)
         assert saved_product is not None and saved_product.requires_honest_sign is False
         assert int(await check.scalar(select(func.count(MarkingCode.id))) or 0) == 0
         assert int(await check.scalar(select(func.count(MarkingPool.id))) or 0) == 0
         assert int(await check.scalar(select(func.count(MarkingPoolProduct.id))) or 0) == 0
 
     async with SessionLocal() as retry_session:
-        retry_product = await retry_session.get(Product, product.id)
-        retry_tenant = await retry_session.get(Tenant, tenant.id)
-        retry_seller = await retry_session.get(Seller, seller.id)
+        retry_product = await retry_session.get(Product, product_id)
+        retry_tenant = await retry_session.get(Tenant, tenant_id)
+        retry_seller = await retry_session.get(Seller, seller_id)
         assert retry_product is not None and retry_tenant is not None and retry_seller is not None
         if mode == "auto":
             await _auto(retry_session, retry_tenant, retry_seller, retry_product, cis)
@@ -352,9 +404,9 @@ async def test_c8_each_import_path_rolls_back_code_pool_link_and_flag_on_commit_
             await _manual(retry_session, retry_tenant, retry_seller, retry_product, cis)
         else:
             await marking.assign_import_rows_to_product(
-                retry_session, tenant.id, seller.id, request_id=uuid.uuid4(),
+                retry_session, tenant_id, seller_id, request_id=uuid.uuid4(),
                 files=[("labels.pdf", _label_pdf(cis, article="UNKNOWN"))],
-                row_keys=["0"], product_id=product.id, uploaded_by_user_id=None,
+                row_keys=["0"], product_id=product_id, uploaded_by_user_id=None,
             )
         await retry_session.refresh(retry_product)
         assert retry_product.requires_honest_sign is True
@@ -368,6 +420,7 @@ async def test_c9_retry_and_concurrent_attempts_have_one_code_one_link_and_true_
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C9")
+    tenant_id, seller_id, product_id = tenant.id, seller.id, product.id
     cis = _full_cis("C9")
     request_id = uuid.uuid4()
     files = [("labels.pdf", _label_pdf(cis, article=product.sku_code))]
@@ -375,17 +428,24 @@ async def test_c9_retry_and_concurrent_attempts_have_one_code_one_link_and_true_
     async def retry() -> marking.AutoMarkingImportResult:
         async with SessionLocal() as session:
             return await marking.auto_import_marking_codes(
-                session, tenant.id, seller.id, request_id=request_id, files=files,
+                session, tenant_id, seller_id, request_id=request_id, files=files,
                 uploaded_by_user_id=None,
             )
 
     concurrent = await asyncio.gather(retry(), retry())
     first = concurrent[0]
     repeated = await marking.auto_import_marking_codes(
-        db_session, tenant.id, seller.id, request_id=request_id, files=files,
+        db_session, tenant_id, seller_id, request_id=request_id, files=files,
         uploaded_by_user_id=None,
     )
-    assign_product = await _product(db_session, tenant, seller, sku="WMS658-C9-ASSIGN")
+    assign_product = await _product_ids(
+        db_session,
+        tenant_id,
+        seller_id,
+        sku="WMS658-C9-ASSIGN",
+        barcode="04601234567891",
+    )
+    assign_product_id = assign_product.id
     assign_cis = _full_cis("C9-ASSIGN")
     assign_request_id = uuid.uuid4()
     assign_files = [("assign.pdf", _label_pdf(assign_cis, article="UNKNOWN"))]
@@ -393,23 +453,30 @@ async def test_c9_retry_and_concurrent_attempts_have_one_code_one_link_and_true_
         async with SessionLocal() as session:
             return await marking.assign_import_rows_to_product(
                 session,
-                tenant.id,
-                seller.id,
+                tenant_id,
+                seller_id,
                 request_id=assign_request_id,
                 files=assign_files,
                 row_keys=["0"],
-                product_id=assign_product.id,
+                product_id=assign_product_id,
                 uploaded_by_user_id=None,
             )
 
     assigned, assigned_retry = await asyncio.gather(assign_attempt(), assign_attempt())
-    manual_product = await _product(db_session, tenant, seller, sku="WMS658-C9-MANUAL")
+    manual_product = await _product_ids(
+        db_session,
+        tenant_id,
+        seller_id,
+        sku="WMS658-C9-MANUAL",
+        barcode="04601234567892",
+    )
+    manual_product_id = manual_product.id
     manual_cis = _full_cis("C9-MANUAL")
     async def manual_attempt() -> marking.MarkingImportResult:
         async with SessionLocal() as session:
-            retry_tenant = await session.get(Tenant, tenant.id)
-            retry_seller = await session.get(Seller, seller.id)
-            retry_product = await session.get(Product, manual_product.id)
+            retry_tenant = await session.get(Tenant, tenant_id)
+            retry_seller = await session.get(Seller, seller_id)
+            retry_product = await session.get(Product, manual_product_id)
             assert retry_tenant is not None and retry_seller is not None
             assert retry_product is not None
             return await _manual(
@@ -418,23 +485,25 @@ async def test_c9_retry_and_concurrent_attempts_have_one_code_one_link_and_true_
 
     manual_first, manual_retry = await asyncio.gather(manual_attempt(), manual_attempt())
 
-    await db_session.refresh(product)
-    await db_session.refresh(assign_product)
-    await db_session.refresh(manual_product)
     assert first.import_id == repeated.import_id
     assert {row.import_id for row in concurrent} == {first.import_id}
     assert assigned.import_id == assigned_retry.import_id
     assert assigned.assigned_keys == assigned_retry.assigned_keys == ["0"]
     assert sorted([manual_first.accepted_count, manual_retry.accepted_count]) == [0, 1]
-    assert int(await db_session.scalar(select(func.count(MarkingCode.id))) or 0) == 3
-    assert int(await db_session.scalar(select(func.count(MarkingPoolProduct.id))) or 0) == 3
-    assert all(
-        row.requires_honest_sign for row in (product, assign_product, manual_product)
-    )
+    async with SessionLocal() as check:
+        products = [
+            await check.get(Product, row_id)
+            for row_id in (product_id, assign_product_id, manual_product_id)
+        ]
+        assert int(await check.scalar(select(func.count(MarkingCode.id))) or 0) == 3
+        assert int(await check.scalar(select(func.count(MarkingPoolProduct.id))) or 0) == 3
+        assert all(row is not None and row.requires_honest_sign for row in products)
 
 
 @pytest.mark.asyncio
-async def test_c10_import_keeps_exact_tenant_and_seller_boundaries(db_session: AsyncSession) -> None:
+async def test_c10_import_keeps_exact_tenant_and_seller_boundaries(
+    db_session: AsyncSession,
+) -> None:
     tenant, seller = await _scope(db_session)
     other_seller = Seller(tenant_id=tenant.id, name="WMS658 other seller")
     db_session.add(other_seller)
@@ -447,16 +516,34 @@ async def test_c10_import_keeps_exact_tenant_and_seller_boundaries(db_session: A
     foreign_tenant = await _product(
         db_session, other_tenant, other_tenant_seller, sku="WMS658-C10",
     )
+    tenant_id, seller_id = tenant.id, seller.id
+    own_id = own.id
+    foreign_seller_id, foreign_tenant_id = foreign_seller.id, foreign_tenant.id
 
     result = await _auto(db_session, tenant, seller, own, _full_cis("C10"))
-    assert [group.product_id for group in result.groups] == [own.id]
-    with pytest.raises(marking.MarkingCodeServiceError):
-        await _manual(db_session, tenant, seller, foreign_seller, _full_cis("C10-X"))
-    with pytest.raises(marking.MarkingCodeServiceError):
-        await _manual(db_session, tenant, seller, foreign_tenant, _full_cis("C10-Y"))
-    for row in (foreign_seller, foreign_tenant):
-        await db_session.refresh(row)
-        assert row.requires_honest_sign is False
+    assert [group.product_id for group in result.groups] == [own_id]
+    async with SessionLocal() as foreign_seller_session:
+        with pytest.raises(marking.MarkingCodeServiceError):
+            await _manual_ids(
+                foreign_seller_session,
+                tenant_id,
+                seller_id,
+                foreign_seller_id,
+                _full_cis("C10-X"),
+            )
+    async with SessionLocal() as foreign_tenant_session:
+        with pytest.raises(marking.MarkingCodeServiceError):
+            await _manual_ids(
+                foreign_tenant_session,
+                tenant_id,
+                seller_id,
+                foreign_tenant_id,
+                _full_cis("C10-Y"),
+            )
+    async with SessionLocal() as check:
+        for row_id in (foreign_seller_id, foreign_tenant_id):
+            row = await check.get(Product, row_id)
+            assert row is not None and row.requires_honest_sign is False
 
 
 @pytest.mark.asyncio
@@ -465,6 +552,7 @@ async def test_c11_pdf_keeps_full_payload_artifact_and_import_identity(
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C11")
+    tenant_id = tenant.id
     cis = _full_cis("C11")
     result = await _auto(db_session, tenant, seller, product, cis)
     code = (await _codes_for_import(db_session, result.import_id))[0]
@@ -473,7 +561,7 @@ async def test_c11_pdf_keeps_full_payload_artifact_and_import_identity(
     assert code.import_batch_id == result.import_id
     assert code.label_artifact_pdf is not None
     assert _decoded_values(code.label_artifact_pdf) == [cis]
-    tape = await marking.build_label_artifact_tape_pdf(db_session, tenant.id, [code.id])
+    tape = await marking.build_label_artifact_tape_pdf(db_session, tenant_id, [code.id])
     assert _decoded_values(tape) == [cis]
 
 
@@ -488,7 +576,7 @@ async def test_c12_text_import_prints_full_saved_payload_not_gtin_or_barcode(
     cis = _full_cis(f"C12-{suffix}")
     result = await _manual(db_session, tenant, seller, product, cis, suffix=suffix)
     code = (await _codes_for_import(db_session, result.import_id))[0]
-    build = getattr(marking, "build_import_result_pdf")
+    build = marking.build_import_result_pdf
 
     pdf = await build(
         db_session, tenant.id, result.import_id, code_ids=[code.id], copies=1
@@ -512,27 +600,31 @@ async def test_c13_print_result_uses_only_selected_ids_in_requested_order(
     )
     db_session.add(old)
     await db_session.commit()
+    tenant_id, seller_id = tenant.id, seller.id
+    product_sku = product.sku_code
+    old_id = old.id
     first, second = _full_cis("C13-A"), _full_cis("C13-B")
     result = await marking.auto_import_marking_codes(
-        db_session, tenant.id, seller.id, request_id=uuid.uuid4(),
+        db_session, tenant_id, seller_id, request_id=uuid.uuid4(),
         files=[
-            ("a.pdf", _label_pdf(first, article=product.sku_code)),
-            ("b.pdf", _label_pdf(second, article=product.sku_code)),
+            ("a.pdf", _label_pdf(first, article=product_sku)),
+            ("b.pdf", _label_pdf(second, article=product_sku)),
         ],
         uploaded_by_user_id=None,
     )
     codes = await _codes_for_import(db_session, result.import_id)
     by_value = {row.cis_code: row for row in codes}
-    build = getattr(marking, "build_import_result_pdf")
+    build = marking.build_import_result_pdf
 
     pdf = await build(
-        db_session, tenant.id, result.import_id,
+        db_session, tenant_id, result.import_id,
         code_ids=[by_value[second].id, by_value[first].id], copies=1,
     )
 
     assert _decoded_values(pdf) == [second, first]
-    await db_session.refresh(old)
-    assert old.status == STATUS_AVAILABLE
+    async with SessionLocal() as check:
+        saved_old = await check.get(MarkingCode, old_id)
+        assert saved_old is not None and saved_old.status == STATUS_AVAILABLE
 
 
 @pytest.mark.asyncio
@@ -541,11 +633,12 @@ async def test_c14_missing_artifact_or_foreign_id_fails_without_substitution(
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C14")
+    tenant_id, seller_id, product_id = tenant.id, seller.id, product.id
     cis = _full_cis("C14")
     result = await _auto(db_session, tenant, seller, product, cis)
     code = (await _codes_for_import(db_session, result.import_id))[0]
     neighbor = MarkingCode(
-        tenant_id=tenant.id, seller_id=seller.id, product_id=product.id,
+        tenant_id=tenant_id, seller_id=seller_id, product_id=product_id,
         cis_code=_full_cis("C14-NEIGHBOR"), gtin="04601234567890",
         label_artifact_pdf=build_datamatrix_pdf([_full_cis("C14-NEIGHBOR")]),
         status=STATUS_AVAILABLE,
@@ -553,15 +646,18 @@ async def test_c14_missing_artifact_or_foreign_id_fails_without_substitution(
     db_session.add(neighbor)
     code.label_artifact_pdf = None
     await db_session.commit()
-    build = getattr(marking, "build_import_result_pdf")
+    code_id, neighbor_id = code.id, neighbor.id
+    build = marking.build_import_result_pdf
 
     with pytest.raises(marking.MarkingCodeServiceError):
-        await build(db_session, tenant.id, result.import_id, code_ids=[code.id], copies=1)
+        await build(db_session, tenant_id, result.import_id, code_ids=[code_id], copies=1)
     with pytest.raises(marking.MarkingCodeServiceError):
-        await build(db_session, tenant.id, result.import_id, code_ids=[neighbor.id], copies=1)
-    await db_session.refresh(code)
-    await db_session.refresh(neighbor)
-    assert code.status == neighbor.status == STATUS_AVAILABLE
+        await build(db_session, tenant_id, result.import_id, code_ids=[neighbor_id], copies=1)
+    async with SessionLocal() as check:
+        saved_code = await check.get(MarkingCode, code_id)
+        saved_neighbor = await check.get(MarkingCode, neighbor_id)
+        assert saved_code is not None and saved_neighbor is not None
+        assert saved_code.status == saved_neighbor.status == STATUS_AVAILABLE
 
 
 @pytest.mark.asyncio
@@ -570,18 +666,19 @@ async def test_c15_print_result_preserves_order_copies_payloads_and_nonempty_pag
 ) -> None:
     tenant, seller = await _scope(db_session)
     product = await _product(db_session, tenant, seller, sku="WMS658-C15")
+    tenant_id, seller_id, product_sku = tenant.id, seller.id, product.sku_code
     values = [_full_cis("C15-A"), _full_cis("C15-B")]
     result = await marking.auto_import_marking_codes(
-        db_session, tenant.id, seller.id, request_id=uuid.uuid4(),
+        db_session, tenant_id, seller_id, request_id=uuid.uuid4(),
         files=[
-            ("wide.pdf", _label_pdf(values[0], article=product.sku_code)),
-            ("small.pdf", _label_pdf(values[1], article=product.sku_code)),
+            ("wide.pdf", _label_pdf(values[0], article=product_sku)),
+            ("small.pdf", _label_pdf(values[1], article=product_sku)),
         ], uploaded_by_user_id=None,
     )
     codes = await _codes_for_import(db_session, result.import_id)
-    build = getattr(marking, "build_import_result_pdf")
+    build = marking.build_import_result_pdf
     pdf = await build(
-        db_session, tenant.id, result.import_id,
+        db_session, tenant_id, result.import_id,
         code_ids=[codes[1].id, codes[0].id], copies=2,
     )
 
@@ -638,6 +735,9 @@ async def test_c21_exact_import_print_leaves_existing_pool_and_neighbor_processe
     )
     db_session.add(order)
     await db_session.commit()
+    tenant_id = tenant.id
+    product_id, shared_product_id = product.id, shared_product.id
+    old_id, old_pool_id, order_id = old.id, old_pool.id, order.id
     before = (old.status, old.pool_id, product.fbs_stock_limit, product.fbs_percent)
     order_before = (
         order.status, order.reserve_status, order.pick_status, order.pack_status,
@@ -645,30 +745,41 @@ async def test_c21_exact_import_print_leaves_existing_pool_and_neighbor_processe
     )
     result = await _auto(db_session, tenant, seller, product, _full_cis("C21-NEW"))
     new_code = (await _codes_for_import(db_session, result.import_id))[0]
-    build = getattr(marking, "build_import_result_pdf")
+    build = marking.build_import_result_pdf
 
     pdf = await build(
-        db_session, tenant.id, result.import_id, code_ids=[new_code.id], copies=1
+        db_session, tenant_id, result.import_id, code_ids=[new_code.id], copies=1
     )
 
-    await db_session.refresh(old)
-    await db_session.refresh(product)
-    await db_session.refresh(order)
     assert _decoded_values(pdf) == [_full_cis("C21-NEW")]
-    assert (old.status, old.pool_id, product.fbs_stock_limit, product.fbs_percent) == before
-    assert (
-        order.status, order.reserve_status, order.pick_status, order.pack_status,
-        order.sticker_status, order.meta_details_json,
-    ) == order_before
-    assert set(
-        (
-            await db_session.scalars(
-                select(MarkingPoolProduct.product_id).where(
-                    MarkingPoolProduct.pool_id == old_pool.id
+    async with SessionLocal() as check:
+        saved_old = await check.get(MarkingCode, old_id)
+        saved_product = await check.get(Product, product_id)
+        saved_order = await check.get(FbsOrder, order_id)
+        assert saved_old is not None and saved_product is not None and saved_order is not None
+        assert (
+            saved_old.status,
+            saved_old.pool_id,
+            saved_product.fbs_stock_limit,
+            saved_product.fbs_percent,
+        ) == before
+        assert (
+            saved_order.status,
+            saved_order.reserve_status,
+            saved_order.pick_status,
+            saved_order.pack_status,
+            saved_order.sticker_status,
+            saved_order.meta_details_json,
+        ) == order_before
+        assert set(
+            (
+                await check.scalars(
+                    select(MarkingPoolProduct.product_id).where(
+                        MarkingPoolProduct.pool_id == old_pool_id
+                    )
                 )
-            )
-        ).all()
-    ) == {product.id, shared_product.id}
+            ).all()
+        ) == {product_id, shared_product_id}
 
 
 @pytest.mark.asyncio
