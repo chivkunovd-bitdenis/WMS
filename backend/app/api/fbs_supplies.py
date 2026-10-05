@@ -728,6 +728,23 @@ class FbsDeliveryPreflightOut(BaseModel):
     cancelled_orders: list[FbsCancelledDeliveryOrderOut] = Field(default_factory=list)
 
 
+class FbsDeliveryOperatorErrorOut(BaseModel):
+    title: str
+    orders: list[int | None]
+    message: str | None = None
+
+
+class FbsLastDeliveryErrorContextOut(BaseModel):
+    operator_errors: list[FbsDeliveryOperatorErrorOut]
+
+
+class FbsLastDeliveryErrorOut(BaseModel):
+    code: str
+    message: str
+    retryable: bool
+    context: FbsLastDeliveryErrorContextOut
+
+
 class FbsSupplyDeliverBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
     confirmed_preflight_version: str | None = Field(default=None, min_length=1, max_length=128)
@@ -765,6 +782,7 @@ class FbsWorkspaceOut(BaseModel):
     partial_rejection: dict[str, object] | None = None
     picking_auto_passed_reason: str | None = None
     wb_sync_stale: bool = False
+    last_delivery_error: FbsLastDeliveryErrorOut | None = None
     server_now: str
 
 
