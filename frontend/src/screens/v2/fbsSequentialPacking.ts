@@ -95,6 +95,8 @@ export function packingSerialBusy(): boolean {
 
 export type PackingScanController = {
   hasSelectedRow?: () => boolean
+  /** True only when the visible rows prove that this code belongs to the controller. */
+  matches?: (raw: string) => boolean
   scan: (raw: string) => Promise<void>
   scanOrder?: (orderId: string, raw: string, target?: FbsKizLookup) => Promise<void>
   /** R20: drop the started scan (waiting for KIZ or after a print failure); true when dropped. */
@@ -211,7 +213,12 @@ async function routePackingScanNow(
   const pending = remaining.find((one) => one.hasPending())
   if (pending) return pending.scan(raw)
   const saved = remaining.find((one) => one.hasSavedAttempt(raw))
-  const ordered = saved ? [saved, ...remaining.filter((one) => one !== saved)] : remaining
+  const matching = saved ? [] : remaining.filter((one) => one.matches?.(raw) === true)
+  // A durable unfinished attempt remains authoritative. Otherwise a barcode
+  // already present in visible rows must not be sent to unrelated supplies.
+  // Unknown order stickers retain the existing server lookup across the group.
+  const candidates = matching.length > 0 ? matching : remaining
+  const ordered = saved ? [saved, ...remaining.filter((one) => one !== saved)] : candidates
   let stickerNotFound: FbsApiError | null = null
   for (const controller of ordered) {
     try { await controller.scan(raw); return }

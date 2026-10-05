@@ -690,6 +690,13 @@ export function FfFbsSupplyWorkspace({
     ))
     return {
       ...controller,
+      matches: (raw: string) => {
+        const current = sequentialWorkspaceRef.current
+        if (!current) return false
+        const clean = raw.trim()
+        return fbsCodeBelongsToSupply(clean, current)
+          || current.orders.some((order) => order.sticker.code === clean || String(order.wb_order_id) === clean)
+      },
       hasSelectedRow: () => Boolean(kizRowInputRef.current && kizRowTargetRef.current),
       hasPending: () => Boolean(kizRowInputRef.current && kizRowTargetRef.current) || controller.hasPending(),
       view: () => kizRowInputRef.current && kizRowTargetRef.current
@@ -2097,6 +2104,7 @@ export function FfFbsSupplyWorkspace({
         || current.orders.some((order) => order.external_order_id === clean || order.sticker.code === clean)
     }
     return {
+      matches: belongsToOzonSupply,
       hasSelectedRow: () => Boolean(ozonKizTargetRef.current),
       hasPending: () => Boolean(ozonKizTargetRef.current || ozonScanBusyRef.current),
       hasSavedAttempt: () => false,
