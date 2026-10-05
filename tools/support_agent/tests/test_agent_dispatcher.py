@@ -245,6 +245,66 @@ def test_split_message_emits_one_completion_after_all_parts(tmp_path: Path) -> N
     assert store.kv_get("agent_dispatch_queue", []) == queue
 
 
+def test_split_message_suppresses_part_answers_and_progress(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    owner_id = store.add_message(
+        source="telegram", chat_id=4242, msg_id="owner-split-live", role="owner",
+        author_id="42", author_name="Owner", ts=100, kind="text",
+        text="Проверь две связанные части", file_id=None, reply_to=None,
+    )
+    assert owner_id is not None
+    owner = store.row("SELECT * FROM messages WHERE id=?", (owner_id,))
+    assert owner is not None
+    agent.dispatcher.accept(owner)
+
+    def split_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        return LlmResult(json.dumps({"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": f"topic-{owner_id}-1", "subrequest": "Первая часть"},
+            {"topic_id": f"topic-{owner_id}-2", "subrequest": "Вторая часть"},
+        ]}]}), "codex", "sol", "session")
+
+    agent.llm.agent_turn = split_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+
+    def part_turn(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["event"]
+        kwargs["progress_callback"](f"Промежуточно {event['id']}")
+        return LlmResult(json.dumps({
+            "answer": f"Отдельный ответ {event['id']}",
+            "summary": f"Завершено {event['id']}",
+            "next_action": "",
+        }), "codex", "sol", "session")
+
+    agent.llm.agent_turn = part_turn  # type: ignore[method-assign]
+    agent.dispatcher._work_topic(f"topic-{owner_id}-1")
+    assert store.rows("SELECT * FROM outbox") == []
+    assert store.kv_get("agent_dispatch_queue", []) == []
+
+    agent.dispatcher._work_topic(f"topic-{owner_id}-2")
+    queued = store.kv_get("agent_dispatch_queue", [])
+    assert len(queued) == 1
+    completion = store.kv_get(f"agent_event:{queued[0]}")
+    assert completion["kind"] == "worker_done"
+    assert completion["payload"]["split_complete"] is True
+
+    def moderate(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        return LlmResult(json.dumps({"routes": [{
+            "event_id": event["id"], "owner_reply": "Один сводный ответ",
+        }]}), "codex", "sol", "session")
+
+    agent.llm.agent_turn = moderate  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+    messages = store.rows("SELECT * FROM outbox")
+    assert len(messages) == 1
+    assert messages[0]["purpose"] == "agent_moderator"
+    assert messages[0]["text"] == "Один сводный ответ"
+    assert store.kv_get("agent_dispatch_queue", []) == []
+    agent.dispatcher._route_once()
+    assert len(store.rows("SELECT * FROM outbox")) == 1
+
+
 def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
     agent, store = _agent(tmp_path)
     source = _message(store, -10, "unsafe", "Создай тему")
