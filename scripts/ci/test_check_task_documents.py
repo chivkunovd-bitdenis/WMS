@@ -249,8 +249,9 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-722: correction ledger")
         return checker.contract_change_errors(self.root, rollout)
 
-    def test_sol61_high_review_accepts_corrected_contract(self):
-        self.assertEqual(self.sol61_correction_errors("high"), [])
+    def test_sol61_high_review_cannot_accept_corrected_contract(self):
+        self.assertTrue(any("реестр коррекции" in error
+                            for error in self.sol61_correction_errors("high")))
 
     def test_sol61_low_review_cannot_accept_corrected_contract(self):
         self.assertTrue(any("реестр коррекции" in error
