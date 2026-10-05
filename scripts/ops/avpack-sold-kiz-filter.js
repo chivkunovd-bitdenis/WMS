@@ -13,6 +13,7 @@
   const REGISTRY_PATH = '/api/operations/marking-codes/self/withdrawals';
   const PAGE_SIZE = 250;
   const TARGET_COUNT = 80;
+  const FILTER_MARKER = Symbol.for('wms.avpackSoldKizFilter.active');
 
   // Production read-only snapshot, 2026-10-05: exact WMS-517 eligible rows with
   // FbsOrder.wb_status == "sold", no active withdrawal claim and valid WB price.
@@ -158,6 +159,11 @@
 
   function createHelper(dependencies = {}) {
     const root = dependencies.root ?? globalRoot;
+    if (root?.fetch?.[FILTER_MARKER] === true) {
+      throw new SoldKizFilterError(
+        'Локальный фильтр уже установлен. Завершите текущий диалог или перезагрузите вкладку.',
+      );
+    }
     const location = root?.location;
     const storage = root?.localStorage;
     const originalFetch = root?.fetch;
@@ -244,7 +250,10 @@
         if (method !== 'GET' || url.origin !== EXPECTED_ORIGIN || url.pathname !== REGISTRY_PATH) {
           return callOriginalFetch(input, init);
         }
-        if (readToken() !== token) throw new SoldKizFilterError('Seller-сессия изменилась. Перезагрузите страницу.');
+        if (readToken() !== token) {
+          if (root.fetch === patchedFetch) root.fetch = originalFetch;
+          throw new SoldKizFilterError('Seller-сессия изменилась. Перезагрузите страницу.');
+        }
         const limit = Number(url.searchParams.get('limit') ?? '50');
         const offset = Number(url.searchParams.get('offset') ?? '0');
         if (![50, 100, 250].includes(limit) || !Number.isInteger(offset) || offset < 0) {
@@ -255,6 +264,7 @@
           headers: { 'content-type': 'application/json' },
         });
       };
+      Object.defineProperty(patchedFetch, FILTER_MARKER, { value: true });
       root.fetch = patchedFetch;
       return () => {
         if (root.fetch === patchedFetch) root.fetch = originalFetch;
