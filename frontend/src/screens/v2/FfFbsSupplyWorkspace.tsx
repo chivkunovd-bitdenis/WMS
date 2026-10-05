@@ -585,7 +585,13 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScanRef = useRef<(raw: string) => void>(() => undefined)
   // WMS-574: действия рамки окна сборки внутри приёма скана. В обычной карточке
   // они пустые, и приём скана идёт ровно как раньше.
-  const assemblyPlaceOrderRef = useRef<((orderId: string, releaseKizWait: boolean, boxId: string | null, scannedCode?: string) => Promise<void>) | null>(null)
+  const assemblyPlaceOrderRef = useRef<((
+    orderId: string,
+    releaseKizWait: boolean,
+    boxId: string | null,
+    scannedCode?: string,
+    scannedPositionId?: string,
+  ) => Promise<void>) | null>(null)
   const assemblyScanErrorTextRef = useRef<((cause: unknown, raw: string) => string | null) | null>(null)
   // Короб, открытый в момент скана: код несёт его с собой до назначения, даже
   // если оператор тем временем переключил короб или завершил работу (R22).
@@ -653,8 +659,6 @@ export function FfFbsSupplyWorkspace({
   const sequentialOpenRef = useRef(false)
   sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing'
     && (assemblyFrame?.registerScanner ? Boolean(assemblyFrame.visible) : true)
-  const scanPrintPreferencesRef = useRef(scanPrintPreferences)
-  scanPrintPreferencesRef.current = scanPrintPreferences
   useEffect(() => () => { sequentialOpenRef.current = false }, [])
   const sequentialWorkspaceRef = useRef(workspace)
   sequentialWorkspaceRef.current = workspace
@@ -677,9 +681,10 @@ export function FfFbsSupplyWorkspace({
         if (selectedSupplyId) sequentialFrameRef.current?.onPromotePackingOrder?.(selectedSupplyId, orderId)
       },
       // R3: the assembly bar saves the shared checkboxes; the supply keeps them in its state too.
-      () => (sequentialFrameRef.current?.registerScanner
-        ? loadFbsScanPrintPreferences(token)
-        : scanPrintPreferencesRef.current),
+      // The unified bar owns the visible switches in both entry points and
+      // saves them synchronously. Read that same source at scan time so a
+      // just-clicked standalone setting cannot be one render behind.
+      () => loadFbsScanPrintPreferences(token),
       // WMS-636 R11: the undone KIZ tail leaves the row at once, the reload brings the rest.
       (orderId) => setKizCommittedTails((current) => {
         if (!(orderId in current)) return current
@@ -1187,7 +1192,13 @@ export function FfFbsSupplyWorkspace({
   }, [])
 
   const scanIdleCode = useCallback(
-    async (raw: string, preferences: FbsScanPrintPreferences, propagateNotFound = false) => {
+    async (
+      raw: string,
+      preferences: FbsScanPrintPreferences,
+      propagateNotFound = false,
+      lookupCode = raw,
+      scannedPositionId?: string,
+    ) => {
       if (!workspace) return
       // WMS-574 R22: в рамке окна сборки — короб, открытый в момент этого скана.
       const assemblyBoxAtScan = assemblyTakeScanBoxRef.current?.(raw) ?? null
@@ -1205,7 +1216,7 @@ export function FfFbsSupplyWorkspace({
         // KIZ or product barcode, even when no automatic print mode is active.
         let stickerNotFound: unknown = null
         try {
-          const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, raw)
+          const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, lookupCode)
           if (!found.can_bind) {
             setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ ЧЗ внести нельзя'), debug: null })
             playScanError()
@@ -1220,7 +1231,15 @@ export function FfFbsSupplyWorkspace({
           // WMS-575: строка заказа ожила — звук сразу, по ответу lookup.
           playScanSuccess()
           // WMS-574 Д8, Д9: в рамке окна сборки найденный заказ ложится в открытый короб.
-          if (assemblyPlaceOrderRef.current) await assemblyPlaceOrderRef.current(found.order_id, !found.needs_confirmation, assemblyBoxAtScan, raw)
+          if (assemblyPlaceOrderRef.current) {
+            await assemblyPlaceOrderRef.current(
+              found.order_id,
+              !found.needs_confirmation,
+              assemblyBoxAtScan,
+              raw,
+              scannedPositionId,
+            )
+          }
           return
         } catch (cause) {
           if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
@@ -2083,9 +2102,14 @@ export function FfFbsSupplyWorkspace({
   const ozonPackingScanner = useMemo(() => {
     if (!isOzonSupply || !supplyId) return null
     let startPromise: Promise<FbsWorkspace> | null = null
-    const ensureStarted = async () => {
-      const current = sequentialWorkspaceRef.current
-      if (!current || current.supply.packaging_task_id) return current
+    const staleScan = () => new Error('Поставка изменилась. Повторите скан в открытой поставке.')
+    const scanStillOwnsWorkspace = (generation: number) => (
+      workspaceOpenGeneration.current === generation
+      && sequentialWorkspaceRef.current?.supply.id === supplyId
+    )
+    const ensureStarted = async (current: FbsWorkspace) => {
+      if (current.supply.id !== supplyId) throw staleScan()
+      if (current.supply.packaging_task_id) return current
       startPromise ??= startFbsSupplyWork(token, authHeaders, supplyId)
       try {
         const started = await startPromise
@@ -2095,6 +2119,19 @@ export function FfFbsSupplyWorkspace({
       } finally {
         startPromise = null
       }
+    }
+    const positionRoute = (raw: string, current: FbsWorkspace) => {
+      const clean = raw.trim()
+      for (const order of current.orders) {
+        for (const position of order.positions) {
+          if (!productBarcodeOptionsForPosition(position, 'ozon').some((option) => option.barcode === clean)) continue
+          return {
+            lookupCode: order.external_order_id ?? order.sticker.code ?? clean,
+            positionId: position.id ?? undefined,
+          }
+        }
+      }
+      return { lookupCode: clean, positionId: undefined }
     }
     const belongsToOzonSupply = (raw: string) => {
       const current = sequentialWorkspaceRef.current
@@ -2122,17 +2159,27 @@ export function FfFbsSupplyWorkspace({
       },
       lastStep: () => null,
       scan: async (raw: string) => {
+        const generation = workspaceOpenGeneration.current
+        const current = sequentialWorkspaceRef.current
+        if (!current || current.supply.id !== supplyId) throw staleScan()
+        const scanKiz = ozonScanKizRef.current
+        const scanIdle = ozonScanIdleRef.current
+        const target = ozonKizTargetRef.current
         const preferences = { ...loadFbsScanPrintPreferences(token), printQr: false }
-        if (ozonKizTargetRef.current) {
-          await ensureStarted()
-          await ozonScanKizRef.current(raw, false, preferences)
+        if (target) {
+          await ensureStarted(current)
+          if (!scanStillOwnsWorkspace(generation)) throw staleScan()
+          await scanKiz(raw, false, preferences)
           return
         }
-        if (!belongsToOzonSupply(raw)) {
-          throw new FbsApiError('sticker_not_found', 'Стикер не найден', null, false, 404)
-        }
-        await ensureStarted()
-        await ozonScanIdleRef.current(raw, preferences, true)
+        const route = positionRoute(raw, current)
+        await ensureStarted(current)
+        if (!scanStillOwnsWorkspace(generation)) throw staleScan()
+        // Local rows only choose the right controller and translate a product
+        // position into the posting identifier supported by the lookup API.
+        // Unknown codes still reach the server: Ozon child postings are not
+        // present in the workspace payload.
+        await scanIdle(raw, preferences, true, route.lookupCode, route.positionId)
       },
     }
   }, [isOzonSupply, supplyId, token, authHeaders])
@@ -3259,11 +3306,13 @@ export function FfFbsSupplyWorkspace({
     // Д8, Д9, R22–R24: заказ, найденный сканом, — в короб, открытый в момент
     // скана, если ещё ни в каком коробе не лежит; заказу без обязательного ЧЗ
     // ждать ЧЗ незачем.
-    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId, scannedCode) => {
+    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId, scannedCode, scannedPositionId) => {
       if (!current) return
       let orders = current.orders
       const order = current.orders.find((one) => one.id === orderId)
-      const scannedPositionIds = isOzonSupply
+      const scannedPositionIds = isOzonSupply && scannedPositionId
+        ? [scannedPositionId]
+        : isOzonSupply
         ? (order?.positions ?? []).filter((position) => {
           if (!position.id) return false
           if (!scannedCode) return true
@@ -3276,9 +3325,20 @@ export function FfFbsSupplyWorkspace({
       const alreadyBoxed = isOzonSupply
         ? positionIds.length > 0 && positionIds.every((positionId) => current.boxes.some((box) => box.assigned_order_product_ids?.includes(positionId)))
         : current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
+      const releaseUnmarkedSelection = () => {
+        if (!releaseKizWait) return false
+        const selectedOrder = orders.find((one) => one.id === orderId)
+        if (!selectedOrder || requiresOrderHonestSign(selectedOrder)) return false
+        // The controller ref participates in mixed routing before React's next
+        // render, so clear it together with the visible selection.
+        ozonKizTargetRef.current = null
+        dropKizScanActive()
+        return true
+      }
       if (!alreadyBoxed) {
         if (!boxId || !current.boxes.some((box) => box.id === boxId)) {
-          setAssemblyBoxHint('Откройте или создайте короб.')
+          if (releaseUnmarkedSelection()) setAssemblyBoxHint(null)
+          else setAssemblyBoxHint('Откройте или создайте короб.')
           return
         }
         try {
@@ -3298,7 +3358,10 @@ export function FfFbsSupplyWorkspace({
       setAssemblyBoxHint(null)
       if (!releaseKizWait) return
       const refreshedOrder = orders.find((one) => one.id === orderId)
-      if (refreshedOrder && !requiresOrderHonestSign(refreshedOrder)) dropKizScanActive()
+      if (refreshedOrder && !requiresOrderHonestSign(refreshedOrder)) {
+        ozonKizTargetRef.current = null
+        dropKizScanActive()
+      }
     }
     // R16, Д19: «Этого товара нет в поставке» — только если сервер не нашёл
     // код в поставке и это не ШК товара её заказа и не ЧЗ такого товара;
