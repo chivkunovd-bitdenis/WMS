@@ -257,8 +257,8 @@ beforeEach(() => {
     'ozon-a': workspace('ozon-a', 'ozon'),
     'ozon-b': workspace('ozon-b', 'ozon'),
   }
-  ozonLookupOrderIds[ozonLookupKey('ozon-a', OZON_POSITION_BARCODE)] = 'ozon-a-order'
-  ozonLookupOrderIds[ozonLookupKey('ozon-b', OZON_POSITION_BARCODE)] = 'ozon-b-order'
+  ozonLookupOrderIds[ozonLookupKey('ozon-a', 'OZON-POSTING-666')] = 'ozon-a-order'
+  ozonLookupOrderIds[ozonLookupKey('ozon-b', 'OZON-POSTING-666')] = 'ozon-b-order'
   state['wb-new']!.supply.packaging_task_id = null
   fetchWorkspace.mockReset().mockImplementation(async (_token, _headers, id: string) => clone(state[id]!))
   openMarkingPrint.mockReset().mockResolvedValue(undefined)
