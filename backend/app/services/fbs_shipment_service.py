@@ -270,11 +270,18 @@ def _meta_validation_operator_errors(
     return groups
 
 
-def _operator_error_orders_text(orders: list[int | None]) -> str:
+def _operator_error_orders_text(
+    orders: list[int | None],
+    *,
+    after_for: bool = False,
+) -> str:
     known = [str(order_id) for order_id in orders if order_id is not None]
     parts: list[str] = []
     if known:
-        label = "заказ" if len(known) == 1 else "заказы"
+        if after_for:
+            label = "заказа" if len(known) == 1 else "заказов"
+        else:
+            label = "заказ" if len(known) == 1 else "заказы"
         parts.append(f"{label} № {', '.join(known)}")
     if None in orders:
         parts.append("Заказ не указан Wildberries")
@@ -295,7 +302,10 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
         for group in operator_errors
     )
     if all_pending_kiz:
-        orders = _operator_error_orders_text(operator_errors[0]["orders"])
+        orders = _operator_error_orders_text(
+            operator_errors[0]["orders"],
+            after_for=True,
+        )
         return (
             f"Wildberries ещё обрабатывает КИЗы для {orders}. "
             "Подождите несколько минут и повторите передачу поставки",

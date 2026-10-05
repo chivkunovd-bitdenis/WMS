@@ -4155,60 +4155,62 @@ export function FfFbsSupplyWorkspace({
 
   const workspaceDialogs = (
     <>
-      <Dialog
-        open={deliveryErrorsOpen && Boolean(deliveryError)}
-        onClose={() => setDeliveryErrorsOpen(false)}
-        maxWidth="sm"
-        fullWidth
-      >
-        <DialogTitle>Ошибки передачи поставки</DialogTitle>
-        <DialogContent dividers data-testid="fbs-delivery-errors-dialog">
-          <Stack spacing={1}>
-            {deliveryError?.context.operator_errors.map((group, index) => {
-              const expanded = expandedDeliveryErrorGroups.has(index)
-              const orders = group.orders.length > 0 ? group.orders : [null]
-              return (
-                <Box key={`${group.title}-${group.message ?? ''}-${index}`}>
-                  <Button
-                    fullWidth
-                    color="inherit"
-                    aria-expanded={expanded}
-                    onClick={() => setExpandedDeliveryErrorGroups((current) => {
-                      const next = new Set(current)
-                      if (next.has(index)) next.delete(index)
-                      else next.add(index)
-                      return next
-                    })}
-                    sx={{ justifyContent: 'space-between', textAlign: 'left' }}
-                  >
-                    <Typography component="span" variant="subtitle2">{group.title}</Typography>
-                    <Typography component="span" variant="caption" color="text.secondary">
-                      {expanded ? 'Свернуть' : 'Раскрыть'}
-                    </Typography>
-                  </Button>
-                  <Collapse in={expanded}>
-                    {group.message ? (
-                      <Typography variant="body2" sx={{ px: 1, pt: 0.5 }}>
-                        {group.message}
+      {deliveryErrorsOpen && deliveryError ? (
+        <Dialog
+          open
+          onClose={() => setDeliveryErrorsOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Ошибки передачи поставки</DialogTitle>
+          <DialogContent dividers data-testid="fbs-delivery-errors-dialog">
+            <Stack spacing={1}>
+              {deliveryError.context.operator_errors.map((group, index) => {
+                const expanded = expandedDeliveryErrorGroups.has(index)
+                const orders = group.orders.length > 0 ? group.orders : [null]
+                return (
+                  <Box key={`${group.title}-${group.message ?? ''}-${index}`}>
+                    <Button
+                      fullWidth
+                      color="inherit"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedDeliveryErrorGroups((current) => {
+                        const next = new Set(current)
+                        if (next.has(index)) next.delete(index)
+                        else next.add(index)
+                        return next
+                      })}
+                      sx={{ justifyContent: 'space-between', textAlign: 'left' }}
+                    >
+                      <Typography component="span" variant="subtitle2">{group.title}</Typography>
+                      <Typography component="span" variant="caption" color="text.secondary">
+                        {expanded ? 'Свернуть' : 'Раскрыть'}
                       </Typography>
-                    ) : null}
-                    <Box component="ol" sx={{ mt: 1, mb: 0, pl: 4 }}>
-                      {orders.map((order, orderIndex) => (
-                        <Typography component="li" variant="body2" key={`${order ?? 'missing'}-${orderIndex}`}>
-                          {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
+                    </Button>
+                    <Collapse in={expanded}>
+                      {group.message ? (
+                        <Typography variant="body2" sx={{ px: 1, pt: 0.5 }}>
+                          {group.message}
                         </Typography>
-                      ))}
-                    </Box>
-                  </Collapse>
-                </Box>
-              )
-            })}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDeliveryErrorsOpen(false)}>Закрыть</Button>
-        </DialogActions>
-      </Dialog>
+                      ) : null}
+                      <Box component="ol" sx={{ mt: 1, mb: 0, pl: 4 }}>
+                        {orders.map((order, orderIndex) => (
+                          <Typography component="li" variant="body2" key={`${order ?? 'missing'}-${orderIndex}`}>
+                            {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Collapse>
+                  </Box>
+                )
+              })}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeliveryErrorsOpen(false)}>Закрыть</Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
       <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
