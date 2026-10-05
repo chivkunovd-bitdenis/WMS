@@ -82,6 +82,7 @@ import {
   type ProductLineDisplayMeta,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
+import { normalizeProductBarcodes } from '../../utils/productBarcodes'
 import { printBarcodeLabel, printBarcodeLabels } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
@@ -199,7 +200,12 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
   printTestId,
   markingControl,
 }: InboundProductLineCellProps) {
-  const barcode = formatProductBarcodeDisplay(meta)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
+  const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : undefined
 
   return (
     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
@@ -256,10 +262,14 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
-              title={barcode !== '—' ? barcode : undefined}
+              title={barcodeTitle}
               data-testid="ff-inbound-line-barcode"
             >
-              ШК {barcode}
+              {barcodes.length > 0 ? barcodes.map((barcode, index) => (
+                <Typography key={barcode} component="span" variant="inherit" sx={{ display: 'block' }}>
+                  {index === 0 ? 'ШК ' : ''}{barcode}
+                </Typography>
+              )) : 'ШК —'}
             </Typography>
           </Stack>
         </Box>
@@ -283,7 +293,12 @@ type InboundBoxContentLineProps = {
 
 /** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
 const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
-  const barcode = formatProductBarcodeDisplay(meta)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
+  const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : '—'
 
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
@@ -308,10 +323,17 @@ const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quanti
           variant="caption"
           color="text.secondary"
           sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={`${meta.sku_code} · ШК ${barcode}`}
+          title={`${meta.sku_code} · ШК ${barcodeTitle}`}
           data-testid="ff-inbound-box-line-sku"
         >
-          {meta.sku_code} · ШК {barcode}
+          <Typography component="span" variant="inherit" sx={{ display: 'block' }}>
+            {meta.sku_code}
+          </Typography>
+          {barcodes.length > 0 ? barcodes.map((barcode, index) => (
+            <Typography key={barcode} component="span" variant="inherit" sx={{ display: 'block' }}>
+              {index === 0 ? 'ШК ' : ''}{barcode}
+            </Typography>
+          )) : 'ШК —'}
         </Typography>
       </Box>
       <Typography
