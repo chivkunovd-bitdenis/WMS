@@ -171,7 +171,11 @@ def commit_changed_paths(root: Path, commit: str) -> set[str]:
 
 
 def reviewed_contract_correction(
-    root: Path, task_id: str, contract_commit: str, frozen: list[str]
+    root: Path,
+    task_id: str,
+    contract_commit: str,
+    task_contracts: set[str],
+    frozen: list[str],
 ) -> tuple[str | None, set[str], list[str]]:
     """Return the reviewed correction SHA, or explain why its ledger is invalid.
 
@@ -199,16 +203,13 @@ def reviewed_contract_correction(
         return None, set(), [
             f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
         ]
-    if ledger.get("task") == task_id and ledger.get("contract_commit") != contract_commit:
-        # One task may acquire several independent contract commits.  Its one
-        # correction ledger applies only to the exact contract named there;
-        # every other contract remains frozen against its own commit.
-        return None, set(), []
+    ledger_contract = str(ledger.get("contract_commit") or "")
     correction = str(ledger.get("correction_commit") or "")
     files = ledger.get("files")
     review = ledger.get("review")
     if (
         ledger.get("task") != task_id
+        or not re.fullmatch(r"[0-9a-f]{40}", ledger_contract)
         or not re.fullmatch(r"[0-9a-f]{40}", correction)
         or not isinstance(files, list)
         or not files
@@ -220,6 +221,20 @@ def reviewed_contract_correction(
     ):
         return None, set(), [
             f"{task_id}: реестр коррекции контракта заполнен не полностью"
+        ]
+    if ledger_contract != contract_commit:
+        # One task may acquire several independent contract commits.  Its one
+        # correction ledger applies only to the exact existing contract named
+        # there; an absent or invented source commit must not disappear merely
+        # because this invocation is currently checking another contract.
+        if ledger_contract in task_contracts:
+            return None, set(), []
+        return None, set(), [
+            f"{task_id}: реестр ссылается на неизвестный исходный контракт"
+        ]
+    if correction == contract_commit:
+        return None, set(), [
+            f"{task_id}: коррекция должна быть отдельным последующим коммитом"
         ]
     for older, newer, label in (
         (contract_commit, correction, "коррекция не следует за исходным контрактом"),
@@ -255,6 +270,8 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
     # поэтому он не замораживается.
     commits = git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
     errors = []
+    contracts = []
+    contracts_by_task: dict[str, set[str]] = {}
     for commit in commits:
         subject = git(root, "show", "-s", "--format=%s", commit)
         match = re.fullmatch(r"(WMS-\d+): контракт тестов", subject)
@@ -266,8 +283,12 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
         )
         if not frozen:
             continue
+        task_id = match[1]
+        contracts.append((commit, task_id, frozen))
+        contracts_by_task.setdefault(task_id, set()).add(commit)
+    for commit, task_id, frozen in contracts:
         correction, corrected, correction_errors = reviewed_contract_correction(
-            root, match[1], commit, frozen
+            root, task_id, commit, contracts_by_task[task_id], frozen
         )
         errors.extend(correction_errors)
         if correction_errors:
@@ -288,7 +309,7 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
         overlap = sorted(overlap)
         if overlap:
             errors.append(
-                f"изменён контракт тестов {match[1]} после его фиксации: "
+                f"изменён контракт тестов {task_id} после его фиксации: "
                 + ", ".join(overlap)
             )
     return errors

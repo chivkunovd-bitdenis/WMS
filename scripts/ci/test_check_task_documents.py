@@ -314,6 +314,56 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-717 correction ledger")
         self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
 
+    def test_correction_ledger_rejects_missing_or_unknown_contract_commit(self):
+        for task, ledger_contract, expected in (
+            ("WMS-718", None, "заполнен не полностью"),
+            ("WMS-719", "f" * 40, "неизвестный исходный контракт"),
+        ):
+            with self.subTest(task=task):
+                rollout = self.rollout()
+                path = f"backend/tests/test_{task.casefold()}.py"
+                self.write(path, "def test_contract(): pass\n")
+                contract = self.commit(f"{task}: контракт тестов")
+                ledger = {
+                    "task": task,
+                    "contract_commit": ledger_contract,
+                    "correction_commit": contract,
+                    "files": [path],
+                    "review": {
+                        "model": "gpt-6-astra",
+                        "effort": "high",
+                        "verdict": "PASS",
+                    },
+                }
+                self.write(
+                    f"docs/reviews/contract-corrections/{task}.json",
+                    json.dumps(ledger) + "\n",
+                )
+                self.commit(f"{task} invalid source contract")
+                errors = checker.contract_change_errors(self.root, rollout)
+                self.assertTrue(any(expected in error for error in errors), errors)
+
+    def test_correction_must_be_a_strictly_later_commit(self):
+        rollout = self.rollout()
+        task = "WMS-720"
+        path = "backend/tests/test_same_commit.py"
+        self.write(path, "def test_contract(): pass\n")
+        contract = self.commit(f"{task}: контракт тестов")
+        ledger = {
+            "task": task,
+            "contract_commit": contract,
+            "correction_commit": contract,
+            "files": [path],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }
+        self.write(
+            f"docs/reviews/contract-corrections/{task}.json",
+            json.dumps(ledger) + "\n",
+        )
+        self.commit(f"{task} invalid same-commit correction")
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("отдельным последующим коммитом" in error for error in errors), errors)
+
     def test_uncommitted_contract_correction_ledger_is_ignored(self):
         rollout = self.rollout()
         path = "backend/tests/test_contract.py"
