@@ -51,6 +51,8 @@ let wbScanNeedsKiz: boolean
 let ozonLookupOrderIds: Record<string, string>
 let deferredStartSupplyIds: Set<string>
 let releaseDeferredStart: Record<string, (() => void) | undefined>
+let deferredLookupKeys: Set<string>
+let releaseDeferredLookup: Record<string, (() => void) | undefined>
 let root: Root
 let host: HTMLDivElement
 const originalFetch = globalThis.fetch
@@ -205,17 +207,26 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   if (path === '/operations/fbs-orders/kiz/lookup') {
     const supplyId = url.searchParams.get('supply_id')!
     const sticker = url.searchParams.get('sticker')!
-    const orderId = ozonLookupOrderIds[ozonLookupKey(supplyId, sticker)]
-    const found = state[supplyId]?.orders.find((one) => one.id === orderId)
-    if (supplyId.startsWith('ozon') && found) {
-      return json({
-        order_id: found.id, wb_order_id: found.wb_order_id,
-        product: { name: found.product.name, image_url: null, barcode: found.product.barcode, seller_article: found.product.seller_article },
-        current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
-        requires_honest_sign: false,
+    const lookupKey = ozonLookupKey(supplyId, sticker)
+    const complete = () => {
+      const orderId = ozonLookupOrderIds[lookupKey]
+      const found = state[supplyId]?.orders.find((one) => one.id === orderId)
+      if (supplyId.startsWith('ozon') && found) {
+        return json({
+          order_id: found.id, wb_order_id: found.wb_order_id,
+          product: { name: found.product.name, image_url: null, barcode: found.product.barcode, seller_article: found.product.seller_article },
+          current_kiz: null, needs_confirmation: false, can_bind: true, block_reason: null,
+          requires_honest_sign: false,
+        })
+      }
+      return json({ detail: { code: 'sticker_not_found', message: 'Стикер не найден' } }, 404)
+    }
+    if (deferredLookupKeys.has(lookupKey)) {
+      return new Promise<Response>((resolve) => {
+        releaseDeferredLookup[lookupKey] = () => resolve(complete())
       })
     }
-    return json({ detail: { code: 'sticker_not_found', message: 'Стикер не найден' } }, 404)
+    return complete()
   }
 
   const assign = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/boxes\/([^/]+)\/orders$/)
@@ -250,6 +261,8 @@ beforeEach(() => {
   ozonLookupOrderIds = {}
   deferredStartSupplyIds = new Set()
   releaseDeferredStart = {}
+  deferredLookupKeys = new Set()
+  releaseDeferredLookup = {}
   state = {
     'wb-a': workspace('wb-a', 'wb'),
     'wb-b': workspace('wb-b', 'wb'),
@@ -552,5 +565,80 @@ describe('WMS-666 review regressions: live settings and Ozon routing', () => {
     expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
     expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).toBeNull()
     expect(document.body.textContent).not.toContain('Откройте или создайте короб.')
+  })
+})
+
+describe('WMS-666 second review regressions: exhausted and stale Ozon scans', () => {
+  it('skips boxed matching positions and an exhausted supply before assigning the exact unfinished position', async () => {
+    const exhausted = state['ozon-a']!.orders[0]!
+    exhausted.pack = { status: 'packed', packed_at: '2026-10-05T09:00:00Z' }
+    state['ozon-a']!.progress.packed = 1
+    state['ozon-a']!.boxes[0]!.assigned_order_ids = [exhausted.id]
+    state['ozon-a']!.boxes[0]!.assigned_order_product_ids = ['ozon-a-position-a']
+
+    const pending = state['ozon-b']!.orders[0]!
+    pending.positions[1]!.barcode = OZON_POSITION_BARCODE
+    pending.positions[1]!.marketplace_bindings = [{
+      marketplace: 'ozon', external_barcodes: [OZON_POSITION_BARCODE],
+    }]
+    state['ozon-b']!.boxes[0]!.assigned_order_ids = [pending.id]
+    state['ozon-b']!.boxes[0]!.assigned_order_product_ids = ['ozon-b-position-a']
+    await renderAssembly(['ozon-a', 'ozon-b'])
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => calls.some((call) => call.path.startsWith('/operations/fbs-supplies/ozon-b/boxes/')), 750)
+
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-supplies/ozon-a/boxes/'))).toHaveLength(0)
+    const assignment = calls.find((call) => call.path.startsWith('/operations/fbs-supplies/ozon-b/boxes/'))
+    expect(assignment?.body).toEqual({
+      order_ids: [], order_product_ids: ['ozon-b-position-b'],
+    })
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-b'))).toHaveLength(1)
+  })
+
+  it('ignores a delayed lookup from standalone A and lets the next B scan perform its own lookup', async () => {
+    const delayedKey = ozonLookupKey('ozon-a', 'OZON-POSTING-666')
+    deferredLookupKeys.add(delayedKey)
+    await renderSupply('ozon-a')
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => Boolean(releaseDeferredLookup[delayedKey]), 750)
+    await renderSupply('ozon-b')
+    await act(async () => {
+      releaseDeferredLookup[delayedKey]?.()
+      await new Promise((resolve) => setTimeout(resolve, 80))
+    })
+    const lateSelectionVisible = Boolean(document.querySelector('[data-testid="fbs-kiz-scan-active"]'))
+    const bLookupsBefore = calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-b')).length
+
+    physicalScan('OZON-POSTING-666')
+    await settleUntil(() => (
+      calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-b')).length > bLookupsBefore
+      || calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    ), 750)
+
+    expect(lateSelectionVisible).toBe(false)
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-b'))).toHaveLength(bLookupsBefore + 1)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
+  })
+
+  it('releases a successful standalone non-KIZ Ozon selection before the next posting scan', async () => {
+    await renderSupply('ozon-a')
+
+    physicalScan(OZON_POSITION_BARCODE)
+    await settleUntil(() => calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a')).length === 1, 750)
+    await act(async () => { await new Promise((resolve) => setTimeout(resolve, 30)) })
+    const firstSelectionReleased = document.querySelector('[data-testid="fbs-kiz-scan-active"]') === null
+
+    physicalScan('OZON-POSTING-666')
+    await settleUntil(() => (
+      calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a')).length === 2
+      || calls.some((call) => call.path === '/operations/fbs-orders/kiz/validate')
+    ), 750)
+
+    expect(firstSelectionReleased).toBe(true)
+    expect(calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup?supply_id=ozon-a'))).toHaveLength(2)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
+    expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).toBeNull()
   })
 })
