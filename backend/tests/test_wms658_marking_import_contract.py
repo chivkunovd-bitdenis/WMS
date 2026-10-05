@@ -1,5 +1,7 @@
 """WMS-658 C1-C3, C5-C15, C21-C22: contract fixed before implementation."""
 
+# Correction checkpoint combines verified fixture and Ruff-only fixes; expectations unchanged.
+
 from __future__ import annotations
 
 import asyncio

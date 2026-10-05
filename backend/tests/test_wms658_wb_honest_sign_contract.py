@@ -355,6 +355,11 @@ async def test_c20_backfill_apply_rejects_stale_plan_and_changes_only_false_to_t
     for nm, row in products.items():
         await db_session.refresh(row)
         assert row.requires_honest_sign is (row.id in selected)
-        assert (row.name, row.sku_code, row.wb_barcode, row.fbs_stock_limit) == before_other_fields[nm]
+        assert (
+            row.name,
+            row.sku_code,
+            row.wb_barcode,
+            row.fbs_stock_limit,
+        ) == before_other_fields[nm]
     assert await db_session.scalar(select(func.count(MarkingCode.id))) == 0
     assert await db_session.scalar(select(func.count(MarkingPool.id))) == 0
