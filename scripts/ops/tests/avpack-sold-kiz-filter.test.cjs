@@ -116,6 +116,9 @@ function harness(options = {}) {
       if (options.changeTokenInUi) token = 'changed-token';
       return { selectedCount: expectedCount, dialogOpen: true };
     },
+    async rollbackPreparation() {
+      events.push('rollback');
+    },
   };
   const helper = createHelper({ root, ui });
   return { helper, root, calls, events, originalFetch, setToken(value) { token = value; } };
@@ -195,6 +198,7 @@ test('session change while the UI is being prepared restores original fetch', as
   const h = harness({ changeTokenInUi: true });
   await assert.rejects(() => h.helper.run({ mode: 'execute' }), /сесси/i);
   assert.equal(h.root.fetch, h.originalFetch);
+  assert.deepEqual(h.events, ['inspect', 'open', 'rollback']);
 });
 
 test('wrong origin or route aborts without a request', async () => {
