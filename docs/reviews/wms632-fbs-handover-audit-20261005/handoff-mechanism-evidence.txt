@@ -1,0 +1,96 @@
+Installed agent_coordinator.py; sha256=5583e65c010c46a913b4e0954248dc036bcf18e0454229f570e9c011032e5b62
+35: OWNER_TOOLS = [
+36:     _tool("project_job", "Start an owner-authorized arbitrary project task in an isolated Git worktree. "
+37:           "Use for code investigation, exports, edits, development, or an explicitly authorized release. "
+38:           "The task is asynchronous; tell the owner its job ID.",
+39:           {"request": {"type": "string"}, "model": {"type": "string"},
+40:            "provider": {"type": "string"}, "task_ids": {"type": "array", "items": {"type": "string"}},
+41:            "deadline_at": {"type": "string", "description": "ISO local time with timezone or UTC offset"},
+42:            "release_authorized": {"type": "boolean"}, "base_ref": {"type": "string"}}, ["request"]),
+43:     _tool("schedule_project_job", "Schedule an owner-authorized project request for later execution. "
+44:           "Store the exact task and run time; do not infer release permission.",
+45:           {"request": {"type": "string"}, "run_at": {"type": "string"},
+46:            "model": {"type": "string"}, "provider": {"type": "string"},
+47:            "task_ids": {"type": "array", "items": {"type": "string"}},
+48:            "release_authorized": {"type": "boolean"}, "base_ref": {"type": "string"}}, ["request", "run_at"]),
+49:     _tool("select_model", "Set the preferred model for subsequent owner conversation turns. "
+50:           "An explicit model is never silently replaced.",
+51:           {"model": {"type": "string"}, "provider": {"type": "string"}}, ["model", "provider"]),
+52:     _tool("job_status", "Read durable state and result of an existing project job.",
+53:           {"job_id": {"type": "string"}}, ["job_id"]),
+54:     _tool("cancel_job", "Stop a scheduled or running owner project job; inspect unknown external outcomes.",
+55:           {"job_id": {"type": "string"}}, ["job_id"]),
+56:     _tool("send_job_file", "Queue a verified output file from an owner project job "
+57:           "to the owner's personal chat.",
+58:           {"job_id": {"type": "string"}, "path": {"type": "string"},
+59:            "caption": {"type": "string"}}, ["job_id", "path"]),
+60: ]
+61:
+62:
+63: class AgentCoordinator:
+64:     def __init__(self, pipe: Any, tools: Any) -> None:
+65:         self.pipe, self.tools = pipe, tools
+66:         self.cfg, self.store, self.llm = pipe.cfg, pipe.store, pipe.llm
+605:                                                 for spec in self.tools.specs(scope="owner")],
+606:                                          tool_handler=lambda name, args: self.tools.dispatch(
+607:                                              name, args, context),
+608:                                          mode="owner", owner_authorized=True,
+609:                                          cwd=str(worktree), timeout=3600,
+610:                                          progress_callback=job_progress,
+611:                                          cancelled=lambda: bool(
+612:                                              self.store.kv_get(f"agent_job:{job_id}", {})
+613:                                              .get("cancel_requested")
+614:                                              or (not finalizing and
+615:                                                  (deadline := self.store.kv_get(
+616:                                                      f"agent_job:{job_id}", {}).get("deadline_at"))
+617:                                                  and self.clock() >= float(deadline))))
+618:             latest = self.store.kv_get(f"agent_job:{job_id}", {})
+619:             if latest.get("phase") == "finalize" and not finalizing:
+620:                 job.update(phase="finalize", status="queued", interim_result=result.text[:8000])
+621:                 self._save_job(job)
+622:                 return
+623:             job.update(status="done", result=result.text[:12000], finished_at=self.clock())
+624:             self._save_job(job)
+625:             if self.store.kv_get(f"agent_job:{job_id}", {}).get("status") != "done":
+626:                 if self.store.kv_get(f"agent_job:{job_id}", {}).get("cancel_requested"):
+627:                     self.store.queue_message(key=f"agent_job_cancel_unknown:{job_id}",
+Installed app_server.py; sha256=338d587fe1dc86d2b6f427991f95b11bb4ffe8add4e30816489dc69324d84090
+225:                 thread_response = rpc("thread/start", {
+226:                     "ephemeral": True,
+227:                     "model": model,
+228:                     "allowProviderModelFallback": False,
+229:                     "cwd": cwd, "sandbox": {"readonly": "read-only", "write": "workspace-write",
+230:                                                 "owner": "danger-full-access"}[mode],
+231:                     "approvalPolicy": "never", "developerInstructions": system,
+232:                     "dynamicTools": tools,
+233:                 })
+234:                 if thread_response.get("model") != model:
+235:                     raise AppServerError("requested model was not selected")
+236:                 thread = thread_response.get("thread") or {}
+237:             thread_id = thread.get("id") or session_id
+238:             if not isinstance(thread_id, str) or not thread_id:
+239:                 raise AppServerError("app-server did not return a thread ID")
+240:             if session_started is not None:
+241:                 session_started(thread_id)
+242:             started_turn = rpc("turn/start", {"threadId": thread_id,
+243:                                               "input": [{"type": "text", "text": prompt}],
+244:                                               "model": model, "effort": effort})
+245:             turn_id = (started_turn.get("turn") or {}).get("id")
+246:             if isinstance(turn_id, str):
+247:                 active_turn.update({"threadId": thread_id, "turnId": turn_id})
+248:             answer = ""
+249:             occupied = 0
+Installed __main__.py; sha256=c851d6ac4f5d60d9823f803b7adafb1fecd3ef8f093ba2e6fba5948a1348967d
+78: def main() -> int:
+79:     parser = argparse.ArgumentParser(prog="support_agent")
+80:     parser.add_argument("command", choices=["run", "check-config", "check-bots"])
+81:     parser.add_argument("--config", default=None)
+82:     args = parser.parse_args()
+83:     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
+84:     if args.command == "check-config":
+85:         return check_config(args.config)
+86:     if args.command == "check-bots":
+87:         return check_bots(args.config)
+88:     build_agent(load_config(args.config)).run_forever()
+89:     return 0
+90:

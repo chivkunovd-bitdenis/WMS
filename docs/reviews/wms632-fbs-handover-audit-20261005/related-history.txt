@@ -1,0 +1,51 @@
+e0908dc62 Merge remote-tracking branch 'origin/codex/wms612-delivery-checks' into release/2026-10-03-ready
+3ad831770 fix(WMS-642): Astra review 4 — resumed handover checks KIZ, only handed-over orders are checked; no verdict polling after handover (WMS-546 C10)
+473818d4e fix(WMS-642): Astra review 3 — KIZ gate inside the handover after its final WB sync; worker sends KIZ of handed-over supplies
+e39a2a3ee WMS-612 remove box delivery warnings
+75c06631a WMS-445 preserve failed Ozon handoff identity and verify local HTTP fixture
+a996b61dc fix(WMS-058): freeze Ozon pick mutations at confirmed handoff
+ce3148434 WMS-110 show cancelled orders and exclude box links on handover
+cf85b4a73 WMS-391 Preserve handover date during local recovery
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1184)     if not state.carriage_approved:
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1185)         current = await _call(
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1186)             provider,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1187)             client_id=client_id,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1188)             api_key=api_key,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1189)             path="/v1/carriage/get",
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1190)             request=get_request,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1191)             response_type=OzonCarriageCarriageGetResponse,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1192)             read=True,
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1193)         )
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1194)         # Approve may have succeeded immediately before the worker died.
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1195)         # The external fact takes precedence over the last local checkpoint.
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1196)         if current.status not in {"sended", "received", "closed"}:
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1197)             await _call(
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1198)                 provider,
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1199)                 client_id=client_id,
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1200)                 api_key=api_key,
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1201)                 path="/v1/carriage/approve",
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1202)                 request=OzonV1CarriageApproveRequest.model_validate({"carriage_id": carriage_id}),
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1203)                 response_type=OzonV1CarriageApproveResponse,
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1204)                 read=False,
+4306fa7e13 (Denis Civkunov 2026-09-05 20:58:00 +0300 1205)             )
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1206)         state.carriage_approved = True
+f7fffd4eae (Denis Civkunov 2026-09-03 22:52:29 +0300 1207)         await save()
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1208)     confirmed = await _call(
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1209)         provider,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1210)         client_id=client_id,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1211)         api_key=api_key,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1212)         path="/v1/carriage/get",
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1213)         request=get_request,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1214)         response_type=OzonCarriageCarriageGetResponse,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1215)         read=True,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1216)     )
+8de937e560 (Denis Civkunov 2026-09-10 18:10:04 +0300 1217)     if confirmed.status not in _CARRIAGE_CONFIRMED_STATUSES:
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1218)         raise OzonFbsProcessError("ozon_carriage_unconfirmed", "Ozon не подтвердил отгрузку.")
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1219)     barcode = await _call(
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1220)         provider,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1221)         client_id=client_id,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1222)         api_key=api_key,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1223)         path="/v2/posting/fbs/act/get-barcode",
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1224)         request=OzonV2PostingFBSGetBarcodeRequest(id=carriage_id),
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1225)         response_type=OzonV2PostingFBSGetBarcodeResponse,
+81ab9799fa (Denis Civkunov 2026-08-25 17:37:12 +0300 1226)         read=True,

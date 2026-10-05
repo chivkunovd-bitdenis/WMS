@@ -1,0 +1,297 @@
+[
+  {
+    "scenario": "success",
+    "before": {
+      "stock": 1,
+      "reserved": 1,
+      "expense_deltas": [],
+      "supply_status": "packed",
+      "reserve_status": "reserved",
+      "operations": []
+    },
+    "attempts": [
+      {
+        "outcome": "returned_success",
+        "stock": 0,
+        "reserved": 0,
+        "expense_deltas": [
+          -1
+        ],
+        "supply_status": "in_delivery",
+        "reserve_status": "released",
+        "operations": [
+          {
+            "state": "confirmed",
+            "error_code": null,
+            "approved": true
+          }
+        ]
+      },
+      {
+        "outcome": "returned_success",
+        "stock": 0,
+        "reserved": 0,
+        "expense_deltas": [
+          -1
+        ],
+        "supply_status": "in_delivery",
+        "reserve_status": "released",
+        "operations": [
+          {
+            "state": "confirmed",
+            "error_code": null,
+            "approved": true
+          }
+        ]
+      }
+    ],
+    "endpoint_calls": [
+      "/v3/posting/fbs/get",
+      "/v1/carriage/create",
+      "/v1/carriage/get",
+      "/v1/carriage/approve",
+      "/v1/carriage/get",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v2/posting/fbs/act/get-barcode/text",
+      "/v2/posting/fbs/act/get-pdf"
+    ]
+  },
+  {
+    "scenario": "definite_rejection",
+    "before": {
+      "stock": 1,
+      "reserved": 1,
+      "expense_deltas": [],
+      "supply_status": "packed",
+      "reserve_status": "reserved",
+      "operations": []
+    },
+    "attempts": [
+      {
+        "outcome": "ozon_upstream_error",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          }
+        ]
+      },
+      {
+        "outcome": "ozon_upstream_error",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          },
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          }
+        ]
+      }
+    ],
+    "endpoint_calls": [
+      "/v3/posting/fbs/get",
+      "/v1/carriage/create",
+      "/v1/carriage/get",
+      "/v1/carriage/approve",
+      "/v3/posting/fbs/get",
+      "/v1/carriage/get",
+      "/v1/carriage/approve"
+    ]
+  },
+  {
+    "scenario": "document_failure",
+    "before": {
+      "stock": 1,
+      "reserved": 1,
+      "expense_deltas": [],
+      "supply_status": "packed",
+      "reserve_status": "reserved",
+      "operations": []
+    },
+    "attempts": [
+      {
+        "outcome": "ozon_upstream_error",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": true
+          }
+        ]
+      },
+      {
+        "outcome": "returned_success",
+        "stock": 0,
+        "reserved": 0,
+        "expense_deltas": [
+          -1
+        ],
+        "supply_status": "in_delivery",
+        "reserve_status": "released",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": true
+          },
+          {
+            "state": "confirmed",
+            "error_code": null,
+            "approved": true
+          }
+        ]
+      }
+    ],
+    "endpoint_calls": [
+      "/v3/posting/fbs/get",
+      "/v1/carriage/create",
+      "/v1/carriage/get",
+      "/v1/carriage/approve",
+      "/v1/carriage/get",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v3/posting/fbs/get",
+      "/v1/carriage/get",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v2/posting/fbs/act/get-barcode/text",
+      "/v2/posting/fbs/act/get-pdf"
+    ]
+  },
+  {
+    "scenario": "lost_create",
+    "before": {
+      "stock": 1,
+      "reserved": 1,
+      "expense_deltas": [],
+      "supply_status": "packed",
+      "reserve_status": "reserved",
+      "operations": []
+    },
+    "attempts": [
+      {
+        "outcome": "ozon_upstream_error",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          }
+        ]
+      },
+      {
+        "outcome": "ozon_carriage_unconfirmed",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          },
+          {
+            "state": "failed",
+            "error_code": "ozon_carriage_unconfirmed",
+            "approved": false
+          }
+        ]
+      }
+    ],
+    "endpoint_calls": [
+      "/v3/posting/fbs/get",
+      "/v1/carriage/create",
+      "/v3/posting/fbs/get"
+    ]
+  },
+  {
+    "scenario": "lost_approve_formed",
+    "before": {
+      "stock": 1,
+      "reserved": 1,
+      "expense_deltas": [],
+      "supply_status": "packed",
+      "reserve_status": "reserved",
+      "operations": []
+    },
+    "attempts": [
+      {
+        "outcome": "ozon_upstream_error",
+        "stock": 1,
+        "reserved": 1,
+        "expense_deltas": [],
+        "supply_status": "packed",
+        "reserve_status": "reserved",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          }
+        ]
+      },
+      {
+        "outcome": "returned_success",
+        "stock": 0,
+        "reserved": 0,
+        "expense_deltas": [
+          -1
+        ],
+        "supply_status": "in_delivery",
+        "reserve_status": "released",
+        "operations": [
+          {
+            "state": "failed",
+            "error_code": "ozon_upstream_error",
+            "approved": false
+          },
+          {
+            "state": "confirmed",
+            "error_code": null,
+            "approved": true
+          }
+        ]
+      }
+    ],
+    "endpoint_calls": [
+      "/v3/posting/fbs/get",
+      "/v1/carriage/create",
+      "/v1/carriage/get",
+      "/v1/carriage/approve",
+      "/v3/posting/fbs/get",
+      "/v1/carriage/get",
+      "/v1/carriage/approve",
+      "/v1/carriage/get",
+      "/v2/posting/fbs/act/get-barcode",
+      "/v2/posting/fbs/act/get-barcode/text",
+      "/v2/posting/fbs/act/get-pdf"
+    ]
+  }
+]

@@ -1,0 +1,13 @@
+{
+  "id": "1710a7649a6964db",
+  "status": "running",
+  "source_event_id": 154,
+  "source_chat_id": 689889703,
+  "worktree": "/Users/deniscivkunov/Projects/WMS/.worktrees/support-job-1710a7649a6964db",
+  "task_ids": [],
+  "model": "gpt-6-astra",
+  "provider": "codex",
+  "observed_at": "2026-10-05T09:54:53.387525+00:00",
+  "handoff_status": "not_sent_no_supported_running_job_context_update",
+  "receipt_verified": false
+}

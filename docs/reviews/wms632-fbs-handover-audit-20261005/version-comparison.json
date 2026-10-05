@@ -1,0 +1,15 @@
+{
+  "production_sha": "815fdc755efe060b385ee966e3cc60bfabcdc206",
+  "etalon_sha": "001b93e00e3f76e29c7b3f658e082fe2c201b2d1",
+  "product_diff": "",
+  "files": {
+    "backend/app/services/fbs_shipment_service.py": "801e5761d5b4d164702281c57302c4b9222419a2",
+    "backend/app/services/ozon_fbs_process_service.py": "ced6bddbc970a7090affa999f28da90985348a96",
+    "backend/app/services/fbs_ozon_packaging_service.py": "d207d0ebd2c6309c7c7648562e252ea0d7959237",
+    "backend/app/services/inventory_service.py": "595c38087d36c1ea434684b21c660a6a1bd56c13",
+    "backend/app/services/wb_marketplace_orders_service.py": "cf22984ad07e879e23ab957b6a9e2ca2406966c2",
+    "backend/app/api/fbs_supplies.py": "a6dc86c084b97fa29e6fb627c7d371abc64e4d4d",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "f47a604b0d762eb610268aa5ee96cd0b2e8de759",
+    "frontend/src/screens/v2/fbsApi.ts": "a428a5e5720119a35de959458ac7e8359ec3946c"
+  }
+}
