@@ -63,6 +63,9 @@ function fixture(options = {}) {
         throw new Error(SECRET);
       }
       const result = vm.runInContext(source, context, { timeout: 200 });
+      if (options.redirectAfterProbe && source.includes('WMS665_PROBE')) {
+        sandbox.location = new URL('https://foreign.example/');
+      }
       if (options.malformedStatus && source.includes('__WMS665_MAC_RUN__') && !source.includes(HELPER_SOURCE)) {
         return '{broken';
       }
@@ -237,3 +240,50 @@ test('one executable macOS command embeds exact reviewed sources and needs only 
   assert.doesNotMatch(command, /\b(?:curl|wget|node|nodejs|npm|npx|python\d*|pip\d*|brew)\b/i);
   assert.doesNotMatch(command, /\b(?:tccutil|sudo|security)\b|defaults\s+write|doShellScript|fetch\s*\(|XMLHttpRequest|NSURLSession|NSURLConnection/i);
 });
+
+test('redirect after permission probe blocks browser helper loading before any target data is exposed', async () => {
+  const f = fixture({ redirectAfterProbe: true });
+  await rejectsSafely(f);
+  assert.equal(f.sandbox.__injections, 0);
+  assert.equal(f.sandbox.__executions.length, 0);
+});
+
+for (const redirectAfterExecutions of [0, 1, 2]) {
+  test(`JXA rechecks current tab URL before execution number ${redirectAfterExecutions + 1}`, () => {
+    const command = fs.readFileSync(path.join(__dirname, '../avpack-sold-kiz.command'), 'utf8');
+    const jxa = command.split("<<'WMS665_JXA'\n")[1]?.split('\nWMS665_JXA')[0];
+    assert.ok(jxa, 'test must execute the actual command JXA adapter');
+    let urlReads = 0;
+    const executions = [];
+    const tab = {
+      id: () => 42,
+      url() {
+        urlReads += 1;
+        // Inventory sees the correct page. A later browser navigation changes
+        // the current URL before probe, injection or status polling.
+        return urlReads === 1 || executions.length < redirectAfterExecutions
+          ? URL_EXACT : 'https://foreign.example/';
+      },
+      execute({ javascript }) {
+        executions.push(javascript);
+        if (executions.length === 1) return 'null';
+        if (executions.length === 2) return JSON.stringify({ status: 'running', signed: false, sent: false });
+        return JSON.stringify(READY);
+      },
+    };
+    const objc = (value) => value;
+    objc.NSData = { alloc: { initWithBase64EncodedStringOptions: (value) => Buffer.from(value, 'base64') } };
+    objc.NSString = { alloc: { initWithDataEncoding: (data) => data.toString('utf8') } };
+    objc.NSUTF8StringEncoding = 4;
+    objc.NSThread = { sleepForTimeInterval() {} };
+    const context = vm.createContext({
+      $: objc,
+      ObjC: { import() {}, unwrap: (value) => value },
+      Application: () => ({ running: () => true, windows: () => [{ tabs: () => [tab] }] }),
+      console: { log() {} },
+    });
+    assert.throws(() => vm.runInContext(jxa, context, { timeout: 1000 }));
+    assert.equal(executions.length, redirectAfterExecutions,
+      'no probe, helper or poll JavaScript may be passed to Chrome on a foreign URL');
+  });
+}
