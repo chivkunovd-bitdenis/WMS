@@ -243,7 +243,11 @@ async def _lock_backfill_evidence(
                     Product.seller_id == seller_id,
                     Product.wb_nm_id.is_not(None),
                 )
-                .order_by(Product.wb_nm_id, Product.id)
+                # Every multi-Product writer that overlaps this operation uses
+                # the immutable primary key as its lock order.  The plan itself
+                # remains ordered by wb_nm_id; lock order is an independent
+                # concurrency concern.
+                .order_by(Product.id)
                 .execution_options(populate_existing=True)
                 .with_for_update()
             )

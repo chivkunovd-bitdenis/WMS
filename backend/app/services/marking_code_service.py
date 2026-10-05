@@ -586,6 +586,7 @@ async def find_marking_code_by_cis_identity(
     cis_code: str,
     *,
     for_update: bool = False,
+    status_priority: tuple[str, ...] = (),
 ) -> MarkingCode | None:
     """Find a stored code by normalized identity without changing its payload.
 
@@ -607,7 +608,7 @@ async def find_marking_code_by_cis_identity(
         predicates.append(MarkingCode.gtin.in_(_gtin_lookup_variants(gtin)))
 
     stmt = (
-        select(MarkingCode.id, MarkingCode.cis_code)
+        select(MarkingCode.id, MarkingCode.cis_code, MarkingCode.status)
         .where(
             MarkingCode.tenant_id == tenant_id,
             or_(*predicates),
@@ -615,14 +616,15 @@ async def find_marking_code_by_cis_identity(
         .order_by(MarkingCode.created_at, MarkingCode.id)
     )
     candidates = (await session.execute(stmt)).all()
-    code_id = next(
-        (
-            candidate_id
-            for candidate_id, stored in candidates
-            if normalize_cis(stored) == normalized
-        ),
-        None,
-    )
+    matching = [row for row in candidates if normalize_cis(row.cis_code) == normalized]
+    selected_row = None
+    for status in status_priority:
+        selected_row = next((row for row in matching if row.status == status), None)
+        if selected_row is not None:
+            break
+    if selected_row is None:
+        selected_row = matching[0] if matching else None
+    code_id = selected_row.id if selected_row is not None else None
     if code_id is None:
         return None
     selected = select(MarkingCode).where(
@@ -1160,6 +1162,43 @@ async def _validate_pool_products(
         Product.id.in_(unique_ids),
     )
     products = list((await session.execute(stmt)).scalars().all())
+    if len(products) != len(unique_ids):
+        raise MarkingCodeServiceError("product_not_found")
+    for product in products:
+        if product.seller_id not in (None, seller_id):
+            raise MarkingCodeServiceError("product_seller_mismatch")
+
+
+async def _lock_import_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    product_ids: list[uuid.UUID],
+) -> None:
+    """Lock every selected product in the repository-wide Product order.
+
+    A manual import groups work by GTIN, which is unrelated to Product identity.
+    Locking lazily inside each group can therefore oppose the backfill order and
+    deadlock.  Acquire only this import's selected rows, ordered by the immutable
+    primary key, before any import write can dirty a Product row.
+    """
+    unique_ids = sorted(set(product_ids), key=str)
+    if not unique_ids:
+        return
+    products = list(
+        (
+            await session.scalars(
+                select(Product)
+                .where(
+                    Product.tenant_id == tenant_id,
+                    Product.id.in_(unique_ids),
+                )
+                .order_by(Product.id)
+                .execution_options(populate_existing=True)
+                .with_for_update()
+            )
+        ).all()
+    )
     if len(products) != len(unique_ids):
         raise MarkingCodeServiceError("product_not_found")
     for product in products:
@@ -1848,8 +1887,12 @@ async def _import_marking_codes_locked(
             raise MarkingCodeServiceError("manual_import_product_required")
         resolved_pool_specs[gtin] = pool_spec
 
-    for spec in pool_specs:
-        await _validate_pool_products(session, tenant_id, seller_id, spec.product_ids)
+    await _lock_import_products(
+        session,
+        tenant_id,
+        seller_id,
+        [product_id for spec in pool_specs for product_id in spec.product_ids],
+    )
 
     batch_values: dict[str, object] = {
         "tenant_id": tenant_id,
@@ -4734,33 +4777,13 @@ async def verify_pair_and_apply(
     if norm_a != norm_b:
         return VerifyPairResult(match=False, applied=False)
 
-    identity_filters: list[ColumnElement[bool]] = [
-        MarkingCode.cis_code == cis_a,
-        MarkingCode.cis_code == norm_a,
-    ]
-    gtin = extract_gtin_from_cis(norm_a)
-    if gtin is not None:
-        # WMS-658 stores the original payload for printing. Historical and new
-        # rows can therefore differ from the scanner's normalized form by GS
-        # framing or whitespace; GTIN narrows the portable SQL lookup, and the
-        # exact normalized identity is checked in Python below.
-        identity_filters.append(MarkingCode.gtin == gtin)
-    stmt = (
-        select(MarkingCode)
-        .where(
-            MarkingCode.tenant_id == tenant_id,
-            or_(*identity_filters),
-        )
-        .order_by(MarkingCode.created_at, MarkingCode.id)
-        .with_for_update()
+    code = await find_marking_code_by_cis_identity(
+        session,
+        tenant_id,
+        cis_a,
+        for_update=True,
+        status_priority=(STATUS_PRINTED, STATUS_APPLIED),
     )
-    candidates = list((await session.execute(stmt)).scalars().all())
-    matching = [code for code in candidates if normalize_cis(code.cis_code) == norm_a]
-    code = next((row for row in matching if row.status == STATUS_PRINTED), None)
-    if code is None:
-        code = next((row for row in matching if row.status == STATUS_APPLIED), None)
-    if code is None:
-        code = matching[0] if matching else None
     if code is None:
         return VerifyPairResult(match=True, applied=False)
 
