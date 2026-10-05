@@ -14,6 +14,7 @@ from typing import Any
 
 from .hotfix import HotfixRunner, StepFailed
 from .llm import LlmError, LlmUnavailable
+from .pipeline import InlinePool, ThreadPool
 
 TASK_RE = re.compile(r"^WMS-(\d+)$")
 CONTRADICTION_RE = re.compile(r"\bC\d+\b.*\bR\d+\b|\bR\d+\b.*\bC\d+\b", re.IGNORECASE)
@@ -30,6 +31,7 @@ class NightRunner:
     def __init__(self, pipe: Any, hotfix: HotfixRunner) -> None:
         self.p, self.store, self.cfg = pipe, pipe.store, pipe.cfg
         self.hotfix = hotfix
+        self.task_pool = InlinePool() if isinstance(pipe.pool, InlinePool) else ThreadPool(5)
 
     def ensure_job(self, job_id: str) -> int:
         job = self.store.kv_get(f"agent_job:{job_id}", {})
@@ -50,6 +52,7 @@ class NightRunner:
         night = {
             "job_id": job_id, "step": "etalon_ci", "tasks": tasks,
             "release_authorized": bool(job.get("release_authorized")),
+            "prepare_release": bool(job.get("prepare_release")),
             "deadline_at": job.get("deadline_at"), "candidate_attempt": 0,
         }
         with self.store.transaction():
@@ -67,23 +70,82 @@ class NightRunner:
         return dict(self.store.data(tid).get("night") or {})
 
     def _save(self, tid: int, state: dict[str, Any], **changes: Any) -> None:
+        task_id = state.get("_active_task_id")
+        if task_id:
+            # Each lane owns one task. Never write a stale snapshot of its siblings.
+            task = state["tasks"][task_id]
+            if "next_poll" in changes:
+                task["next_poll"] = changes["next_poll"]
+            with self.store.transaction():
+                fresh = self._state(tid)
+                current = fresh["tasks"].get(task_id, {})
+                job = self.store.kv_get(f"agent_job:{fresh['job_id']}", {})
+                if (self.store.ticket(tid)["stage"] != "development"
+                        or current.get("status") != "working" or job.get("cancel_requested")):
+                    return
+                fresh["tasks"][task_id] = task
+                self.store.patch_data(tid, night=fresh)
+            return
         state.update(changes)
-        self.store.patch_data(tid, night=state)
+        with self.store.transaction():
+            fresh = self._state(tid)
+            # A long CI/model call must not restore a revoked owner permission.
+            state["release_authorized"] = bool(fresh.get("release_authorized"))
+            if "release_hold_reason" in fresh:
+                state["release_hold_reason"] = fresh["release_hold_reason"]
+            self.store.patch_data(tid, night=state)
 
     def _task(self, state: dict[str, Any]) -> dict[str, Any] | None:
+        if state.get("_active_task_id"):
+            return state["tasks"][state["_active_task_id"]]
         return next((task for task in state["tasks"].values()
                      if task["status"] == "working"), None)
 
     # -- development ----------------------------------------------------------------
     def development(self, tid: int) -> None:
         state = self._state(tid)
+        if state.get("step") == "etalon_ci":
+            with self.store.lock:
+                if self._cancelled(tid, self._state(tid)):
+                    return
+            if self.p.clock() < float(state.get("next_poll", 0)):
+                return
+            try:
+                self._etalon_ci(tid, state)
+            except StepFailed as exc:
+                with self.store.lock:
+                    fresh = self._state(tid)
+                    if fresh.get("step") == "etalon_ci" and not self._cancelled(tid, fresh):
+                        self._stop_task(tid, fresh, self._task(fresh), str(exc))
+            return
+        # The controller's snapshot and global transitions are indivisible with
+        # respect to lane saves, cancellation and owner messages in this process.
+        # Worker/model calls use their own threads and do not hold this lock.
+        with self.store.lock:
+            self._schedule_development(tid)
+
+    def _schedule_development(self, tid: int) -> None:
+        state = self._state(tid)
         if self._cancelled(tid, state):
             return
         if self.p.clock() < float(state.get("next_poll", 0)):
             return
+        # Older runtimes incorrectly made provider outages terminal. Resume only
+        # that exact failure; do not reopen owner holds or failed safety checks.
+        for interrupted in state["tasks"].values():
+            if (interrupted.get("status") == "stopped"
+                    and str(interrupted.get("reason", "")).startswith(
+                        "frontend-разработчики Sonnet и Sol 5.6 недоступны:")):
+                interrupted.update(status="working", step="developer")
+                interrupted["feedback"] = (
+                    str(interrupted.get("feedback") or "")
+                    + "\nПредыдущий вызов прервался. Проверь и сохрани уже написанный код; "
+                    "продолжи с существующего состояния, не повторяй внешние действия."
+                ).strip()
+                interrupted.pop("reason", None)
+                self._save(tid, state)
         try:
             if state.get("step") == "etalon_ci":
-                self._etalon_ci(tid, state)
                 return
             deadline = state.get("deadline_at")
             if deadline and self.p.clock() >= float(deadline):
@@ -91,7 +153,7 @@ class NightRunner:
                     if current["status"] == "working":
                         current.update(status="stopped", step="stopped",
                                        reason="не готово к сроку выпуска")
-                target = "release" if (state.get("release_authorized")
+                target = "release" if ((state.get("release_authorized") or state.get("prepare_release"))
                                        and any(current["status"] == "ready"
                                                for current in state["tasks"].values())) else "report"
                 step = "candidate" if target == "release" else "morning_report"
@@ -100,7 +162,7 @@ class NightRunner:
             task = self._task(state)
             if task is None:
                 if any(task["status"] == "ready" for task in state["tasks"].values()) \
-                        and state.get("release_authorized"):
+                        and (state.get("release_authorized") or state.get("prepare_release")):
                     deadline = state.get("deadline_at")
                     if deadline and self.p.clock() < float(deadline):
                         self._save(tid, state, next_poll=min(float(deadline), self.p.clock() + 60))
@@ -110,21 +172,41 @@ class NightRunner:
                 else:
                     self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
                 return
+            for current in state["tasks"].values():
+                if (current["status"] == "working"
+                        and self.p.clock() >= float(current.get("next_poll", 0))):
+                    task_id = current["id"]
+                    self.task_pool.submit(
+                        f"night:{tid}:{task_id}",
+                        lambda task_id=task_id: self._develop_task(tid, task_id),
+                    )
+        except (LlmUnavailable, LlmError):
+            self._save(tid, state, next_poll=self.p.clock() + 60)
+        except StepFailed as exc:
+            self._stop_task(tid, state, self._task(state), str(exc))
+
+    def _develop_task(self, tid: int, task_id: str) -> None:
+        state = self._state(tid)
+        task = state["tasks"][task_id]
+        job = self.store.kv_get(f"agent_job:{state['job_id']}", {})
+        if (self.store.ticket(tid)["stage"] != "development"
+                or task["status"] != "working" or job.get("cancel_requested")
+                or self.p.clock() < float(task.get("next_poll", 0))):
+            return
+        state["_active_task_id"] = task_id
+        task.pop("next_poll", None)
+        try:
             getattr(self, f"_task_{task['step']}")(tid, state, task)
-        except LlmUnavailable as exc:
+        except (LlmUnavailable, LlmError) as exc:
             task = self._task(state)
-            if task is not None and task.get("step") == "developer" and task.get("frontend"):
-                self._stop_task(
-                    tid,
-                    state,
-                    task,
-                    "обязательный frontend-разработчик Opus недоступен; "
-                    f"задача не передана другой модели: {exc}",
-                )
-                return
-            raise
-        except LlmError:
-            raise
+            if task is not None:
+                route = ("Sonnet или Sol 5.6"
+                         if task.get("step") == "developer" and task.get("frontend")
+                         else "модели текущего шага")
+                task["reason"] = f"ожидает доступности {route}: {exc}"
+                task["model_retries"] = int(task.get("model_retries", 0)) + 1
+            self._save(tid, state, next_poll=self.p.clock() + 60)
+            return
         except StepFailed as exc:
             self._stop_task(tid, state, self._task(state), str(exc))
 
@@ -142,20 +224,26 @@ class NightRunner:
             raise StepFailed("не удалось прочитать CI etalon") from exc
         if res.rc != 0 or not isinstance(runs, list):
             raise StepFailed("не удалось прочитать CI etalon")
-        if not runs or runs[0].get("status") != "completed":
-            self._save(tid, state, next_poll=self.p.clock() + 30)
-            return
-        check = self._failed_run_check(runs[0])
-        if runs[0].get("conclusion") != "success" or check:
-            check = check or str(runs[0].get("displayTitle") or "CI")
-            self.p.say_owner(f"night_etalon_red:{state['job_id']}:{sha}",
-                             f"etalon красный: {check}, ночь не запускаю",
-                             tid, "night")
-            for task in state["tasks"].values():
-                task.update(status="stopped", reason=f"etalon красный: {check}")
-            self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
-            return
-        self._save(tid, state, step="tasks", etalon_sha=sha, next_poll=0)
+        completed = bool(runs and runs[0].get("status") == "completed")
+        check = self._failed_run_check(runs[0]) if completed else ""
+        with self.store.lock:
+            state = self._state(tid)
+            if (self.store.ticket(tid)["stage"] != "development"
+                    or state.get("step") != "etalon_ci" or self._cancelled(tid, state)):
+                return
+            if not completed:
+                self._save(tid, state, next_poll=self.p.clock() + 30)
+                return
+            if runs[0].get("conclusion") != "success" or check:
+                check = check or str(runs[0].get("displayTitle") or "CI")
+                self.p.say_owner(f"night_etalon_red:{state['job_id']}:{sha}",
+                                 f"etalon красный: {check}, ночь не запускаю",
+                                 tid, "night")
+                for task in state["tasks"].values():
+                    task.update(status="stopped", reason=f"etalon красный: {check}")
+                self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+                return
+            self._save(tid, state, step="tasks", etalon_sha=sha, next_poll=0)
 
     def _failed_run_check(self, run: dict[str, Any]) -> str:
         run_id = run.get("databaseId")
@@ -287,23 +375,33 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_developer(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
-        feedback = str(task.pop("feedback", ""))
+        feedback = str(task.get("feedback", ""))
         prompt = (
             f"Ты разработчик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
             f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Реализуй требования, не меняя контракт тестов. "
+            "Актуальное прямое решение владельца: frontend/дизайн выполняет Sonnet, при его "
+            "недоступности gpt-5.6-sol; ревью выполняет Astra high. Это решение имеет приоритет "
+            "над старым упоминанием Opus в файлах этой рабочей ветки. "
+            "Ты уже отдельный разработчик внутри цепочки: аналитик и тестировщик завершили свои этапы. "
+            "Выполни реализацию сам, не запускай вложенных агентов и не создавай чаты. "
+            "Ревью, приёмку, commit, push и выпуск выполнит контроллер после твоего ответа. "
+            "Перед правкой проверь существующий diff: после прерванного вызова продолжай его, "
+            "не удаляя сохранённые изменения. "
             "Локально запусти контракт и tests/guards. Если проверка Cn противоречит Rm, "
             "не пиши код и укажи точное противоречие. "
             f"Замечание предыдущей попытки: {feedback or 'нет'}. "
+            f"Полные журналы последних проверок (прочитай до исправления): {task.get('check_logs', {})}. "
             'Верни JSON {"summary":"...","contradiction":"" или "C1 противоречит R2"}.'
         )
         result, execution = self.p.llm.ask_json(
             "frontend" if task.get("frontend") else "routine", prompt,
             ticket_id=task.get("ticket_id"),
             session_key=f"night:{state['job_id']}:{task['id']}:developer", mode="write",
-            cli_only="claude" if task.get("frontend") else None,
             cwd=task["path"], timeout=3600,
         )
         task.update(dev_cli=execution.cli, dev_model=execution.model)
+        task.pop("feedback", None)
+        task.pop("reason", None)
         contradiction = str(result.get("contradiction") or "").strip()
         if contradiction and CONTRADICTION_RE.search(contradiction):
             task.update(status="waiting_owner", reason=contradiction, step="owner_decision")
@@ -341,13 +439,18 @@ class NightRunner:
             prompt = (
                 f"Проверь реализацию {task['id']}. Прочитай AGENTS.md, "
                 f"docs/requirements/{task['id']}.md, diff, результаты тестов, "
+                f"полные журналы {task.get('check_logs', {})}, "
                 f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
                 "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
+                "Прямое решение владельца для этого запуска: Sonnet или gpt-5.6-sol реализует, "
+                "Astra high проверяет; оно отменяет старое требование Opus в рабочей ветке. "
                 'Верни JSON {"accepted":true|false,"summary":"конкретные дефекты или результат"}.'
             )
             result, execution = self.p.llm.ask_json(
                 "review", prompt, ticket_id=task.get("ticket_id"), mode="readonly",
-                exclude_cli=("codex" if "astra" in str(task.get("dev_model", "")).lower()
+                cli_only="codex" if task.get("frontend") else None,
+                exclude_cli=(None if task.get("frontend") else
+                             "codex" if "astra" in str(task.get("dev_model", "")).lower()
                              else "claude" if task.get("dev_cli") == "claude" else None),
                 cwd=task["path"], timeout=1800,
                 session_key=f"night:{state['job_id']}:{task['id']}:review",
@@ -405,6 +508,8 @@ class NightRunner:
             f"Проведи приёмку {task['id']} как аналит по "
             f"{SKILLS_ROOT}/wms-product-analyst/SKILL.md. "
             "Прочитай requirements, diff, ревью и результаты тестов. Проверь сценарии. "
+            "Владелец утвердил Sonnet с резервом gpt-5.6-sol и ревью Astra high; "
+            "это актуальное правило вместо старого требования Opus в рабочей ветке. "
             "Заполни только вердикты и заключение в документе; требования и тесты не меняй. "
             "Git-коммит делает контроллер. Полный CI выполнится после фиксации приёмки. "
             'Верни JSON {"accepted":true|false,"summary":"..."}.'
@@ -438,10 +543,29 @@ class NightRunner:
             return
         try:
             step = str(state.get("step"))
+            # Preparing a candidate and its CI does not authorize publication.
+            # Re-read the owner's decision at every mutating release boundary.
+            dispatched = (self.store.data(tid).get("hotfix") or {}).get(f"{step}_intent")
+            if (step in ("merge", "deploy", "promote") and not dispatched
+                    and not self._state(tid).get("release_authorized")):
+                if step in ("merge", "deploy"):
+                    state["release_recheck"] = "candidate_ci" if step == "merge" else "merged_ci"
+                self._save(tid, state, next_poll=self.p.clock() + 30)
+                return
+            if state.get("release_recheck") and not dispatched:
+                recheck = state.pop("release_recheck")
+                self._save(tid, state, step=recheck, next_poll=0)
+                return
             if step == "candidate":
                 self._candidate(tid, state)
             elif step == "candidate_ci":
                 self._candidate_ci(tid, state)
+            elif step == "awaiting_release":
+                if self._state(tid).get("release_authorized"):
+                    # Revalidate both PR SHAs and required checks after the hold.
+                    self._candidate_ci(tid, state)
+                else:
+                    self._save(tid, state, next_poll=self.p.clock() + 30)
             elif step == "candidate_attribute":
                 self._candidate_attribute(tid, state)
             elif step == "merged_ci":
@@ -452,8 +576,9 @@ class NightRunner:
                 self._promote(tid, state)
             elif step == "promote_ci":
                 self._promote_ci(tid, state)
-        except (LlmUnavailable, LlmError):
-            raise
+        except (LlmUnavailable, LlmError) as exc:
+            self._save(tid, state, model_retry_reason=str(exc), next_poll=self.p.clock() + 60)
+            return
         except StepFailed as exc:
             state["release_error"] = str(exc)
             if state.get("release_sha"):
@@ -517,6 +642,9 @@ class NightRunner:
             view = self._pr_view(candidate["pr"])
             if view.get("headRefOid") != candidate["head"] or view.get("baseRefOid") != candidate["base"]:
                 raise StepFailed("состав кандидата или etalon изменился после сборки; нужен новый прогон")
+            if not self._state(tid).get("release_authorized"):
+                self._save(tid, state, step="awaiting_release", next_poll=self.p.clock() + 30)
+                return
             self.store.patch_data(tid, hotfix={"step": "merge", "pr": candidate["pr"],
                                                 "path": candidate["path"],
                                                 "expected_head": candidate["head"]})
@@ -671,8 +799,15 @@ class NightRunner:
         if view.get("state") != "OPEN":
             raise StepFailed("PR постоянной охраны закрыт без слияния")
         if not promotion.get("merge_intent"):
-            promotion["merge_intent"] = True
-            self._save(tid, state)
+            with self.store.transaction():
+                fresh = self._state(tid)
+                if not fresh.get("release_authorized"):
+                    fresh["next_poll"] = self.p.clock() + 30
+                    self.store.patch_data(tid, night=fresh)
+                    return
+                promotion["merge_intent"] = True
+                fresh["promotion"] = promotion
+                self.store.patch_data(tid, night=fresh)
             self.hotfix.run_gh(["gh", "pr", "merge", pr, "--merge",
                                "--match-head-commit", promotion["head"]])
         self._save(tid, state, next_poll=self.p.clock() + 30)
@@ -696,7 +831,9 @@ class NightRunner:
             changed = "да" if task.get("contract_changed") else "нет"
             lines.append(f"{task['id']}: контракт тестов менялся: {changed}")
         body = "\n".join(lines)
-        self.p.say_owner(f"night_report:{state['job_id']}", body[:4000], tid, "night_report")
+        generation = state.get("resume_generation", 0)
+        suffix = f":resume-{generation}" if generation else ""
+        self.p.say_owner(f"night_report:{state['job_id']}{suffix}", body[:4000], tid, "night_report")
         job = self.store.kv_get(f"agent_job:{state['job_id']}", {})
         job.update(status="done", result=body, finished_at=self.p.clock())
         self.store.kv_set(f"agent_job:{state['job_id']}", job)
@@ -707,9 +844,9 @@ class NightRunner:
                 *, paths: list[str] | None = None) -> bool:
         path = task["path"]
         self.hotfix.guard_gitdir(path)
-        pathspecs = [f":(literal){item}" for item in paths] if paths else [
-            ".", ":(exclude)frontend/node_modules",
-        ]
+        # `git add .` respects .gitignore; naming the ignored node_modules
+        # symlink even as an exclusion can make Git return an error.
+        pathspecs = [f":(literal){item}" for item in paths] if paths else ["."]
         self.hotfix.git("add", "-A", "--", *pathspecs, cwd=path)
         staged = self.hotfix.git("diff", "--cached", "--name-only", "--", *pathspecs,
                                  cwd=path)
@@ -792,17 +929,36 @@ class NightRunner:
                 if self.cfg.hotfix.backend_bin else "python3"
             res = self.hotfix.run_untrusted([python, "-m", "pytest", "-n", "auto", "-q",
                                              *backend, *backend_guards], root, root / "backend", 1800)
+            self._save_check_log(task, "backend", res.rc, res.out + res.err)
             if res.rc != 0:
                 problems.append((res.out + res.err)[-1400:])
         frontend_guards = [path for path in ("tests/guards", "src/guards", "tests-guards")
                            if (root / "frontend" / path).exists()]
         if frontend or frontend_guards:
-            res = self.hotfix.run_untrusted(["npx", "vitest", "run", *frontend,
-                                             *frontend_guards],
-                                             root, root / "frontend", 1800)
+            command = ["npx", "vitest", "run", "--configLoader", "runner", *frontend, *frontend_guards]
+            chromium = self.cfg.hotfix.frontend_chromium
+            if chromium:
+                if not Path(chromium).is_file():
+                    raise StepFailed("настроенный тестовый Chromium не найден")
+                command = ["/usr/bin/env", f"WMS_PRINT_CHROMIUM={chromium}", *command]
+            res = self.hotfix.run_untrusted(command, root, root / "frontend", 1800)
+            self._save_check_log(task, "frontend", res.rc, res.out + res.err)
             if res.rc != 0:
                 problems.append((res.out + res.err)[-1400:])
         return problems
+
+    def _save_check_log(self, task: dict[str, Any], suite: str, rc: int, output: str) -> None:
+        root = Path(task["path"]).resolve()
+        folder = root / ".agent-runs" / "night-checks"
+        if root not in folder.resolve().parents:
+            raise StepFailed("каталог журнала проверок находится вне рабочей копии")
+        folder.mkdir(parents=True, exist_ok=True)
+        head = self._head(task)
+        path = folder / f"{suite}-{head}.log"
+        if path.is_symlink():
+            raise StepFailed("журнал проверок не должен быть символической ссылкой")
+        path.write_text(f"SHA: {head}\nSuite: {suite}\nExit: {rc}\n\n{output}", encoding="utf-8")
+        task.setdefault("check_logs", {})[suite] = str(path.relative_to(root))
 
     def _failure(self, tid: int, state: dict[str, Any], task: dict[str, Any],
                  fingerprint: str, reason: str) -> bool:

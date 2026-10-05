@@ -400,6 +400,12 @@ class LlmRouter:
 
     def model_for(self, cli: str, role: str) -> str | None:
         model = self.cfg.llm.models.get(cli, {}).get(role)
+        if role in ("frontend", "mockup") and model:
+            required = {"claude": "sonnet", "codex": "gpt-5.6-sol"}.get(cli)
+            if model != required:
+                raise ValueError(f"{role} on {cli} must use {required}, got {model!r}")
+        if role == "review" and cli == "codex" and model != "gpt-6-astra":
+            raise ValueError(f"Codex review must use gpt-6-astra, got {model!r}")
         if model and "astra" in model.lower() and role != "review":
             # Astra — только ревьюер (решение владельца); ошибка в конфиге не должна её запустить.
             raise ValueError(f"Astra is reviewer-only, but configured for role {role!r}")
@@ -408,13 +414,18 @@ class LlmRouter:
     def effort_for(self, cli: str, role: str) -> str | None:
         if cli != "codex":
             return None
+        if role == "review":
+            return "high"
         return "low" if role == "filter" else self.cfg.llm.codex_effort
 
     def candidates(
         self, role: str, cli_only: str | None, exclude_cli: str | None
     ) -> list[tuple[str, str]]:
         result = []
-        for cli in self.available_clis():
+        available = self.available_clis()
+        ordered = ([cli for cli in ("claude", "codex") if cli in available]
+                   if role in ("frontend", "mockup") else available)
+        for cli in ordered:
             if cli_only and cli != cli_only:
                 continue
             if exclude_cli and cli == exclude_cli:
