@@ -896,9 +896,13 @@ class NightRunner:
         frontend_guards = [path for path in ("tests/guards", "src/guards", "tests-guards")
                            if (root / "frontend" / path).exists()]
         if frontend or frontend_guards:
-            res = self.hotfix.run_untrusted(["npx", "vitest", "run", *frontend,
-                                             *frontend_guards],
-                                             root, root / "frontend", 1800)
+            command = ["npx", "vitest", "run", "--configLoader", "runner", *frontend, *frontend_guards]
+            chromium = self.cfg.hotfix.frontend_chromium
+            if chromium:
+                if not Path(chromium).is_file():
+                    raise StepFailed("настроенный тестовый Chromium не найден")
+                command = ["/usr/bin/env", f"WMS_PRINT_CHROMIUM={chromium}", *command]
+            res = self.hotfix.run_untrusted(command, root, root / "frontend", 1800)
             if res.rc != 0:
                 problems.append((res.out + res.err)[-1400:])
         return problems

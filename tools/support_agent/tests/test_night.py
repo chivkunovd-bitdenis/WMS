@@ -575,6 +575,29 @@ def test_etalon_network_does_not_lock_store_and_respects_cancel(env: Any) -> Non
     assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
 
 
+@pytest.mark.parametrize("with_chromium", [True, False])
+def test_frontend_checks_use_readonly_config_loader_and_preserve_all_filters(
+    env: Any, tmp_path: Path, with_chromium: bool,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task["tests"] = ["frontend/src/example.test.ts"]
+    (root / "frontend" / "src" / "guards").mkdir(parents=True)
+    if with_chromium:
+        binary = tmp_path / "chrome-headless-shell"
+        binary.write_text("fixture", encoding="utf-8")
+        env.cfg.hotfix.frontend_chromium = str(binary)
+    assert runner._run_contract(task) == []
+    command = [args for kind, args in runner.hotfix.calls if kind == "test"][-1]
+    assert command[command.index("npx"):] == [
+        "npx", "vitest", "run", "--configLoader", "runner", "src/example.test.ts", "src/guards",
+    ]
+    if with_chromium:
+        assert command[:2] == ["/usr/bin/env", f"WMS_PRINT_CHROMIUM={binary}"]
+    else:
+        assert command[0] == "npx"
+
+
 def test_interrupted_promote_is_not_repeated(env: Any) -> None:
     runner, tid = make_night(env)
     state = env.store.data(tid)["night"]

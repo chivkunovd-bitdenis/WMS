@@ -72,6 +72,7 @@
   },
   "hotfix": {
     "backend_bin": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin",
+    "frontend_chromium": "",
     "merge_method": "merge",
     "deployed_sha_cmd": "ssh root@sellerfocus.pro git -C /opt/wms rev-parse HEAD",
     "preflight_cmd": "",

@@ -166,6 +166,7 @@ class SandboxCfg:
 @dataclass
 class HotfixCfg:
     backend_bin: str = ""
+    frontend_chromium: str = ""
     merge_method: str = "merge"
     deployed_sha_cmd: str = ""
     preflight_cmd: str = ""
