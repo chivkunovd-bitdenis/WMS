@@ -47,7 +47,7 @@ function render(overrides: Partial<FbsStockDialogProps>) {
   return renderToStaticMarkup(<FbsStockDialog open sellerName="ИП Тестовый Аудит"
     products={[product('p', 'Футболка', { 'b-wb': { free: 120 } })]} bindings={[wb]} cabinets={cabinets}
     wmsWarehouses={[{ id: YARTSEVO, name: 'Ярцево' }]} canEditBindings onClose={() => {}} onSave={() => {}}
-    onAddBinding={() => {}} onChangeWmsWarehouse={() => {}} onServedChange={() => {}} {...overrides} />)
+    onAddBinding={() => {}} onChangeWmsWarehouse={() => {}} {...overrides} />)
 }
 
 /** Тег с этим data-testid — чтобы проверить его атрибуты, а не всю разметку. */
@@ -75,7 +75,7 @@ describe('WMS-469 окно «Остаток для FBS»: структура', (
     // WMS-530 R12: те же слова, что в каталоге.
     expect(markup).toContain('остаток 120 шт, резерв 0 — доступно')
     expect(markup).not.toContain('свободно')
-    expect(markup).toContain('Принимаем заказы продавца со склада «E2E Seller Warehouse»')
+    expect(markup).not.toContain('Принимаем заказы')
     expect(markup).toContain('Передавать остаток на')
     expect(markup).toContain('data-testid="fbs-stock-percent-b-wb"')
     expect(markup).toContain('data-testid="fbs-stock-units-b-wb"')
@@ -128,9 +128,9 @@ describe('WMS-469 F2/F6: сохранённый лимит и время зап�
     expect(tag(zero, 'fbs-stock-units-b-wb')).toContain('value="0"')
   })
 
-  it('R16/R17: пока идёт запись, поля, переключатель, галка приёма и кнопки заперты', () => {
+  it('R16/R17: пока идёт запись, товарные поля, переключатель и кнопки заперты', () => {
     const markup = render({ busy: true, products: [product('p', 'Футболка', { 'b-wb': { free: 30, mode: 'units', value: 10 } })] })
-    for (const id of ['fbs-stock-units-b-wb', 'fbs-stock-by-percent-b-wb', 'fbs-stock-publish-b-wb', 'fbs-stock-served-b-wb', 'fbs-stock-bind-b-wb', 'fbs-stock-add', 'fbs-stock-cancel', 'fbs-stock-save']) {
+    for (const id of ['fbs-stock-units-b-wb', 'fbs-stock-by-percent-b-wb', 'fbs-stock-publish-b-wb', 'fbs-stock-bind-b-wb', 'fbs-stock-add', 'fbs-stock-cancel', 'fbs-stock-save']) {
       expect(tag(markup, id), id).toContain('disabled')
     }
     expect(markup).toContain('data-testid="fbs-stock-percent-b-wb"')
@@ -167,13 +167,14 @@ describe('WMS-454 C28: Ozon-блок только у товара с карто�
   })
 })
 
-describe('WMS-469 R7 галка приёма заказов', () => {
-  it('C13: при снятой галке — чип, строка публикации скрыта', () => {
+describe('WMS-666: приём заказов не является товарной настройкой', () => {
+  it('C2: served=false не скрывает передачу остатка, а глобальной галки в товарном окне нет', () => {
     const markup = render({ bindings: [{ ...wb, served: false }] })
-    expect(tag(markup, 'fbs-stock-served-b-wb')).not.toContain('checked')
-    expect(markup).toContain('заказы не принимаем')
-    expect(markup).not.toContain('data-testid="fbs-stock-row-b-wb"')
-    expect(markup).not.toContain('Обслуживаем склад')
+    expect(markup).not.toContain('data-testid="fbs-stock-served-b-wb"')
+    expect(markup).not.toContain('Принимаем заказы')
+    expect(markup).not.toContain('заказы не принимаем')
+    expect(markup).toContain('data-testid="fbs-stock-row-b-wb"')
+    expect(markup).toContain('data-testid="fbs-stock-publish-b-wb"')
   })
 
   it('C9: длинные названия склада и продавца остаются в разметке целиком', () => {
@@ -182,17 +183,18 @@ describe('WMS-469 R7 галка приёма заказов', () => {
       sellerName: 'ИП Тестовый Аудит с очень длинным наименованием продавца',
       products: [product('a', 'Костюм с очень длинным названием товара для проверки переноса', { 'b-wb': { free: 1 } }),
         product('b', 'Б', { 'b-wb': { free: 1 } })] })
-    expect(markup).toContain(`Принимаем заказы продавца со склада «${longName}»`)
+    expect(markup).toContain(longName)
+    expect(markup).not.toContain('Принимаем заказы')
     expect(markup).toContain('ИП Тестовый Аудит с очень длинным наименованием продавца')
   })
 })
 
 describe('WMS-469 R18 / D4 кабинет селлера', () => {
-  it('C26: связка, склад ФФ и приём заказов только читаются; «Добавить склад» нет; лимит правится', () => {
+  it('C26: связка и склад ФФ только читаются; «Добавить склад» нет; товарный лимит правится', () => {
     const markup = render({ canEditBindings: false, onAddBinding: undefined, onChangeWmsWarehouse: undefined,
-      onServedChange: undefined, bindings: [{ ...wb, editable: false }] })
+      bindings: [{ ...wb, editable: false }] })
     expect(tag(markup, 'fbs-stock-bind-b-wb')).toContain('disabled')
-    expect(tag(markup, 'fbs-stock-served-b-wb')).toContain('disabled')
+    expect(markup).not.toContain('data-testid="fbs-stock-served-b-wb"')
     expect(markup).not.toContain('data-testid="fbs-stock-add"')
     expect(markup).not.toContain('Склады селлера ещё не добавлены')
     expect(tag(markup, 'fbs-stock-units-b-wb')).not.toContain('disabled')
@@ -202,7 +204,7 @@ describe('WMS-469 R18 / D4 кабинет селлера', () => {
   it('editable=false от сервера запирает связку и у администратора', () => {
     const markup = render({ bindings: [{ ...wb, editable: false }] })
     expect(tag(markup, 'fbs-stock-bind-b-wb')).toContain('disabled')
-    expect(tag(markup, 'fbs-stock-served-b-wb')).toContain('disabled')
+    expect(markup).not.toContain('data-testid="fbs-stock-served-b-wb"')
   })
 })
 
@@ -216,10 +218,10 @@ describe('WMS-457 названия и причины в окне', () => {
       ozonWarehousesError: 'Справочник складов Ozon недоступен',
     })
     expect(markup).not.toContain('data-testid="fbs-stock-name-issue-b-wb"')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 501999»')
+    expect(markup).toContain('№ 501999')
     expect(markup).toContain('data-testid="fbs-stock-name-issue-b-gone"')
     expect(markup).toContain('нет в кабинете')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 1020005029603630»')
+    expect(markup).toContain('№ 1020005029603630')
     expect(markup).toContain('data-testid="fbs-stock-name-issue-b-ozon"')
     expect(markup).toContain('название недоступно')
     expect(markup).not.toContain('Склад Ozon 1020005029603630')
@@ -234,7 +236,7 @@ describe('WMS-457 названия и причины в окне', () => {
     expect(markup).toContain('data-testid="fbs-stock-wb-directory-error"')
     expect(markup).toContain('У продавца не сохранён ключ Wildberries с правами «Маркетплейс»')
     expect(markup).not.toContain('data-testid="fbs-stock-error"')
-    expect(markup).toContain('Принимаем заказы продавца со склада «№ 777001»')
+    expect(markup).toContain('№ 777001')
     expect(markup).toContain('название недоступно')
     // Справочник не получен — добавить склад нельзя, и кнопка заперта.
     expect(tag(markup, 'fbs-stock-add')).toContain('disabled')
@@ -243,7 +245,7 @@ describe('WMS-457 названия и причины в окне', () => {
   it('F7 / R19: причина недоступности имени Ozon видна в окне у селлера, без формы добавления', () => {
     const reason = 'Справочник складов Ozon недоступен: боевые запросы к Ozon выключены настройкой WMS_OZON_LIVE_API.'
     const markup = render({
-      canEditBindings: false, onAddBinding: undefined, onChangeWmsWarehouse: undefined, onServedChange: undefined,
+      canEditBindings: false, onAddBinding: undefined, onChangeWmsWarehouse: undefined,
       bindings: [{ ...wb, editable: false }, { ...ozon, name: '№ 1020005029603630', nameIssue: 'list_unavailable', editable: false }],
       products: [product('p', 'Худи', { 'b-wb': { free: 100 }, 'b-ozon': { free: 100 } })],
       cabinets: { wb: received, ozon: { received: false } }, ozonWarehousesError: reason,

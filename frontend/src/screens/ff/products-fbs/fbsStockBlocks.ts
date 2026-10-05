@@ -356,8 +356,6 @@ export function ruleBodyFromDrafts(
 ): Record<string, { publish: boolean; mode: 'percent' | 'units'; value: number; units_configured: boolean }> {
   const body: Record<string, { publish: boolean; mode: 'percent' | 'units'; value: number; units_configured: boolean }> = {}
   for (const binding of bindings) {
-    // Снятая галка приёма заказов прячет строку и не трогает сохранённое правило (R7).
-    if (!binding.served) continue
     const draft = drafts[binding.id]
     if (!draft) continue
     body[binding.id] = draft.byPercent
