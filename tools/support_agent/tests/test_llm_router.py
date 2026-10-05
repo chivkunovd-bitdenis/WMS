@@ -154,11 +154,11 @@ def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) ->
             check_effort("gpt-6-astra", bad)
     for good in ("low", "medium", "high"):
         assert check_effort("gpt-6-astra", good) == good
-    llm.cfg.llm.codex_effort = "xhigh"  # даже ошибка в настройках не даст запустить
+    llm.cfg.llm.codex_effort = "xhigh"  # ревью явно ограничено high
     calls = len(script.calls)
-    with pytest.raises(ValueError):
-        llm.ask("review", "x", mode="readonly")
-    assert len(script.calls) == calls
+    llm.ask("review", "x", mode="readonly")
+    assert len(script.calls) == calls + 1
+    assert 'model_reasoning_effort="high"' in script.calls[-1]
 
 
 def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
@@ -170,15 +170,17 @@ def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
     assert script.calls[-1][0] == "claude"
 
 
-def test_interface_analysis_and_dev_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
+def test_allowed_roles_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
-    store.kv_set("cooldown:claude", time.time() + 999)  # Opus и Sonnet недоступны
+    store.kv_set("cooldown:claude", time.time() + 999)  # Claude недоступен
     for role in ("frontend", "mockup", "analyst", "routine", "filter"):
         llm.ask(role, "x", mode="write" if role in ("frontend", "mockup", "routine") else "text",
                 cwd=str(tmp_path))
     models = [c[c.index("-m") + 1] for c in script.calls]
     assert models == ["gpt-5.6-sol"] * 5  # без вопроса владельцу и без Astra
+    assert llm.cfg.llm.models["claude"]["frontend"] == "sonnet"
+    assert llm.cfg.llm.models["claude"]["mockup"] == "sonnet"
     assert llm.cfg.llm.models["codex"]["review"] == "gpt-6-astra"
     assert {r for r, m in ((r, llm.model_for("codex", r)) for r in ("filter", "routine", "analyst",
             "frontend", "mockup", "review")) if m and "astra" in m} == {"review"}
@@ -190,6 +192,21 @@ def test_astra_configured_for_a_non_review_role_is_refused(tmp_path: Path) -> No
     llm.cfg.llm.models["codex"]["analyst"] = "gpt-6-astra"
     with pytest.raises(ValueError, match="reviewer-only"):
         llm.model_for("codex", "analyst")
+
+
+def test_frontend_models_and_astra_review_are_fixed(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    assert llm.model_for("claude", "frontend") == "sonnet"
+    assert llm.model_for("codex", "frontend") == "gpt-5.6-sol"
+    llm.cfg.llm.cli_order = ["codex", "claude"]
+    assert llm.candidates("frontend", None, None) == [
+        ("claude", "sonnet"), ("codex", "gpt-5.6-sol")]
+    llm.cfg.llm.codex_effort = "xhigh"
+    assert llm.effort_for("codex", "review") == "high"
+    llm.cfg.llm.models["codex"]["review"] = "gpt-5.6-sol"
+    with pytest.raises(ValueError, match="gpt-6-astra"):
+        llm.model_for("codex", "review")
 
 
 def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
@@ -214,8 +231,8 @@ def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
         assert blocked in denied
 
 
-def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path) -> None:
-    """F2: у Sol-разработчика отключены shell и прочие инструменты; он только правит файлы worktree."""
+def test_codex_dev_has_readonly_project_reader_and_only_file_edits(tmp_path: Path) -> None:
+    """Sol читает worktree через изолированный MCP, а меняет только файлы через apply_patch."""
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
@@ -229,10 +246,13 @@ def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path
     assert "--ignore-user-config" in argv and "--ignore-rules" in argv
     assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
     assert "sandbox_workspace_write.network_access=false" in argv
+    assert 'mcp_servers.wms.default_tools_approval_mode="approve"' in argv
+    assert any(a.startswith("mcp_servers.wms.args=") for a in argv)
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
     resume = script.full[-1]
     assert resume[:3] == ["codex", "exec", "--ephemeral"] and "shell_tool" in resume
     assert resume[resume.index("-s") + 1] == "workspace-write" and "--ignore-user-config" in resume
+    assert any(a.startswith("mcp_servers.wms.args=") for a in resume)
 
 
 def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Path) -> None:
