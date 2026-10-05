@@ -35,3 +35,10 @@ History может уже PASS — её ошибке типа исключени
 Fixture adapter и легитимная ledger migration сохраняются отдельными commits.
 Ledger F1-F3 имеют отдельное обоснование аналитика; correction не self-PASS,
 после неё обязательно независимое Astra high review ведущим.
+
+Окончательный frozen18-case SQLite run после восстановления места:
+4 failed, 14 passed, 6 warnings in16.48s, collection/setup errors отсутствуют.
+RED ровно mixed A+healthy B; long fractional kopeks; giant exponent service;
+giant exponent API HTTP500. History create/retry/build все3 PASS с честным
+registry/products coverage отказом. Остальные precision/range/nonfinite cases PASS.
+Никакого изменения timestamp tests седьмой цифры не выполнялось.

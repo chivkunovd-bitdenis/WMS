@@ -1,0 +1,58 @@
+Финальная передача явно заменяющего независимого тестировщика Sol6.1 high.
+Предыдущая ephemeral session57763 не возобновлялась. SKILL.md не читались;
+новые agents/threads, product/requirements/guards/reviewer edits отсутствуют.
+
+Три опубликованных контрактных commit:
+1. WMS662 normal approve scope:
+   8cd304a4d01ba7b0b17b5f1159c4aaedde44aadb
+   codex/wms662-prod-handoff; test_wms662_approve_scope_race.py.
+   Реальный deliver_supply и две DB-сессии; B добавлен или A увеличен во время
+   approve HTTP после записанного exact A/1 snapshot. Только transport/credential
+   boundary synthetic. RED2 failed in2.45s: оба shipped2 вместо1, без setup errors.
+   Далее reserve/billing/finalization/retry assertions ждут product fix.
+   Durable SHA/команда: wms662-663-priority/wms662-approve-scope-tester-handoff.txt.
+   Хранящий эту передачу SHA662: 5fe999dd392a50228f977db4cabc67c0d16b2813.
+2. WMS517 partial/Decimal/history:
+   57b42e6b3e768ef39b39288797772fb177624a2d
+   codex/wms517-sales-report-contract;
+   test_wms517_sales_partial_decimal_regressions.py, frozen18 cases.
+   Окончательно4 failed/14 passed in16.48s без collection/setup errors:
+   mixed R+healthy =>0documents; длинная fractional kopek =>pending/rounded100;
+   giant exponent =>decimal.Overflow и public API HTTP500.
+   History create/retry/build3 PASS; registry/products честно coverage-incomplete.
+   Остальные nonfinite/range/zero/exact boundaries PASS. Timestamp7-digit не менялся.
+   SHA/команды: 2026-10-06-wms517-sales-partial-decimal-tester-handoff.txt.
+3. WMS517 legitimate legacy pricing contract:
+   427fc2cba5d09c78c691ca12277e66cff804fc69
+   Исполнена точная классификация отдельного аналитика6b8538172; F1/F2/F3 только.
+   21 другие ledger tests AST-identical; все старые names/params/decorators сохранены.
+   Новый price source fixture negative control реально ломает F1/F3 на business
+   cost assertions:2 failed in1.13s; никакого product helper monkeypatch.
+   Ledger: 2026-10-06-wms517-legacy-price-test-contract-ledger.md, REVIEW_PENDING.
+   Ведущему: ОБЯЗАТЕЛЬНО отдельное Astra high review этого correction, не self-PASS.
+
+Fixture adapter опубликован отдельно от всех contract expectations:
+475b046cc01b29a33c122633dea4c6d3252c22f6 — SAME synthetic boundary импортирован
+ровно шестью обнаруженными seed/document consumers; AST identical кроме imports.
+5544027611f3ec181ad62233c0838d58fedbb46c — synthetic sales broker включается
+только при seed, gate-only tests сохраняют broker=None. Ни один assert не ослаблен.
+Команды/evidence: 2026-10-06-wms517-sales-fixture-adapter-handoff.txt.
+
+Полный bounded rerun ledger+2 source-positive cases+6 consumers:
+135 passed,4 skipped in11.52s без deselection. PG-only4 skipped; PG56517 не трогался.
+Дополнительная проверка frozen originals после adapter: SC7(2)+SC10(10)+все
+6 sales_regressions =>18 passed in3.15s. Набор10000 повторно не запускался.
+Исходные sales51+6 неизменны от6b8538172; WMS662 исходные3 files неизменны
+от304230586. Ruff всех собственных затронутых tests, git diff --check PASS.
+
+Диск: один промежуточный повтор оборван Errno28/exit120, не засчитан evidence.
+Удалены только завершённые собственные SQLite4037/4644/4786(~9MiB), после этого
+окончательные прогоны полностью завершились. Чужие тестовые базы не удалялись.
+Проверенные удалённые refs до финальной docs-передачи:
+662=5fe999dd392a50228f977db4cabc67c0d16b2813;
+517=427fc2cba5d09c78c691ca12277e66cff804fc69.
+Каждый stage/commit содержит только свои test/fixture/handoff paths.
+Dirty product changes и документы других участников оставлены владельцам.
+Это передача сохранённых контрактов/результатов, НЕ приёмка/CI/deploy/production
+или физическая подпись/маркетплейс. Новые product RED должен исправить developer;
+legitimate correction отдельно проверяет Astra high ведущего.
