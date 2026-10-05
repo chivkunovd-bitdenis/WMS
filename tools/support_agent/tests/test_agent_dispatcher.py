@@ -9,6 +9,8 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+import pytest
+
 from support_agent.agent_authorization import SemanticAuthorization
 from support_agent.agent_coordinator import AgentCoordinator
 from support_agent.agent_dispatcher import _priority
@@ -158,6 +160,87 @@ def test_background_message_can_be_acknowledged_without_topic(tmp_path: Path) ->
     assert saved is not None and saved["status"] == "handled"
     assert store.kv_get("agent_dispatch_queue", []) == []
     assert store.kv_get("agent_topic_index", []) == []
+
+
+def test_existing_topic_before_first_new_subtopic_is_valid(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    initial = _message(store, -10, "initial", "Первая тема")
+    agent.dispatcher.accept(initial)
+    agent.dispatcher._route_once()
+    existing_topic = f"topic-{initial['id']}"
+
+    followup = _message(store, -10, "followup", "Продолжи и проверь отдельно")
+    agent.dispatcher.accept(followup)
+
+    def mixed_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"], "topics": [
+            {"topic_id": existing_topic, "subrequest": "Продолжить", "priority": 8},
+            {"topic_id": f"topic-{followup['id']}-1", "subrequest": "Проверить отдельно",
+             "priority": 8},
+        ]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = mixed_route  # type: ignore[method-assign]
+    agent.dispatcher._route_once()
+
+    assert store.kv_get("agent_dispatch_queue", []) == []
+    assert f"in:{followup['id']}:1:part1" in store.kv_get(
+        f"agent_topic:{existing_topic}")["pending"]
+    assert f"in:{followup['id']}:1:part2" in store.kv_get(
+        f"agent_topic:topic-{followup['id']}-1")["pending"]
+
+
+def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "unsafe", "Создай тему")
+    agent.dispatcher.accept(source)
+
+    def unsafe_route(prompt: str, **kwargs: Any) -> LlmResult:
+        event = json.loads(prompt)["events"][0]
+        answer = {"routes": [{"event_id": event["id"],
+                              "topics": [{"topic_id": "topic-999-1"}]}]}
+        return LlmResult(json.dumps(answer), "codex", "sol", "session")
+
+    agent.llm.agent_turn = unsafe_route  # type: ignore[method-assign]
+    with pytest.raises(ValueError, match="invalid new topic id"):
+        agent.dispatcher._route_once()
+    assert f"in:{source['id']}:1" in store.kv_get("agent_dispatch_queue", [])
+
+
+def test_repeated_router_failure_is_backed_off(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    now = [100.0]
+    agent.clock = lambda: now[0]  # type: ignore[method-assign]
+    source = _message(store, -10, "retry", "Не потеряй меня")
+    agent.dispatcher.accept(source)
+
+    for expected_attempt in range(1, 4):
+        agent.dispatcher._record_route_failure(RuntimeError("same invalid route"))
+        retry = store.kv_get("agent_dispatch_retry")
+        assert retry["attempts"] == expected_attempt
+        assert retry["event_ids"] == [f"in:{source['id']}:1"]
+        if expected_attempt < 3:
+            now[0] = float(retry["next_at"])
+
+    retry = store.kv_get("agent_dispatch_retry")
+    assert float(retry["next_at"]) - now[0] >= 300
+    assert agent.dispatcher._route_retry_ready() is False
+
+
+def test_successful_route_clears_retry_state(tmp_path: Path) -> None:
+    agent, store = _agent(tmp_path)
+    source = _message(store, -10, "recover", "Обработай после сбоя")
+    agent.dispatcher.accept(source)
+    store.kv_set("agent_dispatch_retry", {
+        "signature": "old", "attempts": 3, "next_at": 999,
+        "event_ids": [f"in:{source['id']}:1"], "last_error": "old failure",
+    })
+
+    agent.dispatcher._route_once()
+
+    assert store.kv_get("agent_dispatch_retry") is None
+    assert store.kv_get("agent_dispatch_queue", []) == []
 
 
 def test_model_priority_names_are_tolerated() -> None:
