@@ -580,6 +580,20 @@ def normalize_cis(raw: str) -> str | None:
     return text
 
 
+def _normalized_cis_sql() -> ColumnElement[str]:
+    """Mirror CIS identity cleanup for a metadata-independent fallback query.
+
+    Exact payload and GTIN predicates remain the fast path.  This expression is
+    used only when those narrow candidates do not contain the requested
+    normalized identity, for example when a CSV supplied unrelated GTIN metadata.
+    Python ``normalize_cis`` remains the authoritative final comparison.
+    """
+    value = func.trim(MarkingCode.cis_code, " \t\n\r\v\f")
+    for removable in ("\ufeff", " ", "\n", "\r"):
+        value = func.replace(value, removable, "")
+    return func.trim(value, "\x1d")
+
+
 async def find_marking_code_by_cis_identity(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -617,6 +631,24 @@ async def find_marking_code_by_cis_identity(
     )
     candidates = (await session.execute(stmt)).all()
     matching = [row for row in candidates if normalize_cis(row.cis_code) == normalized]
+    if not matching:
+        # ``MarkingCode.gtin`` is import metadata, not CIS identity.  Preserve
+        # the fast exact/GTIN candidate lookup above, then fall back to the
+        # normalized payload only when metadata cannot locate the stored row.
+        fallback = (
+            select(MarkingCode.id, MarkingCode.cis_code, MarkingCode.status)
+            .where(
+                MarkingCode.tenant_id == tenant_id,
+                _normalized_cis_sql() == normalized,
+            )
+            .order_by(MarkingCode.created_at, MarkingCode.id)
+        )
+        fallback_candidates = (await session.execute(fallback)).all()
+        matching = [
+            row
+            for row in fallback_candidates
+            if normalize_cis(row.cis_code) == normalized
+        ]
     selected_row = None
     for status in status_priority:
         selected_row = next((row for row in matching if row.status == status), None)
@@ -1703,6 +1735,20 @@ async def _existing_import_cis_codes(
             stored_normalized = normalize_cis(stored_cis)
             if stored_normalized is not None and stored_normalized in normalized:
                 existing.add(stored_normalized)
+        unresolved = normalized - existing
+        if unresolved:
+            # A stored CSV GTIN can disagree with the GTIN encoded in the CIS.
+            # Query only unresolved normalized identities and still verify each
+            # returned payload in Python; never replace the first stored payload
+            # or its metadata with values from a repeated import.
+            fallback_stmt = select(MarkingCode.cis_code).where(
+                MarkingCode.tenant_id == tenant_id,
+                _normalized_cis_sql().in_(unresolved),
+            )
+            for stored_cis in (await session.scalars(fallback_stmt)).all():
+                stored_normalized = normalize_cis(stored_cis)
+                if stored_normalized is not None and stored_normalized in unresolved:
+                    existing.add(stored_normalized)
     return existing
 
 
