@@ -11,6 +11,7 @@ import { countFromMapRow, placeOf, targetTitle } from '../inventory/fromWarehous
 import { totals } from '../inventory/InventoryRows'
 import type { InventoryCount } from '../inventory/InventoryTypes'
 import type { WarehouseMapData } from './WarehouseMapTypes'
+import { Wms654CreateCellPreviewDialog } from './Wms654CreateCellPreviewDialog'
 import '../../../index.css'
 
 // Превью экрана без сервера и без входа в систему. Открывается по адресу
@@ -37,6 +38,7 @@ export function PreviewHarness() {
   const [warehouseId, setWarehouseId] = useState('wh-yartsevo')
   const [data, setData] = useState<WarehouseMapData>(() => stubData('wh-yartsevo'))
   const [note, setNote] = useState<string | null>(null)
+  const [cellPreviewOpen, setCellPreviewOpen] = useState(false)
   // Пересчёт открывается модалкой прямо с карты: это тот же документ
   // инвентаризации, суженный до одной ячейки или одной тары.
   const [countDialog, setCountDialog] = useState<{
@@ -144,7 +146,20 @@ export function PreviewHarness() {
             bgcolor: 'background.paper',
           }}
         />
-        <Box sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
+        <Box
+          sx={{ flexGrow: 1, minWidth: 0, p: 3 }}
+          onClickCapture={(event) => {
+            const target = event.target
+            if (
+              target instanceof Element
+              && (target.closest('[data-testid="warehouse-map-create-cell"]')
+                || target.closest('[data-testid="warehouse-map-create-first-cell"]'))
+            ) {
+              event.stopPropagation()
+              setCellPreviewOpen(true)
+            }
+          }}
+        >
           <FfWarehouseMapScreen
             data={shown}
             loading={state === 'loading'}
@@ -180,6 +195,12 @@ export function PreviewHarness() {
           />
         </Box>
       </Box>
+
+      <Wms654CreateCellPreviewDialog
+        open={cellPreviewOpen}
+        warehouseName={shown.warehouses.find((warehouse) => warehouse.id === warehouseId)?.name ?? 'Ярцево'}
+        onClose={() => setCellPreviewOpen(false)}
+      />
 
       <InventoryCountDialog
         open={countDialog !== null}
