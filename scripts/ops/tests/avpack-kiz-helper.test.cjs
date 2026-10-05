@@ -67,9 +67,10 @@ function harness(options = {}) {
         inspections.push(structuredClone(targets));
         return { selectedCount: 0, targetsReady: true, ...options.selection };
       },
-      async selectAndOpen(targets) {
+      async selectAndOpen(targets, assertCurrentSession) {
         events.push('selectAndOpen');
         mutations.push(structuredClone(targets));
+        assertCurrentSession();
       },
     },
     ...options.extraDeps,
@@ -79,6 +80,104 @@ function harness(options = {}) {
 
 function targetIdentity(targets) {
   return targets.map(({ row_id, wb_order_id, cis }) => ({ row_id, wb_order_id: String(wb_order_id), cis }));
+}
+
+function createFakeDom(targets, options = {}) {
+  let dialogOpen = false;
+  let rows = [];
+
+  const makeCheckbox = (onClick) => ({
+    checked: false,
+    disabled: false,
+    click() {
+      this.checked = !this.checked;
+      onClick?.(this);
+    },
+  });
+  const makeRow = (target, checkbox) => ({
+    querySelectorAll(selector) {
+      if (selector === 'a, button') return [{ textContent: target.wb_order_id }];
+      if (selector === 'code') {
+        const compact = `${target.cis.slice(0, 18)}…${target.cis.slice(-4)}`;
+        return [{ textContent: compact }];
+      }
+      if (selector === 'input[type="checkbox"]') return [checkbox];
+      if (selector === '*') return [{ textContent: 'Не выведен' }];
+      return [];
+    },
+  });
+
+  const targetCheckboxes = targets.map((target, index) =>
+    makeCheckbox(() => options.onTargetClick?.({ index, replaceRows, targetCheckboxes })),
+  );
+  rows = targets.map((target, index) => makeRow(target, targetCheckboxes[index]));
+
+  function replaceRows(nextRows) {
+    rows = nextRows;
+  }
+
+  const selectedCount = () => rows.reduce((count, row) => {
+    const [checkbox] = row.querySelectorAll('input[type="checkbox"]');
+    return count + (checkbox?.checked ? 1 : 0);
+  }, 0);
+  const action = {
+    get textContent() { return `Вывести из оборота (${selectedCount()})`; },
+    get disabled() { return selectedCount() === 0; },
+    click() { dialogOpen = true; },
+  };
+  const table = {
+    querySelectorAll(selector) {
+      if (selector === 'tbody tr') return rows;
+      if (selector === 'tbody input[type="checkbox"]:checked') {
+        return rows
+          .map(row => row.querySelectorAll('input[type="checkbox"]')[0])
+          .filter(checkbox => checkbox?.checked);
+      }
+      return [];
+    },
+  };
+  const page = {
+    querySelectorAll(selector) {
+      if (selector === 'input[type="date"]') return [{ value: '2026-09-18' }, { value: '2026-09-19' }];
+      if (selector === 'table[aria-label="КИЗ для вывода из оборота"]') return [table];
+      if (selector === 'button') return [action];
+      return [];
+    },
+  };
+  const dialog = { textContent: 'Выберите сертификат' };
+  const document = {
+    querySelector(selector) {
+      if (selector === '[role="dialog"]') return dialogOpen ? dialog : null;
+      return null;
+    },
+    querySelectorAll(selector) {
+      if (selector === '[data-testid="seller-kiz-withdrawal-page"]') return [page];
+      if (selector === '[role="dialog"]') return dialogOpen ? [dialog] : [];
+      return [];
+    },
+  };
+  return {
+    document,
+    makeCheckbox,
+    makeRow,
+    replaceRows,
+    get dialogOpen() { return dialogOpen; },
+  };
+}
+
+function harnessWithRealDom(options = {}) {
+  const previousDocument = global.document;
+  const fakeDom = createFakeDom([EXPECTED[0]], options.dom);
+  global.document = fakeDom.document;
+  try {
+    const h = harness({
+      rows: [row(EXPECTED[0])],
+      extraDeps: { ui: undefined, ...options.extraDeps },
+    });
+    return { ...h, fakeDom };
+  } finally {
+    global.document = previousDocument;
+  }
 }
 
 function assertReadyDryRun(result, verifiedTargets) {
@@ -233,6 +332,33 @@ test('execute surfaces a dialog-opening failure without retrying or signing', as
     },
   } });
   await failsSafely(h, { mode: 'execute' });
+});
+
+test('real DOM execute stops if the seller session changes after checkbox selection', async () => {
+  let currentToken = TOKEN;
+  const h = harnessWithRealDom({
+    dom: { onTargetClick() { currentToken = 'changed-session'; } },
+    extraDeps: { storage: { getItem() { return currentToken; } } },
+  });
+  await assert.rejects(() => h.helper.run({ mode: 'execute' }), /Сессия seller-кабинета изменилась/);
+  assert.equal(h.fakeDom.dialogOpen, false);
+});
+
+test('real DOM execute rejects a same-count replacement with an unapproved checkbox', async () => {
+  let fakeDom;
+  const h = harnessWithRealDom({
+    dom: {
+      onTargetClick({ replaceRows }) {
+        const unapproved = { row_id: 'other-row', wb_order_id: '9999999999', cis: 'unapproved-cis-value-that-is-long' };
+        const checkbox = fakeDom.makeCheckbox();
+        checkbox.checked = true;
+        replaceRows([fakeDom.makeRow(unapproved, checkbox)]);
+      },
+    },
+  });
+  fakeDom = h.fakeDom;
+  await assert.rejects(() => h.helper.run({ mode: 'execute' }), /Строки изменились|точное выделение/);
+  assert.equal(h.fakeDom.dialogOpen, false);
 });
 
 for (const path of ['/api/auth/me', REGISTRY]) {
