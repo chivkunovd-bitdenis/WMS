@@ -2146,6 +2146,36 @@ def _resolve_auto_product(
     return None, "Товар не найден в каталоге селлера"
 
 
+def _plan_auto_product_matches(
+    parsed_rows: list[dict[str, str | bytes]],
+    products: list[Product],
+    existing_normalized_cis: set[str],
+) -> dict[int, tuple[Product | None, str]]:
+    """Resolve every potentially accepted row before Product locks are taken."""
+    planned: dict[int, tuple[Product | None, str]] = {}
+    seen: set[str] = set()
+    for index, row in enumerate(parsed_rows):
+        normalized_cis = normalize_cis(str(row.get("cis") or ""))
+        code_valid = str(row.get("code_valid", "1")) == "1"
+        gtin = str(row.get("gtin") or "").strip()
+        if code_valid and normalized_cis is not None and not gtin:
+            gtin = extract_gtin_from_cis(normalized_cis) or ""
+        if not code_valid or normalized_cis is None or not gtin:
+            continue
+        if normalized_cis in seen:
+            continue
+        seen.add(normalized_cis)
+        if normalized_cis in existing_normalized_cis:
+            continue
+        planned[index] = _resolve_auto_product(
+            products,
+            article=str(row.get("sku") or "").strip(),
+            size=str(row.get("size") or "").strip(),
+            gtin=gtin,
+        )
+    return planned
+
+
 def _unmatched_to_json(row: AutoImportUnmatchedRow) -> dict[str, object]:
     return {
         "key": row.key,
@@ -2322,6 +2352,21 @@ async def auto_import_marking_codes(
                 )
             ).all()
         )
+        planned_matches = _plan_auto_product_matches(
+            parsed_rows,
+            products,
+            existing_normalized_cis,
+        )
+        # Resolve against the same catalog snapshot as before, then acquire
+        # every Product row that this upload can mutate in the common Product.id
+        # order before creating pools or codes.  File order (for example B→A)
+        # remains the output/import order but can no longer become lock order.
+        await _lock_import_products(
+            session,
+            tenant_id,
+            seller_id,
+            [product.id for product, _reason in planned_matches.values() if product],
+        )
         batch = MarkingCodeImport(
             id=request_id,
             tenant_id=tenant_id,
@@ -2405,12 +2450,7 @@ async def auto_import_marking_codes(
                     )
                 )
                 continue
-            product, reason = _resolve_auto_product(
-                products,
-                article=article or "",
-                size=size or "",
-                gtin=gtin,
-            )
+            product, reason = planned_matches[index]
             if product is None:
                 unmatched.append(
                     AutoImportUnmatchedRow(
