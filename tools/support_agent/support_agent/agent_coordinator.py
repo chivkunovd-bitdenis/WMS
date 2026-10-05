@@ -232,6 +232,15 @@ class AgentCoordinator:
         def progress(message: str) -> None:
             if not message.strip():
                 return
+            if event.get("parent_event_id"):
+                # Split parts produce one consolidated completion; their
+                # individual progress must not become parallel owner messages.
+                return
+            gate_key = f"agent_progress_gate:{event['id']}"
+            last_sent = float(self.store.kv_get(gate_key, 0) or 0)
+            if last_sent and self.clock() - last_sent < 300:
+                return
+            self.store.kv_set(gate_key, self.clock())
             # Commentary is an event for the single moderator, never a direct
             # completion claim or a second independent owner notification.
             digest = hashlib.sha256(message.encode()).hexdigest()[:16]
@@ -260,6 +269,7 @@ class AgentCoordinator:
         current_source = (self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
                           if source is not None else None)
         answer_queued = bool(owner and source is not None and answer
+                             and not event.get("parent_event_id")
                              and not fresh.get("cancel_requested")
                              and int(fresh.get("generation", 0)) == starting_generation
                              and current_source is not None
@@ -345,6 +355,19 @@ class AgentCoordinator:
             scope_error = self._task_scope_error(task_ids, snapshot)
             if scope_error:
                 return {"error": "task_not_ready", "reason": scope_error}
+            requested_tasks = set(task_ids)
+            if requested_tasks:
+                for active_id in reversed(self.store.kv_get("agent_job_index", [])):
+                    active = self.store.kv_get(f"agent_job:{active_id}", {})
+                    if active.get("status") not in ("scheduled", "queued", "running", "recovering"):
+                        continue
+                    overlap = requested_tasks & set(active.get("task_ids") or [])
+                    if not overlap:
+                        continue
+                    existing = self._public_job(active)
+                    existing["deduplicated"] = True
+                    existing["overlapping_task_ids"] = sorted(overlap)
+                    return existing
             material_json = json.dumps(material, sort_keys=True, ensure_ascii=False)
             job_id = hashlib.sha256(material_json.encode()).hexdigest()[:16]
             key = f"agent_job:{job_id}"

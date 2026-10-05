@@ -265,6 +265,14 @@ class AgentDispatcher:
                 parts = route.get("topics")
                 if not isinstance(parts, list) or len(parts) > 8:
                     raise ValueError("invalid topic routes")
+                split_ids = ([f"{event['id']}:part{position + 1}"
+                              for position in range(len(parts))]
+                             if len(parts) > 1 else [])
+                if split_ids:
+                    self.store.kv_set(f"agent_split_group:{event['id']}", {
+                        "source_event": event["id"], "part_ids": split_ids,
+                        "results": {}, "complete": False,
+                    })
                 if not parts:
                     if event["kind"] == "input":
                         current = self.store.row("SELECT revision FROM messages WHERE id=?",
@@ -293,7 +301,8 @@ class AgentDispatcher:
                     routed_id = f"{event['id']}:part{position + 1}" if len(parts) > 1 else event["id"]
                     if routed_id != event["id"] and not self.store.kv_get(f"agent_event:{routed_id}"):
                         self.store.kv_set(f"agent_event:{routed_id}", {
-                            **event, "id": routed_id, "subrequest": str(part.get("subrequest") or "")[:2000],
+                            **event, "id": routed_id, "parent_event_id": event["id"],
+                            "subrequest": str(part.get("subrequest") or "")[:2000],
                         })
                     if routed_id not in topic["pending"]:
                         topic["pending"].append(routed_id)
@@ -407,15 +416,53 @@ class AgentDispatcher:
             topic["status"] = "queued" if topic["pending"] else "waiting"
             self.store.kv_set(f"agent_topic:{topic_id}", topic)
             self.store.kv_set(f"agent_event_done:{event_id}", True)
-            self._emit_internal_locked(topic_id, "worker_done", {
-                "event_key": f"done:{event_id}",
-                "source_event": event_id, "summary": topic.get("summary", ""),
-                "text": result.get("result", "")[:2500],
-                "answer_queued": bool(result.get("answer_queued")),
-                "affected_areas": topic.get("affected_areas", []),
-                "task_ids": topic.get("task_ids", []),
-            })
             event = self.store.kv_get(f"agent_event:{event_id}", {})
+            parent_event_id = str(event.get("parent_event_id") or "")
+            if parent_event_id:
+                group_key = f"agent_split_group:{parent_event_id}"
+                group = self.store.kv_get(group_key, {})
+                results = dict(group.get("results") or {})
+                results[event_id] = {
+                    "summary": str(result.get("summary") or topic.get("summary") or "")[:1500],
+                    "text": str(result.get("result") or "")[:2500],
+                    "affected_areas": topic.get("affected_areas", []),
+                    "task_ids": topic.get("task_ids", []),
+                }
+                group["results"] = results
+                part_ids = [str(item) for item in group.get("part_ids") or []]
+                complete = bool(part_ids) and all(part_id in results for part_id in part_ids)
+                group["complete"] = complete
+                self.store.kv_set(group_key, group)
+                if complete:
+                    ordered = [results[part_id] for part_id in part_ids]
+                    texts: list[str] = []
+                    for item in ordered:
+                        text = str(item.get("text") or "").strip()
+                        if text and text not in texts:
+                            texts.append(text)
+                    self._emit_internal_locked(topic_id, "worker_done", {
+                        "event_key": f"split_done:{parent_event_id}",
+                        "source_event": parent_event_id,
+                        "summary": "\n".join(str(item.get("summary") or "")
+                                              for item in ordered)[:2500],
+                        "text": "\n\n".join(texts)[:6000],
+                        "answer_queued": False, "split_complete": True,
+                        "affected_areas": list(dict.fromkeys(
+                            area for item in ordered for area in item.get("affected_areas", [])
+                        ))[:50],
+                        "task_ids": list(dict.fromkeys(
+                            task_id for item in ordered for task_id in item.get("task_ids", [])
+                        ))[:50],
+                    })
+            else:
+                self._emit_internal_locked(topic_id, "worker_done", {
+                    "event_key": f"done:{event_id}",
+                    "source_event": event_id, "summary": topic.get("summary", ""),
+                    "text": result.get("result", "")[:2500],
+                    "answer_queued": bool(result.get("answer_queued")),
+                    "affected_areas": topic.get("affected_areas", []),
+                    "task_ids": topic.get("task_ids", []),
+                })
             if event.get("kind") == "input":
                 source = self.store.row("SELECT revision FROM messages WHERE id=?",
                                         (event["source_id"],))

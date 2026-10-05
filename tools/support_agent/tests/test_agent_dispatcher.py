@@ -233,10 +233,10 @@ def test_split_message_emits_one_completion_after_all_parts(tmp_path: Path) -> N
     assert len(queue) == 1
     completion = store.kv_get(f"agent_event:{queue[0]}")
     assert completion["kind"] == "worker_done"
-    assert completion["source_event"] == root_event
-    assert completion["split_complete"] is True
-    assert "Первая часть готова" in completion["text"]
-    assert "Вторая часть готова" in completion["text"]
+    assert completion["payload"]["source_event"] == root_event
+    assert completion["payload"]["split_complete"] is True
+    assert "Первая часть готова" in completion["payload"]["text"]
+    assert "Вторая часть готова" in completion["payload"]["text"]
 
 
 def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
