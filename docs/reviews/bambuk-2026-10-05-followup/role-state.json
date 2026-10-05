@@ -1,0 +1,55 @@
+{
+  "job_id": "1710a7649a6964db",
+  "source_message_ids": [
+    153,
+    154
+  ],
+  "base_sha": "001b93e00e3f76e29c7b3f658e082fe2c201b2d1",
+  "stock_recovery": {
+    "state": "blocked",
+    "reason": "ToolDenied: choose_bound_client_chat",
+    "writes_performed": false
+  },
+  "analyst": {
+    "state": "completed",
+    "provider": "codex",
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "ephemeral": true,
+    "prompt": "analyst-prompt.md",
+    "journal": "analyst-events.jsonl",
+    "responsibility": "new requirements and duplicate comparison only",
+    "result": "analyst-result.md"
+  },
+  "next_stage": "separate test writer before code; mockup gate when required",
+  "release_authorized": false,
+  "test_environment": {
+    "engine": "PostgreSQL 16.14",
+    "host": "127.0.0.1",
+    "port": 55462,
+    "database": "wms_test_662",
+    "user": "wms_test",
+    "purpose": "isolated concurrency contract tests",
+    "runtime_dir": "/Users/deniscivkunov/.wms-support-agent/job-runtime/1710a7649a6964db"
+  },
+  "tasks": {
+    "WMS-662": {
+      "branch": "codex/wms662-observed-handoff",
+      "stage": "test_contract",
+      "model": "gpt-6-astra",
+      "effort": "high",
+      "state": "retry_pending",
+      "error": "Selected model is at capacity. Please try a different model.",
+      "retry_delay_seconds": 60
+    },
+    "WMS-663": {
+      "branch": "codex/wms663-ozon-documents",
+      "stage": "mockup",
+      "model": "gpt-5.6-sol",
+      "effort": "high",
+      "state": "running",
+      "fallback_reason": "Sonnet CLI HTTP 401 OAuth access token has expired; credentials unchanged"
+    }
+  },
+  "updated_at": "2026-10-05T10:02:43.773082+00:00"
+}
