@@ -588,7 +588,14 @@ def _normalized_cis_sql() -> ColumnElement[str]:
     normalized identity, for example when a CSV supplied unrelated GTIN metadata.
     Python ``normalize_cis`` remains the authoritative final comparison.
     """
-    value = func.trim(MarkingCode.cis_code, " \t\n\r\v\f")
+    # Python strip() includes GS and Unicode whitespace. Trim the full set only
+    # at the edges: internal TAB/NBSP/record separators remain part of identity.
+    strip_chars = (
+        " \t\n\r\v\f\x1c\x1d\x1e\x1f\x85\u00a0\u1680"
+        "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+        "\u2028\u2029\u202f\u205f\u3000"
+    )
+    value = func.trim(MarkingCode.cis_code, strip_chars)
     for removable in ("\ufeff", " ", "\n", "\r"):
         value = func.replace(value, removable, "")
     return func.trim(value, "\x1d")
