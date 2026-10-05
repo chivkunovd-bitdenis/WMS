@@ -464,7 +464,11 @@ class NightRunner:
                 task.update(step="developer", feedback=reason)
                 self._save(tid, state)
                 return
-            task.update(reviewed_sha=head, review_by=execution.model)
+            task.update(
+                reviewed_sha=head,
+                review_by=execution.model,
+                review_summary=str(result.get("summary") or "ревью принято"),
+            )
         task["step"] = "acceptance"
         self._save(tid, state)
 
@@ -508,6 +512,9 @@ class NightRunner:
             f"Проведи приёмку {task['id']} как аналит по "
             f"{SKILLS_ROOT}/wms-product-analyst/SKILL.md. "
             "Прочитай requirements, diff, ревью и результаты тестов. Проверь сценарии. "
+            f"Перекрёстное ревью: модель {task.get('review_by') or 'не указана'}, "
+            f"SHA {task.get('reviewed_sha') or 'не указан'}, заключение: "
+            f"{task.get('review_summary') or 'нет сохранённого текста'}. "
             f"Дополнительные материалы приёмки от ведущего: {task.get('feedback') or 'нет'}. "
             "Владелец утвердил Sonnet с резервом gpt-5.6-sol и ревью Astra high; "
             "это актуальное правило вместо старого требования Opus в рабочей ветке. "

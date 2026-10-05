@@ -868,6 +868,8 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
         assert kwargs["session_key"] == "night:job1:WMS-700:analyst"
         assert "Дополнительные материалы приёмки от ведущего" in prompt
         assert "C7 вручную проверен в системном предпросмотре дважды" in prompt
+        assert "Перекрёстное ревью: модель" in prompt
+        assert "дефектов нет" in prompt
         doc.write_text(doc.read_text() + "\n## Заключение\nПроверки подтверждены.\n")
         return {"accepted": True, "summary": "принято"}
 
@@ -877,6 +879,8 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "review"
     runner.development(tid)  # review
     assert env.llm.calls[-1]["exclude_cli"] is None  # Astra can review Sol in the same provider
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["review_summary"] == "дефектов нет"
     runner.development(tid)  # acceptance saved before PR/CI
     task = runner._state(tid)["tasks"]["WMS-700"]
     assert task["step"] == "pr" and task["status"] == "working"
