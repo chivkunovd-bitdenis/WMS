@@ -389,7 +389,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               data-testid="fbs-assembly-packing"
             >
               <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
-                <FbsPackingScanBar token={token} qrDisabled={ozonOnly} rejected={{
+                <FbsPackingScanBar token={token} contextKey={supplyIds.join(',')} qrDisabled={ozonOnly} rejected={{
                   count: rejectedCount, active: rejectedFilterOn, onToggle: () => setRejectedFilter((current) => !current),
                 }} enabled={open && stage === 'packing' && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)

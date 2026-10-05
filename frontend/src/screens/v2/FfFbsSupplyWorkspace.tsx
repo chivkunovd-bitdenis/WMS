@@ -681,9 +681,10 @@ export function FfFbsSupplyWorkspace({
   // The ordinary supply card (no assembly frame at all); the assembly always registers its scanner.
   const ordinaryWbPacking = useSequentialPacking && !assemblyFrame
   const sequentialOpenRef = useRef(false)
-  sequentialOpenRef.current = useSequentialPacking && open && stage === 'packing'
-    && (assemblyFrame?.registerScanner ? Boolean(assemblyFrame.visible) : true)
-  useEffect(() => () => { sequentialOpenRef.current = false }, [])
+  // A scan accepted while packing remains valid after the operator switches
+  // to boxes. The bar itself controls intake visibility; this fence only
+  // closes the controller when the supply is actually closed/replaced.
+  sequentialOpenRef.current = useSequentialPacking && open
   const sequentialWorkspaceRef = useRef(workspace)
   sequentialWorkspaceRef.current = workspace
   const sequentialFrameRef = useRef(assemblyFrame)
@@ -3883,6 +3884,7 @@ export function FfFbsSupplyWorkspace({
                   {!assemblyFrame ? (
                     <FbsPackingScanBar
                       token={token}
+                      contextKey={supplyId ?? undefined}
                       enabled={open && stage === 'packing' && packagingEditable && Boolean(sequentialScanner || ozonPackingScanner)}
                       controllers={(sequentialScanner ?? ozonPackingScanner) ? [sequentialScanner ?? ozonPackingScanner!] : []}
                       qrDisabled={isOzonSupply}

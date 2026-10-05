@@ -93,6 +93,33 @@ export function packingSerialBusy(): boolean {
   return packingQueued > 0
 }
 
+export type PackingSerialQueue = {
+  busy: () => boolean
+  run: <T>(task: () => Promise<T>) => Promise<T>
+}
+
+/**
+ * A serial queue owned by one packing surface. It can outlive the visible bar
+ * while the operator switches tabs, so accepted scans finish in FIFO order;
+ * another screen gets another queue and never waits for this tail.
+ */
+export function createPackingSerialQueue(): PackingSerialQueue {
+  let chain: Promise<unknown> = Promise.resolve()
+  let queued = 0
+
+  return {
+    busy() {
+      return queued > 0
+    },
+    run<T>(task: () => Promise<T>): Promise<T> {
+      queued += 1
+      const run = chain.then(task, task)
+      chain = run.catch(() => undefined).finally(() => { queued -= 1 })
+      return run
+    },
+  }
+}
+
 export type PackingScanController = {
   /** Called synchronously when the physical scan arrives, before the shared queue. */
   onReceived?: (raw: string) => void
@@ -113,6 +140,7 @@ export type PackingScanController = {
   hasSavedAttempt: (raw: string) => boolean
   view: () => PackingScanView
 }
+
 export type PackingAttempt = {
   key: string
   preferences: FbsScanPrintPreferences
@@ -192,8 +220,11 @@ function poolKizKeys(result: FbsScanAutoPrintResult): string[] {
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
 export function routePackingScan(
   controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке' = 'сборке',
+  queue?: PackingSerialQueue,
 ): Promise<void> {
-  return runPackingSerial(() => routePackingScanNow(controllers, raw, place))
+  return queue
+    ? queue.run(() => routePackingScanNow(controllers, raw, place))
+    : runPackingSerial(() => routePackingScanNow(controllers, raw, place))
 }
 
 async function routePackingScanNow(
