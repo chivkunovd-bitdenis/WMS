@@ -52,6 +52,7 @@ class NightRunner:
         night = {
             "job_id": job_id, "step": "etalon_ci", "tasks": tasks,
             "release_authorized": bool(job.get("release_authorized")),
+            "prepare_release": bool(job.get("prepare_release")),
             "deadline_at": job.get("deadline_at"), "candidate_attempt": 0,
         }
         with self.store.transaction():
@@ -86,7 +87,13 @@ class NightRunner:
                 self.store.patch_data(tid, night=fresh)
             return
         state.update(changes)
-        self.store.patch_data(tid, night=state)
+        with self.store.transaction():
+            fresh = self._state(tid)
+            # A long CI/model call must not restore a revoked owner permission.
+            state["release_authorized"] = bool(fresh.get("release_authorized"))
+            if "release_hold_reason" in fresh:
+                state["release_hold_reason"] = fresh["release_hold_reason"]
+            self.store.patch_data(tid, night=state)
 
     def _task(self, state: dict[str, Any]) -> dict[str, Any] | None:
         if state.get("_active_task_id"):
@@ -146,7 +153,7 @@ class NightRunner:
                     if current["status"] == "working":
                         current.update(status="stopped", step="stopped",
                                        reason="не готово к сроку выпуска")
-                target = "release" if (state.get("release_authorized")
+                target = "release" if ((state.get("release_authorized") or state.get("prepare_release"))
                                        and any(current["status"] == "ready"
                                                for current in state["tasks"].values())) else "report"
                 step = "candidate" if target == "release" else "morning_report"
@@ -155,7 +162,7 @@ class NightRunner:
             task = self._task(state)
             if task is None:
                 if any(task["status"] == "ready" for task in state["tasks"].values()) \
-                        and state.get("release_authorized"):
+                        and (state.get("release_authorized") or state.get("prepare_release")):
                     deadline = state.get("deadline_at")
                     if deadline and self.p.clock() < float(deadline):
                         self._save(tid, state, next_poll=min(float(deadline), self.p.clock() + 60))
@@ -534,10 +541,29 @@ class NightRunner:
             return
         try:
             step = str(state.get("step"))
+            # Preparing a candidate and its CI does not authorize publication.
+            # Re-read the owner's decision at every mutating release boundary.
+            dispatched = (self.store.data(tid).get("hotfix") or {}).get(f"{step}_intent")
+            if (step in ("merge", "deploy", "promote") and not dispatched
+                    and not self._state(tid).get("release_authorized")):
+                if step in ("merge", "deploy"):
+                    state["release_recheck"] = "candidate_ci" if step == "merge" else "merged_ci"
+                self._save(tid, state, next_poll=self.p.clock() + 30)
+                return
+            if state.get("release_recheck") and not dispatched:
+                recheck = state.pop("release_recheck")
+                self._save(tid, state, step=recheck, next_poll=0)
+                return
             if step == "candidate":
                 self._candidate(tid, state)
             elif step == "candidate_ci":
                 self._candidate_ci(tid, state)
+            elif step == "awaiting_release":
+                if self._state(tid).get("release_authorized"):
+                    # Revalidate both PR SHAs and required checks after the hold.
+                    self._candidate_ci(tid, state)
+                else:
+                    self._save(tid, state, next_poll=self.p.clock() + 30)
             elif step == "candidate_attribute":
                 self._candidate_attribute(tid, state)
             elif step == "merged_ci":
@@ -614,6 +640,9 @@ class NightRunner:
             view = self._pr_view(candidate["pr"])
             if view.get("headRefOid") != candidate["head"] or view.get("baseRefOid") != candidate["base"]:
                 raise StepFailed("состав кандидата или etalon изменился после сборки; нужен новый прогон")
+            if not self._state(tid).get("release_authorized"):
+                self._save(tid, state, step="awaiting_release", next_poll=self.p.clock() + 30)
+                return
             self.store.patch_data(tid, hotfix={"step": "merge", "pr": candidate["pr"],
                                                 "path": candidate["path"],
                                                 "expected_head": candidate["head"]})
@@ -768,8 +797,15 @@ class NightRunner:
         if view.get("state") != "OPEN":
             raise StepFailed("PR постоянной охраны закрыт без слияния")
         if not promotion.get("merge_intent"):
-            promotion["merge_intent"] = True
-            self._save(tid, state)
+            with self.store.transaction():
+                fresh = self._state(tid)
+                if not fresh.get("release_authorized"):
+                    fresh["next_poll"] = self.p.clock() + 30
+                    self.store.patch_data(tid, night=fresh)
+                    return
+                promotion["merge_intent"] = True
+                fresh["promotion"] = promotion
+                self.store.patch_data(tid, night=fresh)
             self.hotfix.run_gh(["gh", "pr", "merge", pr, "--merge",
                                "--match-head-commit", promotion["head"]])
         self._save(tid, state, next_poll=self.p.clock() + 30)

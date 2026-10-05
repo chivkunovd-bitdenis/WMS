@@ -297,7 +297,8 @@ class HotfixRunner:
         with self.store.transaction():
             d = self.store.data(tid)
             current = dict(d.get("hotfix") or {})
-            if current.get("hold_requested"):
+            if (current.get("hold_requested")
+                    or (d.get("night") and not d["night"].get("release_authorized"))):
                 h.clear()
                 h.update(current)
                 return False

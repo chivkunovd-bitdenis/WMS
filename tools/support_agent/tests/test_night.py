@@ -11,6 +11,7 @@ from typing import Any
 
 import pytest
 
+from support_agent.hotfix import HotfixRunner
 from support_agent.llm import ExecResult, LlmError, LlmUnavailable
 from support_agent.night import NightRunner
 from support_agent.pipeline import ThreadPool
@@ -296,6 +297,142 @@ def test_required_ci_rejects_missing_or_skipped_jobs() -> None:
     assert not NightRunner._required_ci_passed([{**row, "bucket": "skipping"}
                                                  if row["name"] == "backend" else row
                                                  for row in good])
+
+
+def test_prepare_release_builds_candidate_without_publication_permission(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="tasks", prepare_release=True)
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    env.store.patch_data(tid, night=state)
+    runner.development(tid)
+    assert env.store.ticket(tid)["stage"] == "release"
+    assert runner._state(tid)["step"] == "candidate"
+    assert runner._state(tid)["release_authorized"] is False
+    assert runner.hotfix.release_calls == []
+
+
+def test_green_candidate_waits_for_owner_and_rechecks_after_approval(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="candidate_ci", candidate={
+        "pr": 9, "head": "b" * 40, "base": "a" * 40,
+        "path": "/fake", "started": env.clock.now,
+    })
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.pr_checks = lambda _: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")
+    ]
+    views: list[int] = []
+
+    def view(pr: int) -> dict[str, str]:
+        views.append(pr)
+        return {"headRefOid": "b" * 40, "baseRefOid": "a" * 40}
+
+    runner._pr_view = view  # type: ignore[method-assign]
+    runner.release(tid)
+    assert runner._state(tid)["step"] == "awaiting_release"
+    assert runner.hotfix.release_calls == []
+    state = runner._state(tid)
+    state.update(release_authorized=True, next_poll=0)
+    env.store.patch_data(tid, night=state)
+    runner.release(tid)
+    assert views == [9, 9]
+    assert runner._state(tid)["step"] == "merge"
+    assert runner.hotfix.release_calls == []
+
+
+@pytest.mark.parametrize("step", ["merge", "deploy", "promote"])
+def test_revoked_permission_blocks_mutating_release_steps(env: Any, step: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step})
+    runner.release(tid)
+    assert runner.hotfix.release_calls == []
+    assert runner._state(tid)["step"] == step
+    assert runner._state(tid)["release_authorized"] is False
+
+
+def test_stale_save_cannot_restore_release_authorization(env: Any) -> None:
+    runner, tid = make_night(env)
+    stale = runner._state(tid)
+    env.store.patch_data(tid, night={**stale, "release_authorized": False,
+                                    "release_hold_reason": "owner hold"})
+    runner._save(tid, stale, next_poll=0)
+    assert runner._state(tid)["release_authorized"] is False
+    assert runner._state(tid)["release_hold_reason"] == "owner hold"
+
+
+def test_prepare_release_at_deadline_still_prepares_candidate(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="tasks", prepare_release=True, deadline_at=env.clock.now)
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    env.store.patch_data(tid, night=state)
+    runner.development(tid)
+    assert runner._state(tid)["step"] == "candidate"
+    assert env.store.ticket(tid)["stage"] == "release"
+
+
+@pytest.mark.parametrize("intent", ["merge_intent", "deploy_intent"])
+def test_real_dispatch_claim_rejects_revocation_during_preflight(env: Any, intent: str) -> None:
+    runner, tid = make_night(env)
+    old_hotfix: dict[str, Any] = {"step": "merge"}
+    env.store.patch_data(tid, hotfix=old_hotfix)
+    env.store.patch_data(tid, night={**runner._state(tid), "release_authorized": False})
+    hotfix = HotfixRunner(env.pipe)
+    assert hotfix._claim_intent(tid, old_hotfix, **{intent: True}) is False
+    assert intent not in env.store.data(tid)["hotfix"]
+
+
+def test_guard_merge_rechecks_permission_after_network_read(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state.update(step="promote_ci", promotion={
+        "pr": 9, "head": "b" * 40, "started": env.clock.now,
+    })
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.pr_checks = lambda _: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")
+    ]
+    calls: list[list[str]] = []
+
+    def network(argv: list[str], *args: Any, **kwargs: Any) -> ExecResult:
+        calls.append(argv)
+        env.store.patch_data(tid, night={**runner._state(tid), "release_authorized": False})
+        return ok(out=json.dumps({"state": "OPEN", "headRefOid": "b" * 40}))
+
+    runner.hotfix.run_gh = network  # type: ignore[method-assign]
+    runner.release(tid)
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in calls)
+    assert not runner._state(tid)["promotion"].get("merge_intent")
+    assert runner._state(tid)["release_authorized"] is False
+
+
+@pytest.mark.parametrize("step", ["merge", "deploy"])
+def test_hold_allows_reconciliation_of_already_claimed_dispatch(env: Any, step: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step},
+                        hotfix={"step": step, f"{step}_intent": True})
+    reconciled: list[str] = []
+    runner._release_hotfix_step = lambda t, s, x: reconciled.append(x)  # type: ignore[method-assign]
+    runner.release(tid)
+    assert reconciled == [step]
+
+
+@pytest.mark.parametrize("step,recheck", [("merge", "candidate_ci"), ("deploy", "merged_ci")])
+def test_resume_after_late_hold_rechecks_ci_before_dispatch(env: Any, step: str, recheck: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step})
+    runner.release(tid)
+    state = runner._state(tid)
+    assert state["release_recheck"] == recheck
+    state.update(release_authorized=True, next_poll=0)
+    env.store.patch_data(tid, night=state)
+    runner.release(tid)
+    assert runner._state(tid)["step"] == recheck
+    assert runner.hotfix.release_calls == []
 
 
 def test_release_calls_existing_hotfix_merge_deploy_verify(env: Any) -> None:
