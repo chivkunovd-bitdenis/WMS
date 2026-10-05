@@ -237,6 +237,12 @@ def test_split_message_emits_one_completion_after_all_parts(tmp_path: Path) -> N
     assert completion["payload"]["split_complete"] is True
     assert "Первая часть готова" in completion["payload"]["text"]
     assert "Вторая часть готова" in completion["payload"]["text"]
+    agent.dispatcher._finish_event(
+        f"topic-{owner_id}-2", second_event,
+        {"summary": "Вторая проверена", "result": "Вторая часть готова",
+         "answer_queued": False},
+    )
+    assert store.kv_get("agent_dispatch_queue", []) == queue
 
 
 def test_new_topic_id_must_belong_to_source_and_safe_suffix(tmp_path: Path) -> None:
