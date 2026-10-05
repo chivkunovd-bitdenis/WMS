@@ -94,6 +94,11 @@ _MARKING_SOURCE_LABELS = {
 _IMPORT_REQUEST_LOCKS: dict[uuid.UUID, tuple[asyncio.Lock, int]] = {}
 
 
+def _tenant_import_lock_id(tenant_id: uuid.UUID) -> uuid.UUID:
+    """One identity lock shared by all three catalog import entry points."""
+    return uuid.uuid5(uuid.NAMESPACE_URL, f"wms-marking-import-identity:{tenant_id}")
+
+
 @asynccontextmanager
 async def _serialize_import_request(request_id: uuid.UUID) -> AsyncIterator[None]:
     """Serialize a request in-process; PostgreSQL lock below covers multiple workers."""
@@ -564,6 +569,10 @@ def normalize_cis(raw: str) -> str | None:
     if not text:
         return None
     text = text.replace(" ", "").replace("\n", "").replace("\r", "")
+    # A leading/trailing GS is transport framing, not a different marking-code
+    # identity. Keep the original value in cis_code, but ignore such framing
+    # while validating and detecting repeats of legacy normalized imports.
+    text = text.strip("\x1d")
     if len(text) < _CIS_MIN_LEN or len(text) > _CIS_MAX_LEN:
         return None
     if not any(ch.isalnum() for ch in text):
@@ -842,6 +851,70 @@ def _materialize_import_result_pdf(
     return _validated_label_artifact_tape(artifacts, None, None)
 
 
+async def _legacy_pdf_payloads_for_import(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    batch: MarkingCodeImport,
+) -> set[str] | None:
+    """Recover row-level provenance for a mixed import created before WMS-658.
+
+    An empty set means the batch contains no PDF input. ``None`` means PDF
+    provenance is expected but incomplete/corrupt, so exact printing must fail
+    closed instead of generating a substitute label.
+    """
+    filename = (batch.filename or "").casefold()
+    expected_pdf_count = filename.count(".pdf")
+    if expected_pdf_count == 0:
+        return set()
+    source_files = list(
+        (
+            await session.scalars(
+                select(MarkingCodeImportFile)
+                .where(
+                    MarkingCodeImportFile.tenant_id == tenant_id,
+                    MarkingCodeImportFile.import_batch_id == batch.id,
+                )
+                .order_by(MarkingCodeImportFile.created_at, MarkingCodeImportFile.id)
+            )
+        ).all()
+    )
+    if len(source_files) < expected_pdf_count:
+        return None
+
+    sources = [
+        (
+            row.storage_key,
+            row.original_filename,
+            row.size_bytes,
+            row.sha256_hex,
+        )
+        for row in source_files
+    ]
+
+    def decode_sources() -> set[str] | None:
+        from app.services.marking_import_storage_service import read_marking_import_source_pdf
+
+        payloads: set[str] = set()
+        try:
+            for storage_key, original_filename, size_bytes, sha256_hex in sources:
+                content = read_marking_import_source_pdf(storage_key)
+                checksum_matches = hashlib.sha256(content).hexdigest() == sha256_hex
+                if len(content) != size_bytes or not checksum_matches:
+                    return None
+                rows = parse_import_file(original_filename, content)
+                for row in rows:
+                    if str(row.get("code_valid", "1")) != "1":
+                        continue
+                    normalized = normalize_cis(str(row.get("cis") or ""))
+                    if normalized is not None:
+                        payloads.add(normalized)
+        except Exception:
+            return None
+        return payloads
+
+    return await asyncio.to_thread(decode_sources)
+
+
 async def build_import_result_pdf(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -855,16 +928,18 @@ async def build_import_result_pdf(
     if copies < 1 or copies > 100:
         raise MarkingCodeServiceError("invalid_copies")
     import_ids = list(dict.fromkeys([import_id, *(additional_import_ids or [])]))
+    batches: dict[uuid.UUID, MarkingCodeImport] = {}
     for requested_import_id in import_ids:
         batch = await session.get(MarkingCodeImport, requested_import_id)
         if batch is None or batch.tenant_id != tenant_id:
             raise MarkingCodeServiceError("import_not_found")
+        batches[requested_import_id] = batch
 
     selected_ids = code_ids
     if selected_ids is None:
         selected_ids = []
         for requested_import_id in import_ids:
-            selected_ids.extend(
+            import_code_ids = list(
                 (
                     await session.scalars(
                         select(MarkingCode.id)
@@ -876,9 +951,15 @@ async def build_import_result_pdf(
                     )
                 ).all()
             )
+            # Printing an entire result must be all-or-nothing. A missing row
+            # is evidence loss, not permission to silently print a shorter set.
+            if len(import_code_ids) != batches[requested_import_id].accepted_count:
+                raise MarkingCodeServiceError("code_not_found")
+            selected_ids.extend(import_code_ids)
     if not selected_ids:
         raise MarkingCodeServiceError("no_codes")
     allowed_import_ids = set(import_ids)
+    legacy_pdf_payloads: dict[uuid.UUID, set[str] | None] = {}
     exact_codes: list[tuple[bytes | None, str, bool]] = []
     for code_id in selected_ids:
         code = await session.get(MarkingCode, code_id)
@@ -888,8 +969,23 @@ async def build_import_result_pdf(
             or code.import_batch_id not in allowed_import_ids
         ):
             raise MarkingCodeServiceError("code_not_found")
+        artifact_required = code.label_artifact_required
+        if code.label_artifact_pdf is None and not artifact_required:
+            code_import_id = code.import_batch_id
+            assert code_import_id is not None
+            if code_import_id not in legacy_pdf_payloads:
+                legacy_pdf_payloads[code_import_id] = await _legacy_pdf_payloads_for_import(
+                    session,
+                    tenant_id,
+                    batches[code_import_id],
+                )
+            source_payloads = legacy_pdf_payloads[code_import_id]
+            normalized_cis = normalize_cis(code.cis_code)
+            artifact_required = source_payloads is None or (
+                normalized_cis is not None and normalized_cis in source_payloads
+            )
         exact_codes.append(
-            (code.label_artifact_pdf, code.cis_code, code.label_artifact_required)
+            (code.label_artifact_pdf, code.cis_code, artifact_required)
         )
     return await asyncio.to_thread(
         _materialize_import_result_pdf,
@@ -1467,14 +1563,33 @@ async def _existing_import_cis_codes(
     tenant_id: uuid.UUID,
     cis_codes: list[str],
 ) -> set[str]:
+    """Return normalized identities already stored for the tenant.
+
+    Historical rows contain the normalized payload while WMS-658 preserves the
+    original payload. Looking up only the literal cis_code would therefore let
+    the same DataMatrix through a second time when whitespace or edge GS framing
+    differs. GTIN narrows the legacy lookup without replacing the stored value.
+    """
     existing: set[str] = set()
     for offset in range(0, len(cis_codes), _IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE):
         chunk = cis_codes[offset : offset + _IMPORT_EXISTING_CIS_QUERY_CHUNK_SIZE]
+        normalized = {value for cis in chunk if (value := normalize_cis(cis)) is not None}
+        gtins = {
+            gtin
+            for value in normalized
+            if (gtin := extract_gtin_from_cis(value)) is not None
+        }
+        conditions: list[ColumnElement[bool]] = [MarkingCode.cis_code.in_(chunk)]
+        if gtins:
+            conditions.append(MarkingCode.gtin.in_(gtins))
         stmt = select(MarkingCode.cis_code).where(
             MarkingCode.tenant_id == tenant_id,
-            MarkingCode.cis_code.in_(chunk),
+            or_(*conditions),
         )
-        existing.update((await session.scalars(stmt)).all())
+        for stored_cis in (await session.scalars(stmt)).all():
+            stored_normalized = normalize_cis(stored_cis)
+            if stored_normalized is not None and stored_normalized in normalized:
+                existing.add(stored_normalized)
     return existing
 
 
@@ -1547,10 +1662,10 @@ async def import_marking_codes(
     uploaded_by_user_id: uuid.UUID | None,
 ) -> MarkingImportResult:
     """Serialize identical manual uploads and keep every write atomic."""
-    lock_id = _manual_import_lock_id(tenant_id, seller_id, files, pool_specs)
-    async with _serialize_import_request(lock_id):
+    request_lock_id = _manual_import_lock_id(tenant_id, seller_id, files, pool_specs)
+    async with _serialize_import_request(_tenant_import_lock_id(tenant_id)):
         try:
-            await _lock_import_request_in_database(session, tenant_id, lock_id)
+            await _lock_import_request_in_database(session, tenant_id, request_lock_id)
             return await _import_marking_codes_locked(
                 session,
                 tenant_id,
@@ -1631,7 +1746,11 @@ async def _import_marking_codes_locked(
         title = pool_spec.title
         product_ids = pool_spec.product_ids
         existing_cis = await _existing_import_cis_codes(session, tenant_id, cis_list)
-        new_cis = [cis for cis in cis_list if cis not in existing_cis]
+        new_cis = [
+            cis
+            for cis in cis_list
+            if (normalized := normalize_cis(cis)) is not None and normalized not in existing_cis
+        ]
         pool_accepted = 0
         pool_duplicates = len(cis_list) - len(new_cis)
         pool_invalid = 0
@@ -1680,8 +1799,18 @@ async def _import_marking_codes_locked(
             duplicate_count += pool_duplicates
             continue
 
-        if product_ids:
-            await _apply_pool_products(session, tenant_id, pool.id, product_ids)
+        # This import must have one commit for the batch, codes, pool links and
+        # product flags. `_apply_pool_products` is a standalone command that
+        # commits by design, so using it here would release the cross-worker
+        # identity lock and expose a partially saved import.
+        for product_id in dict.fromkeys(product_ids):
+            session.add(
+                MarkingPoolProduct(
+                    tenant_id=tenant_id,
+                    pool_id=pool.id,
+                    product_id=product_id,
+                )
+            )
 
         pool_results.append(
             PoolImportResultRow(
@@ -1863,11 +1992,18 @@ async def _lock_import_request_in_database(
     # transaction around while another request is finishing its commit.
     if session.get_bind().dialect.name != "postgresql":
         return
-    key = int.from_bytes(
-        hashlib.sha256(f"marking-import:{tenant_id}:{request_id}".encode()).digest()[:8],
-        signed=True,
-    )
-    await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
+    # The tenant lock makes normalized duplicate detection atomic across auto,
+    # manual and assign requests (and across application workers). The request
+    # lock retains the existing retry/idempotency serialization.
+    for lock_name in (
+        f"marking-import-identity:{tenant_id}",
+        f"marking-import:{tenant_id}:{request_id}",
+    ):
+        key = int.from_bytes(
+            hashlib.sha256(lock_name.encode()).digest()[:8],
+            signed=True,
+        )
+        await session.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": key})
 
 
 async def _auto_import_groups(
@@ -1934,7 +2070,7 @@ async def auto_import_marking_codes(
         raise MarkingCodeServiceError("empty_file")
     fingerprint = _import_files_fingerprint(files)
 
-    async with _serialize_import_request(request_id):
+    async with _serialize_import_request(_tenant_import_lock_id(tenant_id)):
         await _lock_import_request_in_database(session, tenant_id, request_id)
         # Do not start a read transaction before waiting for the in-process
         # lock.  In SQLite that would pin the second concurrent attempt to a
@@ -1963,6 +2099,11 @@ async def auto_import_marking_codes(
         parsed_rows = await asyncio.to_thread(_parse_import_files, files)
         if not parsed_rows:
             raise MarkingCodeServiceError("empty_file")
+        existing_normalized_cis = await _existing_import_cis_codes(
+            session,
+            tenant_id,
+            [str(row.get("cis") or "") for row in parsed_rows],
+        )
         products = list(
             (
                 await session.scalars(
@@ -2043,13 +2184,7 @@ async def auto_import_marking_codes(
                 )
                 continue
             seen.add(normalized_cis)
-            existing_code = await session.scalar(
-                select(MarkingCode).where(
-                    MarkingCode.tenant_id == tenant_id,
-                    MarkingCode.cis_code == cis,
-                )
-            )
-            if existing_code is not None:
+            if normalized_cis in existing_normalized_cis:
                 unmatched.append(
                     AutoImportUnmatchedRow(
                         key=key,
@@ -2115,6 +2250,7 @@ async def auto_import_marking_codes(
                     )
                 )
                 continue
+            existing_normalized_cis.add(normalized_cis)
             _link_accepted_product_import_pool(
                 session,
                 tenant_id=tenant_id,
@@ -2179,7 +2315,7 @@ async def assign_import_rows_to_product(
     ).hexdigest()
     mode = "wms476-assign"
 
-    async with _serialize_import_request(request_id):
+    async with _serialize_import_request(_tenant_import_lock_id(tenant_id)):
         await _lock_import_request_in_database(session, tenant_id, request_id)
         # As with auto import, load the scoped product only after this request
         # owns the lock so a retry observes the committed idempotency record.
@@ -2226,6 +2362,11 @@ async def assign_import_rows_to_product(
             return result
 
         parsed_rows = await asyncio.to_thread(_parse_import_files, files)
+        existing_normalized_cis = await _existing_import_cis_codes(
+            session,
+            tenant_id,
+            [str(row.get("cis") or "") for row in parsed_rows],
+        )
         selected: list[tuple[str, dict[str, str | bytes]]] = []
         for key in selected_key_list:
             try:
@@ -2270,6 +2411,8 @@ async def assign_import_rows_to_product(
                 gtin = extract_gtin_from_cis(normalized_cis) or ""
             if not gtin:
                 continue
+            if normalized_cis in existing_normalized_cis:
+                continue
             pool = await _product_import_pool(
                 session,
                 tenant_id=tenant_id,
@@ -2293,6 +2436,7 @@ async def assign_import_rows_to_product(
             )
             if code is None:
                 continue
+            existing_normalized_cis.add(normalized_cis)
             _link_accepted_product_import_pool(
                 session,
                 tenant_id=tenant_id,

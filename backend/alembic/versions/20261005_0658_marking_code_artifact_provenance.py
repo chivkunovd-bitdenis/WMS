@@ -27,11 +27,12 @@ def upgrade() -> None:
         ),
     )
     # Before this migration only PDF imports stored a label artifact. Preserve
-    # provenance from a PDF-only import name as well as the artifact itself: a
+    # provenance from the import name as well as the artifact itself: a
     # damaged/missing legacy artifact must not silently turn a PDF code into a
-    # CSV/TXT code that can be regenerated from payload. Mixed imports are not
-    # classified by batch alone because that would incorrectly require a PDF
-    # artifact for their legitimate CSV/TXT rows.
+    # CSV/TXT code that can be regenerated from payload. A mixed legacy batch
+    # cannot be classified per row in SQL; exact provenance for those rows is
+    # recovered from MarkingCodeImportFile at print time. New mixed imports
+    # store the exact per-code flag directly.
     op.execute(
         """
         UPDATE marking_codes
