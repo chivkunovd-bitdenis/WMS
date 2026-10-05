@@ -57,6 +57,20 @@ def process_tree() -> dict[int, int]:
             for row in command('ps', '-axo', 'pid=,ppid=').splitlines() if row.strip()}
 
 
+def process_groups() -> dict[int, int]:
+    """Numeric metadata only; PGID survives a parent's death/reparenting."""
+    return {int(row.split()[0]): int(row.split()[2])
+            for row in command('ps', '-axo', 'pid=,ppid=,pgid=').splitlines() if row.strip()}
+
+
+def idle_gate_verified(pid: int, marker: Path) -> bool:
+    """Only this installation's running gate can acknowledge its unique marker."""
+    try:
+        return (marker / str(pid)).read_text() == str(pid)
+    except OSError:
+        return False
+
+
 def no_child_processes(pid: int) -> None:
     assert pid not in process_tree().values(), 'A service subprocess is active'
 
@@ -84,49 +98,78 @@ def atomic_bytes(path: Path, value: bytes) -> None:
 
 
 def drain_and_bootout(pid: int) -> None:
-    """Gate all respawns atomically, then await the old process AND descendants.
+    """Gate respawns, drain the verified dedicated group, then boot out idle gates.
 
-    Installed runner startup loads __main__ before run_forever. Thus replacing
-    __main__ does not alter any in-flight Python stack. Unlike bootout, os.kill
-    sends SIGTERM only to the parent, without launchd's kill deadline. The legacy
-    final tick may still submit work; Python's non-daemon executors drain it before
-    the parent exits. A timeout restores the original entrypoint and kills nothing.
+    No launchd termination deadline is started for the worker. Its last tick and
+    non-daemon executors finish normally. Group membership catches children never
+    observed with their original PPID, including after a worker crash. Observed
+    descendants outside that group are also awaited. Unknown identities abort.
     """
     global STOPPED
     entrypoint = APP / 'support_agent/__main__.py'
     original = entrypoint.read_bytes()
-    gate = ENTRYPOINT_GATE
-    # Python's timestamp bytecode cache also uses source size; force invalidation.
+    if service_pid() != pid:
+        raise RuntimeError('Service identity changed before gate; installation aborted')
+    groups = process_groups()
+    if groups.get(pid) != pid or {p for p, g in groups.items() if g == pid} != {pid}:
+        raise RuntimeError('Service drain requires an idle dedicated process group')
+    marker = Path(tempfile.mkdtemp(prefix='.wms676-gate-', dir=APP))
+    os.chmod(marker, 0o700)
+    gate = (f'import os\nfrom pathlib import Path\n'
+            f'Path({str(marker)!r}, str(os.getpid())).write_text(str(os.getpid()))\n').encode()
+    gate += ENTRYPOINT_GATE
+    # Python timestamp bytecode caching uses source size: invalidate the old code.
     if len(gate) == len(original):
         gate += b'\n'
-    atomic_bytes(entrypoint, gate)
     tracked = {pid}
     try:
-        # The parent cannot respawn as a worker after this atomic gate boundary.
-        # If it exited independently, the next process is gated; do not signal a
-        # stale PID which launchd no longer identifies as this service.
-        if service_pid() == pid:
-            os.kill(pid, signal.SIGTERM)
+        atomic_bytes(entrypoint, gate)
+        # A replacement may have read the old entrypoint BEFORE the atomic gate.
+        # Never assume that a changed PID is idle, and never signal that process.
+        if service_pid() != pid:
+            raise RuntimeError('Service identity changed across gate; installation aborted')
+        os.kill(pid, signal.SIGTERM)
         deadline = time.monotonic() + DRAIN_TIMEOUT_SEC
         while True:
             rows = process_tree()
+            groups = process_groups()
+            tracked |= {p for p, g in groups.items() if g == pid}
             while True:
-                children = {child for child, parent in rows.items() if parent in tracked}
-                expanded = tracked | children
+                expanded = tracked | {child for child, parent in rows.items() if parent in tracked}
                 if expanded == tracked:
                     break
                 tracked = expanded
-            if not tracked.intersection(rows):
+            if not tracked.intersection(rows.keys() | groups.keys()):
                 break
             if time.monotonic() >= deadline:
                 raise TimeoutError('Service drain timed out; ongoing work was not killed')
             time.sleep(0.25)
-        # The old process and every observed descendant are gone. Any launchd
-        # respawn can only run the gated entrypoint, even if it races this bootout.
+        # Query launchd again AFTER drain. A live replacement must prove it ran
+        # this gate, and its group must contain only the idle gate. Missing PID
+        # means KeepAlive has not respawned yet; any future respawn reads the gate.
+        try:
+            actual = service_pid()
+        except StopIteration:
+            actual = None
+        groups = process_groups()
+        if actual in groups:
+            assert actual is not None
+            if (groups[actual] != actual
+                    or {p for p, g in groups.items() if g == actual} != {actual}
+                    or not idle_gate_verified(actual, marker)):
+                raise RuntimeError('Replacement process has no verified idle gate; installation aborted')
+        # Catch an orphan that became visible between the final independent ps
+        # snapshots. No new worker work can be created by the acknowledged gate.
+        if any(g == pid for g in groups.values()):
+            raise RuntimeError('Service group still has pending work; installation aborted')
         subprocess.run(['launchctl', 'bootout', f'gui/{os.getuid()}', str(PLIST)], check=True)
         STOPPED = True
     finally:
         atomic_bytes(entrypoint, original)
+        # On abort, a live gate may not have opened its marker yet. Leave this
+        # tiny private directory then; deleting it would crash that respawn.
+        if STOPPED:
+            shutil.rmtree(marker)
 
 
 def main() -> None:
@@ -143,12 +186,14 @@ def main() -> None:
     package_files = command('git', 'ls-tree', '-r', '--name-only', sha, '--',
                             'tools/support_agent/support_agent').splitlines()
     assert install_files, 'No package migration in this commit'
+    published_files: dict[str, bytes] = {}
     for path in package_files:
         target = APP / Path(path).relative_to('tools/support_agent')
         baseline = subprocess.check_output(['git', 'show', f'{base}:{path}'], cwd=ROOT)
         assert target.read_bytes() == baseline, f'Installed file differs from baseline: {path}'
         published = subprocess.check_output(['git', 'show', f'{sha}:{path}'], cwd=ROOT)
         assert (ROOT / path).read_bytes() == published, f'Checkout differs from published SHA: {path}'
+        published_files[path] = published
     pid = service_pid()
     no_child_processes(pid)
     before = idle_snapshot()
@@ -196,13 +241,13 @@ def main() -> None:
         for path in install_files:
             relative = Path(path).relative_to('tools/support_agent')
             target = APP / relative
-            atomic_bytes(target, (ROOT / path).read_bytes())
+            atomic_bytes(target, published_files[path])
             digest = hashlib.sha256(target.read_bytes()).hexdigest()
-            assert digest == hashlib.sha256((ROOT / path).read_bytes()).hexdigest()
+            assert digest == hashlib.sha256(published_files[path]).hexdigest()
             hashes[str(relative)] = digest
         for path in package_files:
             relative = Path(path).relative_to('tools/support_agent')
-            assert (APP / relative).read_bytes() == (ROOT / path).read_bytes(), str(relative)
+            assert (APP / relative).read_bytes() == published_files[path], str(relative)
         assert idle_snapshot() == stopped, 'Installation altered task/job/Telegram state'
         subprocess.run([str(APP / '.venv/bin/python'), '-m', 'support_agent', 'check-config',
                         '--config', str(cfg_path)], cwd=APP, check=True)
@@ -217,6 +262,12 @@ def main() -> None:
         with sqlite3.connect(f'file:{STATE / "state.db"}?mode=ro', uri=True) as db:
             heartbeat = json.loads(db.execute("SELECT value FROM kv WHERE key='heartbeat'").fetchone()[0])
         assert time.time() - float(heartbeat) < 30
+        # Report exact SHA only after rechecking installed files at the reporting
+        # boundary, still against the pinned blobs (never the mutable checkout).
+        for path in package_files:
+            relative = Path(path).relative_to('tools/support_agent')
+            assert (APP / relative).read_bytes() == published_files[path], (
+                f'Installed package differs from published commit: {relative}')
         report = {'installed_sha': sha, 'published_branch': branch, 'model': MODEL,
                   'codex_bin': CODEX_BIN, 'review_model': REVIEW_MODEL, 'review_effort': 'high',
                   'previous_package_sha': base, 'files': hashes,
