@@ -285,6 +285,24 @@ type QueuedPackingScan = {
   preferences: FbsScanPrintPreferences
 }
 
+type AssemblyPlaceOrder = (
+  orderId: string,
+  releaseKizWait: boolean,
+  boxId: string | null,
+  scannedCode?: string,
+  scannedPositionId?: string,
+  isCurrent?: () => boolean,
+) => Promise<void>
+
+type OzonIdleScanContext = {
+  lookupCode: string
+  scannedPositionId?: string
+  isCurrent: () => boolean
+  acceptsOrder: (orderId: string) => boolean
+  placeOrder: AssemblyPlaceOrder | null
+  releaseSelection: () => void
+}
+
 const KIZ_HINT_TEXT: Record<string, string> = {
   keyboard_layout: 'исправлена раскладка',
   gs_substitute: 'восстановлен разделитель',
@@ -585,13 +603,7 @@ export function FfFbsSupplyWorkspace({
   const acceptPackingScanRef = useRef<(raw: string) => void>(() => undefined)
   // WMS-574: действия рамки окна сборки внутри приёма скана. В обычной карточке
   // они пустые, и приём скана идёт ровно как раньше.
-  const assemblyPlaceOrderRef = useRef<((
-    orderId: string,
-    releaseKizWait: boolean,
-    boxId: string | null,
-    scannedCode?: string,
-    scannedPositionId?: string,
-  ) => Promise<void>) | null>(null)
+  const assemblyPlaceOrderRef = useRef<AssemblyPlaceOrder | null>(null)
   const assemblyScanErrorTextRef = useRef<((cause: unknown, raw: string) => string | null) | null>(null)
   // Короб, открытый в момент скана: код несёт его с собой до назначения, даже
   // если оператор тем временем переключил короб или завершил работу (R22).
@@ -1196,10 +1208,10 @@ export function FfFbsSupplyWorkspace({
       raw: string,
       preferences: FbsScanPrintPreferences,
       propagateNotFound = false,
-      lookupCode = raw,
-      scannedPositionId?: string,
+      ozonContext?: OzonIdleScanContext,
     ) => {
       if (!workspace) return
+      const ownsScan = () => ozonContext?.isCurrent() ?? true
       // WMS-574 R22: в рамке окна сборки — короб, открытый в момент этого скана.
       const assemblyBoxAtScan = assemblyTakeScanBoxRef.current?.(raw) ?? null
       busyHardwareCaptureEnabledRef.current = (
@@ -1216,13 +1228,29 @@ export function FfFbsSupplyWorkspace({
         // KIZ or product barcode, even when no automatic print mode is active.
         let stickerNotFound: unknown = null
         try {
-          const found = await lookupFbsOrderBySticker(token, authHeaders, workspace.supply.id, lookupCode)
+          const found = await lookupFbsOrderBySticker(
+            token,
+            authHeaders,
+            workspace.supply.id,
+            ozonContext?.lookupCode ?? raw,
+          )
+          if (!ownsScan()) return
+          if (ozonContext && !ozonContext.acceptsOrder(found.order_id)) {
+            throw new FbsApiError(
+              'scan_product_exhausted',
+              'В этой поставке не осталось незавершённых позиций с таким штрихкодом.',
+              null,
+              false,
+              404,
+            )
+          }
           if (!found.can_bind) {
             setKizScanError({ text: fbsErrorText(found.block_reason ?? 'На этот заказ ЧЗ внести нельзя'), debug: null })
             playScanError()
             return
           }
           if (!workspace.orders.some((order) => order.id === found.order_id)) await load(true)
+          if (!ownsScan()) return
           kizSelectedStickerRef.current = raw
           setRecentlyScannedOrderId(found.order_id)
           if (found.needs_confirmation) setKizConfirmTarget(found)
@@ -1231,15 +1259,22 @@ export function FfFbsSupplyWorkspace({
           // WMS-575: строка заказа ожила — звук сразу, по ответу lookup.
           playScanSuccess()
           // WMS-574 Д8, Д9: в рамке окна сборки найденный заказ ложится в открытый короб.
-          if (assemblyPlaceOrderRef.current) {
-            await assemblyPlaceOrderRef.current(
+          const placeOrder = ozonContext?.placeOrder ?? assemblyPlaceOrderRef.current
+          const releaseSelection = isOzonSupply
+            && !found.needs_confirmation
+            && !found.requires_honest_sign
+          if (placeOrder) {
+            await placeOrder(
               found.order_id,
-              !found.needs_confirmation,
+              releaseSelection,
               assemblyBoxAtScan,
               raw,
-              scannedPositionId,
+              ozonContext?.scannedPositionId,
+              ozonContext?.isCurrent,
             )
           }
+          if (!ownsScan()) return
+          if (releaseSelection) ozonContext?.releaseSelection()
           return
         } catch (cause) {
           if (!(cause instanceof FbsApiError) || cause.code !== 'sticker_not_found') {
@@ -1604,6 +1639,7 @@ export function FfFbsSupplyWorkspace({
         // Перечитывание поставки догоняет в фоне и не держит следующий скан (Д5).
         if (plan.printChz) void load(true)
       } catch (cause) {
+        if (!ownsScan()) return
         if (propagateNotFound && cause instanceof FbsApiError
           && ['sticker_not_found', 'scan_product_not_found', 'scan_product_exhausted'].includes(cause.code)) {
           throw cause
@@ -1615,8 +1651,10 @@ export function FfFbsSupplyWorkspace({
         })
         playScanError()
       } finally {
-        setKizScanBusy(false)
-        refocusKizInput()
+        if (ownsScan()) {
+          setKizScanBusy(false)
+          refocusKizInput()
+        }
       }
     },
     [workspace, token, authHeaders, load, providerName, refocusKizInput, isOzonSupply],
@@ -2120,25 +2158,46 @@ export function FfFbsSupplyWorkspace({
         startPromise = null
       }
     }
-    const positionRoute = (raw: string, current: FbsWorkspace) => {
+    const scanRoute = (raw: string, current: FbsWorkspace) => {
       const clean = raw.trim()
+      const assignedPositionIds = new Set(
+        current.boxes.flatMap((box) => box.assigned_order_product_ids ?? []),
+      )
+      let known = false
       for (const order of current.orders) {
+        const orderEligible = order.status !== 'cancelled' && order.pack.status !== 'packed'
         for (const position of order.positions) {
           if (!productBarcodeOptionsForPosition(position, 'ozon').some((option) => option.barcode === clean)) continue
+          known = true
+          if (!orderEligible || (position.id && assignedPositionIds.has(position.id))) continue
           return {
+            kind: 'eligible' as const,
             lookupCode: order.external_order_id ?? order.sticker.code ?? clean,
             positionId: position.id ?? undefined,
+            orderId: order.id,
           }
         }
+        const orderCodeMatches = order.external_order_id === clean
+          || order.sticker.code === clean
+          || productBarcodeOptionsForOrder(order, 'ozon').some((option) => option.barcode === clean)
+        if (!orderCodeMatches) continue
+        known = true
+        const position = order.positions.find((one) => !one.id || !assignedPositionIds.has(one.id))
+        if (!orderEligible || !position) continue
+        return {
+          kind: 'eligible' as const,
+          lookupCode: order.external_order_id ?? order.sticker.code ?? clean,
+          positionId: undefined,
+          orderId: order.id,
+        }
       }
-      return { lookupCode: clean, positionId: undefined }
+      return known
+        ? { kind: 'exhausted' as const, lookupCode: clean, positionId: undefined, orderId: undefined }
+        : { kind: 'unknown' as const, lookupCode: clean, positionId: undefined, orderId: undefined }
     }
     const belongsToOzonSupply = (raw: string) => {
       const current = sequentialWorkspaceRef.current
-      if (!current) return false
-      const clean = raw.trim()
-      return fbsCodeBelongsToSupply(clean, current)
-        || current.orders.some((order) => order.external_order_id === clean || order.sticker.code === clean)
+      return current ? scanRoute(raw, current).kind === 'eligible' : false
     }
     return {
       matches: belongsToOzonSupply,
@@ -2165,6 +2224,8 @@ export function FfFbsSupplyWorkspace({
         const scanKiz = ozonScanKizRef.current
         const scanIdle = ozonScanIdleRef.current
         const target = ozonKizTargetRef.current
+        const placeOrder = assemblyPlaceOrderRef.current
+        const dropSelection = ozonDropSelectionRef.current
         const preferences = { ...loadFbsScanPrintPreferences(token), printQr: false }
         if (target) {
           await ensureStarted(current)
@@ -2172,14 +2233,48 @@ export function FfFbsSupplyWorkspace({
           await scanKiz(raw, false, preferences)
           return
         }
-        const route = positionRoute(raw, current)
+        const route = scanRoute(raw, current)
+        if (route.kind === 'exhausted') {
+          throw new FbsApiError(
+            'scan_product_exhausted',
+            'В этой поставке не осталось незавершённых позиций с таким штрихкодом.',
+            null,
+            false,
+            404,
+          )
+        }
         await ensureStarted(current)
         if (!scanStillOwnsWorkspace(generation)) throw staleScan()
         // Local rows only choose the right controller and translate a product
         // position into the posting identifier supported by the lookup API.
         // Unknown codes still reach the server: Ozon child postings are not
         // present in the workspace payload.
-        await scanIdle(raw, preferences, true, route.lookupCode, route.positionId)
+        await scanIdle(raw, preferences, true, {
+          lookupCode: route.lookupCode,
+          scannedPositionId: route.positionId,
+          isCurrent: () => scanStillOwnsWorkspace(generation),
+          acceptsOrder: (orderId) => {
+            const latest = sequentialWorkspaceRef.current
+            if (!latest || latest.supply.id !== supplyId) return false
+            const latestRoute = scanRoute(raw, latest)
+            if (route.kind === 'eligible') {
+              return latestRoute.kind === 'eligible'
+                && latestRoute.orderId === route.orderId
+                && latestRoute.positionId === route.positionId
+                && orderId === route.orderId
+            }
+            if (latestRoute.kind === 'exhausted') return false
+            const found = latest.orders.find((order) => order.id === orderId)
+            if (!found || found.status === 'cancelled' || found.pack.status === 'packed') return false
+            const assigned = new Set(latest.boxes.flatMap((box) => box.assigned_order_product_ids ?? []))
+            return found.positions.some((position) => !position.id || !assigned.has(position.id))
+          },
+          placeOrder,
+          releaseSelection: () => {
+            ozonKizTargetRef.current = null
+            dropSelection()
+          },
+        })
       },
     }
   }, [isOzonSupply, supplyId, token, authHeaders])
@@ -3306,62 +3401,52 @@ export function FfFbsSupplyWorkspace({
     // Д8, Д9, R22–R24: заказ, найденный сканом, — в короб, открытый в момент
     // скана, если ещё ни в каком коробе не лежит; заказу без обязательного ЧЗ
     // ждать ЧЗ незачем.
-    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId, scannedCode, scannedPositionId) => {
-      if (!current) return
-      let orders = current.orders
+    assemblyPlaceOrderRef.current = async (orderId, releaseKizWait, boxId, scannedCode, scannedPositionId, isCurrent = () => true) => {
+      if (!current || !isCurrent()) return
       const order = current.orders.find((one) => one.id === orderId)
+      const assignedPositionIds = new Set(
+        current.boxes.flatMap((box) => box.assigned_order_product_ids ?? []),
+      )
       const scannedPositionIds = isOzonSupply && scannedPositionId
-        ? [scannedPositionId]
+        ? assignedPositionIds.has(scannedPositionId) ? [] : [scannedPositionId]
         : isOzonSupply
         ? (order?.positions ?? []).filter((position) => {
           if (!position.id) return false
+          if (assignedPositionIds.has(position.id)) return false
           if (!scannedCode) return true
           return productBarcodeOptionsForPosition(position, 'ozon').some((option) => option.barcode === scannedCode.trim())
         }).map((position) => position.id!)
         : []
       const positionIds = isOzonSupply && scannedPositionIds.length === 0
-        ? (order?.positions ?? []).flatMap((position) => position.id ? [position.id] : [])
+        ? (order?.positions ?? []).flatMap((position) => (
+          position.id && !assignedPositionIds.has(position.id) ? [position.id] : []
+        ))
         : scannedPositionIds
       const alreadyBoxed = isOzonSupply
         ? positionIds.length > 0 && positionIds.every((positionId) => current.boxes.some((box) => box.assigned_order_product_ids?.includes(positionId)))
         : current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
-      const releaseUnmarkedSelection = () => {
-        if (!releaseKizWait) return false
-        const selectedOrder = orders.find((one) => one.id === orderId)
-        if (!selectedOrder || requiresOrderHonestSign(selectedOrder)) return false
-        // The controller ref participates in mixed routing before React's next
-        // render, so clear it together with the visible selection.
-        ozonKizTargetRef.current = null
-        dropKizScanActive()
-        return true
-      }
       if (!alreadyBoxed) {
         if (!boxId || !current.boxes.some((box) => box.id === boxId)) {
-          if (releaseUnmarkedSelection()) setAssemblyBoxHint(null)
-          else setAssemblyBoxHint('Откройте или создайте короб.')
+          setAssemblyBoxHint(releaseKizWait ? null : 'Откройте или создайте короб.')
           return
         }
         try {
-          const next = await assignToAssemblyBox(
+          await assignToAssemblyBox(
             current,
             boxId,
             isOzonSupply ? [] : [orderId],
             isOzonSupply ? positionIds : undefined,
           )
-          if (next) orders = next.orders
+          if (!isCurrent()) return
         } catch (cause) {
+          if (!isCurrent()) return
           setKizScanError({ text: cause instanceof Error ? fbsErrorText(cause.message) : 'Заказ не положен в короб.', debug: null })
           playScanError()
           return
         }
       }
+      if (!isCurrent()) return
       setAssemblyBoxHint(null)
-      if (!releaseKizWait) return
-      const refreshedOrder = orders.find((one) => one.id === orderId)
-      if (refreshedOrder && !requiresOrderHonestSign(refreshedOrder)) {
-        ozonKizTargetRef.current = null
-        dropKizScanActive()
-      }
     }
     // R16, Д19: «Этого товара нет в поставке» — только если сервер не нашёл
     // код в поставке и это не ШК товара её заказа и не ЧЗ такого товара;
