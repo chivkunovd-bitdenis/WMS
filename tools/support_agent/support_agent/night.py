@@ -118,8 +118,8 @@ class NightRunner:
                     tid,
                     state,
                     task,
-                    "обязательный frontend-разработчик Opus недоступен; "
-                    f"задача не передана другой модели: {exc}",
+                    "frontend-разработчики Sonnet и Sol 5.6 недоступны: "
+                    f"{exc}",
                 )
                 return
             raise
@@ -300,7 +300,6 @@ class NightRunner:
             "frontend" if task.get("frontend") else "routine", prompt,
             ticket_id=task.get("ticket_id"),
             session_key=f"night:{state['job_id']}:{task['id']}:developer", mode="write",
-            cli_only="claude" if task.get("frontend") else None,
             cwd=task["path"], timeout=3600,
         )
         task.update(dev_cli=execution.cli, dev_model=execution.model)
@@ -347,7 +346,9 @@ class NightRunner:
             )
             result, execution = self.p.llm.ask_json(
                 "review", prompt, ticket_id=task.get("ticket_id"), mode="readonly",
-                exclude_cli=("codex" if "astra" in str(task.get("dev_model", "")).lower()
+                cli_only="codex" if task.get("frontend") else None,
+                exclude_cli=(None if task.get("frontend") else
+                             "codex" if "astra" in str(task.get("dev_model", "")).lower()
                              else "claude" if task.get("dev_cli") == "claude" else None),
                 cwd=task["path"], timeout=1800,
                 session_key=f"night:{state['job_id']}:{task['id']}:review",

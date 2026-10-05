@@ -694,7 +694,7 @@ def test_changes_to_ci_or_deploy_files_are_not_a_hotfix(env: Any, tmp_path: Path
     assert hf.shell.ran("git push") == 0 and hf.shell.ran("gh pr create") == 0
 
 
-def test_frontend_hotfix_links_node_modules_by_dispatcher_and_uses_opus_role(env: Any, tmp_path: Path) -> None:
+def test_frontend_hotfix_links_node_modules_and_allows_sonnet_to_sol_fallback(env: Any, tmp_path: Path) -> None:
     hf = hotfix_env(env, tmp_path)
     (Path(env.cfg.repo) / "frontend" / "node_modules").mkdir(parents=True)
     tid = start_hotfix(env)
@@ -707,6 +707,7 @@ def test_frontend_hotfix_links_node_modules_by_dispatcher_and_uses_opus_role(env
     env.pipe.hotfix.step(tid)  # dev
     assert (wt / "frontend" / "node_modules").is_symlink()
     assert [c["role"] for c in env.llm.calls if c.get("session_key") == "dev"] == ["frontend"]
+    assert [c.get("cli_only") for c in env.llm.calls if c.get("session_key") == "dev"] == [None]
     del hf
 
 

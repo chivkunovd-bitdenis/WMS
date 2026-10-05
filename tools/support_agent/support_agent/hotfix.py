@@ -543,7 +543,8 @@ class HotfixRunner:
         try:
             res, result = self.p.llm.ask_json(
                 "review", prompt, ticket_id=tid, mode="readonly", cwd=h["path"],
-                exclude_cli=h.get("dev_cli"),
+                cli_only="codex" if h.get("frontend") else None,
+                exclude_cli=None if h.get("frontend") else h.get("dev_cli"),
             )
         except LlmError:
             raise StepFailed(
