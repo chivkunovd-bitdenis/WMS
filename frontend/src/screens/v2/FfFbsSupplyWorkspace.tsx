@@ -1114,6 +1114,12 @@ export function FfFbsSupplyWorkspace({
       onError?.(cause)
       const structuredDeliveryError = deliveryErrorFromCause(cause)
       if (structuredDeliveryError) {
+        // A silent workspace read may have started after this delivery request
+        // but completed against the database before the failure was saved. Its
+        // stale last_delivery_error must not overwrite the result the operator
+        // has just received. Advance the shared sequence so every read already
+        // in flight loses the same race as any other stale workspace snapshot.
+        workspaceWriteSeq.current += 1
         setDeliveryError(structuredDeliveryError)
         setDeliveryErrorsOpen(false)
         setExpandedDeliveryErrorGroups(new Set(
@@ -3370,6 +3376,7 @@ export function FfFbsSupplyWorkspace({
                 action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}
               >
                 <Typography variant="subtitle2">{group.title}</Typography>
+                <Typography variant="body2">{deliveryError.message}</Typography>
                 {group.message ? <Typography variant="body2">{group.message}</Typography> : null}
                 <Typography variant="body2">
                   {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
@@ -4165,6 +4172,7 @@ export function FfFbsSupplyWorkspace({
           <DialogTitle>Ошибки передачи поставки</DialogTitle>
           <DialogContent dividers data-testid="fbs-delivery-errors-dialog">
             <Stack spacing={1}>
+              <Typography variant="body2">{deliveryError.message}</Typography>
               {deliveryError.context.operator_errors.map((group, index) => {
                 const expanded = expandedDeliveryErrorGroups.has(index)
                 const orders = group.orders.length > 0 ? group.orders : [null]
@@ -4731,7 +4739,7 @@ export function FfFbsSupplyWorkspace({
   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).
   if (assemblyFrame) {
-    const frameMessages = error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
+    const frameMessages = deliveryError || error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
       ? (
         <>
           {workspaceMessages}
