@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -118,6 +119,38 @@ def isolated_withdrawal_gate(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # Tests opt in only their own generated fixture sellers, never a production identity.
     monkeypatch.setattr(settings, "withdrawal_seller_allowlist", "")
+
+
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the shared WB supply mock available to cross-module contracts."""
+    from app.core.settings import settings
+    from app.models.fbs_order import FbsOrder
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+    async def fetch_actual_order_ids(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_order_ids: list[int] | None = None,
+    ) -> list[int]:
+        async with SessionLocal() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(FbsOrder.wb_order_id).where(
+                            FbsOrder.wb_supply_id == wb_supply_id
+                        )
+                    )
+                ).all()
+            )
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_composition_service.fetch_wb_supply_order_ids",
+        fetch_actual_order_ids,
+    )
 
 
 @pytest.fixture(autouse=True)
