@@ -1777,7 +1777,13 @@ export function FfInboundRequestView({
         setBoxCreateError(scanErrorMessageRu(await readApiErrorMessage(res)))
         return
       }
-      await loadDetail()
+      const created = (await res.json()) as InboundBox[]
+      setDetail((current) => {
+        if (!current || current.id !== requestId) return current
+        const boxesById = new Map(current.boxes.map((box) => [box.id, box]))
+        created.forEach((box) => boxesById.set(box.id, box))
+        return { ...current, boxes: [...boxesById.values()] }
+      })
       setPackagesExpanded(true)
       setBoxDialogOpen(false)
       setBoxCount('1')
