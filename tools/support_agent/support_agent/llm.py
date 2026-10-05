@@ -422,7 +422,10 @@ class LlmRouter:
         self, role: str, cli_only: str | None, exclude_cli: str | None
     ) -> list[tuple[str, str]]:
         result = []
-        for cli in self.available_clis():
+        available = self.available_clis()
+        ordered = ([cli for cli in ("claude", "codex") if cli in available]
+                   if role in ("frontend", "mockup") else available)
+        for cli in ordered:
             if cli_only and cli != cli_only:
                 continue
             if exclude_cli and cli == exclude_cli:

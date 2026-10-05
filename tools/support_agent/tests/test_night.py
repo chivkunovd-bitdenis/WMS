@@ -8,7 +8,9 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from support_agent.llm import ExecResult, LlmUnavailable
+import pytest
+
+from support_agent.llm import ExecResult, LlmError, LlmUnavailable
 from support_agent.night import NightRunner
 
 from .conftest import ok
@@ -376,11 +378,13 @@ def test_frontend_developer_allows_sonnet_to_sol_fallback(
     assert env.llm.calls[-1].get("cli_only") is None
 
 
-def test_unavailable_required_frontend_developer_stops_only_that_task(
-    env: Any, tmp_path: Path,
+@pytest.mark.parametrize("failure", [LlmUnavailable, LlmError])
+def test_unavailable_frontend_models_wait_and_preserve_developer_step(
+    env: Any, tmp_path: Path, failure: type[Exception],
 ) -> None:
     runner, tid, root = _tester_repo(env, tmp_path)
     state = runner._state(tid)
+    state["deadline_at"] = None
     task = state["tasks"]["WMS-700"]
     task.update(step="developer", frontend=True, tests=[], contract_hashes={})
     state["tasks"]["WMS-701"] = {
@@ -390,17 +394,42 @@ def test_unavailable_required_frontend_developer_stops_only_that_task(
     runner._save(tid, state)
 
     def unavailable(_: str, __: dict[str, Any]) -> dict[str, Any]:
-        raise LlmUnavailable("explicit Claude model unavailable or turn failed")
+        raise failure("explicit Claude model unavailable or turn failed")
 
+    task["feedback"] = "исправь повторное списание"
+    runner._save(tid, state)
     env.llm.on("frontend", "Ты разработчик WMS-700", unavailable)
     runner.development(tid)
 
     saved = runner._state(tid)["tasks"]
-    assert saved["WMS-700"]["status"] == "stopped"
-    assert saved["WMS-700"]["step"] == "stopped"
-    assert "Sonnet и Sol 5.6 недоступны" in saved["WMS-700"]["reason"]
+    assert saved["WMS-700"]["status"] == "working"
+    assert saved["WMS-700"]["step"] == "developer"
+    assert "ожидает доступности Sonnet или Sol 5.6" in saved["WMS-700"]["reason"]
     assert saved["WMS-701"]["status"] == "working"
+    assert saved["WMS-700"]["feedback"] == "исправь повторное списание"
     assert env.llm.calls[-1].get("cli_only") is None
+    calls = len(env.llm.calls)
+    runner.development(tid)
+    assert len(env.llm.calls) == calls
+    for _ in range(4):
+        env.clock.now += 61
+        env.pipe.process_ticket(tid)
+        assert env.store.ticket(tid)["stage"] == "development"
+        assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "developer"
+    env.clock.now += 61
+
+    def fixed(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        target = root / "backend" / "app" / "fixed.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("fixed = True\n", encoding="utf-8")
+        return {"summary": "ok", "contradiction": ""}
+
+    env.llm.on("frontend", "Ты разработчик WMS-700", fixed)
+    runner.development(tid)
+    resumed = runner._state(tid)["tasks"]["WMS-700"]
+    assert resumed["step"] == "checks"
+    assert "reason" not in resumed
+    assert "исправь повторное списание" in env.llm.calls[-1]["prompt"]
 
 
 def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
@@ -414,6 +443,32 @@ def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
     assert "потерял бы хотфикс" in runner._state(tid)["release_error"]
     assert not any(call[0] == "gh" for call in runner.hotfix.calls)
     assert not runner.hotfix.release_calls
+
+
+def test_legacy_provider_stop_resumes_without_reopening_safety_failure(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(
+        status="stopped", step="stopped", path="/existing",
+        reason="frontend-разработчики Sonnet и Sol 5.6 недоступны: codex_error",
+        feedback="исправь кнопку")
+    state["tasks"]["WMS-701"] = {
+        "id": "WMS-701", "status": "stopped", "step": "stopped", "reason": "контракт изменён",
+    }
+    runner._save(tid, state)
+
+    def unavailable(*args: Any, **kwargs: Any) -> Any:
+        raise LlmUnavailable("at capacity")
+
+    runner._task_developer = unavailable
+    runner.development(tid)
+    tasks = runner._state(tid)["tasks"]
+    assert tasks["WMS-700"]["status"] == "working"
+    assert tasks["WMS-700"]["path"] == "/existing"
+    assert "исправь кнопку" in tasks["WMS-700"]["feedback"]
+    assert "уже написанный код" in tasks["WMS-700"]["feedback"]
+    assert tasks["WMS-701"]["status"] == "stopped"
 
 
 def test_interrupted_promote_is_not_repeated(env: Any) -> None:

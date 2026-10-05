@@ -199,6 +199,9 @@ def test_frontend_models_and_astra_review_are_fixed(tmp_path: Path) -> None:
     llm, _ = router(tmp_path, script)
     assert llm.model_for("claude", "frontend") == "sonnet"
     assert llm.model_for("codex", "frontend") == "gpt-5.6-sol"
+    llm.cfg.llm.cli_order = ["codex", "claude"]
+    assert llm.candidates("frontend", None, None) == [
+        ("claude", "sonnet"), ("codex", "gpt-5.6-sol")]
     llm.cfg.llm.codex_effort = "xhigh"
     assert llm.effort_for("codex", "review") == "high"
     llm.cfg.llm.models["codex"]["review"] = "gpt-5.6-sol"

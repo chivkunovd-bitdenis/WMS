@@ -81,6 +81,20 @@ class NightRunner:
             return
         if self.p.clock() < float(state.get("next_poll", 0)):
             return
+        # Older runtimes incorrectly made provider outages terminal. Resume only
+        # that exact failure; do not reopen owner holds or failed safety checks.
+        for interrupted in state["tasks"].values():
+            if (interrupted.get("status") == "stopped"
+                    and str(interrupted.get("reason", "")).startswith(
+                        "frontend-разработчики Sonnet и Sol 5.6 недоступны:")):
+                interrupted.update(status="working", step="developer")
+                interrupted["feedback"] = (
+                    str(interrupted.get("feedback") or "")
+                    + "\nПредыдущий вызов прервался. Проверь и сохрани уже написанный код; "
+                    "продолжи с существующего состояния, не повторяй внешние действия."
+                ).strip()
+                interrupted.pop("reason", None)
+                self._save(tid, state)
         try:
             if state.get("step") == "etalon_ci":
                 self._etalon_ci(tid, state)
@@ -111,20 +125,16 @@ class NightRunner:
                     self.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
                 return
             getattr(self, f"_task_{task['step']}")(tid, state, task)
-        except LlmUnavailable as exc:
+        except (LlmUnavailable, LlmError) as exc:
             task = self._task(state)
-            if task is not None and task.get("step") == "developer" and task.get("frontend"):
-                self._stop_task(
-                    tid,
-                    state,
-                    task,
-                    "frontend-разработчики Sonnet и Sol 5.6 недоступны: "
-                    f"{exc}",
-                )
-                return
-            raise
-        except LlmError:
-            raise
+            if task is not None:
+                route = ("Sonnet или Sol 5.6"
+                         if task.get("step") == "developer" and task.get("frontend")
+                         else "модели текущего шага")
+                task["reason"] = f"ожидает доступности {route}: {exc}"
+                task["model_retries"] = int(task.get("model_retries", 0)) + 1
+            self._save(tid, state, next_poll=self.p.clock() + 60)
+            return
         except StepFailed as exc:
             self._stop_task(tid, state, self._task(state), str(exc))
 
@@ -287,13 +297,18 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_developer(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
-        feedback = str(task.pop("feedback", ""))
+        feedback = str(task.get("feedback", ""))
         prompt = (
             f"Ты разработчик {task['id']}. Прочитай AGENTS.md, docs/requirements/{task['id']}.md "
             f"и {SKILLS_ROOT}/wms-developer/SKILL.md. Реализуй требования, не меняя контракт тестов. "
             "Актуальное прямое решение владельца: frontend/дизайн выполняет Sonnet, при его "
             "недоступности gpt-5.6-sol; ревью выполняет Astra high. Это решение имеет приоритет "
             "над старым упоминанием Opus в файлах этой рабочей ветки. "
+            "Ты уже отдельный разработчик внутри цепочки: аналитик и тестировщик завершили свои этапы. "
+            "Выполни реализацию сам, не запускай вложенных агентов и не создавай чаты. "
+            "Ревью, приёмку, commit, push и выпуск выполнит контроллер после твоего ответа. "
+            "Перед правкой проверь существующий diff: после прерванного вызова продолжай его, "
+            "не удаляя сохранённые изменения. "
             "Локально запусти контракт и tests/guards. Если проверка Cn противоречит Rm, "
             "не пиши код и укажи точное противоречие. "
             f"Замечание предыдущей попытки: {feedback or 'нет'}. "
@@ -306,6 +321,8 @@ class NightRunner:
             cwd=task["path"], timeout=3600,
         )
         task.update(dev_cli=execution.cli, dev_model=execution.model)
+        task.pop("feedback", None)
+        task.pop("reason", None)
         contradiction = str(result.get("contradiction") or "").strip()
         if contradiction and CONTRADICTION_RE.search(contradiction):
             task.update(status="waiting_owner", reason=contradiction, step="owner_decision")
@@ -345,6 +362,8 @@ class NightRunner:
                 f"docs/requirements/{task['id']}.md, diff, результаты тестов, "
                 f"{SKILLS_ROOT}/../owner-cases.md и {SKILLS_ROOT}/../failure-cases.md целиком. "
                 "Проверь требования, повторы, сбои и соседние процессы. Ничего не меняй. "
+                "Прямое решение владельца для этого запуска: Sonnet или gpt-5.6-sol реализует, "
+                "Astra high проверяет; оно отменяет старое требование Opus в рабочей ветке. "
                 'Верни JSON {"accepted":true|false,"summary":"конкретные дефекты или результат"}.'
             )
             result, execution = self.p.llm.ask_json(
@@ -409,6 +428,8 @@ class NightRunner:
             f"Проведи приёмку {task['id']} как аналит по "
             f"{SKILLS_ROOT}/wms-product-analyst/SKILL.md. "
             "Прочитай requirements, diff, ревью и результаты тестов. Проверь сценарии. "
+            "Владелец утвердил Sonnet с резервом gpt-5.6-sol и ревью Astra high; "
+            "это актуальное правило вместо старого требования Opus в рабочей ветке. "
             "Заполни только вердикты и заключение в документе; требования и тесты не меняй. "
             "Git-коммит делает контроллер. Полный CI выполнится после фиксации приёмки. "
             'Верни JSON {"accepted":true|false,"summary":"..."}.'
@@ -456,8 +477,9 @@ class NightRunner:
                 self._promote(tid, state)
             elif step == "promote_ci":
                 self._promote_ci(tid, state)
-        except (LlmUnavailable, LlmError):
-            raise
+        except (LlmUnavailable, LlmError) as exc:
+            self._save(tid, state, model_retry_reason=str(exc), next_poll=self.p.clock() + 60)
+            return
         except StepFailed as exc:
             state["release_error"] = str(exc)
             if state.get("release_sha"):

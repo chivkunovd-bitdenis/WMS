@@ -569,7 +569,13 @@ def test_form_ticket_moves_card_in_progress_then_done_and_sends_no_client_messag
     assert env.tg.to(CLIENT_CHAT) == []
 
 
-def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any) -> None:
+@pytest.mark.parametrize("sonnet_available", [True, False])
+@pytest.mark.parametrize("review_requires_fix", [True, False])
+@pytest.mark.parametrize("versioned", [True, False])
+@pytest.mark.parametrize("review_unavailable", [True, False])
+def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any,
+                                   sonnet_available: bool, review_requires_fix: bool,
+                                   versioned: bool, review_unavailable: bool) -> None:
     hf = hotfix_env(env, tmp_path)
     tid = env.store.add_ticket(
         kind="partner_task", source="telegram", chat_id=-100222, seller="", stage="await_mockup",
@@ -577,17 +583,39 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any)
     env.pipe.mockups = MockupRunner(env.pipe, hf.runner)
 
     def mock(prompt: str, **kw: Any) -> Any:
-        from support_agent.llm import LlmResult
+        from support_agent.llm import LlmResult, LlmUnavailable
+
+        if kw["provider"] == "claude" and not sonnet_available:
+            raise LlmUnavailable("Sonnet unavailable")
 
         out = Path(kw["cwd"]) / f"mockup-out-{tid}"
         out.mkdir(parents=True, exist_ok=True)
-        (out / "index.html").write_text("<html></html>", encoding="utf-8")
-        assert kw["mode"] == "write" and kw["model"] == "sonnet" and kw["provider"] == "claude"
+        feedback = (env.store.data(tid).get("mockup_review") or {}).get("feedback")
+        if feedback:
+            assert feedback in prompt
+        (out / "index.html").write_text("<html>fixed</html>" if feedback else "<html></html>",
+                                        encoding="utf-8")
+        assert kw["mode"] == "write"
+        assert (kw["model"], kw["provider"]) == (
+            ("sonnet", "claude") if sonnet_available else ("gpt-5.6-sol", "codex"))
         return LlmResult(text=json.dumps({"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}),
-                         cli="claude", model="sonnet")
+                         cli=kw["provider"], model=kw["model"])
 
     calls: list[str] = []
     monkeypatch.setattr(env.llm, "agent_turn", mock, raising=False)
+    from support_agent.llm import LlmUnavailable
+
+    reviews = iter(([LlmUnavailable("at capacity")] if review_unavailable else [])
+                   + ([{"accepted": False, "summary": "исправь кнопку"}]
+                    if review_requires_fix else []) + [{"accepted": True, "summary": "ok"}])
+
+    def review(prompt: str, kw: Any) -> Any:
+        result = next(reviews)
+        if isinstance(result, Exception):
+            raise result
+        return result
+
+    env.llm.on("review", "Проверь кликабельный макет", review)
     monkeypatch.setattr("support_agent.mockups.publish", lambda path, public_id:
                         calls.append(public_id) or "https://sellerfocus.pro/wms-previews/mock/")
     hf.shell.on("git status --porcelain", ok(out=f"?? mockup-out-{tid}/\n"))
@@ -604,13 +632,53 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any)
                 "listed_ticket_ids": []})
     env.say(OWNER_CHAT, "да, нарисуй", user=OWNER_ID)
     assert env.store.ticket(tid)["stage"] == "mockup"
-    Path(env.cfg.repo, ".worktrees", f"mockup-{tid}").mkdir(parents=True, exist_ok=True)
-    env.pipe.process_ticket(tid)
+    name = f"mockup-{tid}"
+
+    def run_mockup() -> None:
+        if versioned:
+            coordinator._submit_mockup(tid)
+        else:
+            env.pipe.process_ticket(tid)
+
+    if versioned:
+        from support_agent.agent_coordinator import AgentCoordinator
+
+        from .test_agent_coordinator import StubTools
+
+        version = "version12345"
+        env.store.patch_data(tid, agent={"version": version, "description": "Экран",
+                                        "mockup": {"version": version, "status": "queued"}})
+        coordinator = AgentCoordinator(env.pipe, StubTools())
+        coordinator.jobs.shutdown(wait=True)
+        coordinator.jobs = SimpleNamespace(submit=lambda fn: fn())
+        name += f"-{version}"
+    Path(env.cfg.repo, ".worktrees", name).mkdir(parents=True, exist_ok=True)
+    run_mockup()
+    if review_unavailable:
+        assert calls == []
+        if versioned:
+            assert env.store.data(tid)["agent"]["mockup"]["status"] == "queued"
+        count = len(env.llm.calls)
+        run_mockup()
+        assert len(env.llm.calls) == count
+        env.clock.now += 61
+        run_mockup()
+    if review_requires_fix:
+        assert calls == []
+        assert env.store.ticket(tid)["stage"] == "mockup"
+        if versioned:
+            assert env.store.data(tid)["agent"]["mockup"]["status"] == "queued"
+        run_mockup()
     env.flush()
-    assert env.store.ticket(tid)["stage"] == "done"
+    if versioned:
+        assert env.store.data(tid)["agent"]["mockup"]["status"] == "published"
+    else:
+        assert env.store.ticket(tid)["stage"] == "done"
     assert any("https://sellerfocus.pro/wms-previews/mock/" in t and "Вариант А" in t
                for t in env.tg.to(OWNER_CHAT))
     assert len(calls) == 1 and hf.shell.ran("git push -u origin mockup/wms-support-") == 1
+    assert [c["cli_only"] for c in env.llm.calls if c["role"] == "review"] == (
+        ["codex"] * (1 + int(review_requires_fix) + int(review_unavailable)))
 
 
 @pytest.mark.parametrize("verdict", ["hotfix"])
