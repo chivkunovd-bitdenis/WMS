@@ -233,6 +233,29 @@ class GitTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("изменён контракт тестов WMS-710", errors[0])
 
+    def sol61_correction_errors(self, effort):
+        rollout = self.rollout()
+        path = "backend/tests/test_contract.py"
+        self.write(path, "def test_contract(): assert old_check()\n")
+        contract = self.commit("WMS-722: контракт тестов")
+        self.write(path, "def test_contract(): assert corrected_check()\n")
+        correction = self.commit("WMS-722: correction")
+        ledger = {
+            "task": "WMS-722", "contract_commit": contract,
+            "correction_commit": correction, "files": [path],
+            "review": {"model": "gpt-6.1-sol", "effort": effort, "verdict": "PASS"},
+        }
+        self.write("docs/reviews/contract-corrections/WMS-722.json", json.dumps(ledger) + "\n")
+        self.commit("WMS-722: correction ledger")
+        return checker.contract_change_errors(self.root, rollout)
+
+    def test_sol61_high_review_accepts_corrected_contract(self):
+        self.assertEqual(self.sol61_correction_errors("high"), [])
+
+    def test_sol61_low_review_cannot_accept_corrected_contract(self):
+        self.assertTrue(any("реестр коррекции" in error
+                            for error in self.sol61_correction_errors("low")))
+
     def test_contract_correction_ledger_rejects_unreviewed_or_extra_files(self):
         rollout = self.rollout()
         path = "backend/tests/test_contract.py"

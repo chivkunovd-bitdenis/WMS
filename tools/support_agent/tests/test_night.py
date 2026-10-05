@@ -576,7 +576,7 @@ def test_unavailable_frontend_models_wait_and_preserve_developer_step(
     saved = runner._state(tid)["tasks"]
     assert saved["WMS-700"]["status"] == "working"
     assert saved["WMS-700"]["step"] == "developer"
-    assert "ожидает доступности Sonnet или Sol 5.6" in saved["WMS-700"]["reason"]
+    assert "ожидает доступности Sol 6.1" in saved["WMS-700"]["reason"]
     assert saved["WMS-700"]["feedback"] == "исправь повторное списание"
     assert env.llm.calls[-1].get("cli_only") is None
     calls = len(env.llm.calls)
@@ -918,7 +918,8 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     runner.development(tid)  # local checks
     assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "review"
     runner.development(tid)  # review
-    assert env.llm.calls[-1]["exclude_cli"] is None  # Astra can review Sol in the same provider
+    assert env.llm.calls[-1].get("exclude_cli") is None
+    assert env.llm.calls[-1]["session_key"] == "night:job1:WMS-700:review"
     task = runner._state(tid)["tasks"]["WMS-700"]
     assert task["review_summary"] == "дефектов нет"
     runner.development(tid)  # acceptance saved before PR/CI
@@ -1076,7 +1077,7 @@ def test_review_defect_returns_to_developer(env: Any, tmp_path: Path) -> None:
     task = runner._state(tid)["tasks"]["WMS-700"]
     assert task["step"] == "developer" and "C1" in task["feedback"]
     assert env.llm.calls[-1]["cli_only"] == "codex"
-    assert env.llm.calls[-1]["exclude_cli"] is None
+    assert env.llm.calls[-1].get("exclude_cli") is None
 
 
 def test_promotion_commits_and_publishes_before_claiming_protection(env: Any, tmp_path: Path) -> None:

@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from .agent_authorization import SemanticAuthorization
 from .agent_dispatcher import AgentDispatcher
-from .llm import LlmUnavailable
+from .llm import WMS_MODEL, WMS_PROVIDER, LlmUnavailable
 
 log = logging.getLogger(__name__)
 INSTRUCTIONS = Path(__file__).with_name("agent_instructions.md")
@@ -127,9 +127,7 @@ class AgentCoordinator:
             return
         scope = "owner" if owner else "client"
         context = self._context(m, owner=owner)
-        model_pref = self.store.kv_get("agent_owner_model", {}) if owner else {}
-        provider = str(model_pref.get("provider") or self.cfg.agent.owner_provider)
-        model = str(model_pref.get("model") or self.cfg.agent.owner_model)
+        model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({"new_message": dict(m),
                              "current_time": self._local_now(),
                              "timezone": self.cfg.agent.timezone,
@@ -172,9 +170,7 @@ class AgentCoordinator:
         }
         context["topic_id"] = topic["id"]
         starting_generation = int(topic.get("generation", 0))
-        model_pref = self.store.kv_get("agent_owner_model", {}) if owner else {}
-        model = str(model_pref.get("model") or self.cfg.agent.owner_model)
-        provider = str(model_pref.get("provider") or self.cfg.agent.owner_provider)
+        model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({
             "event": event, "source_message": dict(source) if source is not None else None,
             "topic": {k: v for k, v in topic.items() if k != "pending"},
@@ -311,8 +307,8 @@ class AgentCoordinator:
                 return {"error": "source_does_not_authorize_action", "reason": decision["reason"]}
         if name == "select_model":
             model, provider = str(args.get("model", "")).strip(), str(args.get("provider", "")).strip()
-            if not model or provider not in ("codex", "claude"):
-                return {"error": "invalid_model_selection"}
+            if (model, provider) != (WMS_MODEL, WMS_PROVIDER):
+                return {"error": "owner_sol61_only", "model": WMS_MODEL, "provider": WMS_PROVIDER}
             self.store.kv_set("agent_owner_model", {"model": model, "provider": provider,
                                                     "event_id": context["event_id"]})
             return {"selected": model, "provider": provider}
@@ -374,14 +370,11 @@ class AgentCoordinator:
             existing = self.store.kv_get(key)
             if existing:
                 return self._public_job(existing)
-            pref = self.store.kv_get("agent_owner_model", {})
             job = {"id": job_id, "source_event_id": context["event_id"],
                    "source_chat_id": context["chat_id"], "source_message_id": context["message_id"],
                    "topic_id": context.get("topic_id") or f"topic-{context['event_id']}",
                    "request": request, "task_ids": args.get("task_ids") or [],
-                   "model": str(args.get("model") or pref.get("model") or self.cfg.agent.owner_model),
-                   "provider": str(args.get("provider") or pref.get("provider")
-                                   or self.cfg.agent.owner_provider),
+                   "model": WMS_MODEL, "provider": WMS_PROVIDER,
                    "release_authorized": bool(args.get("release_authorized", False)),
                    "base_ref": str(args.get("base_ref") or ""),
                    "task_snapshot": snapshot,
@@ -622,8 +615,8 @@ class AgentCoordinator:
                     "text": message[:1500],
                 })
 
-            result = self.llm.agent_turn(prompt, session_key=f"job:{job_id}", model=job["model"],
-                                         provider=job["provider"], system=self.system,
+            result = self.llm.agent_turn(prompt, session_key=f"job:{job_id}", model=WMS_MODEL,
+                                         provider=WMS_PROVIDER, system=self.system,
                                          tools=[{**spec, "type": "function"}
                                                 for spec in self.tools.specs(scope="owner")],
                                          tool_handler=lambda name, args: self.tools.dispatch(
@@ -850,7 +843,7 @@ class AgentCoordinator:
                                  "risks, unknowns, ready subset and what remains. Inspect state before "
                                  "any possible later repeat of an uncertain release."}, ensure_ascii=False)
             result = self.llm.agent_turn(prompt, session_key=f"preflight:{job_id}",
-                                         model=job["model"], provider=job["provider"],
+                                         model=WMS_MODEL, provider=WMS_PROVIDER,
                                          system=self.system, mode="owner", owner_authorized=True,
                                          cwd=str(path), timeout=600)
             self._patch_job(job_id, preflight_status="reported", preflight_result=result.text[:8000])

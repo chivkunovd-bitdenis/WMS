@@ -197,7 +197,7 @@ def reviewed_contract_correction(
 
     A correction is deliberately stricter than an ordinary follow-up commit: it
     may touch only files frozen by the original contract and must have a separate
-    machine-readable ledger recording the independent Astra-high PASS.  CI can
+    machine-readable ledger recording the independent Astra/Sol6.1-high PASS. CI can
     validate the Git facts; the controller remains responsible for obtaining
     and recording the review before the ledger is committed.
     """
@@ -231,7 +231,7 @@ def reviewed_contract_correction(
         or not files
         or any(not isinstance(path, str) or not path for path in files)
         or not isinstance(review, dict)
-        or review.get("model") != "gpt-6-astra"
+        or review.get("model") not in ("gpt-6-astra", "gpt-6.1-sol")
         or review.get("effort") != "high"
         or review.get("verdict") != "PASS"
     ):
