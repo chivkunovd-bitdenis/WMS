@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -10,6 +11,63 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _ensure_ci_etalon_history() -> None:
+    """Restore the comparison ref required by one-time scope contracts in CI.
+
+    The backend job uses actions/checkout with its default shallow history, while
+    WMS scope contracts compare the branch with ``origin/etalon``.  Fetch the
+    history only on GitHub Actions and only when that tracking ref is absent;
+    local test runs remain offline and unchanged.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    root = Path(__file__).resolve().parents[2]
+    verify = subprocess.run(
+        ["git", "rev-parse", "--verify", "origin/etalon"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if verify.returncode == 0:
+        return
+
+    shallow = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    if shallow == "true":
+        subprocess.run(
+            ["git", "fetch", "--no-tags", "--prune", "--unshallow", "origin"],
+            cwd=root,
+            check=True,
+        )
+
+    subprocess.run(
+        [
+            "git",
+            "fetch",
+            "--no-tags",
+            "origin",
+            "+refs/heads/etalon:refs/remotes/origin/etalon",
+        ],
+        cwd=root,
+        check=True,
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # xdist imports conftest in every worker.  Fetch once in the controller to
+    # avoid concurrent writes to Git's shallow/ref files.
+    if not hasattr(config, "workerinput"):
+        _ensure_ci_etalon_history()
+
 
 # Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long")
