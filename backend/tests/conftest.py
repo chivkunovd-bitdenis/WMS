@@ -42,21 +42,17 @@ def _ensure_ci_etalon_history() -> None:
         capture_output=True,
         text=True,
     ).stdout.strip()
+    fetch = ["git", "fetch", "--no-tags", "--prune"]
     if shallow == "true":
-        subprocess.run(
-            ["git", "fetch", "--no-tags", "--prune", "--unshallow", "origin"],
-            cwd=root,
-            check=True,
-        )
-
-    subprocess.run(
-        [
-            "git",
-            "fetch",
-            "--no-tags",
+        fetch.append("--unshallow")
+    fetch.extend(
+        (
             "origin",
             "+refs/heads/etalon:refs/remotes/origin/etalon",
-        ],
+        )
+    )
+    subprocess.run(
+        fetch,
         cwd=root,
         check=True,
     )
