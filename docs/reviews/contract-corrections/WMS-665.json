@@ -1,0 +1,13 @@
+{
+  "task": "WMS-665",
+  "contract_commit": "9c0aa2028f33a049e50a9d63ab554fb08815ab69",
+  "correction_commit": "4d0d8768b585231751fd19f7f10797c12cb703ac",
+  "files": ["scripts/ops/tests/avpack-kiz-helper.test.cjs"],
+  "reason": "R7 added after production read-only discovery of missing seller billing INN, before implementation. Execute must stop; negative identity and row cases remain meaningful in dry-run.",
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "evidence": "docs/reviews/WMS-665-REVIEW.md"
+  }
+}
