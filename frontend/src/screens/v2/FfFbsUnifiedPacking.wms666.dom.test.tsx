@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+// Итоговый скорректированный контракт WMS-666 после ревью C1–C13;
+// бизнес-ожидания сохранены без ослабления.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
