@@ -250,7 +250,14 @@
         if (method !== 'GET' || url.origin !== EXPECTED_ORIGIN || url.pathname !== REGISTRY_PATH) {
           return callOriginalFetch(input, init);
         }
-        if (readToken() !== token) {
+        let currentToken;
+        try {
+          currentToken = readToken();
+        } catch (error) {
+          if (root.fetch === patchedFetch) root.fetch = originalFetch;
+          throw error;
+        }
+        if (currentToken !== token) {
           if (root.fetch === patchedFetch) root.fetch = originalFetch;
           throw new SoldKizFilterError('Seller-сессия изменилась. Перезагрузите страницу.');
         }
