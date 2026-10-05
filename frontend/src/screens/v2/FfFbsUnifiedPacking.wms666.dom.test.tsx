@@ -539,7 +539,7 @@ describe('WMS-666 review regressions: live settings and Ozon routing', () => {
 
   it('releases an unmarked boxless Ozon scan so the next mixed physical scan reaches WB without Escape', async () => {
     state['ozon-a']!.boxes = []
-    saveFbsScanPrintPreferences(TOKEN, { printQr: false, printChz: false, reprintChz: false })
+    saveFbsScanPrintPreferences(TOKEN, { printQr: true, printChz: false, reprintChz: false })
     await renderAssembly(['ozon-a', 'wb-a'])
 
     physicalScan(OZON_POSITION_BARCODE)
@@ -549,6 +549,7 @@ describe('WMS-666 review regressions: live settings and Ozon routing', () => {
     await settleUntil(() => calls.some((call) => call.path.endsWith('/scan-auto-print')), 750)
 
     expect(calls.filter((call) => call.path.endsWith('/scan-auto-print'))).toHaveLength(1)
+    expect(calls.filter((call) => call.path === '/operations/fbs-orders/kiz/validate')).toHaveLength(0)
     expect(document.querySelector('[data-testid="fbs-kiz-scan-active"]')).toBeNull()
     expect(document.body.textContent).not.toContain('Откройте или создайте короб.')
   })
