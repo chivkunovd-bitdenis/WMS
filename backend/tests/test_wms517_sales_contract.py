@@ -145,7 +145,7 @@ def sales_http(monkeypatch: pytest.MonkeyPatch) -> SalesHTTP:
 
 
 async def fixture_order(db: AsyncSession, boundary: SalesHTTP) -> Any:
-    scope, marking, order, supply = await seed(db)
+    scope, marking, order, supply = await seed(db, sales_evidence=False)
     order.wb_rid = f"rid-{order.wb_order_id}.0.0"
     order.wb_status = "sorted"
     order.created_at_wb = datetime(2026, 9, 22, 10, tzinfo=UTC)

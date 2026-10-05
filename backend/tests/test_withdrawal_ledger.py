@@ -8,8 +8,10 @@ import importlib.util
 import io
 import json
 import uuid
+from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -42,6 +44,7 @@ from app.models.marking_withdrawal import (
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_staff_permissions import SellerStaffPermissions
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
@@ -67,10 +70,65 @@ from app.services.withdrawal_recovery import (
 from app.services.withdrawal_service import create_operation, retry_operation
 
 INN = "7701234567"
+_SYNTHETIC_SALES: dict[str, list[dict]] = {}
+_LEGACY_SALES_ENABLED = ContextVar("legacy_sales_enabled", default=False)
+
+
+@pytest.fixture(autouse=True)
+def legacy_sales_http(monkeypatch):
+    """Supply synthetic sale evidence at HTTP only for this legacy test module."""
+    _SYNTHETIC_SALES.clear()
+    original_send = httpx.AsyncClient.send
+    original_sleep = asyncio.sleep
+    enabled = _LEGACY_SALES_ENABLED.set(True)
+    from app.core.settings import settings
+    from app.services import wb_sales_report
+
+    class RedisBoundary:
+        async def eval(self, *args):
+            return 0
+
+        async def get(self, key):
+            return None
+
+        async def set(self, key, value, **kwargs):
+            pass
+
+        async def aclose(self):
+            pass
+
+    monkeypatch.setattr(settings, "celery_broker_url", "redis://legacy-fixture.invalid/0")
+    monkeypatch.setattr(wb_sales_report, "Redis", SimpleNamespace(
+        from_url=lambda *args, **kwargs: RedisBoundary()))
+
+    async def send(client, request, **kwargs):
+        if request.url.host and request.url.host.endswith("wildberries.ru"):
+            assert request.method == "GET"
+            assert request.url.path == "/api/v1/supplier/sales"
+            assert request.url.params["flag"] == "0"
+            rows = _SYNTHETIC_SALES.get(request.headers.get("Authorization", ""), [])
+            cursor = request.url.params["dateFrom"]
+            page = [] if not rows or cursor == rows[-1]["lastChangeDate"] else rows
+            return httpx.Response(200, json=page, request=request)
+        assert isinstance(client._transport, (httpx.MockTransport, httpx.ASGITransport))
+        return await original_send(client, request, **kwargs)
+
+    async def pause(seconds):
+        # Skip vendor minute waits only; preserve scheduling in concurrency cases.
+        if seconds < 30:
+            await original_sleep(seconds)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", send)
+    monkeypatch.setattr(asyncio, "sleep", pause)
+    yield
+    _SYNTHETIC_SALES.clear()
+    _LEGACY_SALES_ENABLED.reset(enabled)
 
 
 async def seed(
     session: AsyncSession,
+    *,
+    sales_evidence: bool | None = None,
 ) -> tuple[WithdrawalScope, FbsOrderMarking, FbsOrder, FbsSupply]:
     tenant = Tenant(name="withdrawal", slug=uuid.uuid4().hex)
     session.add(tenant)
@@ -111,6 +169,27 @@ async def seed(
     )
     session.add(order)
     await session.flush()
+    if _LEGACY_SALES_ENABLED.get() if sales_evidence is None else sales_evidence:
+        order.wb_rid = f"legacy-fixture-{order.id}"
+        token = f"legacy-fixture-{seller.id}"
+        session.add(
+            SellerWildberriesCredentials(
+                seller_id=seller.id,
+                marketplace_token_encrypted=encrypt_secret(token),
+                marketplace_scope_ok=True,
+            )
+        )
+        _SYNTHETIC_SALES[token] = [
+            {
+                "srid": order.wb_rid,
+                "saleID": f"S-{order.id}",
+                "finishedPrice": "999999999999999.99",
+                "date": datetime.now(UTC).isoformat(),
+                "lastChangeDate": (datetime.now(UTC) + timedelta(seconds=1)).isoformat(),
+                "nmId": order.wb_nm_id,
+                "barcode": order.wb_barcode,
+            }
+        ]
     marking = FbsOrderMarking(
         tenant_id=tenant.id,
         order_id=order.id,
