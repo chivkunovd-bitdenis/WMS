@@ -754,6 +754,8 @@ class AgentCoordinator:
                 self.store.patch_data(int(ticket["id"]), agent=agent)
 
     def _submit_mockup(self, tid: int) -> None:
+        if self.clock() < float(self.store.data(tid).get("mockup_next_poll", 0)):
+            return
         key = f"mockup:{tid}"
         with self.job_lock:
             if key in self.active_jobs:

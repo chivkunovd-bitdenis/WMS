@@ -297,7 +297,8 @@ class HotfixRunner:
         with self.store.transaction():
             d = self.store.data(tid)
             current = dict(d.get("hotfix") or {})
-            if current.get("hold_requested"):
+            if (current.get("hold_requested")
+                    or (d.get("night") and not d["night"].get("release_authorized"))):
                 h.clear()
                 h.update(current)
                 return False
@@ -543,7 +544,8 @@ class HotfixRunner:
         try:
             res, result = self.p.llm.ask_json(
                 "review", prompt, ticket_id=tid, mode="readonly", cwd=h["path"],
-                exclude_cli=h.get("dev_cli"),
+                cli_only="codex" if h.get("frontend") else None,
+                exclude_cli=None if h.get("frontend") else h.get("dev_cli"),
             )
         except LlmError:
             raise StepFailed(
