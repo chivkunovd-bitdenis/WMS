@@ -858,13 +858,16 @@ def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: 
     state = runner._state(tid)
     task = state["tasks"]["WMS-700"]
     task.update(step="checks", branch="task", tests=[], contract_hashes={},
-                dev_cli="codex", dev_model="gpt-5.6-sol")
+                dev_cli="codex", dev_model="gpt-5.6-sol",
+                feedback="C7 вручную проверен в системном предпросмотре дважды")
     runner._save(tid, state)
     doc = root / "docs/requirements/WMS-700.md"
 
-    def accept(_: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+    def accept(prompt: str, kwargs: dict[str, Any]) -> dict[str, Any]:
         assert kwargs["mode"] == "write"
         assert kwargs["session_key"] == "night:job1:WMS-700:analyst"
+        assert "Дополнительные материалы приёмки от ведущего" in prompt
+        assert "C7 вручную проверен в системном предпросмотре дважды" in prompt
         doc.write_text(doc.read_text() + "\n## Заключение\nПроверки подтверждены.\n")
         return {"accepted": True, "summary": "принято"}
 
