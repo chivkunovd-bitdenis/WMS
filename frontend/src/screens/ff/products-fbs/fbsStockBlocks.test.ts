@@ -205,19 +205,15 @@ describe('WMS-469 черновики и суммы блока', () => {
   })
 })
 
-describe('WMS-469 R7 тело сохранения', () => {
-  it('отправляет только видимые блоки, с которых принимаем заказы; режим — ровно один', () => {
-    const notServed: StockBinding = { ...ozon, served: false }
+describe('WMS-666 R3 тело сохранения', () => {
+  it('served=false не исключает изменённую пару, а непереданная соседняя пара не попадает в by_binding', () => {
+    const notServed: StockBinding = { ...wb, served: false }
     const drafts = {
       'b-wb': { publish: true, byPercent: false, percent: 0, units: 30 },
       'b-ozon': { publish: true, byPercent: true, percent: 100, units: 0 },
     }
-    expect(ruleBodyFromDrafts([wb, notServed], drafts)).toEqual({
+    expect(ruleBodyFromDrafts([notServed], drafts)).toEqual({
       'b-wb': { publish: true, mode: 'units', value: 30, units_configured: true },
-    })
-    expect(ruleBodyFromDrafts([wb, ozon], drafts)).toEqual({
-      'b-wb': { publish: true, mode: 'units', value: 30, units_configured: true },
-      'b-ozon': { publish: true, mode: 'percent', value: 100, units_configured: false },
     })
   })
 
