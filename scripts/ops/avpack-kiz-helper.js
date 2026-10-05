@@ -154,23 +154,40 @@
         };
       },
 
-      async selectAndOpen(targets) {
+      async selectAndOpen(targets, assertCurrentSession) {
         const { page, table } = pageAndTable();
         const checkboxes = targets.map((target) => targetCheckbox(table, target));
         if (checkboxes.some((checkbox) => !checkbox)) {
           throw new HelperError('Строки изменились перед выделением. Запустите dry-run заново.');
         }
-        const clicked = [];
+        const clearSelection = () => {
+          for (const checkbox of table.querySelectorAll('tbody input[type="checkbox"]:checked')) {
+            if (!checkbox.disabled) checkbox.click();
+          }
+        };
+        const assertExactSelection = () => {
+          const currentTargets = targets.map((target) => targetCheckbox(table, target));
+          const checked = table.querySelectorAll('tbody input[type="checkbox"]:checked');
+          if (
+            currentTargets.some((checkbox) => !checkbox || !checkbox.checked) ||
+            checked.length !== targets.length
+          ) {
+            throw new HelperError('Строки изменились: точное выделение КИЗ не подтверждено.');
+          }
+        };
         try {
+          assertCurrentSession();
           for (const checkbox of checkboxes) {
             checkbox.click();
-            clicked.push(checkbox);
+            assertCurrentSession();
           }
           const action = await waitFor(() => {
             const button = actionButton(page);
             const count = Number(normalizedText(button).match(/\((\d+)\)$/)?.[1]);
             return button && !button.disabled && count === targets.length ? button : null;
           }, 'Не удалось подтвердить точное выделение КИЗ на экране.');
+          assertCurrentSession();
+          assertExactSelection();
           action.click();
           await waitFor(
             () => [...document.querySelectorAll('[role="dialog"]')].some(
@@ -179,9 +196,7 @@
             'Штатный диалог выбора сертификата не открылся.',
           );
         } catch (error) {
-          for (const checkbox of clicked) {
-            if (checkbox.checked) checkbox.click();
-          }
+          clearSelection();
           throw error;
         }
       },
@@ -394,8 +409,15 @@
       }
 
       if (mode === 'execute') {
+        const assertCurrentSession = () => {
+          if (readToken() !== token) {
+            throw new HelperError(
+              'Сессия seller-кабинета изменилась во время проверки. Запустите dry-run заново.',
+            );
+          }
+        };
         try {
-          await ui.selectAndOpen(targets.map(cloneTarget));
+          await ui.selectAndOpen(targets.map(cloneTarget), assertCurrentSession);
         } catch (error) {
           if (error instanceof HelperError) throw error;
           throw new HelperError('Не удалось безопасно выделить КИЗ и открыть диалог сертификата.');
