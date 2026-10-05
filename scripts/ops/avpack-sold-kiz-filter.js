@@ -99,7 +99,7 @@
         const selectedCount = Number(normalizedText(selectedLabel).match(/(\d+)$/)?.[1] ?? 0);
         return { selectedCount };
       },
-      async refreshSelectAllAndOpen(expectedCount) {
+      async refreshSelectAllAndOpen(expectedCount, assertCurrentSession) {
         const container = page();
         const refresh = [...container.querySelectorAll('button')].filter(
           (button) => normalizedText(button) === 'Обновить',
@@ -114,16 +114,20 @@
           ),
           `Штатный экран не показал ровно ${expectedCount} проверенных КИЗ.`,
         );
+        assertCurrentSession();
         const selectAll = await waitFor(() => {
           const inputs = [...container.querySelectorAll('input[aria-label="Выбрать все доступные КИЗ по фильтрам"]')];
           return inputs.length === 1 && !inputs[0].disabled ? inputs[0] : null;
         }, 'Штатный выбор всех КИЗ недоступен.');
         if (selectAll.checked) throw new SoldKizFilterError('Перед запуском снимите текущее выделение КИЗ.');
+        assertCurrentSession();
         selectAll.click();
+        assertCurrentSession();
         const action = await waitFor(() => {
           const button = actionButton(container, expectedCount);
           return button && !button.disabled ? button : null;
         }, `Штатный экран не подтвердил выбор ровно ${expectedCount} КИЗ.`);
+        assertCurrentSession();
         action.click();
         await waitFor(
           () => [...document.querySelectorAll('[role="dialog"]')].some(
@@ -131,7 +135,23 @@
           ),
           'Штатный диалог выбора сертификата не открылся.',
         );
+        assertCurrentSession();
         return { selectedCount: expectedCount, dialogOpen: true };
+      },
+      async rollbackPreparation() {
+        const container = page();
+        const dialogs = [...document.querySelectorAll('[role="dialog"]')];
+        for (const dialog of dialogs) {
+          if (!normalizedText(dialog).includes('Выберите сертификат')) continue;
+          const close = [...dialog.querySelectorAll('button')].find(
+            (button) => button.getAttribute?.('aria-label') === 'Закрыть' && !button.disabled,
+          );
+          close?.click();
+        }
+        const selectAll = container.querySelector(
+          'input[aria-label="Выбрать все доступные КИЗ по фильтрам"]',
+        );
+        if (selectAll?.checked && !selectAll.disabled) selectAll.click();
       },
     };
   }
@@ -213,6 +233,14 @@
       const patchedFetch = async (input, init = {}) => {
         const url = new URL(typeof input === 'string' || input instanceof URL ? input : input.url, location.origin);
         const method = String(init.method ?? input?.method ?? 'GET').toUpperCase();
+        if (
+          method === 'POST' &&
+          url.origin === EXPECTED_ORIGIN &&
+          url.pathname === `${REGISTRY_PATH}/operations`
+        ) {
+          if (root.fetch === patchedFetch) root.fetch = originalFetch;
+          return callOriginalFetch(input, init);
+        }
         if (method !== 'GET' || url.origin !== EXPECTED_ORIGIN || url.pathname !== REGISTRY_PATH) {
           return callOriginalFetch(input, init);
         }
@@ -252,12 +280,17 @@
         return Object.freeze({ mode, status: 'ready', targetCount: targets.length, noSend: true, signed: false, sent: false });
       }
       const restore = installFilter(token, targets);
+      const assertCurrentSession = () => {
+        if (readToken() !== token) {
+          throw new SoldKizFilterError('Seller-сессия изменилась во время подготовки.');
+        }
+      };
       try {
-        const opened = await ui.refreshSelectAllAndOpen(TARGET_COUNT);
+        const opened = await ui.refreshSelectAllAndOpen(TARGET_COUNT, assertCurrentSession);
         if (!opened || opened.selectedCount !== TARGET_COUNT || opened.dialogOpen !== true) {
           throw new SoldKizFilterError('Штатный экран не подтвердил точное выделение и диалог сертификата.');
         }
-        if (readToken() !== token) throw new SoldKizFilterError('Seller-сессия изменилась во время подготовки.');
+        assertCurrentSession();
         return Object.freeze({
           mode,
           status: 'certificate_dialog_open',
@@ -268,6 +301,11 @@
           message: 'Выбраны ровно 80 проверенных WB sold КИЗ. Сертификат и отправку подтверждает Виталий.',
         });
       } catch (error) {
+        try {
+          await ui.rollbackPreparation?.();
+        } catch {
+          // The original error is more useful. Reloading the tab is the final rollback.
+        }
         restore();
         throw error;
       }
