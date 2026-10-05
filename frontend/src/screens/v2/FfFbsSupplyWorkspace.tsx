@@ -2163,12 +2163,12 @@ export function FfFbsSupplyWorkspace({
       const assignedPositionIds = new Set(
         current.boxes.flatMap((box) => box.assigned_order_product_ids ?? []),
       )
-      let known = false
+      let positionCodeMatched = false
       for (const order of current.orders) {
         const orderEligible = order.status !== 'cancelled' && order.pack.status !== 'packed'
         for (const position of order.positions) {
           if (!productBarcodeOptionsForPosition(position, 'ozon').some((option) => option.barcode === clean)) continue
-          known = true
+          positionCodeMatched = true
           if (!orderEligible || (position.id && assignedPositionIds.has(position.id))) continue
           return {
             kind: 'eligible' as const,
@@ -2177,13 +2177,21 @@ export function FfFbsSupplyWorkspace({
             orderId: order.id,
           }
         }
+      }
+      // A position barcode has precedence over posting-level identifiers. Once
+      // every exact position match is exhausted, it must not select another
+      // position through the aggregated order barcode options.
+      if (positionCodeMatched) {
+        return { kind: 'exhausted' as const, lookupCode: clean, positionId: undefined, orderId: undefined }
+      }
+      let orderCodeMatched = false
+      for (const order of current.orders) {
+        const orderEligible = order.status !== 'cancelled' && order.pack.status !== 'packed'
         const orderCodeMatches = order.external_order_id === clean
           || order.sticker.code === clean
-          || productBarcodeOptionsForOrder(order, 'ozon').some((option) => option.barcode === clean)
         if (!orderCodeMatches) continue
-        known = true
-        const position = order.positions.find((one) => !one.id || !assignedPositionIds.has(one.id))
-        if (!orderEligible || !position) continue
+        orderCodeMatched = true
+        if (!orderEligible) continue
         return {
           kind: 'eligible' as const,
           lookupCode: order.external_order_id ?? order.sticker.code ?? clean,
@@ -2191,7 +2199,7 @@ export function FfFbsSupplyWorkspace({
           orderId: order.id,
         }
       }
-      return known
+      return orderCodeMatched
         ? { kind: 'exhausted' as const, lookupCode: clean, positionId: undefined, orderId: undefined }
         : { kind: 'unknown' as const, lookupCode: clean, positionId: undefined, orderId: undefined }
     }
@@ -2265,9 +2273,7 @@ export function FfFbsSupplyWorkspace({
             }
             if (latestRoute.kind === 'exhausted') return false
             const found = latest.orders.find((order) => order.id === orderId)
-            if (!found || found.status === 'cancelled' || found.pack.status === 'packed') return false
-            const assigned = new Set(latest.boxes.flatMap((box) => box.assigned_order_product_ids ?? []))
-            return found.positions.some((position) => !position.id || !assigned.has(position.id))
+            return Boolean(found && found.status !== 'cancelled' && found.pack.status !== 'packed')
           },
           placeOrder,
           releaseSelection: () => {
@@ -3425,7 +3431,8 @@ export function FfFbsSupplyWorkspace({
       const alreadyBoxed = isOzonSupply
         ? positionIds.length > 0 && positionIds.every((positionId) => current.boxes.some((box) => box.assigned_order_product_ids?.includes(positionId)))
         : current.boxes.some((box) => box.assigned_order_ids.includes(orderId))
-      if (!alreadyBoxed) {
+      const hasBoxAssignment = !isOzonSupply || positionIds.length > 0
+      if (hasBoxAssignment && !alreadyBoxed) {
         if (!boxId || !current.boxes.some((box) => box.id === boxId)) {
           setAssemblyBoxHint(releaseKizWait ? null : 'Откройте или создайте короб.')
           return
