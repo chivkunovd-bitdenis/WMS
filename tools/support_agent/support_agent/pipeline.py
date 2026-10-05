@@ -1106,11 +1106,12 @@ class Pipeline:
         self.store.set_stage(tid, "done", answer_confirmed_at=self.clock())
 
     def _crosscheck(self, tid: int, analysis: dict[str, Any], analyst_cli: str) -> dict[str, Any]:
-        """R16: проверяет модель другого семейства; нет модели — честная пометка."""
+        """R16: отдельная сессия Astra high через Codex; нет модели — честная пометка."""
         try:
             res, result = self.llm.ask_json(
                 "review", prompts.crosscheck_prompt(self.ticket_context(tid), str(analysis)),
-                ticket_id=tid, mode="readonly", cwd=self._analysis_cwd(tid), exclude_cli=analyst_cli,
+                ticket_id=tid, mode="readonly", cwd=self._analysis_cwd(tid),
+                cli_only="codex", session_key="review",
             )
         except (LlmUnavailable, LlmError) as exc:
             return {"verdict": "not_done", "reason": str(exc)}
