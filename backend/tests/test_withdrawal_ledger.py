@@ -332,7 +332,7 @@ async def test_registry_server_scope_and_moscow_date(db_session: AsyncSession) -
 
 
 async def test_create_reload_and_overlap_resume_without_duplicate(db_session: AsyncSession) -> None:
-    scope, marking, _, _ = await seed(db_session)
+    scope, marking, order, _ = await seed(db_session)
     request_id = uuid.uuid4()
     op = await create_operation(
         db_session, scope, row_ids=[marking.id], client_request_id=request_id
@@ -353,7 +353,21 @@ async def test_create_reload_and_overlap_resume_without_duplicate(db_session: As
     assert await db_session.scalar(select(func.count()).select_from(WithdrawalItem)) == 1
     item = (await current_items(db_session, scope, op.id))[0]
     assert item.cis == marking.value and item.product_cost == 99999999999999999
-    assert item.price_snapshot_id is not None
+    # R20/R22: a persisted exact sales source replaces the old WMS price snapshot.
+    async with SessionLocal() as reader:
+        reloaded = (await current_items(reader, scope, op.id))[0]
+        evidence = reloaded.preflight_evidence["wb_sale"]
+        raw = _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]
+        assert reloaded.id == item.id and reloaded.product_cost == 99999999999999999
+        assert evidence["source"] == "/api/v1/supplier/sales"
+        assert evidence["order_id"] == str(order.id) and evidence["srid"] == order.wb_rid
+        assert evidence["saleID"] == raw["saleID"]
+        assert evidence["finishedPrice"] == "999999999999999.99"
+        assert evidence["date"] == raw["date"]
+        assert evidence["lastChangeDate"] == raw["lastChangeDate"]
+        assert evidence["raw_sale"] == raw
+        assert evidence["complete"] is True and evidence["received_at"]
+        assert evidence["pages"] == 2 and evidence["row_count"] == 1
     with pytest.raises(WithdrawalError, match="idempotency_selection_mismatch"):
         await create_operation(
             db_session, scope, row_ids=[uuid.uuid4()], client_request_id=request_id
@@ -401,16 +415,19 @@ async def test_price_less_order_feed_keeps_price_sent_with_new_order(
 
 async def test_registry_missing_price_is_an_actual_local_error(db_session: AsyncSession) -> None:
     scope, _, order, _ = await seed(db_session)
+    # The valid historical snapshot is deliberately unable to rescue missing sale price.
     await capture_wb_price_snapshot(
         db_session,
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"currencyCode": 840, "finalPrice": 100},
+        row={"currencyCode": 643, "finalPrice": 12345},
     )
+    _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]["finishedPrice"] = None
+    await db_session.commit()
     rows, _ = await registry(db_session, scope)
     assert rows[0]["status"] == "error"
-    assert rows[0]["error"]["code"] == "missing_rub_final_price"
+    assert rows[0]["error"]["code"] == "invalid_sale_price"
 
 
 async def test_partial_success_survives_neighbour_failure_and_retry(
@@ -512,28 +529,47 @@ async def test_retry_retains_old_price_error_and_new_attempt(db_session: AsyncSe
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"finalPrice": 100, "currencyCode": 840},
+        row={"finalPrice": 77700, "currencyCode": 643},
     )
+    raw_sale = _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]
+    raw_sale["finishedPrice"] = None
     op = await create_operation(
         db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
     )
     await db_session.commit()
     old = (await current_items(db_session, scope, op.id))[0]
-    assert op.state == "failed" and old.error["code"] == "missing_rub_final_price"
+    assert op.state == "failed" and old.error["code"] == "invalid_sale_price"
+    old_evidence = json.dumps(old.preflight_evidence, sort_keys=True)
+    assert old.preflight_evidence["wb_sale"]["raw_sale"]["finishedPrice"] is None
+    assert old.preflight_evidence["wb_sale"]["srid"] == order.wb_rid
+    assert old.preflight_evidence["wb_sale"]["complete"] is True
     await capture_wb_price_snapshot(
         db_session,
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"finalPrice": 12345, "currencyCode": 643},
+        row={"finalPrice": 88800, "currencyCode": 643},
     )
+    # One fresh complete report, not two contradictory versions in the same scan.
+    raw_sale["finishedPrice"] = "123.45"
+    raw_sale["lastChangeDate"] = (datetime.now(UTC) + timedelta(seconds=2)).isoformat()
     await db_session.commit()
     await retry_operation(db_session, scope, op.id, expected_attempt=1)
     await db_session.commit()
     new = (await current_items(db_session, scope, op.id))[0]
     assert new.attempt == 2 and new.product_cost == 12345 and new.document_id is None
-    assert old.state == "failed" and old.error["code"] == "missing_rub_final_price"
-    assert not old.holds_claim and old.price_snapshot_id != new.price_snapshot_id
+    assert old.state == "failed" and old.error["code"] == "invalid_sale_price"
+    assert not old.holds_claim and new.holds_claim
+    assert json.dumps(old.preflight_evidence, sort_keys=True) == old_evidence
+    assert new.preflight_evidence["wb_sale"]["finishedPrice"] == "123.45"
+    assert new.preflight_evidence["wb_sale"]["raw_sale"] == raw_sale
+    assert new.preflight_evidence["wb_sale"]["source"] == "/api/v1/supplier/sales"
+    assert new.preflight_evidence["wb_sale"]["order_id"] == str(order.id)
+    assert new.preflight_evidence["wb_sale"]["srid"] == order.wb_rid
+    assert new.preflight_evidence["wb_sale"]["complete"] is True
+    assert await db_session.scalar(select(func.count(WithdrawalItem.id)).where(
+        WithdrawalItem.operation_id == op.id, WithdrawalItem.holds_claim.is_(True),
+    )) == 1
     assert (await retry_operation(db_session, scope, op.id, expected_attempt=1)).attempt == 2
 
 
