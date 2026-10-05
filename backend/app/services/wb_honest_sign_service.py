@@ -66,11 +66,21 @@ async def fetch_category_catalog(
         headers=headers,
     )
     parents_response.raise_for_status()
-    subjects_response = await client.get(
-        f"{base_url}/content/v2/object/all",
-        headers=headers,
-    )
-    subjects_response.raise_for_status()
+    subject_rows: list[dict[str, Any]] = []
+    page_limit = 1000
+    offset = 0
+    while True:
+        subjects_response = await client.get(
+            f"{base_url}/content/v2/object/all",
+            headers=headers,
+            params={"limit": page_limit, "offset": offset},
+        )
+        subjects_response.raise_for_status()
+        page_rows = _response_rows(subjects_response.json())
+        subject_rows.extend(page_rows)
+        if len(page_rows) < page_limit:
+            break
+        offset += page_limit
 
     clothing_parent_ids = {
         parent_id
@@ -80,7 +90,7 @@ async def fetch_category_catalog(
         and str(row["name"]).strip().casefold() == "одежда"
     }
     parent_by_subject: dict[int, int] = {}
-    for row in _response_rows(subjects_response.json()):
+    for row in subject_rows:
         subject_id = _integer(row.get("subjectID", row.get("subjectId")))
         parent_id = _integer(row.get("parentID", row.get("parentId")))
         if subject_id is not None and parent_id is not None:

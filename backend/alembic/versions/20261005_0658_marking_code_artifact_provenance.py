@@ -27,13 +27,28 @@ def upgrade() -> None:
         ),
     )
     # Before this migration only PDF imports stored a label artifact. Preserve
-    # that provenance so a later damaged artifact cannot be replaced with a
-    # newly generated label, while CSV/TXT codes remain printable from payload.
+    # provenance from a PDF-only import name as well as the artifact itself: a
+    # damaged/missing legacy artifact must not silently turn a PDF code into a
+    # CSV/TXT code that can be regenerated from payload. Mixed imports are not
+    # classified by batch alone because that would incorrectly require a PDF
+    # artifact for their legitimate CSV/TXT rows.
     op.execute(
         """
         UPDATE marking_codes
         SET label_artifact_required = true
-        WHERE import_batch_id IS NOT NULL AND label_artifact_pdf IS NOT NULL
+        WHERE import_batch_id IS NOT NULL
+          AND (
+              label_artifact_pdf IS NOT NULL
+              OR EXISTS (
+                  SELECT 1
+                  FROM marking_code_imports
+                  WHERE marking_code_imports.id = marking_codes.import_batch_id
+                    AND lower(marking_code_imports.filename) LIKE '%.pdf%'
+                    AND lower(marking_code_imports.filename) NOT LIKE '%.csv%'
+                    AND lower(marking_code_imports.filename) NOT LIKE '%.txt%'
+                    AND lower(marking_code_imports.filename) NOT LIKE '%.tsv%'
+              )
+          )
         """
     )
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections import Counter
 from typing import Any
 
 import fitz
@@ -30,6 +31,11 @@ def _decode_pdf(pdf_bytes: bytes) -> list[str]:
         ]
 
 
+def _source_contains_saved_payloads(source: list[str], saved: list[str]) -> bool:
+    """Treat duplicates/unassigned source rows as valid skipped import input."""
+    return not (Counter(saved) - Counter(source))
+
+
 async def audit_marking_import(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -50,7 +56,7 @@ async def audit_marking_import(
                     MarkingCodeImportFile.tenant_id == tenant_id,
                     MarkingCodeImportFile.import_batch_id == import_id,
                 )
-                .order_by(MarkingCodeImportFile.id)
+                .order_by(MarkingCodeImportFile.created_at, MarkingCodeImportFile.id)
             )
         ).all()
     )
@@ -134,7 +140,14 @@ async def audit_marking_import(
     source_evidence_complete = not any(
         gap == "source_pdf" or gap.startswith("source_pdf:") for gap in evidence_gaps
     )
-    if source_evidence_complete and source_payloads and source_payloads != saved_payloads:
+    if (
+        source_evidence_complete
+        and source_payloads
+        and (
+            len(saved_payloads) != batch.accepted_count
+            or not _source_contains_saved_payloads(source_payloads, saved_payloads)
+        )
+    ):
         first_divergence = "saved_cis"
     elif artifact_mismatch:
         first_divergence = "label_artifact_pdf"

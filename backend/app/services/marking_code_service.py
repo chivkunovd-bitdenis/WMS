@@ -742,23 +742,19 @@ def is_printable_label_artifact(pdf_bytes: bytes | None, cis_code: str | None = 
     except ImportError:
         return False
 
-    expected = normalize_cis(cis_code or "") if cis_code else None
-    seen: set[str] = set()
     doc = fitz.open(stream=pdf_bytes, filetype="pdf")
     try:
-        for page_index in range(doc.page_count):
-            _extract_cis_codes_from_text(doc[page_index].get_text("text"), seen)
-        if len(seen) == 1 and (expected is None or expected in seen):
-            return True
-        # Full imported codes need not appear in the human-readable PDF caption.
+        # A human-readable caption is not proof of the DataMatrix payload.  In
+        # particular, a short KIZ printed as text must never make a label with
+        # a missing or different DataMatrix eligible for exact-result printing.
         from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
 
-        decoded = {
+        decoded = [
             item.value
             for page in doc
             for item in decode_datamatrix_codes_on_pdf_page(page)
-        }
-        return len(decoded) == 1 and (cis_code is None or cis_code in decoded)
+        ]
+        return len(decoded) == 1 and (cis_code is None or decoded[0] == cis_code)
     except Exception:
         return False
     finally:
@@ -882,9 +878,6 @@ async def build_import_result_pdf(
             )
     if not selected_ids:
         raise MarkingCodeServiceError("no_codes")
-    if len(selected_ids) * copies > _MAX_LABEL_ARTIFACT_TAPE:
-        raise MarkingCodeServiceError("too_many_codes")
-
     allowed_import_ids = set(import_ids)
     exact_codes: list[tuple[bytes | None, str, bool]] = []
     for code_id in selected_ids:
@@ -1409,6 +1402,7 @@ def _persist_import_source_pdfs(
                 content_type=stored.content_type,
                 size_bytes=stored.size_bytes,
                 sha256_hex=stored.sha256_hex,
+                created_at=datetime.now(UTC),
             )
         )
 
