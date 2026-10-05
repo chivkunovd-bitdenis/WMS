@@ -209,6 +209,14 @@ test('session change after successful preparation restores the original transpor
   assert.equal(h.root.fetch, h.originalFetch);
 });
 
+test('logout after successful preparation also restores the original transport', async () => {
+  const h = harness();
+  await h.helper.run({ mode: 'execute' });
+  h.setToken(null);
+  await assert.rejects(() => h.root.fetch(`${REGISTRY}?limit=50&offset=0`), /Войдите|сесси/i);
+  assert.equal(h.root.fetch, h.originalFetch);
+});
+
 test('a second helper cannot accept the already installed snapshot as backend truth', async () => {
   const h = harness();
   await h.helper.run({ mode: 'execute' });

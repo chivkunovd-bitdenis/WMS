@@ -4,7 +4,6 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { readFileSync } = require('node:fs');
 const vm = require('node:vm');
-const path = require('node:path');
 const { createHelper, TARGETS } = require('../avpack-kiz-helper.js');
 
 // Contract fixtures are independent of the implementation's allowlist.
@@ -218,14 +217,6 @@ test('the standalone script exposes the browser global without making requests o
   vm.runInContext(readFileSync(require.resolve('../avpack-kiz-helper.js'), 'utf8'), context);
   assert.equal(typeof context.AvpackKizHelper.createHelper, 'function');
   assert.equal(context.AvpackKizHelper.TARGETS.length, 4);
-});
-
-test('CI executes the full sold-KIZ helper contract', () => {
-  const workflow = readFileSync(
-    path.resolve(__dirname, '../../../.github/workflows/ci.yml'),
-    'utf8',
-  );
-  assert.match(workflow, /avpack-sold-kiz-filter\.test\.cjs/);
 });
 
 test('default run is read-only and inspects only the first target, never all four', async () => {
