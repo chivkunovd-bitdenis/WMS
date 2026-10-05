@@ -419,6 +419,7 @@ class NightRunner:
 
     def _task_checks(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
         self._assert_contract(task)
+        self._sync_task_base(task)
         failures = self._run_contract(task)
         if failures:
             reason = "\n".join(failures)[-1800:]
@@ -473,6 +474,15 @@ class NightRunner:
         self._save(tid, state)
 
     def _task_pr(self, tid: int, state: dict[str, Any], task: dict[str, Any]) -> None:
+        self.hotfix.fetch()
+        etalon = self.hotfix.git("rev-parse", "origin/etalon", cwd=task["path"]).strip()
+        if self.hotfix.run(
+            ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], task["path"]
+        ).rc != 0:
+            self._clear_stale_validation(task)
+            task["step"] = "checks"
+            self._save(tid, state)
+            return
         self.hotfix.push_branch(task["branch"])
         task["pr_intent"] = True
         self._save(tid, state)
@@ -904,6 +914,37 @@ class NightRunner:
         task["contract_changed"] = changed
         if changed:
             raise StepFailed("разработчик изменил зафиксированный контракт тестов")
+
+    @staticmethod
+    def _clear_stale_validation(task: dict[str, Any]) -> None:
+        for key in (
+            "reviewed_sha", "review_by", "review_summary", "accepted", "accepted_sha",
+            "ci_head", "ci_started", "head_sha",
+        ):
+            task.pop(key, None)
+
+    def _sync_task_base(self, task: dict[str, Any]) -> None:
+        """Merge the latest trusted etalon before tests, review, acceptance and task CI."""
+        self.hotfix.fetch()
+        etalon = self.hotfix.git("rev-parse", "origin/etalon", cwd=task["path"]).strip()
+        if self.hotfix.run(
+            ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], task["path"]
+        ).rc == 0:
+            task["base_sha"] = etalon
+            return
+        if self._changed_outside(task, []):
+            raise StepFailed("нельзя обновить базу задачи с несохранёнными изменениями")
+        result = self.hotfix.run(
+            ["git", "merge", "--no-ff", "--no-edit", etalon], task["path"], 1800
+        )
+        if result.rc != 0:
+            self.hotfix.run(["git", "merge", "--abort"], task["path"])
+            raise StepFailed("актуальный etalon конфликтует с веткой задачи; нужна ручная интеграция")
+        if self._hashes(task, task.get("tests") or []) != task.get("contract_hashes", {}):
+            raise StepFailed("актуальный etalon изменил зафиксированный контракт задачи")
+        task["control_hashes"] = self._control_hashes(task)
+        task["base_sha"] = etalon
+        self._clear_stale_validation(task)
 
     def _control_hashes(self, task: dict[str, Any]) -> dict[str, str]:
         root = Path(task["path"])
