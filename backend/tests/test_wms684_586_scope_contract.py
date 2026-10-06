@@ -34,7 +34,8 @@ TASK_FILES = PRODUCT_PATHS | {
     "frontend/src/test-contracts/inbound684586Harness.tsx",
 }
 REVIEW_PREFIX = "docs/reviews/2026-10-07-wms684-586"
-TASK_SUBJECT = re.compile(r"^WMS-(?:684|586)(?:\s+WMS-\d+)*:")
+TASK_IDS = frozenset({"684", "586"})
+WMS_ID = re.compile(r"(?<![A-Za-z0-9])WMS-(\d+)(?![A-Za-z0-9])")
 
 
 def read(path):
@@ -49,6 +50,10 @@ def _git(*args: str, root: Path = ROOT) -> str:
 
 def _task_file_allowed(path: str) -> bool:
     return path in TASK_FILES or path.startswith(REVIEW_PREFIX)
+
+
+def _is_wms684_586_subject(subject: str) -> bool:
+    return bool(TASK_IDS.intersection(WMS_ID.findall(subject)))
 
 
 def _wms684_586_task_history(
@@ -71,7 +76,7 @@ def _wms684_586_task_history(
         (commit, parents.split())
         for line in history.splitlines()
         for commit, parents, subject in [line.split("\t", 2)]
-        if TASK_SUBJECT.match(subject)
+        if _is_wms684_586_subject(subject)
     ]
 
 
@@ -238,3 +243,29 @@ def test_task_commit_with_forbidden_product_path_fails(
     _commit(root, "WMS-684 WMS-586: forbidden model")
     with pytest.raises(AssertionError, match="foreign files"):
         assert_wms684_586_scope(root, contract)
+
+
+@pytest.mark.parametrize(
+    "subject",
+    (
+        "WMS-652 WMS-684 WMS-586: forbidden model",
+        "WMS-684 WMS-586 forbidden model",
+    ),
+)
+def test_task_id_anywhere_or_without_colon_rejects_forbidden_path(
+    scope_repo: tuple[Path, str], subject: str
+) -> None:
+    root, contract = scope_repo
+    _write(root, "backend/app/models/forbidden.py", "new model\n")
+    _commit(root, subject)
+    with pytest.raises(AssertionError, match="foreign files"):
+        assert_wms684_586_scope(root, contract)
+
+
+def test_task_id_prefix_collision_is_not_attributed_to_wms684_586(
+    scope_repo: tuple[Path, str],
+) -> None:
+    root, contract = scope_repo
+    _write(root, "backend/app/models/forbidden.py", "another task's model\n")
+    _commit(root, "WMS-6840: forbidden model")
+    assert_wms684_586_scope(root, contract)
