@@ -64,6 +64,7 @@ from app.models.seller import Seller
 from app.models.tenant import Tenant
 from app.models.warehouse import Warehouse
 from app.services import fbs_print_asset_service as print_assets
+from app.services import fbs_supply_reconcile_service as reconcile
 from app.services import fbs_supply_service as supplies
 from app.services.fbs_supply_validator_service import SupplyPreflightResult
 from app.services.integration_fernet import encrypt_secret
@@ -306,6 +307,14 @@ async def test_draft_sticker_failure_does_not_break_the_add_and_recovers_later(
     real_batch = print_assets.request_supply_print_batch
     real_add = supplies._execute_wb_batch_add
     wb_add_calls: list[list[int]] = []
+    # WMS-683 reads WB before adding: expose the original composition until
+    # the mocked PATCH succeeds, then expose the confirmed added order.
+    wb_supply_members = {537301}
+
+    async def read_supply_members(*args: Any, **kwargs: Any) -> list[int]:
+        return sorted(wb_supply_members)
+
+    monkeypatch.setattr(reconcile, "fetch_wb_supply_order_ids", read_supply_members)
     storage_failure = failure == "storage_write"
     real_write_bytes = Path.write_bytes
     if storage_failure:
@@ -338,6 +347,7 @@ async def test_draft_sticker_failure_does_not_break_the_add_and_recovers_later(
     async def track_add(*args: Any, **kwargs: Any) -> None:
         wb_add_calls.append(kwargs["wb_order_ids"])
         await real_add(*args, **kwargs)
+        wb_supply_members.update(kwargs["wb_order_ids"])
 
     monkeypatch.setattr(print_assets, "request_supply_print_batch", track_batch)
     monkeypatch.setattr(print_assets, "fetch_marketplace_order_stickers", fetch_stickers)
