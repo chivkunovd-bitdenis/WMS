@@ -94,8 +94,14 @@ try {
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
       assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
       await evaluatePreview(() => {
-        document.querySelector('print-preview-app').shadowRoot.querySelector('print-preview-sidebar').shadowRoot.querySelector('print-preview-button-strip').shadowRoot.querySelector('.cancel-button').click()
+        // Return the protocol response before the Cancel action destroys this target.
+        setTimeout(() => document.querySelector('print-preview-app').shadowRoot.querySelector('print-preview-sidebar').shadowRoot.querySelector('print-preview-button-strip').shadowRoot.querySelector('.cancel-button').click(), 0)
       })
+      await browser.waitForTarget(t => t === popup.target())
+      for (let attempt = 0; browser.targets().includes(previewTarget) && attempt < 100; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+      assert(!browser.targets().includes(previewTarget), 'Cancel must close the native preview')
       await popup.close()
       repeats.push(content)
     }
