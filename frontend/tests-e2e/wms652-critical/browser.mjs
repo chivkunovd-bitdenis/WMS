@@ -253,27 +253,43 @@ async function selectionBoundary(requestId,method,path,u,body){
   if(path.endsWith('/cargo-places'))return fulfill(requestId,[]);
   return fulfill(requestId,{detail:{code:'unhandled_synthetic_endpoint',message:path}},404);
 }
-async function click(selector){await until(`document.querySelector(${JSON.stringify(selector)})`);await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);}
+async function clickElement(expression, label, allowDisabled=false){
+  await until(expression);
+  let point;
+  for(let i=0;i<40;i++){
+    point=await evaluate(`(()=>{const el=${expression};el.scrollIntoView({block:'center',inline:'center'});
+      const r=el.getBoundingClientRect(),s=getComputedStyle(el),x=r.x+r.width/2,y=r.y+r.height/2,hit=document.elementFromPoint(x,y);
+      return {x,y,visible:r.width>0&&r.height>0&&s.display!=='none'&&s.visibility==='visible'&&Number(s.opacity)>0&&x>=0&&y>=0&&x<innerWidth&&y<innerHeight,
+        reachable:hit===el||el.contains(hit)||(${allowDisabled}&&el.disabled&&hit?.contains(el)),disabled:Boolean(el.disabled)};})()`);
+    if(point.visible&&point.reachable&&(!point.disabled||allowDisabled))break;
+    await sleep(50);
+  }
+  assert(point.visible&&point.reachable&&(!point.disabled||allowDisabled),`action must have visible unobscured bounds: ${label}; ${JSON.stringify(point)}`);
+  await cdp.send('Input.dispatchMouseEvent',{type:'mouseMoved',x:point.x,y:point.y});
+  await cdp.send('Input.dispatchMouseEvent',{type:'mousePressed',x:point.x,y:point.y,button:'left',clickCount:1});
+  await cdp.send('Input.dispatchMouseEvent',{type:'mouseReleased',x:point.x,y:point.y,button:'left',clickCount:1});
+}
+async function click(selector,allowDisabled=false){await clickElement(`document.querySelector(${JSON.stringify(selector)})`,selector,allowDisabled);}
 async function freshSelection(id){
   mode='selection';selectionState=selectionFixtures();state={...state};failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;
   requestLog=[];printLog=[];blocked=[];errors=[];trace=[];report.currentCase=id;
   await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs`});
   await until(`document.querySelector('[data-testid="fbs-order-order-a"] input[type=checkbox]')`);
 }
-async function select(ids){for(const id of ids)await click(`[data-testid="fbs-order-${id}"] input[type=checkbox]`);}
+async function select(ids){for(const id of ids)await clickElement(`document.querySelector('[data-testid="fbs-order-${id}"] input[type=checkbox]').closest('[class*="MuiCheckbox-root"]')`,`visible checkbox ${id}`);}
 async function saveCase(id){
   assert.equal(blocked.length,0);assert.equal(errors.length,0);
   await writeFile(`${dir}/${id.replaceAll(/[^A-Za-z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
   report.cases.push({id,status:'PASS'});console.log(`${id}: PASS`);
 }
-async function openCreate(){await evaluate(`[...document.querySelectorAll('[data-testid="fbs-selection-bar"] button')].find(b=>b.innerText==='Сформировать поставку').click()`);}
+async function openCreate(){await clickElement(`[...document.querySelectorAll('[data-testid="fbs-selection-bar"] button')].find(b=>b.innerText==='Сформировать поставку')`,'Сформировать поставку');}
 async function selectionContracts(){
   const one='WMS652.selection[single-create]';await freshSelection(one);await select(['order-a2','order-a']);
   await click('[data-testid="fbs-selected-open"]');
   await until(`document.querySelector('[data-testid="fbs-selected-list"]')`);
   const text=await evaluate(`document.querySelector('[data-testid="fbs-selected-list"]').innerText`);
   assert(text.includes('Товар order-a2')&&text.includes('Товар order-a'));assert(!text.includes('Товар unselected'));assert(!text.includes('Товар order-b'));
-  await evaluate(`[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText==='Закрыть').click()`);
+  await clickElement(`[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText==='Закрыть')`,'Закрыть selected popup');
   await openCreate();await until(`document.querySelector('[data-testid="fbs-create-submit"]')&&!document.querySelector('[data-testid="fbs-create-submit"]').disabled`);
   const preflight=requestLog.filter(r=>r.path==='/operations/fbs-supplies/preflight');
   assert(preflight.length>0);assert.deepEqual(preflight.at(-1).body.order_ids,['order-a2','order-a']);
@@ -315,7 +331,7 @@ async function selectionContracts(){
   for(let i=0;i<50&&!heldAdd;i++)await sleep(100);
   assert(heldAdd,'add HTTP boundary not reached');
   assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-05-add-existing-submit"]').disabled`),true);
-  await click('[data-testid="fbs-05-add-existing-submit"]');assert.equal(addAttempts,1,'busy button must not add twice');
+  await click('[data-testid="fbs-05-add-existing-submit"]',true);assert.equal(addAttempts,1,'busy button must not add twice');
   await heldAdd();await until(`document.querySelector('[data-testid="fbs-add-existing-error"]')`);
   assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-order-order-a"] input').checked`),true);
   assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-order-order-a2"] input').checked`),true);
