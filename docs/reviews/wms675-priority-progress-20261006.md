@@ -1,5 +1,7 @@
 # WMS-675 — приоритетное адресное восстановление Bambook
 
+Опубликованная дельта proofs/plan/requirements/backlog: `4e6c89783` (push подтверждён), диапазон `5b5da992a6cd766eb250ab83f4575fc8b11cdf22..4e6c89783`. Exact SHA и шестнадцатеричные hashes источников сохранены в plan/manifest. Отдельный commit содержит только этот progress handoff.
+
 06.10.2026: live reader блокер снят. Независимый reviewer native priority666 проверил collector767f19fd2 и выполнил31 штатное Ozon-чтение11:31UTC без мутаций; proofs сохранены в ветке на5b5da992a6cd766eb250ab83f4575fc8b11cdf22. 31HTTP200/unknown0, точный SKU/offer/qty1, related/weight empty. 26 положительных единиц,4 отмены,1 ожидание.
 
 Свежий [gateway refresh](wms675-evidence-20261006/accounting-refresh-20261006-attempt1/manifest.json) 11:36:18–11:36:34UTC: существующая tenant роль READ ONLY/RLS on,31 positions/ledger; проведено0, ссылок движения/сторно0, новых отрицательных движений0, unlinked FBS0. Балансы6 SKU совпадают с журналом и предыдущим снимком. Резерв16:15 delivering +1 awaiting. 11 delivered уже имеют11 facts/22 active charges, по1 fbs_order/packing; их не начислять повторно. Amount старых22=null, денежную готовность не заявлять.
@@ -12,4 +14,4 @@
 
 Исходные R1–R5 перенесены в [WMS-675](../requirements/WMS-675.md) с сохранением смысла/классов и честными вердиктами; канонический backlog содержит ровно одну запись675. Старый отчёт/матрица pending остаются историей, текущий source of truth — exact plan/proofs. Никакие tests/requirements662 не ослаблены. Full CI/merge/deploy не запускались; чужие worktree не правились.
 
-Локальная проверка новой дельты:5 offline проверок joint proofs/identity/accounting/billing/blocked plan PASS; ruff PASS; WMS-675 document_errors=[] (вердикты, заключение и5 реальных тестовых ссылок проверены). Следующий шаг ведущего: исправление15 подстатусов владельцем662 + review no-publish runtime + команда на exact26 после общего выпуска. Фактическое восстановление NOT_PERFORMED; WMS-675 не закрыта.
+Локальная проверка новой дельты:5 offline проверок joint proofs/identity/accounting/billing/blocked plan PASS; ruff PASS; committed document gate `python3 scripts/ci/check_task_documents.py 5b5da992a6cd766eb250ab83f4575fc8b11cdf22` PASS (документы заполнены, AGENTS=CLAUDE); WMS-675 document_errors=[] (вердикты, заключение и5 реальных тестовых ссылок проверены). Следующий шаг ведущего: исправление15 подстатусов владельцем662 + review no-publish runtime + команда на exact26 после общего выпуска. Фактическое восстановление NOT_PERFORMED; WMS-675 не закрыта.
