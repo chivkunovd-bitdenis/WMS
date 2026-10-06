@@ -45,6 +45,11 @@ FIXTURE_BLOB_PAIRS = {
         "4e1aff5a80445fa61b5697d60a26985427dfd28e",
         "c92c075ba9f375c578538b776207cdc6b8b56ab3",
     ),
+    "wms663-known-no-documents-complete-requirements": (
+        "WMS-663", "frontend/src/screens/v2/OzonDocumentsAbsence.required-orders.dom.test.tsx",
+        "5a508673b78388e44c903fe503fd76f3e48a7cde",
+        "d96fd44965a7f0b8806d87fe3d4f88243cad1f5e",
+    ),
 }
 POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"
 POSITIVE_STATUS_HANDOFF = (
