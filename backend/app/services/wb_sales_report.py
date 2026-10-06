@@ -56,6 +56,15 @@ class WbSalesError(ValueError):
     pass
 
 
+def _json_integer(value: str) -> int | str:
+    try:
+        return int(value)
+    except ValueError:
+        # Preserve an integer lexeme rejected by Python's conversion-size guard.
+        # Normal integers retain their type; the global safety limit stays intact.
+        return value
+
+
 def _aware(value: datetime) -> datetime:
     return value if value.tzinfo else value.replace(tzinfo=UTC)
 
@@ -344,7 +353,12 @@ async def read_sales_report(
                     # Preserve numeric lexemes without constructing Decimal here:
                     # an unsupported price exponent is an item error, not a reason
                     # to discard a complete page and its healthy neighboring sales.
-                    page = json.loads(response.content, parse_float=str, parse_constant=str)
+                    page = json.loads(
+                        response.content,
+                        parse_float=str,
+                        parse_int=_json_integer,
+                        parse_constant=str,
+                    )
                 except (ValueError, UnicodeDecodeError):
                     raise WbSalesError("wb_sales_incomplete_json") from None
                 pages += 1

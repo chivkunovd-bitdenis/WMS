@@ -213,3 +213,22 @@ Final F2 fix after independent contract2feb9040d4f937f2ccfd0a250f8594d181bb3437:
 - Parent must obtain independent Astra high delta review of final published SHA,
   then analyst acceptance/CI. No user-facing WMS-517 completion or live signing /
   deployment / sold-count proof is claimed by the developer.
+
+F3 raw integer follow-up, after independent contracteeaafc9f8bbb753e84fbd02a76ecf89eb0f93a72
+and failed acceptancee33e1cf0c:
+- Read raw integer testwriter handoff and current independent acceptance. Own
+  four public counterexamples observed4failed in2.06s, precisely409instead200
+  (not500). Python's integer digit-limit ValueError had discarded the whole page.
+- Added a bounded parse_int callback: ordinary lexemes become int exactly as
+  before; only conversion ValueError retains the original lexeme for per-item
+  sale_cost validation. No global security limit was disabled or changed.
+- Newinteger4 + existingrawexponent4 + waiting-rate1 + salesregressions6:
+  15 passed, no skip/deselection,4.70s on isolated PID-scoped SQLite. Shared
+  PostgreSQL56517 was not touched by this follow-up. Prior PG proof not repeated.
+- Direct in-memory parser check: nmId123/quantity-2 retain int type;5000digits
+  remain an exact string; sys.get_int_max_str_digits remains4300. This is a
+  developer smoke check, not a new independent/frozen test contract.
+- Full ruff --no-cache PASS and mypy no-cache PASS552sourcefiles. Frozen tests,
+  requirements, acceptance, review and guard files were not edited by developer.
+- Publish final product SHA for independent Astra high delta review and renewed
+  analyst acceptance. The previous FAIL acceptance is not overwritten or waived.
