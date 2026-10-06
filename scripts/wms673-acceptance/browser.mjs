@@ -68,6 +68,14 @@ try {
         if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails))
         return value.result.value
       }
+      // The C7 scenario explicitly asks for A4 landscape in native preview.
+      // Select that paper ticket in the isolated browser, before photographing it.
+      await evaluatePreview(() => {
+        const app = document.querySelector('print-preview-app')
+        app.setSetting('mediaSize', { width_microns: 210000, height_microns: 297000,
+          name: 'ISO_A4', custom_display_name: 'A4' })
+        app.setSetting('layout', true)
+      })
       const previewReady = () => {
         const app = document.querySelector('print-preview-app')
         const area = app?.shadowRoot?.querySelector('print-preview-preview-area')
@@ -93,6 +101,9 @@ try {
       })
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
       assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
+      assert.equal(previewState.mediaSize.width_microns, 210000)
+      assert.equal(previewState.mediaSize.height_microns, 297000)
+      assert.equal(previewState.layout, true)
       await evaluatePreview(() => {
         // Return the protocol response before the Cancel action destroys this target.
         setTimeout(() => document.querySelector('print-preview-app').shadowRoot.querySelector('print-preview-sidebar').shadowRoot.querySelector('print-preview-button-strip').shadowRoot.querySelector('.cancel-button').click(), 0)
