@@ -1,0 +1,17 @@
+# WMS-652: независимое ревью фазового test contract R50
+
+**PASS для точной миграции R50/C62 в bcb2f05769fa7c5a1b2f249b3ed72685a70b8beb.** Полный C63 и общая готовность выпуска этим не закрыты: защита от удаления assertions/запуска ещё относится к отдельной инфраструктурной части. Модель аудитора Astra, effort high; новых агентов и продуктовых правок нет.
+
+Просмотрены полный diff `backend/tests/test_fbs_supply_from_orders.py`, постановка R50, checkpointREADME, старый контролируемый RED, GREEN/JUnit, сохранённая negative-control программа и три её actualRED. Сравнение product paths `backend/app`/`frontend/src` с родителем bcb пустое. Рабочая source worktree `.worktrees/wms652-critical-fbs-contracts` имела только чужой untracked `local-pg-path.txt`; этот файл не читался и не изменялся.
+
+Контракт сохраняет прежний pytest ID и исходные one-supply/order binding/in_supply assertions. Добавлены независимая сессия чтения committed pending, точное совпадение operation/supply/WB IDs, отсутствие преждевременной привязки,503 с exact `operation_in_progress`/retryabletrue/context, потом201 победителя и отдельный409 `order_incompatible` того же проигравшего. Проверяется одна confirmed операция, тот же canonical ID, один mockCREATE/ADD. Удержание ADD выполняется только после durable commit, поэтому это настоящая проверка окна, вызвавшего исходный CIFAIL, а не возвращение к недетерминированному расписанию. Timeout10s ограничивает ожидание; finally отпускает событие/собирает task. Существующие HTTP mocks сохраняются; сервис создания/DB/ASGI не подменены целиком.
+
+**Независимый прогон точного committed node: 1 PASS,0 SKIP,3.19s** — [лог](fbs-r50-independent-green.txt). Использована собственная PostgreSQL17 loopback127.0.0.1:56634, новая отдельная `wms_test_r50_astra_a`; сервер после опыта остановлен. Команда из source backend:
+
+```sh
+WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test_runner@127.0.0.1:56634/wms_test_r50_astra_a WMS_TEST_DATA_DIR=/private/tmp/wms-r50-astra-a-data PYTHONDONTWRITEBYTECODE=1 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest tests/test_fbs_supply_from_orders.py::test_parallel_from_orders_one_order_one_supply -q -n 0 -p no:cacheprovider --tb=short -o asyncio_default_fixture_loop_scope=session -o asyncio_default_test_loop_scope=session
+```
+
+Предоставленные тестировщиком три negative controls меняют настоящий error outcome на generic503, чужой canonical ID либо retryablefalse. Они падают именно на этих трёх meaningful assertions. Их полный повтор не потребовался: исходники+полный RED прочитаны, а базовый новый контракт независимо выполнен. Это **доказательство чувствительности теста к поломке продукта**, не доказательство запрета ослабить сам тест. C63 требует отдельно удалить canonical/count assertion или допустить произвольный503 и получить отказ охраны. Пока такой anti-weakening proof отсутствует, C63 целиком принимать нельзя; README тестировщика это корректно оговаривает.
+
+Один CREATE в данном контракте относится только к управляемому overlap после persistedclaim. Путь двух HTTP-create до первого claim этим тестом не покрыт и не запрещён: исторический WMS272 допускает лишний пустой WBdraft, при одной основной поставке и отсутствии ADD в проигравший draft. Новая проверка не должна трактоваться как изменение этого поведения. Старый failCI остаётся fail; новый finalCI и независимая аналитическая приёмка ещё нужны. Новых дефектов точного checkpoint не найдено.
