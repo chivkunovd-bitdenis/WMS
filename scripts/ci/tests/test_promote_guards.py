@@ -50,17 +50,26 @@ class PromoteGuardsTests(unittest.TestCase):
             encoding="utf-8",
         )
 
-    def write_saved_process_protection(self, source: str, case: str) -> None:
-        digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+    def write_saved_process_protection(
+        self,
+        source: str,
+        case: str,
+        *,
+        digest: str | None = None,
+        report: str = "protected-fixture.xml",
+        policy_source: str | None = None,
+        suite_name: str = "protected-fixture",
+    ) -> None:
+        actual_digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
         self.write(
             "guards/PROCESS_CONTRACTS.json",
             json.dumps(
                 {
                     "version": 1,
-                    "files": {source: digest},
+                    "files": {policy_source or source: actual_digest if digest is None else digest},
                     "suites": {
-                        "protected-fixture": {
-                            "report": "protected-fixture.xml",
+                        suite_name: {
+                            "report": report,
                             "format": "junit",
                             "exact": True,
                             "cases": [case],
@@ -70,6 +79,51 @@ class PromoteGuardsTests(unittest.TestCase):
                 indent=2,
             ) + "\n",
         )
+
+    def protected_ci_shards_fixture(
+        self,
+        *,
+        digest: str | None = None,
+        case: str | None = None,
+        report: str = "ci-shards.xml",
+        policy_source: str | None = None,
+    ) -> tuple[str, str]:
+        source = "scripts/ci/tests/test_backend_shards.py"
+        test_name = "test_exact_two_shards_merge_all_cases_and_receipt_identity"
+        actual_case = (
+            "scripts.ci.tests.test_backend_shards.BackendShardContracts::"
+            + test_name
+        )
+        self.write(
+            source,
+            "\n".join(
+                (
+                    "class BackendShardContracts:",
+                    f"    def {test_name}(self):",
+                    "        pass",
+                    "",
+                )
+            ),
+        )
+        self.write_saved_process_protection(
+            source,
+            actual_case if case is None else case,
+            digest=digest,
+            report=report,
+            policy_source=policy_source,
+            suite_name="ci-shards",
+        )
+        self.write_manifest("active")
+        self.write(
+            "docs/requirements/WMS-652.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C393 | навсегда | {source}::{test_name} | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "WMS-652 protected ci-shards fixture")
+        return source, test_name
 
     def wms654_expanded_cases(self, owner: str) -> list[str]:
         catalog = [
@@ -285,6 +339,58 @@ class PromoteGuardsTests(unittest.TestCase):
         self.assertEqual(self.git("status", "--porcelain"), "")
 
         promoter.promote(self.root, "WMS-902")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_ci_shards_junit_uses_the_full_scripts_module_name(self):
+        source, _ = self.protected_ci_shards_fixture()
+        original_document = (self.root / "docs/requirements/WMS-652.md").read_text()
+
+        promoter.promote(self.root, "WMS-652")
+
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(
+            self.git("status", "--porcelain"),
+            "",
+        )
+        self.assertEqual((self.root / "docs/requirements/WMS-652.md").read_text(), original_document)
+
+    def test_protected_ci_shards_junit_rejects_changed_source_hash(self):
+        source, _ = self.protected_ci_shards_fixture(digest="0" * 64)
+
+        with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
+            promoter.promote(self.root, "WMS-652")
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_ci_shards_junit_rejects_a_different_policy_source_path(self):
+        source, _ = self.protected_ci_shards_fixture(
+            policy_source="scripts/ci/tests/test_other_backend_shards.py"
+        )
+
+        with self.assertRaisesRegex(ValueError, "вне поддерживаемых"):
+            promoter.promote(self.root, "WMS-652")
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_ci_shards_junit_rejects_wrong_report(self):
+        source, _ = self.protected_ci_shards_fixture(report="other-ci-shards.xml")
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-652")
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_ci_shards_junit_rejects_missing_exact_case(self):
+        source, _ = self.protected_ci_shards_fixture(
+            case=(
+                "scripts.ci.tests.test_backend_shards.BackendShardContracts::"
+                "test_some_other_backend_shard_contract"
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-652")
+        self.assertTrue((self.root / source).is_file())
         self.assertEqual(self.git("status", "--porcelain"), "")
 
     def test_parses_every_br_and_semicolon_separated_permanent_reference(self):
