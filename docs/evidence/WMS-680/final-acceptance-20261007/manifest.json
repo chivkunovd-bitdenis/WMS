@@ -21,7 +21,7 @@
     "outbound-wb-normal-current.png": "f9ecd47523403a6f1d73474d233dfd84a7f6fc48eb4fbc33617ccb1164863389",
     "inbound-28.pdf": "871100ef79148a77ba1fbb3cff3f285b096eec836125849cfec8efa1a64dfa91",
     "contact-normal.png": "d670b65c62048e58216522165556d92ae03b1a5ad7207d8acc7cc11c75687ac4",
-    "outbound-wb-normal.html": "984d731343d8d12d94dd1f961884db129a0b8f4fa227b7486d777055e5b9f334",
+    "outbound-wb-normal.html": "61774fe5936221ff472bbc0720b00d41d0d8070c4b7e30d578c4a9c2ab80e0dc",
     "inbound-wb-normal.html": "acdd76fc8973d33182e0057310ec5917cc9bcaeacb28616aa2874c544a8a7df5",
     "marketplace-4.pdf": "ba116eb300034902989d1eee5a1120b0d9a2b998f0b5ba60a88f4093dafd374c",
     "fbo-wb-normal.html": "75d57f5e3e9fb9490e130b70b3f1d288fa9e259fb1e106033676d5175d8d06ea",
@@ -43,5 +43,6 @@
     "fbo-ozon-long.html": "0214bde67c79ce7759845949e48ea52236ffc7c700d005dde557c24b8f7d9103",
     "fbs-wb-long.html": "945beb657c3fc14d0f7d926f07ce5eb47d8c9926dad06685aef5677561e2a3e4",
     "fbs-ozon-normal.html": "c9d9dc86d574dbaf953a9c2af0691d534da15bdb6e49901d5fe52ff29acf04e1"
-  }
+  },
+  "copiedArtifactNormalization": "Whitespace-only blank-line normalization; original capture retained in ignored analyst workspace."
 }
