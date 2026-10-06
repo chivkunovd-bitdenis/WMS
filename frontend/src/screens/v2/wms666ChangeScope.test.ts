@@ -7,6 +7,7 @@ export function wms666ScopeViolations(paths: string[]): string[] {
   return paths.filter((path) => {
     if (!path) return false
     if (path === 'docs/KANONICHESKIY_BACKLOG.md' || path === 'docs/requirements/WMS-666.md') return false
+    // Only this task's machine-readable correction record belongs to its scope.
     if (path === 'docs/reviews/contract-corrections/WMS-666.json') return false
     if (path.startsWith('frontend/src/screens/v2/')) return false
     if (path === 'frontend/src/components/LabelSizeSelect.tsx' || path === 'frontend/src/utils/labelSize.ts') return false
