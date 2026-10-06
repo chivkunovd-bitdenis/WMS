@@ -1,0 +1,39 @@
+{
+  "model": "real current utility and AST-extracted screen, jsdom platform boundary; NOT Chromium native decoder",
+  "node": "v24.13.1",
+  "sourceHashes": {
+    "screen": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11",
+    "utility": "269694705aabed0a7c44d9cb9ce68fcebe8d01de1b6769b36f5bab99032264be",
+    "frozenHarness": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f"
+  },
+  "events": [
+    {
+      "phase": "known failure before held peers released",
+      "started": 16,
+      "ready": 0,
+      "pending": 15,
+      "maxPending": 15,
+      "frameConnected": false,
+      "busy": false,
+      "operationFinished": true,
+      "error": "The source image cannot be decoded.",
+      "transfers": 0,
+      "marks": 0,
+      "saves": 0
+    },
+    {
+      "phase": "after peer release",
+      "started": 16,
+      "ready": 15,
+      "pending": 0,
+      "maxPending": 15,
+      "frameConnected": false,
+      "busy": false,
+      "operationFinished": true,
+      "error": "The source image cannot be decoded.",
+      "transfers": 0,
+      "marks": 0,
+      "saves": 0
+    }
+  ]
+}
