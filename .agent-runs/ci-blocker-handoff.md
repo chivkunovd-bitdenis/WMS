@@ -60,3 +60,24 @@ transfer до существующего timeout на строке 317.
 узкий regression на iframe-native exception/message и повтор unchanged C5
 на Linux141; возможное направление из diagnostics — меньший decode window
 при сохранении readiness всех labels и нормализация cross-realm error message.
+
+## Stage handoff: WMS-672 C5a test contract
+
+Добавлен отдельный C5a рядом с неизменённым C5:
+`frontend/tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry`.
+Он использует настоящий `FfInboundRequestView`, `printBarcodeLabels`, generated
+valid barcode PNG и iframe. Только отсутствующий у jsdom `scrollIntoView`
+заменён no-op platform double.
+
+До product change целевой запуск воспроизводит осмысленный RED: iframe
+`DOMException('WMS672 decode failed at 2', 'EncodingError')` не является
+`Error` родительского realm, а видимый alert сейчас равен
+`Не удалось напечатать этикетки.` вместо исходного сообщения. Это фиксирует
+точно нормализацию ошибки в screen catch, а не timeout или fixture.
+
+После исправления этот же тест потребует: отсутствие transfer и POST marks
+до честного error, снятие busy-state, затем один явный retry с полным readiness
+всех 33 valid PNG, concurrency строго между 1 и N, ровно один transfer и 33
+technical marks. Existing C5, его 300 labels, timeout и assertions не менялись.
+Разработчику нельзя менять этот контракт; после product change обязательны
+повтор C5a и unchanged Linux141 C5.
