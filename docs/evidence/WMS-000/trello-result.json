@@ -1,0 +1,363 @@
+{
+  "canonical_commit_before_mutation": "d022f28da8068a17d75a150a6e9a949f17cc8381",
+  "remote_verified": "d022f28da8068a17d75a150a6e9a949f17cc8381",
+  "started_at": "2026-10-06T06:43:23.406527+00:00",
+  "updates": [
+    {
+      "id": "6abe4fc5ee160df5a774f4d7",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abe4fc5ee160df5a774f4d7",
+        "name": "Лист подбора только для товаров, добавленных в уже созданную FBS-поставку",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/GjXMi1Jx",
+        "description_sha256": "87b037806aa8d637562a07ed5c64e27dbd61c43277a669dd555fa9d2485aa100",
+        "description_chars": 692
+      },
+      "after": {
+        "id": "6abe4fc5ee160df5a774f4d7",
+        "name": "Лист подбора только для товаров, добавленных в уже созданную FBS-поставку",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/GjXMi1Jx",
+        "description_sha256": "b06bffa1fa1cee1c2e17dbb086a5fc6efda893b26a2c5112165949d523901dca",
+        "description_chars": 2092
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abe516dd7400d93337b2ce1",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abe516dd7400d93337b2ce1",
+        "name": "Показывать все ячейки и короба товара в листе подбора",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/416kobyF",
+        "description_sha256": "6837154c573a30c8f5c71cebb00615d792725e34f685caade5f087a1ed13f36e",
+        "description_chars": 670
+      },
+      "after": {
+        "id": "6abe516dd7400d93337b2ce1",
+        "name": "Показывать все ячейки и короба товара в листе подбора",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/416kobyF",
+        "description_sha256": "0a0fc3d75ad03ab8f15338480856901dc7d4eb799a08927265e0ea12bbd2604e",
+        "description_chars": 2017
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abe51a31ef0f7e65675b49b",
+      "canonical": 430,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abe51a31ef0f7e65675b49b",
+        "name": "Довести раздел «Расчёты»: хранение в литрах и литро-днях",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/ntKcCYcs",
+        "description_sha256": "3720f5bc9df132272ec6171e56c54744dce5231e825f5e0ef85de6646bcc4558",
+        "description_chars": 673
+      },
+      "after": {
+        "id": "6abe51a31ef0f7e65675b49b",
+        "name": "Довести раздел «Расчёты»: хранение в литрах и литро-днях",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/ntKcCYcs",
+        "description_sha256": "02dc882224dee6f8d9b4f47031e73c0b64bc1cc6c6f4ca824d4a7f9d26c8f033",
+        "description_chars": 2051
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abeba5ac205f34a3a63355c",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abeba5ac205f34a3a63355c",
+        "name": "Показывать признак КИЗ/ЧЗ в листе подбора",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/aAVpbR69",
+        "description_sha256": "7691cf7af7629a19a7061c06c652140ca8453bdc6889bc80056a20989ce1fa00",
+        "description_chars": 646
+      },
+      "after": {
+        "id": "6abeba5ac205f34a3a63355c",
+        "name": "Показывать признак КИЗ/ЧЗ в листе подбора",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/aAVpbR69",
+        "description_sha256": "de514a9ff2309d884b1c4e2856d1f15a142cccc7f2b45082e395ec7630f31237",
+        "description_chars": 1971
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abeba8999180bd0c16fa403",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abeba8999180bd0c16fa403",
+        "name": "Удаление или отмена FBS-поставки без потери учёта",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/dyarN4NA",
+        "description_sha256": "d5e41fef5726483818de69144fbd1e01f596d86ec13c3165a4fde662b9dd4237",
+        "description_chars": 760
+      },
+      "after": {
+        "id": "6abeba8999180bd0c16fa403",
+        "name": "Удаление или отмена FBS-поставки без потери учёта",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/dyarN4NA",
+        "description_sha256": "c2bec645964099804f54626cebb5213227c7a1b9b07c44d63e0876aa8bb35bd6",
+        "description_chars": 2204
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abebadf75bf2ce965da6f6a",
+      "canonical": 666,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abebadf75bf2ce965da6f6a",
+        "name": "Убрать ручное «Начать работу с поставкой» перед упаковкой FBS",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/t2YGHFV7",
+        "description_sha256": "721a39e101239d6eb7b2fd40c4f1e01f6ead90ae99c2a2313e9c917e4be4a6e0",
+        "description_chars": 571
+      },
+      "after": {
+        "id": "6abebadf75bf2ce965da6f6a",
+        "name": "Убрать ручное «Начать работу с поставкой» перед упаковкой FBS",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/t2YGHFV7",
+        "description_sha256": "4ed9e8bffec44b0ad17e532352d03963d913c442eed9b5c0cc58742c6da84539",
+        "description_chars": 1591
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abebd53c056a232847c1d6d",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abebd53c056a232847c1d6d",
+        "name": "FBO: полноценная работа с коробами",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/T7M7JMOb",
+        "description_sha256": "ca0aa74a699ff62dda1288e925061885af812ca8c370092ddc2c6a79daa961a3",
+        "description_chars": 656
+      },
+      "after": {
+        "id": "6abebd53c056a232847c1d6d",
+        "name": "FBO: полноценная работа с коробами",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/T7M7JMOb",
+        "description_sha256": "11792a9fdb13b0f53b0dbaa23068da4c72362035c8375a851ca7abdc65df5363",
+        "description_chars": 1989
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6abf4a4c0e8677191eadda7c",
+      "canonical": null,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6abf4a4c0e8677191eadda7c",
+        "name": "КИЗ в процессе возвратов: определить нужное действие",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/TbKnl61w",
+        "description_sha256": "6d79874fca6f9fb0cd5845d970c85bff1fb67e91bf53970e72063f0dc257557b",
+        "description_chars": 604
+      },
+      "after": {
+        "id": "6abf4a4c0e8677191eadda7c",
+        "name": "КИЗ в процессе возвратов: определить нужное действие",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/TbKnl61w",
+        "description_sha256": "abe8e4b18ecaa17538b4d422f2e449275e1c6c67e52cde4f97f3c48ee3dc5aea",
+        "description_chars": 1997
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6ac3c5aa9e7e035c7ec5392b",
+      "canonical": 526,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6ac3c5aa9e7e035c7ec5392b",
+        "name": "Ozon FBS: массово разложить нераспределённые товары по коробам и напечатать все QR",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/hG4PvLmQ",
+        "description_sha256": "1fd6da154fb41745eec46fb1b724659524be19a56f9acb51f54d9d3a84665868",
+        "description_chars": 706
+      },
+      "after": {
+        "id": "6ac3c5aa9e7e035c7ec5392b",
+        "name": "Ozon FBS: массово разложить нераспределённые товары по коробам и напечатать все QR [WMS-526]",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/hG4PvLmQ",
+        "description_sha256": "71ffae965949690de5a8a47f6d1c6551cf4a3ac84f7791aaa6346a4b8f910ef5",
+        "description_chars": 2079
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6ac3c5ab94936d02cec8ef8e",
+      "canonical": 674,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6ac3c5ab94936d02cec8ef8e",
+        "name": "WB FBO: выяснить, почему после добавления GTIN нельзя создать поставку",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/rSO5FjdH",
+        "description_sha256": "8f778f9b6204546e34b5cef8e53891bea1dd3f43d5f5cc88fb2a67a5b7ddbdd2",
+        "description_chars": 569
+      },
+      "after": {
+        "id": "6ac3c5ab94936d02cec8ef8e",
+        "name": "WB FBO: выяснить, почему после добавления GTIN нельзя создать поставку [WMS-674]",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/rSO5FjdH",
+        "description_sha256": "badd7a710c85e0f95f3a3d2154796594d466fd3af6a154995e28cff5398e8a6c",
+        "description_chars": 1527
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6ac3c5aca9ccec827b36983e",
+      "canonical": 669,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6ac3c5aca9ccec827b36983e",
+        "name": "Кабинет селлера: фильтр «Только с остатком» и удобный поиск товаров",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/ojlwP2ne",
+        "description_sha256": "5bbebb95386e4380ef7abfab6918ed4d60c461ca229bc24e5848d487d2596cd6",
+        "description_chars": 1813
+      },
+      "after": {
+        "id": "6ac3c5aca9ccec827b36983e",
+        "name": "Кабинет селлера: фильтр «Только с остатком» и удобный поиск товаров [WMS-669]",
+        "idList": "6ac1233426816ac165b51818",
+        "closed": false,
+        "url": "https://trello.com/c/ojlwP2ne",
+        "description_sha256": "81549f201360c35d895f95d133fd98f140721807d61dcede28610038e883251c",
+        "description_chars": 2847
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6ac3d2ddc0ea1f76cfdfb9ae",
+      "canonical": 671,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6ac3d2ddc0ea1f76cfdfb9ae",
+        "name": "Массово повторно публиковать выбранные FBS-остатки из кабинета селлера [WMS-668]",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": true,
+        "url": "https://trello.com/c/UB3cuWtN",
+        "description_sha256": "f4b4b6f21f50b2aeadce9bf778bd6dced3220ccee361a5a382090af6f744700a",
+        "description_chars": 3031
+      },
+      "after": {
+        "id": "6ac3d2ddc0ea1f76cfdfb9ae",
+        "name": "Массово повторно публиковать выбранные FBS-остатки из кабинета селлера [WMS-671]",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/UB3cuWtN",
+        "description_sha256": "ddce742856fb6b3fd75f68746fa441b3429218f58d5aafbabcd38691d7ce68a9",
+        "description_chars": 4181
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    },
+    {
+      "id": "6ac362a2cda612ec9c460319",
+      "canonical": 661,
+      "status": "verified",
+      "transport": "acknowledged",
+      "before": {
+        "id": "6ac362a2cda612ec9c460319",
+        "name": "Перед созданием задачи обязательно искать смысловые дубли [WMS-661]",
+        "idList": "6abe7ba2fd030d99fda2a8d5",
+        "closed": true,
+        "url": "https://trello.com/c/vARaNQee",
+        "description_sha256": "119d5266823728eb2c1f7cdf394428d1369d5bbef64bbf785040199403587aee",
+        "description_chars": 725
+      },
+      "after": {
+        "id": "6ac362a2cda612ec9c460319",
+        "name": "Перед созданием задачи обязательно искать смысловые дубли [WMS-661]",
+        "idList": "6a14741a0fee7b427b6698e9",
+        "closed": false,
+        "url": "https://trello.com/c/vARaNQee",
+        "description_sha256": "e0f732a5052cebef77a98d34e848a7f9246cecc8b09bff30d4ac0b35febd72fe",
+        "description_chars": 1619
+      },
+      "description_exact": true,
+      "markers_preserved": true
+    }
+  ],
+  "creates": [
+    {
+      "canonical": 672,
+      "status": "created_verified",
+      "actual": {
+        "id": "6ac4989cabb35731d58be5dc",
+        "name": "Общая быстрая печать 200–300 этикеток созданных коробов [WMS-672]",
+        "idList": "6ac1233426816ac165b51818",
+        "closed": false,
+        "url": "https://trello.com/c/gVNlc3PA",
+        "description_sha256": "026007fb6fb90380929ed468b5278d80d1645dcb240530615bfd330531e7d7fd",
+        "description_chars": 822
+      },
+      "description_exact": true,
+      "binding_key": "board-reconcile:WMS-672"
+    }
+  ],
+  "finished_at": "2026-10-06T06:43:41.557006+00:00"
+}
