@@ -33,6 +33,8 @@
     "backend/tests/test_fbs_tracking.py": "fc1c8de533b07e2646693f0ea8302b74bf7cae1f725bb4a130d75af829d6cbe1",
     "backend/tests/test_ozon_box_assembly.py": "f3df76ad46c75fc87babc436c713c48461b13033b7276bcaa81dfc9c51c66a08",
     "backend/tests/test_ozon_box_positions.py": "889b0623463cb5584ad60d58a05ec16265b5184dd2fb80c88392819c9e24d5c6",
+    "backend/tests/test_prod_deploy_backup.py": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
     "backend/tests/test_product_fbs_rule_bulk_read_api.py": "d70e45c8df51c72360143dafdce8361d5b53368fc557d7d491e15a01b1241ca8",
     "backend/tests/test_true_api_withdrawal.py": "36a96153a78a0fceac8f4f21eac834625238759629bf0d9cef917f86d430e3c5",
     "backend/tests/test_wb_order_price_snapshot.py": "27c680ccf7fffd7567c92ef76f6c4cbe872d2cb57281815eb069e21d159fc9ce",
@@ -829,7 +831,22 @@
         "tests.test_wms662_observed_handoff::test_c7_split_quantity_remainder_and_recipe",
         "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[missing]",
         "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[overlap]",
-        "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[unmapped]"
+        "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[unmapped]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[dump]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[archive]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[listing]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[empty]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[network]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[retry]",
+        "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[False]",
+        "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[True]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]"
       ]
     },
     "pg-663-retry": {
