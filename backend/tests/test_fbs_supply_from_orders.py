@@ -739,6 +739,7 @@ async def test_from_orders_idempotency_same_key(
 async def test_parallel_from_orders_one_order_one_supply(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     if "sqlite" in os.environ.get("DATABASE_URL", "").lower():
         pytest.skip("row-level FOR UPDATE locking requires PostgreSQL")
@@ -759,40 +760,96 @@ async def test_parallel_from_orders_one_order_one_supply(
         order_id=857001,
     )
 
-    resp_a, resp_b = await asyncio.gather(
-        async_client.post(
-            "/operations/fbs-supplies/from-orders",
-            headers=headers,
-            json={
-                "name": "Race A",
-                "order_ids": [str(order_id)],
-                "planned_delivery_type": "warehouse_sc",
-                "idempotency_key": str(uuid.uuid4()),
-            },
-        ),
-        async_client.post(
-            "/operations/fbs-supplies/from-orders",
-            headers=headers,
-            json={
-                "name": "Race B",
-                "order_ids": [str(order_id)],
-                "planned_delivery_type": "warehouse_sc",
-                "idempotency_key": str(uuid.uuid4()),
-            },
-        ),
-    )
-    statuses = sorted([resp_a.status_code, resp_b.status_code])
-    assert statuses == [201, 409], (resp_a.text, resp_b.text)
-    rejected = resp_a if resp_a.status_code == 409 else resp_b
-    assert rejected.json()["detail"]["code"] == "order_incompatible"
+    # R50: overlap after a durable pending claim, then test the original
+    # post-confirmation incompatibility as a separate required phase.
+    from app.services import fbs_supply_service as service
 
-    async with SessionLocal() as session:
-        order = await session.get(FbsOrder, order_id)
-        assert order is not None
-        assert order.supply_id is not None
-        assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
-        supply_count = await session.scalar(select(func.count()).select_from(FbsSupply))
-        assert supply_count == 1
+    entered, release = asyncio.Event(), asyncio.Event()
+    creates: list[str] = []
+    adds: list[str] = []
+    real_create, real_add = service.create_marketplace_supply, service._execute_wb_batch_add
+
+    async def counted_create(*args: Any, **kwargs: Any) -> Any:
+        result = await real_create(*args, **kwargs)
+        creates.append(result["id"])
+        return result
+
+    async def held_add(*args: Any, **kwargs: Any) -> Any:
+        adds.append(kwargs["wb_supply_id"])
+        entered.set()
+        await asyncio.wait_for(release.wait(), timeout=10)
+        return await real_add(*args, **kwargs)
+
+    monkeypatch.setattr(service, "create_marketplace_supply", counted_create)
+    monkeypatch.setattr(service, "_execute_wb_batch_add", held_add)
+    winner_payload = {"name": "Race A", "order_ids": [str(order_id)],
+                      "planned_delivery_type": "warehouse_sc",
+                      "idempotency_key": str(uuid.uuid4())}
+    loser_payload = {**winner_payload, "name": "Race B", "idempotency_key": str(uuid.uuid4())}
+    task = asyncio.create_task(async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=winner_payload,
+    ))
+    try:
+        await asyncio.wait_for(entered.wait(), timeout=10)
+        # The callback is reached only after pending has been COMMITTED, not
+        # while a transaction lock hides the canonical object from the loser.
+        async with SessionLocal() as session:
+            operations = list((await session.scalars(select(FbsWbOperation))).all())
+            supplies = list((await session.scalars(select(FbsSupply))).all())
+            assert len(operations) == len(supplies) == 1
+            canonical, supply = operations[0], supplies[0]
+            assert canonical.state == WB_OPERATION_STATE_PENDING_CONFIRMATION
+            assert canonical.local_entity_id == supply.id
+            assert canonical.wb_object_id == supply.wb_supply_id
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            assert order.supply_id is None
+            assert order.status == FBS_ORDER_STATUS_NEW
+            expected_context = {"operation_id": str(canonical.id),
+                                "operation_state": WB_OPERATION_STATE_PENDING_CONFIRMATION,
+                                "supply_id": str(supply.id), "wb_supply_id": supply.wb_supply_id}
+        pending = await async_client.post(
+            "/operations/fbs-supplies/from-orders", headers=headers, json=loser_payload,
+        )
+        assert pending.status_code == 503, pending.text
+        detail = pending.json()["detail"]
+        assert detail["code"] == "operation_in_progress"
+        assert detail["retryable"] is True
+        assert detail["context"] == expected_context
+        assert creates == adds == [expected_context["wb_supply_id"]]
+        async with SessionLocal() as session:
+            assert await session.scalar(select(func.count()).select_from(FbsSupply)) == 1
+            assert await session.scalar(select(func.count()).select_from(FbsWbOperation)) == 1
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None and order.supply_id is None
+        release.set()
+        winner = await task
+        assert winner.status_code == 201, winner.text
+        assert winner.json()["supply"]["id"] == expected_context["supply_id"]
+        confirmed = await async_client.post(
+            "/operations/fbs-supplies/from-orders", headers=headers, json=loser_payload,
+        )
+        assert confirmed.status_code == 409, confirmed.text
+        assert confirmed.json()["detail"]["code"] == "order_incompatible"
+        async with SessionLocal() as session:
+            operations = list((await session.scalars(select(FbsWbOperation))).all())
+            supplies = list((await session.scalars(select(FbsSupply))).all())
+            assert len(supplies) == len(operations) == 1
+            canonical, supply = operations[0], supplies[0]
+            assert str(canonical.id) == expected_context["operation_id"]
+            assert canonical.state == WB_OPERATION_STATE_CONFIRMED
+            assert canonical.local_entity_id == supply.id
+            assert str(supply.id) == expected_context["supply_id"]
+            order = await session.get(FbsOrder, order_id)
+            assert order is not None
+            assert order.supply_id == canonical.local_entity_id
+            assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
+            assert creates == adds == [expected_context["wb_supply_id"]]
+    finally:
+        release.set()
+        if not task.done():
+            task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
 
 
 @pytest.mark.asyncio
