@@ -1,3 +1,5 @@
+// Historical per-exemplar component retained only for its frozen direct tests.
+// Production screens use the owner-approved box-stage choice; do not mount this form.
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import { Alert, Box, Button, Checkbox, Collapse, FormControlLabel, Stack, TextField, Typography } from '@mui/material'
 import { apiUrl } from '../../api'

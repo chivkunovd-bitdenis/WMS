@@ -1,4 +1,4 @@
-import { OzonExemplarDocuments } from './OzonExemplarDocuments'
+import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
@@ -53,7 +53,7 @@ import QrCodeScannerOutlined from '@mui/icons-material/QrCodeScannerOutlined'
 import ReplayOutlinedIcon from '@mui/icons-material/ReplayOutlined'
 import { apiUrl } from '../../api'
 import { ProductPhotoThumb } from '../../components/ProductPhotoThumb'
-import { DeadlinePill, FbsStatusChip } from '../../components/fbs/FbsChips'
+import { DeadlinePill } from '../../components/fbs/FbsChips'
 import { type PackagingTask, type PackagingTaskLine } from '../ff/FfPackagingPage'
 import { useMarkingCodePrint } from '../../utils/useMarkingCodePrint'
 import { printMarkingCodeLabels, printMarkingCodeTape } from '../../utils/printMarkingCodeLabel'
@@ -183,7 +183,10 @@ type Props = {
    * показывает только упаковку и короба этой поставки. Не передан — обычная
    * карточка поставки, всё как было.
    */
-  assemblyFrame?: FbsAssemblyFrameControl
+  assemblyFrame?: FbsAssemblyFrameControl & {
+    packingColumns?: { size: boolean; markingAvailable: boolean }
+    onPackingColumnsChange?: (columns: { size: boolean; markingAvailable: boolean }) => void
+  }
 }
 
 
@@ -3113,10 +3116,16 @@ export function FfFbsSupplyWorkspace({
       || !requiresOrderHonestSign(order)
       || order.metadata.states.some((state) => state.kind === 'sgtin' && Boolean(state.value_tail)))
 
-  const packingShowsSize = fbsPackingShowsSize(packingOrders, isOzonSupply)
+  const ownPackingShowsSize = fbsPackingShowsSize(packingOrders, isOzonSupply)
+  const packingShowsSize = assemblyFrame?.packingColumns?.size ?? ownPackingShowsSize
   // Слот «Доступно ЧЗ» занимает место во всех строках вкладки, если он нужен хотя бы
   // одной: иначе строка без ЧЗ раздвигает блок товара и размер со стикером уезжают вправо.
-  const packingShowsMarkingAvailable = packingOrders.some(requiresOrderHonestSign)
+  const ownPackingShowsMarkingAvailable = packingOrders.some(requiresOrderHonestSign)
+  const packingShowsMarkingAvailable = assemblyFrame?.packingColumns?.markingAvailable ?? ownPackingShowsMarkingAvailable
+  const reportPackingColumns = assemblyFrame?.onPackingColumnsChange
+  useEffect(() => {
+    reportPackingColumns?.({ size: ownPackingShowsSize, markingAvailable: ownPackingShowsMarkingAvailable })
+  }, [reportPackingColumns, ownPackingShowsSize, ownPackingShowsMarkingAvailable])
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
@@ -3707,9 +3716,7 @@ export function FfFbsSupplyWorkspace({
                           key={order.id}
                           direction="row"
                           spacing={1.5}
-                          useFlexGap={isOzonSupply}
                           sx={{
-                            flexWrap: isOzonSupply ? { xs: 'wrap', md: 'nowrap' } : undefined,
                             ...(rejectedFilterOn ? {
                               display: rejectedHidden ? 'none' : undefined,
                               borderBottom: '1px solid',
@@ -3746,7 +3753,7 @@ export function FfFbsSupplyWorkspace({
                             data-testid="fbs-packing-select-order"
                           />
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
-                          <Box sx={{ flex: isOzonSupply ? { xs: '1 1 100%', md: '1 1 0%' } : 1, minWidth: 0 }}>
+                          <Box sx={{ flex: 1, minWidth: 0 }}>
                             {isOzonSupply ? (
                               <Stack spacing={0.5}>
                                 {ozonPositions.map((position, index) => (
@@ -3797,7 +3804,6 @@ export function FfFbsSupplyWorkspace({
                                 {markingView.label}{markingView.reason ? `: ${markingView.reason}` : ''}
                               </Typography>
                             ) : null}
-                            {isOzonSupply ? <OzonExemplarDocuments key={`${workspace.supply.id}:${order.id}`} orderId={order.id} token={token} authHeaders={authHeaders} /> : null}
                           </Box>
                           {packingShowsMarkingAvailable ? (
                             <Box
@@ -3830,7 +3836,7 @@ export function FfFbsSupplyWorkspace({
                               <Typography sx={{ color: 'text.disabled', fontSize: 15 }}>—</Typography>
                             )}
                           </Box>
-                          <Box sx={{ width: !isOzonSupply && packagingEditable ? 150 : 118, flexShrink: 0, textAlign: 'right' }}>
+                          <Box sx={{ width: packagingEditable ? 150 : 118, flexShrink: 0, textAlign: 'right' }}>
                             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', lineHeight: 1 }}>
                               ЧЗ
                             </Typography>
@@ -3939,7 +3945,7 @@ export function FfFbsSupplyWorkspace({
                               <Button size="small" variant="outlined" disabled={busy} onClick={() => void requestPrintBatch([order.id])} data-task-id="FBS-09">
                                 QR
                               </Button>
-                            ) : null}
+                            ) : <Box aria-hidden="true" sx={{ minWidth: 64, flexShrink: 0 }} />}
                             <IconButton size="small" disabled={busy || (!order.product.id && !(isOzonSupply && order.positions.some((position) => position.product_id)))} onClick={() => openOrderMarkingPrint(order, line)} aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10">
                               <PrintOutlinedIcon fontSize="small" />
                             </IconButton>
@@ -3988,7 +3994,7 @@ export function FfFbsSupplyWorkspace({
                           ) : null}
                         </Stack>
                         <Typography variant="body2" color="text.secondary">
-                          Напечатано {printedOrdersCount} из {packingOrders.length} · Обработано {workspace.progress.packed} из {workspace.progress.total}
+                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
@@ -4928,6 +4934,9 @@ export function FfFbsSupplyWorkspace({
                           {ozonAutoBoxesProgress ?? 'Создать автоматически'}
                         </Button>
                       ) : null}
+                      {isOzonSupply ? <OzonDocumentsAbsence key={workspace.supply.id}
+                        orderIds={workspace.orders.map(order => order.id)} token={token}
+                        authHeaders={authHeaders} onError={setError} /> : null}
                       {!isOzonSupply ? <FormControlLabel
                         control={(
                           <Checkbox
@@ -5266,12 +5275,7 @@ export function FfFbsSupplyWorkspace({
                       const positions = order.positions.length ? order.positions : [{ product_id: order.product.id, name: order.product.name, seller_article: order.product.seller_article, sku: order.product.sku, quantity: 1, picked_quantity: order.pick.status === 'picked' ? 1 : 0 }]
                       return <TableRow key={order.id}>
                         <TableCell><ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={42} previewSize={280} testId={`fbs-composition-photo-${order.id}`} /></TableCell>
-                        <TableCell>
-                          <Stack spacing={0.5} sx={{ alignItems: 'flex-start' }}>
-                            <Link component="button" type="button" underline="hover" sx={{ textAlign: 'left' }} onClick={() => setHistoryOpen(true)} data-testid={`fbs-composition-history-${order.id}`}>{isOzonSupply ? order.external_order_id : `№${order.wb_order_id}`}</Link>
-                            <FbsStatusChip status={order.status} />
-                          </Stack>
-                        </TableCell>
+                        <TableCell><Link component="button" type="button" underline="hover" sx={{ textAlign: 'left' }} onClick={() => setHistoryOpen(true)} data-testid={`fbs-composition-history-${order.id}`}>{isOzonSupply ? order.external_order_id : `№${order.wb_order_id}`}</Link></TableCell>
                         <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Box key={`${position.sku ?? position.product_id ?? position.name}-${index}`}><Typography variant="body2" sx={{ fontWeight: 700 }}>{position.name}</Typography><Typography variant="caption" color="text.secondary" sx={{ display: 'block' }}>Артикул: {position.seller_article ?? '—'}{position.sku ? ` · SKU: ${position.sku}` : ''}</Typography></Box>)}</Stack></TableCell>
                         <TableCell><Stack spacing={0.5}>{positions.map((position, index) => <Typography key={`${position.sku ?? position.product_id ?? position.name}-${index}`} variant="body2">{order.positions.length ? `${position.picked_quantity} из ${position.quantity} шт.` : '1 шт.'}</Typography>)}</Stack></TableCell>
                         <TableCell>{order.metadata.required.length ? order.metadata.required.join(', ') : 'Не требуется'}</TableCell><TableCell>{order.pick.status === 'picked' ? 'Подобран' : 'Ожидает'}</TableCell>

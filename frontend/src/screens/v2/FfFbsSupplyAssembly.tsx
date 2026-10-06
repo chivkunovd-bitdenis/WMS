@@ -87,6 +87,11 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // поставка и открытый короб не терялись при переходе между вкладками.
   const [framesMounted, setFramesMounted] = useState(false)
   const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
+  const [packingColumnsBySupply, setPackingColumnsBySupply] = useState<Record<string, { size: boolean; markingAvailable: boolean }>>({})
+  const reportPackingColumns = useCallback((id: string, columns: { size: boolean; markingAvailable: boolean }) => {
+    setPackingColumnsBySupply(current => current[id]?.size === columns.size && current[id]?.markingAvailable === columns.markingAvailable
+      ? current : { ...current, [id]: columns })
+  }, [])
   const scanners = useRef(new Map<string, PackingScanController>())
   const [, setScannerVersion] = useState(0)
   const [promotedSupplyId, setPromotedSupplyId] = useState<string | null>(null)
@@ -183,6 +188,10 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     () => supplyIds.map((id) => workspaces[id]).filter((one): one is FbsWorkspace => Boolean(one)),
     [supplyIds, workspaces],
   )
+  const packingColumns = {
+    size: supplyIds.some(id => packingColumnsBySupply[id]?.size),
+    markingAvailable: supplyIds.some(id => packingColumnsBySupply[id]?.markingAvailable),
+  }
   const allLoaded = ordered.length === supplyIds.length && supplyIds.length > 0
   const ozonOnly = ordered.every((one) => one.supply.marketplace === 'ozon')
   const { ready, total } = fbsAssemblyReadiness(ordered)
@@ -409,6 +418,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     onClose={() => undefined}
                     assemblyFrame={{
                       packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
+                      packingColumns,
+                      onPackingColumnsChange: columns => reportPackingColumns(supplyId, columns),
                       rejectedFilter: { active: rejectedFilterOn, count: rejectedCount, headerSupplyId: rejectedHeaderSupplyId },
                       active: true,
                       expanded: true,

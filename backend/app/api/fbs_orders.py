@@ -745,13 +745,18 @@ class OzonExemplarDocumentsBody(BaseModel):
     expected_version: int
 
 
+class OzonAbsentDocumentsBody(BaseModel):
+    expected_version: int
+
+
 async def _ozon_document_action(
     session: AsyncSession,
     user: User,
     order_id: uuid.UUID,
-    body: OzonExemplarDocumentsBody | None = None,
+    body: OzonExemplarDocumentsBody | OzonAbsentDocumentsBody | None = None,
     *,
     prepare: bool = False,
+    absent: bool = False,
 ) -> dict[str, Any]:
     from app.services.marketplace_account_service import (
         MarketplaceAccountError,
@@ -763,6 +768,7 @@ async def _ozon_document_action(
         document_view,
         fetch_exemplar_snapshot,
         get_exemplar_documents,
+        save_absent_exemplar_documents,
         save_exemplar_documents,
         store_document_data,
     )
@@ -774,6 +780,17 @@ async def _ozon_document_action(
             user.tenant_id, order.seller_id
         )
         provider = build_ozon_provider()
+        if absent:
+            assert isinstance(body, OzonAbsentDocumentsBody)
+            return await save_absent_exemplar_documents(
+                session,
+                tenant_id=user.tenant_id,
+                order_id=order_id,
+                expected_version=body.expected_version,
+                provider=provider,
+                client_id=client_id,
+                api_key=api_key,
+            )
         if prepare:
             if (
                 document_data(order).get("state") in {"preparing", "checking", "unknown"}
@@ -855,3 +872,13 @@ async def prepare_ozon_exemplar_documents(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     return await _ozon_document_action(session, user, order_id, prepare=True)
+
+
+@router.post("/{order_id}/ozon-exemplar-documents/absent")
+async def set_ozon_exemplar_documents_absent(
+    order_id: uuid.UUID,
+    body: OzonAbsentDocumentsBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    return await _ozon_document_action(session, user, order_id, body, absent=True)
