@@ -1,0 +1,62 @@
+{
+  "reviewed_source": "de9f31a464fc09df26c6a77b488c904ea3ec19e2",
+  "native_preservation_base": "3348db9c61d62dfb8038be3b432a293f27ce9a1e",
+  "frozen_test_first": "58eab40495a96b0d67d02ea6b537c044071cbccf",
+  "public_stable_producer": "9a33b651c309796707053e1056c7f80dff7194d5",
+  "etalon_read": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "checks": [
+    {
+      "path": "tools/print-agent/history.html",
+      "same_as_3348": true,
+      "candidate_sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6"
+    },
+    {
+      "path": "tools/print-agent/wms_cups_observe.c",
+      "same_as_3348": true,
+      "candidate_sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a"
+    },
+    {
+      "path": "tools/print-agent/test_wms_cups_observe.c",
+      "same_as_3348": true,
+      "candidate_sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "same_as_3348": true,
+      "candidate_sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "same_as_test_first": true,
+      "candidate_sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+    },
+    {
+      "check": "parser_five_test_methods_and_run_case_AST_equal_ed053",
+      "pass": true
+    },
+    {
+      "check": "Swift_outside_run_defaultPrinter_byte_equal_3348",
+      "pass": true
+    },
+    {
+      "check": "all_declared_provenance_hashes_recomputed",
+      "pass": true
+    },
+    {
+      "check": "frontend_backend_workflows_guards_scripts_unchanged_from_contract",
+      "pass": true
+    },
+    {
+      "check": "Python_syntax_in_memory",
+      "pass": true
+    }
+  ],
+  "test_execution_by_reviewer": false,
+  "package_build_by_reviewer": false,
+  "developer_recorded_results": {
+    "frozen_contract": 6,
+    "resolver_regression": 5,
+    "native_runtime": 3,
+    "status": "OK in committed raw logs; independently read, not rerun"
+  }
+}
