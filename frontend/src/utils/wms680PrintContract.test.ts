@@ -83,6 +83,116 @@ function expectOwnVariantRows(html: string) {
   expect(html.slice(second)).toContain('Синий')
 }
 
+type VariantColumns = { article: string; color: string; size: string }
+
+function printableText(fragment: string) {
+  return fragment
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function mainTable(html: string) {
+  const table = html.match(/<table\b[^>]*>[\s\S]*?<\/table>/)?.[0]
+  expect(table, 'печатная форма должна содержать товарную таблицу').toBeTruthy()
+  return table!
+}
+
+function tableHeaders(html: string) {
+  return [...mainTable(html).matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>/g)].map((match) => printableText(match[1]!))
+}
+
+function tableRows(html: string) {
+  const body = mainTable(html).match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1]
+  expect(body, 'товарная таблица должна содержать tbody').toBeTruthy()
+  return [...body!.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/g)].map((match) => match[1]!)
+}
+
+function rowCells(row: string) {
+  return [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((match) => printableText(match[1]!))
+}
+
+/** R8 replaces only the old inline placement, not the values or their sources. */
+function expectSeparateVariantColumns(html: string, expected: VariantColumns[]) {
+  const headers = tableHeaders(html)
+  for (const header of ['Артикул', 'Цвет', 'Размер']) {
+    expect(headers.filter((value) => value === header), `ровно один столбец «${header}»`).toHaveLength(1)
+  }
+  const article = headers.indexOf('Артикул')
+  const color = headers.indexOf('Цвет')
+  const size = headers.indexOf('Размер')
+  const product = headers.findIndex((value) => /товар|наименование/i.test(value))
+  expect(product, 'название товара остаётся отдельным текстовым столбцом').toBeGreaterThanOrEqual(0)
+  const rows = tableRows(html)
+  expect(rows).toHaveLength(expected.length)
+  for (const [index, values] of expected.entries()) {
+    const cells = rowCells(rows[index]!)
+    expect(cells[article]).toContain(values.article)
+    expect(cells[color]).toContain(values.color)
+    expect(cells[size]).toContain(values.size)
+    // Sentinel values prove that a variant did not remain hidden in the name/shared cell.
+    expect(cells[product]).not.toContain(values.article)
+    expect(cells[product]).not.toContain(values.color)
+    expect(cells[product]).not.toContain(values.size)
+  }
+}
+
+const fourVariants: VariantColumns[] = [
+  { article: 'ART-680', color: 'COLOR-RED-680', size: 'SIZE-S-680' },
+  { article: 'ART-680', color: 'COLOR-BLUE-680', size: 'SIZE-M-680' },
+  { article: 'ART-680', color: 'COLOR-GREEN-680', size: 'SIZE-L-680' },
+  { article: 'ART-680', color: 'COLOR-BLACK-680', size: 'SIZE-XL-680' },
+]
+
+function fourInboundRows() {
+  return fourVariants.map((variant, index) => ({
+    product_name: `NAME-${index + 1}-680`, vendor_code: variant.article, sku_code: `SKU-${index + 1}-680`,
+    barcode: `00000000000${index + 1}`, wb_nm_id: 680 + index, photo_url: null,
+    expected_qty: index + 1, size: variant.size, color: variant.color,
+  }))
+}
+
+function fourPackagingRows() {
+  return fourVariants.map((variant, index) => ({
+    product_name: `PACK-NAME-${index + 1}-680`, vendor_code: variant.article, sku_code: `PACK-SKU-${index + 1}-680`,
+    barcode: `10000000000${index + 1}`, wb_nm_id: 690 + index, photo_url: null,
+    instructions: `INSTRUCTION-${index + 1}-680`, quantity: index + 1, size: variant.size, color: variant.color,
+  }))
+}
+
+function fourWaybill(kind: ShipmentWaybillData['docKind']) {
+  return {
+    ...waybill(kind),
+    lines: fourVariants.map((variant, index) => ({
+      sku_code: variant.article, product_name: `WAYBILL-NAME-${index + 1}-680`, quantity: index + 1,
+      shipped_qty: index, received_qty: index, storage_location_code: `CELL-${index + 1}-680`,
+      size: variant.size, color: variant.color,
+    })),
+  } as ShipmentWaybillData
+}
+
+function capturedWaybillData(data: ShipmentWaybillData) {
+  const state = globalThis as { window?: unknown; document?: unknown }
+  const previousWindow = state.window
+  const previousDocument = state.document
+  const capture = { __WMS_CAPTURE_PRINT_HTML__: true, __WMS_LAST_PRINT_HTML__: '' }
+  const iframe = { setAttribute() {}, style: {}, onload: null } as unknown as HTMLIFrameElement
+  state.window = capture
+  state.document = { createElement: () => iframe, body: { appendChild() {}, removeChild() {} } } as unknown as Document
+  try {
+    if (data.docKind === 'marketplace_unload') printMarketplaceUnloadWaybill({ ...data, wbWarehouseLabel: data.wbWarehouseLabel ?? null })
+    else if (data.docKind === 'operational_outbound') printOperationalOutboundWaybill(data)
+    else printInboundSupplyWaybill(data)
+    return capture.__WMS_LAST_PRINT_HTML__
+  } finally {
+    state.window = previousWindow
+    state.document = previousDocument
+  }
+}
+
 describe('WMS-680 · контракт печатных накладных до реализации', () => {
   it('C680-01: лист приёмки и возврат печатают варианты своих Product без смешения строк', () => {
     const html = buildInboundReceivingSheetHtml(inbound)
@@ -104,8 +214,8 @@ describe('WMS-680 · контракт печатных накладных до �
   it('C680-03: самостоятельная упаковка использует ту же форму и не теряет два поля', () => {
     const html = buildShipmentPackagingSheetHtml(packaging)
     expect(html).toContain('WB variant')
-    expect(html).toContain('Размер: S')
-    expect(html).toContain('Цвет: Красный')
+    expect(html).toContain('S')
+    expect(html).toContain('Красный')
   })
 
   it('C680-04: операционная отгрузка сохраняет ячейки, подбор и варианты строк', () => {
@@ -157,8 +267,8 @@ describe('WMS-680 · контракт печатных накладных до �
       ...packaging,
       items: [{ ...packaging.items[0]!, size: 'KNOWN-S', color: 'KNOWN-RED' }],
     } as unknown as ShipmentPackagingSheetData)
-    expect(htmlWithoutCatalog).toContain('Размер: KNOWN-S')
-    expect(htmlWithoutCatalog).toContain('Цвет: KNOWN-RED')
+    expect(htmlWithoutCatalog).toContain('KNOWN-S')
+    expect(htmlWithoutCatalog).toContain('KNOWN-RED')
     expect(htmlWithoutCatalog).not.toContain('catalog')
   })
 
@@ -170,8 +280,8 @@ describe('WMS-680 · контракт печатных накладных до �
       ...packaging,
       items: [{ ...packaging.items[0]!, size, color }],
     } as unknown as ShipmentPackagingSheetData)
-    expect(html).toContain(`Размер: ${expectedSize}`)
-    expect(html).toContain(`Цвет: ${expectedColor}`)
+    expect(html).toContain(expectedSize)
+    expect(html).toContain(expectedColor)
     expect(html).toContain('pack')
     expect(html).toContain('data-testid="tz-sheet-qty">2</td>')
   })
@@ -205,5 +315,97 @@ describe('WMS-680 · контракт печатных накладных до �
     }
     expect(source).not.toContain('WMS-680: acceptance-act')
     expect(source).not.toContain('WMS-680: print-label')
+  })
+
+  it('C680-15: все реальные шаблоны печатают четыре варианта в отдельных столбцах Артикул, Цвет и Размер', () => {
+    const inboundHtml = buildInboundReceivingSheetHtml({ ...inbound, items: fourInboundRows() } as InboundReceivingSheetData)
+    const packagingHtml = buildShipmentPackagingSheetHtml({ ...packaging, items: fourPackagingRows() } as ShipmentPackagingSheetData)
+    expectSeparateVariantColumns(inboundHtml, fourVariants)
+    expectSeparateVariantColumns(packagingHtml, fourVariants)
+
+    for (const kind of ['marketplace_unload', 'operational_outbound', 'inbound_intake'] as const) {
+      expectSeparateVariantColumns(capturedWaybillData(fourWaybill(kind)), fourVariants)
+    }
+
+    const fbsHtml = buildFbsPickingListPrintHtml({
+      supplyName: 'FBS-680-columns', wbSupplyId: 'WB-680', marketplace: 'mixed', sellerName: 'Seller A', wmsWarehouseName: 'WMS',
+      routeLabel: 'Route', deadlineLabel: '2026-10-07', printedAtLabel: '2026-10-06',
+      rows: fourVariants.map((variant, index) => ({
+        name: `FBS-NAME-${index + 1}-680`, size: variant.size, color: variant.color, imageUrl: null,
+        identifiers: [variant.article, `BARCODE-${index + 1}-680`], locations: [`FBS-CELL-${index + 1}-680`],
+        required: index + 10, picked: index, wbOrders: [6800 + index], stickerCodes: [null], marking: `MARK-${index + 1}-680`,
+      })),
+    })
+    expectSeparateVariantColumns(fbsHtml, fourVariants)
+  })
+
+  it('C680-16: известные, fallback, whitespace и строковый 0 остаются в собственных колонках без каталога', () => {
+    const expected = [
+      { article: 'KNOWN-ARTICLE-680', color: 'KNOWN-COLOR-680', size: '0' },
+      { article: 'SKU-FALLBACK-680', color: '—', size: '—' },
+    ]
+    const inboundHtml = buildInboundReceivingSheetHtml({
+      ...inbound,
+      items: [
+        { ...fourInboundRows()[0]!, vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
+        { ...fourInboundRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
+      ],
+    } as InboundReceivingSheetData)
+    const packagingHtml = buildShipmentPackagingSheetHtml({
+      ...packaging,
+      items: [
+        { ...fourPackagingRows()[0]!, vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
+        { ...fourPackagingRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
+      ],
+    } as ShipmentPackagingSheetData)
+    expectSeparateVariantColumns(inboundHtml, expected)
+    expectSeparateVariantColumns(packagingHtml, expected)
+
+    for (const kind of ['marketplace_unload', 'operational_outbound', 'inbound_intake'] as const) {
+      const data = fourWaybill(kind)
+      data.lines = [
+        { ...data.lines[0]!, sku_code: expected[0]!.article, color: expected[0]!.color, size: expected[0]!.size },
+        { ...data.lines[1]!, sku_code: expected[1]!.article, color: '  ', size: '   ' },
+      ]
+      expectSeparateVariantColumns(capturedWaybillData(data), expected)
+    }
+
+    const fbsHtml = buildFbsPickingListPrintHtml({
+      supplyName: 'FBS-680-fallback', wbSupplyId: 'WB-680', marketplace: 'ozon', sellerName: 'Seller A', wmsWarehouseName: 'WMS',
+      routeLabel: 'Route', deadlineLabel: '2026-10-07', printedAtLabel: '2026-10-06',
+      rows: expected.map((variant, index) => ({
+        name: `FBS-FALLBACK-${index + 1}-680`, size: variant.size === '—' ? '  ' : variant.size,
+        color: variant.color === '—' ? '  ' : variant.color, imageUrl: null, identifiers: [variant.article], locations: [],
+        required: index + 100, picked: 0, wbOrders: [6900 + index], stickerCodes: [null], marking: '—',
+      })),
+    })
+    expectSeparateVariantColumns(fbsHtml, expected)
+  })
+
+  it('C680-17: реальные caller-map сохраняют варианты, реквизиты и границы прежних форм', () => {
+    const files = {
+      inbound: readFileSync(new URL('../../../frontend/src/screens/ff/FfInboundRequestView.tsx', import.meta.url), 'utf8'),
+      packaging: readFileSync(new URL('../../../frontend/src/screens/ff/FfPackagingPage.tsx', import.meta.url), 'utf8'),
+      outbound: readFileSync(new URL('../../../frontend/src/screens/v2/OutboundScreen.tsx', import.meta.url), 'utf8'),
+      workspace: readFileSync(new URL('../../../frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8'),
+      assembly: readFileSync(new URL('../../../frontend/src/screens/v2/FfFbsSupplyAssembly.tsx', import.meta.url), 'utf8'),
+    }
+    expect(files.inbound).toContain('vendor_code: meta.wb_vendor_code ?? \'\'')
+    expect(files.inbound).toContain('size: ln.size')
+    expect(files.inbound).toContain('color: ln.color')
+    expect(files.packaging).toContain('vendor_code: displayMeta.wb_vendor_code ?? \'\'')
+    expect(files.packaging).toContain('instructions: ln.packaging_instructions')
+    expect(files.packaging).toContain('quantity: ln.qty_need_pack')
+    expect(files.outbound).toContain('storage_location_code: addressStorageEnabled')
+    expect(files.outbound).toContain('shipped_qty: ln.shipped_qty')
+    expect(files.workspace).toContain('let rows: typeof pickingRows = pickingRows')
+    expect(files.assembly).toContain('let rows = fbsAssemblyPickingRows(ordered)')
+
+    const html = buildShipmentPackagingSheetHtml({ ...packaging, items: fourPackagingRows() } as ShipmentPackagingSheetData)
+    for (const value of ['100000000001', 'INSTRUCTION-1-680', '1', 'data-testid="shipment-sheet-fact"></td>', 'size: A4']) {
+      expect(html).toContain(value)
+    }
+    const operational = capturedWaybillData(fourWaybill('operational_outbound'))
+    for (const value of ['CELL-1-680', 'Подбор по ячейкам', 'Отгружено', 'Seller A']) expect(operational).toContain(value)
   })
 })
