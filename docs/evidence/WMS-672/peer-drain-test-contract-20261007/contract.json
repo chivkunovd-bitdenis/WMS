@@ -1,0 +1,43 @@
+{
+  "base": "565559aaff73e5a2f0fb436cac1032a4856a8379",
+  "product_previous_fix": "9e757a02c",
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms672-peer-drain.test.mjs",
+  "report": "release-print/672-peer-drain.tap",
+  "format": "node-tap",
+  "source_closure_sha256": {
+    "frontend/tests-e2e/wms672-peer-drain.test.mjs": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "frontend/src/utils/printBarcodeLabel.ts": "269694705aabed0a7c44d9cb9ce68fcebe8d01de1b6769b36f5bab99032264be",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "frozen_preserved_sha256": {
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+    "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "frontend/tests-e2e/wms672-dom.test.tsx": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+    "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd"
+  },
+  "cases": [
+    "C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness",
+    "C5 synchronous decode throw drains held active peers before cleanup and retry readiness"
+  ],
+  "precode": {
+    "passed": 0,
+    "failed": 2,
+    "skipped": 0,
+    "cancelled": 0,
+    "expected_failure": "failed tape source must live until held active decode peers settle",
+    "raw_tap_gzip": "precode-red.tap.gz",
+    "raw_tap_sha256": "cf7dde883bcb6edae542b37f02fa35cda3ed75cb95c12267ea60560b9a38231e",
+    "readable_tap": "precode-red.tap (trailing whitespace normalized only)"
+  },
+  "no_numeric_window_requirement": true,
+  "native_chromium_causality_proven": false,
+  "product_or_ci_changed": false,
+  "existing_seven": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0,
+    "report": "existing-seven.tap"
+  }
+}
