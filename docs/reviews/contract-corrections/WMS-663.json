@@ -1,30 +1,58 @@
 {
   "task": "WMS-663",
-  "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
-  "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
-  "files": [
-    "backend/tests/test_wms663_customs_documents_contract.py",
-    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx"
-  ],
-  "review": {
-    "model": "gpt-6-astra",
-    "effort": "high",
-    "verdict": "PASS",
-    "scope": "Fixture/DOM target correction content only; not product or checker acceptance",
-    "evidence": "docs/reviews/wms663-astra-7d9e9.md",
-    "evidence_commit": "4306d91b3a1963999780329127c19144e4902cf1",
-    "summary": "Independent review explicitly approved UUID capture before expire_all and the exact exemplar Save button; assertions and permanent protection were not weakened."
-  },
-  "protocol_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
-  "protocol_status": "BLOCKED",
-  "blocker": {
-    "code": "CORRECTION_EQUALS_ENTIRE_FROZEN_CONTRACT",
-    "frozen_files": [
-      "backend/tests/test_wms663_customs_documents_contract.py",
-      "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx"
-    ],
-    "reason": "The requirements document is excluded from frozen paths. Both remaining frozen files are changed by the exact reviewed commit, so the strict-subset condition fails in both supported formats.",
-    "checker_acceptance": false,
-    "resolution": "Controller must resolve the unsupported whole-frozen-set correction through the authorized governance process. Do not invent a source SHA, omit a changed file, split historical evidence artificially, or weaken checker/guards."
-  }
+  "fixture_corrections": [
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+      "files": [
+        {
+          "path": "backend/tests/test_wms663_customs_documents_contract.py",
+          "transform": "wms663-uuid-before-expire",
+          "before_blob": "5fb61d0c51a6b4f2d84f3b5bf17397f622059283",
+          "after_blob": "4e1aff5a80445fa61b5697d60a26985427dfd28e"
+        },
+        {
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+          "transform": "wms663-exemplar-save-selector",
+          "before_blob": "21baad5243f664aca69ff817407ea17e66f59155",
+          "after_blob": "8548a75eb6963edcd5e3b3755e0a618d918f9f94"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+        "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+        "evidence_commit": "4306d91b3a1963999780329127c19144e4902cf1",
+        "evidence": "docs/reviews/wms663-astra-7d9e9.md",
+        "evidence_blob": "4d0860e779ff6325584a14ae39065aecf12fd7b3"
+      }
+    },
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "1fd2d92dc30eb376c1d8a8e27238e52d963a196e",
+      "correction_commit": "17ce363a8360620bc6b843e003278cd4ea106678",
+      "files": [
+        {
+          "path": "backend/tests/test_wms663_customs_documents_contract.py",
+          "transform": "wms663-complete-positive-status-fixtures",
+          "before_blob": "4e1aff5a80445fa61b5697d60a26985427dfd28e",
+          "after_blob": "c92c075ba9f375c578538b776207cdc6b8b56ab3"
+        }
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "1fd2d92dc30eb376c1d8a8e27238e52d963a196e",
+        "correction_commit": "17ce363a8360620bc6b843e003278cd4ea106678",
+        "evidence": "docs/reviews/wms663-astra-1fd2d92.md",
+        "evidence_commit": "e27c0eab577fd7cc183aeec14c2451e1c7d8b7c2",
+        "evidence_blob": "ea2aab84f2b8d48966c74f11abd463ced0837228"
+      }
+    }
+  ]
 }

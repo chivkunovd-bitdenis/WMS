@@ -95,7 +95,8 @@ class PositiveFixtureChainTests(unittest.TestCase):
         ]:
             with self.subTest(new=new):
                 self.assertIn(old, DATA["after"])
-                self.assertTrue(self.repo.errors(self.chain(mutation=lambda text: text.replace(old, new))))
+                self.assertTrue(self.repo.errors(self.chain(
+                    mutation=lambda text, old=old, new=new: text.replace(old, new))))
 
     def test_reject_extra_paths_handoff_mutation_mode_and_wrong_full_review_sha(self):
         ledger = self.chain()
