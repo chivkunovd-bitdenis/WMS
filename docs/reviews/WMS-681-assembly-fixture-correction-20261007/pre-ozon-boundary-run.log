@@ -1,0 +1,82 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-681/.wms681-merged-product-fixture/frontend
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > R17/WMS-666: единая поверхность использует последний короб без отдельного старта и без start-work 670ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся 853ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый 331ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}» 233ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > Д11/WMS-666: нет открытого короба — общий скан выполняется без новой блокировки и заказ не кладётся 580ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: без коробов общий скан остаётся доступен и не создаёт короб или QR сам 246ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: новый короб становится открытым, принимает следующий скан и не печатает QR 624ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: переход между общей упаковкой и коробами не открывает печать и не возвращает рамку 303ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати 232ms
+ × src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB 343ms
+   → expected 'Поставка FBS 29.09.2026 · WB № WB-GI-…' to contain 'Грузоместо WB для короба не создано'
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR 359ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане 733ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор открыл вкладку коробов, пока шёл поиск, — заказ ложится в короб, открытый при скане 777ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода 2132ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…» 564ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки 164ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > F4: после передачи без полученного QR — «Получить QR повторно», как в карточке 149ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > скан стикера в карточке не кладёт заказ в короб и не создаёт legacy-рамку 293ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр 210ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-575 · ЧЗ в русской раскладке в единой поверхности > «/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер 458ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB 276ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR 401ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C5/C9: одиночный QR восстанавливает непривязанный короб и открывает настоящую этикетку 339ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C9: массовая печать получает недостающий QR связанного короба и сохраняет уже готовый 344ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C9: восстановленный групповой снимок даёт все пять QR массовой печати 521ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C10: частичный отказ не теряет готовый QR, показывает причину и число отсутствующих 325ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C10/R6: HTTP-ошибка после сохранённого A1 перечитывает snapshot и печатает готовую часть 507ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C10: ноль готовых не открывает окно, повтор после сети получает QR 441ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный массовый ответ A не открывает QR после перехода на поставку B 681ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный одиночный ответ A не открывает QR после перехода на поставку B 649ms
+ × src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C11: готовая этикетка Ozon остаётся в прежнем пути и не вызывает WB recovery 311ms
+   → Cannot read properties of null (reading 'state')
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB
+AssertionError: expected 'Поставка FBS 29.09.2026 · WB № WB-GI-…' to contain 'Грузоместо WB для короба не создано'
+
+Expected: "Грузоместо WB для короба не создано"
+Received: "Поставка FBS 29.09.2026 · WB № WB-GI-574 · ИП Тестовый · Склад WB КолединоКороба · Склад / СЦРаспределено 0 из 2 шт · осталось 2Печать всех QR (1)Без распределенияКоробовКоробовДобавить короба▾Короб 1 · 0 шт · открыт — сканы идут сюдаЗакрыть коробQRДобавить товарыПередать в WB"
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx:470:39
+    468|     await settle(30)
+    469|     expect(document.body.textContent).not.toContain('Проверка перед пе…
+    470|     expect(document.body.textContent).toContain('Грузоместо WB для кор…
+       |                                       ^
+    471|     expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).to…
+    472|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-681 recovery · реальные WB QR по свежему снимку > C11: готовая этикетка Ozon остаётся в прежнем пути и не вызывает WB recovery
+TypeError: Cannot read properties of null (reading 'state')
+ ❯ pending src/screens/v2/OzonDocumentsAbsence.tsx:12:89
+     10|   }[] }[]
+     11| }
+     12| const pending = (data: Documents) => ['preparing', 'checking', 'unknow…
+       |                                                                                         ^
+     13| function selected(data: Documents): boolean {
+     14|   if (data.absence_selected !== undefined) return data.absence_selected
+ ❯ OzonDocumentsAbsence src/screens/v2/OzonDocumentsAbsence.tsx:78:47
+ ❯ Object.react_stack_bottom_frame ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:25904:20
+ ❯ renderWithHooks ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:7662:22
+ ❯ updateFunctionComponent ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:10166:19
+ ❯ beginWork ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:11778:18
+ ❯ runWithFiberInDEV ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:874:13
+ ❯ performUnitOfWork ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:17641:22
+ ❯ workLoopSync ../../../../frontend/node_modules/react-dom/cjs/react-dom-client.development.js:17469:41
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 29 passed (31)
+   Start at  02:43:14
+   Duration  95.44s (transform 586ms, setup 0ms, collect 79.84s, tests 15.05s, environment 384ms, prepare 43ms)
+
+JSON report written to /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-681/docs/reviews/WMS-681-assembly-fixture-correction-20261007/merged-run.json

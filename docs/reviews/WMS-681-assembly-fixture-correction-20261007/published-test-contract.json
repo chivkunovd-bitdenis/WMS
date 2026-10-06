@@ -1,0 +1,214 @@
+{
+  "test_commit": "879588d0ad7fe5fe579f16dcc4726c31f03fdb1d",
+  "test_parent": "1eb2c30726c501a41b661a1b144864c94491a2c5",
+  "test_commit_paths": [
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx"
+  ],
+  "before_blob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+  "current_base_blob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+  "after_blob": "12358c8953c842819db9a1b277ce51cbd83b9915",
+  "executed_source_blob_before_comment_annotation": "9cb7bbc43708a170b426e7ca56c24f4a43539e3a",
+  "post_execution_changes": "Exactly two comment lines clarify authorized supersession; executable source unchanged, checked by exact string replacement and matching previously captured executed blob. No rerun of unchanged green behavior.",
+  "analyst_authority_commit": "c7f755ce3a6c0ebce9a37567ae423aaa54565f51",
+  "analyst_authority_blob": "6aa0a1c46b086c523cfa6351d111a8e6d60e36ce",
+  "product_sha": "95b4728eb58793e3a58cb89b057e53ba8b9228a5",
+  "runner_exit_code": 0,
+  "total": 31,
+  "passed": 31,
+  "failed": 0,
+  "pending": 0,
+  "skipped": 0,
+  "cases": [
+    {
+      "id": "BASE-01",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > R17/WMS-666: единая поверхность использует последний короб без отдельного старта и без start-work",
+      "status": "passed",
+      "durationMs": 333.9860420000041
+    },
+    {
+      "id": "BASE-02",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся",
+      "status": "passed",
+      "durationMs": 643.0000839999993
+    },
+    {
+      "id": "BASE-03",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый",
+      "status": "passed",
+      "durationMs": 404.898125000007
+    },
+    {
+      "id": "BASE-04",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}»",
+      "status": "passed",
+      "durationMs": 313.7422499999957
+    },
+    {
+      "id": "BASE-05",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > Д11/WMS-666: нет открытого короба — общий скан выполняется без новой блокировки и заказ не кладётся",
+      "status": "passed",
+      "durationMs": 393.87370799999917
+    },
+    {
+      "id": "BASE-06",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: без коробов общий скан остаётся доступен и не создаёт короб или QR сам",
+      "status": "passed",
+      "durationMs": 350.94087500000023
+    },
+    {
+      "id": "BASE-07",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: новый короб становится открытым, принимает следующий скан и не печатает QR",
+      "status": "passed",
+      "durationMs": 575.0347089999996
+    },
+    {
+      "id": "BASE-08",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: переход между общей упаковкой и коробами не открывает печать и не возвращает рамку",
+      "status": "passed",
+      "durationMs": 332.83087499999965
+    },
+    {
+      "id": "BASE-09",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати",
+      "status": "passed",
+      "durationMs": 362.0934169999964
+    },
+    {
+      "id": "BASE-10",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "status": "passed",
+      "durationMs": 230.39625000000524
+    },
+    {
+      "id": "BASE-11",
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "status": "passed",
+      "durationMs": 226.4120830000029
+    },
+    {
+      "id": "BASE-12",
+      "caseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане",
+      "status": "passed",
+      "durationMs": 901.9841660000093
+    },
+    {
+      "id": "BASE-13",
+      "caseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл вкладку коробов, пока шёл поиск, — заказ ложится в короб, открытый при скане",
+      "status": "passed",
+      "durationMs": 731.8467080000119
+    },
+    {
+      "id": "BASE-14",
+      "caseId": "WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода",
+      "status": "passed",
+      "durationMs": 2163.587124999991
+    },
+    {
+      "id": "BASE-15",
+      "caseId": "WMS-574 · итоговое ревью > Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»",
+      "status": "passed",
+      "durationMs": 561.849000000002
+    },
+    {
+      "id": "BASE-16",
+      "caseId": "WMS-574 · итоговое ревью > F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки",
+      "status": "passed",
+      "durationMs": 167.2086249999993
+    },
+    {
+      "id": "BASE-17",
+      "caseId": "WMS-574 · итоговое ревью > F4: после передачи без полученного QR — «Получить QR повторно», как в карточке",
+      "status": "passed",
+      "durationMs": 144.28850000000966
+    },
+    {
+      "id": "BASE-18",
+      "caseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > скан стикера в карточке не кладёт заказ в короб и не создаёт legacy-рамку",
+      "status": "passed",
+      "durationMs": 285.6977499999921
+    },
+    {
+      "id": "BASE-19",
+      "caseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр",
+      "status": "passed",
+      "durationMs": 203.8578339999949
+    },
+    {
+      "id": "BASE-20",
+      "caseId": "WMS-575 · ЧЗ в русской раскладке в единой поверхности > «/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер",
+      "status": "passed",
+      "durationMs": 448.14700000001176
+    },
+    {
+      "id": "681-QR-01",
+      "caseId": "WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "status": "passed",
+      "durationMs": 232.5187500000029
+    },
+    {
+      "id": "681-QR-02",
+      "caseId": "WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "status": "passed",
+      "durationMs": 378.6913329999952
+    },
+    {
+      "id": "681-QR-03",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C5/C9: одиночный QR восстанавливает непривязанный короб и открывает настоящую этикетку",
+      "status": "passed",
+      "durationMs": 360.6790409999958
+    },
+    {
+      "id": "681-QR-04",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: массовая печать получает недостающий QR связанного короба и сохраняет уже готовый",
+      "status": "passed",
+      "durationMs": 308.8468329999887
+    },
+    {
+      "id": "681-QR-05",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: восстановленный групповой снимок даёт все пять QR массовой печати",
+      "status": "passed",
+      "durationMs": 529.358917000005
+    },
+    {
+      "id": "681-QR-06",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: частичный отказ не теряет готовый QR, показывает причину и число отсутствующих",
+      "status": "passed",
+      "durationMs": 310.84091700000863
+    },
+    {
+      "id": "681-QR-07",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10/R6: HTTP-ошибка после сохранённого A1 перечитывает snapshot и печатает готовую часть",
+      "status": "passed",
+      "durationMs": 364.20091699999466
+    },
+    {
+      "id": "681-QR-08",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: ноль готовых не открывает окно, повтор после сети получает QR",
+      "status": "passed",
+      "durationMs": 578.917208999992
+    },
+    {
+      "id": "681-QR-09",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный массовый ответ A не открывает QR после перехода на поставку B",
+      "status": "passed",
+      "durationMs": 517.1230840000062
+    },
+    {
+      "id": "681-QR-10",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный одиночный ответ A не открывает QR после перехода на поставку B",
+      "status": "passed",
+      "durationMs": 751.8252079999947
+    },
+    {
+      "id": "681-QR-11",
+      "caseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: готовая этикетка Ozon остаётся в прежнем пути и не вызывает WB recovery",
+      "status": "passed",
+      "durationMs": 279.3903750000027
+    }
+  ],
+  "private_fixture_removed": true,
+  "private_fixture_tracked_or_committed": false,
+  "original_product_files_overwritten": false,
+  "original_product_restoration_required": false,
+  "no_policy_checker_or_other_frozen_file_changes": true
+}
