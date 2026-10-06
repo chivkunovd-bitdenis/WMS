@@ -1,0 +1,17 @@
+case-list-type list
+{
+  "reviewedSha": "93b0757103fbd29fb00d4f198f6baab8def85172",
+  "freshCollection": 4625,
+  "shardCounts": [
+    2313,
+    2312
+  ],
+  "geometrySource": "1c045a4f2d6c1bb34eeed2f5e79f6e53be2a8a9d",
+  "savedEvidence": "d6e39bb4fdf97a046f2c34a7b4d4e00345daa835",
+  "geometryPass": 43,
+  "exactMutantFailures": {
+    "hide-packing-print-action": 7,
+    "overlap-order-seller-header": 2,
+    "hide-selected-action-only-for-long-data": 1
+  }
+}

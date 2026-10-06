@@ -1,0 +1,17 @@
+{
+  "postgresServicesUnchanged": true,
+  "existingBackendStepsUnchangedExceptRecordedJUnit": true,
+  "protectedBackendCases": 600,
+  "pendingProtectedFiles": [
+    "scripts/ci/backend_shards.py",
+    "scripts/ci/tests/test_backend_shards.py",
+    "scripts/ci/tests/test_backend_shard_failclosed.py",
+    "scripts/ci/tests/test_ci_release_additions.py",
+    "scripts/ci/tests/test_backend_shard_redis_setup.py"
+  ],
+  "pendingNamedReports": [
+    "ci-shards.xml",
+    "product-scope.xml",
+    "wms517-mac.tap"
+  ]
+}
