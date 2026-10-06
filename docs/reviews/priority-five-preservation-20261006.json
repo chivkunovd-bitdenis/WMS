@@ -1,5 +1,6 @@
 {
-  "candidate_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+  "candidate_sha": "7cf8de3432f9c7568cb14959dc79a101d1d41beb",
+  "application_product_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
   "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
   "source_ancestry": [
     {
@@ -211,6 +212,29 @@
         "scripts/ci/wms663-proof/c10_mixed.py",
         "scripts/ci/wms663-proof/prepare-ui.mjs"
       ]
+    },
+    {
+      "task": "WMS-517 live reader/proofs/runbook",
+      "source": "e09eb757c1879bd87c43c276a514e65b4da07e9b",
+      "merge_base": "e93f9efba99032028444d7149268f1860dddd379",
+      "is_ancestor": true,
+      "paths": [
+        "scripts/ops/wms517-read-sold.py"
+      ]
+    },
+    {
+      "task": "WMS-675 initial scoped operational evidence/read-only collector",
+      "source": "749b80cb85e3a15344c23fe83012d38af1ae99d4",
+      "merge_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+      "is_ancestor": true,
+      "paths": []
+    },
+    {
+      "task": "WMS-675 real Ozon read proof",
+      "source": "5b5da992a6cd766eb250ab83f4575fc8b11cdf22",
+      "merge_base": "749b80cb85e3a15344c23fe83012d38af1ae99d4",
+      "is_ancestor": true,
+      "paths": []
     }
   ],
   "path_checks": [
@@ -1674,6 +1698,17 @@
         "WMS-663"
       ],
       "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 live reader/proofs/runbook",
+      "path": "scripts/ops/wms517-read-sold.py",
+      "source_blob": "31b506d34ffb55e5ab3a2524512c036b03ec110a",
+      "candidate_blob": "31b506d34ffb55e5ab3a2524512c036b03ec110a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 live reader/proofs/runbook"
+      ],
+      "status": "unchanged source blob"
     }
   ],
   "etalon_paths_outside_accepted_delta": [
@@ -1952,5 +1987,5 @@
     ]
   },
   "unexpected_unique_path_drift": [],
-  "note": "Integrator static conservation only. Shared Workspace needs independent review; no new tests/full CI performed."
+  "note": "Integrator static conservation only; independent product review is a separate session. No new tests/full CI performed."
 }

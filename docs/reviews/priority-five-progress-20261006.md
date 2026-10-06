@@ -108,3 +108,25 @@ helper/proof517 и read-only proof/план675; новыйruntime662 в675 не 
 ## Интеграция 14 — WMS-675 живые ответы Ozon
 
 База `b0f9c3e07cbe97102604531281549ef986631579`; source `5b5da992a6cd766eb250ab83f4575fc8b11cdf22` включён без конфликтов. Сохранены31HTTP200,26положительных подтверждений передачи,4отмены и1ожидающийposting. Эти внешние факты не подменяются локальнымdone. Исходный исполнитель675сверяет свежиеledger/остаток/резерв и сохраняет точныйmissingdeltaплан и текущийrequirements675/backlog; планнеприменяется. Продуктобщейсборки08e0неизменен. Далее —финальный675документ,scope666correction и независимоеревью/приёмкаhelper517. Общие тесты/CI ещё не выполнялись.
+
+## Новое основание WMS-662 — реальные подстатусы675
+
+Точная версия `7cf8de3432f9c7568cb14959dc79a101d1d41beb` и сохранённые31livecards
+выявили новый случай вне прежних приёмки/ревью. В `ozon_proves_handoff`
+(`backend/app/services/fbs_observed_handoff_service.py`,218–229) allowlist подстатусов
+отвергает delivering/posting_in_pickup_point9 и delivering/posting_on_way_to_city6.
+Текущий код принимает только11delivered/posting_received из26положительных,
+пропускает15. Все4cancel и1awaiting остаются FALSE. Это лично проверено выполнением
+только неизменённого pure ASTclassifier на сохранённых JSON, без imports,
+внешних операций или applicationmutation; exactрезультат сохранён рядом
+в `wms662-live675-classifier-gap-20261006.json`.
+
+Отдельный тестировщик сначала сохраняет RED-контракт этих двух реальных подстатусов;
+интегратор не меняет product до testcommit. После него минимальныйfixallowlist,
+целевые контрактные тесты и узкое независимое повторное ревью новогоcase.
+Полученный отдельный productreview08e0PASS8e301dda остаётся фактом своего снимка,
+а не доказательством новогоcase. Scope666correction0455cd0a также ожидает
+отдельногоreviewPASS; ledgerPENDING не подменяется GREENтестом.
+
+Обновлённая статическая карта на7cf8de343 сохраняет13sourceancestries,
+132sourcepaths и66untouchedetalons; unexpecteddrift отсутствует.
