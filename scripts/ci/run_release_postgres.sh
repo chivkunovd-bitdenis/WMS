@@ -37,6 +37,8 @@ WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1
     tests/test_wms469_stock_dialog_backend.py::test_c24_parallel_complete_saves_never_mix_rules \
     tests/test_wms469_stock_dialog_backend.py::test_c23_parallel_same_binding_create_keeps_one_row \
     tests/test_fbs_supply_from_orders.py::test_parallel_from_orders_one_order_one_supply \
+    -o asyncio_default_fixture_loop_scope=session \
+    -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/663-669-670-683.xml"
 WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
   pytest -n 0 -q tests/test_wms663_release_retry_contract.py \
