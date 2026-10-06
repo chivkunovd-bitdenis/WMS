@@ -12,6 +12,7 @@ process on the dedicated wms_test_662_batch database, never the F6 database.
 from __future__ import annotations
 
 import asyncio
+import copy
 import os
 import uuid
 from collections import Counter
@@ -123,6 +124,9 @@ class BatchSchedule:
             async with asyncio.timeout(8):
                 while not self.finished.is_set():
                     if set(self.pids) == {"batch", "ordinary"}:
+                        # pg_stat_activity is cached within the observer's
+                        # transaction. Refresh before reading CURRENT writers.
+                        await observer.execute(text("select pg_stat_clear_snapshot()"))
                         rows = (await observer.execute(text(
                             "select pid, pg_blocking_pids(pid), query from pg_stat_activity "
                             "where pid in (:batch, :ordinary)"
@@ -138,6 +142,37 @@ class BatchSchedule:
                                 and ordinary in waits.get(batch, [])):
                             self.cycle_seen = True
                     await asyncio.sleep(0.01)  # poll frequency, never releases a barrier
+
+
+class BatchOrdinaryTransport(ApproveRaceTransport):
+    """Keep the ordinary transport's snapshot checks scoped to supply C.
+
+    The reused single-supply fixture expects one operation in the whole tenant;
+    a genuine batch necessarily already has operations for A/B as well.
+    """
+
+    async def call(self, *, client_id, api_key, path, payload):
+        if path != "/v1/carriage/approve":
+            return await super().call(client_id=client_id, api_key=api_key,
+                                      path=path, payload=payload)
+        self.endpoint_calls.append((path, dict(payload)))
+        before = await saved(self.case)
+        operations = [op for op in before.operations
+                      if str(op.local_entity_id) == str(self.case.supply.id)]
+        assert len(operations) == 1
+        self.snapshot = copy.deepcopy(operations[0].request_summary_json)
+        scope = self.snapshot["ozon_handoff_orders"]
+        assert set(scope) == {str(self.case.orders[0].id)}
+        assert scope[str(self.case.orders[0].id)]["quantities"] == {
+            str(self.case.products[0].id): 1,
+        }
+        assert self.snapshot["ozon_handoff_progress"]["posting_numbers"] == [
+            self.case.orders[0].external_order_id,
+        ]
+        assert not self.approved
+        await self.mutate()
+        self.approved = True
+        return {}
 
 
 async def tariffs(case):
@@ -247,7 +282,7 @@ async def test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_mon
     async def no_change():
         pass
 
-    ordinary_api = ApproveRaceTransport(ccase, no_change)
+    ordinary_api = BatchOrdinaryTransport(ccase, no_change)
 
     async def worker(name, operation):
         token = role.set(name)
@@ -280,7 +315,13 @@ async def test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_mon
         observer = asyncio.create_task(schedule.observe())
         results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), 15)
         schedule.finished.set()
-        await observer
+        try:
+            await observer
+        except TimeoutError:
+            pytest.fail(f"HARNESS: observer timeout; pids={schedule.pids}; "
+                        f"trace={schedule.trace}; errors={schedule.errors}; "
+                        f"wait={schedule.wait_queries}; results={results}; "
+                        f"barrier_errors={schedule.harness_errors}")
     finally:
         schedule.release.set()
         schedule.finished.set()
@@ -300,6 +341,7 @@ async def test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_mon
                   f"actual_wait={schedule.wait_queries}; trace={schedule.trace}; "
                   f"sqlstates={schedule.errors}; results={results}; balances={balances}; "
                   f"stock={final.stock}; reserves={final.position_reserves}; issues={issues}")
+    print(f"BATCH PG evidence: {diagnostic}")
     assert not schedule.harness_errors, f"HARNESS: {diagnostic}"
     assert schedule.wait_seen and len(set(schedule.pids.values())) == 2, f"HARNESS: {diagnostic}"
     assert set(batch_api.requested) == {a.external_order_id, b.external_order_id}, diagnostic
