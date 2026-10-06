@@ -332,6 +332,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
         ? order.positions.map((position, positionIndex) => ({
             key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
             name: position.name,
+            article: position.seller_article?.trim() || position.sku?.trim() || null,
             size: position.size ?? null,
             color: position.color ?? null,
             imageUrl: position.image_url ?? null,
@@ -346,6 +347,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
         : [{
             key: order.product.id ?? `unmapped-${order.id}`,
             name: order.product.name,
+            article: order.product.seller_article?.trim() || null,
             size: order.product.size,
             color: order.product.color ?? null,
             imageUrl: order.product.image_url,

@@ -1,3 +1,4 @@
+import { compactPrintWidth, printColgroup } from '../../utils/printTableColumns'
 import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import type { FbsOrderMetadata, FbsPickOptionLocation, FbsWorkspace } from './fbsApi'
 
@@ -295,6 +296,7 @@ export type FbsPickingListPrintRow = {
   name: string
   size: string | null
   color?: string | null
+  article?: string | null
   imageUrl: string | null
   identifiers: string[]
   locations: string[]
@@ -365,6 +367,7 @@ export function fbsBuildPickingRows(
       ? order.positions.map((position) => ({
         key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
         name: position.name,
+        article: position.seller_article?.trim() || position.sku?.trim() || null,
         size: position.size ?? null,
         color: position.color ?? null,
         imageUrl: position.image_url ?? null,
@@ -379,6 +382,7 @@ export function fbsBuildPickingRows(
       : [{
         key: order.product.id ?? `unmapped-${order.id}`,
         name: order.product.name,
+        article: order.product.seller_article?.trim() || null,
         size: order.product.size,
         color: order.product.color ?? null,
         imageUrl: order.product.image_url,
@@ -487,12 +491,29 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
         ? ` · № ${escapePrintHtml(input.wbSupplyId)}`
         : ` · № WB ${escapePrintHtml(input.wbSupplyId)}`
     : ''
+  const articleFor = (row: FbsPickingListPrintRow) => row.article?.trim() || row.identifiers[0]?.trim() || '—'
+  const columns = printColgroup(277, [
+    { width: 28 * 25.4 / 96 },
+    { width: 54 * 25.4 / 96 },
+    { grow: 2 },
+    { width: compactPrintWidth('Артикул', input.rows.map(articleFor), 25, 12) },
+    { width: compactPrintWidth('Цвет', input.rows.map((row) => row.color), 22, 12) },
+    { width: compactPrintWidth('Размер', input.rows.map((row) => row.size), 20, 20) },
+    { grow: 1 },
+    { width: compactPrintWidth(`Заказы ${marketplaceLabel}`, input.rows.flatMap((row) => row.wbOrders), 24, 12) },
+    { width: 116 * 25.4 / 96 },
+    { width: compactPrintWidth('Взять', input.rows.map((row) => row.required), 20, 12) },
+    { width: compactPrintWidth('Подобрано', input.rows.map((row) => `${row.picked} / ${row.required}`), 27, 12) },
+    { width: compactPrintWidth('Маркировка', input.rows.map((row) => row.marking), 24, 12) },
+  ])
   let position = 1
   const rows = input.rows.map((row) => {
     const positionFrom = position
     const positionTo = positionFrom + row.required - 1
     position = positionTo + 1
     const positionLabel = positionFrom === positionTo ? `${positionFrom}` : `${positionFrom}–${positionTo}`
+    const article = articleFor(row)
+    const identifiers = row.identifiers.filter((identifier) => identifier.trim() !== article)
     const imageUrl = printableImageUrl(row.imageUrl)
     const nonEmptyStickerCodes = row.stickerCodes.filter((code): code is string => Boolean(code))
     const stickerCodes = nonEmptyStickerCodes.length
@@ -504,9 +525,10 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
         <td class="image">${imageUrl ? `<img src="${imageUrl}" alt="" />` : '<span>—</span>'}</td>
         <td>
           <strong>${escapePrintHtml(row.name)}</strong>
-          <div class="muted">Цвет: ${escapePrintHtml(row.color?.trim() || '—')}</div>
-          <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
+          <div class="muted">${identifiers.length ? identifiers.map(escapePrintHtml).join(' · ') : ''}</div>
         </td>
+        <td>${escapePrintHtml(article)}</td>
+        <td>${escapePrintHtml(row.color?.trim() || '—')}</td>
         <td class="size">${escapePrintHtml(row.size?.trim() || '—')}</td>
         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
@@ -539,9 +561,9 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .number { width: 28px; text-align: center; }
       .image { width: 54px; text-align: center; }
       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
-      .size { width: 78px; text-align: center; }
+      .size { text-align: center; }
       td.size { font-size: 20px; font-weight: 700; }
-      .quantity { width: 62px; text-align: center; font-weight: 700; }
+      .quantity { text-align: center; font-weight: 700; }
       .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
       .footer { margin-top: 8px; color: #687083; font-size: 10px; }
@@ -557,8 +579,9 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+      ${columns}
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар</th><th>Артикул</th><th>Цвет</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="12">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>

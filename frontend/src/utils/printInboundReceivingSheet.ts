@@ -1,4 +1,5 @@
 import { escapeLabelHtml } from './productLabelText'
+import { compactPrintWidth, printColgroup } from './printTableColumns'
 
 export type InboundReceivingSheetItem = {
   product_name: string
@@ -31,10 +32,9 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
        <div class="rs-photo rs-photo-empty" style="display:none">фото</div>`
     : `<div class="rs-photo rs-photo-empty">фото</div>`
 
-  const article = item.vendor_code.trim() || item.sku_code.trim()
+  const article = item.vendor_code.trim() || item.sku_code.trim() || '—'
   const productMeta = [
-    article ? `Арт.: ${article}` : '',
-    item.sku_code.trim() ? `SKU: ${item.sku_code.trim()}` : '',
+    item.sku_code.trim() && item.sku_code.trim() !== article ? `SKU: ${item.sku_code.trim()}` : '',
     item.wb_nm_id != null ? `Артикул WB: ${item.wb_nm_id}` : '',
   ]
     .filter(Boolean)
@@ -47,9 +47,10 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
   <td class="rs-product-cell">
     <p class="rs-name">${escapeLabelHtml(item.product_name)}</p>
     ${productMeta ? `<p class="rs-meta">${productMeta}</p>` : ''}
-    <p class="rs-meta">Размер: ${escapeLabelHtml(item.size?.trim() || '—')}</p>
-    <p class="rs-meta">Цвет: ${escapeLabelHtml(item.color?.trim() || '—')}</p>
   </td>
+  <td class="rs-article-cell">${escapeLabelHtml(article)}</td>
+  <td class="rs-color-cell">${escapeLabelHtml(item.color?.trim() || '—')}</td>
+  <td class="rs-size-cell">${escapeLabelHtml(item.size?.trim() || '—')}</td>
   <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">${escapeLabelHtml(barcode)}</td>
   <td class="rs-expected-cell" data-testid="receiving-sheet-expected">${item.expected_qty}</td>
   <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
@@ -58,6 +59,16 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
 
 /** HTML листа приёмки с фото товаров и пустой колонкой «Факт» под ручной пересчёт (A4). */
 export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData): string {
+  const columns = printColgroup(194, [
+    { width: 24 },
+    { grow: 2 },
+    { width: compactPrintWidth('Артикул', data.items.map((item) => item.vendor_code.trim() || item.sku_code.trim()), 26) },
+    { width: compactPrintWidth('Цвет', data.items.map((item) => item.color), 22) },
+    { width: compactPrintWidth('Размер', data.items.map((item) => item.size), 18) },
+    { width: compactPrintWidth('ШК', data.items.map((item) => item.barcode), 26) },
+    { width: compactPrintWidth('Заявлено', data.items.map((item) => item.expected_qty), 18, 13) },
+    { width: compactPrintWidth('Факт', [], 10) },
+  ])
   const rows = data.items.map((item, i) => itemRow(item, i)).join('')
   const body =
     data.items.length > 0
@@ -105,6 +116,7 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
         border: 1px solid #cfcfcf;
         padding: 4px 5px;
         vertical-align: top;
+        overflow-wrap: anywhere;
       }
       th {
         background: #ececec;
@@ -119,9 +131,9 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
       }
       .rs-photo-cell { width: 24mm; }
       .rs-product-cell { width: auto; }
-      .rs-barcode-cell { width: 30mm; word-break: break-word; font-weight: 700; }
-      .rs-expected-cell { width: 20mm; text-align: right; font-weight: 700; font-size: 13px; }
-      .rs-fact-cell { width: 20mm; min-height: 24mm; }
+      .rs-barcode-cell { word-break: break-word; font-weight: 700; }
+      .rs-expected-cell { text-align: right; font-weight: 700; font-size: 13px; }
+      .rs-fact-cell { min-height: 24mm; }
       .rs-photo {
         width: 21mm;
         height: 21mm;
@@ -154,10 +166,14 @@ export function buildInboundReceivingSheetHtml(data: InboundReceivingSheetData):
     ${
       data.items.length > 0
         ? `<table data-testid="receiving-sheet-table">
+      ${columns}
       <thead>
         <tr>
           <th>Фото</th>
           <th>Товар</th>
+          <th>Артикул</th>
+          <th>Цвет</th>
+          <th>Размер</th>
           <th>ШК</th>
           <th>Заявлено</th>
           <th>Факт</th>
