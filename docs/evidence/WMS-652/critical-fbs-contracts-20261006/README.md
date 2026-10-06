@@ -213,3 +213,36 @@ RED (createPOST=0) и actual second-submit duplicate RED (createPOST=6 вмес�
 после byte restoration, с mute-audio и actual mouse input. `browser-click-green`
 сохраняет выявленное при разработке helper ограничение прозрачного MUI nativeinput;
 это не productRED, исправленный helper нажимает видимый checkbox root.
+
+## Checkpoint5: ключ explicit selection после remount
+
+По узкому независимому review B `ef56da85cde417e796010cd3963baa6ddc853866`
+добавлены assertions к тем же трём `remount-after-lost-ack` IDs. Первый и
+восстановленный explicit selection POST должны иметь одинаковый непустой
+idempotency_key и сохранять actual supply/order/sticker identity. Товарный
+lookup miss не включён в сравнение. Базовый product trace уже был правильным;
+это укрепление контракта, product fix не выполнялся, cases.json/33IDs сохранены.
+
+Test-source SHA: `8e501fcb969ad0ceb482e479f69fd37f726862ca`.
+Новый `remount-selection-mutation.py` временно меняет только request key в
+saved-explicit ветке `deps.select` на randomUUID, не меняя native print dispatch.
+`remount-selection-key-red/mutation-proof.json`: **ровно три remount RED** на
+сообщении «restored explicit selection must reuse initial idempotency key»;
+остальные30 cases PASS. Во всех трёх trace native print keys остались
+scan-wb-a-order, scan-wb-a-order, scan-wb-next-order, а accepted ledger содержит
+те же два уникальных intents; обе правильные pack операции завершились.
+Таким образом RED не объясняется новым print key/неверным объектом/ошибкой setup.
+Product bytes восстановлены в finally, productdiff после опыта пуст.
+
+`remount-selection-key-green/result.json`: после восстановления все33 cases
+PASS на том же exactsource SHA8e501, включая три усиленных remount cases.
+Весь запуск использует Chrome --mute-audio. Dependency closure теперь10 файлов
+под `frontend/tests-e2e/wms652-critical/`, включая новый mutation helper;
+registry/CI остаются ответственностью root.
+
+Из root при существующем isolated Vite server:
+
+```sh
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/remount-selection-key-red python3 frontend/tests-e2e/wms652-critical/remount-selection-mutation.py
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/remount-selection-key-green node frontend/tests-e2e/wms652-critical/browser.mjs
+```
