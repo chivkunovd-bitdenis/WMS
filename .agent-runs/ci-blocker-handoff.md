@@ -132,3 +132,18 @@ non-protected move scenario и rejection test outside supported trees повто
 PASS. Исправление должно только распознать сохранённую active protection и
 регистрацию/check без move для такого original; новую policy migration,
 allow-all или ослабление guards не добавлять.
+
+## Stage handoff: WMS-654 protected Vitest templates
+
+`test_promote_guards.py` теперь фиксирует genuine C6 template references из
+WMS-654: `independent coordinates sides=%s tiers=%s` и
+`${entry} sides=%s tiers=%s`. Positive contract требует original source без
+move и все реальные 12 expanded IDs: четыре CatalogSection combinations и
+восемь map-entry combinations, bound к hash-protected source и existing
+`frontend-all.json` Vitest receipt. Current matcher не умеет связать template
+с expanded names, поэтому positive RED воспроизводим до process-fix.
+
+Negative contracts отдельно требуют отказ при missing expanded case, неверном
+expanded name, case из другого source file, другом report и неверном source
+hash. Нельзя реализовывать это prefix/substring match или пропуском одного
+case: exact full set и source/report binding обязательны.
