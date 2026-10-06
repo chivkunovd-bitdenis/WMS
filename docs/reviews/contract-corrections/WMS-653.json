@@ -1,13 +1,16 @@
 {
   "task": "WMS-653",
   "contract_commit": "9f131c42bec5266b90abb499c56060c0f3bd4b70",
-  "correction_commit": "1329e272b916062597bc94dc818682a08e96dd22",
+  "correction_commit": "2b5a86e4935fdf7dff74fa2b277bd7d18b4d0e0f",
   "files": [
     "backend/tests/test_wms653_scope_contract.py"
   ],
   "review": {
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "effort": "high",
-    "verdict": "PASS"
+    "verdict": "PASS",
+    "evidence_commit": "fb39a9081e0bf4889bad9e3e7f8bf289e9e9876c",
+    "evidence_path": "docs/evidence/WMS-653/scope-attribution-independent-review-20261006.md",
+    "source_review_commit": "30bbd17d899dfcc5407bce4a60dc923782179bc8"
   }
 }
