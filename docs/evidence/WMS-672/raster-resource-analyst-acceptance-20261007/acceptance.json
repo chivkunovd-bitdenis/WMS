@@ -1,0 +1,123 @@
+{
+  "role": "distinct replacement product analyst; original session unavailable; not contract/product author",
+  "model": "Sol6.1",
+  "effort": "high",
+  "base_sha": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+  "review_commit": "bfba7536566962de5c6bb16667b3ce80420d6302",
+  "software_acceptance": "PASS bounded native bulk-decode delta",
+  "product_reference_approval": {
+    "from": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+    "to": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+    "activated": false,
+    "scope_tests_preserved": 51
+  },
+  "runtime_actions": [],
+  "saved_run": {
+    "id": 37545334001,
+    "attempt": 1,
+    "head": "b3adc5d73c24f7dcbc15e40f22ed115e1a756b47",
+    "node_pass": 12,
+    "node_skip": 0,
+    "unchanged_entire_C5": "PASS",
+    "duration_s": 83.784
+  },
+  "whole_trace_dataLossOccurred": true,
+  "prepared_registry": {
+    "files": 229,
+    "suites": 21,
+    "case_ids": 1173,
+    "activated_final_source": false
+  },
+  "product_paths": [
+    {
+      "path": "frontend/src/utils/printBarcodeLabel.ts",
+      "sha256": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
+      "blob": "d804701f5c76aaede3c8f0c3e234f03bbbc0d07f"
+    },
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+      "sha256": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11",
+      "blob": "44af1117341f4ab291149c6aa801a0ecf6c43a6f"
+    }
+  ],
+  "saved_input_identities": [
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-independent-review-20261007/review.md",
+      "bytes": 9569,
+      "sha256": "3848081ef100224d2518be4eb7701cad8c0ee8f9119116608e6cfc4d1f7694ed"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-independent-review-20261007/source-checks.json",
+      "bytes": 60323,
+      "sha256": "56f12d9db02bc6974cd45e7abf463d1ae322a333681d4939bc9dee50fa259173"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-test-contract-20261007/contract.json",
+      "bytes": 4735,
+      "sha256": "698b60833a39d3ce073c5ba4fd6bcf6a4325028b5d90076d48f180a0e1b75e5c"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/manifest.json",
+      "bytes": 12198,
+      "sha256": "f566190d430b65a3b30eb538fb0af983cee8bf7783ce5db673cd80276e14d189"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/raw/672-native-errors.tap",
+      "bytes": 1871,
+      "sha256": "552326526d146fd9f858f587dac2a61bd2a9f5f65a1480ac24e3d66072a10ae8"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/raw/672-peer-drain.tap",
+      "bytes": 1054,
+      "sha256": "09173c0695f43fcaa6eedfb427398e0e239dd4066675c8ae576215e9763d346c"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/raw/672-raster-resource.tap",
+      "bytes": 1404,
+      "sha256": "d07adb66f82c7b6fd8ccc864852d8641727ca065ee9979a5c1e05c5c69a8c44f"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/raw/672-c5.tap",
+      "bytes": 614,
+      "sha256": "7d0bfb81440453de844c6c47c6d2d10d8dcbe8ec397fae628048159023fad38e"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-672/raster-resource-linux-comparison-20261007/positive-cohort-chain.md",
+      "bytes": 1900,
+      "sha256": "a8045e4af8f6194b5cd16994254481619aa6f5c2ae8283d0245756274b1482c2"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/reviews/wms672-functional-finish-20261006.md",
+      "bytes": 14189,
+      "sha256": "efaf0ce698e8cbbb930a4c2069e5094e03f1b2255761efd02d685808b2865f80"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-652/process-gates-20261006/installed-independent-anchor.json",
+      "bytes": 789,
+      "sha256": "fd1ae140a6a4f3859dab0e4121c07afd4c19e29ed99d205b0763b9dc744078e7"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-652/process-gates-20261006/actual-negative-canary.json",
+      "bytes": 9232,
+      "sha256": "aeed6645a9baea7c6f1d2a69b07d67910102ea6cb48d25c28ae2167ad638d01f"
+    },
+    {
+      "ref": "050544fb3bcb7aae87dbc0d60c5b6ae429b9acb8",
+      "path": "docs/evidence/WMS-652/process-gates-20261006/production-entry-protection.md",
+      "bytes": 3521,
+      "sha256": "2eb29128b0b95a22d4f0831beb5fab44579a61dd07f58dbb8939307137442342"
+    }
+  ]
+}

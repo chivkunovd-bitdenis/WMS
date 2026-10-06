@@ -1,0 +1,14 @@
+Checker immutable source: d61805978b3e7878d1056c99b4e6e0823edf49a5
+Scope: only edited WMS-672.md/WMS-652.md; missing sparse test files read from saved HEAD Git blobs. No test execution.
+WMS-672: current_errors=8, baseline_errors=0, introduced=8
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape.
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape.
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape.
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 blank message retains existing generic preparation error and zero external actions.
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 nonstring message retains existing generic preparation error and zero external actions.
+В frontend/tests-e2e/wms672-native-errors.test.mjs не найдено имя теста C5 no message retains existing generic preparation error and zero external actions.
+В frontend/tests-e2e/wms672-peer-drain.test.mjs не найдено имя теста C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness.
+В frontend/tests-e2e/wms672-peer-drain.test.mjs не найдено имя теста C5 synchronous decode throw drains held active peers before cleanup and retry readiness.
+WMS-652: current_errors=0, baseline_errors=0, introduced=0
+AGENTS/CLAUDE Git HEAD bytes equal: True
+Verdict: FAIL
