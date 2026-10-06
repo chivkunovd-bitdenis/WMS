@@ -409,6 +409,23 @@ describe('WMS-657 · перенос размера в листе подбора 
       expect(bodyRow).toContain(value)
     }
     expect(bodyRow).toContain('src="data:image/png;base64,AA=="')
+
+    const match = (yMin: number, yMax: number): PdfTextMatch => ({
+      pageIndex: 0,
+      words: [{ pageIndex: 0, text: 'control', xMin: 0, xMax: 1, yMin, yMax }],
+    })
+    const productName = match(100, 108)
+    const preservedIdentifier = match(122, 130)
+    const neighboringCell = match(112, 118)
+    // The former name-only anchor is intentionally RED: it loses the lower
+    // identifier line that remains under Product after Article moved out.
+    expect(() => assertSamePdfRow([productName], [{ label: 'соседняя ячейка', match: neighboringCell }])).toThrow(/смещено в другую строку/)
+    expect(() => assertSamePdfRow([productName, preservedIdentifier], [{ label: 'соседняя ячейка', match: neighboringCell }])).not.toThrow()
+    expect(() => assertSamePdfRow([productName, preservedIdentifier], [{ label: 'реально смещённая ячейка', match: match(140, 148) }])).toThrow(/смещено в другую строку/)
+    expect(() => pdfTable({ pages: [] }, {
+      tableBounds: { left: 0, right: 100 },
+      columnBounds: Array.from({ length: 11 }, (_, index) => ({ left: index, right: index + 1 })),
+    } as GeometryReport)).toThrow(/двенадцати колонок/)
   })
 
   it('C3: короткий размер остаётся одной строкой, отсутствие размера — прочерком', () => {
@@ -480,7 +497,10 @@ describe('WMS-657 · перенос размера в листе подбора 
       { label: 'подобрано', match: pdfText(table, 10, '0/1') },
       { label: 'маркировка', match: pdfText(table, 11, 'PDF-MARKING-WMS-657') },
     ]
-    assertSamePdfRow([name], cells)
+    // Identifier remains in the Product cell after R8 moves only the article.
+    // Its wrapped block is part of the row anchor, as it was before R8.
+    const identifier = pdfText(table, 2, 'PDF-IDENTIFIER-WMS-657')
+    assertSamePdfRow([name, identifier], cells)
 
     const lostFragment = size.words.at(-1)!
     const textLossCopy: PdfTextReport = {
@@ -544,6 +564,10 @@ describe('WMS-657 · перенос размера в листе подбора 
     for (const [index] of rows.entries()) {
       const rowNumber = index + 1
       const name = pdfText(table, 2, `ROW-${String(rowNumber).padStart(3, '0')}`)
+      const identifierValue = index === 16
+        ? 'ДЛИННЫЙ-ИДЕНТИФИКАТОР-СОСЕДНЕЙ-КОЛОНКИ-WMS-657-123456789'
+        : `ID-${rowNumber}`
+      const identifier = pdfText(table, 2, identifierValue)
       const article = pdfText(table, 3, `ARTICLE-${rowNumber}`)
       const color = pdfText(table, 4, `COLOR-${String(rowNumber).padStart(3, '0')}`)
       const expectedSize = index === 1 ? '46' : index === 2 ? '—' : index === 0 || index === 16 || index === 33 ? 'Универсальный' : `S${String(rowNumber).padStart(2, '0')}`
@@ -551,7 +575,7 @@ describe('WMS-657 · перенос размера в листе подбора 
       const location = index === 16
         ? 'ДЛИННЫЙ-ПУТЬ-ЯЧЕЙКИ-И-ТАРЫ-WMS-657-123456789: 1'
         : `A-${rowNumber}: 1`
-      assertSamePdfRow([name], [
+      assertSamePdfRow([name, identifier], [
         { label: `номер позиции строки ${rowNumber}`, match: pdfWord(table, 0, String(rowNumber)) },
         { label: `фото строки ${rowNumber}`, match: pdfText(table, 1, '—', index) },
         { label: `артикул строки ${rowNumber}`, match: article },
