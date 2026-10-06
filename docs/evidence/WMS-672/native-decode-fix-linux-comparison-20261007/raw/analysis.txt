@@ -1,0 +1,137 @@
+[
+  {
+    "fixture": "fixture-1",
+    "file": "page-0.json",
+    "started": 460,
+    "decoded": 444,
+    "transfers": 1,
+    "iframes": 1,
+    "errors": [
+      {
+        "kind": "promise-catch",
+        "time": 8735,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 150",
+        "localError": true,
+        "parentError": true,
+        "started": 160,
+        "decoded": 144,
+        "decodeAt": 150,
+        "frames": 18
+      },
+      {
+        "kind": "screen-catch",
+        "time": 8736.599999999991,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 150",
+        "localError": true,
+        "parentError": true,
+        "started": 160,
+        "decoded": 144,
+        "decodeAt": 150,
+        "frames": 18
+      }
+    ]
+  },
+  {
+    "fixture": "fixture-1",
+    "file": "page-1.json",
+    "iframes": 0,
+    "errors": []
+  },
+  {
+    "fixture": "fixture-2",
+    "file": "page-0.json",
+    "started": 540,
+    "decoded": 518,
+    "alert": "The source image cannot be decoded.",
+    "transfers": 0,
+    "iframes": 0,
+    "errors": [
+      {
+        "kind": "promise-catch",
+        "time": 8803.899999999994,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 299",
+        "localError": true,
+        "parentError": true,
+        "started": 300,
+        "decoded": 288,
+        "decodeAt": 299,
+        "frames": 36
+      },
+      {
+        "kind": "screen-catch",
+        "time": 8805.700000000012,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 299",
+        "localError": true,
+        "parentError": true,
+        "started": 300,
+        "decoded": 288,
+        "decodeAt": 299,
+        "frames": 36
+      },
+      {
+        "kind": "native-reject",
+        "time": 2027.6000000000058,
+        "realm": "iframe",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": true,
+        "parentError": false,
+        "started": 540,
+        "decoded": 518,
+        "decodeAt": null,
+        "frames": 100,
+        "index": 531,
+        "complete": true,
+        "width": 836,
+        "height": 356,
+        "png": {
+          "valid": true,
+          "width": 836,
+          "height": 356,
+          "bytes": 7641
+        }
+      },
+      {
+        "kind": "promise-catch",
+        "time": 14404.399999999994,
+        "realm": "parent",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": false,
+        "parentError": false,
+        "started": 540,
+        "decoded": 518,
+        "decodeAt": null,
+        "frames": 100
+      },
+      {
+        "kind": "screen-catch",
+        "time": 14405.899999999994,
+        "realm": "parent",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": false,
+        "parentError": false,
+        "started": 540,
+        "decoded": 518,
+        "decodeAt": null,
+        "frames": 100
+      }
+    ]
+  }
+]
