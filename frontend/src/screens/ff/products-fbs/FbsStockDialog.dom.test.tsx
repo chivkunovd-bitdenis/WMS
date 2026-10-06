@@ -72,6 +72,7 @@ function deferred<T>() {
 function fakeSession(initial: FbsStockDialogData) {
   const putCalls: Array<{ marketplace: string; externalId: string; body: unknown }> = []
   const saveCalls: Array<Record<string, unknown>> = []
+  const saveProductIds: string[][] = []
   let nextPut: (call: { marketplace: string; externalId: string; body: { wms_warehouse_id?: string; served?: boolean } }) => Promise<BindingOutcome> | BindingOutcome =
     () => ({ ok: true, data: fresh(initial) })
   let nextSave: (body: Record<string, unknown>) => Promise<SaveOutcome> | SaveOutcome = () => ({ kind: 'saved' })
@@ -83,13 +84,14 @@ function fakeSession(initial: FbsStockDialogData) {
       putCalls.push({ marketplace, externalId, body })
       return nextPut({ marketplace, externalId, body })
     },
-    saveRule: async (_ids, byBinding) => {
+    saveRule: async (ids, byBinding) => {
+      saveProductIds.push(ids)
       saveCalls.push(byBinding)
       return nextSave(byBinding)
     },
   }
   return {
-    session, putCalls, saveCalls,
+    session, putCalls, saveCalls, saveProductIds,
     onPut: (fn: typeof nextPut) => { nextPut = fn },
     onSave: (fn: typeof nextSave) => { nextSave = fn },
     onReread: (fn: typeof rereadAnswer) => { rereadAnswer = fn },
@@ -266,7 +268,7 @@ describe('WMS-469 F9: смена склада ФФ', () => {
     fake.onPut(() => ({ ok: false, message: 'Ошибка 500', data: fresh(initial) }))
     const { element } = renderContainer(fake)
     await mount(element)
-    await click('fbs-stock-served-b-wb')
+    await select('fbs-stock-bind-b-wb', B)
     await tick()
     expect($('fbs-stock-error').textContent).toBe('Ошибка 500')
     // Второе — смена склада на B со свободными 100, ответ отложен: очистка
@@ -314,18 +316,13 @@ describe('WMS-469 F5: перечитывание после сбоя не уда
     // Связь восстановилась: перечитывание показывает B.
     const moved = data([{ ...wb, wmsWarehouseId: B, wmsWarehouseName: 'Склад B' }], [product({ 'b-wb': { free: 100, value: 50 } })])
     fake.onReread(() => moved)
-    fake.onPut(() => ({ ok: true, data: { ...moved, bindings: [{ ...moved.bindings[0]!, served: false }] } }))
-    await click('fbs-stock-served-b-wb')
-    await tick()
-    // Выключение приёма заказов — одно поле, без склада; окно перед этим перечитало и показывает B.
-    expect(fake.putCalls[1]).toMatchObject({ body: { served: false } })
-    expect(fake.putCalls[1]!.body).not.toHaveProperty('wms_warehouse_id')
-    expect($<HTMLSelectElement>('fbs-stock-bind-b-wb').value).toBe(B)
-    // Включение приёма — вместе со складом из свежего состояния (B, не A).
     fake.onPut(() => ({ ok: true, data: moved }))
-    await click('fbs-stock-served-b-wb')
+    await select('fbs-stock-bind-b-wb', B)
     await tick()
-    expect(fake.putCalls[2]!.body).toEqual({ served: true, wms_warehouse_id: B })
+    // Окно сначала перечитало фактический B и уже его отправило в повторном действии.
+    expect(fake.putCalls[1]).toMatchObject({ body: { wms_warehouse_id: B } })
+    expect(fake.putCalls[1]!.body).not.toHaveProperty('served')
+    expect($<HTMLSelectElement>('fbs-stock-bind-b-wb').value).toBe(B)
   })
 
   it('если перечитать снова не удалось — действие не выполняется, причина в окне', async () => {
@@ -337,52 +334,35 @@ describe('WMS-469 F5: перечитывание после сбоя не уда
     await select('fbs-stock-bind-b-wb', B)
     await tick()
     fake.onReread(() => null)
-    await click('fbs-stock-served-b-wb')
+    await select('fbs-stock-bind-b-wb', B)
     await tick()
     expect(fake.putCalls).toHaveLength(1)
     expect($('fbs-stock-error').textContent).toContain('не удалось перечитать')
   })
 })
 
-describe('WMS-469 F10: отметки после частичной обрезки', () => {
-  it('черновик блока, не входившего в запрос, остаётся изменённым и уходит при следующем сохранении', async () => {
-    const both = (ozonServed: boolean, wbValue = 50) =>
-      data([wb, { ...ozon, served: ozonServed }], [product({ 'b-wb': { free: 100, value: wbValue }, 'b-ozon': { free: 100, value: 50 } })])
-    const fake = fakeSession(both(true))
-    const { element, onClose } = renderContainer(fake)
+describe('WMS-666: точная область товар × склад', () => {
+  it('C1/C2: served=false не скрывает строку, а сохранение WB не трогает binding, Ozon и другие товары', async () => {
+    const initial = data(
+      [{ ...wb, served: false }, ozon],
+      [product({ 'b-wb': { free: 100, value: 50 }, 'b-ozon': { free: 100, value: 40 } })],
+    )
+    const fake = fakeSession(initial)
+    const { element } = renderContainer(fake)
     await mount(element)
-    // Ozon: 50 → 40, затем приём заказов снят — строка скрыта, черновик остаётся.
-    await type('fbs-stock-units-b-ozon', '40')
-    fake.onPut(() => ({ ok: true, data: both(false) }))
-    await click('fbs-stock-served-b-ozon')
-    await tick()
-    expect(maybe('fbs-stock-row-b-ozon')).toBeNull()
-    // WB: 50 → 80, сохранение; сервер обрезал до 60.
-    await type('fbs-stock-units-b-wb', '80')
-    fake.onSave(() => ({
-      kind: 'clamped',
-      items: [{ product_id: 'p', by_binding: {
-        'b-wb': { publish: true, mode: 'units', value: 60, marketplace: 'wb', external_warehouse_id: '501001', wms_warehouse_id: A, served: true, applicable: true, on_hand: 60, reserved: 0, free_stock: 60, published_now: 60 },
-        'b-ozon': { publish: true, mode: 'units', value: 50, marketplace: 'ozon', external_warehouse_id: '777001', wms_warehouse_id: A, served: false, applicable: true, on_hand: 60, reserved: 0, free_stock: 60, published_now: 50 },
-      } }],
-      clamps: { 'b-wb': { requested_value: 80, saved_value: 60, limiting_product_id: 'p', limiting_product_name: 'Товар p' } },
-    }))
-    await click('fbs-stock-save')
-    await tick()
-    expect(fake.saveCalls).toEqual([{ 'b-wb': { publish: true, mode: 'units', value: 80, units_configured: true } }])
-    expect(onClose).not.toHaveBeenCalled()
-    expect(input('fbs-stock-units-b-wb').value).toBe('60')
-    expect($('fbs-stock-cap-note-b-wb').textContent).toBe('товара «Товар p» всего 60 штук')
-    // Возврат приёма заказов Ozon: в поле его несохранённые 40, и они уходят.
-    fake.onPut(() => ({ ok: true, data: both(true, 60) }))
-    await click('fbs-stock-served-b-ozon')
-    await tick()
+
+    expect(maybe('fbs-stock-served-b-wb')).toBeNull()
+    expect(maybe('fbs-stock-row-b-wb')).not.toBeNull()
     expect(input('fbs-stock-units-b-ozon').value).toBe('40')
-    fake.onSave(() => ({ kind: 'saved' }))
+
+    await type('fbs-stock-units-b-wb', '30')
     await click('fbs-stock-save')
-    await tick()
-    expect(fake.saveCalls[1]).toEqual({ 'b-ozon': { publish: true, mode: 'units', value: 40, units_configured: true } })
-    expect(onClose).toHaveBeenCalledTimes(1)
+
+    expect(fake.saveProductIds).toEqual([['p']])
+    expect(fake.saveCalls).toEqual([{
+      'b-wb': { publish: true, mode: 'units', value: 30, units_configured: true },
+    }])
+    expect(fake.putCalls).toHaveLength(0)
   })
 })
 
@@ -491,22 +471,4 @@ describe('WMS-490 D6: встроенный режим (вкладка «Зада
     footerHost.remove()
   })
 
-  it('ревью №1 F4: немедленная запись (без «Сохранить»/«Отмена») сообщает onChanged сразу, а не только при закрытии', async () => {
-    // Карточка товара закрывается своей общей «Закрыть»/Escape/фоном, которые
-    // не проходят через close() контейнера (см. ProductCardDialog.tsx) — если
-    // бы onChanged срабатывал только внутри close(), запись «приём заказов»
-    // без последующего «Сохранить»/«Отмена» терялась бы для перечитывания
-    // каталога. embedded-режим обязан сообщить о ней сразу же.
-    const fake = fakeSession(data([wb], [product({ 'b-wb': { free: 100, value: 10 } })]))
-    const footerHost = document.createElement('div')
-    document.body.appendChild(footerHost)
-    const onChanged = vi.fn()
-    const { element, onClose } = renderContainer(fake, { embedded: true, footerSlotEl: footerHost, onChanged })
-    await mount(element)
-    expect(onChanged).not.toHaveBeenCalled()
-    await click('fbs-stock-served-b-wb')
-    expect(onChanged).toHaveBeenCalledTimes(1)
-    expect(onClose).not.toHaveBeenCalled()
-    footerHost.remove()
-  })
 })

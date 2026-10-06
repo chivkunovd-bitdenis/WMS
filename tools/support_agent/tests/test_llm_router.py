@@ -49,22 +49,21 @@ def router(tmp_path: Path, script: ExecScript) -> tuple[LlmRouter, Store]:
     return LlmRouter(cfg, store, exec_fn=script), store
 
 
-def test_roles_use_cheap_and_strong_models_without_api_keys(tmp_path: Path) -> None:
+def test_roles_use_sol61_without_api_keys(tmp_path: Path) -> None:
     script = ExecScript()
     llm, _ = router(tmp_path, script)
     llm.ask("filter", "x")
     llm.ask("routine", "x", mode="write", cwd=str(tmp_path))
     llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
-    models = [c[c.index("--model") + 1] for c in script.calls]
-    assert models == ["haiku", "sonnet", "opus"]
+    models = [c[c.index("-m") + 1] for c in script.calls]
+    assert models == ["gpt-6.1-sol"] * 3
     flat = " ".join(" ".join(c) for c in script.calls).lower()
     assert "api-key" not in flat and "api_key" not in flat
-    assert "--tools" in script.calls[0]  # фильтр: без инструментов
-    assert "bypassPermissions" not in " ".join(script.calls[1]) and "dontAsk" in script.calls[2]
-    assert "Edit" in script.calls[2][script.calls[2].index("--disallowedTools"):]  # аналитик не пишет
+    assert "bypassPermissions" not in " ".join(script.calls[1])
+    assert script.calls[2][script.calls[2].index("-s") + 1] == "read-only"
 
 
-@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("cli", ["codex"])
 @pytest.mark.parametrize("role", ["filter", "routine", "analyst", "review", "frontend", "mockup"])
 def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
     tmp_path: Path, cli: str, role: str,
@@ -86,12 +85,12 @@ def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
         assert "обычную форму или расположение действия выбирай сам" in delivered
 
 
-def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_path: Path) -> None:
+def test_limit_waits_for_codex_and_recovers_without_fallback(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     script.claude_limit = True
     result = llm.ask("analyst", "x", mode="readonly")
-    assert result.cli == "codex" and llm.cooling("claude")
+    assert result.cli == "codex" and not llm.cooling("claude")
     before = len(script.calls)
     llm.ask("analyst", "y", mode="readonly")
     assert all("claude" not in c[:6] for c in script.full[before:])  # claude в паузе: не дёргаем
@@ -102,12 +101,12 @@ def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_
     with pytest.raises(LlmUnavailable):
         llm.ask("analyst", "w", mode="readonly")  # оба в паузе: даже не вызываем
     assert llm.available_clis() == []
-    store.kv_set("cooldown:claude", time.time() - 1)
-    script.claude_limit = False
-    assert llm.ask("analyst", "back", mode="readonly").cli == "claude"
+    store.kv_set("cooldown:codex", time.time() - 1)
+    script.codex_limit = False
+    assert llm.ask("analyst", "back", mode="readonly").cli == "codex"
 
 
-@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("cli", ["codex"])
 def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_restart(
     tmp_path: Path, cli: str,
 ) -> None:
@@ -147,7 +146,7 @@ def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) ->
     store.kv_set("cooldown:claude", time.time() + 999)
     llm.ask("review", "x", mode="readonly")
     argv = script.calls[-1]
-    assert argv[argv.index("-m") + 1] == "gpt-6-astra"
+    assert argv[argv.index("-m") + 1] == "gpt-6.1-sol"
     assert 'model_reasoning_effort="high"' in argv
     for bad in ("xhigh", "max", "ultra", None):
         with pytest.raises(ValueError):
@@ -166,8 +165,8 @@ def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
     llm, _ = router(tmp_path, script)
     llm.ask("review", "x", mode="readonly", exclude_cli="claude")
     assert script.calls[-1][0] == "codex"
-    llm.ask("review", "x", mode="readonly", exclude_cli="codex")
-    assert script.calls[-1][0] == "claude"
+    with pytest.raises(LlmUnavailable):
+        llm.ask("review", "x", mode="readonly", exclude_cli="codex")
 
 
 def test_allowed_roles_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
@@ -178,43 +177,40 @@ def test_allowed_roles_fall_back_to_sol_automatically_never_astra(tmp_path: Path
         llm.ask(role, "x", mode="write" if role in ("frontend", "mockup", "routine") else "text",
                 cwd=str(tmp_path))
     models = [c[c.index("-m") + 1] for c in script.calls]
-    assert models == ["gpt-5.6-sol"] * 5  # без вопроса владельцу и без Astra
+    assert models == ["gpt-6.1-sol"] * 5
     assert llm.cfg.llm.models["claude"]["frontend"] == "sonnet"
     assert llm.cfg.llm.models["claude"]["mockup"] == "sonnet"
-    assert llm.cfg.llm.models["codex"]["review"] == "gpt-6-astra"
+    assert llm.cfg.llm.models["codex"]["review"] == "gpt-6.1-sol"
     assert {r for r, m in ((r, llm.model_for("codex", r)) for r in ("filter", "routine", "analyst",
-            "frontend", "mockup", "review")) if m and "astra" in m} == {"review"}
+            "frontend", "mockup", "review")) if m and "astra" in m} == set()
 
 
-def test_astra_configured_for_a_non_review_role_is_refused(tmp_path: Path) -> None:
+def test_stale_astra_config_cannot_override_sol61(tmp_path: Path) -> None:
     script = ExecScript()
     llm, _ = router(tmp_path, script)
     llm.cfg.llm.models["codex"]["analyst"] = "gpt-6-astra"
-    with pytest.raises(ValueError, match="reviewer-only"):
-        llm.model_for("codex", "analyst")
+    assert llm.model_for("codex", "analyst") == "gpt-6.1-sol"
 
 
-def test_frontend_models_and_astra_review_are_fixed(tmp_path: Path) -> None:
+def test_frontend_models_and_review_are_fixed(tmp_path: Path) -> None:
     script = ExecScript()
     llm, _ = router(tmp_path, script)
-    assert llm.model_for("claude", "frontend") == "sonnet"
-    assert llm.model_for("codex", "frontend") == "gpt-5.6-sol"
+    assert llm.model_for("claude", "frontend") is None
+    assert llm.model_for("codex", "frontend") == "gpt-6.1-sol"
     llm.cfg.llm.cli_order = ["codex", "claude"]
     assert llm.candidates("frontend", None, None) == [
-        ("claude", "sonnet"), ("codex", "gpt-5.6-sol")]
+        ("codex", "gpt-6.1-sol")]
     llm.cfg.llm.codex_effort = "xhigh"
     assert llm.effort_for("codex", "review") == "high"
     llm.cfg.llm.models["codex"]["review"] = "gpt-5.6-sol"
-    with pytest.raises(ValueError, match="gpt-6-astra"):
-        llm.model_for("codex", "review")
+    assert llm.model_for("codex", "review") == "gpt-6.1-sol"
 
 
 def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
     script = ExecScript()
     llm, _ = router(tmp_path, script)
     wt = str(tmp_path / "wt")
-    llm.ask("routine", "x", mode="write", cwd=wt)
-    argv = script.calls[-1]
+    argv = llm.build_claude("sonnet", "write", None, None, wt)
     assert argv[argv.index("--permission-mode") + 1] == "dontAsk"
     assert "bypassPermissions" not in argv and "--dangerously-skip-permissions" not in argv
     allowed = argv[argv.index("--allowedTools") + 1: argv.index("--disallowedTools")]
@@ -342,9 +338,8 @@ def test_codex_readonly_without_seatbelt_still_has_no_shell(tmp_path: Path) -> N
 def test_claude_write_and_readonly_get_builtin_sandbox_and_secret_read_denies(tmp_path: Path) -> None:
     script = ExecScript()
     llm, _ = router(tmp_path, script)
-    llm.ask("routine", "x", mode="write", cwd=str(tmp_path))
-    llm.ask("analyst", "x", mode="readonly", cwd=str(tmp_path))
-    for argv in script.full[-2:]:
+    for mode in ("write", "readonly"):
+        argv = llm.build_claude("sonnet", mode, None, None, str(tmp_path))
         settings = json.loads(argv[argv.index("--settings") + 1])["sandbox"]
         assert settings["enabled"] is True and settings["allowUnsandboxedCommands"] is False
         deny = settings["filesystem"]["denyRead"]
@@ -384,7 +379,7 @@ def test_real_codex_json_stream_gives_session_id() -> None:
     assert _codex_session_id(live) == "01a0fd43-39f6-70c3-9213-907ea87ac473"
 
 
-@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("cli", ["codex"])
 def test_resumed_analyst_receives_current_rules_history_and_state_after_restart(
     tmp_path: Path, cli: str,
 ) -> None:
@@ -437,7 +432,8 @@ def test_ask_json_retries_once_and_calls_are_logged(tmp_path: Path) -> None:
     answers = iter(["не json", '```json\n{"a": 1}\n```'])
 
     def fake(argv: list[str], cwd: str | None, timeout: int, stdin: str | None) -> ExecResult:
-        return ExecResult(0, json.dumps({"result": next(answers), "session_id": "s", "is_error": False}), "")
+        Path(argv[argv.index("-o") + 1]).write_text(next(answers))
+        return ExecResult(0, "", "")
 
     cfg = make_config(tmp_path)
     store = Store(cfg.db_path)
@@ -445,7 +441,7 @@ def test_ask_json_retries_once_and_calls_are_logged(tmp_path: Path) -> None:
     data, _ = llm.ask_json("filter", "q")
     assert data == {"a": 1}
     rows = store.rows("SELECT cli, model, ok FROM llm_calls")
-    assert [(r["cli"], r["model"], r["ok"]) for r in rows] == [("claude", "haiku", 1)] * 2
+    assert [(r["cli"], r["model"], r["ok"]) for r in rows] == [("codex", "gpt-6.1-sol", 1)] * 2
 
 
 def test_extract_json_handles_nested_and_noise() -> None:
@@ -464,5 +460,5 @@ def test_config_example_loads() -> None:
     from support_agent.config import config_from_dict
 
     cfg = config_from_dict(json.loads(Path("config.example.json").read_text(encoding="utf-8")))
-    assert cfg.llm.models["claude"]["filter"] == "haiku" and cfg.llm.codex_effort == "high"
+    assert cfg.llm.models["codex"]["filter"] == "gpt-6.1-sol" and cfg.llm.codex_effort == "high"
     assert cfg.telegram.chats[-1000000000001].role == "client" and cfg.secrets() == []

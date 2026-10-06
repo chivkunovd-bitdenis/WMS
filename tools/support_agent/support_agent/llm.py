@@ -26,6 +26,11 @@ from .store import Store
 
 log = logging.getLogger(__name__)
 
+# Direct owner decision, WMS-676. Stale configuration/job preferences must not
+# send the next stage back to a previous model or provider.
+WMS_MODEL = "gpt-6.1-sol"
+WMS_PROVIDER = "codex"
+
 ASTRA_ALLOWED_EFFORT = ("minimal", "low", "medium", "high")
 LIMIT_PATTERNS = re.compile(
     r"usage limit|rate.?limit|limit reached|hit your limit|quota|too many requests|"
@@ -214,8 +219,7 @@ class LlmRouter:
 
         if not session_key:
             raise ValueError("agent session_key is required")
-        model = model or self.cfg.agent.owner_model
-        provider = provider or self.cfg.agent.owner_provider
+        model, provider = WMS_MODEL, WMS_PROVIDER
         chosen_effort = effort or self.cfg.llm.codex_effort
         if provider not in ("codex", "claude"):
             raise LlmUnavailable(f"agent provider {provider!r} is not configured")
@@ -257,8 +261,13 @@ class LlmRouter:
                 effort=effort, progress_callback=progress_callback,
             )
         signature = agent_capability_signature(tools, work_cwd)
-        key = f"agent_session:{session_key}:{provider}:{model}:{mode}"
-        saved = self.store.kv_get(key, {})
+        prefix = f"agent_session:{session_key}:"
+        key = f"{prefix}shared:{mode}"
+        self._migrate_background(key, prefix, mode)
+        saved = self.store.kv_get(key)
+        if saved is None:
+            previous = self._previous_session_values(prefix, mode)
+            saved = previous[-1] if previous else {}
         state = saved if isinstance(saved, dict) else {}
         handoff = str(state.get("handoff") or "")
         original_prompt = prompt
@@ -396,20 +405,10 @@ class LlmRouter:
         return float(self.store.kv_get(f"cooldown:{cli}", 0)) > time.time()
 
     def available_clis(self) -> list[str]:
-        return [c for c in self.cfg.llm.cli_order if not self.cooling(c)]
+        return [] if self.cooling(WMS_PROVIDER) else [WMS_PROVIDER]
 
     def model_for(self, cli: str, role: str) -> str | None:
-        model = self.cfg.llm.models.get(cli, {}).get(role)
-        if role in ("frontend", "mockup") and model:
-            required = {"claude": "sonnet", "codex": "gpt-5.6-sol"}.get(cli)
-            if model != required:
-                raise ValueError(f"{role} on {cli} must use {required}, got {model!r}")
-        if role == "review" and cli == "codex" and model != "gpt-6-astra":
-            raise ValueError(f"Codex review must use gpt-6-astra, got {model!r}")
-        if model and "astra" in model.lower() and role != "review":
-            # Astra — только ревьюер (решение владельца); ошибка в конфиге не должна её запустить.
-            raise ValueError(f"Astra is reviewer-only, but configured for role {role!r}")
-        return model
+        return WMS_MODEL if cli == WMS_PROVIDER else None
 
     def effort_for(self, cli: str, role: str) -> str | None:
         if cli != "codex":
@@ -705,7 +704,10 @@ class LlmRouter:
         for cli, model in options:
             sessions = self._sessions(ticket_id, session_key)
             existing = sessions.get(cli) if cli != "codex" else None
-            history_key = f"role:{ticket_id}:{session_key}:codex:{model}:{mode}" if session_key else ""
+            prefix = f"role:{ticket_id}:{session_key}:"
+            history_key = f"{prefix}shared:{mode}" if session_key else ""
+            if history_key:
+                self._migrate_background(history_key, prefix, mode)
             call_prompt = self._background_prompt(history_key, full) if cli == "codex" else full
             for resume in ([True, False] if existing else [False]):
                 db_log = self._new_db_log(role, mode, db_role)
@@ -740,6 +742,31 @@ class LlmRouter:
                     self._save_session(ticket_id, session_key, cli, result.session_id)
                 return result
         raise LlmUnavailable(last_error or "no_cli_available")
+
+    def _previous_session_values(self, prefix: str, mode: str) -> list[Any]:
+        suffix = f":{mode}"
+        # substr uses literal boundaries: user/session keys containing SQL wildcard
+        # characters must not pull a different task or role into the handoff.
+        rows = self.store.rows(
+            "SELECT key,value FROM kv WHERE substr(key,1,?)=? AND substr(key,-?)=? ORDER BY rowid",
+            (len(prefix), prefix, len(suffix), suffix),
+        )
+        values = []
+        for row in rows:
+            parts = row["key"][len(prefix):].split(":")
+            if len(parts) == 3 and parts[0] in ("codex", "claude"):
+                values.append(json.loads(row["value"]))
+        return values
+
+    def _migrate_background(self, key: str, prefix: str, mode: str) -> None:
+        target = f"background_context:{key}"
+        with self.store.transaction():
+            if self.store.kv_get(target) is not None:
+                return
+            histories = self._previous_session_values(f"background_context:{prefix}", mode)
+            history = [exchange for previous in histories if isinstance(previous, list)
+                       for exchange in previous]
+            self.store.kv_set(target, history)
 
     def _background_prompt(self, key: str, prompt: str, *, handoff: str = "") -> str:
         if not key:

@@ -11,6 +11,7 @@ from sqlalchemy.orm import selectinload
 from app.models.document_event import (
     DOCUMENT_TYPE_INBOUND_INTAKE,
     EVENT_TARE_LINE_QTY_CHANGED,
+    DocumentEvent,
 )
 from app.models.inbound_intake import (
     InboundIntakeBox,
@@ -87,6 +88,92 @@ async def create_open_box(
             session.expunge(box)
             continue
     raise InboundIntakeBoxError("barcode_collision")
+
+
+async def create_box_batch(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    request_id: uuid.UUID,
+    *,
+    quantity: int,
+    mutation_id: uuid.UUID | None = None,
+) -> list[InboundIntakeBox]:
+    """Create one atomic, retry-safe batch without changing box numbering or barcodes."""
+    if quantity < 1 or quantity > 1000:
+        raise InboundIntakeBoxError("invalid_qty")
+
+    req = await _get_request_for_intake(session, tenant_id, request_id)
+    existing_receipt = None
+    if mutation_id is not None:
+        existing_receipt = await session.scalar(
+            select(DocumentEvent).where(
+                DocumentEvent.tenant_id == tenant_id,
+                DocumentEvent.idempotency_key
+                == f"inbound:box_batch_create:{mutation_id}",
+            )
+        )
+    if existing_receipt is not None:
+        stored_payload = existing_receipt.payload_json
+        if (
+            stored_payload.get("request_id") != str(request_id)
+            or stored_payload.get("quantity") != quantity
+        ):
+            raise InboundIntakeBoxError("mutation_payload_mismatch")
+        try:
+            box_ids = [uuid.UUID(str(value)) for value in stored_payload["box_ids"]]
+        except (KeyError, TypeError, ValueError):
+            raise InboundIntakeBoxError("mutation_result_deleted") from None
+    else:
+        box_ids = [uuid.uuid4() for _ in range(quantity)]
+    payload: dict[str, object] = {
+        "request_id": str(request_id),
+        "quantity": quantity,
+        "box_ids": [str(box_id) for box_id in box_ids],
+    }
+    replay = await _claim_box_mutation(
+        session,
+        tenant_id,
+        request_id,
+        mutation_id=mutation_id,
+        action="box_batch_create",
+        payload=payload,
+    )
+    if replay:
+        boxes = await _load_boxes(session, box_ids)
+        if len(boxes) != quantity:
+            raise InboundIntakeBoxError("mutation_result_deleted")
+        return boxes
+
+    next_number = await _next_box_number(session, req.id)
+    created: list[InboundIntakeBox] = []
+    for offset, box_id in enumerate(box_ids):
+        for _ in range(8):
+            box = InboundIntakeBox(
+                id=box_id,
+                tenant_id=tenant_id,
+                request_id=req.id,
+                box_number=next_number + offset,
+                internal_barcode=_new_barcode(),
+            )
+            try:
+                async with session.begin_nested():
+                    session.add(box)
+                    await session.flush()
+            except IntegrityError:
+                continue
+            await intake_svc.record_container_mutation(
+                session,
+                box,
+                before=None,
+                after=intake_svc.container_audit_fields(box),
+            )
+            created.append(box)
+            break
+        else:
+            raise InboundIntakeBoxError("barcode_collision")
+
+    await session.commit()
+    return await _load_boxes(session, box_ids)
 
 
 async def create_boxes_for_request(
@@ -224,7 +311,10 @@ async def update_box_free_text(
 
 def _intake_editable(req: InboundIntakeRequest) -> bool:
     return req.status in INTAKE_STATUSES or (
-        req.status == intake_svc.STATUS_DRAFT and intake_svc.is_ff_inbound(req)
+        req.status == intake_svc.STATUS_DRAFT
+        and req.created_by_seller_id is None
+        and req.operation_type
+        in (intake_svc.OPERATION_TYPE_INBOUND, intake_svc.OPERATION_TYPE_RETURN)
     )
 
 
@@ -741,3 +831,19 @@ async def _load_box(session: AsyncSession, box_id: uuid.UUID) -> InboundIntakeBo
     res = await session.execute(stmt)
     box = res.scalar_one()
     return box
+
+
+async def _load_boxes(
+    session: AsyncSession, box_ids: list[uuid.UUID]
+) -> list[InboundIntakeBox]:
+    if not box_ids:
+        return []
+    stmt = (
+        select(InboundIntakeBox)
+        .where(InboundIntakeBox.id.in_(box_ids))
+        .options(
+            selectinload(InboundIntakeBox.lines).selectinload(InboundIntakeBoxLine.product),
+        )
+        .order_by(InboundIntakeBox.box_number.asc())
+    )
+    return list((await session.scalars(stmt)).unique().all())

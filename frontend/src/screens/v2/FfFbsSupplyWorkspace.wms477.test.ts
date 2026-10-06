@@ -20,6 +20,9 @@ let runSource = ''
 let button: ts.JsxElement | null = null
 const helpers: Record<string, string> = {}
 function visit(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name) {
+    helpers[node.name.getText(file)] = node.getText(file)
+  }
   if (ts.isCallExpression(node) && node.expression.getText(file) === 'useEffect') {
     const effectDeps = node.arguments[1]?.getText(file) ?? ''
     if (node.getText(file).includes('setInterval')) {
@@ -52,7 +55,8 @@ if (!resetEffect) throw new Error('Supply opening reset effect not found')
 if (!runSource) throw new Error('Production run() helper not found')
 if (!button) throw new Error('«Проверить в WB» button not found')
 for (const name of ['beginWorkspaceWrite', 'refreshAfterLostRace', 'performSkipHonestSign',
-  'addOrdersToCurrentSupply', 'load', 'checkMarkingsInWb']) {
+  'addOrdersToCurrentSupply', 'load', 'checkMarkingsInWb', 'normalizeDeliveryError',
+  'deliveryErrorFromCause']) {
   if (!helpers[name]) throw new Error(`Production ${name} helper not found`)
 }
 // У кода экрана описаны типы, поэтому он сначала переводится в JS: исполняется тот
@@ -60,6 +64,17 @@ for (const name of ['beginWorkspaceWrite', 'refreshAfterLostRace', 'performSkipH
 const asJs = (name: string, code: string) => ts.transpileModule(`const ${name} = ${code}`, {
   compilerOptions: { target: ts.ScriptTarget.ESNext },
 }).outputText
+
+const normalizeDeliveryError = (new Function(
+  `${asJs('normalizeDeliveryError', helpers.normalizeDeliveryError)}; return normalizeDeliveryError`,
+) as () => (value: unknown) => unknown)()
+
+function compileDeliveryErrorFromCause(FbsApiError: unknown) {
+  return (new Function(
+    'FbsApiError', 'normalizeDeliveryError',
+    `${asJs('deliveryErrorFromCause', helpers.deliveryErrorFromCause)}; return deliveryErrorFromCause`,
+  ) as (...args: unknown[]) => (cause: unknown) => unknown)(FbsApiError, normalizeDeliveryError)
+}
 
 const attribute = (name: string) => attributeOf(button!, name)
 const flush = () => new Promise((resolve) => { setTimeout(resolve, 0) })
@@ -168,6 +183,8 @@ function operator(options: {
   const run = (new Function(
     'beginWorkspaceWrite', 'refreshAfterLostRace', 'setBusy', 'setError', 'setNotice',
     'setRetryAction', 'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
+    'deliveryErrorFromCause', 'setDeliveryError', 'setDeliveryErrorsOpen',
+    'setExpandedDeliveryErrorGroups', 'workspaceWriteSeq',
     'FbsApiError', 'fbsErrorText', 'readFbsWorkspaceStage', `${asJs('run', runSource)}; return run`,
   ) as (...args: unknown[]) => (operation: () => Promise<unknown>, success: unknown) => Promise<unknown>)(
     beginWorkspaceWrite,
@@ -182,6 +199,8 @@ function operator(options: {
     (update: (previous: string) => string) => { seen.stage = update(seen.stage) },
     (_marketplace: string, _current: string, next: string) => next,
     (stage: string) => stage,
+    compileDeliveryErrorFromCause(TestApiError), () => undefined, () => undefined,
+    () => undefined, writeSeq,
     TestApiError,
     (message: string) => message,
     readFbsWorkspaceStage,
@@ -637,14 +656,17 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
     const keepStage = (_marketplace: string, _current: string, next: string) => next
     const same = (value: string) => value
     const load = (new Function('fetchFbsWorkspace', 'beginWorkspaceWrite', 'setWorkspace', 'setStage',
-      'setError', 'setBusy', 'fbsErrorText', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
+      'setError', 'setBusy', 'normalizeDeliveryError', 'setDeliveryError',
+      'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
+      'fbsStageAfterWorkspaceRefresh', 'visualStage',
       'open', 'supplyId', 'token', 'authHeaders', `${asJs('load', helpers.load)}; return load`) as (
       ...args: unknown[]) => (silent?: boolean, onApplied?: (fresh: unknown) => void) => Promise<unknown>)(
       () => {
         journal.push('GET')
         return new Promise((resolve, reject) => { reads.push({ resolve, reject }) })
       },
-      beginWorkspaceWrite, setWorkspace, setStage, setError, setBusy, same, keepStage, same,
+      beginWorkspaceWrite, setWorkspace, setStage, setError, setBusy, normalizeDeliveryError,
+      () => undefined, () => undefined, () => undefined, same, keepStage, same,
       true, 'supply-1', 'synthetic', () => ({}),
     )
     const refreshAfterLostRace = (new Function('load',
@@ -653,11 +675,14 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
     const run = (new Function(
       'beginWorkspaceWrite', 'refreshAfterLostRace', 'setBusy', 'setError', 'setNotice',
       'setRetryAction', 'setWorkspace', 'setStage', 'fbsStageAfterWorkspaceRefresh', 'visualStage',
-      'FbsApiError', 'fbsErrorText', `${asJs('run', runSource)}; return run`) as (
+      'deliveryErrorFromCause', 'setDeliveryError', 'setDeliveryErrorsOpen',
+      'setExpandedDeliveryErrorGroups', 'workspaceWriteSeq', 'FbsApiError', 'fbsErrorText',
+      'readFbsWorkspaceStage', `${asJs('run', runSource)}; return run`) as (
       ...args: unknown[]) => unknown)(
       beginWorkspaceWrite, refreshAfterLostRace, setBusy, setError,
       (next: string | null) => { seen.notice = next }, () => {}, setWorkspace, setStage,
-      keepStage, same, TestApiError, same,
+      keepStage, same, compileDeliveryErrorFromCause(TestApiError), () => undefined,
+      () => undefined, () => undefined, writeSeq, TestApiError, same, readFbsWorkspaceStage,
     )
     const press = (new Function('workspace', 'run', 'syncFbsSupplyMarkings', 'token', 'authHeaders',
       'fbsMarkingVerdictsSummary',

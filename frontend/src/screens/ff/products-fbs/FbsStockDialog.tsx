@@ -61,11 +61,10 @@ import type { MarketplaceCode } from './stub'
 // Окно «Остаток для FBS» по принятому макету WMS-469.
 //
 // Блок = один склад продавца из кабинета площадки ↔ склад ФФ. Внутри блока —
-// галка приёма заказов (свойство продавца, сохраняется сразу) и одна строка
-// площадки этой привязки: переключатель передачи, ползунок в цвете площадки,
-// поле «шт» и галочка «процентом». Процент и число — два представления одного
-// лимита, расходиться они не могут. Лимиты выбранных товаров сохраняются
-// кнопкой «Сохранить»; связка и приём заказов — в момент действия.
+// одна строка площадки этой привязки: переключатель передачи, ползунок в цвете
+// площадки, поле «шт» и галочка «процентом». Процент и число — два представления
+// одного лимита, расходиться они не могут. Лимиты выбранных товаров сохраняются
+// кнопкой «Сохранить»; связка сохраняется в момент действия.
 
 export type FbsStockDialogProps = {
   open: boolean
@@ -79,8 +78,8 @@ export type FbsStockDialogProps = {
   /** Физические склады ФФ для выбора в шапке блока и при добавлении. */
   wmsWarehouses: Array<{ id: string; name: string }>
   /**
-   * Можно ли из этого кабинета добавлять связки, менять склад ФФ и приём
-   * заказов. У селлера — нет (D4): контролы видны, но только читаются.
+   * Можно ли из этого кабинета добавлять связки и менять склад ФФ.
+   * У селлера — нет (D4): контролы видны, но только читаются.
    */
   canEditBindings: boolean
   /** Идёт запрос: кнопки действий заперты, чтобы не отправить дважды. */
@@ -97,8 +96,6 @@ export type FbsStockDialogProps = {
   onAddBinding?: (warehouse: CabinetWarehouse, wmsWarehouseId: string) => void
   /** Сменить склад ФФ у готовой связки. Сохраняется сразу. */
   onChangeWmsWarehouse?: (binding: StockBinding, wmsWarehouseId: string) => void
-  /** Принимаем ли заказы со склада продавца. Свойство продавца, сохраняется сразу. */
-  onServedChange?: (binding: StockBinding, served: boolean) => void
   /** Отказ сервера или потеря ответа. Показываем здесь: окно с введённым не закрываем. */
   actionError?: string | null
   /** Почему кабинет Wildberries не отдал список складов — плашка сверху окна. */
@@ -194,7 +191,6 @@ function useFbsStockBody({
   onSave,
   onAddBinding,
   onChangeWmsWarehouse,
-  onServedChange,
   actionError,
   wbWarehousesError,
   ozonWarehousesError,
@@ -380,7 +376,6 @@ function useFbsStockBody({
             setReclamp({ bindingId: binding.id, wmsWarehouseId: id })
             onChangeWmsWarehouse?.(binding, id)
           }}
-          onServedChange={(served) => onServedChange?.(binding, served)}
         />
       ))}
 
@@ -433,7 +428,6 @@ function BindingBlock({
   onDraft,
   onCapNote,
   onChangeWmsWarehouse,
-  onServedChange,
 }: {
   binding: StockBinding
   products: StockDialogProduct[]
@@ -445,7 +439,6 @@ function BindingBlock({
   onDraft: (next: BlockDraft) => void
   onCapNote: (note: { free: number; product: { name: string } } | null) => void
   onChangeWmsWarehouse: (wmsWarehouseId: string) => void
-  onServedChange: (served: boolean) => void
 }) {
   const totals = blockTotals(binding, products)
   const calc = rowCalc(binding, draft, products)
@@ -522,28 +515,6 @@ function BindingBlock({
         </Typography>
       </Stack>
 
-      <Stack direction="row" sx={{ alignItems: 'center', flexWrap: 'wrap', columnGap: 1.5, pt: 0.5 }}>
-        {/* Галочка приёма заказов — свойство продавца, а не товара, но живёт
-            здесь же: оператор видит склады продавца именно в этом окне.
-            На публикацию остатка она не влияет — той управляет переключатель
-            строки ниже (WMS-376). */}
-        <CheckboxInput
-          label={`Принимаем заказы продавца со склада «${binding.name}»`}
-          checked={binding.served}
-          onChange={onServedChange}
-          disabled={!editable || busy}
-          testId={`fbs-stock-served-${binding.id}`}
-        />
-        {!binding.served ? (
-          <StatusChip
-            label="заказы не принимаем"
-            hint="Заказы продавца с этого склада к нам не приходят"
-            testId={`fbs-stock-not-served-${binding.id}`}
-          />
-        ) : null}
-      </Stack>
-
-      {binding.served ? (
         <Box sx={{ pt: 0.5 }} data-testid={`fbs-stock-row-${binding.id}`}>
           <FormControlLabel
             sx={{ ml: -1, '& .MuiFormControlLabel-label': { display: 'inline-flex', alignItems: 'center', gap: 1, fontSize: 16 } }}
@@ -675,7 +646,6 @@ function BindingBlock({
             ) : null}
           </Box>
         </Box>
-      ) : null}
     </Paper>
   )
 }

@@ -1,0 +1,13 @@
+{
+  "task": "WMS-657",
+  "contract_commit": "422077c30b044bbcf715e78462d3b8e0639918f1",
+  "correction_commit": "c0731fc41646bf75d141d3700d5398dc15141326",
+  "files": [
+    "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS"
+  }
+}

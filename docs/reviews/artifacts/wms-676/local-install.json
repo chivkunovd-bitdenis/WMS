@@ -1,0 +1,24 @@
+{
+  "installed_sha": "e9c482d42ec9ff6aa6e48014d51f420c0b9d9a21",
+  "published_branch": "codex/wms676-sol61-pipeline",
+  "model": "gpt-6.1-sol",
+  "previous_package_sha": "b18026e8f580f419a6d72a356c513f7e66336648",
+  "files": {
+    "support_agent/agent_coordinator.py": "3560058de0e495a6f1783501b9ee6660ff3dc9f0f07f0e47870dce2cb2748f26",
+    "support_agent/agent_instructions.md": "aaed31c2af9f99da07e5c905a46c4cbe64da2445295d022d087c94a133f3a8b2",
+    "support_agent/config.py": "b1d810d181f388760bb4f439d031ebb3f8c6e276387dc8d1823baaf2cdf01838",
+    "support_agent/hotfix.py": "bd8809764377cd28d9f92dac188f684bdc1be8b6398834e12318090a2ba44fe4",
+    "support_agent/llm.py": "746ed99c2d578af386aa4366d9cfe937e2a546e3885c819be1bbc8c2542197e9",
+    "support_agent/mockups.py": "bd4cedbe7c5b6e945197edd3fa7eca12a861bc8682cc852e6003e13031679f7a",
+    "support_agent/night.py": "ea2309970400b0c3e68642a17d6c8523e5e6e68b52137f10b77836e5febb8260",
+    "support_agent/prompts.py": "2b7f98507ec801de5218d3953a9ab635511717aacd48e76418c85250da8cf15b"
+  },
+  "state_preserved_during_install": true,
+  "all_package_modules_match_commit": true,
+  "initial_ticket_count": 21,
+  "backup": "/Users/deniscivkunov/.wms-support-agent/sol61-before-ax2sj_mm",
+  "service_running": true,
+  "heartbeat_age_sec": 0.41403698921203613,
+  "non_model_configuration_preserved": true,
+  "scope": "Local Telegram service only; no merge or WMS production deploy"
+}

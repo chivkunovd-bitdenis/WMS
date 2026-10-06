@@ -20,7 +20,7 @@ from zoneinfo import ZoneInfo
 
 from .agent_authorization import SemanticAuthorization
 from .agent_dispatcher import AgentDispatcher
-from .llm import LlmUnavailable
+from .llm import WMS_MODEL, WMS_PROVIDER, LlmUnavailable
 
 log = logging.getLogger(__name__)
 INSTRUCTIONS = Path(__file__).with_name("agent_instructions.md")
@@ -127,9 +127,7 @@ class AgentCoordinator:
             return
         scope = "owner" if owner else "client"
         context = self._context(m, owner=owner)
-        model_pref = self.store.kv_get("agent_owner_model", {}) if owner else {}
-        provider = str(model_pref.get("provider") or self.cfg.agent.owner_provider)
-        model = str(model_pref.get("model") or self.cfg.agent.owner_model)
+        model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({"new_message": dict(m),
                              "current_time": self._local_now(),
                              "timezone": self.cfg.agent.timezone,
@@ -172,9 +170,7 @@ class AgentCoordinator:
         }
         context["topic_id"] = topic["id"]
         starting_generation = int(topic.get("generation", 0))
-        model_pref = self.store.kv_get("agent_owner_model", {}) if owner else {}
-        model = str(model_pref.get("model") or self.cfg.agent.owner_model)
-        provider = str(model_pref.get("provider") or self.cfg.agent.owner_provider)
+        model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({
             "event": event, "source_message": dict(source) if source is not None else None,
             "topic": {k: v for k, v in topic.items() if k != "pending"},
@@ -232,6 +228,15 @@ class AgentCoordinator:
         def progress(message: str) -> None:
             if not message.strip():
                 return
+            if event.get("parent_event_id"):
+                # Split parts produce one consolidated completion; their
+                # individual progress must not become parallel owner messages.
+                return
+            gate_key = f"agent_progress_gate:{event['id']}"
+            last_sent = float(self.store.kv_get(gate_key, 0) or 0)
+            if last_sent and self.clock() - last_sent < 300:
+                return
+            self.store.kv_set(gate_key, self.clock())
             # Commentary is an event for the single moderator, never a direct
             # completion claim or a second independent owner notification.
             digest = hashlib.sha256(message.encode()).hexdigest()[:16]
@@ -260,6 +265,7 @@ class AgentCoordinator:
         current_source = (self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
                           if source is not None else None)
         answer_queued = bool(owner and source is not None and answer
+                             and not event.get("parent_event_id")
                              and not fresh.get("cancel_requested")
                              and int(fresh.get("generation", 0)) == starting_generation
                              and current_source is not None
@@ -301,8 +307,8 @@ class AgentCoordinator:
                 return {"error": "source_does_not_authorize_action", "reason": decision["reason"]}
         if name == "select_model":
             model, provider = str(args.get("model", "")).strip(), str(args.get("provider", "")).strip()
-            if not model or provider not in ("codex", "claude"):
-                return {"error": "invalid_model_selection"}
+            if (model, provider) != (WMS_MODEL, WMS_PROVIDER):
+                return {"error": "owner_sol61_only", "model": WMS_MODEL, "provider": WMS_PROVIDER}
             self.store.kv_set("agent_owner_model", {"model": model, "provider": provider,
                                                     "event_id": context["event_id"]})
             return {"selected": model, "provider": provider}
@@ -345,20 +351,30 @@ class AgentCoordinator:
             scope_error = self._task_scope_error(task_ids, snapshot)
             if scope_error:
                 return {"error": "task_not_ready", "reason": scope_error}
+            requested_tasks = set(task_ids)
+            if requested_tasks:
+                for active_id in reversed(self.store.kv_get("agent_job_index", [])):
+                    active = self.store.kv_get(f"agent_job:{active_id}", {})
+                    if active.get("status") not in ("scheduled", "queued", "running", "recovering"):
+                        continue
+                    overlap = requested_tasks & set(active.get("task_ids") or [])
+                    if not overlap:
+                        continue
+                    existing = self._public_job(active)
+                    existing["deduplicated"] = True
+                    existing["overlapping_task_ids"] = sorted(overlap)
+                    return existing
             material_json = json.dumps(material, sort_keys=True, ensure_ascii=False)
             job_id = hashlib.sha256(material_json.encode()).hexdigest()[:16]
             key = f"agent_job:{job_id}"
             existing = self.store.kv_get(key)
             if existing:
                 return self._public_job(existing)
-            pref = self.store.kv_get("agent_owner_model", {})
             job = {"id": job_id, "source_event_id": context["event_id"],
                    "source_chat_id": context["chat_id"], "source_message_id": context["message_id"],
                    "topic_id": context.get("topic_id") or f"topic-{context['event_id']}",
                    "request": request, "task_ids": args.get("task_ids") or [],
-                   "model": str(args.get("model") or pref.get("model") or self.cfg.agent.owner_model),
-                   "provider": str(args.get("provider") or pref.get("provider")
-                                   or self.cfg.agent.owner_provider),
+                   "model": WMS_MODEL, "provider": WMS_PROVIDER,
                    "release_authorized": bool(args.get("release_authorized", False)),
                    "base_ref": str(args.get("base_ref") or ""),
                    "task_snapshot": snapshot,
@@ -599,8 +615,8 @@ class AgentCoordinator:
                     "text": message[:1500],
                 })
 
-            result = self.llm.agent_turn(prompt, session_key=f"job:{job_id}", model=job["model"],
-                                         provider=job["provider"], system=self.system,
+            result = self.llm.agent_turn(prompt, session_key=f"job:{job_id}", model=WMS_MODEL,
+                                         provider=WMS_PROVIDER, system=self.system,
                                          tools=[{**spec, "type": "function"}
                                                 for spec in self.tools.specs(scope="owner")],
                                          tool_handler=lambda name, args: self.tools.dispatch(
@@ -827,7 +843,7 @@ class AgentCoordinator:
                                  "risks, unknowns, ready subset and what remains. Inspect state before "
                                  "any possible later repeat of an uncertain release."}, ensure_ascii=False)
             result = self.llm.agent_turn(prompt, session_key=f"preflight:{job_id}",
-                                         model=job["model"], provider=job["provider"],
+                                         model=WMS_MODEL, provider=WMS_PROVIDER,
                                          system=self.system, mode="owner", owner_authorized=True,
                                          cwd=str(path), timeout=600)
             self._patch_job(job_id, preflight_status="reported", preflight_result=result.text[:8000])

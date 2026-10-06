@@ -131,9 +131,9 @@ def test_codex_dynamic_project_reader_and_persisted_thread(tmp_path: Path) -> No
     result = llm.agent_turn("Read project", session_key="owner", mode="readonly")
     assert "project facts" in json.loads(result.text)["text"]
     assert result.session_id == "thread-1"
-    state = store.kv_get("agent_session:owner:codex:gpt-5.6-sol:readonly")
+    state = store.kv_get("agent_session:owner:shared:readonly")
     assert state["thread_id"] is None and state["rollover"] is False
-    history = store.kv_get("background_context:agent_session:owner:codex:gpt-5.6-sol:readonly")
+    history = store.kv_get("background_context:agent_session:owner:shared:readonly")
     assert history[0]["prompt"] == "Read project" and "project facts" in history[0]["answer"]
     assert "900000" not in str(state)
 
@@ -162,7 +162,7 @@ def test_full_project_mode_requires_trusted_owner(tmp_path: Path) -> None:
         llm.agent_turn("Export", session_key="job", mode="owner", cwd=str(tmp_path))
 
 
-def test_explicit_opus_uses_claude_without_fallback(tmp_path: Path) -> None:
+def test_stale_explicit_opus_uses_sol61_without_fallback(tmp_path: Path) -> None:
     cfg = make_config(tmp_path)
     calls: list[list[str]] = []
     progress: list[str] = []
@@ -173,15 +173,17 @@ def test_explicit_opus_uses_claude_without_fallback(tmp_path: Path) -> None:
         return ExecResult(0, json.dumps({"result": "Done", "session_id": "claude-thread",
                                          "is_error": False}), "")
 
+    binary = tmp_path / "fake-codex"
+    fake_server(binary)
+    cfg.llm.codex_bin = str(binary)
     llm = LlmRouter(cfg, Store(cfg.db_path), exec_fn=execute)
     result = llm.agent_turn("Do it", session_key="owner", model="opus", provider="claude",
                             mode="owner", owner_authorized=True, cwd=str(tmp_path),
-                            effort="medium", progress_callback=progress.append)
-    assert result.model == "opus" and result.cli == "claude"
-    assert calls[0][calls[0].index("--model") + 1] == "opus"
-    assert calls[0][calls[0].index("--effort") + 1] == "medium"
-    assert progress == ["Claude: ход модели начат."]
-    assert "codex" not in calls[0]
+                            effort="medium", progress_callback=progress.append,
+                            include_project_tools=False)
+    assert result.model == "gpt-6.1-sol" and result.cli == "codex"
+    assert calls == []
+    assert progress == ["Reading current facts"]
 
 
 def test_claude_service_tool_reports_actual_stage_before_handler(tmp_path: Path) -> None:
@@ -202,11 +204,11 @@ def test_claude_service_tool_reports_actual_stage_before_handler(tmp_path: Path)
         assert progress[-1] == "Claude: вызван сервисный инструмент lookup."
         return {"found": True}
 
-    result = LlmRouter(cfg, Store(cfg.db_path), exec_fn=execute).agent_turn(
-        "Inspect", session_key="owner", model="opus", provider="claude", mode="owner",
-        owner_authorized=True, cwd=str(tmp_path),
-        tools=[{"name": "lookup", "description": "synthetic lookup",
-                "inputSchema": {"type": "object", "properties": {}}}],
+    result = LlmRouter(cfg, Store(cfg.db_path), exec_fn=execute)._claude_agent_turn(
+        "Inspect", session_key="owner", model="opus", mode="owner",
+        cwd=str(tmp_path), system="", timeout=30, cancelled=None, effort=None,
+        tools=normalize_agent_tools([{"name": "lookup", "description": "synthetic lookup",
+                "inputSchema": {"type": "object", "properties": {}}}]),
         tool_handler=handle, progress_callback=progress.append)
     assert result.text == "done" and seen == ["lookup"]
     assert progress == ["Claude: ход модели начат.",

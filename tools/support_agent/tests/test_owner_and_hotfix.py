@@ -596,8 +596,7 @@ def test_mockup_only_after_owner_yes(env: Any, tmp_path: Path, monkeypatch: Any,
         (out / "index.html").write_text("<html>fixed</html>" if feedback else "<html></html>",
                                         encoding="utf-8")
         assert kw["mode"] == "write"
-        assert (kw["model"], kw["provider"]) == (
-            ("sonnet", "claude") if sonnet_available else ("gpt-5.6-sol", "codex"))
+        assert (kw["model"], kw["provider"]) == ("gpt-6.1-sol", "codex")
         return LlmResult(text=json.dumps({"dir": f"mockup-out-{tid}", "variants": ["Вариант А"]}),
                          cli=kw["provider"], model=kw["model"])
 
