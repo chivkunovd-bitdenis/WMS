@@ -282,6 +282,10 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
         state = "unknown" if read_errors else current_document_state(
             data.get("status"), list(remote.values()), view_errors
         )
+        # A retained snapshot is not fresh acceptance evidence for omitted exemplars.
+        expected = status_exemplars({"products": products})
+        if state == "accepted" and (not expected or not expected.keys() <= remote.keys()):
+            state = "unknown"
     for product in products:
         position = by_sku.get(product["product_id"])
         product.update(
