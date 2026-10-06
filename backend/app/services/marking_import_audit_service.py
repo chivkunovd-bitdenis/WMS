@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import uuid
 from collections import Counter
@@ -54,7 +55,9 @@ def _layout_signatures(pdf_bytes: bytes) -> list[str]:
     Coordinates are relative so the permitted proportional print scaling does
     not itself create a divergence.  Text, embedded-image placement, and
     vector drawing placement make a newly composed label distinguishable from
-    an imported label that happens to encode the same DataMatrix value.
+    an imported label that happens to encode the same DataMatrix value. Image
+    bytes are part of the evidence too: position alone cannot establish that
+    a rasterized supplier label was not replaced.
     """
     signatures: list[str] = []
     with fitz.open(stream=pdf_bytes, filetype="pdf") as document:
@@ -64,8 +67,11 @@ def _layout_signatures(pdf_bytes: bytes) -> list[str]:
                 for block in page.get_text("blocks", sort=True)
                 if len(block) >= 5 and str(block[4]).strip()
             ]
-            image_rects = sorted(
-                _relative_rect(rect, page)
+            images = sorted(
+                (
+                    _relative_rect(rect, page),
+                    hashlib.sha256(document.extract_image(int(image[0]))["image"]).hexdigest(),
+                )
                 for image in page.get_images(full=True)
                 for rect in page.get_image_rects(int(image[0]))
             )
@@ -81,7 +87,7 @@ def _layout_signatures(pdf_bytes: bytes) -> list[str]:
                         if page.rect.height
                         else 0.0,
                         "text": text_blocks,
-                        "images": image_rects,
+                        "images": images,
                         "drawings": drawing_rects,
                     },
                     ensure_ascii=False,
@@ -122,17 +128,20 @@ async def audit_marking_import(
     )
     evidence_gaps: list[str] = []
     source_payloads: list[str] = []
+    source_layouts: list[str] = []
     if not source_files:
         evidence_gaps.append("source_pdf")
     else:
         for source_file in source_files:
             try:
-                decoded_source = _decode_pdf(read_source_pdf(source_file.storage_key))
+                source_pdf = read_source_pdf(source_file.storage_key)
+                decoded_source = _decode_pdf(source_pdf)
                 if not decoded_source:
                     evidence_gaps.append("source_pdf")
                     evidence_gaps.append(f"source_pdf:{source_file.id}")
                     break
                 source_payloads.extend(decoded_source)
+                source_layouts.extend(_layout_signatures(source_pdf))
             except Exception:
                 evidence_gaps.append("source_pdf")
                 evidence_gaps.append(f"source_pdf:{source_file.id}")
@@ -208,6 +217,18 @@ async def audit_marking_import(
     source_evidence_complete = not any(
         gap == "source_pdf" or gap.startswith("source_pdf:") for gap in evidence_gaps
     )
+    source_to_artifact_layout_complete = (
+        source_evidence_complete
+        and bool(source_layouts)
+        and len(source_layouts) == len(source_payloads)
+        and len(artifact_layouts) == len(saved_payloads)
+        and len(source_layouts) == len(artifact_layouts)
+    )
+    if source_evidence_complete and source_payloads and not source_to_artifact_layout_complete:
+        # A page carrying several labels cannot be matched to one cropped
+        # stored artifact from layout data alone. Do not turn that uncertainty
+        # into a successful source-to-artifact comparison.
+        evidence_gaps.append("source_to_artifact_layout")
     if (
         source_evidence_complete
         and source_payloads
@@ -217,6 +238,9 @@ async def audit_marking_import(
         )
     ):
         first_divergence = "saved_cis"
+    elif source_to_artifact_layout_complete and source_layouts != artifact_layouts:
+        evidence_gaps.append("label_artifact_pdf")
+        first_divergence = "label_artifact_pdf"
     elif artifact_mismatch:
         first_divergence = "label_artifact_pdf"
     elif final_artifact_invalid or (

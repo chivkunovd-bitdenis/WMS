@@ -180,11 +180,14 @@ async def build_backfill_plan(
         nm_id = int(product.wb_nm_id) if product.wb_nm_id is not None else None
         raw = imported_card.raw_json if imported_card is not None else None
         missing: str | None = None
+        raw_nm_id: int | None = None
         subject_id: int | None = None
         if not isinstance(raw, dict):
             missing = "raw_card"
-        elif _raw_nm_id(raw) is None:
+        elif (raw_nm_id := _raw_nm_id(raw)) is None:
             missing = "nmID"
+        elif raw_nm_id != nm_id:
+            missing = "raw_nmID_mismatch"
         else:
             subject_id = _integer(raw.get("subjectID", raw.get("subjectId")))
             if subject_id is None:
@@ -194,15 +197,16 @@ async def build_backfill_plan(
             elif subject_id not in catalog.parent_by_subject:
                 missing = "subject_catalog_link"
         if missing is not None:
-            skipped_rows.append(
-                {
-                    "product_id": str(product.id),
-                    "tenant_id": str(product.tenant_id),
-                    "seller_id": str(product.seller_id),
-                    "nmID": nm_id,
-                    "missing": missing,
-                }
-            )
+            skipped: dict[str, object] = {
+                "product_id": str(product.id),
+                "tenant_id": str(product.tenant_id),
+                "seller_id": str(product.seller_id),
+                "nmID": nm_id,
+                "missing": missing,
+            }
+            if missing == "raw_nmID_mismatch":
+                skipped["raw_nmID"] = raw_nm_id
+            skipped_rows.append(skipped)
             continue
         assert isinstance(raw, dict) and subject_id is not None
         decision = derive_marking_requirement(raw, catalog)
