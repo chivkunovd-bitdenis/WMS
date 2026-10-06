@@ -1,4 +1,4 @@
-import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
+import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations, saveInboundLabelAttempt, type InboundLabelAttempt } from "./inboundDraftPersistence"
 import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
 import {
@@ -1606,6 +1606,7 @@ export function FfInboundRequestView({
     | { kind: 'cargo-all' }
 
   const [boxPrintTarget, setBoxPrintTarget] = useState<InboundBoxPrintTarget | null>(null)
+  const inboundLabelPrinting = useRef(false)
 
   type InboundInternalLabelTarget =
     | { kind: 'box'; id: string; number: number; barcode: string }
@@ -1616,33 +1617,73 @@ export function FfInboundRequestView({
     labelSize: LabelSize,
   ) => {
     if (targets.length === 0) return
+    if (inboundLabelPrinting.current) return
+    inboundLabelPrinting.current = true
     setBusy(true)
     setError(null)
     try {
-      // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
-      // диалог принтера для каждого короба и рвёт непрерывную ленту.
-      printBarcodeLabels(targets.map((target) => ({
-        title: target.kind === 'box'
-          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
-          : `Грузоместо № ${target.number}`,
-        barcode: target.barcode,
-        barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
-        labelSize,
-        layout: 'internalBox' as const,
-      })))
-      for (const target of targets) {
-        const path = target.kind === 'box'
+      let attempt = readIntake(token, requestId).labelAttempt
+      if (attempt && attempt.state !== 'complete') {
+        // Read the original document before repairing technical marks. Neither
+        // a missing mark response nor afterprint authorizes another transfer.
+        const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), { headers: authHeaders })
+        if (!res.ok) throw new Error(await readApiErrorMessage(res))
+        const current = await res.json() as InboundDetail
+        if (attempt.state === 'unknown') {
+          if (window.confirm('Исход предыдущей передачи этикеток неизвестен. Проверьте очередь принтера и бумагу. Результат проверен? Следующее отдельное подтверждение разрешит перепечатку.')) {
+            saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
+          }
+          throw new Error('Предыдущая лента не отправлена повторно. Проверьте результат перед отдельным подтверждением перепечатки.')
+        }
+        const printedBefore = attempt.printedBefore
+        attempt = { ...attempt, paths: attempt.paths.filter((path) => {
+          const id = path.split('/').at(-2)
+          const items = path.includes('/cargo-places/') ? current.cargo_places : current.boxes
+          const printedAt = items?.find((item) => item.id === id)?.label_printed_at
+          return !printedAt || printedAt === printedBefore[path]
+        }) }
+        saveInboundLabelAttempt(token, requestId, attempt)
+      } else {
+        const paths = targets.map((target) => target.kind === 'box'
           ? `/operations/inbound-intake-requests/${requestId}/boxes/${target.id}/mark-label-printed`
-          : `/operations/inbound-intake-requests/${requestId}/cargo-places/${target.id}/mark-label-printed`
+          : `/operations/inbound-intake-requests/${requestId}/cargo-places/${target.id}/mark-label-printed`)
+        const printedBefore = Object.fromEntries(targets.map((target, index) => {
+          const items = target.kind === 'box' ? detail?.boxes : detail?.cargo_places
+          return [paths[index], items?.find((item) => item.id === target.id)?.label_printed_at ?? null]
+        }))
+        const prepared: InboundLabelAttempt = { id: randomId(), printedBefore, html: '', paths, state: 'unknown' }
+        // One complete iframe, with concurrent decode, before technical marks.
+        await printBarcodeLabels(targets.map((target) => ({
+          title: target.kind === 'box'
+            ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
+            : `Грузоместо № ${target.number}`,
+          barcode: target.barcode,
+          barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
+          labelSize,
+          layout: 'internalBox' as const,
+        })), { beforeTransfer: (html) => {
+          prepared.html = html
+          // Synchronous durable write must succeed before external print.
+          saveInboundLabelAttempt(token, requestId, prepared)
+        } })
+        attempt = { ...prepared, state: 'transferred' }
+        saveInboundLabelAttempt(token, requestId, attempt)
+      }
+      while (attempt.paths.length) {
+        const path = attempt.paths[0]
         const res = await fetch(apiUrl(path), { method: 'POST', headers: authHeaders })
         if (!res.ok) {
           throw new Error(await readApiErrorMessage(res))
         }
+        attempt = { ...attempt, paths: attempt.paths.slice(1) }
+        saveInboundLabelAttempt(token, requestId, attempt)
       }
       await loadDetail()
+      saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
     } finally {
+      inboundLabelPrinting.current = false
       setBusy(false)
     }
   }

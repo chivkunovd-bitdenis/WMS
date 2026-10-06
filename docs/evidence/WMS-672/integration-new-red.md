@@ -1,0 +1,3 @@
+# WMS-672/673 integration RED before correction
+
+Base 4b298efc, contract commit c9f1df70c. Mechanical source deltas introduce duplicate randomId import in FfInboundRequestView (lines 86 and 115). Existing etalon WMS659 already imports it. `tsc --noEmit -p tsconfig.app.json` exits 2 with TS2300 twice. Full untouched output: integration-local/tsc.log. Missing pdf-lib in reused dependency tree is a separate environment limitation, not product RED. No test expectations changed. Publish this exact candidate before removing only the extra import. Independent Astra diff review and analyst acceptance remain required.

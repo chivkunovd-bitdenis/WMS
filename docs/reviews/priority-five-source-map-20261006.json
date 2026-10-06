@@ -64,6 +64,13 @@
           "resolution": "Retain all current sections and insert only accepted WMS-669 section"
         }
       ]
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "source": "a13b59f0e326da56af0a0ee55cdbcfdbc590043c",
+      "base": "fa311770fcc41516cbfd168faee7c982be6d8920",
+      "mode": "merge scoped reviewed integration with original contracts/corrections/proof ancestry",
+      "conflicts": []
     }
   ]
 }

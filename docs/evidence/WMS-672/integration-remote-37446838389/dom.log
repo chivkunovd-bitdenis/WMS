@@ -1,0 +1,114 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90m/home/runner/work/WMS/WMS/frontend[39m
+
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mR17: «Начать работу» открывает последний короб без создания нового и без start-work[33m 393[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mД8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся[33m 496[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mД8: заказ, уже лежащий в коробе, не перекладывается в открытый[33m 372[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mR16: код не из этой поставки — «Этого товара нет в поставке {номер WB}»[33m 419[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mД11: нет открытого короба — скан выполняется, заказ не кладётся, подсказка «Откройте или создайте короб.»[33m 301[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-589: «Начать работу» без коробов создаёт и открывает один короб, но не запрашивает и не печатает QR[32m 168[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-589: «Создать короб» создаёт и открывает короб без печати QR[33m 400[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-589: завершение работы и переключатель рамки не открывают печать[32m 250[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати[32m 265[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB[32m 222[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · скан в активной рамке окна сборки[2m > [22mWMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR[33m 325[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mR22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане[33m 549[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mR22 (F1): оператор завершил работу с поставкой, пока шёл поиск стикера, — заказ всё равно ложится в короб, открытый при скане[33m 621[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mR22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода[33m 1760[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mД19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»[33m 654[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mF4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки[32m 69[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · итоговое ревью[2m > [22mF4: после передачи без полученного QR — «Получить QR повторно», как в карточке[32m 73[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · обычная карточка поставки не меняется[2m > [22mскан стикера в карточке не кладёт заказ в короб и не снимает ожидание ЧЗ[32m 237[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-574 · обычная карточка поставки не меняется[2m > [22mWMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр[32m 186[2mms[22m[39m
+ [32m✓[39m src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx[2m > [22mWMS-575 · ЧЗ в русской раскладке в активной рамке[2m > [22m«/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер[33m 494[2mms[22m[39m
+[90mstderr[2m | src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22m[2mWMS-673 business RED contract through real buttons and API fixtures[2m > [22m[2mC1 WB single: separate adjacent column carries both exact product colors
+[22m[39mReact does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC1 WB single: separate adjacent column carries both exact product colors[32m 283[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC2 Ozon single: each position owns its color, barcode and posting identity[32m 101[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC3 mixed assembly: repeat ID aggregates; same names at distinct seller IDs stay separate[32m 68[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC4 single: group filled color survives partial empty and input reversal[32m 133[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC4 group: group filled color survives partial empty and input reversal[32m 52[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC4 single: missing/null/empty/whitespace colors all print dash[32m 103[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC4 group: missing/null/empty/whitespace colors all print dash[32m 47[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC5 single: ampersands, markup and scripts remain text in exact color cell[32m 55[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC5 group: ampersands, markup and scripts remain text in exact color cell[32m 38[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC6 empty print colspan agrees with all eleven headers[32m 35[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC9 single: option failure preserves color, fallback and explicit repeat[32m 96[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 business RED contract through real buttons and API fixtures[2m > [22mC9 group: option failure preserves color, fallback and explicit repeat[32m 76[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC6/C10 single: print reads only, keeps fixtures and old cell semantics including fresh options[32m 118[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC6/C10 group: print reads only, keeps fixtures and old cell semantics including fresh options[32m 43[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC9 single: blocked popup fetches no print options and allows explicit repeat[32m 183[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC9 group: blocked popup fetches no print options and allows explicit repeat[32m 44[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC9 single: closed popup during request prevents document write; repeat works[32m 47[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC9 group: closed popup during request prevents document write; repeat works[32m 37[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingColor.wms673.dom.test.tsx[2m > [22mWMS-673 preexisting controls (must PASS without product edits)[2m > [22mC11 WMS610: common print stays available on composition/picking/packing/boxes, old screen quantity headers[32m 156[2mms[22m[39m
+ [32m✓[39m src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mvalidates positive integers, recovers from API failure and refreshes the box list[33m 459[2mms[22m[39m
+ [32m✓[39m src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mreuses one mutation after a lost response and gives the next intentional batch a new one[32m 163[2mms[22m[39m
+ [32m✓[39m src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22moffers the same enabled bulk action in an editable return[32m 45[2mms[22m[39m
+ [32m✓[39m src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mkeeps the bulk action disabled in completed inbound and return documents[32m 55[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д1: деление выбора на поставки[2m > [22mделит 10 заказов 2 селлеров и 2 складов WB, у одного склада два грузовых типа[32m 6[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д1: деление выбора на поставки[2m > [22mразделяет по складу WMS и типу покупателя — тем же признакам, по которым отказывает сервер[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д1: деление выбора на поставки[2m > [22mД2: новое окно только для WB, который делится на 2+ поставки[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mскан уходит первой поставке, которой товар ещё нужен[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mесли товар не нужен никому — первая поставка с ним, чтобы сервер ответил прежним отказом[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mC8: число 3 раздаётся по порядку, уменьшение до 1 снимает сначала со второй поставки[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mотмена последнего снятия возвращает штуку той поставке, которой она досталась[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mбез истории уменьшение идёт с поставок в обратном порядке[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mбольше, чем ждут заказы группы, — остаток уходит последней поставке, сервер ответит прежним отказом[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 Д5: раздача общего подбора по поставкам[2m > [22mто же число — запросов нет[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 R3/R4: создание поставок групп без дубля[2m > [22mWMS-588: после частичного успеха создаёт задание только из созданных в этой попытке поставок[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 R3/R4: создание поставок групп без дубля[2m > [22mпосле сбоя повтор отправляет только несозданные группы с прежними ключами[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 R3/R4: создание поставок групп без дубля[2m > [22mокончательный отказ сервера меняет ключ группы, как в окне одной поставки[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mR5: шапка — сумма тех же чисел, что шапка карточки каждой поставки[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mR7: подзаголовок поставки[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mД4: supply_ids из адреса и вкладка по группе[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mД14: строки листа подбора суммируют план товара по всем поставкам группы[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mWMS-588: чистая группа Ozon берёт позиции и их план/частичный подбор, а не товар заказа по одной штуке[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mWMS-588: подпись рамки Ozon не называет поставку и склад WB[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 окно сборки[2m > [22mWMS-580 R5/R6: порядок строк листа группы для одной поставки совпадает с её собственной лентой/листом[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 итоговое ревью[2m > [22mД5 при одном ШК у товаров разных селлеров: первая поставка, которой нужен именно её товар[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-574 итоговое ревью[2m > [22mД19: ШК товара заказа, ШК привязки и ЧЗ с тем же GTIN относятся к поставке, чужой код — нет[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsSupplyAssembly.test.ts[2m > [22mWMS-604 independent seller creation[2m > [22mstarts different sellers together, keeps one seller sequential and preserves group order[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22msupplyQrExpectedForStatus[2m > [22mdoes not count a future supply QR while cargo-place QR codes are printed[32m 1[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22msupplyQrExpectedForStatus[2m > [22mrequests the supply QR after handoff[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mOzon position distribution[2m > [22mrequires every position, including multiple units in one position[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mOzon position distribution[2m > [22mdoes not mistake a missing position identity for a complete order[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-526 Ozon auto boxes plan[2m > [22masks one label per fully distributed order without a ready label[32m 1[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-526 Ozon auto boxes plan[2m > [22mhas nothing to do when all positions are boxed and labelled[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-526 Ozon auto boxes plan[2m > [22mnames failed Ozon orders grouped by reason[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mkeeps assigned neutral even with a code tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mkeeps sending neutral even with a code tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mkeeps pending neutral even with a code tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mkeeps unknown neutral even with a code tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mkeeps allowed_without_check neutral even with a code tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22muses the actual acceptance, not just a tail[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mshows rejected in red with the received reason[32m 1[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mshows replacement_required in red with the received reason[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mtranslates the saved WB decision when WB supplied no reason[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-086 marking verdict presentation[2m > [22mdoes not show success when an accepted status has a refusal reason[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-477 «Проверено в WB: подтверждено X из Y»[2m > [22mcounts an order as checked only when WB accepted every code in it[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-477 «Проверено в WB: подтверждено X из Y»[2m > [22mcounts by the entered code, not by the status WB sent back[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-477 «Проверено в WB: подтверждено X из Y»[2m > [22mleaves out orders where no Честный знак was entered at all[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-477 «Проверено в WB: подтверждено X из Y»[2m > [22mignores non-sgtin metadata and an empty packing tab[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-394 repeated active sticker[2m > [22mmatches scanner whitespace, BOM and Russian keyboard layout[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-394 repeated active sticker[2m > [22mkeeps case, punctuation, other orders and actual KIZ distinct[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mfbsPickSourceLabels (WMS-528)[2m > [22mshows only containers when stock is in sorting[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mfbsPickSourceLabels (WMS-528)[2m > [22mshows the cell with its container, largest first, only enough to cover the pick[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mfbsPickSourceLabels (WMS-528)[2m > [22mshows the full container path, skips empty sources and nothing when the pick is done[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-580: лист подбора и лента «Печать всего» в одном порядке[2m > [22mR1: заказы товара идут по tape_order_index, не по порядку создания в базе или в массиве[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-580: лист подбора и лента «Печать всего» в одном порядке[2m > [22mR4: заказ без сопоставленного товара получает свою строку и не пропадает из листа[32m 0[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsUx.test.ts[2m > [22mWMS-580: лист подбора и лента «Печать всего» в одном порядке[2m > [22mR2: отправление Ozon с несколькими позициями — строки листа и порядок отправлений в ленте совпадают[32m 0[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m5 passed[39m[22m[90m (5)[39m
+[2m      Tests [22m [1m[32m95 passed[39m[22m[90m (95)[39m
+[2m   Start at [22m 10:01:20
+[2m   Duration [22m 157.02s[2m (transform 1.04s, setup 0ms, collect 145.04s, tests 10.72s, environment 582ms, prepare 188ms)[22m
+
