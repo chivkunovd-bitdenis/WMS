@@ -1,0 +1,11 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/frontend
+
+ ✓ src/screens/v2/fbsSupplyAssembly.test.ts (23 tests) 31ms
+ ✓ src/screens/v2/FfFbsOrdersScreen.wms588.dom.test.tsx (2 tests) 115ms
+
+ Test Files  2 passed (2)
+      Tests  25 passed (25)
+   Start at  22:03:53
+   Duration  1.30s (transform 121ms, setup 0ms, collect 768ms, tests 147ms, environment 237ms, prepare 108ms)
+

@@ -1,0 +1,30 @@
+WMS_AUDIT_PRODUCT_MUTATION=drop_pick_undo
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_g_stock_2_pick_undo_and_cancel_restore_exact_source ___________
+tests/guards/test_guard_stock_picking.py:85: in test_g_stock_2_pick_undo_and_cancel_restore_exact_source
+    check(
+tests/guards/stock_helpers.py:17: in check
+    assert actual == expected, (
+           ^^^^^^^^^^^^^^^^^^
+E   AssertionError: нарушено решение владельца от 02.10: отмена подбора возвращает ячейку и тару, было {('f6e1295d-03eb-4f37-b958-f6b09256f8a3', 'None'): 3, ('f6e1295d-03eb-4f37-b958-f6b09256f8a3', '0914de8f-568c-402c-b49a-0ab0db404ec9'): 2, ('5ab0257d-f750-4fac-a428-817f5cf70b80', 'None'): 5}, стало {('f6e1295d-03eb-4f37-b958-f6b09256f8a3', 'None'): 2, ('f6e1295d-03eb-4f37-b958-f6b09256f8a3', '0914de8f-568c-402c-b49a-0ab0db404ec9'): 1, ('5ab0257d-f750-4fac-a428-817f5cf70b80', 'None'): 7}
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/guards/test_guard_stock_picking.py::test_g_stock_2_pick_undo_and_cancel_restore_exact_source
+1 failed, 6 warnings in 1.04s
