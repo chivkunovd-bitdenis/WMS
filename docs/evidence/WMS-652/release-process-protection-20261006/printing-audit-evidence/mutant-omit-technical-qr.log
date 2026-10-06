@@ -1,0 +1,65 @@
+FF.                                                                      [100%]
+=================================== FAILURES ===================================
+___________________ test_scan_finds_order_by_sticker_barcode ___________________
+
+    def test_scan_finds_order_by_sticker_barcode() -> None:
+        """Сканер отдаёт технический код — заказ должен найтись.
+
+        Раньше поиск шёл только по человеческому номеру, и скан не находил ничего:
+        оператор видел «Стикер не найден в этой поставке» на стикере из этой же поставки.
+        """
+        target = _order(sticker_code="5694425 3074", sticker_barcode="*DUIkWJJF")
+        other = _order(sticker_code="5691530 4908", sticker_barcode="*DUBqocyI")
+
+        scanned = normalize_scanned_sticker("*DUIkWJJF\n")
+>       assert _find_order_by_sticker([other, target], scanned) is target
+E       AssertionError: assert None is <app.models.fbs_order.FbsOrder object at 0x10f202a50>
+E        +  where None = _find_order_by_sticker([<app.models.fbs_order.FbsOrder object at 0x10f219a90>, <app.models.fbs_order.FbsOrder object at 0x10f202a50>], '*DUIkWJJF')
+
+tests/test_fbs_kiz_sticker_lookup.py:47: AssertionError
+___________________ test_scan_in_russian_layout_finds_order ____________________
+
+    def test_scan_in_russian_layout_finds_order() -> None:
+        """Сканер в русской раскладке печатает кириллицу — заказ всё равно должен найтись.
+
+        Бой 27.08.2026, поставка WB-GI-270121264: со стикера «*DVNdzDVg» сканер отправлял
+        «*ВМТвяВМп», сервер сравнивал буквально и отвечал «Стикер не найден в этой поставке».
+        Для Честного знака раскладка разворачивалась, для стикера — нет.
+        """
+        target = _order(sticker_code="5723323 0901", sticker_barcode="*DVNdzDVg")
+        other = _order(sticker_code="5723359 7116", sticker_barcode="*DVNjYrxp")
+
+        candidates = sticker_scan_candidates("*ВМТвяВМп")
+        found = next(
+            (
+                order
+                for candidate in candidates
+                if (order := _find_order_by_sticker([other, target], candidate)) is not None
+            ),
+            None,
+        )
+>       assert found is target
+E       assert None is <app.models.fbs_order.FbsOrder object at 0x10f218a50>
+
+tests/test_fbs_kiz_sticker_lookup.py:81: AssertionError
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fbs_kiz_sticker_lookup.py::test_scan_finds_order_by_sticker_barcode
+FAILED tests/test_fbs_kiz_sticker_lookup.py::test_scan_in_russian_layout_finds_order
+2 failed, 1 passed, 6 warnings in 0.21s

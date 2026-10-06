@@ -1,0 +1,20 @@
+test_receipt_survives_restart_without_duplicate (test_wms_print_direct.DirectPrintTest.test_receipt_survives_restart_without_duplicate) ... ok
+test_uncertain_submission_not_repeated (test_wms_print_direct.DirectPrintTest.test_uncertain_submission_not_repeated) ... FAIL
+test_changed_content_rejected (test_wms_print_direct.DirectPrintTest.test_changed_content_rejected) ... ok
+
+======================================================================
+FAIL: test_uncertain_submission_not_repeated (test_wms_print_direct.DirectPrintTest.test_uncertain_submission_not_repeated)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/tools/print-agent/test_wms_print_direct.py", line 38, in test_uncertain_submission_not_repeated
+    submit.assert_called_once()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/unittest/mock.py", line 964, in assert_called_once
+    raise AssertionError(msg)
+AssertionError: Expected 'mock' to have been called once. Called 2 times.
+Calls: [call(b'\x89PNG\r\n\x1a\ntest'), call(b'\x89PNG\r\n\x1a\ntest')].
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.008s
+
+FAILED (failures=1)

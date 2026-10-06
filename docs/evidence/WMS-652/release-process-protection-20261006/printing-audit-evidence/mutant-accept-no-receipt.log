@@ -1,0 +1,39 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/frontend
+
+ ❯ src/utils/printPreparedQr.test.ts (4 tests | 1 failed) 70ms
+   ✓ direct OS queue printing > preserves scanner focus without browser print UI or confirmation 8ms
+   ✓ direct OS queue printing > waits for the first OS receipt before sending the next scan 53ms
+   ✓ direct OS queue printing > does not retry automatically or use browser printing after losing the response 2ms
+   × direct OS queue printing > keeps the selected packing order until a real queue receipt is recovered 7ms
+     → promise resolved "undefined" instead of rejecting
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/utils/printPreparedQr.test.ts > direct OS queue printing > keeps the selected packing order until a real queue receipt is recovered
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/utils/printPreparedQr.test.ts:56:41
+     54|     }
+     55|     const scanner = createPackingScanController(deps)
+     56|     await expect(scanner.scan('barcode')).rejects.toThrow('Результат н…
+       |                                         ^
+     57|     expect(deps.pack).not.toHaveBeenCalled()
+     58|     expect(scanner.view()).toMatchObject({ orderId: 'order-1' })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  22:04:15
+   Duration  561ms (transform 118ms, setup 0ms, collect 167ms, tests 70ms, environment 186ms, prepare 37ms)
+
