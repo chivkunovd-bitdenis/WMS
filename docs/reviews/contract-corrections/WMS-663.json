@@ -78,6 +78,27 @@
         "evidence_blob": "725f1510d8e7406bfc1077aebb0a0d17356773b7",
         "scope": "Exact one-line accessible Close selector correction only; 16 expectations unchanged"
       }
+    },
+    {
+      "contract_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+      "source_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+      "correction_commit": "a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62",
+      "files": [
+        {
+          "path": "frontend/src/screens/v2/OzonDocumentsAbsence.required-orders.dom.test.tsx",
+          "transform": "wms663-known-no-documents-complete-requirements",
+          "before_blob": "5a508673b78388e44c903fe503fd76f3e48a7cde",
+          "after_blob": "d96fd44965a7f0b8806d87fe3d4f88243cad1f5e"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PENDING",
+        "source_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+        "correction_commit": "a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62"
+      }
     }
   ],
   "owner_supersessions": [

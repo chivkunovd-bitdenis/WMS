@@ -62,3 +62,27 @@ commits в общий HEAD. Для завершения добавить в ка
 PASS изменить verdict. Artifact должен называть полный проверенный final test SHA
 и PASS; исторические review-записи не менять. Затем независимый reviewer проверит
 сам этот узкий process diff. Данная ветка не является общим runtime кандидатом.
+
+## Дополнение: отдельная F3 fixture-chain запись
+
+По отдельному прямому поручению ведущего добавлена strict fixture-only пара
+`wms663-known-no-documents-complete-requirements`: original
+`68c3bd3052e201c16b8f9a1d0fe1282cc91615c3`, correction
+`a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62`, единственный путь
+`frontend/src/screens/v2/OzonDocumentsAbsence.required-orders.dom.test.tsx`.
+Пины полного файла: `5a508673b78388e44c903fe503fd76f3e48a7cde` →
+`d96fd44965a7f0b8806d87fe3d4f88243cad1f5e`. Добавлено ровно одно fixture-поле
+`requirements_complete: true` у уже известного no-documents posting B;
+assertions/названия/порядок/контроль записи не изменены. Это fixture-уточнение
+F3 нового68c3 контракта, не owner supersession прежнего C16 и не изменение UI.
+
+Новая запись находится в существующем `fixture_corrections`; owner layer,
+legacy662 и прежние fixture-записи не менялись. Её реальное независимое
+review также **PENDING**, evidence ещё не добавлен. 6 узких process-regressions
+проверяют exact one-field diff, RED без allowlist-пары, GREEN с отдельным
+synthetic review, запрет PENDING/чужих assertions/лишних файлов/неверного old
+blob/последующей мутации/режима executable. Первая mode-проба выявила ошибку
+самого harness: повторный git add возвращал файл к0644; проба исправлена
+реальным chmod одноразового fixture-файла. Повторный целевой прогон — 6 PASS.
+Synthetic process proof не подставляется в настоящий ledger. Для закрытия
+F3 нужны реальные evidence commit/blob и review source68c3 → correctiona08c98f77.
