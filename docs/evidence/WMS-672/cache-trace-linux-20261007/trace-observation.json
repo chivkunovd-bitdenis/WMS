@@ -1,0 +1,87 @@
+{
+  "events": 86644,
+  "category_counts": {
+    "__metadata": 43,
+    "disabled-by-default-cc.debug": 4009,
+    "cc": 9205,
+    "blink.user_timing": 66487,
+    "cc,benchmark": 3125,
+    "blink.user_timing,rail": 15,
+    "cc,disabled-by-default-devtools.timeline": 49,
+    "disabled-by-default-memory-infra": 848,
+    "cc,raf_investigation": 1,
+    "disabled-by-default-cc.debug,disabled-by-default-viz.quads,disabled-by-default-devtools.timeline.layers": 148,
+    "cc,benchmark,disabled-by-default-devtools.timeline.frame": 2714
+  },
+  "user_timing_top_names": [
+    [
+      "\u200bInsertion",
+      11699
+    ],
+    [
+      "\u200bForwardRef(Box)",
+      5576
+    ],
+    [
+      "\u200bStyled(div)",
+      5130
+    ],
+    [
+      "\u200bForwardRef(ButtonBase)",
+      4609
+    ],
+    [
+      "\u200bMuiButtonBaseRoot",
+      3681
+    ],
+    [
+      "\u200bForwardRef(Button)",
+      3373
+    ],
+    [
+      "\u200bMuiButtonRoot",
+      2971
+    ],
+    [
+      "\u200bMuiSwitchBase",
+      2842
+    ],
+    [
+      "\u200bForwardRef(Typography)",
+      2775
+    ],
+    [
+      "\u200bForwardRef(Grid)",
+      2441
+    ],
+    [
+      "\u200bMuiStackRoot",
+      2439
+    ],
+    [
+      "\u200bCheckboxInput",
+      2396
+    ],
+    [
+      "\u200bFieldFrame",
+      2394
+    ],
+    [
+      "\u200bForwardRef(Checkbox)",
+      2373
+    ],
+    [
+      "\u200bMuiCheckboxRoot",
+      2357
+    ]
+  ],
+  "dataLossOccurred": true,
+  "maxBufferUsage": 0.996608555316925,
+  "native_markers": 0,
+  "getTaskCount": 22,
+  "getTaskTargetSizes": {
+    "16x16": 22
+  },
+  "cache_backend_observed": "software",
+  "result": "INCONCLUSIVE for native failure cause; truncated capture cannot establish absent admission/decode events"
+}
