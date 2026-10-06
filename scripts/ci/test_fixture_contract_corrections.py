@@ -103,6 +103,11 @@ class FixtureChainTests(unittest.TestCase):
     def test_real_663_correction_of_both_frozen_files_passes(self):
         self.assertEqual(self.errors(self.setup_chain()), [])
 
+    def test_actual_sol61_high_review_accepts_exact_fixture_delta(self):
+        ledger = self.setup_chain()
+        ledger["fixture_corrections"][0]["review"]["model"] = "gpt-6.1-sol"
+        self.assertEqual(self.errors(ledger), [])
+
     def test_real_517_two_deltas_same_frozen_file_and_exact_companion_pass(self):
         self.assertEqual(self.errors(self.setup_chain("WMS-517")), [])
 
@@ -145,7 +150,7 @@ class FixtureChainTests(unittest.TestCase):
             changed = copy.deepcopy(ledger)
             changed["fixture_corrections"][0]["files"][0][field] = "f" * 40
             variants.append(changed)
-        for field, value in [("model", "gpt-6.1-sol"), ("effort", "low"), ("verdict", "FAIL"),
+        for field, value in [("model", "unknown-reviewer"), ("effort", "low"), ("verdict", "FAIL"),
                              ("source_commit", self.base), ("correction_commit", self.base),
                              ("evidence_commit", self.base), ("evidence_blob", "f" * 40),
                              ("evidence", "docs/reviews/missing.md")]:
