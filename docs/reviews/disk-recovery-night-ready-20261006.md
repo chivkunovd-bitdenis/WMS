@@ -48,3 +48,19 @@ KiB, около 1013,7 MiB. Он немного отличается от сум
 `node_modules` WMS-666 и WMS-672/673, SQLite/production DB, исходники, Git index,
 отчёты агентов, Chrome, swap, secrets и внешние сервисы. Никакой общий поиск с
 последующим массовым удалением не выполнялся.
+
+## Дополнительная проверенная очистка после 12:46 Tbilisi
+
+При падении свободного места до 303 MiB удалена только повторно устанавливаемая
+копия зависимостей старого, уже принятого WMS-670:
+`/Users/deniscivkunov/Projects/WMS/.worktrees/wms666-product-stock-scope/frontend/node_modules`.
+Размер до удаления — 476796 KiB (488239104 байта). Несмотря на историческое
+имя каталога, HEAD этого checkout — WMS-670, `8a2790d349ab6247d99fde906c11f4fc3bc5c4e6`.
+Это не активный `wms666-unified-fbs-packing`.
+
+Перед удалением подтверждены чистый checkout, ignored и ноль tracked-файлов
+в зависимостях, обычный каталог без symlink, наличие package-lock, отсутствие
+процессов/cwd/open handles и ссылок из остальных frontend/node_modules.
+Код, Git, база и lock-файл не удалялись. Восстановление — `npm ci` в frontend
+этого checkout. SHA-256 package-lock до удаления:
+`4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c`.
