@@ -1,0 +1,103 @@
+{
+  "checkedAt": "2026-10-06T09:29:32.704Z",
+  "archive": "/Users/deniscivkunov/Projects/WMS/.worktrees/night-ready-acceptance-1006/tmp/sqlite-recovery-20261006-old8.tar.gz",
+  "archiveBytes": 474163,
+  "archiveSha256": "4b697415d3553f11aefc19babc62a1f3480d47ef20f73d03c485b3450b1c06d9",
+  "originalBytes": 22609920,
+  "allocatedOriginalBytes": 22609920,
+  "verification": "Every tar member byte-compared in memory with its original before unlink; SHA256 equal; old >7 days; untracked; no cwd/handles/companions",
+  "entries": [
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw0.sqlite",
+      "member": "backend/tests/wms_pytest_gw0.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:59.906Z",
+      "sha256": "eb1442e3cebba62c7a263efda4c0918aeeb902feb32e9485dfe14e8fb766c671",
+      "device": 16777231,
+      "inode": 260245781,
+      "mtimeMs": 1788445679906.6536
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw1.sqlite",
+      "member": "backend/tests/wms_pytest_gw1.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:28:00.564Z",
+      "sha256": "5db20ed83ca7fa7aaafe34f1c1c63e7fdc20fc02f0c97eeb399db12fcb58b61c",
+      "device": 16777231,
+      "inode": 260245782,
+      "mtimeMs": 1788445680564.4297
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw2.sqlite",
+      "member": "backend/tests/wms_pytest_gw2.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:59.722Z",
+      "sha256": "1e2bbc6bb2d2375e47c3076bd723670c946746d95ff4bada3af31f7c2b9e6f66",
+      "device": 16777231,
+      "inode": 260245778,
+      "mtimeMs": 1788445679722.5664
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw3.sqlite",
+      "member": "backend/tests/wms_pytest_gw3.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:59.835Z",
+      "sha256": "3e87a524cf702bdb0952a37f0d577877a0f27de7d174160260f921660e595cc3",
+      "device": 16777231,
+      "inode": 260245777,
+      "mtimeMs": 1788445679835.2285
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw4.sqlite",
+      "member": "backend/tests/wms_pytest_gw4.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:59.713Z",
+      "sha256": "3278e8b0c6657ff4c3d8a0f95672ff2c1aa345817463a36bfe52917a43ab1667",
+      "device": 16777231,
+      "inode": 260245780,
+      "mtimeMs": 1788445679713.7585
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw5.sqlite",
+      "member": "backend/tests/wms_pytest_gw5.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:43.771Z",
+      "sha256": "7af6ed8283c0bc59af4f11928f0b0cbc1e168731342a8d3763982e79ce623a49",
+      "device": 16777231,
+      "inode": 260245779,
+      "mtimeMs": 1788445663771.7761
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw6.sqlite",
+      "member": "backend/tests/wms_pytest_gw6.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:43.956Z",
+      "sha256": "5c72151fe0d4d544596caade19af0bf6d5674ca2c7dfc3b0e99d0eaf9b462e02",
+      "device": 16777231,
+      "inode": 260245783,
+      "mtimeMs": 1788445663956.084
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.claude/worktrees/agent-ac6c35b1b853f4ccb/backend/tests/wms_pytest_gw7.sqlite",
+      "member": "backend/tests/wms_pytest_gw7.sqlite",
+      "size": 2826240,
+      "allocatedBytes": 2826240,
+      "mtime": "2026-09-03T14:27:43.701Z",
+      "sha256": "7cc910b106e6484cde1cd02b3d6ca2e9688d485a21a8cae456393292028dd0b9",
+      "device": 16777231,
+      "inode": 260245784,
+      "mtimeMs": 1788445663701.5762
+    }
+  ],
+  "beforeDf": "Filesystem   1024-blocks      Used Available Capacity iused   ifree %iused  Mounted on\n/dev/disk3s5   239362496 203678624    166444   100% 3520911 1664440   68%   /System/Volumes/Data\n",
+  "deleted": true,
+  "afterDf": "Filesystem   1024-blocks      Used Available Capacity iused   ifree %iused  Mounted on\n/dev/disk3s5   239362496 203656004    189064   100% 3520905 1890640   65%   /System/Volumes/Data\n",
+  "logicalNetFreedBytes": 22134784
+}
