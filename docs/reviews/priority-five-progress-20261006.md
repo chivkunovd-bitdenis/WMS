@@ -174,3 +174,15 @@ parent назначает отдельнуюсессию на точный оп�
 ## Интеграция 17 — WMS-517 независимое заключение
 
 База `b4043c0df9fee0419bdfe85167bbd645f820de9c`; source `85c2f5e0e24af84548e7ff74e193b3ac423d3f82` включён автоматически,4docs. Отдельныйreviewновогоhelper иSC13приёмкаfreshsoldсохранены; исходныйproductreviewнеповторялся. Новый662fixb4043c0dfпереданparentнаузкоенезависимоеревью. Scope666reviewedledger иcurrent675docsещёожидаются. Дополнительное675поручение: прочитать штатныеstockpublicationsideeffects восстановления, безновыхsuppressрежимов/monkeypatch.
+
+## Интеграция 18 — принятая совместимость staging migration history
+
+База `7f9d720ee47db130eaa9ef63df8325566c70dcd1`. Включена ancestry staging `727575a0fd47dec56f34b38b987925686626c2b9` и reviewedcompat
+`c775941f373b89a9eaca70d0056673ff27a0dafa` через oursmerge, сохраняющий всё нынешнее runtime/tests/checker.
+Затем восстановлены ровно9acceptedmigrationfiles из `7f7e922b16d8f2fa08816f8446e7a53a1d24ac74`;
+каждый blob совпал также со staging727575a0. Исходные migration тела/revision IDs
+не редактировались. Отчёт независимогоAstrareview сохранён исходнымфайлом.
+НовыеDDL,DBmigration,stamp,downgrade иотдельныйdeployне выполняются.
+Послеcommitкандидат станетdescendantstaging, возможенобычныйfastforwardбезforce.
+Следующийшаг —локальнаяread-onlyпроверкаграфа/offlineплана, затемдожать675docs,
+scope666ledger иузкий662reviewпередобщимteststage/CI.

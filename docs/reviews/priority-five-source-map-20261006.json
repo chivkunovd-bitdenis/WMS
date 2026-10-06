@@ -154,6 +154,26 @@
       "base": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
       "mode": "merge four acceptance documents only; runtime untouched",
       "conflicts": []
+    },
+    {
+      "task": "Accepted WMS-660 staging compatibility prerequisite",
+      "source": "7f7e922b16d8f2fa08816f8446e7a53a1d24ac74",
+      "review": "c775941f373b89a9eaca70d0056673ff27a0dafa",
+      "staging_source": "727575a0fd47dec56f34b38b987925686626c2b9",
+      "base": "7f9d720ee47db130eaa9ef63df8325566c70dcd1",
+      "mode": "ours ancestry merge staging+review then exact nine migration blobs; current runtime/tests/checker preserved",
+      "conflicts": [],
+      "paths": [
+        "backend/alembic/versions/20260912_0305_assistant_messages.py",
+        "backend/alembic/versions/20260913_2200_assistant_executor_attempts.py",
+        "backend/alembic/versions/20260925_0433_merge_assistant_staging.py",
+        "backend/alembic/versions/20260929_0589_merge_staging_etalon.py",
+        "backend/alembic/versions/20260929_0590_merge_wms_588_and_staging_heads.py",
+        "backend/alembic/versions/20260930_0566_ff_section_permissions.py",
+        "backend/alembic/versions/20260930_0567_product_primary_print_barcode.py",
+        "backend/alembic/versions/20261001_0612_merge_staging_urgent.py",
+        "backend/alembic/versions/20261003_0001_merge_staging_etalon.py"
+      ]
     }
   ],
   "local_product_fixes": [
