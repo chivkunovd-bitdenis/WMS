@@ -103,6 +103,32 @@ def _source_contains_saved_payloads(source: list[str], saved: list[str]) -> bool
     return not (Counter(saved) - Counter(source))
 
 
+def _extract_source_evidence(
+    pdf_bytes: bytes,
+) -> tuple[list[str], dict[str, list[str]], bool]:
+    """Keep source candidates across pages despite ingestion's file-wide dedup."""
+    payloads: list[str] = []
+    layouts: dict[str, list[str]] = {}
+    incomplete = False
+    with fitz.open(stream=pdf_bytes, filetype="pdf") as source:
+        for page_index, page in enumerate(source):
+            page_payloads = [item.value for item in decode_datamatrix_codes_on_pdf_page(page)]
+            payloads.extend(page_payloads)
+            with fitz.open() as single_page:
+                single_page.insert_pdf(source, from_page=page_index, to_page=page_index)
+                labels = extract_label_artifacts_from_pdf(bytes(single_page.tobytes()))
+            extracted: Counter[str] = Counter()
+            for label in labels:
+                if label.code_valid:
+                    extracted[label.cis] += 1
+                    layouts.setdefault(label.cis, []).extend(_layout_signatures(label.label_pdf))
+            # The extractor can also dedup repeated symbols within one page.
+            # If it cannot supply every decoded occurrence's region, retain
+            # that evidence gap rather than silently endorsing its first crop.
+            incomplete |= bool(Counter(page_payloads) - extracted)
+    return payloads, layouts, incomplete
+
+
 async def audit_marking_import(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -136,21 +162,20 @@ async def audit_marking_import(
         for source_file in source_files:
             try:
                 source_pdf = read_source_pdf(source_file.storage_key)
-                decoded_source = _decode_pdf(source_pdf)
+                decoded_source, file_layouts, incomplete = _extract_source_evidence(source_pdf)
                 if not decoded_source:
                     evidence_gaps.append("source_pdf")
                     evidence_gaps.append(f"source_pdf:{source_file.id}")
                     break
                 source_payloads.extend(decoded_source)
+                if incomplete:
+                    evidence_gaps.append("source_to_artifact_layout")
                 # Use the same evidence-based label boundaries as ingestion.
                 # Whole-sheet coordinates cannot be compared with a cropped
                 # label. Match the extracted region by its full payload, not
                 # by page count or an arbitrary permitted crop.
-                for label in extract_label_artifacts_from_pdf(source_pdf):
-                    if label.code_valid:
-                        source_layouts.setdefault(label.cis, []).extend(
-                            _layout_signatures(label.label_pdf)
-                        )
+                for cis, layouts in file_layouts.items():
+                    source_layouts.setdefault(cis, []).extend(layouts)
             except Exception:
                 evidence_gaps.append("source_pdf")
                 evidence_gaps.append(f"source_pdf:{source_file.id}")
