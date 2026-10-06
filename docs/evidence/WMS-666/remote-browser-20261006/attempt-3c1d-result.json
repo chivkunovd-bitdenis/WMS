@@ -1,0 +1,19 @@
+{
+  "base": "9a73432accdd5c2ef7b48d08cc8abdef5942c258",
+  "probe": "3c1d96610550871c76042f34b2053bebb48bf683",
+  "cases": [],
+  "physicalPaper": "OPEN",
+  "staging": "NOT TESTED",
+  "scope": "Real FBS screen/URL effects, synthetic API; no application shell or live data",
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.57",
+    "revision": "@73c14f6228d7cd537c855007e8f88678969cc0eb",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.11"
+  },
+  "currentCase": "ozon-single",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: Ozon position did not reach its box",
+  "stack": "AssertionError [ERR_ASSERTION]: Ozon position did not reach its box\n    at file:///home/runner/work/WMS/WMS/scripts/ci/wms666-browser-proof.mjs:168:7"
+}

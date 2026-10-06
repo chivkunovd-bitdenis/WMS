@@ -1,0 +1,127 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T08%3A28%3A18.286Z&to=2026-10-06T08%3A28%3A18.286Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-9b3993c3-dffd-5f14-b7b0-2ccf0f495b57",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-ozon-b",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57&sticker=OZON-POSTING-666",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57/boxes/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-box/orders",
+      "body": {
+        "order_ids": [],
+        "order_product_ids": [
+          "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-position-a"
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-product-a&seller_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57/order-print-tape",
+      "body": {
+        "order_ids": [
+          "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "label",
+              "copies": 1
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-product-a&seller_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/9b3993c3-dffd-5f14-b7b0-2ccf0f495b57/order-print-tape",
+      "body": {
+        "order_ids": [
+          "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "label",
+              "copies": 1
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    }
+  ],
+  "printLog": [],
+  "blocked": [],
+  "errors": []
+}
