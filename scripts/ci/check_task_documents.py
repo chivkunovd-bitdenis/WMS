@@ -35,7 +35,22 @@ FIXTURE_BLOB_PAIRS = {
         "21baad5243f664aca69ff817407ea17e66f59155",
         "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
     ),
+    "wms663-close-accessible-selector": (
+        "WMS-663", "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+        "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
+        "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+    ),
+    "wms663-complete-positive-status-fixtures": (
+        "WMS-663", "backend/tests/test_wms663_customs_documents_contract.py",
+        "4e1aff5a80445fa61b5697d60a26985427dfd28e",
+        "c92c075ba9f375c578538b776207cdc6b8b56ab3",
+    ),
 }
+POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"
+POSITIVE_STATUS_HANDOFF = (
+    "docs/reviews/wms663-healthy-positive-fixture-correction-handoff.md",
+    "75319cb7026d032af7e47946b4b636aadc39c8eb",
+)
 LEGACY_SALES_COMPANION = {
     "path": "backend/tests/test_withdrawal_ledger.py",
     "before_blob": "d7f0d01d0f417aea487d0d7f616ba240b133f5a4",
@@ -314,7 +329,15 @@ def exact_fixture_corrections(
             expected.add(path)
             transforms.add(transform)
             prior_sha, prior_blob = state.get(path, (original, git_blob(root, original, path)))
-            if (source != prior_sha or before != prior_blob
+            # Only this reviewed fifth pair has a later product source. Reject
+            # even a reverted intervening mutation, not merely differing bytes.
+            source_matches = source == prior_sha
+            if transform == POSITIVE_STATUS_TRANSFORM and not source_matches:
+                source_matches = ancestor(root, prior_sha, source) and not git(
+                    root, "log", "--full-history", "--format=%H", f"{prior_sha}..{source}",
+                    "--", path,
+                )
+            if (not source_matches or before != prior_blob
                     or git_blob(root, source, path) != before
                     or git_blob(root, parent, path) != before
                     or git_blob(root, correction, path) != after):
@@ -331,6 +354,13 @@ def exact_fixture_corrections(
                     or git_blob(root, correction, path) != companion["after_blob"]):
                 return fail("подменён точный companion blob")
             expected.add(path)
+        if POSITIVE_STATUS_TRANSFORM in transforms:
+            handoff_path, handoff_blob = POSITIVE_STATUS_HANDOFF
+            if (git(root, "ls-tree", "-z", "--full-tree", parent, "--", handoff_path)
+                    or git_blob(root, correction, handoff_path) != handoff_blob
+                    or git_blob(root, head, handoff_path) != handoff_blob):
+                return fail("подменён точный positive STATUS handoff")
+            expected.add(handoff_path)
         if commit_changed_paths(root, correction) != expected:
             return fail("коммит меняет не ровно перечисленные файлы")
         review = entry.get("review")
