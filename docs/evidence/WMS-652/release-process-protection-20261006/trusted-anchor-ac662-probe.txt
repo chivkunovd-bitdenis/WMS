@@ -1,0 +1,4 @@
+API_OUTAGE_EXIT 2
+API_OUTAGE_PUBLICATION_HISTORY [["earlier", "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "success"]]
+OVERLAPPING_CLI_EXITS {"new": 2, "old": 0}
+OVERLAPPING_PUBLICATION_HISTORY [["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "failure"], ["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "success"]]
