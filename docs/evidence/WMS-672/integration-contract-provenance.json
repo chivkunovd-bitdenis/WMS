@@ -1,0 +1,107 @@
+{
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "files": {
+    "frontend/tests-e2e/wms672-box-labels.test.mjs": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "3f29649e56f986e8e549da592937474197197418"
+    },
+    "frontend/tests-e2e/wms672-dom.test.tsx": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "d29e1134cf728bb114c3c35a868df2fba2b7ce8e"
+    },
+    "frontend/tests-e2e/wms672-dom.config.ts": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "5ae7e788f2582040c84bc6fe22880270de8a9c78"
+    },
+    "frontend/tests-e2e/wms672-harness.tsx": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "0c5722d499ba35098c771b06a19705cb575c84f7"
+    },
+    "frontend/tests-e2e/wms672-harness.html": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "9b91e2391b542895980ac521a93615ad30c2b697"
+    },
+    "frontend/tests-e2e/wms672-vite.config.ts": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "f39d0b6422b70489c62d1ca246617240a40079e1"
+    },
+    "backend/tests/test_wms672_box_label_scope.py": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "1dd02ddc3959229a41165ea8547d51fb0d74098c"
+    },
+    "docs/evidence/WMS-672/testwriter-authorized-correction.md": {
+      "source_commit": "6b6a47e748769d0b88c26178aafe88f4803c5ee8",
+      "source_blob": "adfd1d41d923dd2597c0bb547e2271592d0cdc28"
+    },
+    "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "b1e7496d0e3bba29fff7d5aa473b651d424524f8"
+    },
+    "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "16149d68b47d2b41d595044872c21aa1235ec0f4"
+    },
+    "frontend/src/screens/v2/wms673PrintFixtures.ts": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "63deeed70a8546ff78d7e9497d3dbec919a0d616"
+    },
+    "frontend/src/screens/v2/wms673PrintRenderer.ts": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "694b455fcb0647186b36a556a6141439a65c2b32"
+    },
+    "frontend/src/screens/v2/wms673MarketplaceProjection.json": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "01906407f3f6aa03f525e6c222dd3b201844a78c"
+    },
+    "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "ce1b72602761496606b00b68d514afaeeefad3cb"
+    },
+    "backend/tests/test_wms673_print_read_contract.py": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "89278672000f964712d27d1e18d7ab56daf60372"
+    },
+    "docs/reviews/wms673-wms657-contract-migration-tester.md": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "a1b7ded6f74d9e6a6ecc25113ae2ba42a30c5843"
+    },
+    "docs/reviews/wms673-wms657-authorized-contract-migration.md": {
+      "source_commit": "76f71776f403d0bdda07d521738281392e2b12ce",
+      "source_blob": "fa0d7bef817a23e2e5fd3541e618d5502fb4d7e3"
+    },
+    "docs/requirements/WMS-672.md": {
+      "source_commit": "27a0ca36f3989f14c3a67f4f085e7e7295dfb049",
+      "source_blob": "e3075aa14e496a90515ddfb2890bd8b952f1dff3"
+    },
+    "docs/requirements/WMS-673.md": {
+      "source_commit": "2e49343af678fbb895f265b4342b2e08a3dad475",
+      "source_blob": "b4faf96b46559e0c3fc85f8cfaa3068dbbfcff5b"
+    },
+    "frontend/tests-e2e/wms672-remaining.test.mjs": {
+      "source_commit": "afb2d5d3dfa989c43e8f979fe176f7c487fad4a4",
+      "source_blob": "707e60e1dc731ccf7a25308f60a583b576b0608c"
+    },
+    "docs/evidence/WMS-672/remaining-tester-handoff-20261006.md": {
+      "source_commit": "afb2d5d3dfa989c43e8f979fe176f7c487fad4a4",
+      "source_blob": "6f7c803c241bdc345aea89bd4bfb3e76981faf8d"
+    },
+    "docs/reviews/wms672-astra-163259-0e6a7.md": {
+      "source_commit": "6c4c1253124e0b2738826a83755ce4a53ca2ddb4",
+      "source_blob": "92174c291673b7496666d8fb7127da70a74f7487"
+    },
+    "docs/reviews/wms673-astra-bc272386.md": {
+      "source_commit": "ff559d760896a485e42e457bb84f74522357d0d5",
+      "source_blob": "f35f24529a1becb02678c53c39fa27a6dd23e76d"
+    },
+    "docs/reviews/wms673-astra-final-delta-76f71776.md": {
+      "source_commit": "e548d7b7c6012f674bf981954adf11f6b04bb703",
+      "source_blob": "df8fe3fb41f66509ee11e71f355246ef8dace0c3"
+    }
+  },
+  "notes": [
+    "Exact reviewed test blobs imported before product integration.",
+    "WMS657 migration authorized by 379f6f79 and accepted in 2e49343a; no test relaxation.",
+    "Existing WMS659 contracts and accepted correction ledger retained from etalon.",
+    "Historical acceptance refers only to historical source; new candidate requires independent diff review and analyst acceptance."
+  ]
+}
