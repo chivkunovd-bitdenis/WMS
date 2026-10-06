@@ -511,12 +511,16 @@ async def _find_cargo_qr_asset(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     trbx_id: uuid.UUID,
+    *,
+    refresh: bool = False,
 ) -> FbsPrintAsset | None:
     stmt = select(FbsPrintAsset).where(
         FbsPrintAsset.tenant_id == tenant_id,
         FbsPrintAsset.fbs_trbx_id == trbx_id,
         FbsPrintAsset.kind == PRINT_ASSET_KIND_CARGO_PLACE_QR,
     )
+    if refresh:
+        stmt = stmt.execution_options(populate_existing=True)
     result = await session.execute(stmt)
     return result.scalars().first()
 
@@ -617,7 +621,29 @@ async def ensure_cargo_place_qr_assets(
                 message="Некорректные данные QR грузоместа.",
             )
 
-        asset = await _find_cargo_qr_asset(session, tenant_id, trbx.id)
+        # The external read can overlap across workers after the confirmed
+        # create checkpoint. Serialize only local persistence on the existing
+        # cargo row, including its file, and re-read after the lock: another
+        # worker may have committed a usable QR while this response was pending.
+        locked_id = await session.scalar(
+            select(FbsTrbx.id)
+            .join(FbsSupply, FbsSupply.id == FbsTrbx.supply_id)
+            .where(
+                FbsTrbx.id == trbx.id,
+                FbsTrbx.supply_id == supply.id,
+                FbsSupply.tenant_id == tenant_id,
+                FbsSupply.seller_id == supply.seller_id,
+            )
+            .with_for_update(of=FbsTrbx)
+        )
+        if locked_id is None:
+            raise FbsPrintAssetError(
+                "supply_not_found", message="Грузоместо не найдено в поставке."
+            )
+        asset = await _find_cargo_qr_asset(session, tenant_id, trbx.id, refresh=True)
+        if asset is not None and _asset_file_ready(asset):
+            trbx.qr_asset_id = asset.id
+            continue
         if asset is None:
             asset = FbsPrintAsset(
                 tenant_id=tenant_id,
