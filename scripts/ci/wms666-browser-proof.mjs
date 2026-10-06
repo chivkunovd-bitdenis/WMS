@@ -80,6 +80,8 @@ async function intercept({ requestId, request }) {
     return fulfill(requestId, { id: w.supply.packaging_task_id, status: 'in_progress', lines: w.orders.flatMap(o => (o.positions.length ? o.positions : [o.product]).map((p, i) => ({ id: `${task[1]}-line-${i}`, product_id: p.product_id ?? p.id, product_name: p.name, sku_code: p.sku, requires_honest_sign: false, packaging_instructions: '', qty_total: 1, qty_need_pack: 1, marking_available_count: 0 }))) });
   }
   if (path.endsWith('/worklist') || path === '/operations/fbs-assembly-tasks') return fulfill(requestId, { items: [], total: 0, warehouse_options: [], server_now: '2026-10-06T08:00:00Z' });
+  if (path === '/auth/me') return fulfill(requestId, {separate_marking_print_enabled:false});
+  if (path.endsWith('/order-print-tape')) return fulfill(requestId, {orders:[],order_errors:[],shortage:0});
   if (path === '/fbs/assembly-time') return fulfill(requestId, { hours: 0, orders: 0, in12: null, in24: null });
   const scan = path.match(/^\/operations\/fbs-supplies\/(wb-[ab])\/scan-auto-print$/);
   if (scan) {
@@ -165,17 +167,11 @@ try {
       await scan('OZON-POS-666-A');
       await until(`!document.querySelector('[data-testid="fbs-kiz-scan-active"]')`, 4000);
       await sleep(500);
-      assert(requestLog.some(r=>r.path.includes('/boxes/')&&r.body?.order_product_ids?.includes(`${OZ}-position-a`)), 'Ozon position did not reach its box');
+      assert(requestLog.some(r=>r.path.includes('/kiz/lookup')&&r.path.includes(OZ)), 'Ozon scan lookup missing');
+      // The standalone card has no group open-box context; box assignment is a group assertion.
+      if (name !== 'ozon-single') assert(requestLog.some(r=>r.path.includes('/boxes/')&&r.body?.order_product_ids?.includes(`${OZ}-position-a`)), 'Ozon position did not reach its group box');
       assert.equal(printLog.length, 0, 'Ozon scan emitted native QR print');
       assert.equal(requestLog.filter(r=>r.path.includes('/scan-auto-print')).length, 0);
-      // Real row and bulk actions, including their real dialog rendering.
-      for (const [action, expr] of [['row', `document.querySelector('[data-order-id] button[aria-label="Печать ЧЗ и ШК"]')`], ['bulk', `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Печать всего ('))`]]) {
-        await evaluate(`(${expr}).click()`); await sleep(500);
-        await capture(`${name}-${action}-print`);
-        await cdp.send('Input.dispatchKeyEvent', { type:'keyDown', key:'Escape', code:'Escape', windowsVirtualKeyCode:27 });
-        await cdp.send('Input.dispatchKeyEvent', { type:'keyUp', key:'Escape', code:'Escape', windowsVirtualKeyCode:27 }); await sleep(250);
-        assert.equal(printLog.length, 0, `Ozon ${action} emitted QR print`);
-      }
     }
     if (name === 'mixed') {
       await scan('4606660000001');
@@ -189,6 +185,32 @@ try {
       assert(requestLog.some(r=>r.path.includes(`/fbs-supplies/${OZ}/boxes/`)&&r.body?.order_product_ids?.includes(`${OZ}-position-a`)));
       assert.equal(printLog.length,1,'Mixed Ozon emitted QR print');
       await capture('mixed-after-scans');
+    }
+    if (name.startsWith('ozon') || name === 'mixed') {
+      const rowId = `${OZ}-order`;
+      for (const [action, expr] of [['row', `document.querySelector('[data-order-id="${rowId}"] button[aria-label="Печать ЧЗ и ШК"]')`], ['bulk', `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Печать всего ('))`]]) {
+        // Mixed bulk belongs to both marketplaces; select only the Ozon row first.
+        if (name === 'mixed' && action === 'bulk') {
+          await evaluate(`document.querySelector('[data-order-id="${rowId}"] input[type="checkbox"]').click()`);
+        }
+        const selector = name === 'mixed' && action === 'bulk'
+          ? `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Печать выбранного ('))` : expr;
+        await evaluate(`(${selector}).click()`);
+        await until(`document.querySelector('[data-testid="marking-print-confirm"]')`);
+        await capture(`${name}-${action}-print`);
+        const before = requestLog.filter(r=>r.path.endsWith('/order-print-tape')).length;
+        await evaluate(`document.querySelector('[data-testid="marking-print-confirm"]').click()`);
+        for(let i=0;i<50 && requestLog.filter(r=>r.path.endsWith('/order-print-tape')).length===before;i++) await sleep(100);
+        const intent=requestLog.filter(r=>r.path.endsWith('/order-print-tape')).at(-1);
+        assert.equal(requestLog.filter(r=>r.path.endsWith('/order-print-tape')).length,before+1,`${name} ${action}: print intent missing`);
+        assert.equal(intent.body.include_order_qr,false,`${name} ${action}: Ozon QR intent`);
+        assert(intent.body.order_ids.every(id=>id.includes(OZ)||id.includes('ozon-b')));
+        // Synthetic server returns no printable assets: this proves request intent, not manual paper output.
+        await until(`document.querySelector('[data-testid="marking-print-error"]')`);
+        await evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(b=>b.textContent==='Отмена').click()`);
+        await until(`!document.querySelector('[data-testid="marking-print-confirm"]')`);
+        assert.equal(printLog.length,name==='mixed'?1:0,`${name} ${action}: Ozon native QR print`);
+      }
     }
     await writeFile(`${dir}/${name}.requests.json`,JSON.stringify({requestLog,printLog,blocked,errors},null,2));
     assert.equal(errors.length,0,`${name}: browser/probe exceptions`);
