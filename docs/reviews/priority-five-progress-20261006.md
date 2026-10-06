@@ -268,3 +268,18 @@ Backend остановилсядоMypy/Pytest на15Ruffstyleerrors только
 неподключались. Полнаявнешняяприёмка/бумага/подпись/apply не объявлены.
 675functionalisolatedDBtest сохраняется тем же исполнителем и будетвключён
 следующимSHA; самплан26единицневыдаётсязадоказанное проведениетестовойDB.
+
+## Первый frontend CI — реальные failures
+
+CI37460067342на066a5e95c завершёнFAIL. Backlog/guardsPASS. Frontend1517PASS,
+8testFAIL+1suiteFAIL в6files: sizeevalharness,2QR681assemblyselectors,
+oldWMS514sourceguard,2WMS636oldscannerselectors,2WMS666mixed/standaloneprintcases,
+scope666historymissing. Точнаягруппа переданаparent; ожиданиянескрываются/неослабляются.
+Дляruntime/fixtureразбораparentвыделяетотдельногоисполнителя.
+
+Scope666 требуетoriginalcontract0e078 вGit, а стандартныйfrontendcheckout
+CIбылshallow. Backend/frontendcheckouts теперьfetch-depth0, какdoc/guardjobs;
+никакихskip/relax тестамне добавлено. Это исправление runnerконтекста.
+НовыйCI37460722630идётна5ddd09aacпослеформатирования; онневыдаётсязаPASS.
+Этотworkflowfixсохранитсяследующимкоммитом, когдавключаетсяfrontfixили675test,
+чтобынеcancelполезныйbackendпрогонещёоднимнемедленнымheadupdate.
