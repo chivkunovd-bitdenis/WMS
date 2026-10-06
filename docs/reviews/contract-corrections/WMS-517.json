@@ -1,0 +1,35 @@
+{
+  "task": "WMS-517",
+  "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+  "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+  "files": [
+    "backend/tests/test_wms517_sales_contract.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "scope": "SC10 fixture correction only; not product acceptance",
+    "evidence": "docs/reviews/wms517-astra-096475c.md",
+    "evidence_commit": "445c78a378d04def5483e416b526d3cedc0c4e41",
+    "summary": "Independent review found SC10 scalar operation_id capture before rollback justified, with exact price, evidence and immutable bytes checks preserved."
+  },
+  "protocol_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
+  "format_reason": "Historical single-file contract; the array format rejects singleton wholesale replacements.",
+  "excluded_changes": [
+    {
+      "commit": "9b90320b58c51f8f5d35e6e90db3b855207834fb",
+      "source_commit": "3243caa2605ad8b3821d8f685920bfb70341dbdc",
+      "classification": "scope-only fake adapter; not a checker-supported original contract",
+      "reason": "Source subject includes R19 suffix and does not exactly equal WMS-517: контракт тестов. It cannot be an array correction source under this protocol.",
+      "verification": "Three added optional-argument fake lines; all 9 Python assertions and test names unchanged. No scoped independent correction PASS is inferred from product test success."
+    },
+    {
+      "commit": "427fc2cba5d09c78c691ca12277e66cff804fc69",
+      "classification": "approved business assertion migration; not scope-only",
+      "approval_commit": "6b85381722dafb690c3a2c4b90cce762b4b3643b",
+      "reason": "Price source, expected error code and retry evidence expectations change to finishedPrice sales. Commit also adds tests, a diagnostic and a review document; it is not a strict-subset frozen-file correction.",
+      "review_evidence": "docs/reviews/wms517-astra-096475c.md"
+    }
+  ]
+}
