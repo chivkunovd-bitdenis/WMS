@@ -314,6 +314,30 @@ async def test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart
                             "rnpt_check_status": "",
                             "gtd_error_codes": [],
                             "rnpt_error_codes": [],
+                        },
+                        {
+                            "exemplar_id": 82,
+                            "gtd": "",
+                            "is_gtd_absent": True,
+                            "rnpt": "000-RNPT/82",
+                            "is_rnpt_absent": False,
+                            "weight": 1.5,
+                            "marks": [{"mark": "123456789012345", "mark_type": "imei"}],
+                        }
+                    ],
+                },
+                {
+                    "product_id": SKU_TWO,
+                    "is_rnpt_needed": True,
+                    "exemplars": [
+                        {
+                            "exemplar_id": 91,
+                            "gtd": "",
+                            "is_gtd_absent": True,
+                            "rnpt": "000-RNPT/91",
+                            "is_rnpt_absent": False,
+                            "weight": 2.0,
+                            "marks": [{"mark": "UIN-91", "mark_type": "jw_uin"}],
                         }
                     ],
                 }
@@ -543,6 +567,30 @@ async def test_wms663_lost_set_response_reads_status_before_any_repeat(
                     "is_rnpt_absent": False,
                     "gtd_check_status": "",
                     "gtd_error_codes": [],
+                },
+                {
+                    "exemplar_id": 82,
+                    "gtd": "",
+                    "is_gtd_absent": True,
+                    "rnpt": "000-RNPT/82",
+                    "is_rnpt_absent": False,
+                    "weight": 1.5,
+                    "marks": [{"mark": "123456789012345", "mark_type": "imei"}],
+                }
+            ],
+        },
+        {
+            "product_id": SKU_TWO,
+            "is_rnpt_needed": True,
+            "exemplars": [
+                {
+                    "exemplar_id": 91,
+                    "gtd": "",
+                    "is_gtd_absent": True,
+                    "rnpt": "000-RNPT/91",
+                    "is_rnpt_absent": False,
+                    "weight": 2.0,
+                    "marks": [{"mark": "UIN-91", "mark_type": "jw_uin"}],
                 }
             ],
         }
@@ -649,6 +697,30 @@ async def test_wms663_two_sessions_commit_one_posting_version_once(
                                 "is_gtd_absent": False,
                                 "gtd_check_status": "",
                                 "gtd_error_codes": [],
+                            },
+                            {
+                                "exemplar_id": 82,
+                                "gtd": "",
+                                "is_gtd_absent": True,
+                                "rnpt": "000-RNPT/82",
+                                "is_rnpt_absent": False,
+                                "weight": 1.5,
+                                "marks": [{"mark": "123456789012345", "mark_type": "imei"}],
+                            }
+                        ],
+                    },
+                    {
+                        "product_id": SKU_TWO,
+                        "is_rnpt_needed": True,
+                        "exemplars": [
+                            {
+                                "exemplar_id": 91,
+                                "gtd": "",
+                                "is_gtd_absent": True,
+                                "rnpt": "000-RNPT/91",
+                                "is_rnpt_absent": False,
+                                "weight": 2.0,
+                                "marks": [{"mark": "UIN-91", "mark_type": "jw_uin"}],
                             }
                         ],
                     }
