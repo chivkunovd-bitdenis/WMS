@@ -35,9 +35,12 @@
       "review": {
         "model": "gpt-6.1-sol",
         "effort": "high",
-        "verdict": "PENDING",
+        "verdict": "PASS",
         "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
-        "correction_commit": "667a136a2760ff62fc181f47772290a8388587c6"
+        "correction_commit": "667a136a2760ff62fc181f47772290a8388587c6",
+        "evidence": "docs/reviews/wms663-666-owner-correction-independent-review-20261006.md",
+        "evidence_commit": "764701a36738170b255cb2faf8fdab3a77609e4d",
+        "evidence_blob": "b92b8a9e0b041f4e1253d4b89037c9271aad6f7f"
       }
     }
   ]
