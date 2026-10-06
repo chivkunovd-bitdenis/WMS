@@ -405,7 +405,7 @@ export function fbsBuildPickingRows(
       current.picked += row.picked
       if (!current.color) current.color = row.color
       current.wbOrders.push(isOzonSupply
-        ? (order.external_order_id ?? String(order.wb_order_id))
+        ? (order.external_order_id ?? order.wb_order_id)
         : order.wb_order_id)
       current.stickerCodes.push(order.sticker.code)
       const locations = order.inventory.locations
