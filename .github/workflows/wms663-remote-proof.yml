@@ -12,6 +12,8 @@ concurrency:
   cancel-in-progress: false
 jobs:
   c10-postgres:
+    # Explicit opt-in only: unchanged PG proof already PASS in run 37439193822.
+    if: contains(github.event.head_commit.message, '[C10]')
     runs-on: ubuntu-24.04
     timeout-minutes: 8
     services:

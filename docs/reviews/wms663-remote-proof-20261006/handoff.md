@@ -15,7 +15,7 @@ parent: 923961749907ee212d450f25b19950c43b270ce0.
 Only one tracked file/line changed:
 `frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx`.
 Before blob: 8548a75eb6963edcd5e3b3755e0a618d918f9f94.
-After blob: 7b41916c4 (full Git object available via correction SHA).
+After blob: 7b41916c43bf144d9fdeb7772d415bdf5535ff05.
 
 ```diff
 -    const close = button('Закрыть')
@@ -85,3 +85,27 @@ must resolve its relation to the original request; this tester changes no R/C,
 acceptance verdict or conclusion. New fixture delta needs its own independent
 Astra high review and supported protocol registration by the owning reviewer/
 controller; previous unchanged reviews or acceptance are not rerun.
+
+## First current remote result, exact proof SHA 01dec4491
+
+Run https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37439193822
+on 01dec4491cfb221e0d1b061e4908d45c01b05989 completed. PG job PASS:
+unchanged frozen two-session test and mixed writer both PASS, 2 passed/1 warning
+in 1.87s, JUnit skipped=0. Synthetic pending document claim prevented marking
+SET, then explicit continuation preserved GTD/marks/neighbors with version=2.
+See remote-pg-01dec/result.xml and probe.log. This closes the executed server
+portion of C10, not UI double click or external API.
+
+Compiled real UI: Chrome/154.0.8037.57, C18 1280 PASS. C18 390 FAIL on
+checkbox label clipping; this is not a measurement-only false positive:
+block width=0, all three TextField container widths=0, input width=28.
+The 390 screenshot also shows the existing workspace squeezing long content.
+Geometry and raw screenshots are in remote-ui-01dec. Browser errors=[]; no
+forbidden network. No UI or geometry expectation weakened. Product remains
+unchanged; this tester owns no product fix. Independent review/developer must
+resolve the narrow geometry. Additional remote C16 steps were not reached.
+
+Next addressed run retains C18 FAIL, captures the actual scrolled document area
+and continues C16 at 1280 independently. PG job now requires explicit [C10] in
+commit message; its unchanged successful proof is not rerun for UI-only edits.
+No unchanged product reviews or acceptance are repeated.

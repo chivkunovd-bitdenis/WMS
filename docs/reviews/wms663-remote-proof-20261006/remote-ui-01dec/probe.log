@@ -1,0 +1,9 @@
+AssertionError [ERR_ASSERTION]: 390: checkbox label clipped
+    at file:///home/runner/work/WMS/WMS/scripts/ci/wms663-proof/browser.mjs:45:151 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

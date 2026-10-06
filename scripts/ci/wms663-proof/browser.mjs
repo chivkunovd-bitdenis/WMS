@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 if(process.env.GITHUB_ACTIONS!=='true'||process.platform!=='linux')throw Error('Only GitHub Linux runner is authorized');
 const dir=process.env.WMS663_EVIDENCE;await mkdir(dir,{recursive:true});
 const report={product:'1fd2d92dc30eb376c1d8a8e27238e52d963a196e',fixture:'d9e022697e098a2f9c0feee6a5bf03f99cac5945',probe:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),scope:'Real unchanged workspace/theme, synthetic fetch only; no deployed backend, live API, printer or external cycle',cases:[]};
-const errors=[];let cdp,chromeLog='';
+const errors=[];const geometryFailures=[];let cdp,chromeLog='';
 class CDP{
  constructor(url){this.ws=new WebSocket(url);this.next=0;this.pending=new Map();this.listeners=new Map();this.ready=new Promise((r,j)=>{this.ws.onopen=r;this.ws.onerror=j});this.ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=this.pending.get(m.id);this.pending.delete(m.id);if(p){clearTimeout(p.timer);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result)}}else for(const f of this.listeners.get(m.method)??[])Promise.resolve(f(m.params)).catch(e=>errors.push(String(e)))}}
  async send(method,params={}){await this.ready;const id=++this.next;return new Promise((resolve,reject)=>{const timer=setTimeout(()=>{this.pending.delete(id);reject(Error('CDP timeout '+method))},12000);this.pending.set(id,{resolve,reject,timer});this.ws.send(JSON.stringify({id,method,params}))})}
@@ -40,12 +40,17 @@ try{
    return{width:innerWidth,block:bounds(block),rows,controls,text:block.innerText,fixture:window.proof.fixture,windowOverflow:document.documentElement.scrollWidth>innerWidth,context:document.body.innerText.includes('Ozon')};
   })()`);
   await writeFile(`${dir}/c18-${width}.geometry.json`,JSON.stringify(geometry,null,2));await capture(`c18-${width}`);
+  await evaluate(`(${input('Номер ГТД · SKU 663001 · экземпляр 1')}).scrollIntoView({block:'center'})`);await sleep(250);await capture(`c18-${width}-documents`);
+  try {
   assert.equal(geometry.fixture.sku,2);assert.equal(geometry.fixture.units,3);assert.equal(geometry.rows.length,3);assert(geometry.context);
   assert(geometry.text.includes(await evaluate('window.proof.longName')),'long product name absent');
   for(const row of geometry.rows){assert(row.value.startsWith('0000/')&&row.value.length>=60);assert(!row.overlap,`${width}: field/checkbox overlap`);assert(!row.labelOverflow,`${width}: checkbox label clipped`);assert(row.input.width>60,`${width}: input too narrow`)}
   assert(geometry.controls.every(c=>c.bounds.width>0&&c.bounds.height>0),'unreadable action');
   report.cases.push({case:'C18',width,status:'PASS',fixture:geometry.fixture,windowOverflow:geometry.windowOverflow});
+  } catch(e) {geometryFailures.push(String(e));report.cases.push({case:'C18',width,status:'FAIL',failure:String(e)});}
  }
+ await cdp.send('Emulation.setDeviceMetricsOverride',{width:1280,height:1100,deviceScaleFactor:1,mobile:false});
+ await cdp.send('Page.navigate',{url:'http://127.0.0.1:16663/'});await openDocuments();
  // C16 supplemental original scenario: rejected -> correction -> refresh -> tab -> remount.
  const label='Номер ГТД · SKU 663001 · экземпляр 1';const field=input(label);
  const save=`document.querySelector('button[aria-label="Сохранить ГТД / РНПТ · SKU 663001 · экземпляр 1"]')`;
@@ -68,6 +73,6 @@ try{
  await capture('c16-refresh-tab-remount');
  report.cases.push({case:'C16 supplemental',status:'PASS',scope:'rejected/correct/save/GET refresh/keyboard tab/remount synthetic readback; order B remains untested'});
  report.cases.push({case:'C10 double UI click',status:'PASS',putCount:1});
- assert.equal(errors.length,0,'browser exceptions or forbidden network');report.status='PASS';
+ assert.equal(errors.length,0,'browser exceptions or forbidden network');report.geometryFailures=geometryFailures;report.status=geometryFailures.length?'FAIL':'PASS';if(geometryFailures.length)process.exitCode=1;
 }catch(e){report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;if(cdp)try{await capture('failure')}catch{}}
 finally{if(cdp)try{await writeFile(`${dir}/requests.json`,JSON.stringify(await evaluate('window.proof?.requests'),null,2))}catch{}await writeFile(`${dir}/result.json`,JSON.stringify({...report,errors},null,2));await writeFile(`${dir}/chrome.log`,chromeLog);cdp?.ws.close();chrome.kill()}
