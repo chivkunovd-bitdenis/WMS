@@ -1,0 +1,8 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms672-673-analyst-20261006/frontend
+
+stderr | tests-e2e/wms672-dom.test.tsx > C1 inbound 300: one complete ordered tape, no box creation
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one.
+
+stderr | tests-e2e/wms672-dom.test.tsx > C1 inbound 300: one complete ordered tape, no box creation
+You seem to have overlapping act() calls, this is not supported. Be sure to await previous act() calls before making a new one.

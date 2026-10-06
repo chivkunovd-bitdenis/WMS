@@ -1,0 +1,26 @@
+WMS672 browser error: TypeError: Cannot read properties of undefined (reading 'replace')
+    at intakeStorageKey (http://127.0.0.1:16724/src/screens/ff/inboundDraftPersistence.ts:6:52)
+    at readIntake (http://127.0.0.1:16724/src/screens/ff/inboundDraftPersistence.ts:10:35)
+    at http://127.0.0.1:16724/src/screens/ff/FfInboundRequestView.tsx:396:71
+    at mountStateImpl (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=c7f6f0f0:4588:20)
+    at mountState (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=c7f6f0f0:4609:19)
+    at Object.useState (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=c7f6f0f0:13051:13)
+    at exports.useState (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react.js?v=c7f6f0f0:748:31)
+    at FfInboundRequestView (http://127.0.0.1:16724/src/screens/ff/FfInboundRequestView.tsx:396:56)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=c7f6f0f0:12868:12)
+    at renderWithHooks (http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=c7f6f0f0:4213:19)
+✖ tests-e2e/wms672-box-labels.test.mjs (29527.385292ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 0
+ℹ fail 0
+ℹ cancelled 1
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 29531.521667
+
+✖ failing tests:
+
+test at tests-e2e/wms672-box-labels.test.mjs:1:1
+✖ tests-e2e/wms672-box-labels.test.mjs (29527.385292ms)
+  'Promise resolution is still pending but the event loop has already resolved'
