@@ -71,10 +71,10 @@ function itemRow(item: PackagingSheetItem, index: number): string {
 export function buildShipmentPackagingSheetHtml(data: ShipmentPackagingSheetData): string {
   const columns = printColgroup(194, [
     { width: 24 },
-    { grow: 2 },
-    { width: compactPrintWidth('Артикул', data.items.map((item) => item.vendor_code.trim() || item.sku_code.trim()), 26) },
-    { width: compactPrintWidth('Цвет', data.items.map((item) => item.color), 22) },
-    { width: compactPrintWidth('Размер', data.items.map((item) => item.size), 18) },
+    { grow: 3 },
+    { width: compactPrintWidth('Артикул', data.items.map((item) => item.vendor_code.trim() || item.sku_code.trim()), 18) },
+    { width: compactPrintWidth('Цвет', data.items.map((item) => item.color), 16) },
+    { width: compactPrintWidth('Размер', data.items.map((item) => item.size), 16) },
     { width: compactPrintWidth('ШК', data.items.map((item) => item.barcode), 26) },
     { width: compactPrintWidth('Кол-во', data.items.map((item) => item.quantity), 18, 13) },
     { grow: 1 },

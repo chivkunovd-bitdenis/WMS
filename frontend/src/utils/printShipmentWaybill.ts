@@ -96,17 +96,17 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
 
   const columns = printColgroup(186, [
     ...(!isInbound ? [{ width: 7 }] : []),
-    { width: compactPrintWidth('SKU', data.lines.map((line) => line.sku_code), 22, 12, 4.5) },
+    { width: compactPrintWidth('SKU', data.lines.map((line) => line.sku_code), 16, 12, 4.5, 12) },
     { grow: 1 },
-    { width: compactPrintWidth('Артикул', data.lines.map((line) => line.sku_code), 24, 12, 4.5) },
-    { width: compactPrintWidth('Цвет', data.lines.map((line) => line.color), 24, 12, 4.5) },
-    { width: compactPrintWidth('Размер', data.lines.map((line) => line.size), 20, 12, 4.5) },
-    ...(isOperational ? [{ width: compactPrintWidth('Ячейка', data.lines.map((line) => line.storage_location_code), 23, 12, 4.5) }] : []),
-    { width: compactPrintWidth(isInbound ? 'Заявлено' : 'Кол-во', data.lines.map((line) => line.quantity), 20, 12, 4.5) },
-    ...(isOperational ? [{ width: compactPrintWidth('Отгружено', data.lines.map((line) => line.shipped_qty), 20, 12, 4.5) }] : []),
+    { width: compactPrintWidth('Артикул', data.lines.map((line) => line.sku_code), 20, 12, 4.5, 12) },
+    { width: compactPrintWidth('Цвет', data.lines.map((line) => line.color), 17, 12, 4.5, 12) },
+    { width: compactPrintWidth('Размер', data.lines.map((line) => line.size), 18, 12, 4.5, 12) },
+    ...(isOperational ? [{ width: compactPrintWidth('Ячейка', data.lines.map((line) => line.storage_location_code), 16, 12, 4.5, 12) }] : []),
+    { width: compactPrintWidth(isInbound ? 'Заявлено' : 'Кол-во', data.lines.map((line) => line.quantity), 18, 12, 4.5, 12) },
+    ...(isOperational ? [{ width: compactPrintWidth('Отгружено', data.lines.map((line) => line.shipped_qty), 20, 12, 4.5, 12) }] : []),
     ...(isInbound ? [
-      { width: compactPrintWidth('Факт', data.lines.map((line) => line.received_qty ?? 0), 20, 12, 4.5) },
-      { width: compactPrintWidth('Расхождение', data.lines.map((line) => discrepancyText(line.quantity, line.received_qty ?? 0)), 28, 12, 4.5) },
+      { width: compactPrintWidth('Факт', data.lines.map((line) => line.received_qty ?? 0), 15, 12, 4.5, 12) },
+      { width: compactPrintWidth('Расхождение', data.lines.map((line) => discrepancyText(line.quantity, line.received_qty ?? 0)), 28, 12, 4.5, 12) },
     ] : []),
   ])
   const lineRows = data.lines.map((line, index) => `<tr>
