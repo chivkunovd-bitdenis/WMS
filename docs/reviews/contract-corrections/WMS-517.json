@@ -31,5 +31,15 @@
       "reason": "Price source, expected error code and retry evidence expectations change to finishedPrice sales. Commit also adds tests, a diagnostic and a review document; it is not a strict-subset frozen-file correction.",
       "review_evidence": "docs/reviews/wms517-astra-096475c.md"
     }
-  ]
+  ],
+  "protocol_status": "BLOCKED_AT_CURRENT_HEAD",
+  "blocker": {
+    "code": "FROZEN_FILE_CHANGED_AFTER_REVIEWED_CORRECTION",
+    "commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+    "path": "backend/tests/test_wms517_sales_contract.py",
+    "change": "fixture_order now calls seed(db, sales_evidence=False)",
+    "reason": "SC10 baseline validates, but current file differs from it. Array entries cannot overlap this file; 432516e8 also changes test_withdrawal_ledger.py outside the original frozen set.",
+    "checker_acceptance": false,
+    "resolution": "Controller must resolve this additional fixture change through the authorized contract process. Do not replace the reviewed correction SHA, record overlapping entries, or legalize business assertion changes as scope-only."
+  }
 }
