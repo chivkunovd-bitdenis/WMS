@@ -11,6 +11,33 @@ const WMS_666_HISTORY_CHECKOUT_CHANGE = {
   beforeBlob: '621ee62065c67ae66d756b25057d56e780bb411d',
   afterBlob: 'bbec58a4b781913e7792a6718158a9fc4b806c90',
 }
+const WMS_666_DOCUMENT_HISTORY = [
+  {
+    commit: '1d34b77874e1b1396d8bdd216bd0053a4a308440',
+    changedPaths: ['docs/KANONICHESKIY_BACKLOG.md', 'docs/requirements/WMS-517.md',
+      'docs/requirements/WMS-666.md', 'docs/reviews/wms666-replacement-acceptance-20261006.md'],
+    files: [{ path: 'docs/requirements/WMS-517.md',
+      beforeBlob: 'aca08cc54fce43c7e0987664827e5ec193fff6d5',
+      afterBlob: '89a8fb5fbbfe2a823477dbc495fe7b0e78abd6d7' }],
+  },
+  {
+    commit: 'c5d9255e5d912e13398c883961d0c476ee5a1938',
+    changedPaths: ['docs/reviews/wms663-666-frontend-rollback-scope-20261006.md'],
+    files: [{ path: 'docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
+      beforeBlob: '664aa8ea5e279c04f9b6219a8440142fd7bc142a',
+      afterBlob: 'c68d9ac10b045020e651544017d84e574dab5e7a' }],
+  },
+  {
+    commit: '8ec0fcd6c7625a4351e6e9a04dfe80f055ac398a',
+    changedPaths: ['docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
+      'docs/reviews/wms666-earlier-frontend-scope-20261006.md'],
+    files: [{ path: 'docs/reviews/wms663-666-frontend-rollback-scope-20261006.md',
+      beforeBlob: 'c68d9ac10b045020e651544017d84e574dab5e7a',
+      afterBlob: '664aa8ea5e279c04f9b6219a8440142fd7bc142a' },
+    { path: 'docs/reviews/wms666-earlier-frontend-scope-20261006.md', beforeBlob: null,
+      afterBlob: '9dda566e064373fce1e817ce11c8fd5c1b345165' }],
+  },
+]
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -27,8 +54,19 @@ const WMS_666_PROOF_FILES = new Set([
 
 export function wms666AcceptedHistoryChange(cwd: string | URL, commit: string, path: string): boolean {
   const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
-  if (commit !== accepted.commit || path !== accepted.path) return false
   const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  const documents = WMS_666_DOCUMENT_HISTORY.find((entry) => entry.commit === commit)
+  const file = documents?.files.find((entry) => entry.path === path)
+  if (documents && file) {
+    // Immutable doc-only history, not permission for any future edit of these paths.
+    const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
+      .split('\n').filter(Boolean).sort()
+    if (JSON.stringify(changed) !== JSON.stringify([...documents.changedPaths].sort())) return false
+    const treeEntry = (sha: string) => git('ls-tree', '--full-tree', sha, '--', path)
+    return treeEntry(`${commit}^`) === (file.beforeBlob === null ? '' : `100644 blob ${file.beforeBlob}\t${path}`)
+      && treeEntry(commit) === `100644 blob ${file.afterBlob}\t${path}`
+  }
+  if (commit !== accepted.commit || path !== accepted.path) return false
   // Only the immutable four-line fetch-depth fix is already accepted.
   // Future commits and pending edits of this path receive no exemption.
   return git('rev-parse', `${commit}^:${path}`) === accepted.beforeBlob
@@ -231,6 +269,56 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
     try {
       const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
       expect(() => wms666AcceptedHistoryChange(repo.cwd, accepted.commit, accepted.path)).toThrow()
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('accepts only exact doc-only historical commits and keeps their paths forbidden generally', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    for (const entry of WMS_666_DOCUMENT_HISTORY) {
+      for (const file of entry.files) {
+        expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)
+        expect(wms666AcceptedHistoryChange(cwd, WMS_666_CONTRACT, file.path)).toBe(false)
+        expect(wms666AcceptedHistoryChange(cwd, entry.commit, `${file.path}.new`)).toBe(false)
+        expect(wms666ScopeViolations([file.path])).toEqual([file.path])
+      }
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
+    }
+  })
+
+  it('rejects future committed, dirty and staged edits of every historical document path', () => {
+    const repo = fixtureRepository()
+    try {
+      for (const path of new Set(WMS_666_DOCUMENT_HISTORY.flatMap((entry) => entry.files.map((file) => file.path)))) {
+        repo.git('reset', '--hard', repo.contract)
+        repo.write(path, 'independent document before future mutation\n')
+        const baseline = repo.commit('WMS-517: independent documentation')
+        repo.write(path, 'future forbidden task document\n')
+        const future = repo.commit('WMS-666: future documentation edit')
+        expect(wms666AcceptedHistoryChange(repo.cwd, future, path)).toBe(false)
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+        repo.git('reset', '--hard', baseline)
+        repo.write(path, 'unstaged forbidden document\n')
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+        repo.git('add', path)
+        repo.write(path, 'independent document before future mutation\n')
+        expect(repo.git('diff', '--name-only', 'HEAD', '--', path)).toBe('')
+        expect(repo.git('diff', '--cached', '--name-only', 'HEAD', '--', path)).toBe(path)
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      }
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('fails exact doc-history lookup when immutable objects are absent', () => {
+    const repo = fixtureRepository()
+    try {
+      for (const entry of WMS_666_DOCUMENT_HISTORY) {
+        expect(() => wms666AcceptedHistoryChange(repo.cwd, entry.commit, entry.files[0].path)).toThrow()
+      }
     } finally {
       repo.close()
     }

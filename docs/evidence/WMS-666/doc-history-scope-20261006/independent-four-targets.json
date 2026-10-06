@@ -1,0 +1,17 @@
+{
+  "reviewed_commit": "b1742141c4625d7ed9e238132d94ffea402f49ee",
+  "actual_head": "29e7436896d71e1fc35728b1445d9907af7f0b8d",
+  "command": [
+    "/usr/local/bin/node",
+    "node_modules/vitest/vitest.mjs",
+    "run",
+    "src/screens/v2/wms666ChangeScope.test.ts",
+    "--reporter=verbose",
+    "--testNamePattern=keeps the actual task diff|accepts only exact doc-only historical|rejects future committed, dirty and staged edits of every historical document|fails exact doc-history lookup"
+  ],
+  "exit_code": 0,
+  "duration_seconds": 4.982,
+  "test_sha256": "3490f5354f98a74309ebe7964d65f8f8690137f05d6ec0f0d9304b4cd769c323",
+  "source_unchanged": true,
+  "node_version": "v24.13.1"
+}
