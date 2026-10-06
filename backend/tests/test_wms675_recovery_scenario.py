@@ -150,6 +150,7 @@ async def seed_incident(session):
             wb_status=source["wb_status"],
             supplier_status=source["supplier_status"],
             mapping_status="mapped",
+            reserve_status="reserved" if row["local_reserved_quantity"] else "released",
             created_at_wb=datetime.fromisoformat(source["created_at_wb"]),
             deadline_at=datetime.fromisoformat(card["shipment_date"]),
             meta_details_json={"ozon_requirements": {"kinds": []}},
