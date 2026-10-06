@@ -62,6 +62,7 @@
     "backend/tests/test_wms669_seller_catalog_once.py": "510a2072b2da6b585c5123b1469aec0bc7379574bf7dbaed5646f9e02c6de7db",
     "backend/tests/test_wms675_recovery_scenario.py": "72dcca9c9c665cae90b4140b96b18803b9f2de1e90c087cdfe71eb17ec33f498",
     "backend/tests/wms669_catalog_fixtures.py": "bcdad64905dec456f0e2b3e0b5d69d3fa4ab41b24b8525e0a645c955bbe0ce90",
+    "docs/evidence/WMS-652/ci-two-shards-20261006/backend-collection.json": "e0e4fb620b057b2f39e8c2b014d666ad01a28b0161f14676458231f0c6d1a714",
     "docs/evidence/WMS-652/trusted-anchor-20261006/process-integrity.yml": "5d87dea00670cdc8c09c5f033d538887a11e4724245a5b45a62c75a765df0719",
     "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/balances_locations.csv": "6f4ef7ea120a1cf1ed8b13eb7037eb2f57c627f250788069f036d8c2731d4f1e",
     "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/balances_vs_all_movements.csv": "8e7af57acf3ea84a18dae585fd25517756aeec036887c5c71b3a5246cdb10c8c",

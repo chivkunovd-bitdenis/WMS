@@ -1,0 +1,99 @@
+{
+  "id": 24431521,
+  "name": "WMS-652 etalon: только PR с зелёным CI",
+  "target": "branch",
+  "source_type": "Repository",
+  "source": "chivkunovd-bitdenis/WMS",
+  "enforcement": "active",
+  "conditions": {
+    "ref_name": {
+      "exclude": [],
+      "include": [
+        "refs/heads/etalon"
+      ]
+    }
+  },
+  "rules": [
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "pull_request",
+      "parameters": {
+        "required_approving_review_count": 0,
+        "dismiss_stale_reviews_on_push": false,
+        "required_reviewers": [],
+        "require_code_owner_review": false,
+        "require_last_push_approval": false,
+        "required_review_thread_resolution": false,
+        "require_extra_approval_for_unattributed_changes": true,
+        "allowed_merge_methods": [
+          "merge",
+          "squash",
+          "rebase"
+        ]
+      }
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": true,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "baseline",
+            "integration_id": 15368
+          },
+          {
+            "context": "backlog",
+            "integration_id": 15368
+          },
+          {
+            "context": "backend",
+            "integration_id": 15368
+          },
+          {
+            "context": "frontend-build",
+            "integration_id": 15368
+          },
+          {
+            "context": "охрана",
+            "integration_id": 15368
+          },
+          {
+            "context": "print-regressions",
+            "integration_id": 15368
+          },
+          {
+            "context": "printer-windows",
+            "integration_id": 15368
+          },
+          {
+            "context": "process-proof",
+            "integration_id": 15368
+          },
+          {
+            "context": "process-integrity",
+            "integration_id": 15368
+          }
+        ]
+      }
+    }
+  ],
+  "node_id": "RRS_lACqUmVwb3NpdG9yec5H8QK8zgF0y6E",
+  "created_at": "2026-10-04T01:12:11.289+04:00",
+  "updated_at": "2026-10-06T23:50:55.959+04:00",
+  "bypass_actors": [],
+  "current_user_can_bypass": "never",
+  "_links": {
+    "self": {
+      "href": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/rulesets/24431521"
+    },
+    "html": {
+      "href": "https://github.com/chivkunovd-bitdenis/WMS/rules/24431521"
+    }
+  }
+}

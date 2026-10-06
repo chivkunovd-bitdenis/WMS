@@ -134,6 +134,8 @@ CI и установленная версия. Реальное внешнее �
 исторический контракт106PASS воспроизведён. Отдельный разработчик работает над
 четырьмя scripts/ops файлами; старую ветку665 целиком не переносить.
 
-## Checkpoint общей интеграции23:50UTC
+## Checkpoint общей интеграции19:50UTC
 
-[Точный handoff и registry](../../evidence/WMS-652/process-gates-20261006/integration-handoff.md):221files/1146suite IDs, Mac110PASS, geometry43 сохранены, независимые reviews Mac/CI/geometry приняты. Предыдущая строка об ожидании доступности Виталика устарела: владелец требует сначала softwaredeploy, затем личный Mac/подпись. Приёмка новой дельты поручена отдельному замещающему Sol аналитику. Main только checker/workflow045272b51; SOURCEpin/rules/canary/fullCI/deploy ещё не объявлены. Production прежний8f11d912.
+[Точный handoff и registry](../../evidence/WMS-652/process-gates-20261006/integration-handoff.md):222files/1146suite IDs, Mac110PASS, geometry43 сохранены, независимые reviews Mac/CI/geometry приняты. Предыдущая строка об ожидании доступности Виталика устарела: владелец требует сначала softwaredeploy, затем личный Mac/подпись. Приёмка новой дельты поручена отдельному замещающему Sol аналитику. Main только checker/workflow045272b51; SOURCEpin/rules/canary/fullCI/deploy ещё не объявлены. Production прежний8f11d912.
+
+19:52UTC: actual71contracts+45subtestsPASS; обязательныеruleset24431521readback9checks/stricttrue/nobypass сохранены вevidence. Источникpin проходит отдельную boundedпроверку последобавлениязащитыcollectionfixture.
