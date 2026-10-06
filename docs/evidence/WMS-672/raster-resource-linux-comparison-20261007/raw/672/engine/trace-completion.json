@@ -1,0 +1,180 @@
+{
+  "dataLossOccurred": true,
+  "stream": "1",
+  "traceFormat": "json",
+  "streamCompression": "gzip",
+  "usage": [
+    {
+      "percentFull": 0.08402237296104431,
+      "eventCount": 0,
+      "value": 0.08402237296104431
+    },
+    {
+      "percentFull": 0.09423637390136719,
+      "eventCount": 0,
+      "value": 0.09423637390136719
+    },
+    {
+      "percentFull": 0.1253039836883545,
+      "eventCount": 0,
+      "value": 0.1253039836883545
+    },
+    {
+      "percentFull": 0.15138618648052216,
+      "eventCount": 0,
+      "value": 0.15138618648052216
+    },
+    {
+      "percentFull": 0.17406371235847473,
+      "eventCount": 0,
+      "value": 0.17406371235847473
+    },
+    {
+      "percentFull": 0.18075145781040192,
+      "eventCount": 0,
+      "value": 0.18075145781040192
+    },
+    {
+      "percentFull": 0.48005837202072144,
+      "eventCount": 0,
+      "value": 0.48005837202072144
+    },
+    {
+      "percentFull": 0.5074173212051392,
+      "eventCount": 0,
+      "value": 0.5074173212051392
+    },
+    {
+      "percentFull": 0.5361137986183167,
+      "eventCount": 0,
+      "value": 0.5361137986183167
+    },
+    {
+      "percentFull": 0.5403088331222534,
+      "eventCount": 0,
+      "value": 0.5403088331222534
+    },
+    {
+      "percentFull": 0.6839129328727722,
+      "eventCount": 0,
+      "value": 0.6839129328727722
+    },
+    {
+      "percentFull": 0.9280763864517212,
+      "eventCount": 0,
+      "value": 0.9280763864517212
+    },
+    {
+      "percentFull": 0.9857125282287598,
+      "eventCount": 0,
+      "value": 0.9857125282287598
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    },
+    {
+      "percentFull": 0.9982976913452148,
+      "eventCount": 0,
+      "value": 0.9982976913452148
+    }
+  ],
+  "reason": "fixture-2-context-close",
+  "stopRequestedEpochMs": 1791328543167
+}
