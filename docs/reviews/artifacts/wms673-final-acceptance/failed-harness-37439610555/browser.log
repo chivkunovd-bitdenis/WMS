@@ -1,0 +1,8 @@
+file:///home/runner/work/WMS/WMS/frontend/acceptance/browser.mjs:65
+      if (!preview) throw new Error('Native print-preview target has no accessible page')
+                          ^
+
+Error: Native print-preview target has no accessible page
+    at file:///home/runner/work/WMS/WMS/frontend/acceptance/browser.mjs:65:27
+
+Node.js v24.21.0

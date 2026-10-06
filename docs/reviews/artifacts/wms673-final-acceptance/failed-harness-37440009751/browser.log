@@ -1,0 +1,15 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Native print preview failed to become ready: {"title":"Лист подбора — FBS supply-a","url":"chrome://print/","previewState":"display-preview","text":"\n\n\n\n\n\n\n\n  \n  \n\n\n\n"}
+    at file:///home/runner/work/WMS/WMS/frontend/acceptance/browser.mjs:89:7 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

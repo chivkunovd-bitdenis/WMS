@@ -1,0 +1,25 @@
+{
+  "run": 37431998239,
+  "artifact": 11396964277,
+  "member": "673/923894384d3be770e8a560d2b2557d8dc22a27f8086630617c5c4ca37517adb1.pdf",
+  "pdf_sha256": "7822751d441241d09e5be06599d83c63377111564ab6db9ca6bf75af381f8bc5",
+  "pages": 12,
+  "viewed_pages": [
+    1,
+    7,
+    12
+  ],
+  "renderer": "PyMuPDF 1.27.2.3, 1.8 scale, no browser",
+  "first_rows": [
+    1,
+    2,
+    3
+  ],
+  "middle_rows": [
+    19,
+    20,
+    21
+  ],
+  "last_row": 34,
+  "visual_verdict": "PASS: all eleven columns aligned; full wrapped size/color; 46 and dash visible; repeated headers; final row and footer intact"
+}

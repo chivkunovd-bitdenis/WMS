@@ -1,0 +1,26 @@
+file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:88
+            this._reject(callback, new TargetCloseError('Target closed'));
+                                   ^
+
+TargetCloseError: Protocol error (Runtime.evaluate): Target closed
+    at CallbackRegistry.clear (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:88:36)
+    at CdpCDPSession.onClosed (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/cdp/CdpSession.js:121:25)
+    at Connection.onMessage (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/cdp/Connection.js:166:25)
+    at WebSocket.<anonymous> (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/node/NodeWebSocketTransport.js:48:32)
+    at callListener (/home/runner/work/WMS/WMS/frontend/node_modules/ws/lib/event-target.js:290:14)
+    at WebSocket.onMessage (/home/runner/work/WMS/WMS/frontend/node_modules/ws/lib/event-target.js:209:9)
+    at WebSocket.emit (node:events:514:28)
+    at Receiver.receiverOnMessage (/home/runner/work/WMS/WMS/frontend/node_modules/ws/lib/websocket.js:1253:20)
+    at Receiver.emit (node:events:514:28)
+    at Immediate.<anonymous> (/home/runner/work/WMS/WMS/frontend/node_modules/ws/lib/receiver.js:638:16) {
+  cause: ProtocolError
+      at <instance_members_initializer> (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:108:14)
+      at new Callback (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:112:16)
+      at CallbackRegistry.create (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/common/CallbackRegistry.js:27:26)
+      at Connection._rawSend (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/cdp/Connection.js:125:26)
+      at CdpCDPSession.send (file:///home/runner/work/WMS/WMS/frontend/node_modules/puppeteer-core/lib/puppeteer/cdp/CdpSession.js:72:14)
+      at evaluatePreview (file:///home/runner/work/WMS/WMS/frontend/acceptance/browser.mjs:67:37)
+      at file:///home/runner/work/WMS/WMS/frontend/acceptance/browser.mjs:96:13
+}
+
+Node.js v24.21.0

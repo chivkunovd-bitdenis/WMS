@@ -1,0 +1,309 @@
+{
+  "browser": "Chrome/154.0.8037.57",
+  "source": "76f71776f403d0bdda07d521738281392e2b12ce",
+  "cases": [
+    {
+      "kind": "single",
+      "repeats": [
+        {
+          "headers": [
+            "№",
+            "Фото",
+            "Товар и идентификаторы",
+            "Размер",
+            "Цвет",
+            "Ячейка / тара",
+            "Заказы WB",
+            "Стикер",
+            "Взять",
+            "Подобрано",
+            "Маркировка"
+          ],
+          "rows": [
+            [
+              "1",
+              "—",
+              "\n          Товар red\n          ART-red · WB 1673 · WB-CODE-red\n        ",
+              "Универсальный",
+              "Красный & синий насыщенный длинный цвет",
+              "A-01: 9",
+              "№673000",
+              "S673 0000",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "2",
+              "—",
+              "\n          Товар blue\n          ART-blue · WB 1673 · WB-CODE-blue\n        ",
+              "46",
+              "Синий",
+              "A-01: 9",
+              "№673001",
+              "S673 0001",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ]
+          ],
+          "sizeStyle": {
+            "width": "78px",
+            "fontSize": "20px"
+          },
+          "printCalls": 1
+        },
+        {
+          "headers": [
+            "№",
+            "Фото",
+            "Товар и идентификаторы",
+            "Размер",
+            "Цвет",
+            "Ячейка / тара",
+            "Заказы WB",
+            "Стикер",
+            "Взять",
+            "Подобрано",
+            "Маркировка"
+          ],
+          "rows": [
+            [
+              "1",
+              "—",
+              "\n          Товар red\n          ART-red · WB 1673 · WB-CODE-red\n        ",
+              "Универсальный",
+              "Красный & синий насыщенный длинный цвет",
+              "A-01: 9",
+              "№673000",
+              "S673 0000",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "2",
+              "—",
+              "\n          Товар blue\n          ART-blue · WB 1673 · WB-CODE-blue\n        ",
+              "46",
+              "Синий",
+              "A-01: 9",
+              "№673001",
+              "S673 0001",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ]
+          ],
+          "sizeStyle": {
+            "width": "78px",
+            "fontSize": "20px"
+          },
+          "printCalls": 1
+        }
+      ],
+      "transport": {
+        "requests": [
+          {
+            "path": "/operations/fbs-supplies/supply-a/workspace",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-a/pick-options",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-a/pick-options",
+            "method": "GET"
+          }
+        ],
+        "unchanged": true
+      },
+      "errors": []
+    },
+    {
+      "kind": "group",
+      "repeats": [
+        {
+          "headers": [
+            "№",
+            "Фото",
+            "Товар и идентификаторы",
+            "Размер",
+            "Цвет",
+            "Ячейка / тара",
+            "Заказы маркетплейса",
+            "Стикер",
+            "Взять",
+            "Подобрано",
+            "Маркировка"
+          ],
+          "rows": [
+            [
+              "1",
+              "—",
+              "\n          Товар red\n          ART-red · WB 1673 · WB-CODE-red\n        ",
+              "Универсальный",
+              "Красный & синий насыщенный длинный цвет",
+              "A-01: 9",
+              "№673000",
+              "S673 0000",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "2",
+              "—",
+              "\n          Товар blue\n          ART-blue · WB 1673 · WB-CODE-blue\n        ",
+              "46",
+              "Синий",
+              "A-01: 9",
+              "№673001",
+              "S673 0001",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "3–5",
+              "—",
+              "\n          Первая позиция Ozon\n          OZ-ART-RED · SKU 673101 · OZ-RED\n        ",
+              "S",
+              "Красный",
+              "A-01: 9",
+              "№OZ-673-POSTING",
+              "S673 0000",
+              "3",
+              "1 / 3",
+              "sgtin"
+            ],
+            [
+              "6–7",
+              "—",
+              "\n          Вторая позиция Ozon\n          OZ-ART-BLUE · SKU 673102 · OZ-BLUE\n        ",
+              "XL",
+              "Синий",
+              "A-01: 9",
+              "№OZ-673-POSTING",
+              "S673 0000",
+              "2",
+              "2 / 2",
+              "sgtin"
+            ]
+          ],
+          "sizeStyle": {
+            "width": "78px",
+            "fontSize": "20px"
+          },
+          "printCalls": 1
+        },
+        {
+          "headers": [
+            "№",
+            "Фото",
+            "Товар и идентификаторы",
+            "Размер",
+            "Цвет",
+            "Ячейка / тара",
+            "Заказы маркетплейса",
+            "Стикер",
+            "Взять",
+            "Подобрано",
+            "Маркировка"
+          ],
+          "rows": [
+            [
+              "1",
+              "—",
+              "\n          Товар red\n          ART-red · WB 1673 · WB-CODE-red\n        ",
+              "Универсальный",
+              "Красный & синий насыщенный длинный цвет",
+              "A-01: 9",
+              "№673000",
+              "S673 0000",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "2",
+              "—",
+              "\n          Товар blue\n          ART-blue · WB 1673 · WB-CODE-blue\n        ",
+              "46",
+              "Синий",
+              "A-01: 9",
+              "№673001",
+              "S673 0001",
+              "1",
+              "0 / 1",
+              "sgtin"
+            ],
+            [
+              "3–5",
+              "—",
+              "\n          Первая позиция Ozon\n          OZ-ART-RED · SKU 673101 · OZ-RED\n        ",
+              "S",
+              "Красный",
+              "A-01: 9",
+              "№OZ-673-POSTING",
+              "S673 0000",
+              "3",
+              "1 / 3",
+              "sgtin"
+            ],
+            [
+              "6–7",
+              "—",
+              "\n          Вторая позиция Ozon\n          OZ-ART-BLUE · SKU 673102 · OZ-BLUE\n        ",
+              "XL",
+              "Синий",
+              "A-01: 9",
+              "№OZ-673-POSTING",
+              "S673 0000",
+              "2",
+              "2 / 2",
+              "sgtin"
+            ]
+          ],
+          "sizeStyle": {
+            "width": "78px",
+            "fontSize": "20px"
+          },
+          "printCalls": 1
+        }
+      ],
+      "transport": {
+        "requests": [
+          {
+            "path": "/operations/fbs-supplies/supply-a/workspace",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-oz/workspace",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-a/pick-options",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-oz/pick-options",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-a/pick-options",
+            "method": "GET"
+          },
+          {
+            "path": "/operations/fbs-supplies/supply-oz/pick-options",
+            "method": "GET"
+          }
+        ],
+        "unchanged": true
+      },
+      "errors": []
+    }
+  ],
+  "pass": true
+}
