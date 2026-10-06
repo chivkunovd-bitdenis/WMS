@@ -1,0 +1,87 @@
+{
+  "reviewed_fix": "9e757a02cefa0cd1f7a95d272944e0b7c2b0660a",
+  "integrated_source": "296107aafcf44d1ac5afa623d32c644fa5396233",
+  "frozen_contract": "05a7d08a65e135256fa69e8bf84519e95bcdef96",
+  "ci_wiring": "f528152ca04ccf2d86207b95ee3de0b96141948f",
+  "preserved_frozen_test_hashes": {
+    "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "frontend/tests-e2e/wms672-dom.config.ts": "dd41131adc4f3dedcd82bf466b52a157fcd320131a4651656415bfa47ad7f0a4",
+    "frontend/tests-e2e/wms672-dom.test.tsx": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+    "frontend/tests-e2e/wms672-harness.html": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
+    "frontend/tests-e2e/wms672-harness.tsx": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
+    "frontend/tests-e2e/wms672-remaining.test.mjs": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
+    "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f"
+  },
+  "scope_cli_probes": [
+    {
+      "command": [
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
+        "scripts/ci/product_scope.py",
+        "--trusted-ref",
+        "d61805978b3e7878d1056c99b4e6e0823edf49a5"
+      ],
+      "exit": 1,
+      "output": {
+        "unapproved_product_paths": [
+          "frontend/src/screens/ff/FfInboundRequestView.tsx",
+          "frontend/src/utils/printBarcodeLabel.ts"
+        ]
+      }
+    },
+    {
+      "command": [
+        "/Library/Frameworks/Python.framework/Versions/3.14/bin/python3",
+        "scripts/ci/product_scope.py",
+        "--trusted-ref",
+        "9e757a02cefa0cd1f7a95d272944e0b7c2b0660a"
+      ],
+      "exit": 0,
+      "output": {
+        "unapproved_product_paths": []
+      }
+    }
+  ],
+  "reviewed_product_hashes": {
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11",
+    "frontend/src/utils/printBarcodeLabel.ts": "269694705aabed0a7c44d9cb9ce68fcebe8d01de1b6769b36f5bab99032264be"
+  },
+  "developer_actual_node_TAP": {
+    "pass": 7,
+    "fail": 0,
+    "skips": 0,
+    "cases": [
+      "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
+      "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
+      "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
+      "C5 blank message retains existing generic preparation error and zero external actions",
+      "C5 nonstring message retains existing generic preparation error and zero external actions",
+      "C5 no message retains existing generic preparation error and zero external actions",
+      "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks"
+    ]
+  },
+  "developer_local_receipt": {
+    "base_sha": "ecb1d5721ea823a0ffd861303302c4b8dc731e6d",
+    "testwriter_sha": "05a7d08a65e135256fa69e8bf84519e95bcdef96",
+    "testwriter_cherry_pick_sha": "a52257b23660fe448f9d12fd53f14d1fb61111f3",
+    "node": "v24.13.1",
+    "precode": {
+      "passed": 4,
+      "failed": 3,
+      "skipped": 0
+    },
+    "after": {
+      "passed": 7,
+      "failed": 0,
+      "skipped": 0
+    },
+    "typecheck_exit": 0,
+    "build_exit": 0,
+    "old_test_sources_unchanged": true,
+    "new_test_source_unchanged": true,
+    "linux_comparison": "pending; coordinator only"
+  },
+  "independent_tests_repeated": false,
+  "linux_receipt": "pending",
+  "product_reference_upgrade_approved": false
+}
