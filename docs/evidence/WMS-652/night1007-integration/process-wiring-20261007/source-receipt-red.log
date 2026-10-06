@@ -1,0 +1,24 @@
+test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference) ... ok
+test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact) ... FAIL
+test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact) ... ok
+test_controlled_accepted_final_freeze_accepts_only_its_exact_reference (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_controlled_accepted_final_freeze_accepts_only_its_exact_reference) ... ok
+test_existing_517_pg_run_produces_report_without_duplicate_run (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_existing_517_pg_run_produces_report_without_duplicate_run) ... ok
+test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze) ... ok
+test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job) ... ok
+
+======================================================================
+FAIL: test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_ci_release_additions.py", line 146, in test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact
+    self.assert_wms686_raw_receipts(job, proof, receipt)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_ci_release_additions.py", line 55, in assert_wms686_raw_receipts
+    self.assertIn(command, compact_job)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'node --test --test-reporter=tap docs/mockups/WMS-686/model.test.ts > "$RUNNER_TEMP/wms686-model.tap"' not found in 'timeout-minutes: 15 runs-on: ubuntu-latest steps: - uses: actions/checkout@v4 - uses: actions/setup-node@v4 with: node-version: "24" cache: npm cache-dependency-path: frontend/package-lock.json - name: Install existing frontend dependencies run: | npm ci --prefix frontend ln -s frontend/node_modules node_modules - name: WMS-686 frozen model and isolation contract run: node --test docs/mockups/WMS-686/model.test.ts - name: WMS-686 demo typecheck and build run: | frontend/node_modules/.bin/tsc --noEmit -p docs/mockups/WMS-686/tsconfig.json frontend/node_modules/.bin/vite build --config docs/mockups/WMS-686/vite.config.ts'
+
+----------------------------------------------------------------------
+Ran 7 tests in 0.005s
+
+FAILED (failures=1)

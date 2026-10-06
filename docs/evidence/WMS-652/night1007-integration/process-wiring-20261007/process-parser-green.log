@@ -1,0 +1,15 @@
+test_browser_report_is_exact_named_actual_sha_not_old_green (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_browser_report_is_exact_named_actual_sha_not_old_green) ... ok
+test_duplicate_cannot_replace_missing_case (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_duplicate_cannot_replace_missing_case) ... ok
+test_every_nonpass_and_collection_error_refuse (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_every_nonpass_and_collection_error_refuse) ... ok
+test_freeze_rejects_source_helper_runner_and_self_updated_hash (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_freeze_rejects_source_helper_runner_and_self_updated_hash) ... ok
+test_no_external_paths_or_empty_policy (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_no_external_paths_or_empty_policy) ... ok
+test_real_named_cases_green (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_real_named_cases_green) ... ok
+test_same_count_other_case_cannot_replace_required_case (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_same_count_other_case_cannot_replace_required_case) ... ok
+test_subset_allows_unrelated_skip_but_never_protected_skip (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_subset_allows_unrelated_skip_but_never_protected_skip) ... ok
+test_unavailable_empty_malformed_or_symlink_report_refuses (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_unavailable_empty_malformed_or_symlink_report_refuses) ... ok
+test_vitest_requires_file_and_full_parameterized_name_not_summary (scripts.ci.tests.test_process_contracts.ProcessContractTests.test_vitest_requires_file_and_full_parameterized_name_not_summary) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.738s
+
+OK

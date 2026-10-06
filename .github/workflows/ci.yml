@@ -378,11 +378,18 @@ jobs:
           npm ci --prefix frontend
           ln -s frontend/node_modules node_modules
       - name: WMS-686 frozen model and isolation contract
-        run: node --test docs/mockups/WMS-686/model.test.ts
+        run: node --test --test-reporter=tap docs/mockups/WMS-686/model.test.ts > "$RUNNER_TEMP/wms686-model.tap"
       - name: WMS-686 demo typecheck and build
         run: |
           frontend/node_modules/.bin/tsc --noEmit -p docs/mockups/WMS-686/tsconfig.json
           frontend/node_modules/.bin/vite build --config docs/mockups/WMS-686/vite.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wms686-model.tap
+          if-no-files-found: error
+          retention-days: 14
 
   guards:
     timeout-minutes: 10
@@ -493,7 +500,7 @@ jobs:
   process-proof:
     # Required by the deployment verifier. Branch enforcement needs a separately
     # installed trusted anchor; this candidate workflow cannot protect itself.
-    needs: [baseline, backend, frontend-build, guards, print-regressions, printer-windows]
+    needs: [baseline, backend, frontend-build, guards, print-regressions, printer-windows, wms686-mockup]
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -523,6 +530,10 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/process-proof
+      - uses: actions/download-artifact@v4
+        with:
+          name: wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof
       - name: Verify every required named case and bind evidence to this attempt
         env:

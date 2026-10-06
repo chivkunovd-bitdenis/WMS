@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "84b795f6841ce2f9ff55bbba05c95b58252a478a0c610d7fd56ebd1f169a8ed6",
+    ".github/workflows/ci.yml": "a119bbaebd81f9f379167d647bdc74571ca4314ae2afed810f0de05a5a3e5361",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -191,7 +191,7 @@
     "scripts/ci/tests/test_backend_shard_redis_setup.py": "756bc9ea158afae5624813781b9191bbc71d9408b4265115cc60b01694768884",
     "scripts/ci/tests/test_backend_shards.py": "dded5d07d5cb4f7203d24eb93f4bd55a8b816c81797ab6c5b7ff968d47dbcb0c",
     "scripts/ci/tests/test_ci_baseline.py": "00a7a6654c8bdfdddaafe6baab11adbb69a6c4dd0c5bcf076a5f253f53fa97e3",
-    "scripts/ci/tests/test_ci_release_additions.py": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+    "scripts/ci/tests/test_ci_release_additions.py": "f692a75b5fdda7f1fdac189d4b57a3be9b82d54aab62a955b86f9d951c590a7a",
     "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
@@ -222,7 +222,10 @@
     "scripts/ops/tests/wms517-replay-historical-mac-tests.cjs": "db4540b2397222137c7c4576e344d21bb3872962c1688a9dedfa3cb58bebd39f",
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
-    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747"
+    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "1806c766bd141b9ce2d7c760cd2606a64c4b67648f0b57922c538c77ddf2213b",
+    "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
+    "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1"
   },
   "suites": {
     "backend-fbs": {
@@ -1319,7 +1322,11 @@
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
-        "scripts.ci.tests.test_backend_shard_redis_setup.RedisDependencyContract::test_actual_setup_installs_missing_binary_and_preserves_present_binary"
+        "scripts.ci.tests.test_backend_shard_redis_setup.RedisDependencyContract::test_actual_setup_installs_missing_binary_and_preserves_present_binary",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_controlled_accepted_final_freeze_accepts_only_its_exact_reference",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job",
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact"
       ]
     },
     "product-scope": {
@@ -1495,6 +1502,24 @@
         "SC17 missing seller token \"\" rejects before any GET or UI",
         "SC17 identity GET HTTP 401 refuses preparation",
         "SC17 identity GET HTTP 403 refuses preparation"
+      ]
+    },
+    "wms686-model": {
+      "report": "wms686-model.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав",
+        "C3: частичный подбор переносит только выбранные конкретные КИЗ и сохраняет историю остальных",
+        "C3: количество без конкретных КИЗ либо КИЗ другого товара не подтверждает уходящие единицы",
+        "C4: вся ячейка переносит оба короба и смешанный состав без списания остатка",
+        "C5/C6: добровольный перескан той же единицы в перенесённом коробе не требует переупаковки и не добавляет товар",
+        "C6: КИЗ другого товара или другого короба не становится проверкой выбранной единицы",
+        "C7: новый короб получает код, добавленная единица сохраняет КИЗ/приёмку, закрытие выбирает следующий короб",
+        "C6/C7: один КИЗ нельзя назначить второй единице, повтор той же единицы не дублирует короб",
+        "C8: сброс демо полностью восстанавливает исходные короба, КИЗ и прогресс",
+        "C8: сохранение и повторная загрузка восстанавливают точный прогресс и связи КИЗ",
+        "C9: неизвестный API-маршрут явно отказывает без любого сетевого fallback"
       ]
     }
   }
