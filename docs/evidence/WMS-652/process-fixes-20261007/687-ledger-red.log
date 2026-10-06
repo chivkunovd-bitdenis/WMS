@@ -1,0 +1,35 @@
+test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links (scripts.ci.test_check_task_documents.GitTests.test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links) ... FAIL
+test_wms687_correction_rejects_product_or_other_task_test_companion (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_product_or_other_task_test_companion) ... ok
+test_wms687_correction_rejects_foreign_or_semantic_requirement_change (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_foreign_or_semantic_requirement_change) ... ok
+test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) ... 
+  test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) (mode='deleted') ... FAIL
+
+======================================================================
+FAIL: test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links (scripts.ci.test_check_task_documents.GitTests.test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/test_check_task_documents.py", line 804, in test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links
+    self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['WMS-687: коммит коррекции должен менять ровно перечисленные файлы'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'WMS-687: коммит коррекции должен менять ровно перечисленные файлы'
+
+- ['WMS-687: коммит коррекции должен менять ровно перечисленные файлы']
++ []
+
+======================================================================
+FAIL: test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) (mode='deleted')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/test_check_task_documents.py", line 936, in test_wms687_correction_rejects_undeclared_or_deleted_frozen_test
+    self.assertTrue(checker.contract_change_errors(root, rollout))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: [] is not true
+
+----------------------------------------------------------------------
+Ran 4 tests in 12.624s
+
+FAILED (failures=2)

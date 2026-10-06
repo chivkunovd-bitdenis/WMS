@@ -519,6 +519,86 @@ def owner_ui_supersessions(root: Path, task_id: str, ledger: dict):
     return {original: (current, {path})}, {(original, path): entry["before_blob"]}, []
 
 
+def requirement_test_links_only(root: Path, before: str, after: str, path: str) -> bool:
+    """A reviewed companion may update links, never requirement semantics."""
+    def masked(text: str) -> str:
+        lines = text.splitlines()
+        for index, line in enumerate(lines[:-1]):
+            headers = [plain(value).casefold() for value in cells(line)]
+            if "тест" not in headers:
+                continue
+            separator = cells(lines[index + 1])
+            if len(separator) != len(headers) or not all(re.fullmatch(r":?-{3,}:?", v) for v in separator):
+                continue
+            test_col = headers.index("тест")
+            for row in range(index + 2, len(lines)):
+                if "|" not in lines[row] or not lines[row].strip():
+                    break
+                values = cells(lines[row])
+                if len(values) != len(headers):
+                    break
+                values[test_col] = "<test-links>"
+                lines[row] = "|".join(values)
+        return "\n".join(lines)
+    if git_blob(root, before, path) is None or git_blob(root, after, path) is None:
+        return False
+    return masked(git(root, "show", f"{before}:{path}")) == masked(git(root, "show", f"{after}:{path}"))
+
+
+def correction_companions(root: Path, task_id: str, correction: str, frozen: set[str],
+                          expected: set[str], entry: dict) -> bool:
+    parents = git(root, "rev-list", "--parents", "-n", "1", correction).split()
+    if len(parents) != 2 or any(git_blob(root, correction, path) is None for path in expected):
+        return False
+    companions = commit_changed_paths(root, correction) - expected
+    # This is compatibility for the independently reviewed WMS-687 additive
+    # correction, not a new general correction/migration permission.
+    if companions and (
+        task_id != "WMS-687"
+        or expected != {"frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"}
+        or not companions.issubset({
+            "docs/requirements/WMS-687.md",
+            "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts",
+            "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx",
+        })
+    ):
+        return False
+    declared = entry.get("ancillary_files")
+    if declared is not None and (
+        not isinstance(declared, list) or any(not isinstance(p, str) for p in declared)
+        or len(declared) != len(set(declared)) or set(declared) != companions
+    ):
+        return False
+    for path in companions:
+        if path in frozen:
+            return False
+        if path == f"docs/requirements/{task_id}.md":
+            if not requirement_test_links_only(root, parents[1], correction, path):
+                return False
+            continue
+        # Only newly added tests of this exact task can accompany a correction.
+        # Existing/frozen files, product code and another task are never allowed.
+        own_test = (
+            (path.startswith("frontend/src/") and re.search(
+                rf"\.wms{task_id[4:]}(?:\.|_)\S*\.test\.(?:ts|tsx)$", path, re.I))
+            or (path.startswith("backend/tests/") and re.search(
+                rf"/test_wms{task_id[4:]}(?:_|\.)[^/]*\.py$", path, re.I))
+        )
+        if (not own_test or git_blob(root, parents[1], path) is not None
+                or git_blob(root, correction, path) is None):
+            return False
+    review = entry["review"]
+    if "report" in review or "report_commit" in review:
+        report, ref = review.get("report"), review.get("report_commit")
+        if (not isinstance(report, str) or not report.startswith("docs/reviews/")
+                or not isinstance(ref, str) or not re.fullmatch(r"[0-9a-f]{40}", ref)
+                or not ancestor(root, correction, ref) or not ancestor(root, ref, "HEAD")
+                or git_blob(root, ref, report) is None
+                or git_blob(root, ref, report) != git_blob(root, "HEAD", report)):
+            return False
+    return True
+
+
 def reviewed_contract_correction(
     root: Path,
     task_id: str,
@@ -627,7 +707,7 @@ def reviewed_contract_correction(
             expected == frozen and (array_format or len(frozen) > 1)
         ):
             return {}, [f"{task_id}: коррекция должна менять только часть исходного контракта"]
-        if commit_changed_paths(root, correction) != expected:
+        if not correction_companions(root, task_id, correction, frozen, expected, entry):
             return {}, [f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"]
         already_corrected = corrected_by_contract.setdefault(original, set())
         if already_corrected & expected:

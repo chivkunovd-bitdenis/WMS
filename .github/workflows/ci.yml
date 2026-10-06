@@ -432,6 +432,8 @@ jobs:
           scripts/ci/tests/test_backend_shard_redis_setup.py
           scripts/ci/tests/test_promote_guards.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
+      - name: WMS-687 strict reviewed correction compatibility
+        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k wms687 --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -440,6 +442,7 @@ jobs:
             ${{ runner.temp }}/product-scope.xml
             ${{ runner.temp }}/product-scope-receipt.json
             ${{ runner.temp }}/ci-shards.xml
+            ${{ runner.temp }}/docgate-687.xml
           if-no-files-found: error
           retention-days: 14
       - name: Verify against the checker and manifest from trusted BASE

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "47b6f8d722586c78e016adbf232e1c978cecf60a5ddbe2fb6ccf0e912a7097af",
+    ".github/workflows/ci.yml": "8e99fd1c055c4adc1a2d9b869673233bb9b7a3689fa49f48e5edf29218ecc449",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -195,7 +195,7 @@
     "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
-    "scripts/ci/tests/test_promote_guards.py": "63ce26153e5cc7e66a69b09fc0553ee667ae33a3cdcb159c85cb4cec9e81f906",
+    "scripts/ci/tests/test_promote_guards.py": "86a0376ebed20104e1a9fa85a532b1a2f3a19e226f0ff77c9b480439779d512d",
     "scripts/ci/tests/test_regression_guards.py": "b2f7beeb093a4b3b9bf3581c8bb623d198b2382fc98e94869058d055e808666c",
     "scripts/ci/tests/test_server_process_gate.py": "81e41fb6f4f6c6db886caa80cefaf8bb6802c68bd1869deac727b11502142cb9",
     "scripts/ci/tests/test_trusted_process_artifact.py": "68d18105645c2aa140fd3b7a53faa63dfcf1700b30be3418a198bfadc0da129b",
@@ -226,12 +226,14 @@
     "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "1806c766bd141b9ce2d7c760cd2606a64c4b67648f0b57922c538c77ddf2213b",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
-    "scripts/ci/promote_guards.py": "33c760cf1a41c7e5af163bc2ab775372e9441d15cd03700cb522171c92786d3b",
+    "scripts/ci/promote_guards.py": "9d7373455b2fbfe6e0f07b68c7fcb6b9a44b8f36e3deeb96bb4e5f3456b3779d",
     "backend/tests/test_wms654_cells.py": "00931612a0788579440ac37d1bb6afa8e472cc89998d39b8de47443e178f7923",
     "backend/tests/test_wms654_migration.py": "36b998e36ff5e6f6478e9c31f45c1c89616b9a6ef5cad2878b993940406a2d3c",
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
     "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
-    "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc"
+    "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc",
+    "scripts/ci/check_task_documents.py": "d77fdec52513b0b967b4510871b84405676901ec49d1f25bb39e1d6e67a943c8",
+    "scripts/ci/test_check_task_documents.py": "fa76bb1f89b2b44fcc05918b704dc8c1ab30929a81a33054725af4a9aa01d794"
   },
   "suites": {
     "backend-fbs": {
@@ -1373,7 +1375,15 @@
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_promotes_only_permanent_tests_and_updates_references",
-        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_rejects_test_outside_supported_trees"
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_rejects_test_outside_supported_trees",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_unbound_expanded_case",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_expanded_case_or_source",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_case_file",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_vitest_report",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_changed_source_hash",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_missing_saved_protected_policy_refuses_legacy_move",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_dangling_saved_protected_policy_refuses_legacy_move"
       ]
     },
     "product-scope": {
@@ -1585,6 +1595,17 @@
       "exact": false,
       "cases": [
         "tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry"
+      ]
+    },
+    "docgate-687": {
+      "report": "docgate-687.xml",
+      "format": "junit",
+      "exact": true,
+      "cases": [
+        "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change",
+        "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_product_or_other_task_test_companion",
+        "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_undeclared_or_deleted_frozen_test",
+        "scripts.ci.test_check_task_documents.GitTests::test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links"
       ]
     }
   }

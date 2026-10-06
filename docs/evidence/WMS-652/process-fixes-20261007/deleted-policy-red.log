@@ -1,0 +1,36 @@
+test_dangling_saved_protected_policy_refuses_legacy_move (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_dangling_saved_protected_policy_refuses_legacy_move) ... FAIL
+test_empty_active_permanent_reference_still_refuses_promotion (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_empty_active_permanent_reference_still_refuses_promotion) ... ok
+test_missing_saved_protected_policy_refuses_legacy_move (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_missing_saved_protected_policy_refuses_legacy_move) ... FAIL
+test_parses_every_br_and_semicolon_separated_permanent_reference (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_parses_every_br_and_semicolon_separated_permanent_reference) ... ok
+test_promotes_only_permanent_tests_and_updates_references (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_promotes_only_permanent_tests_and_updates_references) ... ok
+test_protected_original_stays_registered_and_second_promotion_is_idempotent (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_original_stays_registered_and_second_promotion_is_idempotent) ... ok
+test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report) ... ok
+test_protected_wms654_templates_reject_changed_source_hash (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_reject_changed_source_hash) ... ok
+test_protected_wms654_templates_reject_unbound_expanded_case (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_reject_unbound_expanded_case) ... ok
+test_protected_wms654_templates_reject_wrong_case_file (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_reject_wrong_case_file) ... ok
+test_protected_wms654_templates_reject_wrong_expanded_case_or_source (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_reject_wrong_expanded_case_or_source) ... ok
+test_protected_wms654_templates_reject_wrong_vitest_report (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_wms654_templates_reject_wrong_vitest_report) ... ok
+test_rejects_test_outside_supported_trees (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_rejects_test_outside_supported_trees) ... ok
+
+======================================================================
+FAIL: test_dangling_saved_protected_policy_refuses_legacy_move (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_dangling_saved_protected_policy_refuses_legacy_move)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_promote_guards.py", line 369, in test_dangling_saved_protected_policy_refuses_legacy_move
+    with self.assertRaisesRegex(ValueError, "Process protection"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_saved_protected_policy_refuses_legacy_move (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_missing_saved_protected_policy_refuses_legacy_move)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_promote_guards.py", line 355, in test_missing_saved_protected_policy_refuses_legacy_move
+    with self.assertRaisesRegex(ValueError, "Process protection"):
+         ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 13 tests in 2.575s
+
+FAILED (failures=2)

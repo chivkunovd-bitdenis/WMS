@@ -136,9 +136,15 @@ def permanent_references(lines: list[str]) -> list[tuple[int, int, PurePosixPath
 
 
 def saved_process_policy(root: Path) -> dict | None:
-    if not (root / POLICY_PATH).exists():
-        return None
-    raw = local_file(root, POLICY_PATH).read_bytes()
+    saved_entry = git(root, "ls-tree", "HEAD", "--", POLICY_PATH)
+    if not saved_entry:
+        if not (root / POLICY_PATH).exists() and not (root / POLICY_PATH).is_symlink():
+            return None
+        raise ValueError("Process protection должна быть сохранена в Git до promotion")
+    try:
+        raw = local_file(root, POLICY_PATH).read_bytes()
+    except ValueError as exc:
+        raise ValueError(f"Process protection сохранена в HEAD, но недоступна: {exc}") from exc
     policy = json.loads(raw)
     validate_policy(policy)
     saved = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{POLICY_PATH}"])
@@ -158,6 +164,24 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
     module = ".".join(source.with_suffix("").parts[1:])
     frontend = str(source).removeprefix("frontend/")
     for suite in policy["suites"].values():
+        # These two accepted test.each templates represent fixed four-mode
+        # matrices. A wildcard/one matching case would silently lose a mode.
+        if (str(source) == "frontend/src/sections/CatalogSection.wms654.test.tsx"
+                and test_name in ("C6 independent coordinates sides=%s tiers=%s",
+                                  "C6 ${entry} sides=%s tiers=%s")):
+            if suite["format"] != "vitest" or suite["report"] != "frontend-all.json":
+                continue
+            if test_name.startswith("C6 independent"):
+                titles = ["WMS-654 actual CatalogSection contract C6 independent coordinates"]
+            else:
+                titles = ["WMS-654 real map form openings C6 " + entry for entry in
+                          ("warehouse-map-create-cell", "warehouse-map-create-first-cell")]
+            required = {f"{frontend}::{title} sides={sides} tiers={tiers}"
+                        for title in titles for sides, tiers in
+                        (("false", "false"), ("true", "false"), ("false", "true"), ("true", "true"))}
+            if required.issubset(suite["cases"]):
+                return True
+            continue
         for case in suite["cases"]:
             owner, separator, name = case.partition("::")
             if suite["format"] == "junit":

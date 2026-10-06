@@ -1,0 +1,30 @@
+{
+  "frozen_test_contracts": [
+    "aba5577bbe2516e92a6f258900499054da82516a",
+    "ca4f8d0fd470fc27c5f1e356eb682edcb95daca1",
+    "1dc7fc05dd3a559534474a91b419986f6f3ca483"
+  ],
+  "before_code_red": {
+    "ledger": "2 failures (allowed companion and deleted frozen); other negative probesPASS",
+    "template": "1 error, expected registered template rejected",
+    "deleted_policy": "2 failures: deleted/dangling HEAD policy fall through to move"
+  },
+  "after_code": {
+    "promotion": 13,
+    "ci_shards_raw_verified": 37,
+    "docgate687_raw_verified": 4,
+    "final_correction_regressions": 34,
+    "final_correction_subtests": 9
+  },
+  "test_bytes_unchanged": true,
+  "old1146_cases_and_18_bindings_preserved": true,
+  "policy": {
+    "files": 233,
+    "suites": 22,
+    "case_ids": 1218
+  },
+  "independent_review": "PENDING",
+  "finalP": "PENDING",
+  "finalS": "PENDING",
+  "main_etalon_deploy": "UNCHANGED"
+}
