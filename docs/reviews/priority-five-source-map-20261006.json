@@ -148,5 +148,20 @@
       "red": "2 true live positive cases FAILED;10 negative/received cases PASS by separate test writer",
       "frozen": "backend/tests/test_wms662_live_delivery_substatuses.py"
     }
+  ],
+  "local_product_fixes": [
+    {
+      "task": "WMS-662 live Ozon substatus gap",
+      "base": "127884ce9",
+      "test_contract": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "path": "backend/app/services/fbs_observed_handoff_service.py",
+      "method": "ozon_proves_handoff",
+      "added_values": [
+        "posting_in_pickup_point",
+        "posting_on_way_to_city"
+      ],
+      "delta": "Exactly two allowlist strings; no other product or frozen-test changes",
+      "review": "Separate narrow review pending"
+    }
   ]
 }

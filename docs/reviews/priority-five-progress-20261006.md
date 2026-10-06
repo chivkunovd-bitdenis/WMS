@@ -156,3 +156,17 @@ Awaiting/cancelled/unknownнерасширяются. Дождаться отд�
 ## Интеграция 16 — отдельный RED-контракт WMS-662
 
 База `8e64e14e8ea39adbe122191e209a329b7513b920`; test-onlysource `c466c65b850dd87481be5da88b99bcfaa4087414` включён ancestrymerge доproductfix. Одинновыйфайл с двумянастоящимиcards675; отдельныйтестировщик сохранил2positiveFAIL/10negative-or-receivedPASS. Текущиеcontracts иruntimeнеизменены. Теперьминимальныйfixдвухподстатусов и одинцелевойпрогон12cases; ожиданиянеизменять. Общие тесты/CI ещё не выполнялись.
+
+## WMS-662 минимальный fix после RED
+
+Контрактc466c65b включён и опубликован отдельнымmerge127884ce9 доfix.
+Изменён только `ozon_proves_handoff`: добавлены двастроковых allowlist значения
+posting_in_pickup_point иposting_on_way_to_city, без правок NEGATIVE, primary
+statuses, scope/quantities, синхронизации, бухгалтерии и frozen test.
+Собственныйцелевойpytest:12PASS,6existingdeprecationwarnings,0.05s;Ruffцелевого
+модуляPASS. Факты команды/исходныйtestblob сохранены в
+`wms662-live675-fix-verification-20261006.json`. Это узкийGREEN, полныйCIне заявлен.
+Интегратор теперь автор этихдвухстрок и не подменяет их независимыйreview;
+parent назначает отдельнуюсессию на точный опубликованныйfixSHA.
+Следующийшаг —517helperreview/SC13docs,scope666reviewedledger иcurrent675docs,
+затемобщиепроверки по поручению ведущего.

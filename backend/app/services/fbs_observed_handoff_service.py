@@ -225,6 +225,8 @@ def ozon_proves_handoff(row: dict[str, Any]) -> bool:
         "",
         "posting_delivered",
         "posting_received",
+        "posting_in_pickup_point",
+        "posting_on_way_to_city",
     }
 
 
