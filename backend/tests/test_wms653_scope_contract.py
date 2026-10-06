@@ -29,6 +29,9 @@ TASK_FILES = PRODUCT_PATHS | {
     "docs/KANONICHESKIY_BACKLOG.md",
     "docs/requirements/WMS-653.md",
     "docs/reviews/contract-corrections/WMS-653.json",
+    # Exact shared release metadata; adjacent reports remain foreign files.
+    "docs/reviews/priority-five-progress-20261006.md",
+    "docs/reviews/priority-five-source-map-20261006.json",
 }
 # Accepted historical process/integration changes, tied to immutable commits.
 # They never authorize another WMS-653 edit of these foreign files.
@@ -266,6 +269,37 @@ def test_foreign_migration_is_not_wms653_delta(scope_repo: tuple[Path, str]) -> 
     _write(root, "frontend/src/screens/v2/fbsApi.ts", "own presentation\n")
     _commit(root, "WMS-653: presentation")
     assert_wms653_scope(root, contract)
+
+
+def test_exact_shared_release_metadata_passes(scope_repo: tuple[Path, str]) -> None:
+    root, contract = scope_repo
+    for path in (
+        "docs/reviews/priority-five-progress-20261006.md",
+        "docs/reviews/priority-five-source-map-20261006.json",
+    ):
+        _write(root, path, "shared integration evidence\n")
+    _commit(root, "WMS-653 WMS-475 WMS-537: record shared release metadata")
+    assert_wms653_scope(root, contract)
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "docs/reviews/priority-five-progress-20261007.md",
+        "docs/reviews/priority-five-source-map-20261007.json",
+        "docs/reviews/priority-five-source-map-20261006.md",
+        "docs/reviews/wms663-priority-proof-20261006.md",
+    ],
+)
+def test_adjacent_shared_metadata_remains_forbidden(
+    scope_repo: tuple[Path, str],
+    path: str,
+) -> None:
+    root, contract = scope_repo
+    _write(root, path, "foreign proof\n")
+    _commit(root, "WMS-653: foreign release proof")
+    with pytest.raises(AssertionError, match="foreign files"):
+        assert_wms653_scope(root, contract)
 
 
 @pytest.mark.parametrize(
