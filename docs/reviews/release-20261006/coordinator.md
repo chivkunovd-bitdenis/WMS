@@ -133,3 +133,7 @@ CI и установленная версия. Реальное внешнее �
 Контракт109 сценариев сохранён отдельно136ce395f до кода: старыйhelper78PASS31FAIL;
 исторический контракт106PASS воспроизведён. Отдельный разработчик работает над
 четырьмя scripts/ops файлами; старую ветку665 целиком не переносить.
+
+## Checkpoint общей интеграции23:50UTC
+
+[Точный handoff и registry](../../evidence/WMS-652/process-gates-20261006/integration-handoff.md):221files/1146suite IDs, Mac110PASS, geometry43 сохранены, независимые reviews Mac/CI/geometry приняты. Предыдущая строка об ожидании доступности Виталика устарела: владелец требует сначала softwaredeploy, затем личный Mac/подпись. Приёмка новой дельты поручена отдельному замещающему Sol аналитику. Main только checker/workflow045272b51; SOURCEpin/rules/canary/fullCI/deploy ещё не объявлены. Production прежний8f11d912.
