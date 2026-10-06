@@ -95,3 +95,18 @@ candidate при сохранении настоящей команды `product
 После independent acceptance/freeze интегратор должен одновременно заменить
 final fixture pin и literal workflow pin на один опубликованный 40-hex SHA.
 До этого workflow, policy, checker и production code не менялись.
+
+## Stage handoff: transition completion and WMS-686 raw receipt RED
+
+SOURCE contract теперь имеет controlled independently accepted final-freeze
+fixture: positive exact final pin проходит только при отдельной acceptance record;
+старый pin становится mismatch. `HEAD`, `${GITHUB_SHA}` и unreviewed candidate
+по-прежнему отказаны. Реальная fixture остаётся pending и продолжает строго
+проверять actual `ci.yml` against `d618…` до независимого final freeze.
+
+Добавлен raw-receipt contract WMS-686. На текущем candidate он намеренно RED,
+поскольку job `wms686-mockup` отсутствует: будущая wiring обязана записывать
+настоящий Node TAP всех 11 tests, загрузить exact-attempt artifact, включить job
+в `process-proof.needs` и скачать этот exact artifact в reports. Controlled
+mutations отдельно доказывают отказ при missing TAP, upload, download и required
+job; policy/checker/workflow/product этим тестировщиком не менялись.
