@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "8e99fd1c055c4adc1a2d9b869673233bb9b7a3689fa49f48e5edf29218ecc449",
+    ".github/workflows/ci.yml": "8969cc9f80aa0774634719bb25153ec73d2a72d574a595862c20ccd6582502f1",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -232,8 +232,8 @@
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
     "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
     "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc",
-    "scripts/ci/check_task_documents.py": "d77fdec52513b0b967b4510871b84405676901ec49d1f25bb39e1d6e67a943c8",
-    "scripts/ci/test_check_task_documents.py": "fa76bb1f89b2b44fcc05918b704dc8c1ab30929a81a33054725af4a9aa01d794"
+    "scripts/ci/check_task_documents.py": "519a93199c820276d8dbe5b98871d06f8ed8c96802eb68c3b09b2ef035f00a70",
+    "scripts/ci/test_check_task_documents.py": "c61316a19bf97d2231a618ac3aacdddd0e5a776c9c6b892f2e3a2f9a24476992"
   },
   "suites": {
     "backend-fbs": {
@@ -1602,6 +1602,8 @@
       "format": "junit",
       "exact": true,
       "cases": [
+        "scripts.ci.test_check_task_documents.GitTests::test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit",
+        "scripts.ci.test_check_task_documents.GitTests::test_wms687_ancillary_correction_with_report_still_requires_report_commit",
         "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change",
         "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_product_or_other_task_test_companion",
         "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_undeclared_or_deleted_frozen_test",

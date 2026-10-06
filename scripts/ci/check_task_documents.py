@@ -588,7 +588,7 @@ def correction_companions(root: Path, task_id: str, correction: str, frozen: set
                 or git_blob(root, correction, path) is None):
             return False
     review = entry["review"]
-    if "report" in review or "report_commit" in review:
+    if companions and ("report" in review or "report_commit" in review):
         report, ref = review.get("report"), review.get("report_commit")
         if (not isinstance(report, str) or not report.startswith("docs/reviews/")
                 or not isinstance(ref, str) or not re.fullmatch(r"[0-9a-f]{40}", ref)

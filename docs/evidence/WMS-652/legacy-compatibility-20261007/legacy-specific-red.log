@@ -1,0 +1,49 @@
+F.                                                                       [100%]
+=================================== FAILURES ===================================
+_ GitTests.test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit _
+
+self = <test_check_task_documents.GitTests testMethod=test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit>
+
+    def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
+        rollout = self.rollout()
+        report = "docs/reviews/WMS-654-correction-review.md"
+        frozen = "frontend/src/sections/CatalogSection.wms654.test.tsx"
+        self.write(report, "# Legacy WMS-654 independent PASS report\n")
+        self.commit("WMS-654 independent review report")
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        contract = self.commit("WMS-654: контракт тестов")
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        correction = self.commit("WMS-654 exact reviewed correction")
+        self.write(
+            "docs/reviews/contract-corrections/WMS-654.json",
+            json.dumps(
+                {
+                    "task": "WMS-654",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": [frozen],
+                    "review": {
+                        "model": "gpt-6-astra",
+                        "effort": "high",
+                        "verdict": "PASS",
+                        "report": report,
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-654 correction ledger")
+
+>       self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+E       AssertionError: Lists differ: ['WMS-654: коммит коррекции должен менять ровно перечисленные файлы'] != []
+E
+E       First list contains 1 additional elements.
+E       First extra element 0:
+E       'WMS-654: коммит коррекции должен менять ровно перечисленные файлы'
+E
+E       - ['WMS-654: коммит коррекции должен менять ровно перечисленные файлы']
+E       + []
+
+scripts/ci/test_check_task_documents.py:967: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit
+1 failed, 1 passed, 65 deselected in 1.66s

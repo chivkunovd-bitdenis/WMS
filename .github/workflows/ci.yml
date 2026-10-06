@@ -433,7 +433,7 @@ jobs:
           scripts/ci/tests/test_promote_guards.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - name: WMS-687 strict reviewed correction compatibility
-        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k wms687 --junitxml="$RUNNER_TEMP/docgate-687.xml"
+        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k "wms687 or accepted_report_without_report_commit" --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
