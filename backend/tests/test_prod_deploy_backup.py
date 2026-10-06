@@ -21,7 +21,8 @@ def test_deploy_requires_verified_backup_before_migration(
     repo.mkdir()
     source = Path(__file__).resolve().parents[2]
     for relative in ("docker-compose.wms-host-8088.yml", "deploy/Caddyfile.http",
-                     "scripts/deploy/verify-wms-host-network.py"):
+                     "scripts/deploy/verify-wms-host-network.py",
+                     "scripts/ci/verify_server_process_ci.py", "scripts/ci/verify_ci.py"):
         target = repo / relative
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source / relative, target)
@@ -41,6 +42,8 @@ stopped = Path(os.environ["TEST_STOPPED_API"])
 if name == "git" and args[:1] == ["rev-parse"]:
     print("a" * 40)
 elif name == "docker":
+    if not Path(os.environ["TEST_GATE_PASSED"]).exists():
+        raise RuntimeError("Docker was reached before the server process gate")
     if "stop" in args and "api" in args:
         stopped.touch()
     if args[:1] == ["inspect"] and "State.Running" in args[-1]:
@@ -95,14 +98,67 @@ elif name == "docker":
     stub.chmod(0o755)
     for name in ("git", "docker", "curl"):
         (binaries / name).symlink_to(stub)
+    # Keep the server gate real while replacing only its public GitHub HTTP boundary.
+    # A Docker command fails if the real verifier did not first complete successfully.
+    site = tmp_path / "site"
+    site.mkdir()
+    site.joinpath("sitecustomize.py").write_text('''
+import io, json, os
+from pathlib import Path
+from urllib.parse import parse_qs, urlparse
+import urllib.request
+
+class Response(io.BytesIO):
+    def __enter__(self): return self
+    def __exit__(self, *_): self.close()
+
+def response(path):
+    parsed = urlparse(path)
+    route, query = parsed.path.lstrip('/'), parse_qs(parsed.query)
+    sha = query.get('head_sha', ['a' * 40])[0]
+    root = 'repos/chivkunovd-bitdenis/WMS'
+    run = {'id': 654, 'workflow_id': 987, 'path': '.github/workflows/ci.yml@refs/heads/etalon',
+           'repository': {'full_name': 'chivkunovd-bitdenis/WMS'},
+           'head_repository': {'full_name': 'chivkunovd-bitdenis/WMS'}, 'head_sha': sha,
+           'head_branch': 'etalon', 'event': 'push', 'run_number': 1, 'run_attempt': 1,
+           'status': 'completed', 'conclusion': 'success', 'check_suite_id': 321}
+    if route == root + '/actions/workflows/ci.yml':
+        return {'id': 987, 'path': '.github/workflows/ci.yml', 'state': 'active'}
+    if route == root + '/actions/workflows/987/runs':
+        return {'total_count': 1, 'workflow_runs': [run]}
+    if route == root + '/check-suites/321':
+        return {'app': {'id': 15368, 'slug': 'github-actions'}, 'head_sha': sha}
+    if route == root + '/actions/runs/654/attempts/1/jobs':
+        names = ['baseline', 'backlog', 'backend', 'frontend-build', 'охрана',
+                 'print-regressions', 'printer-windows', 'process-proof']
+        jobs = [{'id': i, 'name': name, 'head_sha': sha, 'run_id': 654,
+                 'status': 'completed', 'conclusion': 'success'} for i, name in enumerate(names)]
+        return {'total_count': len(jobs), 'jobs': jobs}
+    if route == root + '/actions/runs/654/artifacts':
+        return {'total_count': 1, 'artifacts': [{'id': 777, 'name': f'process-proof-{sha}-654-1',
+            'expired': False, 'size_in_bytes': 1, 'workflow_run': {'id': 654, 'head_sha': sha}}]}
+    raise AssertionError('unexpected GitHub gate request: ' + route)
+
+def fake_urlopen(request, timeout):
+    Path(os.environ['TEST_GATE_PASSED']).touch()
+    with Path(os.environ['TEST_GATE_REQUESTS']).open('a') as output:
+        output.write(request.full_url + '\\n')
+    return Response(json.dumps(response(request.full_url)).encode())
+
+urllib.request.urlopen = fake_urlopen
+''')
     script = Path(__file__).resolve().parents[2] / "scripts/deploy/prod-update.sh"
     backup_dir = tmp_path / "private-backups"
+    gate_requests = tmp_path / "gate-requests"
     environment = {
             **os.environ, "PATH": f"{binaries}:{os.environ['PATH']}",
+            "PYTHONPATH": f"{site}:{os.environ.get('PYTHONPATH', '')}",
             "WMS_REPO_DIR": str(repo), "WMS_BACKUP_DIR": str(backup_dir),
             "WMS_DEPLOY_GUARD_ONLY": "0", "TEST_COMMANDS": str(commands),
             "TEST_BACKUP_ERROR": "dump" if backup_error == "retry" else backup_error,
             "TEST_STOPPED_API": str(tmp_path / "api-stopped"),
+            "TEST_GATE_PASSED": str(tmp_path / "gate-passed"),
+            "TEST_GATE_REQUESTS": str(gate_requests),
     }
     result = subprocess.run(
         ["bash", str(script)], capture_output=True, text=True, env=environment,
@@ -118,6 +174,9 @@ elif name == "docker":
             ["bash", str(script)], capture_output=True, text=True, env=environment, check=False,
         )
     calls = [json.loads(line) for line in commands.read_text().splitlines()]
+    assert (tmp_path / "gate-passed").exists(), "real server gate must complete before Docker"
+    assert any("/actions/workflows/987/runs" in request
+               for request in gate_requests.read_text().splitlines())
     if backup_error == "network":
         assert result.returncode != 0
         assert "subnet/gateway changed" in result.stderr
