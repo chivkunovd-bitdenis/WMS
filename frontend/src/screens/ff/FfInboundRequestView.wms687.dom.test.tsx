@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from 'react'
+import { act, type ComponentProps, type ComponentType } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfInboundRequestView } from './FfInboundRequestView'
@@ -106,6 +106,14 @@ function testId(id: string): HTMLElement {
   return element as HTMLElement
 }
 
+// R4: право входа совпадает с уже существующим правом настройки каталога, а
+// не с более широким правом работы в приёмке. Пока production-компонент ещё
+// не принимает этот prop, сужаем тип только на стороне теста: так RED
+// показывает отсутствие именно нужного контракта, а не ошибку TypeScript.
+const FfInboundWithCatalogPermission = FfInboundRequestView as unknown as ComponentType<
+  ComponentProps<typeof FfInboundRequestView> & { canManageCatalog: boolean }
+>
+
 async function click(id: string): Promise<void> {
   await act(async () => testId(id).click())
   await flush()
@@ -146,4 +154,35 @@ describe('WMS-687 shared FBS stock dialog from an inbound document', () => {
       expect((containerCalls[0]?.chosen as Array<{ id: string }>).map((row) => row.id)).toEqual(['product-a'])
     },
   )
+
+  it('does not expose the stock entry to a reception operator without the existing catalog-settings right', async () => {
+    const current = documentDetail('inbound')
+    vi.stubGlobal('fetch', vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      if (url.endsWith(`/operations/inbound-intake-requests/${current.id}`)) return json(current)
+      if (url.includes('/products/linked-wb-catalog')) return json([])
+      if (url.endsWith('/marking-codes')) return json({ items: [], checking: false })
+      if (url.includes('/locations?exclude_sorting_zone=true')) return json([])
+      if (url.endsWith('/warehouses')) return json([{ id: 'warehouse-687', name: 'Основной', code: 'MAIN' }])
+      throw new Error(`Unexpected WMS-687 request: ${url}`)
+    }))
+    await act(async () => {
+      root.render(
+        <FfInboundWithCatalogPermission
+          token="wms687-token"
+          requestId={current.id}
+          // The document itself remains operable for a reception worker.
+          isFulfillmentAdmin
+          canManageCatalog={false}
+          workspace="reception"
+          onClose={() => undefined}
+        />,
+      )
+    })
+    await flush()
+
+    expect(document.querySelector('[data-testid="ff-inbound-stock-select-line-line-a"]')).toBeNull()
+    expect(document.querySelector('[data-testid="ff-inbound-set-fbs-stock"]')).toBeNull()
+    expect(containerCalls).toHaveLength(0)
+  })
 })
