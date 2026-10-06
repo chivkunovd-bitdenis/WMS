@@ -198,7 +198,8 @@ function assertPdfTableWithinColumns(table: PdfTable) {
 
 async function renderPdf(html: string, _evidenceName = 'picking-list') {
   const output = artifactPath(html, 'pdf')
-  const pdf = await PDFDocument.load(readFileSync(output))
+  // Copy Node Buffer bytes into this test realm's Uint8Array for pdf-lib/jsdom.
+  const pdf = await PDFDocument.load(new Uint8Array(readFileSync(output)))
   const textReport = parsePdfTextReport(execFileSync('pdftotext', ['-bbox-layout', output, '-'], { encoding: 'utf8', timeout: 15_000, maxBuffer: 4 * 1024 * 1024 }))
   return { pdf, textReport }
 }

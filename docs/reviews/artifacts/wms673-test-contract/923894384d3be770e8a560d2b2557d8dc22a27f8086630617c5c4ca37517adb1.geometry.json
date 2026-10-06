@@ -1,0 +1,429 @@
+{
+  "tableBounds": {
+    "left": 0,
+    "right": 1047
+  },
+  "columnBounds": [
+    {
+      "left": 0.5,
+      "right": 28.5
+    },
+    {
+      "left": 28.5,
+      "right": 82.5
+    },
+    {
+      "left": 82.5,
+      "right": 224.5
+    },
+    {
+      "left": 224.5,
+      "right": 302.5
+    },
+    {
+      "left": 302.5,
+      "right": 380.5
+    },
+    {
+      "left": 380.5,
+      "right": 522.5
+    },
+    {
+      "left": 522.5,
+      "right": 664.5
+    },
+    {
+      "left": 664.5,
+      "right": 780.5
+    },
+    {
+      "left": 780.5,
+      "right": 842.5
+    },
+    {
+      "left": 842.5,
+      "right": 904.5
+    },
+    {
+      "left": 904.5,
+      "right": 1046.5
+    }
+  ],
+  "rowCellCounts": [
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11,
+    11
+  ],
+  "tableWithinPage": true,
+  "headersAligned": true,
+  "allCellContentFits": true,
+  "neighboringCellsDoNotOverlap": true,
+  "rowsDoNotOverlap": true,
+  "sizeStyle": {
+    "width": "78px",
+    "fontSize": "20px"
+  },
+  "fixedWidths": [
+    {
+      "className": "number",
+      "width": "28px"
+    },
+    {
+      "className": "image",
+      "width": "54px"
+    },
+    {
+      "className": "sticker",
+      "width": "116px"
+    },
+    {
+      "className": "quantity",
+      "width": "62px"
+    },
+    {
+      "className": "quantity",
+      "width": "62px"
+    }
+  ],
+  "sizeCells": [
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "46",
+      "linesWithinCell": true,
+      "lineCount": 1
+    },
+    {
+      "text": "—",
+      "linesWithinCell": true,
+      "lineCount": 1
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    },
+    {
+      "text": "Универсальный",
+      "linesWithinCell": true,
+      "lineCount": 3
+    }
+  ],
+  "colorCells": [
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ000",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ001",
+      "linesWithinCell": true
+    },
+    {
+      "text": "—",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ003",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ004",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ005",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ006",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ007",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ008",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ009",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ010",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ011",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ012",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ013",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ014",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ015",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ016",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ017",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ018",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ019",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ020",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ021",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ022",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ023",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ024",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ025",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ026",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ027",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ028",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ029",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ030",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ031",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ032",
+      "linesWithinCell": true
+    },
+    {
+      "text": "Красный & синий, шоколадный трюфель, тёмный бордовый с серебристым рисунком ЦВЕТ033",
+      "linesWithinCell": true
+    }
+  ]
+}
