@@ -1,0 +1,32 @@
+[
+  {
+    "path": "cc/tiles/software_image_decode_cache.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/software_image_decode_cache.cc",
+    "decoded_sha256": "377eeb087d659afb23f35291e9344eba73638b02b8e963a1298491473a6a95a6"
+  },
+  {
+    "path": "cc/tiles/software_image_decode_cache_utils.h",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/software_image_decode_cache_utils.h",
+    "decoded_sha256": "33b41ae8c6e5d567bebb9752663dc70f184c834751605527bcf0a7b202898814"
+  },
+  {
+    "path": "cc/tiles/image_controller.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/image_controller.cc",
+    "decoded_sha256": "8112f6c91a96ec4e9abbc113c67954f864ea559b52ebbdcc500e01daafa5115d"
+  },
+  {
+    "path": "cc/tiles/decoded_image_tracker.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/decoded_image_tracker.cc",
+    "decoded_sha256": "0af5c3800ffdc32a9a9fba0c575a447d5a66d91b1d0c698f536e200094dccc1a"
+  },
+  {
+    "path": "cc/tiles/image_decode_cache_utils.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/image_decode_cache_utils.cc",
+    "decoded_sha256": "d41da8548c017e7e4339cd4059ccaa9015cb08671ac3ab9affacf31e659a9174"
+  },
+  {
+    "path": "third_party/blink/renderer/platform/widget/compositing/layer_tree_settings.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/third_party/blink/renderer/platform/widget/compositing/layer_tree_settings.cc",
+    "decoded_sha256": "34f02f257b988581925a2011146381570ba49f7940de6ebbf4434c8b82aa0a36"
+  }
+]

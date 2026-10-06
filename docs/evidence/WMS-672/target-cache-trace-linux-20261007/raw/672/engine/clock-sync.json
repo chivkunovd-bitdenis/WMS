@@ -1,0 +1,22 @@
+[
+  {
+    "syncId": "C5-clock-fixture-2-trace-start-0",
+    "epochBeforeMs": 1791325314845,
+    "epochAfterMs": 1791325314847
+  },
+  {
+    "syncId": "C5-clock-fixture-2-opened-1",
+    "epochBeforeMs": 1791325314878,
+    "epochAfterMs": 1791325314878
+  },
+  {
+    "syncId": "C5-clock-native-failure-notice-2",
+    "epochBeforeMs": 1791325328184,
+    "epochAfterMs": 1791325328185
+  },
+  {
+    "syncId": "C5-clock-fixture-2-trace-end-3",
+    "epochBeforeMs": 1791325329184,
+    "epochAfterMs": 1791325329185
+  }
+]
