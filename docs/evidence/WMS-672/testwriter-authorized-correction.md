@@ -35,3 +35,26 @@ Their earlier PASS covers original attempt/source preservation and no second
 transfer only; it does not prove all 300 technical marks completed or physical paper.
 Independent product + authorized correction review must follow; tester does not
 approve own changes. WMS-673 requirements/workflows/artifacts are owned elsewhere.
+
+## Follow-up fixture correction after first remote proof
+
+First correction commit `8afc05d0bc531fd310b7d6d5273f0b382223db11` was published
+before runner `d36f7ec68f4f81dd71f13143dd2fdfc6998473a2`, run 37440457090.
+C1/C2 inbound300 and return300 real PDF/raster PASS, C6 all200 marks PASS.
+C4 normal1/200/300 and fallback source actually transferred; C4 overall FAIL
+because its observer used Playwright RAF polling while fixture suspended RAF.
+C5 actual150 error/busy-clear reached, 0 transfer, decodeStarted160/decoded128;
+new extra active==0 assertion hung on native promises in destroyed iframe.
+These are new fixture defects, not a product PASS for the failed cases.
+
+Authorized scope remains 6f1b196b. Follow-up blob browser contract
+`ba1a936a2951970c71edb2bd8c1dc441038f7b72` →
+`3f29649e56f986e8e549da592937474197197418`.
+Use timer polling only for stalled-frame observer (same 30s timeout); remove the
+invented wait for abandoned iframe promises after actual error + busy-clear.
+Track successful native decodes per exact source iframe for corrected retry,
+without resetting/skipping counters or reusing any previous frame's readiness.
+Save normal timing before separate fallback assertion, retaining failure if it fails.
+DOM blob stays d29e1134cf728bb114c3c35a868df2fba2b7ce8e. No product change.
+Publish follow-up contract before repinning remote proof. Since only C4/C5 changed,
+rerun only these remaining failures; do not repeat successful C1/C2/C6 or C7/C8.

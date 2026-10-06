@@ -71,7 +71,6 @@ async function fixture(n, operation = 'inbound', fault = {}) {
     window.__wms672Decoded = 0;
     window.__wms672DecodeStarted = 0;
     window.__wms672DecodeEvents = [];
-    window.__wms672Active = 0;
     window.__wms672Frames = 0;
     const raf = window.requestAnimationFrame.bind(window);
     window.requestAnimationFrame = callback => fault.stallFrames ? 0 : raf(time => {
@@ -86,22 +85,21 @@ async function fixture(n, operation = 'inbound', fault = {}) {
       if (node.tagName === 'IFRAME') node.addEventListener('load', () => {
         const w = node.contentWindow;
         const decode = w.HTMLImageElement.prototype.decode;
+        let ready = 0; // successful native decodes in this exact source frame
         w.HTMLImageElement.prototype.decode = async function () {
           if (!this.classList.contains('barcode')) return decode.call(this);
-          window.__wms672Active += 1;
-          try {
           const index = ++window.__wms672DecodeStarted;
           window.__wms672DecodeEvents.push({ index, frame: window.__wms672Frames });
           if (window.__wms672Fault.decodeAt === index) throw new Error(`WMS672 decode failed at ${index}`);
           while (window.__wms672Hold) await new Promise(r => setTimeout(r, 10));
           if (fault.delayMs) await new Promise(r => setTimeout(r, fault.delayMs));
           await decode.call(this);
+          ready += 1;
           window.__wms672Decoded += 1;
-          } finally { window.__wms672Active -= 1; }
         };
         w.focus = () => {};
         w.print = () => {
-          window.__wms672Transfers.push({ html: node.srcdoc, decoded: window.__wms672Decoded,
+          window.__wms672Transfers.push({ html: node.srcdoc, decoded: ready,
             attempt: Object.values(localStorage).map(value => { try { return JSON.parse(value)?.labelAttempt; } catch { return null; } }).find(Boolean) });
         };
       });
@@ -119,8 +117,8 @@ async function confirm(f, action = 'ff-inbound-boxes-print-all') {
   await f.page.getByTestId(action).click();
   await f.page.getByTestId('ff-inbound-box-print-dialog-confirm').click();
 }
-async function transfer(f, count = 1) {
-  await f.page.waitForFunction(n => window.__wms672Transfers.length >= n, count);
+async function transfer(f, count = 1, polling = 'raf') {
+  await f.page.waitForFunction(n => window.__wms672Transfers.length >= n, count, { polling });
   return f.page.evaluate(() => window.__wms672Transfers);
 }
 async function renderTape(context, html) {
@@ -246,10 +244,10 @@ function assertMarks(successful, boxes) {
   assert.deepEqual(successful.map(m => m.path.split('/').at(-2)), boxes.map(b => b.id), 'all original boxes marked exactly once in order');
   assert.ok(successful.every(m => m.transfers === 1), 'every mark follows the single transfer');
 }
-async function allMarks(f, job) {
+async function allMarks(f, job, polling = 'raf') {
   await f.page.waitForFunction(() => Object.values(localStorage).some(value => {
     try { return JSON.parse(value)?.labelAttempt?.state === 'complete'; } catch { return false; }
-  }));
+  }), undefined, { polling });
   assertMarks(f.successfulMarks, f.data.boxes);
   const attempt = await f.page.evaluate(() => Object.values(localStorage).map(value => {
     try { return JSON.parse(value)?.labelAttempt; } catch { return null; }
@@ -288,17 +286,18 @@ test('C4 once: measure 1/200/300 preview preparation; decode delays overlap and 
       measurements.push({ n, preparationMs, artificialHoldMs: holdMs, concurrentDecodes: concurrent });
     } finally { await f.context.close(); }
   }
-  // Existing production fallback must finish when parent animation frames stop.
-  const stalled = await fixture(300, 'inbound', { stallFrames: true });
-  try {
-    await assert.rejects(() => renderTape(stalled.context, '<img src="data:image/png;base64,AAAA">'), 'PDF helper must propagate actual bad PNG native decode');
-    await confirm(stalled); const jobs = await transfer(stalled); assertComplete(jobs, 300); await allMarks(stalled, jobs[0]); }
-  finally { await stalled.context.close(); }
   await writeFile(resolve(evidence, 'timing.json'), JSON.stringify({
     node: process.version, platform: process.platform, arch: process.arch,
     browser: browser.version(), delayMs: 20, measurements,
     boundary: 'synthetic intercepted preview-ready transfer; artificial hold reported separately; excludes hardware and initial screen load',
   }, null, 2));
+  // Existing production fallback must finish when parent animation frames stop.
+  const stalled = await fixture(300, 'inbound', { stallFrames: true });
+  try {
+    await assert.rejects(() => renderTape(stalled.context, '<img src="data:image/png;base64,AAAA">'), 'PDF helper must propagate actual bad PNG native decode');
+    await confirm(stalled); const jobs = await transfer(stalled, 1, 50); assertComplete(jobs, 300); await allMarks(stalled, jobs[0], 50); }
+  finally { await stalled.context.close(); }
+
 });
 
 test('C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry', async () => {
@@ -308,13 +307,12 @@ test('C5 decode failure at label 150: no transfer/early marks, visible error, ex
       await confirm(f);
       await f.page.getByRole('alert').filter({ hasText: `WMS672 decode failed at ${failedIndex}` }).waitFor();
       await f.page.waitForFunction(() => !document.querySelector('[data-testid="ff-inbound-boxes-print-all"]').disabled);
-      await f.page.waitForFunction(() => window.__wms672Active === 0);
       assert.ok(await f.page.evaluate(index => window.__wms672DecodeStarted >= index, failedIndex));
       assert.equal(await f.page.evaluate(() => window.__wms672Transfers.length), 0);
       assert.equal(f.marks(), 0, 'failed preparation must not mark existing boxes printed');
       assert.equal(await f.page.getByTestId('ff-inbound-boxes-print-all').isEnabled(), true);
       assert.equal(await f.page.evaluate(() => new Promise(r => setTimeout(() => r('responsive'), 0))), 'responsive');
-      await f.page.evaluate(() => { window.__wms672Fault.decodeAt = null; window.__wms672Decoded = 0; window.__wms672DecodeStarted = 0; });
+      await f.page.evaluate(() => { window.__wms672Fault.decodeAt = null; });
       await confirm(f);
       const jobs = await transfer(f);
       assertComplete(jobs, 300);
