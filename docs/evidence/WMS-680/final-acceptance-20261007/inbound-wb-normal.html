@@ -1,0 +1,154 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Лист приёмки — №000680</title>
+    <style>
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 7mm 8mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 10.5px;
+        color: #111;
+        margin: 0;
+        width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .rs-head {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 3px 12px;
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .rs-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .rs-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+      .rs-photo-cell { width: 24mm; }
+      .rs-product-cell { width: auto; }
+      .rs-barcode-cell { word-break: break-word; font-weight: 700; }
+      .rs-expected-cell { text-align: right; font-weight: 700; font-size: 13px; }
+      .rs-fact-cell { min-height: 24mm; }
+      .rs-photo {
+        width: 21mm;
+        height: 21mm;
+        object-fit: contain;
+        border: 1px solid #eee;
+        display: block;
+        margin: 0;
+      }
+      .rs-photo-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 11px;
+        background: #f5f5f5;
+      }
+      .rs-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .rs-meta { margin: 0; color: #555; word-break: break-word; }
+      .rs-empty { color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1>Лист приёмки</h1>
+    <dl class="rs-head">
+      <div><dt>Номер</dt><dd>№000680</dd></div>
+      <div><dt>Селлер</dt><dd>Селлер680</dd></div>
+      <div><dt>Склад</dt><dd>Склад680 (WH680)</dd></div>
+      <div><dt>Дата</dt><dd>2026-10-07</dd></div>
+    </dl>
+    <table data-testid="receiving-sheet-table">
+      <colgroup><col style="width:12.3711%" /><col style="width:37.9897%" /><col style="width:7.5773%" /><col style="width:8.5567%" /><col style="width:6.7010%" /><col style="width:13.4021%" /><col style="width:8.4021%" /><col style="width:5.0000%" /></colgroup>
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th>Артикул</th>
+          <th>Цвет</th>
+          <th>Размер</th>
+          <th>ШК</th>
+          <th>Заявлено</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody><tr data-testid="rs-sheet-card" data-row-index="0">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Товар одного артикула · вариант 0</p>
+    <p class="rs-meta"><span>SKU: SKU-0</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="rs-article-cell">ONE</td>
+  <td class="rs-color-cell">Красный</td>
+  <td class="rs-size-cell">S</td>
+  <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">4600000000000</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">1</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="1">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Товар одного артикула · вариант 1</p>
+    <p class="rs-meta"><span>SKU: SKU-1</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="rs-article-cell">ONE</td>
+  <td class="rs-color-cell">Синий</td>
+  <td class="rs-size-cell">M</td>
+  <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">4600000000001</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">2</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="2">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Товар одного артикула · вариант 2</p>
+    <p class="rs-meta"><span>SKU: SKU-2</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="rs-article-cell">ONE</td>
+  <td class="rs-color-cell">—</td>
+  <td class="rs-size-cell">0</td>
+  <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">4600000000002</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">3</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr><tr data-testid="rs-sheet-card" data-row-index="3">
+  <td class="rs-photo-cell"><div class="rs-photo rs-photo-empty">фото</div></td>
+  <td class="rs-product-cell">
+    <p class="rs-name">Товар одного артикула · вариант 3</p>
+    <p class="rs-meta"><span>SKU: SKU-3</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="rs-article-cell">ONE</td>
+  <td class="rs-color-cell">Зелёный</td>
+  <td class="rs-size-cell">—</td>
+  <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">4600000000003</td>
+  <td class="rs-expected-cell" data-testid="receiving-sheet-expected">4</td>
+  <td class="rs-fact-cell" data-testid="receiving-sheet-fact"></td>
+</tr></tbody>
+    </table>
+  </body>
+</html>
