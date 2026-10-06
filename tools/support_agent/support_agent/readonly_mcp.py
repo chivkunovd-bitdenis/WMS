@@ -110,26 +110,33 @@ class Reader:
 
     def search(self, pattern: str, path: str = ".", glob: str = "*") -> str:
         base = self.resolve(path)
+        if not base.exists():
+            raise Refused("путь не существует")
         try:
             rx = re.compile(pattern)
         except re.error:
             rx = re.compile(re.escape(pattern))
         hits: list[str] = []
+        incomplete: list[str] = []
         files = [base] if base.is_file() else self._walk(base)
         for file in files:
             if not fnmatch.fnmatch(file.name, glob):
                 continue
             try:
-                if file.stat().st_size > MAX_READ * 5:
-                    continue
-                text = file.read_text(encoding="utf-8")
+                with file.open(encoding="utf-8") as fh:
+                    for number, line in enumerate(fh, 1):
+                        if "\0" in line:
+                            incomplete.append(f"{self.rel(file)}: двоичный файл не прочитан")
+                            break
+                        if rx.search(line):
+                            hits.append(f"{self.rel(file)}:{number}: {line.rstrip()[:300]}")
+                            if len(hits) >= MAX_HITS:
+                                return ("\n".join(hits + incomplete)
+                                        + "\n… результатов слишком много, уточните запрос")
             except (OSError, UnicodeDecodeError):
-                continue
-            for number, line in enumerate(text.splitlines(), 1):
-                if rx.search(line):
-                    hits.append(f"{self.rel(file)}:{number}: {line[:300]}")
-                    if len(hits) >= MAX_HITS:
-                        return "\n".join(hits) + "\n… результатов слишком много, уточните запрос"
+                incomplete.append(f"{self.rel(file)}: ошибка чтения, поиск неполный; используйте read_file")
+        if incomplete:
+            return "\n".join(hits + incomplete)
         return "\n".join(hits) or "(ничего не найдено)"
 
     def _walk(self, base: Path) -> list[Path]:
@@ -211,7 +218,11 @@ def call_tool(reader: Reader, name: str, args: dict[str, Any]) -> tuple[str, boo
                 "git_log": reader.git_log, "git_show": reader.git_show}.get(name)
         if func is None:
             return f"неизвестный инструмент {name}", True
-        return str(func(**args))[:MAX_OUT], False
+        result = str(func(**args))
+        if len(result) > MAX_OUT:
+            notice = "\n… ответ обрезан, уточните запрос или продолжайте read_file через offset"
+            result = result[:MAX_OUT - len(notice)] + notice
+        return result, False
     except Refused as exc:
         return f"ОТКАЗ: {exc}", True
     except (TypeError, ValueError, OSError, subprocess.SubprocessError) as exc:

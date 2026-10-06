@@ -34,8 +34,10 @@ class AgentTools:
         common = [
             self._spec(
                 "read_context",
-                "Read source messages, linked tasks and memory. Paginate with before_id.",
-                {"chat_id": "integer", "ticket_id": "integer", "before_id": "integer", "limit": "integer"},
+                "Read source messages, selected task and memory. Page messages with before_id; "
+                "page tasks with before_ticket_id. all_task_chats is owner-only.",
+                {"chat_id": "integer", "ticket_id": "integer", "before_id": "integer", "limit": "integer",
+                 "before_ticket_id": "integer", "all_task_chats": "boolean"},
             ),
             self._spec(
                 "remember",
@@ -238,10 +240,15 @@ class AgentTools:
     def _tool_read_context(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         chat_id = self._chat(args.get("chat_id"), event, owner)
         tid = args.get("ticket_id")
+        selected_task = None
         if tid:
             ticket = self._ticket(tid, event, owner)
             if ticket["chat_id"] != chat_id:
                 raise ToolDenied("ticket_chat_mismatch")
+            selected_task = {**dict(ticket), "data": json.loads(ticket["data"])}
+        all_chats = args.get("all_task_chats") is True
+        if all_chats and not owner:
+            raise ToolDenied("cross_chat_access")
         limit = max(1, min(int(args.get("limit") or 30), 100))
         before = int(args.get("before_id") or 2**63 - 1)
         rows = self.store.rows(
@@ -249,9 +256,12 @@ class AgentTools:
             "FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?",
             (chat_id, before, limit),
         )
+        task_before = int(args.get("before_ticket_id") or 2**63 - 1)
+        task_where = "id<?" if all_chats else "chat_id=? AND id<?"
+        task_args = (task_before,) if all_chats else (chat_id, task_before)
         task_rows = self.store.rows(
-            "SELECT id,kind,stage,author_id,data FROM tickets WHERE chat_id=? ORDER BY id DESC LIMIT 30",
-            (chat_id,),
+            "SELECT id,chat_id,kind,stage,author_id,data FROM tickets WHERE " + task_where
+            + " ORDER BY id DESC LIMIT ?", (*task_args, limit),
         )
         outgoing = self.store.rows(
             "SELECT id,key,chat_id,reply_to,text,status,tg_message_id,ticket_id,purpose,created_at,sent_at "
@@ -263,6 +273,8 @@ class AgentTools:
             "outgoing": [dict(r) for r in reversed(outgoing)],
             "next_before_id": rows[-1]["id"] if len(rows) == limit else None,
             "tasks": [{**dict(r), "data": json.loads(r["data"])} for r in task_rows],
+            "selected_task": selected_task,
+            "next_before_ticket_id": task_rows[-1]["id"] if len(task_rows) == limit else None,
             "memory": self.store.kv_get(f"agent_memory:{chat_id}", {}),
         }
 
