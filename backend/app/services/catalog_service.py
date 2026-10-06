@@ -383,7 +383,15 @@ async def create_location_from_rack(
         except IntegrityError as exc:
             await session.rollback()
             msg = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-            if "uq_storage_locations_wh_code" in msg or "storage_locations_wh_code" in msg:
+            if (
+                "uq_storage_locations_wh_code" in msg
+                or "storage_locations_wh_code" in msg
+                or (
+                    "unique constraint failed: storage_locations.warehouse_id, "
+                    "storage_locations.code"
+                )
+                in msg
+            ):
                 raise CatalogError("location_code_taken") from exc
             if "uq_storage_locations_tenant_barcode" in msg or "tenant_barcode" in msg:
                 # Retry barcode collision (extremely unlikely).
