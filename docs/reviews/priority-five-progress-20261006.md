@@ -248,3 +248,23 @@ stagingancestry (433/593–597/599/617/618) иscoped672/673. Восстанов�
 новыйruntime/seed/DDLизнихнепереносится.672/673 связанысактуальнымиrequirements;
 672полнаяприёмкачестнонеобъявлена,673сохраняетпринятие. Никакихновыхзадач,
 тестов,checkerпослаблений илиизмененийproductизэтойвосстановительнойправкинет.
+
+## PR387 и первый реальный CI
+
+PR https://github.com/chivkunovd-bitdenis/WMS/pull/387 создан иattach_artifact
+выполнен. ПолныйCI37460067342 запущенна066a5e95c08b9e91c7957e205b35b58ad16e2ab0.
+Backlog/documentCIgatePASS; frontendtypecheck/CAdESprofilePASS.
+Backend остановилсядоMypy/Pytest на15Ruffstyleerrors тольков2testfiles.
+ЛокальныйfullRuffвоспроизвёлровноих; форматированиеисправлено, обаPythonAST
+до/послепобайтноравны,assertions/состав/условиянеизменны. Proofсохранён.
+ПослеформатированияfullRuffPASS;fullMypyPASS(563sourcefiles);целевые662/672
+14pytestPASS(18existingdeprecationwarnings,7.34s);docgatePASS.
+Этоне полныйCI-PASS: новыйcommitобновляетPR и запускает следующийfullCI.
+
+Составпакетаизsource-map:662/663/666/517код+675operationalproof/plan;
+651/667/669/672/673explicitmerges;653/657/659/660/670вetalonbaseсохранены;
+681QRhotfixbaseи683productionhotfixancestryсохранены. Этообщийпакет,
+а неотдельныйвыпускпяти. Новые незавершённые658/674/671/654 и681systemic
+неподключались. Полнаявнешняяприёмка/бумага/подпись/apply не объявлены.
+675functionalisolatedDBtest сохраняется тем же исполнителем и будетвключён
+следующимSHA; самплан26единицневыдаётсязадоказанное проведениетестовойDB.

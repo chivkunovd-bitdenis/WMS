@@ -243,5 +243,15 @@
       "path": "docs/requirements/WMS-657.md",
       "change": "C2 test reference ten\u2192eleven columns after authorized WMS-673 color migration; existing assertions/ledger untouched"
     }
-  ]
+  ],
+  "formatting_only_corrections": {
+    "base_sha": "066a5e95c08b9e91c7957e205b35b58ad16e2ab0",
+    "failed_ci_run": 37460067342,
+    "paths": [
+      "backend/tests/test_wms662_live_delivery_substatuses.py",
+      "backend/tests/test_wms672_box_label_scope.py"
+    ],
+    "protection": "Both Python ASTs identical before/after; frozen expectations/composition unchanged",
+    "proof": "docs/reviews/priority-five-ruff-format-only-proof-20261006.json"
+  }
 }

@@ -1,0 +1,18 @@
+{
+  "failed_ci_run": 37460067342,
+  "failed_head": "066a5e95c08b9e91c7957e205b35b58ad16e2ab0",
+  "checks": [
+    {
+      "path": "backend/tests/test_wms662_live_delivery_substatuses.py",
+      "ast_identical": true,
+      "ast_sha256": "fb3439263ff402954392fd837f744c13f71c06572d3b124dd4128e9299a674e9"
+    },
+    {
+      "path": "backend/tests/test_wms672_box_label_scope.py",
+      "ast_identical": true,
+      "ast_sha256": "63e90339badf547e09e586b7b03dd722ac98c8cbe1225b809d0ec85d5407c834"
+    }
+  ],
+  "expectations_and_test_composition_unchanged": true,
+  "runtime_unchanged": true
+}
