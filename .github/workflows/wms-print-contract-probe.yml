@@ -1,0 +1,71 @@
+name: WMS print contract probe
+
+on:
+  push:
+    branches: [codex/wms672-673-analyst-20261006]
+    paths:
+      - .github/workflows/wms-print-contract-probe.yml
+      - scripts/ci/wms-print-contract-probe.mjs
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms-print-contract-probe-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  print-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      WMS672_TEST_URL: http://127.0.0.1:16724
+      WMS672_EVIDENCE_DIR: ${{ runner.temp }}/print-contract/672
+      WMS673_RENDERED_ARTIFACTS_DIR: ${{ runner.temp }}/print-contract/673
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install runner dependencies without changing repository lockfiles
+        run: |
+          mkdir -p "$RUNNER_TEMP/print-contract"
+          git rev-parse HEAD > "$RUNNER_TEMP/print-contract/sha.txt"
+          npm ci --prefix frontend > "$RUNNER_TEMP/print-contract/npm-ci.log" 2>&1
+          npm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/print-contract/playwright-install.log" 2>&1
+          node "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium > "$RUNNER_TEMP/print-contract/chromium-install.log" 2>&1
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Run sequential synthetic browser and PDF contracts
+        shell: bash
+        run: |
+          set -uo pipefail
+          cd frontend
+          node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/print-contract/vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do
+            if curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null; then break; fi
+            sleep 1
+          done
+          curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null || exit 2
+          timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
+          result672=${PIPESTATUS[0]}
+          timeout 90s node ../scripts/ci/wms-print-contract-probe.mjs --render673 2>&1 | tee "$RUNNER_TEMP/print-contract/673-render.log"
+          renderer=${PIPESTATUS[0]}
+          result673=2
+          if [ "$renderer" -eq 0 ]; then
+            timeout 90s node node_modules/vitest/vitest.mjs run src/screens/v2/fbsPickingColor.wms673.pdf.test.ts --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/print-contract/673.log"
+            result673=${PIPESTATUS[0]}
+          fi
+          printf '672=%s\n673-renderer=%s\n673=%s\n' "$result672" "$renderer" "$result673" | tee "$RUNNER_TEMP/print-contract/exit-codes.txt"
+          test "$result672" -eq 0 && test "$renderer" -eq 0 && test "$result673" -eq 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms-print-contract-${{ github.sha }}
+          path: ${{ runner.temp }}/print-contract
+          retention-days: 14
+          if-no-files-found: error
