@@ -20,40 +20,44 @@
     },
     {
       "contract_commit": "0e078418bcb7ee45fa654b0d829e5de0ec80ebb0",
-      "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+      "correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
       "files": [
         "frontend/src/screens/v2/wms666ChangeScope.test.ts"
       ],
       "review": {
-        "model": "gpt-6-astra",
+        "model": "gpt-6.1-sol",
         "effort": "high",
         "verdict": "PASS",
-        "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
-        "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
-        "review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
-        "evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md",
-        "evidence_blob": "164ebcf0d882231768691f8e75cfa09f098ca79a",
-        "reviewer_session": "/root/scope666_astra",
-        "evidence_summary": "Actual Astra high review of b1d7 found cached counteredit P2; narrow recheck of cumulative 30aea reproduced the original case and confirmed rejection. Original negative assertions and prior correction provenance retained."
+        "source_commit": "20448622da89b3ef4de10443af0c8c75da9cbf0c",
+        "correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+        "review_commit": "6aa186fed74fba63b79d1572e4a889f379ad7a38",
+        "source_review_commit": "d814f65891b6f7f5d9ca81197689fa3085232611",
+        "evidence": "docs/evidence/WMS-666/ci-history-scope-independent-review-20261006.md",
+        "previous_correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+        "previous_review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
+        "previous_review_model": "gpt-6-astra",
+        "previous_evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md"
       }
     },
     {
       "contract_commit": "071a05daca43a9c29a4152c6666601a9d9a5e5cd",
-      "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+      "correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
       "files": [
         "frontend/src/screens/v2/wms666ChangeScope.test.ts"
       ],
       "review": {
-        "model": "gpt-6-astra",
+        "model": "gpt-6.1-sol",
         "effort": "high",
         "verdict": "PASS",
-        "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
-        "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
-        "review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
-        "evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md",
-        "evidence_blob": "164ebcf0d882231768691f8e75cfa09f098ca79a",
-        "reviewer_session": "/root/scope666_astra",
-        "evidence_summary": "Actual Astra high review of b1d7 found cached counteredit P2; narrow recheck of cumulative 30aea reproduced the original case and confirmed rejection. Original negative assertions and prior correction provenance retained."
+        "source_commit": "20448622da89b3ef4de10443af0c8c75da9cbf0c",
+        "correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+        "review_commit": "6aa186fed74fba63b79d1572e4a889f379ad7a38",
+        "source_review_commit": "d814f65891b6f7f5d9ca81197689fa3085232611",
+        "evidence": "docs/evidence/WMS-666/ci-history-scope-independent-review-20261006.md",
+        "previous_correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+        "previous_review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
+        "previous_review_model": "gpt-6-astra",
+        "previous_evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md"
       }
     }
   ]
