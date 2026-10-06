@@ -252,6 +252,24 @@
       "mode": "test-only source before checker fix",
       "conflicts": [],
       "red": "67 PASS /3 RED reported by separate test writer; strict model/effort/scope/SHA/blob controls retained"
+    },
+    {
+      "task": "WMS-672 remaining functional acceptance C7/C10/C11",
+      "source": "59a2a0efa0a6be055c8bc70193e4c6b0be4f23a3",
+      "integration": [
+        "2ebf49c82",
+        "e31373fb5"
+      ],
+      "mode": "exact report and51evidence files copied; one-time runner workflow and ancestry omitted",
+      "conflicts": [],
+      "facts": "6 browser PASS,10 server+4 component659PASS;10 screenshots personally inspected by executor;SQLite concurrency1skip honest, correspondingPGtest in commonCI",
+      "remaining": "C12 physical series after release and explicit operator instruction"
+    },
+    {
+      "task": "WMS-662/666 clean independent correction evidence",
+      "source": "ec1ffacb77140c87b0daba341da58313a157750d",
+      "mode": "merge clean report ancestry including4ebab12; excluded unrelated cfc report",
+      "facts": "662format5feca actualPASS;666QRdc9b1578 actualPASS17/17Node20, correction ledgers follow separately"
     }
   ],
   "local_product_fixes": [
