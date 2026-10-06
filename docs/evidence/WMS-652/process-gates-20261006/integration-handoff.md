@@ -1,0 +1,15 @@
+# Общая интеграция после независимых проверок
+
+Рабочая ветка `codex/wms652-process-gates`, исходный продукт d61805978b3e7878d1056c99b4e6e0823edf49a5. Исправление Mac сохранено в последовательности frozen test00fe743ca → helper291b42c95; независимое заключение2ceddf740 закрывает задержку настоящего React0/700ms. Geometry/source/evidence731cd40e2→ed4657507→313e38b5b→5462b9829 сохраняют43IDs. Независимая проверка CI/scope/geometry15c974f22 подтверждает71 новых и48 существующих контрактов, exact4625collection и2313/2312union.
+
+Registry сохраняет222 source/helper/test/workflow files и1146 suite IDs. Все210 прежних путей и955 IDs сохранены; добавлены10geometry,20shards,51scope,110Mac. Пять прежних хешей обновлены только из рассмотренных новых CI/test sources; четыре Mac production helper/generator/command файла и collectionfixture включены в freeze closure. Машинное сопоставление — integrated-registry-checkpoint.json. В общей ветке actual whole-product CLI относительно fixed d618 возвращает пустой unapproved_product_paths; Mac110 заново прошли с exact TAP именами без skip (integrated-mac-110.tap).
+
+Исходные reports20/51 взяты из настоящих XML и сверены с сохранёнными cases.json. Добавленные suites требуют exact named execution в ci-shards.xml/product-scope.xml/wms517-mac.tap; existing CI уже сохраняет эти reports и скачивает их в process-proof. Это проверка интеграции и подготовленная первичная policy, не установленная внешняя защита. Проверка SOURCE pin, конфигурация независимого main-checker, обязательные правила GitHub и negative canary ещё нужны.
+
+Замещающий аналитик должен принять документы652/517 на этом checkpoint: заполнить C59 настоящими scope/geometry refs и SC17 frozen0/1/84/305/700ms refs; сохранить ручные физические/подпись/SC18 проверки как не исполненные и latest owner уточнение о выполнении после деплоя. Нельзя подписаться исходным аналитиком. Заключение и backlog должны отражать программную приёмку отдельно от ещё не выполненного fullCI/mandatory enforcement/deploy.
+
+Проверенный `.command` имеет sha2566e60684bbe8318178f0c97d34507f9a93f811c74ed3e2631ae249ac02a8505c9; immutable published source —7a2fa31d83e06b2724edbcca1aaead0914ad5e56. [Скачать именно этот файл](https://raw.githubusercontent.com/chivkunovd-bitdenis/WMS/7a2fa31d83e06b2724edbcca1aaead0914ad5e56/scripts/ops/avpack-sold-kiz.command). До production/signature эта ссылка не является доказательством запуска на Mac.
+
+Production остаётся8f11d912351e8de7633b4abcf74d195badaeb254. Main045272b51f28829b6220410856e9216a3054ce33 содержит только independent checker/workflow; source pin ещё не установлен. PR387 остаётся будущим общим кандидатом; merge/deploy не выполнены. Цель полного обычного CI10–15 минут ещё не измерена.
+
+В общей ветке дополнительно исполнены71 frozen CI/scope контракт и45subtestsPASS, raw integrated-ci-scope-71.xml. Etalonruleset24431521 после owner-authorizedupdate/readback active:9requiredchecks, stricttrue, nobypass, прежниеrules/settings сохранены; sourcepin и negative canary ещё pending.

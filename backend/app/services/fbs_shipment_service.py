@@ -1323,6 +1323,12 @@ async def _apply_local_delivered(
     source_plan: source_svc.FbsShipmentSourcePlan | None,
     operation: Any,
 ) -> None:
+    snapshots = (getattr(operation, "request_summary_json", None) or {}).get("ozon_handoff_orders")
+    if supply.marketplace == "ozon" and isinstance(snapshots, dict):
+        await _apply_ozon_snapshot_delivered(
+            session, supply, orders, actor_user_id, operation, snapshots,
+        )
+        return
     await _write_off_delivered_orders_once(
         session,
         supply,
@@ -1344,6 +1350,73 @@ async def _apply_local_delivered(
     await charge_handed_over_orders(session, orders, occurred_at=now)
 
 
+async def _apply_ozon_snapshot_delivered(
+    session: AsyncSession,
+    supply: FbsSupply,
+    orders: list[FbsOrder],
+    actor_user_id: uuid.UUID | None,
+    operation: Any,
+    snapshots: dict[str, Any],
+) -> None:
+    """Finish the ordinary operation, not a new observation, for its exact snapshot."""
+    from app.services.fbs_observed_handoff_service import (
+        completed_quantities,
+        expected_quantities,
+        snapshot_targets,
+    )
+    from app.services.fbs_order_billing_service import charge_handed_over_orders
+
+    targets = {
+        order.id: snapshot_targets(order, snapshots[str(order.id)])
+        for order in orders
+        if order.status not in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}
+        and order.tenant_id == supply.tenant_id
+        and order.seller_id == supply.seller_id
+        and order.warehouse_id == supply.warehouse_id
+        and order.marketplace == supply.marketplace
+        and isinstance(snapshots.get(str(order.id)), dict)
+    }
+    targets = {order_id: quantities for order_id, quantities in targets.items() if quantities}
+    approved = [order for order in orders if order.id in targets]
+    await _write_off_delivered_orders_once(
+        session, supply, approved, actor_user_id, source_plan=None, operation=operation,
+        proved_quantities_by_order=targets,
+    )
+    ledgers = {
+        ledger.fbs_order_id: ledger for ledger in await session.scalars(
+            select(FbsShipmentReversalLedger).where(
+                FbsShipmentReversalLedger.tenant_id == supply.tenant_id,
+                FbsShipmentReversalLedger.fbs_order_id.in_([order.id for order in orders]),
+            )
+        )
+    }
+    all_complete = True
+    billable: list[FbsOrder] = []
+    billing_quantities: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
+    for order in orders:
+        if order.status in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}:
+            continue
+        completed = completed_quantities(ledgers.get(order.id))
+        expected = expected_quantities(order)
+        complete = bool(expected) and completed == expected
+        all_complete = all_complete and complete
+        if order.id in targets and completed:
+            billable.append(order)
+            billing_quantities[order.id] = {
+                pid: min(qty, completed.get(pid, 0)) for pid, qty in targets[order.id].items()
+            }
+        if complete and order.status not in _TERMINAL_ORDER_STATUSES:
+            order.status = FBS_ORDER_STATUS_IN_DELIVERY
+    now = supply.delivered_at or getattr(operation, "confirmed_at", None) or datetime.now(UTC)
+    if all_complete and billable:
+        supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
+        supply.delivered_at = now
+    await session.flush()
+    await charge_handed_over_orders(
+        session, billable, occurred_at=now, quantities_by_order=billing_quantities,
+    )
+
+
 async def _write_off_delivered_orders_once(
     session: AsyncSession,
     supply: FbsSupply,
@@ -1352,6 +1425,7 @@ async def _write_off_delivered_orders_once(
     *,
     source_plan: source_svc.FbsShipmentSourcePlan | None,
     operation: Any,
+    proved_quantities_by_order: dict[uuid.UUID, dict[uuid.UUID, int]] | None = None,
 ) -> None:
     """Create exactly one physical write-off recipe per confirmed FBS order."""
     active_orders = [
@@ -1386,15 +1460,24 @@ async def _write_off_delivered_orders_once(
     for order in active_orders:
         ledger = existing_ledgers.get(order.id)
         if order.marketplace == "ozon" and (
-            ledger is None or (ledger.shipment_movement_id is None and ledger.ozon_positions_json)
+            ledger is None or ledger.ozon_positions_json
         ):
             try:
+                # A historical partial recipe may contain only completed rows.
+                # Stage the remaining units before the regular button consumes
+                # them, reusing all locations and movements already persisted.
+                prepared = await prepare_ozon_shipment_sources(
+                    session, tenant_id=supply.tenant_id, warehouse_id=supply.warehouse_id,
+                    orders=[order],
+                )
+                ledger = prepared[0]
                 ledger = await write_off_ozon_order(
                     session,
                     tenant_id=supply.tenant_id,
                     order=order,
                     actor_user_id=actor_user_id,
                     ledger=ledger,
+                    proved_quantities=(proved_quantities_by_order or {}).get(order.id),
                 )
             except OzonPackagingError as exc:
                 raise FbsShipmentError(str(exc), http_status=409) from exc
@@ -1519,7 +1602,12 @@ async def _write_off_delivered_orders_once(
             ledger.wb_operation_id = operation.id
             ledger.written_off_by_user_id = actor_user_id
             ledger.written_off_at = datetime.now(UTC)
-        await _release_reservation(session, order)
+        if order.marketplace == "ozon" and proved_quantities_by_order is not None:
+            from app.services.fbs_observed_handoff_service import reduce_ozon_reservations
+
+            await reduce_ozon_reservations(session, order, ledger)
+        else:
+            await _release_reservation(session, order)
     await session.flush()
 
 
@@ -1934,6 +2022,8 @@ async def _save_ozon_handoff_progress(
     """
     summary = dict(operation.request_summary_json or {})
     summary[OZON_HANDOFF_PROGRESS_KEY] = progress.to_json()
+    if progress.carriage_approved and progress.posting_numbers:
+        summary.setdefault("ozon_approved_postings", list(progress.posting_numbers))
     operation.request_summary_json = summary
     await session.commit()
 
@@ -2116,6 +2206,27 @@ async def _deliver_ozon_supply_locked(
                 (attempt.request_summary_json or {}).get(OZON_HANDOFF_PROGRESS_KEY)
             )
         )
+    if existing is not None and progress.carriage_approved:
+        from app.services.fbs_observed_handoff_service import (
+            checkpoint_targets,
+            expected_quantities,
+        )
+
+        # Freeze historical quantities before preparation can extend the recipe.
+        # A recovery cannot add current orders to an already approved carriage.
+        for order in orders:
+            await checkpoint_targets(session, order, existing)
+        legacy_summary = dict(existing.request_summary_json or {})
+        participants = [order for order in orders if order.status != FBS_ORDER_STATUS_CANCELLED]
+        if "ozon_handoff_orders" not in legacy_summary and not (
+            len(participants) == 1
+            and sum(expected_quantities(participants[0]).values()) == 1
+        ):
+            # Without a saved recipe/quantity, the old approved scope is unknown.
+            # A legacy one-unit singleton is unambiguous; a current larger scope is not.
+            legacy_summary["ozon_handoff_orders"] = {}
+            legacy_summary["ozon_handoff_orders_complete"] = True
+            existing.request_summary_json = legacy_summary
     try:
         source_plan = await plan_ozon_shipment_sources(
             session, tenant_id=tenant_id, warehouse_id=supply.warehouse_id, orders=orders,
@@ -2192,12 +2303,37 @@ async def _deliver_ozon_supply_locked(
 
     # Первая долговечная точка — до любой мутации в кабинете. Без неё падение
     # процесса стёрло бы саму запись о том, что передача начиналась.
+    from app.services.fbs_observed_handoff_service import expected_quantities, observation_scope
+
+    summary = dict(operation.request_summary_json or {})
+    if "ozon_handoff_orders" not in summary:
+        summary["ozon_handoff_orders"] = {
+            str(order.id): {"scope": observation_scope(order),
+                            "quantities": {str(pid): qty for pid, qty in
+                                           expected_quantities(order).items()}}
+            for order in orders if order.status != FBS_ORDER_STATUS_CANCELLED
+        }
+        summary["ozon_handoff_orders_complete"] = True
+        operation.request_summary_json = summary
     await _checkpoint(progress)
+    from app.services.fbs_observed_handoff_service import snapshot_targets
+
+    handoff_orders = [
+        order for order in orders
+        if order.status not in {FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT}
+        and isinstance(summary["ozon_handoff_orders"].get(str(order.id)), dict)
+        and snapshot_targets(order, summary["ozon_handoff_orders"][str(order.id)])
+    ]
     try:
+        if not handoff_orders:
+            raise OzonFbsProcessError(
+                "ozon_handoff_scope_changed", "Состав подтверждённой передачи изменился.",
+                status_code=409,
+            )
         result = await handoff_supply(
             session,
             supply=supply,
-            orders=orders,
+            orders=handoff_orders,
             provider=provider,
             client_id=client_id,
             api_key=api_key,
@@ -2321,6 +2457,21 @@ async def deliver_supply(
     supply_read = await _get_supply_read(session, tenant_id, supply_id, with_trbxes=True)
     if supply_read is None:
         raise FbsShipmentError("supply_not_found")
+
+    # A prior read-only reconciliation already completed this physical handover.
+    # A new browser key cannot authorize a second marketplace mutation.
+    if supply_read.delivered_at is not None:
+        from app.models.fbs_wb_operation import FbsWbOperation
+
+        observed = await session.scalar(select(FbsWbOperation.id).where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == supply_read.seller_id,
+            FbsWbOperation.local_entity_id == supply_id,
+            FbsWbOperation.operation_kind == "observed_handoff",
+            FbsWbOperation.state == WB_OPERATION_STATE_CONFIRMED,
+        ))
+        if observed is not None:
+            return supply_read
 
     request_hash = request_hash_for_deliver(
         supply_id=supply_id,

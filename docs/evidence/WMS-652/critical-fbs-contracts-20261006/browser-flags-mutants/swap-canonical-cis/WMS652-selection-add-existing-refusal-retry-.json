@@ -1,0 +1,75 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/created-order-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/created-order-c/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/created-order-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A37%3A59.067Z&to=2026-10-06T18%3A37%3A59.067Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&seller_id=seller-a&status_group=active",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/compatible/orders/batch",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "idempotency_key": "f5ff7d9a-cf9c-4fe4-8105-3ee6887c12c0"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/compatible/orders/batch",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "idempotency_key": "a6aa6748-b5b6-47e1-876e-d0b98e5eb271"
+      }
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

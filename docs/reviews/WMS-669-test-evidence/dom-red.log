@@ -1,0 +1,148 @@
+
+> frontend@0.0.0 test:unit
+> vitest run src/screens/v2/Wms669SellerCatalog.dom.test.tsx src/screens/v2/SellerCatalogAsync.dom.test.tsx
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms669-urgent-confirmed-contract-20261006/frontend
+
+ ✓ src/screens/v2/SellerCatalogAsync.dom.test.tsx (20 tests) 15296ms
+   ✓ catalog job lifecycle in actual seller screens > settings loads the WB-only server count after reading an existing key on reload  878ms
+   ✓ catalog job lifecycle in actual seller screens > settings refreshes the WB count when the first saved key finishes importing without another action  2014ms
+   ✓ catalog job lifecycle in actual seller screens > settings never fetches a WB count for an Ozon-only seller  464ms
+   ✓ catalog job lifecycle in actual seller screens > reloads the current marketplace/search/page/fulfillment after an older job completes  3214ms
+   ✓ catalog job lifecycle in actual seller screens > retry wb starts and observes only that marketplace  715ms
+   ✓ catalog job lifecycle in actual seller screens > retry ozon starts and observes only that marketplace  808ms
+   ✓ catalog job lifecycle in actual seller screens > ignores late connection response after unmount, including the second marketplace  527ms
+   ✓ catalog job lifecycle in actual seller screens > ignores late start response after unmount, including the second marketplace  575ms
+   ✓ catalog job lifecycle in actual seller screens > ignores late retry response after unmount, including the second marketplace  703ms
+   ✓ catalog job lifecycle in actual seller screens > ignores a late start after a seller session switch  575ms
+   ✓ catalog job lifecycle in actual seller screens > settings ignores late wb-save on unmount and never starts a watcher  453ms
+   ✓ catalog job lifecycle in actual seller screens > settings ignores late retry on unmount and never starts a watcher  515ms
+   ✓ catalog job lifecycle in actual seller screens > keeps WB validation-unavailable error in the dialog with entered key intact  669ms
+   ✓ catalog job lifecycle in actual seller screens > settings ignores a late WB save after switching seller sessions  873ms
+   ✓ catalog job lifecycle in actual seller screens > products stops an existing watcher when the seller session changes  880ms
+   ✓ catalog job lifecycle in actual seller screens > settings stops an existing watcher when the seller session changes  513ms
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx (12 tests | 8 failed) 21410ms
+   ✓ WMS-669 seller catalog contract > control: real rows, quantities, existing filters, paging and row actions render  4340ms
+   × WMS-669 seller catalog contract > C6 Артикул resets page and keeps all intersecting filters 2978ms
+     → Required visible filter: Размер: expected undefined to be defined
+   × WMS-669 seller catalog contract > C6 Размер resets page and keeps all intersecting filters 3588ms
+     → Required visible filter: Артикул: expected undefined to be defined
+   × WMS-669 seller catalog contract > C6 Только с остатком resets page and keeps all intersecting filters 4139ms
+     → Required visible filter: Артикул: expected undefined to be defined
+   × WMS-669 seller catalog contract > C4/C7 groups keep separate rows, stock/actions and repeat context on the next page 601ms
+     → Visible category/article/size subheadings: expected 0 to be greater than or equal to 3
+   × WMS-669 seller catalog contract > C5 groups missing values honestly and keeps imported size set in one row 434ms
+     → Visible category/article/size subheadings: expected 0 to be greater than or equal to 3
+   × WMS-669 seller catalog contract > C7 selection survives pages and filters; bulk action sends only original product IDs 2903ms
+     → Required visible filter: Артикул: expected undefined to be defined
+   × WMS-669 seller catalog contract > C8 ignores late old-filter page even when transport ignores AbortSignal 210ms
+     → Required visible filter: Артикул: expected undefined to be defined
+   ✓ WMS-669 seller catalog contract > C8 ignores late page and summary after the existing token-based shop switch  372ms
+   × WMS-669 seller catalog contract > C8 old search response cannot overwrite newer results even if cancellation is ignored 1039ms
+     → expected 'Пуховик stale2329блэкSKU-stale6690000…' to contain 'Пуховик current'
+   ✓ WMS-669 seller catalog contract > C8 clears previous seller rows and quantities while the new shop response is pending  354ms
+   ✓ WMS-669 seller catalog contract > control: empty result and request error use existing states and can be retried  451ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 8 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C6 Артикул resets page and keeps all intersecting filters
+AssertionError: Required visible filter: Размер: expected undefined to be defined
+ ❯ field src/screens/v2/Wms669SellerCatalog.dom.test.tsx:69:54
+     67| function field(label: string): HTMLInputElement {
+     68|   const found = [...document.querySelectorAll('label')].find((el) => e…
+     69|   expect(found, `Required visible filter: ${label}`).toBeDefined()
+       |                                                      ^
+     70|   const input = found!.htmlFor ? document.getElementById(found!.htmlFo…
+     71|   expect(input, `Input for ${label}`).toBeInstanceOf(HTMLInputElement)
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:161:43
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C6 Размер resets page and keeps all intersecting filters
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C6 Только с остатком resets page and keeps all intersecting filters
+AssertionError: Required visible filter: Артикул: expected undefined to be defined
+ ❯ field src/screens/v2/Wms669SellerCatalog.dom.test.tsx:69:54
+     67| function field(label: string): HTMLInputElement {
+     68|   const found = [...document.querySelectorAll('label')].find((el) => e…
+     69|   expect(found, `Required visible filter: ${label}`).toBeDefined()
+       |                                                      ^
+     70|   const input = found!.htmlFor ? document.getElementById(found!.htmlFo…
+     71|   expect(input, `Input for ${label}`).toBeInstanceOf(HTMLInputElement)
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:160:44
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C4/C7 groups keep separate rows, stock/actions and repeat context on the next page
+AssertionError: Visible category/article/size subheadings: expected 0 to be greater than or equal to 3
+ ❯ assertGroups src/screens/v2/Wms669SellerCatalog.dom.test.tsx:108:73
+    106|   const rows = [...element('seller-products-table').querySelectorAll('…
+    107|   const groupRows = headers()
+    108|   expect(groupRows.length, 'Visible category/article/size subheadings'…
+       |                                                                         ^
+    109|   const indexes = [category, article, size].map((label) => {
+    110|     const group = groupRows.find((row) => row.textContent?.trim().incl…
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:190:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C5 groups missing values honestly and keeps imported size set in one row
+AssertionError: Visible category/article/size subheadings: expected 0 to be greater than or equal to 3
+ ❯ assertGroups src/screens/v2/Wms669SellerCatalog.dom.test.tsx:108:73
+    106|   const rows = [...element('seller-products-table').querySelectorAll('…
+    107|   const groupRows = headers()
+    108|   expect(groupRows.length, 'Visible category/article/size subheadings'…
+       |                                                                         ^
+    109|   const indexes = [category, article, size].map((label) => {
+    110|     const group = groupRows.find((row) => row.textContent?.trim().incl…
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:209:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C7 selection survives pages and filters; bulk action sends only original product IDs
+AssertionError: Required visible filter: Артикул: expected undefined to be defined
+ ❯ field src/screens/v2/Wms669SellerCatalog.dom.test.tsx:69:54
+     67| function field(label: string): HTMLInputElement {
+     68|   const found = [...document.querySelectorAll('label')].find((el) => e…
+     69|   expect(found, `Required visible filter: ${label}`).toBeDefined()
+       |                                                      ^
+     70|   const input = found!.htmlFor ? document.getElementById(found!.htmlFo…
+     71|   expect(input, `Input for ${label}`).toBeInstanceOf(HTMLInputElement)
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:236:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C8 ignores late old-filter page even when transport ignores AbortSignal
+AssertionError: Required visible filter: Артикул: expected undefined to be defined
+ ❯ field src/screens/v2/Wms669SellerCatalog.dom.test.tsx:69:54
+     67| function field(label: string): HTMLInputElement {
+     68|   const found = [...document.querySelectorAll('label')].find((el) => e…
+     69|   expect(found, `Required visible filter: ${label}`).toBeDefined()
+       |                                                      ^
+     70|   const input = found!.htmlFor ? document.getElementById(found!.htmlFo…
+     71|   expect(input, `Input for ${label}`).toBeInstanceOf(HTMLInputElement)
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:255:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/8]⎯
+
+ FAIL  src/screens/v2/Wms669SellerCatalog.dom.test.tsx > WMS-669 seller catalog contract > C8 old search response cannot overwrite newer results even if cancellation is ignored
+AssertionError: expected 'Пуховик stale2329блэкSKU-stale6690000…' to contain 'Пуховик current'
+
+Expected: "Пуховик current"
+Received: "Пуховик stale2329блэкSKU-stale66900000000148Остаток 0Резерв 0Доступно 0ТЗЧЗРезервы"
+
+ ❯ src/screens/v2/Wms669SellerCatalog.dom.test.tsx:307:39
+    305|     expect(dataRows()[0].textContent).toContain('Пуховик current')
+    306|     await act(async () => { late.resolve(json(page([product('stale')],…
+    307|     expect(dataRows()[0].textContent).toContain('Пуховик current')
+       |                                       ^
+    308|     expect(document.body.textContent).not.toContain('Пуховик stale')
+    309|     expect(element('seller-catalog-filter-count').textContent).not.toC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/8]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  8 failed | 24 passed (32)
+   Start at  11:10:08
+   Duration  49.35s (transform 2.24s, setup 0ms, collect 20.17s, tests 36.71s, environment 3.66s, prepare 1.02s)

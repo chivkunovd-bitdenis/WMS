@@ -1,0 +1,211 @@
+{
+  "promotion_653": {
+    "references": 11,
+    "preflight_failures": [
+      {
+        "line": 91,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_fbs_shipment_deliver_gate_unit.py"
+      },
+      {
+        "line": 94,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_fbs_shipment_deliver_gate_unit.py"
+      }
+    ]
+  },
+  "promotion_657": {
+    "references": 6,
+    "preflight_failures": []
+  },
+  "promotion_659": {
+    "references": 11,
+    "preflight_failures": [
+      {
+        "line": 114,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms659_bulk_inbound_boxes.py"
+      },
+      {
+        "line": 116,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms659_bulk_inbound_boxes.py"
+      },
+      {
+        "line": 117,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx"
+      },
+      {
+        "line": 118,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms659_bulk_inbound_boxes.py"
+      },
+      {
+        "line": 120,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms659_bulk_inbound_boxes.py"
+      },
+      {
+        "line": 122,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms659_bulk_inbound_boxes.py"
+      }
+    ]
+  },
+  "promotion_660": {
+    "references": 0,
+    "preflight_failures": []
+  },
+  "promotion_667": {
+    "references": 9,
+    "preflight_failures": []
+  },
+  "promotion_669": {
+    "references": 9,
+    "preflight_failures": []
+  },
+  "promotion_670": {
+    "references": 8,
+    "preflight_failures": [
+      {
+        "line": 216,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.dom.test.tsx"
+      },
+      {
+        "line": 217,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.render.test.tsx"
+      },
+      {
+        "line": 218,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      },
+      {
+        "line": 219,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      },
+      {
+        "line": 220,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      },
+      {
+        "line": 221,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      },
+      {
+        "line": 222,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      },
+      {
+        "line": 224,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms469_stock_dialog_backend.py"
+      }
+    ]
+  },
+  "promotion_672": {
+    "references": 9,
+    "preflight_failures": [
+      {
+        "line": 167,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-dom.test.tsx",
+        "path": "frontend/tests-e2e/wms672-dom.test.tsx"
+      },
+      {
+        "line": 168,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "path": "frontend/tests-e2e/wms672-box-labels.test.mjs"
+      },
+      {
+        "line": 169,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "path": "frontend/tests-e2e/wms672-box-labels.test.mjs"
+      },
+      {
+        "line": 171,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-dom.test.tsx",
+        "path": "frontend/tests-e2e/wms672-dom.test.tsx"
+      },
+      {
+        "line": 172,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "path": "frontend/tests-e2e/wms672-box-labels.test.mjs"
+      },
+      {
+        "line": 173,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "path": "frontend/tests-e2e/wms672-box-labels.test.mjs"
+      },
+      {
+        "line": 174,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-dom.test.tsx",
+        "path": "frontend/tests-e2e/wms672-dom.test.tsx"
+      },
+      {
+        "line": 175,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms672_box_label_scope.py"
+      },
+      {
+        "line": 176,
+        "reason": "Тест вне поддерживаемых backend/frontend каталогов: frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "path": "frontend/tests-e2e/wms672-box-labels.test.mjs"
+      }
+    ]
+  },
+  "promotion_673": {
+    "references": 9,
+    "preflight_failures": [
+      {
+        "line": 65,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx"
+      },
+      {
+        "line": 67,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx"
+      },
+      {
+        "line": 69,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx"
+      },
+      {
+        "line": 70,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts"
+      },
+      {
+        "line": 72,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx"
+      },
+      {
+        "line": 73,
+        "reason": "whole multi-reference cell treated as one test name",
+        "path": "backend/tests/test_wms673_print_read_contract.py"
+      }
+    ]
+  },
+  "scope_other_primary_task_bypass": {
+    "result": "PASS despite committed forbidden model",
+    "subject": "WMS-652 WMS-653: introduce forbidden model"
+  },
+  "scope_negative_control": {
+    "result": "REJECTED with WMS-653 primary subject",
+    "message": "WMS-653 must not add a table/migration, model-backed status or background task: ['backend/app/models/audit_forbidden.py']"
+  },
+  "contract_subject_suffix_bypass": [],
+  "contract_exact_subject_negative_control": [
+    "изменён контракт тестов WMS-673 после его фиксации: test_contract.py"
+  ],
+  "reference_comment_only": []
+}

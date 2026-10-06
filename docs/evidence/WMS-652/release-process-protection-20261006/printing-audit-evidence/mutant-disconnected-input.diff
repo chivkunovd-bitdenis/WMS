@@ -1,0 +1,13 @@
+diff --git a/frontend/src/screens/v2/FbsPackingScanBar.tsx b/frontend/src/screens/v2/FbsPackingScanBar.tsx
+index aefb7bc9c..722aa34dd 100644
+--- a/frontend/src/screens/v2/FbsPackingScanBar.tsx
++++ b/frontend/src/screens/v2/FbsPackingScanBar.tsx
+@@ -101,7 +101,7 @@ export function FbsPackingScanBar({ controllers, enabled, token, contextKey = to
+       // so a later Escape or «Назад» never overtakes it.
+       const generation = queueGeneration.current
+       const serialQueue = serialQueueRef.current
+-      void routePackingScan(controllers, raw, 'сборке', serialQueue)
++      void Promise.resolve()
+         .then(() => { if (generation === queueGeneration.current) playScanSuccess() })
+         .catch((cause: unknown) => {
+           if (generation !== queueGeneration.current) return

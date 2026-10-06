@@ -249,9 +249,8 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-722: correction ledger")
         return checker.contract_change_errors(self.root, rollout)
 
-    def test_sol61_high_review_cannot_accept_corrected_contract(self):
-        self.assertTrue(any("реестр коррекции" in error
-                            for error in self.sol61_correction_errors("high")))
+    def test_sol61_high_review_accepts_corrected_contract(self):
+        self.assertEqual(self.sol61_correction_errors("high"), [])
 
     def test_sol61_low_review_cannot_accept_corrected_contract(self):
         self.assertTrue(any("реестр коррекции" in error
@@ -299,12 +298,17 @@ class GitTests(unittest.TestCase):
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
 
-    def test_array_corrections_reject_sol_high_review(self):
+    def test_array_corrections_accept_sol_high_review(self):
         rollout, _, _, entries = self.disjoint_corrections()
         entries[1]["review"]["model"] = "gpt-6.1-sol"
         self.save_corrections(entries)
-        errors = checker.contract_change_errors(self.root, rollout)
-        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_array_corrections_reject_unknown_model(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["review"]["model"] = "unknown-reviewer"
+        self.save_corrections(entries)
+        self.assertTrue(checker.contract_change_errors(self.root, rollout))
 
     def test_array_corrections_reject_non_pass_review(self):
         rollout, _, _, entries = self.disjoint_corrections()

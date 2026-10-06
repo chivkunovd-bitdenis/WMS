@@ -1,0 +1,23 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-staging-c11-acceptance-20261006/frontend
+
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > rejects migrations, backend entities, stock logic and guard registry changes
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > keeps the actual task diff inside the approved packing UI/test/document boundary 1669ms
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > accepts exact task proofs and rejects adjacent proof and correction namespaces
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > reads advancing task history: foreign backend passes, new task backend or guards fail
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > checks task merge resolutions while ignoring an imported foreign backend tree
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > rejects a new task workflow edit and pending CI changes independently
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > accepts only the exact immutable history checkout delta
+ ↓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > fails an accepted history lookup if its immutable source is missing
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > accepts only exact doc-only historical commits and keeps their paths forbidden generally 218ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > rejects future committed, dirty and staged edits of every historical document path 2006ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > fails exact doc-history lookup when immutable objects are absent 177ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed | 7 skipped (11)
+   Start at  20:06:07
+   Duration  4.46s (transform 32ms, setup 0ms, collect 30ms, tests 4.07s, environment 0ms, prepare 65ms)
+
+fatal: bad object 1d34b77874e1b1396d8bdd216bd0053a4a308440
+fatal: bad object c5d9255e5d912e13398c883961d0c476ee5a1938
+fatal: bad object 8ec0fcd6c7625a4351e6e9a04dfe80f055ac398a

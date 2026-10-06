@@ -1,0 +1,61 @@
+// @vitest-environment jsdom
+// One-off developer probe after implementation; not the frozen RED contract.
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
+import { expect, it, vi } from 'vitest'
+import { OzonExemplarDocuments } from './OzonExemplarDocuments'
+
+it('shows current cabinet state and errors while permitting only server-authorized writes', async () => {
+  ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  for (const [state, editable, error] of [
+    ['accepted', true, ''], ['rejected', true, 'gtd_invalid'],
+    ['checking', true, ''], ['unknown', true, ''],
+    ['checking', false, ''], ['unknown', false, ''], ['preparing', false, ''],
+  ] as const) {
+    const view = {
+      version: 1, state, editable, status: state === 'checking' ? 'validation_in_process' : 'ship_available',
+      errors: error ? [error] : [], products: [{ product_id: 663001, sku: '663001', name: 'Товар Ozon',
+        exemplars: [{ exemplar_id: 81, ordinal: 1, gtd_required: true, rnpt_required: false,
+          gtd: 'CABINET-NEW', is_gtd_absent: false, state, errors: error ? [error] : [] }] }],
+    }
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => view }))
+    vi.stubGlobal('fetch', fetchMock)
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    try {
+      await act(async () => { root.render(<OzonExemplarDocuments orderId="f4" token="fake" authHeaders={() => ({})} />) })
+      await act(async () => { (container.querySelector('button') as HTMLButtonElement).click() })
+      const input = container.querySelector('input[type="text"]') as HTMLInputElement
+      expect(input.value).toBe('CABINET-NEW')
+      expect(input.disabled).toBe(!editable)
+      const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement
+      expect(checkbox.disabled).toBe(!editable)
+      expect(checkbox.checked).toBe(false)
+      if (error) expect(container.textContent?.match(/gtd_invalid/g)?.length).toBe(2)
+      if (state !== 'accepted') expect(container.textContent).not.toContain('Принято')
+      if (state === 'checking') expect(container.textContent).toContain('Проверяется в Ozon')
+      if (state === 'unknown') expect(container.textContent).toContain('Результат Ozon пока неизвестен')
+      const save = Array.from(container.querySelectorAll('button')).find(button => button.textContent === 'Сохранить')!
+      expect(save.disabled).toBe(true)
+      if (editable) {
+        await act(async () => {
+          Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(input, 'NEXT-EXPLICIT')
+          input.dispatchEvent(new Event('input', { bubbles: true }))
+        })
+        expect(save.disabled).toBe(false)
+        await act(async () => { save.click() })
+        const calls = fetchMock.mock.calls as unknown as [string, RequestInit][]
+        expect(calls.length).toBe(2)
+        expect(calls[1][1].method).toBe('PUT')
+        expect(JSON.parse(calls[1][1].body as string)).toMatchObject({
+          product_id: 663001, exemplar_id: 81, gtd: 'NEXT-EXPLICIT', expected_version: 1, is_gtd_absent: false,
+        })
+      } else expect(fetchMock.mock.calls.length).toBe(1)
+    } finally {
+      await act(async () => { root.unmount() })
+      container.remove()
+      vi.unstubAllGlobals()
+    }
+  }
+}, 30000)

@@ -1,0 +1,8 @@
+WMS652.realQr[supply_id=A]: PASS
+WMS652.realQr[supply_ids=A]: PASS
+WMS652.realQr[supply_ids=A,B]: PASS
+WMS652.selection[single-create]: PASS
+Error: UI timeout: document.querySelector('[data-testid="fbs-group-create-submit"]')?.innerText.includes('Повторить (1)')
+    at until (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:46:9)
+    at async selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:271:3)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:194:3

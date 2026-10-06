@@ -1,0 +1,32 @@
+[
+  {
+    "name": "baseline-qr-sticker-parser",
+    "command": [
+      "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+      "-m",
+      "pytest",
+      "-n",
+      "0",
+      "-q",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_scan_finds_order_by_sticker_barcode",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_scan_in_russian_layout_finds_order",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_human_number_still_works_for_manual_entry"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "mutant-omit-technical-qr",
+    "command": [
+      "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+      "-m",
+      "pytest",
+      "-n",
+      "0",
+      "-q",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_scan_finds_order_by_sticker_barcode",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_scan_in_russian_layout_finds_order",
+      "tests/test_fbs_kiz_sticker_lookup.py::test_human_number_still_works_for_manual_entry"
+    ],
+    "exit_code": 1
+  }
+]

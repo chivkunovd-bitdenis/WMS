@@ -1,0 +1,38 @@
+{
+  "sha": "bcb2f05769fa7c5a1b2f249b3ed72685a70b8beb",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.selection[add-existing-refusal-retry]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:195:3"
+}

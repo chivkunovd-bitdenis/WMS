@@ -1,0 +1,816 @@
+{
+  "reviewed_sha": "259a36854462e5dc794c9ee8eefa5a7e3d5acc68",
+  "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "source_sha": "d640d6da1e5ddb16a5628b480ac893b541e3644b",
+  "source_paths": 91,
+  "decision_counts": {
+    "byte-identical accepted source": 86,
+    "exact source changed-line payload retained on fresh etalon; base changes preserved": 2,
+    "only exact WMS-662 entry inserted into fresh backlog; unrelated introductions omitted": 1,
+    "excluded unrelated unfinished introduction; retained in source branch": 2
+  },
+  "unchanged_etalon_paths": 74,
+  "issues": [],
+  "results": [
+    {
+      "path": ".github/workflows/wms662-c19.yml",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/billing_ledger_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_cancellation_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_observed_handoff_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_order_billing_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_ozon_packaging_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_shipment_service.py",
+      "decision": "exact source changed-line payload retained on fresh etalon; base changes preserved",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/operation_fact_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/ozon_fbs_sync_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/wb_marketplace_orders_service.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_approve_scope_race.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_astra_regressions.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_steady_state.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing_cancellation.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_invoiced_continuation.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_postgres.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/KANONICHESKIY_BACKLOG.md",
+      "decision": "only exact WMS-662 entry inserted into fresh backlog; unrelated introductions omitted",
+      "pass": true,
+      "note": "Entry content matches source; one extra separator blank line. Outside WMS-662 entry the etalon backlog is byte-identical."
+    },
+    {
+      "path": "docs/requirements/WMS-662.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-663.md",
+      "decision": "excluded unrelated unfinished introduction; retained in source branch",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-675.md",
+      "decision": "excluded unrelated unfinished introduction; retained in source branch",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/analysis.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-batch-causality-7f62e184.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-956cd8a.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-c19-7fb13f78.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-ca4808f.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-ef9225bb.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/batch-handoff-tester.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/api.log",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/artifact-sha256.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/facts.json",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/fixture.json",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/frontend-package-lock.json",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/frontend.log",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-composition.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-history.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-refresh.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-reopen.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-\u041a\u043e\u0440\u043e\u0431\u0430.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-\u041f\u043e\u0434\u0431\u043e\u0440.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-\u0423\u043f\u0430\u043a\u043e\u0432\u043a\u0430 \u0438 \u043c\u0430\u0440\u043a\u0438\u0440\u043e\u0432\u043a\u0430.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/last-state.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-composition.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-history.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-refresh.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-reopen.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-\u041a\u043e\u0440\u043e\u0431\u0430.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-\u041f\u043e\u0434\u0431\u043e\u0440.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-\u0423\u043f\u0430\u043a\u043e\u0432\u043a\u0430 \u0438 \u043c\u0430\u0440\u043a\u0438\u0440\u043e\u0432\u043a\u0430.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/product-manifest.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/product-sha.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/proof-sha.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/python-dependencies.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/artifact-sha256.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/facts.json",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-composition.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-refresh.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-reopen.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-composition.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-refresh.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-reopen.png",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/product-sha.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/proof-sha.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-developer-fix-evidence.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-developer-fix.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-handoff-tester.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-single-run-evidence.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-approve-scope-tester-handoff.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-astra-review-6330ec83.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-acceptance-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-developer-handoff.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-final-acceptance-7fb13f78.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-tester-proof-7fb13f7.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-testwriter-handoff.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-developer.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f3-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f4-f5-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f6-testcorrection-handoff.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f6-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-final-acceptance-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-invoiced-continuation-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-regression-tester-handoff.txt",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "decision": "exact source changed-line payload retained on fresh etalon; base changes preserved",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "scripts/wms662-c19/browser.mjs",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "scripts/wms662-c19/entry.tsx",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    },
+    {
+      "path": "scripts/wms662-c19/server.py",
+      "decision": "byte-identical accepted source",
+      "pass": true
+    }
+  ],
+  "unchanged_etalon": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "pass": true
+    },
+    {
+      "path": "AGENTS.md",
+      "pass": true
+    },
+    {
+      "path": "CLAUDE.md",
+      "pass": true
+    },
+    {
+      "path": "backend/app/api/fbs_supplies.py",
+      "pass": true
+    },
+    {
+      "path": "backend/app/api/inbound_intake.py",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_packing_box_service.py",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/fbs_workspace_service.py",
+      "pass": true
+    },
+    {
+      "path": "backend/app/services/inbound_intake_box_service.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_fbs_packing_box.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_fbs_shipment_deliver_gate_unit.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_fbs_shipment_warehouse_sc.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms653_delivery_error_contract.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms653_scope_contract.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms659_bulk_inbound_boxes.py",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-652.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-653.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-657.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-659.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-664.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-666.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-668.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-670.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-676.md",
+      "pass": true
+    },
+    {
+      "path": "docs/requirements/WMS-681.md",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/HANDOFF-2026-10-06-NIGHT-RELEASE.md",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/artifacts/wms-676/install_sol61.py",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/artifacts/wms-676/local-install.json",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-653.json",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-657.json",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-659.json",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-664.json",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-delta-563510a.md",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-e7a8485.md",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-wms660.md",
+      "pass": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-release-evidence-2026-10-06.md",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/inboundDraftPersistence.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.dom.test.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.render.test.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialogContainer.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/fbsStockBlocks.test.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/fbsStockBlocks.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.load.test.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms653.dom.test.tsx",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsApi.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsUx.ts",
+      "pass": true
+    },
+    {
+      "path": "scripts/ci/check_task_documents.py",
+      "pass": true
+    },
+    {
+      "path": "scripts/ci/test_check_task_documents.py",
+      "pass": true
+    },
+    {
+      "path": "scripts/ci/test_review_fallback_policy.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/README.md",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/config.example.json",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_coordinator.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_dispatcher.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_instructions.md",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/config.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/hotfix.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/llm.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/mockups.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/night.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/prompts.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_coordinator.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_dispatcher.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_dispatcher_batch_topics.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_runtime.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_llm_router.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_model_migration.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_night.py",
+      "pass": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_owner_and_hotfix.py",
+      "pass": true
+    }
+  ],
+  "frozen_tests": [
+    {
+      "path": "backend/tests/test_wms662_approve_scope_race.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_astra_regressions.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_steady_state.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing_cancellation.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_invoiced_continuation.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "pass": true
+    },
+    {
+      "path": "backend/tests/test_wms662_postgres.py",
+      "pass": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "pass": true
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "sha": "bcb2f05769fa7c5a1b2f249b3ed72685a70b8beb",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.selection[seller-warehouse-group-retry]",
+  "status": "FAIL",
+  "failure": "Error: UI timeout: document.querySelector('[data-testid=\"fbs-group-create-submit\"]')?.innerText.includes('Повторить (1)')",
+  "stack": "Error: UI timeout: document.querySelector('[data-testid=\"fbs-group-create-submit\"]')?.innerText.includes('Повторить (1)')\n    at until (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:46:9)\n    at async selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:271:3)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:194:3"
+}

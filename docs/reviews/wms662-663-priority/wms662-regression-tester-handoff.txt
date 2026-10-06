@@ -1,0 +1,24 @@
+Независимый тестировщик, замороженный дополнительный контракт F1/F2.
+Контрактный commit: 304230586be3c21773cd03ff47ea15ab5c48aa75
+Ветка: codex/wms662-prod-handoff
+Проверенный до исправления product SHA: 6330ec83a06b1c32898542250a0d0788b38803dc.
+
+Файл: backend/tests/test_wms662_astra_regressions.py.
+Два сценария, три pytest cases (F1 параметризован quantity 1/2).
+Реальная изолированная SQLite conftest; новая сессия чтения после публичной
+sync_ozon_order_statuses. Только transport/credentials подменены штатной fixture.
+Нет pytest collection hooks, product edits или правок frozen initial contracts.
+
+Команда из backend:
+/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest -q tests/test_wms662_astra_regressions.py --tb=short
+Результат до fix: 3 failed, 6 warnings in 1.71s; setup errors отсутствуют.
+F1 quantity=1: shipped 2 вместо 1 (точное воспроизведение ревью).
+F1 quantity=2: shipped 3 вместо saved approve/source quantity 1.
+F2: shipped (2,0) сохранён, но position reserves (1,2) вместо (0,0).
+После RED дополнительные assertions финализации/idempotence ещё не достигнуты;
+их прохождение не заявляется. Ruff нового файла и git diff --check прошли.
+PostgreSQL и production не запускались; чужие базы не затрагивались.
+
+developer662: исправлять код после этого SHA; ожидания и состав тестов не менять.
+Нужно подтвердить весь дополнительный контракт вместе с исходными тестами,
+затем независимое Astra high ревью, аналитическую приёмку и CI точного SHA.

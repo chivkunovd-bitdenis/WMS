@@ -1,0 +1,39 @@
+WMS_AUDIT_PRODUCT_MUTATION=drop_mapping
+F                                                                        [100%]
+=================================== FAILURES ===================================
+______________ test_fbs_order_product_mapping_success_and_missing ______________
+tests/test_fbs_orders_intake.py:388: in test_fbs_order_product_mapping_success_and_missing
+    assert by_wb[800101]["product_id"] == product.json()["id"]
+E   AssertionError: assert None == '8c96663b-638f-4bdf-a580-f289769c42ec'
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.wb_marketplace_orders_service:wb_marketplace_orders_service.py:1294 wb supplies list fetch failed: seller=9dc8a89f-c991-4662-b8f0-88b24c38a1fa error=upstream_error page=0
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/services/wb_marketplace_orders_service.py", line 1280, in fetch_seller_supplies_map
+    page = await fetch_marketplace_supplies_page(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    )
+    ^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/services/wildberries_fbs_client.py", line 712, in fetch_marketplace_supplies_page
+    raise map_upstream_error(response)
+app.services.wildberries_errors.WildberriesClientError: upstream_error
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fbs_orders_intake.py::test_fbs_order_product_mapping_success_and_missing
+1 failed, 6 warnings in 4.79s

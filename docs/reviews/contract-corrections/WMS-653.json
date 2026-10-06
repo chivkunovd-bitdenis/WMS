@@ -1,13 +1,16 @@
 {
   "task": "WMS-653",
   "contract_commit": "9f131c42bec5266b90abb499c56060c0f3bd4b70",
-  "correction_commit": "1329e272b916062597bc94dc818682a08e96dd22",
+  "correction_commit": "d177e57c1f38705da747b807cec16904717b349f",
   "files": [
     "backend/tests/test_wms653_scope_contract.py"
   ],
   "review": {
-    "model": "gpt-6-astra",
+    "model": "gpt-6.1-sol",
     "effort": "high",
-    "verdict": "PASS"
+    "verdict": "PASS",
+    "evidence_commit": "a7c3599b4e0e7e08cf12ffb9479db8ded969143b",
+    "evidence_path": "docs/evidence/WMS-653/shared-proof-independent-review-20261006.md",
+    "source_review_commit": "6b1aaf66b1fab7322b20782eead4dc7bb3f43ad9"
   }
 }

@@ -1,0 +1,228 @@
+{
+  "candidate_sha": "7cf8de3432f9c7568cb14959dc79a101d1d41beb",
+  "file": "backend/app/services/fbs_observed_handoff_service.py",
+  "method": "ozon_proves_handoff",
+  "mode": "Execute only unchanged pure classifier AST against saved live proof, no imports or external actions",
+  "rows": [
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0113371235-0054-3.json",
+      "posting_number": "0113371235-0054-3",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0144953533-0124-1.json",
+      "posting_number": "0144953533-0124-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0148656673-0134-1.json",
+      "posting_number": "0148656673-0134-1",
+      "status": "awaiting_packaging",
+      "substatus": "posting_created",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0153677007-0258-1.json",
+      "posting_number": "0153677007-0258-1",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0164033835-0039-1.json",
+      "posting_number": "0164033835-0039-1",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0172663629-0081-1.json",
+      "posting_number": "0172663629-0081-1",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0181745532-0045-3.json",
+      "posting_number": "0181745532-0045-3",
+      "status": "cancelled",
+      "substatus": "posting_canceled",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0187441457-0073-1.json",
+      "posting_number": "0187441457-0073-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0190055173-0461-1.json",
+      "posting_number": "0190055173-0461-1",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0236443586-0012-1.json",
+      "posting_number": "0236443586-0012-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0249035122-0351-1.json",
+      "posting_number": "0249035122-0351-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-0282817049-0013-1.json",
+      "posting_number": "0282817049-0013-1",
+      "status": "cancelled",
+      "substatus": "posting_canceled",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-06383353-1897-1.json",
+      "posting_number": "06383353-1897-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-21052558-0445-1.json",
+      "posting_number": "21052558-0445-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-23388119-0163-1.json",
+      "posting_number": "23388119-0163-1",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-28508065-0594-1.json",
+      "posting_number": "28508065-0594-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-31853470-0198-1.json",
+      "posting_number": "31853470-0198-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-45035035-0211-1.json",
+      "posting_number": "45035035-0211-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-50261136-0017-1.json",
+      "posting_number": "50261136-0017-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-55322493-0272-1.json",
+      "posting_number": "55322493-0272-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-56845110-0045-1.json",
+      "posting_number": "56845110-0045-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-56907807-0024-1.json",
+      "posting_number": "56907807-0024-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-59814512-0364-3.json",
+      "posting_number": "59814512-0364-3",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-62035277-0532-1.json",
+      "posting_number": "62035277-0532-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-66144885-0156-18.json",
+      "posting_number": "66144885-0156-18",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-80034639-0273-1.json",
+      "posting_number": "80034639-0273-1",
+      "status": "cancelled",
+      "substatus": "posting_canceled",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-81035721-0742-1.json",
+      "posting_number": "81035721-0742-1",
+      "status": "delivered",
+      "substatus": "posting_received",
+      "current_classifier_result": true
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-83893932-0680-2.json",
+      "posting_number": "83893932-0680-2",
+      "status": "delivering",
+      "substatus": "posting_on_way_to_city",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-85257535-0274-1.json",
+      "posting_number": "85257535-0274-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-99185584-1963-5.json",
+      "posting_number": "99185584-1963-5",
+      "status": "cancelled",
+      "substatus": "posting_canceled",
+      "current_classifier_result": false
+    },
+    {
+      "proof": "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1/posting-99630148-0017-1.json",
+      "posting_number": "99630148-0017-1",
+      "status": "delivering",
+      "substatus": "posting_in_pickup_point",
+      "current_classifier_result": false
+    }
+  ],
+  "current_positive_count": 11,
+  "observed_positive_status_count": 26,
+  "rejected_positive_count": 15
+}

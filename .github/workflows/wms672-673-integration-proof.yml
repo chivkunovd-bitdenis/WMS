@@ -1,0 +1,71 @@
+name: WMS-672 673 scoped integration proof
+on:
+  push:
+    branches: [codex/wms672-673-prerequisite-integration]
+    paths: [.github/workflows/wms672-673-integration-proof.yml]
+permissions:
+  contents: read
+jobs:
+  boundaries:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin immutable product and contracts
+        run: |
+          mkdir -p "$RUNNER_TEMP/proof"
+          printf 'candidate=%s\nbase=4b298efc95be7b4b6b7fe5665be9f3671f1fe747\n' "$GITHUB_SHA" > "$RUNNER_TEMP/proof/pins.txt"
+          git ls-tree -r HEAD -- frontend/src backend > "$RUNNER_TEMP/proof/product.manifest"
+          git diff 4b298efc HEAD -- frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx backend/tests/test_wms659_bulk_inbound_boxes.py docs/reviews/contract-corrections/WMS-659.json > "$RUNNER_TEMP/proof/frozen659.diff"
+          test ! -s "$RUNNER_TEMP/proof/frozen659.diff"
+          sha256sum frontend/tests-e2e/wms672-remaining.test.mjs frontend/tests-e2e/wms672-box-labels.test.mjs frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts > "$RUNNER_TEMP/proof/contracts.sha256"
+      - name: Prepare disposable isolated runner
+        run: |
+          npm ci --prefix frontend > "$RUNNER_TEMP/proof/npm-ci.log" 2>&1
+          npm install --prefix "$RUNNER_TEMP/runner-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/proof/runner-tools.log" 2>&1
+          pip install -e 'backend[dev]' > "$RUNNER_TEMP/proof/pip.log" 2>&1
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/runner-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "WMS672_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - name: Existing backend contracts on disposable runner database only
+        run: |
+          cd backend
+          set -o pipefail
+          pytest -n auto tests/test_wms659_bulk_inbound_boxes.py tests/test_wms672_box_label_scope.py tests/test_wms673_print_read_contract.py 2>&1 | tee "$RUNNER_TEMP/proof/backend.log"
+      - name: Existing DOM contracts and non-browser HTML migration checks
+        run: |
+          cd frontend
+          set -o pipefail
+          node node_modules/vitest/vitest.mjs run src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx src/screens/v2/fbsPickingColor.wms673.dom.test.tsx src/screens/v2/fbsSupplyAssembly.test.ts src/screens/v2/fbsUx.test.ts src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/dom.log"
+          node node_modules/vitest/vitest.mjs run src/screens/v2/fbsPickingListPrint.wms657.test.ts -t 'C[123]:' --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/657-html.log"
+      - name: Scoped original controls and published C10 browser RED case
+        env:
+          WMS672_TEST_URL: http://127.0.0.1:16724
+        run: |
+          set -uo pipefail
+          export WMS672_EVIDENCE_DIR="$RUNNER_TEMP/proof/browser"
+          cd frontend
+          node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/proof/vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
+          timeout 150s node --test --test-concurrency=1 --test-name-pattern='C10 remaining' tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/c10-browser.log"
+          browser=${PIPESTATUS[0]}
+          timeout 150s node --test --test-concurrency=1 --test-name-pattern='C10 controls' tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/c10-original.log"
+          original=${PIPESTATUS[0]}
+          printf 'browser=%s\noriginal=%s\n' "$browser" "$original" > "$RUNNER_TEMP/proof/exits.txt"
+          git diff --exit-code HEAD -- src ../backend tests-e2e || exit 2
+          test "$browser" = 0 && test "$original" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms672-673-integration-${{ github.sha }}
+          path: ${{ runner.temp }}/proof
+          retention-days: 14

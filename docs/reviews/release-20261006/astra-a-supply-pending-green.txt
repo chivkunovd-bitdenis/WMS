@@ -1,0 +1,13 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+PENDING_RESPONSE 503 {"detail": {"code": "operation_in_progress", "message": "Для этих заказов уже сохранена попытка создания поставки. Дождитесь ответа WB или продолжите проверку этой попытки.", "context": {"operation_id": "3657a7e4-6bff-4870-855c-414b4e50673b", "operation_state": "pending_confirmation", "supply_id": "4eb26f60-be8e-4af4-b439-f5c06f27f3f3", "wb_supply_id": "WB-GI-MOCK-1"}, "retryable": true}}
+AFTER_CONFIRM_RESPONSE 409 {"detail": {"code": "order_incompatible", "message": "Заказ нельзя добавить в выбранную поставку.", "context": {"order_ids": ["c9100aec-71d7-42a7-8818-a684feeee239"], "reasons": ["already_in_supply", "order_bad_status"]}, "retryable": false}}
+FINAL_INVARIANTS {"supplies": 1, "operations": 1, "operation_state": "confirmed", "order_status": "in_supply", "create_calls": 1, "add_calls": 1}
+.
+=============================== warnings summary ===============================
+tests/test_fbs_supply_from_orders.py:738
+  /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/tests/test_fbs_supply_from_orders.py:738: PytestUnknownMarkWarning: Unknown pytest.mark.postgresql_concurrency - is this a typo?  You can register custom marks to avoid this warning - for details, see https://docs.pytest.org/en/stable/how-to/mark.html
+    @pytest.mark.postgresql_concurrency
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 3.73s

@@ -1,0 +1,13 @@
+diff --git a/backend/app/services/fbs_kiz_service.py b/backend/app/services/fbs_kiz_service.py
+index a08d09cac..9aa02df8c 100644
+--- a/backend/app/services/fbs_kiz_service.py
++++ b/backend/app/services/fbs_kiz_service.py
+@@ -602,7 +602,7 @@ def _find_order_by_sticker(orders: list[FbsOrder], sticker: str) -> FbsOrder | N
+     if matching_postings:
+         return unique(matching_postings)
+     # Preserve WB's technical sticker -> printed number -> barcode priority.
+-    for field in ("sticker_barcode", "sticker_code", "wb_barcode"):
++    for field in ("sticker_code", "wb_barcode"):
+         matches = [
+             order for order in orders if _normalized_optional(getattr(order, field)) == sticker
+         ]

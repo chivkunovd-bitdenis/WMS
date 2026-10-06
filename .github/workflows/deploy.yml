@@ -76,7 +76,7 @@ jobs:
             target_sha=$(gh api --method GET --hostname github.com "repos/$GITHUB_REPOSITORY/commits/etalon" --jq '.sha')
           fi
           [[ "$target_sha" =~ ^[0123456789abcdef]{40}$ ]]
-          python3 scripts/ci/verify_ci.py --repository "$GITHUB_REPOSITORY" --sha "$target_sha"
+          python3 scripts/ci/verify_process_ci.py --repository "$GITHUB_REPOSITORY" --sha "$target_sha"
           echo "sha=$target_sha" >> "$GITHUB_OUTPUT"
 
       - name: Deploy on server (trunk guard + docker compose)

@@ -1,0 +1,65 @@
+{
+  "fetched_at_utc": "2026-10-06T11:22:54.733Z",
+  "probe_sha": "ba7d6002430e7d5b32d97eb2cce7c1fadc0ada17",
+  "source_url": "https://docs.ozon.ru/api/seller/",
+  "result": "UNKNOWN",
+  "network": [
+    {
+      "url": "https://docs.ozon.ru/api/seller/?__rr=1",
+      "http_status": 403,
+      "mime_type": "text/html"
+    },
+    {
+      "url": "https://st.ozone.ru/s3/abt-challenge/style_v47_3.css",
+      "http_status": 200,
+      "mime_type": "text/css"
+    },
+    {
+      "url": "https://st.ozone.ru/s3/abt-challenge/incidents/styles_v2/common.css",
+      "http_status": 200,
+      "mime_type": "text/css"
+    },
+    {
+      "url": "https://st.ozone.ru/s3/abt-challenge/script_v47_3.js",
+      "http_status": 200,
+      "mime_type": "text/javascript"
+    },
+    {
+      "url": "https://st.ozone.ru/s3/ozon-fonts/onest.woff2",
+      "http_status": 200,
+      "mime_type": "font/woff2"
+    },
+    {
+      "url": "https://docs.ozon.ru/favicon.ico",
+      "http_status": 403,
+      "mime_type": "text/html"
+    },
+    {
+      "url": "https://docs.ozon.ru/abt/result",
+      "http_status": 403,
+      "mime_type": "application/json"
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json",
+      "http_status": 403,
+      "mime_type": "text/html"
+    }
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.57",
+    "revision": "@73c14f6228d7cd537c855007e8f88678969cc0eb",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.11"
+  },
+  "page": {
+    "url": "https://docs.ozon.ru/api/seller/?__rr=1",
+    "title": "Похоже, нет соединения",
+    "text": "Похоже, нет соединения\nВыключите VPN, перезагрузите роутер или подключитесь к другой сети\nИнцидент: fab_chlg_20261006112303_01M48F7V57E9QS212FG6945SZ7\nОбновить страницу\nОбратиться в поддержку"
+  },
+  "schema_response": {
+    "http_status": 403,
+    "url": "https://docs.ozon.ru/api/seller/swagger.json",
+    "content_type": "text/html"
+  }
+}

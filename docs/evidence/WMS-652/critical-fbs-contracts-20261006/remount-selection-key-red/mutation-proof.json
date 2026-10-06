@@ -1,0 +1,24 @@
+{
+  "mutation": "new-key-only-on-restored-explicit-selection",
+  "sourceSha": "8e501fcb969ad0ceb482e479f69fd37f726862ca",
+  "failed": [
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ '35006ca7-de83-4a6c-bbca-510c51865b3f'\n- 'd45e8361-0c9d-40b8-b8e3-64d254a4207c'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ 'f4819e04-672c-4ea8-a6bd-4c05bd016a16'\n- '95165647-01d9-43fa-b52a-c840afc6ba6e'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ '9094857e-9aa0-4008-b988-111de331db1f'\n- 'ae1911a4-e00f-449c-a4d8-976b7d7e2b93'\n"
+    }
+  ],
+  "otherCasesPass": 30,
+  "nativePrintKeysUnchanged": true,
+  "productBytesRestoredInFinally": true
+}

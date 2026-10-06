@@ -1,0 +1,47 @@
+{
+  "layout": [
+    {
+      "id": "ff-inbound-add-to-box",
+      "text": "Создать короба",
+      "x": 42,
+      "y": 417.078125,
+      "width": 163.140625,
+      "height": 36.5,
+      "parent": "<button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-add-to-box\">Создать короба</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-create-cargo-places\">Создать грузоместа</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-boxes-print-all\">Печать коробов</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-cargo-places-print-all\">Печать грузомест</button><span aria-label=\"Отметьте короба, которые ставите на палету\" class=\"\" data-mui-internal-clone-element=\"true\" style=\"display: inline-flex;\"><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary css-dyinow-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-combine-pallet\">Собрать палету</button></span>"
+    },
+    {
+      "id": "ff-inbound-create-cargo-places",
+      "text": "Создать грузоместа",
+      "x": 213.140625,
+      "y": 417.078125,
+      "width": 200.171875,
+      "height": 36.5,
+      "parent": "<button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-add-to-box\">Создать короба</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-create-cargo-places\">Создать грузоместа</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-boxes-print-all\">Печать коробов</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-cargo-places-print-all\">Печать грузомест</button><span aria-label=\"Отметьте короба, которые ставите на палету\" class=\"\" data-mui-internal-clone-element=\"true\" style=\"display: inline-flex;\"><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary css-dyinow-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-combine-pallet\">Собрать палету</button></span>"
+    },
+    {
+      "id": "ff-inbound-boxes-print-all",
+      "text": "Печать коробов",
+      "x": 421.3125,
+      "y": 417.078125,
+      "width": 164.28125,
+      "height": 36.5,
+      "parent": "<button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-add-to-box\">Создать короба</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-create-cargo-places\">Создать грузоместа</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-boxes-print-all\">Печать коробов</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-cargo-places-print-all\">Печать грузомест</button><span aria-label=\"Отметьте короба, которые ставите на палету\" class=\"\" data-mui-internal-clone-element=\"true\" style=\"display: inline-flex;\"><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary css-dyinow-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-combine-pallet\">Собрать палету</button></span>"
+    },
+    {
+      "id": "ff-inbound-cargo-places-print-all",
+      "text": "Печать грузомест",
+      "x": 593.59375,
+      "y": 417.078125,
+      "width": 180.59375,
+      "height": 36.5,
+      "parent": "<button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-add-to-box\">Создать короба</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-contained MuiButton-sizeMedium MuiButton-colorPrimary css-74d805-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-create-cargo-places\">Создать грузоместа</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"0\" type=\"button\" data-testid=\"ff-inbound-boxes-print-all\">Печать коробов</button><button class=\"MuiButtonBase-root MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-outlined MuiButton-sizeMedium MuiButton-colorPrimary css-1blvszr-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-cargo-places-print-all\">Печать грузомест</button><span aria-label=\"Отметьте короба, которые ставите на палету\" class=\"\" data-mui-internal-clone-element=\"true\" style=\"display: inline-flex;\"><button class=\"MuiButtonBase-root MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary Mui-disabled MuiButton-root MuiButton-contained MuiButton-sizeSmall MuiButton-colorPrimary css-dyinow-MuiButtonBase-root-MuiButton-root\" tabindex=\"-1\" type=\"button\" disabled=\"\" data-testid=\"ff-inbound-combine-pallet\">Собрать палету</button></span>"
+    }
+  ],
+  "error": "WMS672 decode failed at 2",
+  "previewLabels": 3,
+  "neighborDialogs": [
+    "cargo",
+    "individual box"
+  ],
+  "externalWrites": []
+}

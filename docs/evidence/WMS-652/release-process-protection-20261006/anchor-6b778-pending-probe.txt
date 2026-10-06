@@ -1,0 +1,4 @@
+FROZEN_SHA 6b778ebb2aa4b8dbb4580201841f5ba0bfc4430f
+DECLARED_QUEUE_MODEL {"mode": "single", "cancelled": ["A-new"], "publications": [["A-old", "A", "success"], ["B-unrelated", "B", "success"]], "latest": {"A": "success", "B": "success"}}
+IN_MEMORY_MAX_CONTROL {"mode": "max", "cancelled": [], "publications": [["A-old", "A", "success"], ["A-new", "A", "failure"], ["B-unrelated", "B", "success"]], "latest": {"A": "failure", "B": "success"}}
+Reproduced under documented scheduler semantics; no live check publication.

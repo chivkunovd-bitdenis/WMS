@@ -62,7 +62,7 @@ async def confirmed_order_handover_dates(
             FbsWbOperation.seller_id.in_(
                 {order.seller_id for order in own_orders if order.seller_id}
             ),
-            FbsWbOperation.operation_kind == "supply_deliver",
+            FbsWbOperation.operation_kind.in_({"supply_deliver", "observed_handoff"}),
             FbsWbOperation.state == "confirmed",
             FbsWbOperation.local_entity_type == "fbs_supply",
             FbsWbOperation.confirmed_at.is_not(None),
@@ -97,17 +97,25 @@ async def confirmed_order_handover_dates(
     operation_by_id = {op.id: op for op in operations}
     ledger_orders: dict[uuid.UUID, list[uuid.UUID]] = {}
     if operation_by_id:
-        for op_id, order_id in await session.execute(
-            select(
-                FbsShipmentReversalLedger.wb_operation_id,
-                FbsShipmentReversalLedger.fbs_order_id,
-            )
+        for ledger in await session.scalars(
+            select(FbsShipmentReversalLedger)
             .where(
                 FbsShipmentReversalLedger.tenant_id == tenant_id,
                 FbsShipmentReversalLedger.fbs_order_id.in_(by_id),
                 FbsShipmentReversalLedger.wb_operation_id.in_(operation_by_id),
             )
         ):
+            op_id = ledger.wb_operation_id
+            order_id = ledger.fbs_order_id
+            if op_id is None:
+                continue
+            operation = operation_by_id[op_id]
+            if operation.operation_kind == "observed_handoff" and (
+                ledger.shipment_movement_id is None or ledger.reversed_at is not None
+                or any(not row.get("movement_id") and not row.get("cancelled_postings")
+                       for row in ledger.ozon_positions_json or [])
+            ):
+                continue
             ledger_orders.setdefault(op_id, []).append(order_id)
     proven_orders: set[uuid.UUID] = set()
     for op in operations:
@@ -185,9 +193,16 @@ async def record_fbs_order_confirmed(
     *,
     occurred_at: datetime | None = None,
     confirmed_handover_at: datetime | None = None,
+    handed_over_quantities: dict[uuid.UUID, int] | None = None,
 ) -> None:
     """Записать факт и начисление за собранный заказ. Повтор безопасен."""
-    if order.status not in CONFIRMED_STATUSES:
+    explicit_partial_handover = (
+        order.marketplace == "ozon"
+        and confirmed_handover_at is not None
+        and bool(handed_over_quantities)
+        and order.status not in {"cancelled", "defect"}
+    )
+    if order.status not in CONFIRMED_STATUSES and not explicit_partial_handover:
         return
     # Только внутренний путь подтверждённой передачи вправе начислить раньше
     # sorted/done; импорт внешнего in_delivery сам по себе недостаточен.
@@ -195,6 +210,12 @@ async def record_fbs_order_confirmed(
         return
     if order.seller_id is None:
         return
+    if handed_over_quantities is not None:
+        # Same seller fence as public invoice creation, before any fact/charge
+        # row lock: either an invoice sees the extension or the extension sees it.
+        await session.scalar(select(Seller.id).where(
+            Seller.id == order.seller_id, Seller.tenant_id == order.tenant_id,
+        ).with_for_update(key_share=True))
     handover_at = confirmed_handover_at or (
         await confirmed_order_handover_dates(session, order.tenant_id, [order])
     ).get(order.id)
@@ -206,6 +227,8 @@ async def record_fbs_order_confirmed(
         # WMS-406 changes WB; retain Ozon's existing confirmed-status contract.
         moment = confirmed_handover_at or occurred_at or handover_at or order_work_moment(order)
     positions = await _positions(session, order)
+    if handed_over_quantities is not None:
+        positions = list(handed_over_quantities.items())
     quantity = sum(count for _, count in positions)
 
     # Связи заказа не трогаем через `order.seller` и `order.product`: заказы в
@@ -246,6 +269,7 @@ async def record_fbs_order_confirmed(
             document_number_snapshot=order_display_number(order),
             occurred_at=moment,
             item_quantity=quantity,
+            cumulative_handover=handed_over_quantities is not None,
             lines=[
                 line_input(products.get(product_id) if product_id else None, product_id, count)
                 for product_id, count in positions
@@ -273,6 +297,7 @@ async def record_fbs_order_confirmed(
                 occurred_at=moment,
                 performer_id=None,
                 respect_billing_start=False,
+                cumulative_handover=handed_over_quantities is not None,
                 warehouse_id=order.warehouse_id,
                 # Без строк ставка ищется только в старой таблице тарифов, а
                 # матрица — единственный живой экран — пишет в новую:
@@ -288,7 +313,8 @@ async def record_fbs_order_confirmed(
 
 
 async def charge_handed_over_orders(
-    session: AsyncSession, orders: list[FbsOrder], *, occurred_at: datetime
+    session: AsyncSession, orders: list[FbsOrder], *, occurred_at: datetime,
+    quantities_by_order: dict[uuid.UUID, dict[uuid.UUID, int]] | None = None,
 ) -> None:
     """Начислить после успешной передачи, не откатывая её при ошибке денег."""
     for order in orders:
@@ -296,7 +322,8 @@ async def charge_handed_over_orders(
         try:
             async with session.begin_nested():
                 await record_fbs_order_confirmed(
-                    session, order, confirmed_handover_at=occurred_at
+                    session, order, confirmed_handover_at=occurred_at,
+                    handed_over_quantities=(quantities_by_order or {}).get(order.id),
                 )
         except Exception:
             logger.exception("fbs handover charge skipped: order_id=%s", order_id)

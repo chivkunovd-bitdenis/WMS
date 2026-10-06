@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
   Box,
@@ -519,6 +519,9 @@ export function SellerProductsStockScreen({
   const [filterSearch, setFilterSearch] = useState('')
   const [debouncedSearch, setDebouncedSearch] = useState('')
   const [filterCategory, setFilterCategory] = useState('')
+  const [filterArticle, setFilterArticle] = useState('')
+  const [filterSize, setFilterSize] = useState('')
+  const [stockOnly, setStockOnly] = useState(false)
   const [filterFulfillment, setFilterFulfillment] = useState<FulfillmentFilter>('all')
   // WMS-614 R1: по умолчанию «Все маркетплейсы» — исходный список до действия
   // селлера не меняется. Фильтр живёт в URL-параметрах каталога (R3), не в
@@ -549,19 +552,24 @@ export function SellerProductsStockScreen({
   // Токен сессии, к которой относятся показанные строки. Держим в ref, чтобы
   // ответ, пришедший после смены сессии, было с чем сравнить (WMS-488).
   const sessionTokenRef = useRef(token)
+  const sessionSellerRef = useRef(sellerId)
   const catalogAbortRef = useRef<AbortController | null>(null)
   useEffect(() => {
     sessionTokenRef.current = token
+    sessionSellerRef.current = sellerId
     // Показанное принадлежит прежнему токену: до ответа по новому на экране
     // не должно остаться ни строки прежнего селлера.
     setItems([])
     setStock([])
+    setTotal(0)
+    setScopeTotal(0)
+    setCategoryOptions([])
     setReserveDirections({})
     setSelectedKeys(new Set())
     setSelectedItemsByKey(new Map())
     setWbSyncProgress(null)
     setOzonSyncProgress(null)
-  }, [token])
+  }, [token, sellerId])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setDebouncedSearch(filterSearch.trim()), 250)
@@ -570,11 +578,14 @@ export function SellerProductsStockScreen({
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedSearch, filterCategory, filterFulfillment, filterMarketplace, rowsPerPage])
+  }, [debouncedSearch, filterCategory, filterArticle, filterSize, stockOnly, filterFulfillment, filterMarketplace, rowsPerPage])
 
   const load = useCallback(async () => {
     const requestToken = token
+    const requestSeller = sellerId
     const isCurrentSession = () => sessionTokenRef.current === requestToken
+      && sessionSellerRef.current === requestSeller
+      && catalogAbortRef.current === controller && !controller.signal.aborted
     catalogAbortRef.current?.abort()
     const controller = new AbortController()
     catalogAbortRef.current = controller
@@ -584,9 +595,13 @@ export function SellerProductsStockScreen({
       limit: String(rowsPerPage),
       offset: String(page * rowsPerPage),
       on_fulfillment: filterFulfillment,
+      group_by: 'category_article_size',
+      stock_only: String(stockOnly),
     })
     if (debouncedSearch) params.set('search', debouncedSearch)
     if (filterCategory) params.set('category', filterCategory)
+    if (filterArticle.trim()) params.set('article', filterArticle.trim())
+    if (filterSize.trim()) params.set('size', filterSize.trim())
     // WMS-614 R3: тот же параметр marketplace должен совпадать между /page и
     // /keys (seller catalog dialog). Здесь используется только /page; keys —
     // в SellerCatalogSelectionDialog, где marketplace уже фиксирован окном.
@@ -624,7 +639,7 @@ export function SellerProductsStockScreen({
       }
       return changed ? next : current
     })
-  }, [authHeaders, debouncedSearch, filterCategory, filterFulfillment, filterMarketplace, page, rowsPerPage, token])
+  }, [authHeaders, debouncedSearch, filterCategory, filterArticle, filterSize, stockOnly, filterFulfillment, filterMarketplace, page, rowsPerPage, token, sellerId])
 
   const latestLoadRef = useRef(load)
   useEffect(() => { latestLoadRef.current = load }, [load])
@@ -634,34 +649,41 @@ export function SellerProductsStockScreen({
     return () => catalogAbortRef.current?.abort()
   }, [load])
 
+  const stockRequestRef = useRef(0)
   const loadStock = useCallback(async () => {
+    const requestId = ++stockRequestRef.current
+    const requestSeller = sellerId
     const requestToken = token
+    const isCurrent = () => sessionTokenRef.current === requestToken
+      && sessionSellerRef.current === requestSeller && stockRequestRef.current === requestId
     try {
       const res = await fetch(apiUrl('/operations/inventory-balances/summary'), {
         headers: { ...authHeaders(requestToken) },
       })
-      if (sessionTokenRef.current !== requestToken) {
+      if (!isCurrent()) {
         return
       }
       if (!res.ok) {
-        setError(await readApiErrorMessage(res))
+        const message = await readApiErrorMessage(res)
+        if (isCurrent()) setError(message)
         return
       }
       const body = (await res.json()) as StockSummaryRow[]
-      if (sessionTokenRef.current !== requestToken) {
+      if (!isCurrent()) {
         return
       }
       setStock(body)
     } catch (e) {
-      if (sessionTokenRef.current !== requestToken) {
+      if (!isCurrent()) {
         return
       }
       setError(e instanceof Error ? e.message : 'Не удалось загрузить остатки.')
     }
-  }, [authHeaders, token])
+  }, [authHeaders, token, sellerId])
 
   useEffect(() => {
     void loadStock()
+    return () => { stockRequestRef.current += 1 }
   }, [loadStock])
 
   const stockByProductId = useMemo(() => new Map(stock.map((s) => [s.product_id, s])), [stock])
@@ -1178,6 +1200,19 @@ export function SellerProductsStockScreen({
               ))}
             </Select>
           </FormControl>
+          <TextField
+            id="seller-catalog-article" size="small" label="Артикул"
+            value={filterArticle} onChange={(e) => { setPage(0); setFilterArticle(e.target.value) }}
+            sx={{ minWidth: 160 }}
+          />
+          <TextField
+            id="seller-catalog-size" size="small" label="Размер"
+            value={filterSize} onChange={(e) => { setPage(0); setFilterSize(e.target.value) }}
+            sx={{ width: 120 }}
+          />
+          <FormControlLabel label="Только с остатком" control={
+            <Checkbox checked={stockOnly} onChange={(e) => { setPage(0); setStockOnly(e.target.checked) }} />
+          } />
           <FormControl size="small" sx={{ minWidth: 200 }}>
             <InputLabel id="seller-catalog-fulfillment-filter-label">Фулфилмент</InputLabel>
             <Select
@@ -1288,12 +1323,29 @@ export function SellerProductsStockScreen({
             </TableRow>
           </TableHead>
           <TableBody>
-            {items.map((row) => {
+            {items.map((row, index) => {
               const onFulfillment = isProductItem(row)
               const bal = onFulfillment ? stockByProductId.get(row.id) : undefined
               const primaryBarcode = itemPrimaryBarcode(row)
               const allBarcodes = itemAllBarcodes(row)
+              const group = (item: SellerCatalogItem) => [
+                (isProductItem(item) ? item.wb_subject_name : item.category)?.trim() || 'Без категории',
+                itemVendorCode(item)?.trim() || 'Без артикула',
+                (isProductItem(item) ? item.wb_size?.trim() : item.sizes.join(', ')) || 'Без размера',
+              ]
+              const currentGroup = group(row)
+              const previousGroup = index > 0 ? group(items[index - 1]) : []
               return (
+                <Fragment key={row.key}>
+                  {currentGroup.map((label, level) => (
+                    currentGroup.slice(0, level + 1).some((value, i) => value !== previousGroup[i])
+                      ? <TableRow key={level}>
+                          <TableCell colSpan={11} sx={{ pl: 1 + level * 2, fontWeight: 600, bgcolor: 'action.hover', overflowWrap: 'anywhere' }}>
+                            {label}
+                          </TableCell>
+                        </TableRow>
+                      : null
+                  ))}
                 <TableRow
                   hover
                   selected={selectedKeys.has(row.key)}
@@ -1469,6 +1521,7 @@ export function SellerProductsStockScreen({
                     ) : null}
                   </TableCell>
                 </TableRow>
+                </Fragment>
               )
             })}
             {scopeTotal === 0 ? (

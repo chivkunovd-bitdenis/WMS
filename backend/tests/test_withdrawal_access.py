@@ -12,7 +12,11 @@ import httpx
 import pytest
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import func, select
-from test_withdrawal_ledger import document, seed
+from test_withdrawal_ledger import (
+    document,
+    legacy_sales_http,  # noqa: F401 -- same synthetic I/O fixture
+    seed,
+)
 
 from app.api.auth import SwitchSellerBody, me, switch_seller
 from app.api.deps import get_current_user, get_effective_seller_id

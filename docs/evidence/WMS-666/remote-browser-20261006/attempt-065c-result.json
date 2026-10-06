@@ -1,0 +1,11 @@
+{
+  "base": "9a73432accdd5c2ef7b48d08cc8abdef5942c258",
+  "probe": "065c8a435bd8051611e1dbecd21e9065f4b42323",
+  "cases": [],
+  "physicalPaper": "OPEN",
+  "staging": "NOT TESTED",
+  "scope": "Real FBS screen/URL effects, synthetic API; no application shell or live data",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: Chromium did not start",
+  "stack": "AssertionError [ERR_ASSERTION]: Chromium did not start\n    at file:///home/runner/work/WMS/WMS/scripts/ci/wms666-browser-proof.mjs:118:3"
+}

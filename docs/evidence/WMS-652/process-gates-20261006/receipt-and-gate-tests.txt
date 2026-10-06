@@ -1,0 +1,6 @@
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'packing.xml'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+----------------------------------------------------------------------
+Ran 18 tests in 0.582s
+
+OK

@@ -1,0 +1,48 @@
+{
+  "candidate": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "postgres": "16.14 (Homebrew), isolated initdb, trust fixture user wms_test, loopback 55473",
+  "groups": [
+    {
+      "xml": "three.xml",
+      "executed": 3,
+      "nodes": [
+        "tests.test_fbs_supply_assembly::test_fbs_supply_add_order_concurrent_race",
+        "tests.test_fbs_picking::test_fbs_pick_concurrent_same_order_allocation_one_success",
+        "tests.test_fbs_picking::test_fbs_pick_sorting_last_unit_is_atomic"
+      ],
+      "network": {
+        "allowed_endpoint": [
+          "127.0.0.1",
+          55473
+        ],
+        "allowed_connections": 4,
+        "blocked_attempts": [
+          {
+            "event": "socket.getaddrinfo",
+            "host": "b'common-api.wildberries.ru'",
+            "port": "443"
+          }
+        ],
+        "pytest_exit_code": 0
+      }
+    },
+    {
+      "xml": "514.xml",
+      "executed": 3,
+      "nodes": [
+        "tests.test_wms514_scan_auto_print::test_concurrent_replay_returns_one_scan_selection",
+        "tests.test_wms514_scan_auto_print::test_concurrent_distinct_scans_select_distinct_units",
+        "tests.test_wms514_scan_auto_print::test_concurrent_atomic_reprint_recovery_claims_only_once"
+      ],
+      "network": {
+        "allowed_endpoint": [
+          "127.0.0.1",
+          55473
+        ],
+        "allowed_connections": 2,
+        "blocked_attempts": [],
+        "pytest_exit_code": 0
+      }
+    }
+  ]
+}

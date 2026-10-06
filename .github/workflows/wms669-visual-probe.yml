@@ -1,0 +1,47 @@
+name: WMS-669 isolated C11 visual proof
+on:
+  push:
+    branches: [codex/wms669-urgent-confirmed-contract-20261006]
+    paths: [.github/workflows/wms669-visual-probe.yml, scripts/ci/wms669-visual-probe.mjs]
+permissions:
+  contents: read
+jobs:
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 7a47ad36f3a08ba973882b80cfe1bca87c2b873f
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: d7f4633912b066f740efdb2ce1ecabfba356755d
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser and source dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/wms669-evidence"
+          npm ci --prefix source/frontend > "$RUNNER_TEMP/wms669-evidence/npm-ci.log" 2>&1
+          ln -s "$GITHUB_WORKSPACE/source/frontend/node_modules" baseline/frontend/node_modules
+          npm install --prefix "$RUNNER_TEMP/wms669-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/wms669-evidence/browser-install.log" 2>&1
+          node "$RUNNER_TEMP/wms669-tools/node_modules/playwright/cli.js" install --with-deps chromium >> "$RUNNER_TEMP/wms669-evidence/browser-install.log" 2>&1
+      - name: Actual browser on exact product, read-only synthetic transport
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/wms669-tools/node_modules/playwright/index.mjs
+          WMS669_EVIDENCE_DIR: ${{ runner.temp }}/wms669-evidence
+        run: timeout 420s node scripts/ci/wms669-visual-probe.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms669-c11-${{ github.sha }}
+          path: ${{ runner.temp }}/wms669-evidence
+          retention-days: 14
+          if-no-files-found: error

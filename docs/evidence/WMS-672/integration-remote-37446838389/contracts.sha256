@@ -1,0 +1,3 @@
+36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd  frontend/tests-e2e/wms672-remaining.test.mjs
+69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d  frontend/tests-e2e/wms672-box-labels.test.mjs
+382486dc2bc08cf8cb400c3e362e24ae313d90e0c61817ed6213ff2f69ad98c2  frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts

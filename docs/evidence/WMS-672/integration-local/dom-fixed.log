@@ -1,0 +1,17 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms672-remaining-tester-20261006/frontend
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > R17: «Начать работу» открывает последний короб без создания нового и без start-work 432ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся 526ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый 479ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}» 385ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д11: нет открытого короба — скан выполняется, заказ не кладётся, подсказка «Откройте или создайте короб.» 426ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: «Начать работу» без коробов создаёт и открывает один короб, но не запрашивает и не печатает QR 332ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: «Создать короб» создаёт и открывает короб без печати QR 300ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: завершение работы и переключатель рамки не открывают печать 278ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати 495ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB 236ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR 262ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане 778ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор завершил работу с поставкой, пока шёл поиск стикера, — заказ всё равно ложится в короб, открытый при скане 680ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода 1990ms

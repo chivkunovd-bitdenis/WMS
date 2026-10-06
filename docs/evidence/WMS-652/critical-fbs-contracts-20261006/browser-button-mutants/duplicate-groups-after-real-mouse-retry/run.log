@@ -1,0 +1,17 @@
+WMS652.realQr[supply_id=A]: PASS
+WMS652.realQr[supply_ids=A]: PASS
+WMS652.realQr[supply_ids=A,B]: PASS
+WMS652.selection[single-create]: PASS
+AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+6 !== 4
+
+    at selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:315:10)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:212:3 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: 6,
+  expected: 4,
+  operator: 'strictEqual',
+  diff: 'simple'
+}

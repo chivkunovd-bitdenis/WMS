@@ -1,0 +1,131 @@
+{
+  "started_at_utc": "2026-10-06T12:02:59.271085+00:00",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+  "posting_number": "0148656673-0134-1",
+  "execution_status": "BOUNDED_READ_FINISHED_NOT_C19",
+  "requests": [
+    {
+      "posting_number": "0148656673-0134-1",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "started_at_utc": "2026-10-06T12:03:01.511369+00:00",
+      "response": {
+        "posting_number": "0148656673-0134-1",
+        "status": "awaiting_packaging",
+        "substatus": "posting_created",
+        "requirements_present": true,
+        "requirements": {
+          "products_requiring_gtd": [
+            1695134284
+          ],
+          "products_requiring_rnpt": []
+        },
+        "products": [
+          {
+            "sku": 1695134284,
+            "quantity": 1
+          }
+        ]
+      },
+      "result": "READ_RESPONSE_NOT_ACCEPTANCE",
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 12:03:01 GMT",
+      "finished_at_utc": "2026-10-06T12:03:01.741680+00:00"
+    },
+    {
+      "posting_number": "0148656673-0134-1",
+      "endpoint": "/v5/fbs/posting/product/exemplar/status",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "started_at_utc": "2026-10-06T12:03:01.741705+00:00",
+      "response": {
+        "posting_number": "0148656673-0134-1",
+        "status": "ship_not_available",
+        "products": [
+          {
+            "product_id": 1695134284,
+            "exemplars": [
+              {
+                "exemplar_id": 38244381924,
+                "present_document_fields": [
+                  "gtd",
+                  "rnpt",
+                  "is_gtd_absent",
+                  "is_rnpt_absent",
+                  "gtd_check_status",
+                  "rnpt_check_status",
+                  "gtd_error_codes",
+                  "rnpt_error_codes"
+                ],
+                "marks_count": 0,
+                "gtd": {
+                  "value_type": "str",
+                  "empty": true,
+                  "length": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "is_gtd_absent": false,
+                "gtd_check_status": "",
+                "gtd_error_codes": [],
+                "rnpt": {
+                  "value_type": "str",
+                  "empty": true,
+                  "length": 0,
+                  "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+                },
+                "is_rnpt_absent": false,
+                "rnpt_check_status": "",
+                "rnpt_error_codes": []
+              }
+            ]
+          }
+        ],
+        "response_keys": [
+          "posting_number",
+          "products",
+          "status"
+        ],
+        "field_types": {
+          "posting_number": "str",
+          "products": "list",
+          "status": "str"
+        }
+      },
+      "result": "READ_RESPONSE_NOT_ACCEPTANCE",
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 12:03:01 GMT",
+      "finished_at_utc": "2026-10-06T12:03:01.816698+00:00"
+    }
+  ],
+  "mutation_endpoints_called": [],
+  "local_commit_called": false,
+  "retries": 0,
+  "scope_snapshot": {
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "source": "wms",
+    "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+    "external_order_id": "0148656673-0134-1",
+    "local_order_status": "in_supply",
+    "position_id": "e73d0d92-41c3-435d-abc6-4e1bf95ee5d9",
+    "ozon_sku": 1695134284,
+    "quantity": 1,
+    "read_only": "on"
+  },
+  "finished_at_utc": "2026-10-06T12:03:01.820775+00:00",
+  "transport_receipt": {
+    "started_at_utc": "2026-10-06T12:02:57.387752+00:00",
+    "reader_sha256": "01c1264278a388516946e74584ec7a0ea669a3dc6e54f6253222d709e4c18ce5",
+    "reader_commit": "915002fbac6bc419c55dd635b44513597af2661e",
+    "runtime": "existing root@194.87.96.144 /opt/wms container wms_prod-api-1 /app Python process",
+    "exit_code": 0,
+    "stderr_bytes": 0,
+    "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+}

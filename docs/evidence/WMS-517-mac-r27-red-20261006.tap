@@ -1,0 +1,1120 @@
+TAP version 13
+# Subtest: SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog
+not ok 1 - SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog
+  ---
+  duration_ms: 69.352542
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-dom.test.cjs:15:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    80 !== 305
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 305
+  actual: 80
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-dom.test.cjs:80:67)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success
+not ok 2 - launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success
+  ---
+  duration_ms: 4.158708
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:105:1'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+not ok 3 - accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+  ---
+  duration_ms: 1.0945
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: accepts the correct production registry URL variant / and ignores unrelated tabs
+not ok 4 - accepts the correct production registry URL variant / and ignores unrelated tabs
+  ---
+  duration_ms: 1.532209
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: allows query and hash on the exact registry URL and ignores unrelated tabs
+not ok 5 - allows query and hash on the exact registry URL and ignores unrelated tabs
+  ---
+  duration_ms: 0.658916
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+not ok 6 - accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+  ---
+  duration_ms: 0.951167
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+not ok 7 - accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+  ---
+  duration_ms: 0.793
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+not ok 8 - accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+  ---
+  duration_ms: 0.849875
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 9 - rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.756209
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 10 - rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.375084
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+ok 11 - rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.397375
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 12 - rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.444959
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+ok 13 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+  ---
+  duration_ms: 0.310417
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+ok 14 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+  ---
+  duration_ms: 0.429292
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab not a URL before injection
+ok 15 - rejects non-target tab not a URL before injection
+  ---
+  duration_ms: 0.327459
+  type: 'test'
+  ...
+# Subtest: rejects 0 matching tabs before injection
+ok 16 - rejects 0 matching tabs before injection
+  ---
+  duration_ms: 0.390667
+  type: 'test'
+  ...
+# Subtest: rejects 2 matching tabs before injection
+ok 17 - rejects 2 matching tabs before injection
+  ---
+  duration_ms: 0.321917
+  type: 'test'
+  ...
+# Subtest: does not launch Chrome if it is not already running
+ok 18 - does not launch Chrome if it is not already running
+  ---
+  duration_ms: 0.667
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failRunning
+ok 19 - fails fast and redacts Apple Events or Automation error at failRunning
+  ---
+  duration_ms: 0.324625
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failTabs
+ok 20 - fails fast and redacts Apple Events or Automation error at failTabs
+  ---
+  duration_ms: 0.291125
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failEvaluate
+ok 21 - fails fast and redacts Apple Events or Automation error at failEvaluate
+  ---
+  duration_ms: 0.291291
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failProbe
+ok 22 - fails fast and redacts Apple Events or Automation error at failProbe
+  ---
+  duration_ms: 0.275917
+  type: 'test'
+  ...
+# Subtest: repeated launch after successful preparation does not inject or execute twice
+not ok 23 - repeated launch after successful preparation does not inject or execute twice
+  ---
+  duration_ms: 0.658542
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:180:1'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: an already running launch is never injected again and polling is bounded
+ok 24 - an already running launch is never injected again and polling is bounded
+  ---
+  duration_ms: 0.680083
+  type: 'test'
+  ...
+# Subtest: helper rejection is redacted, never retried and never reported as success
+ok 25 - helper rejection is redacted, never retried and never reported as success
+  ---
+  duration_ms: 0.962666
+  type: 'test'
+  ...
+# Subtest: a hung helper times out with bounded polling and no automatic retry
+ok 26 - a hung helper times out with bounded polling and no automatic retry
+  ---
+  duration_ms: 2.376709
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"status":"ready"}
+ok 27 - does not accept unsafe or incomplete helper result {"status":"ready"}
+  ---
+  duration_ms: 2.469792
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":0}
+ok 28 - does not accept unsafe or incomplete helper result {"targetCount":0}
+  ---
+  duration_ms: 1.178
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":-1}
+ok 29 - does not accept unsafe or incomplete helper result {"targetCount":-1}
+  ---
+  duration_ms: 0.913292
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":1.5}
+ok 30 - does not accept unsafe or incomplete helper result {"targetCount":1.5}
+  ---
+  duration_ms: 0.918666
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":"84"}
+ok 31 - does not accept unsafe or incomplete helper result {"targetCount":"84"}
+  ---
+  duration_ms: 1.014125
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":null}
+ok 32 - does not accept unsafe or incomplete helper result {"targetCount":null}
+  ---
+  duration_ms: 0.830792
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 33 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 0.731834
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":null}
+ok 34 - does not accept unsafe or incomplete helper result {"targetCount":null}
+  ---
+  duration_ms: 0.54
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"noSend":false}
+ok 35 - does not accept unsafe or incomplete helper result {"noSend":false}
+  ---
+  duration_ms: 0.640792
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 36 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 0.620666
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"signed":true}
+ok 37 - does not accept unsafe or incomplete helper result {"signed":true}
+  ---
+  duration_ms: 1.358542
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"sent":true}
+ok 38 - does not accept unsafe or incomplete helper result {"sent":true}
+  ---
+  duration_ms: 0.611583
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 39 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 0.588791
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 40 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 0.545542
+  type: 'test'
+  ...
+# Subtest: does not accept malformed browser status as readiness
+ok 41 - does not accept malformed browser status as readiness
+  ---
+  duration_ms: 0.44225
+  type: 'test'
+  ...
+# Subtest: one executable macOS command embeds exact reviewed sources and needs only system JXA
+ok 42 - one executable macOS command embeds exact reviewed sources and needs only system JXA
+  ---
+  duration_ms: 1.779292
+  type: 'test'
+  ...
+# Subtest: all launch artifacts and the runbook use the correct production URL without the old working link
+ok 43 - all launch artifacts and the runbook use the correct production URL without the old working link
+  ---
+  duration_ms: 0.379417
+  type: 'test'
+  ...
+# Subtest: the command generator reproduces the saved executable exactly without writing any real file
+ok 44 - the command generator reproduces the saved executable exactly without writing any real file
+  ---
+  duration_ms: 1.103958
+  type: 'test'
+  ...
+# Subtest: redirect after permission probe blocks browser helper loading before any target data is exposed
+ok 45 - redirect after permission probe blocks browser helper loading before any target data is exposed
+  ---
+  duration_ms: 0.634959
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 1
+ok 46 - JXA rechecks current tab URL before execution number 1
+  ---
+  duration_ms: 1.959125
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 2
+ok 47 - JXA rechecks current tab URL before execution number 2
+  ---
+  duration_ms: 2.500791
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 3
+ok 48 - JXA rechecks current tab URL before execution number 3
+  ---
+  duration_ms: 1.100833
+  type: 'test'
+  ...
+# Subtest: successful JXA preparation brings the exact target tab and its background window to the front
+not ok 49 - successful JXA preparation brings the exact target tab and its background window to the front
+  ---
+  duration_ms: 1.701125
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:344:1'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (eval at <anonymous> (evalmachine.<anonymous>:20:10), <anonymous>:19:29)
+    Object.launch (eval at <anonymous> (evalmachine.<anonymous>:20:10), <anonymous>:175:44)
+    evalmachine.<anonymous>:73:25
+    Script.runInContext (node:vm:149:12)
+    Object.runInContext (node:vm:301:6)
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:383:6)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1103:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:785:18)
+    Test.postRun (node:internal/test_runner/test:1232:19)
+  ...
+# Subtest: JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+ok 50 - JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+  ---
+  duration_ms: 1.944916
+  type: 'test'
+  ...
+# Subtest: JXA redacts focus setters activation and repeated tab lookup failures without another execute
+ok 51 - JXA redacts focus setters activation and repeated tab lookup failures without another execute
+  ---
+  duration_ms: 5.556208
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 1
+not ok 52 - SC17 launcher accepts fresh positive integer dialog count 1
+  ---
+  duration_ms: 1.385208
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 80
+ok 53 - SC17 launcher accepts fresh positive integer dialog count 80
+  ---
+  duration_ms: 1.83375
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 81
+not ok 54 - SC17 launcher accepts fresh positive integer dialog count 81
+  ---
+  duration_ms: 1.139958
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 84
+not ok 55 - SC17 launcher accepts fresh positive integer dialog count 84
+  ---
+  duration_ms: 0.782125
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 305
+not ok 56 - SC17 launcher accepts fresh positive integer dialog count 305
+  ---
+  duration_ms: 1.1635
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3'
+  failureType: 'testCodeFailure'
+  error: 'Помощник безопасно остановился. Подпись и отправка не выполнялись.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'MacLauncherError'
+  stack: |-
+    fail (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:19:29)
+    launch (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-macos-launcher.js:175:44)
+    /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+  ...
+# Subtest: SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80
+not ok 57 - SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 17.482625
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: 'Строка 0d2b2f9f-799c-476c-b4f8-8090efff5ddb отсутствует или задублирована.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:228:39
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80
+not ok 58 - SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.351708
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: 'Строка 0d2b2f9f-799c-476c-b4f8-8090efff5ddb отсутствует или задублирована.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:228:39
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 dry-run uses all 80 fresh eligible sales-backed rows without fixed80
+ok 59 - SC17 dry-run uses all 80 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 2.24175
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80
+not ok 60 - SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.474166
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    all must clear both handover dates, product and search before UI refresh
+    + actual - expected
+
+    + {
+    +   date_from: '2026-09-18',
+    +   date_to: '2026-09-25',
+    +   product_id: 'old-product',
+    +   search: 'old-search'
+    + }
+    - {}
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    date_from: '2026-09-18'
+    date_to: '2026-09-25'
+    product_id: 'old-product'
+    search: 'old-search'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80
+not ok 61 - SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.878208
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    80 !== 81
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 81
+  actual: 80
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80
+not ok 62 - SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.102709
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    all must clear both handover dates, product and search before UI refresh
+    + actual - expected
+
+    + {
+    +   date_from: '2026-09-18',
+    +   date_to: '2026-09-25',
+    +   product_id: 'old-product',
+    +   search: 'old-search'
+    + }
+    - {}
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    date_from: '2026-09-18'
+    date_to: '2026-09-25'
+    product_id: 'old-product'
+    search: 'old-search'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80
+not ok 63 - SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.907959
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    80 !== 84
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 84
+  actual: 80
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80
+not ok 64 - SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.569875
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    all must clear both handover dates, product and search before UI refresh
+    + actual - expected
+
+    + {
+    +   date_from: '2026-09-18',
+    +   date_to: '2026-09-25',
+    +   product_id: 'old-product',
+    +   search: 'old-search'
+    + }
+    - {}
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    date_from: '2026-09-18'
+    date_to: '2026-09-25'
+    product_id: 'old-product'
+    search: 'old-search'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80
+not ok 65 - SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.697917
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    80 !== 305
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 305
+  actual: 80
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80
+not ok 66 - SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.181125
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    all must clear both handover dates, product and search before UI refresh
+    + actual - expected
+
+    + {
+    +   date_from: '2026-09-18',
+    +   date_to: '2026-09-25',
+    +   product_id: 'old-product',
+    +   search: 'old-search'
+    + }
+    - {}
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    date_from: '2026-09-18'
+    date_to: '2026-09-25'
+    product_id: 'old-product'
+    search: 'old-search'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80
+not ok 67 - SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.26675
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    80 !== 501
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 501
+  actual: 80
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80
+not ok 68 - SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.653542
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5'
+  failureType: 'testCodeFailure'
+  error: |-
+    all must clear both handover dates, product and search before UI refresh
+    + actual - expected
+
+    + {
+    +   date_from: '2026-09-18',
+    +   date_to: '2026-09-25',
+    +   product_id: 'old-product',
+    +   search: 'old-search'
+    + }
+    - {}
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    date_from: '2026-09-18'
+    date_to: '2026-09-25'
+    product_id: 'old-product'
+    search: 'old-search'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 zero rows never claims readiness or opens certificate dialog (dry-run)
+ok 69 - SC17 zero rows never claims readiness or opens certificate dialog (dry-run)
+  ---
+  duration_ms: 0.284541
+  type: 'test'
+  ...
+# Subtest: SC17 zero rows never claims readiness or opens certificate dialog (execute)
+ok 70 - SC17 zero rows never claims readiness or opens certificate dialog (execute)
+  ---
+  duration_ms: 0.125791
+  type: 'test'
+  ...
+# Subtest: SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs
+not ok 71 - SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs
+  ---
+  duration_ms: 0.25025
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3'
+  failureType: 'testCodeFailure'
+  error: 'Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 отсутствует или задублирована.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:228:39
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 return removes former ID and adds a new sold row: selects only current eligible IDs
+not ok 72 - SC17 return removes former ID and adds a new sold row: selects only current eligible IDs
+  ---
+  duration_ms: 0.204916
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3'
+  failureType: 'testCodeFailure'
+  error: 'Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 отсутствует или задублирована.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:228:39
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 active claim on former ID is excluded: selects only current eligible IDs
+not ok 73 - SC17 active claim on former ID is excluded: selects only current eligible IDs
+  ---
+  duration_ms: 0.225083
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3'
+  failureType: 'testCodeFailure'
+  error: 'Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:231:15
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 already withdrawn former ID is excluded: selects only current eligible IDs
+not ok 74 - SC17 already withdrawn former ID is excluded: selects only current eligible IDs
+  ---
+  duration_ms: 0.212708
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3'
+  failureType: 'testCodeFailure'
+  error: 'Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:231:15
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs
+not ok 75 - SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs
+  ---
+  duration_ms: 0.220667
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3'
+  failureType: 'testCodeFailure'
+  error: 'Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.'
+  code: 'ERR_TEST_FAILURE'
+  name: 'SoldKizFilterError'
+  stack: |-
+    /private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:231:15
+    Array.map (<anonymous>)
+    exactTargets (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+    Object.run (/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms517-mac-historical-k7IYjV/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+    async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 newly returned/claimed ID between read and selection cannot survive as stale snapshot
+ok 76 - SC17 newly returned/claimed ID between read and selection cannot survive as stale snapshot
+  ---
+  duration_ms: 0.72975
+  type: 'test'
+  ...
+# Subtest: SC17 same count but replacement ID between read and selection cannot be stale success
+ok 77 - SC17 same count but replacement ID between read and selection cannot be stale success
+  ---
+  duration_ms: 0.384792
+  type: 'test'
+  ...
+# Subtest: SC17 duplicate across pages refuses partial or ambiguous preparation before dialog
+ok 78 - SC17 duplicate across pages refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.556542
+  type: 'test'
+  ...
+# Subtest: SC17 empty nonterminal page refuses partial or ambiguous preparation before dialog
+ok 79 - SC17 empty nonterminal page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.438417
+  type: 'test'
+  ...
+# Subtest: SC17 short nonterminal first page refuses partial or ambiguous preparation before dialog
+ok 80 - SC17 short nonterminal first page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.607042
+  type: 'test'
+  ...
+# Subtest: SC17 short terminal page refuses partial or ambiguous preparation before dialog
+not ok 81 - SC17 short terminal page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 3.729291
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:167:3'
+  failureType: 'testCodeFailure'
+  error: |-
+    The expression evaluated to a falsy value:
+
+      assert.ok(!h.events.includes('open'))
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-test-contract/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:169:12)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: SC17 changed total on second page refuses partial or ambiguous preparation before dialog
+ok 82 - SC17 changed total on second page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 2.229917
+  type: 'test'
+  ...
+# Subtest: SC17 invalid total refuses partial or ambiguous preparation before dialog
+ok 83 - SC17 invalid total refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.572
+  type: 'test'
+  ...
+# Subtest: SC17 oversized page refuses partial or ambiguous preparation before dialog
+ok 84 - SC17 oversized page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.426083
+  type: 'test'
+  ...
+# Subtest: SC17 second-page invalid JSON refuses partial or ambiguous preparation before dialog
+ok 85 - SC17 second-page invalid JSON refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.467667
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 401 refuses partial or ambiguous preparation before dialog
+ok 86 - SC17 second-page HTTP 401 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.421625
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 403 refuses partial or ambiguous preparation before dialog
+ok 87 - SC17 second-page HTTP 403 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.422291
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 429 refuses partial or ambiguous preparation before dialog
+ok 88 - SC17 second-page HTTP 429 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.581708
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 503 refuses partial or ambiguous preparation before dialog
+ok 89 - SC17 second-page HTTP 503 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.516625
+  type: 'test'
+  ...
+# Subtest: SC17 wrong tenant_id rejects before registry or UI
+ok 90 - SC17 wrong tenant_id rejects before registry or UI
+  ---
+  duration_ms: 0.199333
+  type: 'test'
+  ...
+# Subtest: SC17 wrong seller_id rejects before registry or UI
+ok 91 - SC17 wrong seller_id rejects before registry or UI
+  ---
+  duration_ms: 0.112542
+  type: 'test'
+  ...
+# Subtest: SC17 wrong active_seller_id rejects before registry or UI
+ok 92 - SC17 wrong active_seller_id rejects before registry or UI
+  ---
+  duration_ms: 0.099292
+  type: 'test'
+  ...
+# Subtest: SC17 wrong role rejects before registry or UI
+ok 93 - SC17 wrong role rejects before registry or UI
+  ---
+  duration_ms: 0.094709
+  type: 'test'
+  ...
+# Subtest: SC17 wrong withdrawal_enabled rejects before registry or UI
+ok 94 - SC17 wrong withdrawal_enabled rejects before registry or UI
+  ---
+  duration_ms: 0.093292
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://sellerfocus.pro"}
+ok 95 - SC17 exact production origin and route required {"origin":"https://sellerfocus.pro"}
+  ---
+  duration_ms: 0.115125
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://foreign.example"}
+ok 96 - SC17 exact production origin and route required {"origin":"https://foreign.example"}
+  ---
+  duration_ms: 0.068166
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://wms.sellerfocus.pro.evil.test"}
+ok 97 - SC17 exact production origin and route required {"origin":"https://wms.sellerfocus.pro.evil.test"}
+  ---
+  duration_ms: 0.057125
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"http://wms.sellerfocus.pro"}
+ok 98 - SC17 exact production origin and route required {"origin":"http://wms.sellerfocus.pro"}
+  ---
+  duration_ms: 0.052583
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"pathname":"/seller/orders"}
+ok 99 - SC17 exact production origin and route required {"pathname":"/seller/orders"}
+  ---
+  duration_ms: 0.179375
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"switchTokenAtOffset":250}
+ok 100 - SC17 seller session switch refuses preparation {"switchTokenAtOffset":250}
+  ---
+  duration_ms: 1.731416
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"changeTokenInUi":true}
+ok 101 - SC17 seller session switch refuses preparation {"changeTokenInUi":true}
+  ---
+  duration_ms: 0.832417
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"switchIdentity":true}
+ok 102 - SC17 seller session switch refuses preparation {"switchIdentity":true}
+  ---
+  duration_ms: 0.708542
+  type: 'test'
+  ...
+# Subtest: SC17 preexisting selection is not silently extended
+ok 103 - SC17 preexisting selection is not silently extended
+  ---
+  duration_ms: 0.326958
+  type: 'test'
+  ...
+# Subtest: SC17 incomplete DOM confirmation is never success {"openedCount":83}
+ok 104 - SC17 incomplete DOM confirmation is never success {"openedCount":83}
+  ---
+  duration_ms: 0.33525
+  type: 'test'
+  ...
+# Subtest: SC17 incomplete DOM confirmation is never success {"dialogOpen":false}
+ok 105 - SC17 incomplete DOM confirmation is never success {"dialogOpen":false}
+  ---
+  duration_ms: 0.30125
+  type: 'test'
+  ...
+# Subtest: SC17 missing seller token null rejects before any GET or UI
+ok 106 - SC17 missing seller token null rejects before any GET or UI
+  ---
+  duration_ms: 0.088417
+  type: 'test'
+  ...
+# Subtest: SC17 missing seller token "" rejects before any GET or UI
+ok 107 - SC17 missing seller token "" rejects before any GET or UI
+  ---
+  duration_ms: 0.053167
+  type: 'test'
+  ...
+# Subtest: SC17 identity GET HTTP 401 refuses preparation
+ok 108 - SC17 identity GET HTTP 401 refuses preparation
+  ---
+  duration_ms: 0.194209
+  type: 'test'
+  ...
+# Subtest: SC17 identity GET HTTP 403 refuses preparation
+ok 109 - SC17 identity GET HTTP 403 refuses preparation
+  ---
+  duration_ms: 0.093209
+  type: 'test'
+  ...
+1..109
+# tests 109
+# suites 0
+# pass 78
+# fail 31
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 296.966542

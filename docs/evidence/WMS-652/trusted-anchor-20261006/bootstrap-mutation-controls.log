@@ -1,0 +1,124 @@
+bypass exact approved base
+exit=1
+
+.....F...
+======================================================================
+FAIL: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'source_sha': 'dddddddddddddddddddddddddddddddddddddddd'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 74, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.019s
+
+FAILED (failures=1)
+
+allow seed even when BASE policy exists
+exit=1
+
+.EFF......
+======================================================================
+ERROR: test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 120, in test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin
+    result = self.verify({'base_sha': 'e'*40, 'source_sha': S})
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/trusted_process_check.py", line 281, in verify_pr_evidence
+    result = verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap)
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/trusted_process_check.py", line 211, in verify_pr
+    baseline, baseline_tree, source = baseline_policy(get, root, base, approved_bootstrap)
+                                      ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/trusted_process_check.py", line 147, in baseline_policy
+    raise ValueError('Bootstrap is not approved for this exact PR base')
+ValueError: Bootstrap is not approved for this exact PR base
+
+======================================================================
+FAIL: test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed) (mutation='outage')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 132, in test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 74, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed) (mutation='malformed')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 132, in test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 74, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.016s
+
+FAILED (failures=2, errors=1)
+
+ignore source Git file mismatch
+exit=1
+
+........FF
+======================================================================
+FAIL: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='blob')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 74, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='mode')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 74, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.017s
+
+FAILED (failures=2)
+
+CLI does not load approved pin
+exit=1
+
+F........
+======================================================================
+FAIL: test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 166, in test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact
+    self.assertEqual(self.m.main(), 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.015s
+
+FAILED (failures=1)

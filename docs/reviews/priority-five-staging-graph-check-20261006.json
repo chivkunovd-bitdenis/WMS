@@ -1,0 +1,49 @@
+{
+  "candidate_sha": "e45822aedbd75aa2a6efa6bc41b75d50e4dde1a7",
+  "heads": [
+    "20261003_0001"
+  ],
+  "revision_count": 199,
+  "upgrade_steps_from_staging_revision": 0,
+  "staging_is_ancestor": true,
+  "preserved_product_and_checker": [
+    {
+      "path": "backend/app",
+      "before": "0674b01cdcf92a3e397c2177597154009875b5e7",
+      "after": "0674b01cdcf92a3e397c2177597154009875b5e7",
+      "identical": true
+    },
+    {
+      "path": "backend/tests",
+      "before": "4989229c17e88987820c51186dd696ef9fa6bbb8",
+      "after": "4989229c17e88987820c51186dd696ef9fa6bbb8",
+      "identical": true
+    },
+    {
+      "path": "frontend/src",
+      "before": "e96f75ad7593e0a39ac2ac6387669d6d09ff1443",
+      "after": "e96f75ad7593e0a39ac2ac6387669d6d09ff1443",
+      "identical": true
+    },
+    {
+      "path": "scripts/ci/check_task_documents.py",
+      "before": "7c8b167a9e58ad205df88dd82d6c2eabf8c2a229",
+      "after": "7c8b167a9e58ad205df88dd82d6c2eabf8c2a229",
+      "identical": true
+    },
+    {
+      "path": "AGENTS.md",
+      "before": "510ce8febd402f9a78a5f1fddd964d99283afaff",
+      "after": "510ce8febd402f9a78a5f1fddd964d99283afaff",
+      "identical": true
+    },
+    {
+      "path": "CLAUDE.md",
+      "before": "510ce8febd402f9a78a5f1fddd964d99283afaff",
+      "after": "510ce8febd402f9a78a5f1fddd964d99283afaff",
+      "identical": true
+    }
+  ],
+  "database_connection": false,
+  "new_ddl": false
+}
