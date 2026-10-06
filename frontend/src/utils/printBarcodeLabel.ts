@@ -188,7 +188,16 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], hand
       // window supplies frames: the zero-sized print iframe may be throttled.
       const groupSize = 16
       for (let start = 0; start < images.length; start += groupSize) {
-        await Promise.all(images.slice(start, start + groupSize).map((image) => image.decode()))
+        // Capture synchronous decode throws as cohort failures too.
+        const active = images.slice(start, start + groupSize).map(async (image) => { await image.decode() })
+        try {
+          await Promise.all(active)
+        } catch (error) {
+          // Removing the iframe must not abandon its still-running peers.
+          // Keep the first failure while every already-started worker settles.
+          await Promise.allSettled(active)
+          throw error
+        }
         if (start + groupSize < images.length) {
           await new Promise<void>((resolve) => {
             // A background tab can suspend animation frames. Still yield a
