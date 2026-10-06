@@ -1,6 +1,137 @@
 # WMS-658: независимое ревью и адресная перепроверка
 
-## Актуальный результат · 6e9575ec + ff86e912 · FAIL
+## Актуальный результат · 441ce285 · технический PASS
+
+07.10.2026 независимо перепроверен продукт
+`441ce28536837b70a3e6fc8b6d4b1e6121f264b2` на HEAD передачи
+`cb1e276735190ab94da9e0d92638a8df3fc4fe0b`, после frozen F4 contract
+`a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd`.
+**Техническое адресное ревью — PASS:** F4 устранён для разных страниц
+и для повторных этикеток на одном листе. Корректный crop и обнаружение
+реальных подмен сохраняются. Подтверждённых технических замечаний по
+перепроверенному изменению не осталось. Это заключение не означает
+приёмку WMS-658 целиком или подтверждение реального инцидента.
+
+До проверок дерево чистое, ветка `codex/night1007-658`. Обновлён
+origin/etalon; база осталась `4b298efc95be7b4b6b7fe5665be9f3671f1fe747`,
+AGENTS.md совпадает с её правилами. Полностью прочитанные owner/failure
+libraries сохранены и применялись; их diff и diff требований пусты.
+Прочитаны [.agent-runs/developer-658-ambiguous-source-handoff.md](../../.agent-runs/developer-658-ambiguous-source-handoff.md),
+новый продуктовый diff, frozen F4 contract, актуальный аудит и настоящий
+низкоуровневый `marking_datamatrix_service` с вызываемым extractor.
+Developer handoff сообщает RED нового контракта до правки и 6 PASS после;
+эти числа не выдаются за собственный запуск reviewer.
+
+### F4 · PASS: неоднозначность больше не теряется внутри source PDF
+
+Новый `_extract_source_evidence` извлекает исходные области постранично,
+поэтому file-wide dedup штатного import extractor больше не удаляет
+кандидат со следующей страницы. Все полученные сигнатуры объединяются
+по полному payload. Разные макеты одного КИЗа оставляют
+`source_to_artifact_layout`, совпадающие повторные сигнатуры не создают
+неоднозначность сами по себе.
+
+Для повтора на одном листе добавлено сравнение количества реально
+декодированных символов с числом возвращённых областей по каждому полному
+КИЗу. Если extractor отбросил повторную область, `incomplete=True`
+передаётся в audit как явный `source_to_artifact_layout`. Импортное
+удаление повторов при этом не менялось.
+
+Собственная диагностика разместила две этикетки с одним полным КИЗом
+и разными видимыми артикулами в отдельных рамках на **одном листе**
+480×250. Каждая этикетка — 220×220; обе надписи присутствуют в PDF.
+Проверены напрямую native `zxingcpp.read_barcodes`, штатный
+`decode_datamatrix_codes_on_pdf_page`, настоящий extractor, новая функция
+сбора evidence и полный `audit_marking_import` на SQLite в памяти:
+
+```text
+SAME_SHEET_NATIVE_ZXING_RESULT_COUNT 2
+SAME_SHEET_WRAPPER_RESULT_COUNT 2
+SAME_SHEET_RECOGNIZED_FULL_CIS True
+SAME_SHEET_PHYSICAL_TEXT_BOTH_PRESENT True
+SAME_SHEET_EXTRACTOR_RESULT_COUNT 1
+SAME_SHEET_EVIDENCE_COUNTS_AND_INCOMPLETE 2 1 True
+SAME_SHEET_AUDIT
+  {'first_divergence': None, 'evidence_gaps': ['source_to_artifact_layout']}
+```
+
+Таким образом, защита работает на реальных низкоуровневых результатах,
+а не на подменённом списке двух кодов. Само совпадение с первой областью
+больше не означает полную проверку исходника. Весь PDF, crop, декодирование
+и сигнатуры были настоящими; заменено только чтение внешнего хранилища
+на выдачу синтетических байтов в памяти.
+
+Дополнительные положительные контроли нового сбора evidence:
+
+```text
+DISTINCT_CIS_SAME_SHEET_EVIDENCE 2 2 False
+IDENTICAL_LAYOUT_TWO_PAGES_EVIDENCE 2 2 1 False
+```
+
+Первый — два разных КИЗа на одном листе: две области, неполноты нет.
+Второй — два одинаковых макета на разных страницах: два экземпляра,
+одна уникальная сигнатура, неполноты нет. Сравнение Counter применяется
+по payload и количеству экземпляров, а не только к конкретной двухстраничной
+фикстуре предыдущего RED.
+
+### Собственные адресные проверки и сохранность соседних путей
+
+Выполнены **5 PASS, 0 skip**, 4.09 s, pytest `-n 0`, SQLite в памяти:
+
+```sh
+WMS_TEST_DATABASE_URL=sqlite+aiosqlite:///:memory: \
+WMS_TEST_DATA_DIR=/private/tmp/wms658-review-round4-data \
+PYTHONDONTWRITEBYTECODE=1 \
+/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest \
+  -n 0 -p no:cacheprovider -q --tb=short \
+  tests/test_wms658_marking_import_contract.py::test_c22_audit_reports_ambiguous_layouts_for_same_cis_in_one_source_pdf \
+  tests/test_wms658_marking_import_contract.py::test_c22_audit_accepts_unchanged_label_cropped_from_supplier_page \
+  tests/test_wms658_marking_import_contract.py::test_c22_incident_audit_is_read_only_and_reports_first_divergence \
+  tests/test_wms658_marking_import_contract.py::test_c22_audit_reports_source_to_saved_label_substitution \
+  tests/test_wms658_marking_import_contract.py::test_c22_audit_reports_raster_final_label_substitution
+```
+
+Это проверки непосредственно изменённого пути аудита: новый F4,
+настоящий auto-import → crop 220×220 → PDF результата → audit (F3),
+отсутствующий конечный файл и настоящие подмены исходного/конечного
+макета при сохранении полного КИЗа (F1). Все ожидания проходят.
+Низкоуровневая диагностика выполнялась после pytest, отдельным
+последовательным процессом Python через stdin; параллельных worker не было.
+
+Diff импортного сервиса, label extractor, DataMatrix decoder и
+`wb_honest_sign_service` относительно ранее проверенного `6e9575ec` пуст.
+Следовательно, import dedup и raw nmID guard не изменены. F2 сохраняет
+результат прежней собственной перепроверки: исключение mismatch и отказ
+apply до записи; неизменённый nmID-набор в этом раунде повторно не запускался.
+Продукт, frozen tests, требования и guards reviewer не менял.
+
+### Граница приёмки по историческим артефактам
+
+Полностью прочитан точный отчёт из
+`4be907b00763a6145379bfd5216d9c5be317ce07`:
+[incident-artifact-followup-20261007.md](../evidence/WMS-658/incident-artifact-followup-20261007.md).
+По этому read-only исследованию для исходного импорта нет ImportFile
+и ссылки на сохранённый оригинал; исторический журнал фиксирует отказ
+его хранения. Финальный файл КИЗ-печати тоже не сохранён как серверный
+артефакт. Найденные десять PNG — WB-стикеры заказов, не искомые КИЗ-этикетки.
+Нынешние PDF были созданы позднее из текста и не доказывают исходный макет
+или фактически напечатанный файл.
+
+Эти сведения — результат incident researcher, не новое production-чтение
+reviewer. **R11/C22 реального инцидента остаются открытыми.** Synthetic
+PASS, равенство payload и наличие WB-стикеров не закрывают сравнение
+исходной и фактической печатной этикетки. Согласованная приёмка, C23,
+R10, физическая печать, PostgreSQL-конкуренция и CI сохраняют прежние границы.
+Окончательную приёмку выполняет исходный аналитик.
+
+Изменён только этот отчёт. Чужие файлы не включены в его commit.
+Новые агенты, установки dependencies, full build, широкие неизменённые
+наборы, production/WB/Ozon writes, секреты, сообщения людям и merge/deploy
+не использовались.
+
+---
+
+## История третьего раунда · 6e9575ec + ff86e912 · FAIL
 
 07.10.2026 проверен продукт
 `6e9575ecfd83d1c933d8cf017c1aa071fb49ebeb` с исправленной тестовой
