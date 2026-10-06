@@ -323,3 +323,11 @@ Existing touched537 concurrency case `test_concurrent_add_of_the_same_order_to_a
 653 source `65872a95d97e649ad67b85cc2afa7824ba4cdd44` included by merge `563d2a2a0`: exact correction2b5a86e, actual Sol high review30bbd, cumulative canonicalledger and requirements.29/29independentPASS plus real3parentoctopusnegative; accepted9migrationblobs unchanged.
 
 475/537 original fixture correctionc38 passed actual independent review `6cd6ee0ab996e6af28c8a96eb0d913675d35f73d`, report-only included.23PASS/1priorPGskip;124assertions preserved. The one remaining mandatory537concurrency case is being reproduced and corrected separately on ownedPostgreSQL25437; its oldskip is not called success. Common workflow already executes that exactcase serially on existingPGservice. Finalpush/CI waits only for its correction+actualproof/review.
+
+## Final common CI3 input · 06.10.2026
+
+All known CI2 findings closed by their assigned authors/reviewers. Exact input `6517b1e93478d918c455d8f419d535dd59c92675` includes537PGcorrection11301, actual RED/PASSproof584ca and independentreviewa094(report-only). PrivatePG16.14: original1FAIL,corrected1PASS;200/409,onePATCH,oneasset,all95assertions retained. ExistingserialCIstep requires thiscase onPostgreSQL. No skip is passed off as success.
+
+Fresh fetch confirms etalon4b298efc95be7b4b6b7fe5665be9f3671f1fe747 and staging727575a0fd47dec56f34b38b987925686626c2b9 unchanged. Candidate descends both andhotfix6838f11. Product backend/app/frontend/src(runtime excludingtests) stillexactb4043c0df reviewed product plus narrow662fix. Current source map retains everycorrection/report/proof; no unfinished658/674/671/654/systemic681added. New read-only663 observations do not delay thisCI.
+
+Next boundary: finaldocs/backlog/diff/clean checks, onepublishednoflagcommit and commonPR387fullCI exactSHA. Staging/production not deployed; stock/documents/printer/signature mutations not performed. AftergreenCI leadingagent prepares ordinaryexistingstagingdeployment and verifiesexactSHA beforeproduction.

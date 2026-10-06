@@ -313,6 +313,14 @@
       "review": "30bbd17d899dfcc5407bce4a60dc923782179bc8",
       "mode": "merge original separatetestwriter+independentreview+cumulativeledger;9migrationblobs unchanged",
       "facts": "29localPASS,29independentPASS,actual3-parentoctopusnegative;no runtime changes"
+    },
+    {
+      "task": "WMS-537 mandatory PostgreSQL concurrent draft-add functional correction",
+      "source": "11301a6e1004abb212052e26f2b005e6e958633b",
+      "proof": "584ca48321ef8da05ef36e6627cc5b4fad0c7faa",
+      "review": "a094164c5b260dca4b265e7fd28758758a59f86c",
+      "mode": "ancestry test/proof merge, exactreport-onlycherry-pick;existingPGCIstep executesexactcase",
+      "facts": "original1FAIL zeroPATCH;corrected1PASS on isolatedPG16.14;200/409,onePATCH,oneasset;95assertionsunchanged;actualindependentSolPASS"
     }
   ],
   "local_product_fixes": [
@@ -351,5 +359,7 @@
     ],
     "protection": "Both Python ASTs identical before/after; frozen expectations/composition unchanged",
     "proof": "docs/reviews/priority-five-ruff-format-only-proof-20261006.json"
-  }
+  },
+  "final_ci_input": "6517b1e93478d918c455d8f419d535dd59c92675",
+  "staging_base_confirmed": "727575a0fd47dec56f34b38b987925686626c2b9"
 }
