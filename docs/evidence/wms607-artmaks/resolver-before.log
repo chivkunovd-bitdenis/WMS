@@ -1,0 +1,41 @@
+FF.FF
+======================================================================
+FAIL: test_cups_unreachable_is_not_missing_default (__main__.DefaultPrinterTests.test_cups_unreachable_is_not_missing_default)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-printer-failure-analysis/tools/print-agent/test_macos_default_printer.py", line 87, in test_cups_unreachable_is_not_missing_default
+    self.assertIn('Недоступна служба печати macOS',output)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Недоступна служба печати macOS' not found in 'ERROR:В системе не выбран принтер по умолчанию\njournal:false\nretry:Label_Printer-1\nrepeat:Label_Printer-1\nsubmits:1\n'
+
+======================================================================
+FAIL: test_error_text_is_not_a_queue_or_uncertain_job (__main__.DefaultPrinterTests.test_error_text_is_not_a_queue_or_uncertain_job)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-printer-failure-analysis/tools/print-agent/test_macos_default_printer.py", line 81, in test_error_text_is_not_a_queue_or_uncertain_job
+    self.assertIn('ERROR:',output)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^
+AssertionError: 'ERROR:' not found in 'RECEIPT:Label_Printer-1\njournal:true\nretry:Label_Printer-1\nrepeat:Label_Printer-1\nsubmits:1\n'
+
+======================================================================
+FAIL: test_stale_default_keeps_same_key_recoverable (__main__.DefaultPrinterTests.test_stale_default_keeps_same_key_recoverable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-printer-failure-analysis/tools/print-agent/test_macos_default_printer.py", line 93, in test_stale_default_keeps_same_key_recoverable
+    self.assertIn('macOS не определила принтер по умолчанию',output)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'macOS не определила принтер по умолчанию' not found in 'ERROR:В системе не выбран принтер по умолчанию\njournal:false\nretry:Label_Printer-1\nrepeat:Label_Printer-1\nsubmits:1\n'
+
+======================================================================
+FAIL: test_valid_default_with_warning_still_prints (__main__.DefaultPrinterTests.test_valid_default_with_warning_still_prints)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-printer-failure-analysis/tools/print-agent/test_macos_default_printer.py", line 71, in test_valid_default_with_warning_still_prints
+    self.assertIn('RECEIPT:Label_Printer-1',output)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'RECEIPT:Label_Printer-1' not found in 'ERROR:В системе не выбран принтер по умолчанию\njournal:false\nretry:Label_Printer-1\nrepeat:Label_Printer-1\nsubmits:1\n'
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.060s
+
+FAILED (failures=4)

@@ -1,0 +1,18 @@
+{
+ "saved_at": "2026-10-06T22:26:10+0400",
+ "ipp_job": "4",
+ "cups_job": 314,
+ "job_name": "label.png",
+ "user": "deniscivkunov",
+ "content_type": "application/pdf",
+ "normalized": null,
+ "source_page_mm": "58.0x40.0",
+ "source_pages": 1,
+ "codes": [
+  {
+   "format": "QR Code",
+   "text": "WMS607-76a3bb1c7b"
+  }
+ ],
+ "page_mm": "58.0x40.0"
+}

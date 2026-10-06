@@ -1,0 +1,13 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms607-printer-failure-analysis/frontend
+
+stdout | src/screens/v2/wms607.artmaks.emulator.test.ts > ArtMaks: actual helper failure, next barcode blocked, same barcode recovers to emulator
+REAL_HELPER_JOURNAL {"artmaks-emulator-1791310954992":{"receipt":"WMS604_Proof-312","hash":"929cc176270b28b6a99556f59f07b42ddd339a7b1245107c168cead9fd368f52"}}
+
+ ✓ src/screens/v2/wms607.artmaks.emulator.test.ts (1 test) 697ms
+   ✓ ArtMaks: actual helper failure, next barcode blocked, same barcode recovers to emulator  696ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  22:22:34
+   Duration  1.49s (transform 190ms, setup 0ms, collect 295ms, tests 697ms, environment 0ms, prepare 90ms)

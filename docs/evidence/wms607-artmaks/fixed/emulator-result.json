@@ -1,0 +1,54 @@
+{
+  "test_id": "WMS607-76a3bb1c7b",
+  "source_sha256": "462e5a33020226b31c88098d527d04ebfe70af238d873f51889936b53bec09c3",
+  "device": "устройство для WMS604_Proof: ipp://localhost:18631/ipp/print",
+  "runs": [
+    {
+      "case": "default_valid",
+      "exit": 0,
+      "result": "QUEUE:WMS604_Proof",
+      "journal_exists": false
+    },
+    {
+      "case": "default_invalid_process_override",
+      "exit": 0,
+      "result": "ERROR:macOS не определила принтер по умолчанию. В настройках «Принтеры и сканеры» выберите конкретный принтер этикеток, затем повторите скан. Этикетка не отправлена.",
+      "journal_exists": false
+    },
+    {
+      "case": "default_invalid_long_override",
+      "exit": 0,
+      "result": "ERROR:macOS не определила принтер по умолчанию. В настройках «Принтеры и сканеры» выберите конкретный принтер этикеток, затем повторите скан. Этикетка не отправлена.",
+      "journal_exists": false
+    },
+    {
+      "case": "CUPS_unreachable_same_emulator_still_on",
+      "exit": 0,
+      "result": "ERROR:Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+      "journal_exists": false
+    },
+    {
+      "case": "restore_CUPS_same_key",
+      "exit": 0,
+      "result": "RECEIPT:WMS604_Proof-313",
+      "journal_exists": true
+    },
+    {
+      "case": "repeat_same_key",
+      "exit": 0,
+      "result": "RECEIPT:WMS604_Proof-313",
+      "journal_exists": true
+    }
+  ],
+  "journal": {
+    "WMS607-76a3bb1c7b": {
+      "hash": "6ccbc817d16cd8f91689e2bc7f6ac47036d4aed314108be0e2555f928a60a5f2",
+      "receipt": "WMS604_Proof-313"
+    }
+  },
+  "emulator_outputs": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-222508-35608.pdf",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-222508-35608.json",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-222508-35608.preview.png"
+  ]
+}

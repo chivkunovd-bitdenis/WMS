@@ -34,14 +34,19 @@ private struct ProcessResult {
     let timedOut: Bool
 }
 
-private func run(_ executable: String, _ arguments: [String], timeout: TimeInterval) throws -> ProcessResult {
+private func run(
+    _ executable: String, _ arguments: [String], timeout: TimeInterval,
+    mergeStandardError: Bool = true
+) throws -> ProcessResult {
     let process = Process()
     let pipe = Pipe()
     process.executableURL = URL(fileURLWithPath: executable)
     process.arguments = arguments
     process.environment = ProcessInfo.processInfo.environment.merging(["LC_ALL": "C"]) { _, new in new }
     process.standardOutput = pipe
-    process.standardError = pipe
+    // Resolver output is data: a warning on stderr is not part of a queue name.
+    // Keep diagnostics in the helper's terminal without mixing them into stdout.
+    process.standardError = mergeStandardError ? pipe : FileHandle.standardError
 
     let timeoutLock = NSLock()
     var timedOut = false
@@ -63,15 +68,24 @@ private func run(_ executable: String, _ arguments: [String], timeout: TimeInter
 }
 
 private func defaultPrinter() throws -> String {
-    let result = try run("/usr/bin/lpstat", ["-d"], timeout: 10)
-    guard !result.timedOut, result.status == 0, let separator = result.output.firstIndex(of: ":") else {
-        throw PrintError.message("В системе не выбран принтер по умолчанию")
+    let result = try run("/usr/bin/lpstat", ["-d"], timeout: 5, mergeStandardError: false)
+    guard !result.timedOut else {
+        throw PrintError.message("Служба печати macOS не ответила вовремя. Этикетка не отправлена; повторите скан после восстановления печати.")
     }
-    let name = result.output[result.output.index(after: separator)...].trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !name.isEmpty, name.count <= 127, !name.contains(where: { $0.isNewline }) else {
-        throw PrintError.message("В системе не выбран принтер по умолчанию")
+    if result.status == 0, let separator = result.output.firstIndex(of: ":") {
+        let name = result.output[result.output.index(after: separator)...].trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty, name.count <= 127, !name.contains(where: { $0.isWhitespace }) {
+            // lpstat -d may return exit 0 and an error containing a colon.
+            // Validate the exact queue before Printer persists an uncertain job.
+            let queue = try run("/usr/bin/lpstat", ["-p", name], timeout: 5, mergeStandardError: false)
+            if !queue.timedOut, queue.status == 0 { return name }
+        }
     }
-    return name
+    let printers = try run("/usr/bin/lpstat", ["-p"], timeout: 5, mergeStandardError: false)
+    guard !printers.timedOut, printers.status == 0 else {
+        throw PrintError.message("Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.")
+    }
+    throw PrintError.message("macOS не определила принтер по умолчанию. В настройках «Принтеры и сканеры» выберите конкретный принтер этикеток, затем повторите скан. Этикетка не отправлена.")
 }
 
 private func parseReceipt(_ output: String, queue: String) -> String? {

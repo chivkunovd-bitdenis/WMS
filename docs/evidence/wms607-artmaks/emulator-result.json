@@ -1,0 +1,54 @@
+{
+  "test_id": "WMS607-807a5706bc",
+  "source_sha256": "335b0ae7dcdc3ee2621a13942f9d83a350dd0e4083fad825990f01e77937333e",
+  "device": "устройство для WMS604_Proof: ipp://localhost:18631/ipp/print",
+  "runs": [
+    {
+      "case": "default_valid",
+      "exit": 0,
+      "result": "QUEUE:WMS604_Proof",
+      "journal_exists": false
+    },
+    {
+      "case": "default_invalid_process_override",
+      "exit": 0,
+      "result": "QUEUE:Ошибка: переменная окружения LPDEST указывает несуществующее назначение «WMS607_MISSING».",
+      "journal_exists": false
+    },
+    {
+      "case": "default_invalid_long_override",
+      "exit": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию",
+      "journal_exists": false
+    },
+    {
+      "case": "CUPS_unreachable_same_emulator_still_on",
+      "exit": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию",
+      "journal_exists": false
+    },
+    {
+      "case": "restore_CUPS_same_key",
+      "exit": 0,
+      "result": "RECEIPT:WMS604_Proof-311",
+      "journal_exists": true
+    },
+    {
+      "case": "repeat_same_key",
+      "exit": 0,
+      "result": "RECEIPT:WMS604_Proof-311",
+      "journal_exists": true
+    }
+  ],
+  "journal": {
+    "WMS607-807a5706bc": {
+      "hash": "929cc176270b28b6a99556f59f07b42ddd339a7b1245107c168cead9fd368f52",
+      "receipt": "WMS604_Proof-311"
+    }
+  },
+  "emulator_outputs": [
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-221759-34127.json",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-221759-34127.preview.png",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/wms631-stand-kit/printer-out/job-20261006-221759-34127.pdf"
+  ]
+}

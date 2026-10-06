@@ -1,0 +1,23 @@
+[
+  {
+    "file": "emulator-input.png",
+    "decoded": [
+      "WMS607-76a3bb1c7b"
+    ],
+    "pass": true
+  },
+  {
+    "file": "scan-job-20261006-222610-35867.preview.png",
+    "decoded": [
+      "WMS607-76a3bb1c7b"
+    ],
+    "pass": true
+  },
+  {
+    "file": "output-job-20261006-222508-35608.preview.png",
+    "decoded": [
+      "WMS607-76a3bb1c7b"
+    ],
+    "pass": true
+  }
+]

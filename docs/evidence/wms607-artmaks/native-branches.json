@@ -1,0 +1,52 @@
+{
+  "source_sha256": "335b0ae7dcdc3ee2621a13942f9d83a350dd0e4083fad825990f01e77937333e",
+  "cases": {
+    "english": {
+      "returncode": 0,
+      "result": "QUEUE:Label_Printer"
+    },
+    "russian": {
+      "returncode": 0,
+      "result": "QUEUE:Label_Printer"
+    },
+    "crlf": {
+      "returncode": 0,
+      "result": "QUEUE:Label_Printer"
+    },
+    "no_default": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "scheduler_down": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "valid_default_with_stderr": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "nonzero_with_default": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "empty_name": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "name_128": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    },
+    "timeout": {
+      "returncode": 0,
+      "result": "ERROR:В системе не выбран принтер по умолчанию"
+    }
+  },
+  "recovery": [
+    "first_error:В системе не выбран принтер по умолчанию",
+    "journal_after_failed_lookup:false",
+    "retry:fake-1",
+    "repeat:fake-1",
+    "submissions:1"
+  ]
+}
