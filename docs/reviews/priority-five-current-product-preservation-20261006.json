@@ -1,0 +1,21 @@
+{
+  "candidate": "14215d543e2e2ca33be31e6cc70108e302585fc4",
+  "runtime_baseline": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+  "scope": [
+    "backend/app",
+    "frontend/src",
+    ":(exclude)frontend/src/**/*.test.ts",
+    ":(exclude)frontend/src/**/*.test.tsx"
+  ],
+  "runtime_changes_since_reviewed_product_plus_narrow_fix": [],
+  "independent_common_product_review": {
+    "reviewed_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+    "report": "8e301ddaf542d4823bcc14363e318f409fdc0935"
+  },
+  "independent_narrow_fix_review": {
+    "reviewed_sha": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+    "report": "17e50faa3d13981b123ef7b093b2f97aefee9016"
+  },
+  "staging_ancestor": "727575a0fd47dec56f34b38b987925686626c2b9",
+  "production_hotfix683_ancestor": "8f11d912351e8de7633b4abcf74d195badaeb254"
+}

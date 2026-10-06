@@ -270,6 +270,39 @@
       "source": "ec1ffacb77140c87b0daba341da58313a157750d",
       "mode": "merge clean report ancestry including4ebab12; excluded unrelated cfc report",
       "facts": "662format5feca actualPASS;666QRdc9b1578 actualPASS17/17Node20, correction ledgers follow separately"
+    },
+    {
+      "task": "WMS-652 actual independent Sol model compatibility",
+      "source": "f263064f4c5735a477b91bd92bea982c9eeceaf5",
+      "tests_before_code": "2e94cf5f04a7863cf8abbe028126a6e48f8aee95",
+      "review": "74890bb821d3a881c16b2806c964ca8676d0b832",
+      "review_integration": "6f0dab804",
+      "mode": "narrow model guard only; exact evidence/scope controls retained",
+      "facts": "3RED before fix;70 localPASS;81 independentPASS,0skip"
+    },
+    {
+      "task": "WMS-666/514/636 accepted legacy harness maintenance",
+      "source": "89b3d190d8fe7b153a7a64351d3b05d9fc6d9023",
+      "integration": "0d25e858c",
+      "reviewed_legacy_correction": "2c9b9ebf2b4af14f55f7c0d165a88c046aabaaee",
+      "review": "4c506312fc4f03dcc2d34a332158962fafb6a688",
+      "mode": "merge test-only corrections and actual review ledgers; independent report only cherry-pick",
+      "facts": "legacy4files58PASS;QR17PASSNode20;assertions/events/timeouts unchanged"
+    },
+    {
+      "task": "WMS-662 frozen PostgreSQL CI routing and WMS-663 generated schema",
+      "source": "c884171aca6cbf72bc9ae6cc46d37cfa6afd7381",
+      "mode": "mandatory separate idlePG16steps matching frozen guards;generatedOpenAPIfromcurrentAPI",
+      "facts": "2PG662contracts rerouted unchanged;OpenAPI2pathsadded92existingpathsunchanged;asyncpg0.31.0 pinned"
+    },
+    {
+      "task": "WMS-475/537 marketplace membership fixture correction",
+      "source": "c38e2cfbcc142b50e9dd1d606adddb2a42b19acf",
+      "proof": "a841e067e4883bbb39eec4f6953b06fb92f510c4",
+      "integration": "14215d543e2e2ca33be31e6cc70108e302585fc4",
+      "mode": "merge test-only correction;hotfix683runtime unchanged",
+      "facts": "23PASS1priorPGskip;all124assertionsunchanged",
+      "review": "pending actual separate report"
     }
   ],
   "local_product_fixes": [
