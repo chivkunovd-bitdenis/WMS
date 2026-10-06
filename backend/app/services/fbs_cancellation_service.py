@@ -20,7 +20,6 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
-from app.models.seller import Seller
 from app.services.billing_ledger_service import (
     PACKING_SERVICE_CODE,
     record_operational_reversal,
@@ -138,6 +137,15 @@ async def reverse_fbs_order_billing(
     """
     try:
         async with session.begin_nested():
+            # Continuation already holds this exact order through stock and
+            # billing. Fence the active snapshot against that same operation,
+            # including a direct retry whose cancelled status needs no UPDATE.
+            # Do not lock its seller: another order's handoff holds product
+            # before seller, while cancellation still has stock work to do.
+            if await session.scalar(select(FbsOrder.id).where(
+                FbsOrder.id == order.id, FbsOrder.tenant_id == order.tenant_id,
+            ).with_for_update()) is None:
+                return
             if order.marketplace == "wb":
                 from app.services.fbs_order_billing_service import confirmed_order_handover_dates
 
@@ -147,13 +155,6 @@ async def reverse_fbs_order_billing(
                     # WMS-406: a later buyer cancellation does not undo work
                     # already performed by the warehouse at successful handover.
                     return
-            # Use the same seller fence as continuation and invoice creation,
-            # before touching ledger rows. No concurrent continuation can add
-            # another charge outside this cancellation's fixed active set.
-            if order.seller_id is not None:
-                await session.scalar(select(Seller.id).where(
-                    Seller.id == order.seller_id, Seller.tenant_id == order.tenant_id,
-                ).with_for_update(key_share=True))
             charge, reversal = aliased(BillingLedgerEntry), aliased(BillingLedgerEntry)
             active_services = list(await session.scalars(
                 select(charge.service_code).outerjoin(
