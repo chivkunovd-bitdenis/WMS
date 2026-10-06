@@ -263,3 +263,11 @@ Run37539919041 attempt1/source85607798 завершён FAILURE: actual Linux141
 Независимый source-only review47817 активного cohort опубликован5a9b55bbf50c449fea2655be9d1b0207d17daf55 и включён как commona98fcd70e: async capture/drain/first-error identity/cleanup lock accepted,9frozen source hashes сохранены,2+7 receipts прочитаны без повторных запусков. Effectiveness/ref/SOURCE approval не дано.
 
 Полный raw causal checkpoint ещё сохраняется исполнителем. Его предварительный ledger указывает555native/Queue requests,540Add/540Remove balanced, peak225×1,190,464=267,854,400bytes;15 отказавших GetTask не получили admission/decode events при неизменных225 live allocations. Initial explicit memory dump success=false обязательно останется ограничением. После публикации exact keys/clock/raw reviewer проверит этот причинный вывод; до этого новая product correction, migration/pin/fullCI/deploy не объявляются.
+
+## Checkpoint 22:43 UTC: raw admission ledger сохранён; causal reviewer активен
+
+Developer185447983635437533cfe49e8418c3e451c76233 опубликован и включён как common732d0b6c5:57 docs files, все55 manifest members и исходныеgzipSHA проверены. [Полный target causal отчёт](../../evidence/WMS-672/target-cache-trace-linux-20261007/comparison-result.md) связывает555 native calls/Queue requests,540balanced Add/Remove с полной tuple cachekey/target/color и clocks. Независимый reviewer ci_delta немедленно возобновлён на exact raw/ledger/source inference; отсутствиеCDPполяmaxlimit и initialdumpfalse сохраняются явно.
+
+Новая минимальная resource mechanism ещё не реализована. Разработчик передаёт конкретный план отдельно от оформления отчёта; после causal verdict отдельная существующая Sol testwriter сессия фиксирует новый контракт до кода. Далее тот же разработчик, actual LinuxC5, независимое ревью/отдельная аналитическая приёмка, accepted productref/SOURCEpin, полныйCI и обычный выпуск. Дополнительных разрешений не требуется. Product478/frozen7+2/11/C5, prepared228/1170, старые ref/pin/PR387/fullCI и runtime SHA сохранены.
+
+Вторичная ArtMaks работа остаётся вне общего релиза. Техническийreview новойresolverдельты PASS не равен приёмке: отдельныйаналитик77443e92 не принял actuallegacyHTTP same-key recovery послеfailed_before_submit и скрытыйspecificreason/genericerror. Эти доработки не блокируют652 и в его кандидат не переносятся.
