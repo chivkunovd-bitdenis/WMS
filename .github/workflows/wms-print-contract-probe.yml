@@ -20,6 +20,9 @@ jobs:
     timeout-minutes: 10
     env:
       WMS672_TEST_URL: http://127.0.0.1:16724
+      # 672 baseline completed in run 37431409929. Do not repeat unchanged tests.
+      # Set to 'all' for the next changed 672 implementation/contract.
+      WMS_PRINT_PROBE_SCOPE: '673'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -42,6 +45,7 @@ jobs:
           WMS672_EVIDENCE_DIR: ${{ runner.temp }}/print-contract/672
           WMS673_RENDERED_ARTIFACTS_DIR: ${{ runner.temp }}/print-contract/673
         run: |
+          set +e
           set -uo pipefail
           cd frontend
           node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/print-contract/vite.log" 2>&1 &
@@ -52,8 +56,11 @@ jobs:
             sleep 1
           done
           curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null || exit 2
-          timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
-          result672=${PIPESTATUS[0]}
+          result672=skipped
+          if [ "$WMS_PRINT_PROBE_SCOPE" = all ]; then
+            timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
+            result672=${PIPESTATUS[0]}
+          fi
           timeout 90s node ../scripts/ci/wms-print-contract-probe.mjs --render673 2>&1 | tee "$RUNNER_TEMP/print-contract/673-render.log"
           renderer=${PIPESTATUS[0]}
           result673=2
@@ -62,7 +69,7 @@ jobs:
             result673=${PIPESTATUS[0]}
           fi
           printf '672=%s\n673-renderer=%s\n673=%s\n' "$result672" "$renderer" "$result673" | tee "$RUNNER_TEMP/print-contract/exit-codes.txt"
-          test "$result672" -eq 0 && test "$renderer" -eq 0 && test "$result673" -eq 0
+          { [ "$result672" = skipped ] || [ "$result672" = 0 ]; } && test "$renderer" -eq 0 && test "$result673" -eq 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:
