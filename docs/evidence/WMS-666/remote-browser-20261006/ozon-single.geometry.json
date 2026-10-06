@@ -1,0 +1,171 @@
+{
+  "url": "http://127.0.0.1:16666/app/ff/fbs?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57",
+  "bars": 1,
+  "lists": 1,
+  "oldButtons": false,
+  "activeFrames": 0,
+  "qr": {
+    "checked": false,
+    "disabled": true,
+    "color": "rgb(15, 23, 42)",
+    "checkboxColor": "rgba(0, 0, 0, 0.26)"
+  },
+  "settings": "​\nПечатать QR\nПечатать ЧЗ\n\n2\n\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки",
+  "bar": {
+    "x": 71,
+    "y": 326.078125,
+    "width": 1443,
+    "height": 67.875,
+    "right": 1514,
+    "bottom": 393.953125
+  },
+  "controls": [
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 87,
+        "y": 338.078125,
+        "width": 498.546875,
+        "height": 42.875,
+        "right": 585.546875,
+        "bottom": 380.953125
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 597.546875,
+        "y": 339.265625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 638.046875,
+        "bottom": 379.765625
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 773.3125,
+        "y": 339.265625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 813.8125,
+        "bottom": 379.765625
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Экземпляров ЧЗ: меньше",
+      "bounds": {
+        "x": 946.28125,
+        "y": 346.265625,
+        "width": 26.5,
+        "height": 26.5,
+        "right": 972.78125,
+        "bottom": 372.765625
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Экземпляров ЧЗ: больше",
+      "bounds": {
+        "x": 990.78125,
+        "y": 346.265625,
+        "width": 26.5,
+        "height": 26.5,
+        "right": 1017.28125,
+        "bottom": 372.765625
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 1029.28125,
+        "y": 339.265625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 1069.78125,
+        "bottom": 379.765625
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Отменить последний скан",
+      "bounds": {
+        "x": 1273.5,
+        "y": 343.265625,
+        "width": 32.5,
+        "height": 32.5,
+        "right": 1306,
+        "bottom": 375.765625
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 1318,
+        "y": 359.953125,
+        "width": 180,
+        "height": 21,
+        "right": 1498,
+        "bottom": 380.953125
+      }
+    }
+  ],
+  "controlOverlap": false,
+  "rows": [
+    {
+      "id": "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-order",
+      "text": "Футболка Ozon, позиция A — длинное название позиции, коллекция осень, размер и цвет\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\nM\n\nБрюки Ozon, позиция B — длинное название позиции, коллекция осень, размер и цвет\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\nL\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ",
+      "bounds": {
+        "x": 71,
+        "y": 485.46875,
+        "width": 1443,
+        "height": 158.875,
+        "right": 1514,
+        "bottom": 644.34375
+      },
+      "actions": [
+        {
+          "label": "ТЗ",
+          "bounds": {
+            "x": 1361,
+            "y": 548.109375,
+            "width": 64,
+            "height": 33.59375,
+            "right": 1425,
+            "bottom": 581.703125
+          }
+        },
+        {
+          "label": "Печать ЧЗ и ШК",
+          "bounds": {
+            "x": 1429,
+            "y": 548.65625,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1461.5,
+            "bottom": 581.15625
+          }
+        },
+        {
+          "label": "Перепечатать",
+          "bounds": {
+            "x": 1465.5,
+            "y": 548.65625,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1498,
+            "bottom": 581.15625
+          }
+        }
+      ]
+    }
+  ],
+  "rowOverlap": false
+}
