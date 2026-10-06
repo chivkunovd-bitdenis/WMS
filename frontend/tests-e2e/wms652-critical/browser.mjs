@@ -1,0 +1,307 @@
+// WMS652 critical real-screen contracts. No mocked product controllers.
+import { spawn, execFileSync } from 'node:child_process';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { createRequire } from 'node:module';
+import assert from 'node:assert/strict';
+import { workspace, selectionFixtures } from './fixtures.mjs';
+const require = createRequire(new URL('../../package.json', import.meta.url));
+const bwip = require('bwip-js'), { PNG } = require('pngjs');
+const ORIGIN = 'http://127.0.0.1:16686';
+const dir = process.env.WMS652_EVIDENCE;
+if (!dir) throw Error('Set WMS652_EVIDENCE to a persistent evidence directory');
+await mkdir(dir,{recursive:true});
+const qrCodes = ['*DUIkWJJF', '*DUIkNEXT'];
+const cises = ['010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A','010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B'];
+const qrImages = await Promise.all(qrCodes.map(text => bwip.toBuffer({bcid:'qrcode',text,scale:3})));
+let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst;
+let cdp, mode='qr', selectionState, failedGroup, groupAttempts, addAttempts, createdRefs, heldAdd;
+const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
+class CDP {
+  constructor(url) {
+    this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();
+    this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });
+    this.ws.onmessage = event => {
+      const msg = JSON.parse(event.data);
+      if (msg.id) { const p = this.pending.get(msg.id); this.pending.delete(msg.id); if (p) { clearTimeout(p.timer); msg.error ? p.reject(Error(JSON.stringify(msg.error))) : p.resolve(msg.result); } }
+      else for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => errors.push(String(e)));
+    };
+  }
+  async send(method, params = {}) {
+    await this.ready; const id = ++this.next;
+    return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.pending.delete(id); reject(Error(`CDP timeout ${method}`)); }, 12000); this.pending.set(id, { resolve, reject, timer }); this.ws.send(JSON.stringify({ id, method, params })); });
+  }
+  on(method, callback) { this.listeners.set(method, [...this.listeners.get(method) ?? [], callback]); }
+}
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+async function evaluate(expression) {
+  const r = await cdp.send('Runtime.evaluate', { expression, returnByValue: true, awaitPromise: true });
+  if (r.exceptionDetails) throw Error(JSON.stringify(r.exceptionDetails));
+  return r.result.value;
+}
+async function until(expression, ms = 25000) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { if (await evaluate(`Boolean(${expression})`)) return; await sleep(150); }
+  throw Error(`UI timeout: ${expression}`);
+}
+async function fulfill(id, body, status = 200, type = 'application/json') {
+  const bytes = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));
+  await cdp.send('Fetch.fulfillRequest', { requestId: id, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: type }, { name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }], body: bytes.toString('base64') });
+}
+function prepareState(many) {
+  state = {'wb-a':workspace('wb-a','wb'),'wb-b':workspace('wb-b','wb')};
+  const a=state['wb-a'].orders[0], b=state['wb-b'].orders[0];
+  a.sticker.code=qrCodes[0]; b.sticker.code=qrCodes[1];
+  a.metadata.required=b.metadata.required=['sgtin'];
+  b.id='wb-next-order'; b.product.id='product-next'; b.wb_order_id=666002;
+  if(!many){ b.supply_id='wb-a';state['wb-a'].orders.push(b); }
+  for(const w of Object.values(state)) w.boxes=[];
+}
+function bindingTarget(one){return {order_id:one.id,wb_order_id:one.wb_order_id,product:one.product,
+ current_kiz:null,needs_confirmation:false,can_bind:true,block_reason:null,requires_honest_sign:true};}
+async function intercept({requestId,request}) {
+  const u=new URL(request.url),path=u.pathname.replace(/^\/api/,'');
+  if(u.origin===ORIGIN&&!u.pathname.startsWith('/api/')&&!path.startsWith('/assets/qr-'))return cdp.send('Fetch.continueRequest',{requestId});
+  if(u.origin==='http://127.0.0.1:17843'&&path==='/print'){
+    if(request.method==='OPTIONS')return fulfill(requestId,{});
+    const job=JSON.parse(request.postData);printLog.push(job);trace.push(`print:${job.idempotencyKey}`);
+    return fulfill(requestId,{receipt:`synthetic-${printLog.length}`});
+  }
+  if(u.origin!==ORIGIN){blocked.push(request.url);return cdp.send('Fetch.failRequest',{requestId,errorReason:'BlockedByClient'});}
+  const body=request.postData?JSON.parse(request.postData):null;
+  requestLog.push({method:request.method,path:path+u.search,body});
+  const ws=path.match(/^\/operations\/fbs-supplies\/([^/]+)\/workspace$/);
+  if(ws)return fulfill(requestId,state[ws[1]]);
+  if(mode==='selection'&&path.startsWith('/operations/'))return selectionBoundary(requestId,request.method,path,u,body);
+  if(path.endsWith('/worklist')||path==='/operations/fbs-assembly-tasks')return fulfill(requestId,{items:[],total:0,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
+  if(path==='/auth/me')return fulfill(requestId,{separate_marking_print_enabled:false});
+  if(path==='/fbs/assembly-time')return fulfill(requestId,{hours:0,orders:0});
+  if(path.endsWith('/order-print-tape'))return fulfill(requestId,{orders:[],order_errors:[],shortage:0});
+  const lookup=path==='/operations/fbs-orders/kiz/lookup';
+  if(lookup){
+    const one=state[u.searchParams.get('supply_id')]?.orders.find(o=>o.sticker.code===u.searchParams.get('sticker'));
+    if(!one)return fulfill(requestId,{detail:{code:'sticker_not_found',message:'Стикер не найден'}},404);
+    trace.push(`lookup:${one.id}`);
+    if(holdFirst&&one.id==='wb-a-order'){heldLookup=()=>fulfill(requestId,bindingTarget(one));return;}
+    return fulfill(requestId,bindingTarget(one));
+  }
+  const scan=path.match(/^\/operations\/fbs-supplies\/([^/]+)\/scan-auto-print$/);
+  if(scan){
+    if(!body.order_id){trace.push(`product-miss:${body.barcode}`);return fulfill(requestId,{detail:{code:'scan_product_not_found',message:'Не товарный ШК'}},404);}
+    const one=state[scan[1]].orders.find(o=>o.id===body.order_id);
+    assert(one&&one.sticker.code===body.barcode,'wrong sticker selection object');
+    trace.push(`select:${one.id}`);
+    return fulfill(requestId,{scan_id:`scan-${one.id}`,order_id:one.id,wb_order_id:one.wb_order_id,
+      replayed:false,binding_target:bindingTarget(one),reprint_recovery:null,requires_honest_sign:true,
+      qr_asset:{id:`qr-${one.id}`,kind:'order_sticker',status:'ready',content_type:'image/png',width_mm:58,height_mm:40,
+        preview_url:`/assets/qr-${one.id}.png`,download_url:null,checksum:null,applied_at:null,error:null},
+      codes:[],printed_codes:[],shortage:0,order_errors:[]});
+  }
+  if(path.startsWith('/assets/qr-'))return fulfill(requestId,qrImages[path.includes('wb-a-order')?0:1],200,'image/png');
+  if(path==='/operations/fbs-orders/kiz/validate')return fulfill(requestId,{valid:true});
+  if(path==='/operations/fbs-orders/kiz/commit'){
+    trace.push(`bind:${body.pairs[0].order_id}`);
+    return fulfill(requestId,body.pairs.map(p=>({order_id:p.order_id,status:'ok',code:'ok',bound_kiz:p.value})));
+  }
+  const copy=path.match(/\/scan-auto-print\/scan-(.+)\/reprint-claim$/);
+  if(copy)return fulfill(requestId,{claimed:true,started:false,kiz:cises[copy[1]==='wb-a-order'?0:1],code_id:null,has_label_artifact:false});
+  if(path.endsWith('/print-claim'))return fulfill(requestId,{claimed:true,started:false});
+  if(path.endsWith('/print-started'))return fulfill(requestId,{claimed:false,started:true});
+  const task=path.match(/^\/operations\/packaging-tasks\/task-([^/]+)$/);
+  if(task)return fulfill(requestId,{id:`task-${task[1]}`,document_number:task[1],display_number:task[1],status:'in_progress',
+    lines:state[task[1]].orders.map(o=>({id:`line-${o.id}`,product_id:o.product.id,product_name:o.product.name,
+      sku_code:o.product.sku,requires_honest_sign:true,packaging_instructions:'',qty_total:1,qty_need_pack:1,marking_available_count:0}))});
+  if(path.endsWith('/pack')){trace.push(`pack:${body.order_id}`);return fulfill(requestId,{});}
+  return fulfill(requestId,{detail:{code:'unhandled_synthetic_endpoint',message:path}},404);
+}
+async function scan(code) {
+  await until(`document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]')&&!document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]').disabled`,5000);
+  await evaluate(`document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]').focus()`);
+  await cdp.send('Input.insertText',{text:code});
+  await cdp.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+  await cdp.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
+}
+const chromePath=process.env.WMS652_CHROME||(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'google-chrome');
+const chrome=spawn(chromePath,['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update',
+ '--remote-debugging-port=16687',`--user-data-dir=${mkdtempSync(`${tmpdir()}/wms652-critical-chrome-`)}`,'about:blank'],{stdio:['ignore','pipe','pipe']});
+let chromeLog='';chrome.stderr.on('data',d=>{chromeLog+=d});chrome.stdout.on('data',d=>{chromeLog+=d});chrome.on('error',e=>{chromeLog+=String(e)});
+try {
+  let tabs;for(let i=0;i<100;i++){try{tabs=await(await fetch('http://127.0.0.1:16687/json/list')).json();break}catch{await sleep(100)}}
+  assert(tabs?.length,`Chrome unavailable: ${chromeLog}`);
+  cdp=new CDP(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);cdp.on('Fetch.requestPaused',intercept);
+  cdp.on('Runtime.exceptionThrown',e=>errors.push(e.exceptionDetails));
+  await cdp.send('Page.enable');await cdp.send('Runtime.enable');
+  await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
+  await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`
+    localStorage.clear();sessionStorage.clear();
+    localStorage.setItem('wms:fbs:scan-auto-print:unknown-tenant:unknown-user',JSON.stringify({printQr:true,printChz:false,reprintChz:true,reprintChzCopies:2}));
+    localStorage.setItem('wms.print.labelSizeId','60x80');
+    const p=new URLSearchParams(location.search),ids=(p.get('supply_ids')||p.get('supply_id')||'').split(',');
+    sessionStorage.setItem('wms:fbs:assembly:'+ids.join(',')+':stage','packing');
+    ids.forEach(id=>sessionStorage.setItem('wms:fbs:'+id+':stage','packing'));
+  `});
+  await cdp.send('Emulation.setDeviceMetricsOverride',{width:1600,height:1000,deviceScaleFactor:1,mobile:false});
+  for(const [id,query,many] of [['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]]){
+    try {
+    prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];heldLookup=undefined;holdFirst=true;
+    report.currentCase=`WMS652.realQr[${id}]`;
+    await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs?${query}`});
+    await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
+    await scan(qrCodes[0]);
+    for(let i=0;i<50&&!heldLookup;i++)await sleep(100);
+    assert(heldLookup,'input must reach product-miss then sticker lookup');
+    await scan(cises[0]);await scan(qrCodes[1]);await scan(cises[1]);
+    await heldLookup();
+    for(let i=0;i<100&&!trace.includes('pack:wb-next-order');i++)await sleep(100);
+    assert(trace.includes('pack:wb-next-order'),`next QR/KIZ did not complete: ${trace.join(' -> ')}`);
+    const selections=requestLog.filter(r=>r.path.endsWith('/scan-auto-print')&&r.body?.order_id);
+    assert.deepEqual(selections.map(r=>r.body.order_id),['wb-a-order','wb-next-order']);
+    assert.deepEqual(selections.map(r=>r.body.barcode),qrCodes);
+    assert.deepEqual(selections.map(r=>r.body.print_chz),[false,false]);
+    const commits=requestLog.filter(r=>r.path==='/operations/fbs-orders/kiz/commit');
+    assert.deepEqual(commits.map(r=>r.body.pairs),[
+      [{order_id:'wb-a-order',value:cises[0],confirmed:false,scan_auto_print_id:'scan-wb-a-order'}],
+      [{order_id:'wb-next-order',value:cises[1],confirmed:false,scan_auto_print_id:'scan-wb-next-order'}],
+    ]);
+    assert(commits.every(r=>r.body.scan_no_wb_wait===true));
+    assert.deepEqual(printLog.map(p=>p.idempotencyKey),['scan-wb-a-order','scan-wb-a-order:copy','scan-wb-a-order:copy:c2',
+      'scan-wb-next-order','scan-wb-next-order:copy','scan-wb-next-order:copy:c2']);
+    assert.deepEqual(printLog.map(p=>[p.widthMm,p.heightMm]),Array(6).fill([60,80]));
+    assert.equal(printLog[0].imageDataUrl,`data:image/png;base64,${qrImages[0].toString('base64')}`);
+    assert.equal(printLog[3].imageDataUrl,`data:image/png;base64,${qrImages[1].toString('base64')}`);
+    assert.equal(printLog[1].imageDataUrl,printLog[2].imageDataUrl);assert.equal(printLog[4].imageDataUrl,printLog[5].imageDataUrl);
+    assert.notEqual(printLog[1].imageDataUrl,printLog[4].imageDataUrl,'different canonical CIS must yield different exact copies');
+    for(const index of [1,4]){const image=PNG.sync.read(Buffer.from(printLog[index].imageDataUrl.split(',')[1],'base64'));assert.equal(image.width,720);assert.equal(image.height,960);}
+    const packs=requestLog.filter(r=>r.path.endsWith('/pack'));
+    assert.deepEqual(packs.map(r=>r.body),[{quantity:1,order_id:'wb-a-order',idempotency_key:'scan-wb-a-order:packed'},
+      {quantity:1,order_id:'wb-next-order',idempotency_key:'scan-wb-next-order:packed'}]);
+    assert.deepEqual(packs.map(r=>r.path),['/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',
+      `/operations/packaging-tasks/task-${many?'wb-b':'wb-a'}/lines/line-wb-next-order/pack`]);
+    assert.deepEqual(trace.filter(x=>x.startsWith('product-miss:')),qrCodes.map(q=>`product-miss:${q}`));
+    assert(trace.indexOf('print:scan-wb-a-order')<trace.indexOf('pack:wb-a-order'));
+    assert(trace.indexOf('pack:wb-a-order')<trace.indexOf('lookup:wb-next-order'));
+    assert(trace.indexOf('print:scan-wb-next-order:copy:c2')<trace.indexOf('pack:wb-next-order'));
+    assert.equal(blocked.length,0);assert.equal(errors.length,0);
+    await writeFile(`${dir}/${id.replaceAll(/[=,]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
+    report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
+    } catch(e) {
+      report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});
+      await writeFile(`${dir}/${id.replaceAll(/[=,]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
+      console.error(`${report.currentCase}: ${e}`);
+    }
+  }
+  await selectionContracts();
+  assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
+  report.status='PASS';
+}catch(e){report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
+finally{
+  await writeFile(`${dir}/result.json`,JSON.stringify(report,null,2));
+  await writeFile(`${dir}/last-requests.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
+  await writeFile(`${dir}/chrome.log`,chromeLog);cdp?.ws.close();chrome.kill();
+}
+// True OrdersScreen selection and true create/group/add dialogs: only HTTP is synthetic.
+async function selectionBoundary(requestId,method,path,u,body){
+  const page=items=>({items,total:items.length,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
+  if(path==='/operations/fbs-orders/worklist')return fulfill(requestId,page(u.searchParams.get('status_group')==='new'?selectionState.orders:[]));
+  if(path==='/operations/fbs-supplies/worklist')return fulfill(requestId,page(selectionState.supplies));
+  if(path==='/operations/fbs-assembly-tasks'){
+    if(method==='POST')return fulfill(requestId,{id:`assembly-${requestLog.length}`,number:'000652',created_at:'2026-10-06T08:00:00Z',
+      created_by:{id:'tester',name:'Тестировщик'},supplies:body.supply_ids.map(id=>({id,marketplace:'wb',name:id,seller:{id:'seller-a',name:'Альфа'},
+        status:'draft',orders_count:1,picked_count:0,units_count:1,picked_units_count:0,packed_count:0}))});
+    return fulfill(requestId,{items:[]});
+  }
+  if(path==='/operations/fbs-supplies/preflight'){
+    const one=selectionState.orders.find(o=>o.id===body.order_ids[0]);
+    return fulfill(requestId,{compatible:true,issues:[],summary:{marketplace:'wb',seller:one.seller,wb_warehouse:one.wb_warehouse,
+      wms_warehouse:one.wms_warehouse,orders_count:body.order_ids.length,cargo_type:'mgt',buyer_type:'individual',required_marking_count:0,pvz_blocked_count:0}});
+  }
+  if(path==='/operations/fbs-supplies/from-orders'){
+    const key=body.order_ids.join(',');groupAttempts[key]=(groupAttempts[key]||0)+1;
+    if(key===failedGroup&&groupAttempts[key]===1)return fulfill(requestId,{detail:{code:'fixture_refused',message:'synthetic definite refusal',retryable:false}},422);
+    const id=`created-${key.replaceAll(',','-')}`;createdRefs.push(id);
+    state[id]=workspace(id,'wb');state[id].orders=[];state[id].supply.packaging_task_id=null;state[id].stage='composition';
+    return fulfill(requestId,state[id],201);
+  }
+  if(path==='/operations/fbs-supplies/compatible/orders/batch'){
+    addAttempts++;
+    if(addAttempts===1){heldAdd=()=>fulfill(requestId,{detail:{code:'fixture_refused',message:'synthetic definite refusal',retryable:false}},422);
+      return;}
+    state.compatible=workspace('compatible','wb');state.compatible.orders=[];state.compatible.stage='composition';state.compatible.supply.packaging_task_id=null;
+    return fulfill(requestId,state.compatible);
+  }
+  if(path.endsWith('/cargo-places'))return fulfill(requestId,[]);
+  return fulfill(requestId,{detail:{code:'unhandled_synthetic_endpoint',message:path}},404);
+}
+async function click(selector){await until(`document.querySelector(${JSON.stringify(selector)})`);await evaluate(`document.querySelector(${JSON.stringify(selector)}).click()`);}
+async function freshSelection(id){
+  mode='selection';selectionState=selectionFixtures();state={...state};failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;
+  requestLog=[];printLog=[];blocked=[];errors=[];trace=[];report.currentCase=id;
+  await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs`});
+  await until(`document.querySelector('[data-testid="fbs-order-order-a"] input[type=checkbox]')`);
+}
+async function select(ids){for(const id of ids)await click(`[data-testid="fbs-order-${id}"] input[type=checkbox]`);}
+async function saveCase(id){
+  assert.equal(blocked.length,0);assert.equal(errors.length,0);
+  await writeFile(`${dir}/${id.replaceAll(/[^A-Za-z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
+  report.cases.push({id,status:'PASS'});console.log(`${id}: PASS`);
+}
+async function openCreate(){await evaluate(`[...document.querySelectorAll('[data-testid="fbs-selection-bar"] button')].find(b=>b.innerText==='Сформировать поставку').click()`);}
+async function selectionContracts(){
+  const one='WMS652.selection[single-create]';await freshSelection(one);await select(['order-a2','order-a']);
+  await click('[data-testid="fbs-selected-open"]');
+  await until(`document.querySelector('[data-testid="fbs-selected-list"]')`);
+  const text=await evaluate(`document.querySelector('[data-testid="fbs-selected-list"]').innerText`);
+  assert(text.includes('Товар order-a2')&&text.includes('Товар order-a'));assert(!text.includes('Товар unselected'));assert(!text.includes('Товар order-b'));
+  await evaluate(`[...document.querySelectorAll('[role=dialog] button')].find(b=>b.innerText==='Закрыть').click()`);
+  await openCreate();await until(`document.querySelector('[data-testid="fbs-create-submit"]')&&!document.querySelector('[data-testid="fbs-create-submit"]').disabled`);
+  const preflight=requestLog.filter(r=>r.path==='/operations/fbs-supplies/preflight');
+  assert(preflight.length>0);assert.deepEqual(preflight.at(-1).body.order_ids,['order-a2','order-a']);
+  await click('[data-testid="fbs-create-submit"]');
+  for(let i=0;i<50&&!createdRefs.length;i++)await sleep(100);
+  assert.deepEqual(requestLog.filter(r=>r.path==='/operations/fbs-supplies/from-orders').map(r=>r.body.order_ids),[['order-a2','order-a']]);
+  assert.deepEqual(createdRefs,['created-order-a2-order-a']);await saveCase(one);
+
+  const grouped='WMS652.selection[seller-warehouse-group-retry]';await freshSelection(grouped);failedGroup='order-b';
+  await select(['order-b','order-c','order-a']);await openCreate();
+  await until(`document.querySelector('[data-testid="fbs-group-create-submit"]')&&!document.querySelector('[data-testid="fbs-group-create-submit"]').disabled`);
+  assert.equal(await evaluate(`document.querySelectorAll('[data-testid^="fbs-group-create-row-"]').length`),3);
+  assert.deepEqual(requestLog.filter(r=>r.path==='/operations/fbs-supplies/preflight').map(r=>r.body.order_ids),[['order-a'],['order-c'],['order-b']]);
+  await click('[data-testid="fbs-group-create-submit"]');
+  await until(`document.querySelector('[data-testid="fbs-group-create-submit"]')?.innerText.includes('Повторить (1)')`);
+  assert.deepEqual(createdRefs,['created-order-a','created-order-c']);
+  // The selected IDs remain until all groups succeeded; successful groups
+  // are retained by the real dialog and never posted again on retry.
+  assert(await evaluate(`document.querySelector('[data-testid="fbs-selection-bar"]').innerText.includes('3')`));
+  await click('[data-testid="fbs-group-create-submit"]');
+  for(let i=0;i<50&&createdRefs.length!==3;i++)await sleep(100);
+  const requestedGroups=requestLog.filter(r=>r.path==='/operations/fbs-supplies/from-orders').map(r=>r.body.order_ids.join(','));
+  assert.equal(requestedGroups.length,4);assert.deepEqual(requestedGroups.slice(0,3).sort(),['order-a','order-b','order-c']);assert.equal(requestedGroups[3],'order-b');
+  assert.deepEqual([...createdRefs].sort(),['created-order-a','created-order-b','created-order-c']);
+  for(let i=0;i<50&&requestLog.filter(r=>r.method==='POST'&&r.path==='/operations/fbs-assembly-tasks').length<2;i++)await sleep(100);
+  assert.deepEqual(requestLog.filter(r=>r.method==='POST'&&r.path==='/operations/fbs-assembly-tasks').map(r=>r.body.supply_ids),[['created-order-a','created-order-c'],['created-order-b']]);
+  await saveCase(grouped);
+
+  const add='WMS652.selection[add-existing-refusal-retry]';await freshSelection(add);await select(['order-a2','order-a']);
+  await click('[data-testid="fbs-05-add-existing-open"]');
+  await until(`document.querySelector('[data-testid="fbs-05-existing-supply-select"] [role=combobox]')`);
+  await evaluate(`document.querySelector('[data-testid="fbs-05-existing-supply-select"] [role=combobox]').focus()`);
+  await cdp.send('Input.dispatchKeyEvent',{type:'keyDown',key:'ArrowDown',code:'ArrowDown',windowsVirtualKeyCode:40});
+  await cdp.send('Input.dispatchKeyEvent',{type:'keyUp',key:'ArrowDown',code:'ArrowDown',windowsVirtualKeyCode:40});
+  await until(`document.querySelector('[role=listbox]')`);
+  const options=await evaluate(`[...document.querySelectorAll('[role=listbox] [role=option]')].map(o=>o.dataset.value)`);
+  assert.deepEqual(options,['compatible']);await click('[role=option][data-value="compatible"]');
+  await click('[data-testid="fbs-05-add-existing-submit"]');
+  for(let i=0;i<50&&!heldAdd;i++)await sleep(100);
+  assert(heldAdd,'add HTTP boundary not reached');
+  assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-05-add-existing-submit"]').disabled`),true);
+  await click('[data-testid="fbs-05-add-existing-submit"]');assert.equal(addAttempts,1,'busy button must not add twice');
+  await heldAdd();await until(`document.querySelector('[data-testid="fbs-add-existing-error"]')`);
+  assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-order-order-a"] input').checked`),true);
+  assert.equal(await evaluate(`document.querySelector('[data-testid="fbs-order-order-a2"] input').checked`),true);
+  await click('[data-testid="fbs-05-add-existing-submit"]');
+  for(let i=0;i<50&&addAttempts!==2;i++)await sleep(100);
+  assert.deepEqual(requestLog.filter(r=>r.path==='/operations/fbs-supplies/compatible/orders/batch').map(r=>r.body.order_ids),[['order-a2','order-a'],['order-a2','order-a']]);
+  assert.equal(addAttempts,2,'one refused and one successful explicit add, with no silent repeat');
+  await saveCase(add);
+}

@@ -1,0 +1,48 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A26%3A43.468Z&to=2026-10-06T18%3A26%3A43.468Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}
