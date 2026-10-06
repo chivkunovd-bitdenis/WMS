@@ -1,0 +1,110 @@
+{
+  "base": "f6066d68bd198794602a6e8916612d0d3b32460f",
+  "test_first": "030d75c01549b32a67ed4af405fea984b5974025",
+  "reviewed_source": "d736a02427c916979b2117ebecc1ace10dc9cc07",
+  "old_contract_preserved": {
+    "parameters": [
+      "",
+      "dump",
+      "archive",
+      "listing",
+      "empty",
+      "network",
+      "retry"
+    ],
+    "assertions": 23,
+    "assertions_sha256": "ddbfe3e8447dd54825fadf01f437a1adb6fa18f2ed583f58172cb1ed962fc3da"
+  },
+  "frozen_new_contract_unchanged": true,
+  "new_contract_sha256": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+  "product_and_ci_and_policy_diff": [],
+  "fixture_change": {
+    "added_lines": 17,
+    "deleted_lines": 0
+  },
+  "actual_junit": {
+    "tests": 15,
+    "failures": 0,
+    "errors": 0,
+    "skips": 0,
+    "cases": [
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[]",
+        "time": "1.896"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[dump]",
+        "time": "1.831"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[archive]",
+        "time": "1.375"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[listing]",
+        "time": "1.646"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[empty]",
+        "time": "1.621"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[network]",
+        "time": "0.761"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_deploy_requires_verified_backup_before_migration[retry]",
+        "time": "2.786"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_workflow_bootstrap_checks_git_and_separates_stdin[False]",
+        "time": "0.395"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup",
+        "name": "test_workflow_bootstrap_checks_git_and_separates_stdin[True]",
+        "time": "0.291"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_all_seven_backup_variants_and_original_assertions_are_preserved",
+        "time": "0.004"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+        "time": "1.991"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+        "time": "0.623"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+        "time": "0.544"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
+        "time": "0.673"
+      },
+      {
+        "classname": "tests.test_prod_deploy_backup_gate_boundary",
+        "name": "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]",
+        "time": "0.592"
+      }
+    ]
+  },
+  "production_shell_sha256": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6",
+  "real_server_verifier_sha256": "f0f2481151e75dea0a5dc314fba30acca8760452229cade9f9d6927321288ab6"
+}
