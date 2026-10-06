@@ -2208,15 +2208,18 @@ export function FfFbsSupplyWorkspace({
     setNotice(null)
     try {
       let snapshot = workspace
-      let recoveryError: string | null = null
+      const recoveryErrors: string[] = []
+      const attemptedBoxIds = new Set<string>()
       // One retry can return a whole recovered physical group.  Recompute from
       // that fresh server snapshot before considering another box: this avoids
       // one browser click producing several WB creates for the same group.
       while (true) {
         const missing = snapshot.boxes.find((box) => (
-          !box.wb_trbx_id || box.qr_asset?.status !== 'ready' || !box.qr_asset.preview_url
+          (!box.wb_trbx_id || box.qr_asset?.status !== 'ready' || !box.qr_asset.preview_url)
+          && !attemptedBoxIds.has(box.id)
         ))
         if (!missing) break
+        attemptedBoxIds.add(missing.id)
         try {
           const next = await retryFbsPackingBoxQr(token, authHeaders, supplyIdAtStart, missing.id)
           if (!write.isCurrent() || !write.matchesShownSupply(next)) return
@@ -2224,8 +2227,7 @@ export function FfFbsSupplyWorkspace({
           if (write.isLatest()) setWorkspace(next)
         } catch (cause) {
           if (!write.isCurrent()) return
-          recoveryError = cause instanceof Error ? fbsErrorText(cause.message) : 'WB не вернул QR грузоместа.'
-          break
+          recoveryErrors.push(cause instanceof Error ? fbsErrorText(cause.message) : 'WB не вернул QR грузоместа.')
         }
       }
       if (!write.isCurrent() || snapshot.supply.id !== supplyIdAtStart) return
@@ -2238,12 +2240,12 @@ export function FfFbsSupplyWorkspace({
         !box.wb_trbx_id || box.qr_asset?.status !== 'ready' || !box.qr_asset.preview_url
       ))
       if (assets.length === 0) {
-        setError(recoveryError ?? 'Этикетки грузомест WB не готовы. Проверьте результат создания коробов; внутренние QR WMS вместо них не печатаются.')
+        setError(recoveryErrors[0] ?? 'Этикетки грузомест WB не готовы. Проверьте результат создания коробов; внутренние QR WMS вместо них не печатаются.')
         return
       }
       if (notReady.length > 0) {
-        setNotice(recoveryError
-          ? `${recoveryError} Не получены QR ${notReady.length} коробов; печатаются остальные ${assets.length}.`
+        setNotice(recoveryErrors.length > 0
+          ? `${recoveryErrors[0]} Не получены QR ${notReady.length} коробов; печатаются остальные ${assets.length}.`
           : `QR ${notReady.length} коробов ещё не готов — печатаются остальные ${assets.length}.`)
       }
       openAssetPreview(assets)
@@ -3965,7 +3967,12 @@ export function FfFbsSupplyWorkspace({
                     }
                     const boxQuantity = [...grouped.values()].reduce((sum, row) => sum + row.quantity, 0)
                     const remainingOrderQuantity = assigned.reduce((sum, order) => sum + fbsUnassignedPositionQuantity(order.positions, assignedBoxPositionIds), 0)
-                    const ozonQrDisabled = isOzonSupply && (assigned.length === 0 || remainingOrderQuantity > 0)
+                    // A label that Ozon has already issued remains printable even
+                    // after the related order is absent from this stale snapshot.
+                    // Only obtaining a new label requires a complete assignment.
+                    const ozonQrDisabled = isOzonSupply
+                      && !box.qr_asset?.preview_url
+                      && (assigned.length === 0 || remainingOrderQuantity > 0)
                     return (
                       <Box key={box.id}>
                         <Stack direction="row" spacing={1.5} sx={{ alignItems: 'center', px: 2, py: 1.25 }}>

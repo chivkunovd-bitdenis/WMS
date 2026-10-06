@@ -5,6 +5,7 @@ the old PVZ-only restriction was dropped on 2026-08-17."""
 
 from __future__ import annotations
 
+import asyncio
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -36,11 +37,15 @@ from app.models.fbs_trbx import FbsTrbx
 from app.models.fbs_wb_operation import (
     WB_OPERATION_STATE_FAILED,
     WB_OPERATION_STATE_PENDING_CONFIRMATION,
+    FbsWbOperation,
 )
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.document_event_service import record_document_mutation, system_document_events
-from app.services.fbs_supply_reconcile_service import get_cargo_operation_by_idempotency
+from app.services.fbs_supply_reconcile_service import (
+    OPERATION_KIND_CARGO_PLACES_CREATE,
+    get_cargo_operation_by_idempotency,
+)
 
 
 def _distribution_state(supply: FbsSupply) -> dict[str, object]:
@@ -92,6 +97,7 @@ class DeliveryBoxReadiness:
 WITHOUT_DISTRIBUTION_KEY_PREFIX = "no-distribution:"
 RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX = "retired-no-dist:"
 CREATION_IDEMPOTENCY_KEY_MAX_LENGTH = 128
+_recovery_locks: dict[uuid.UUID, asyncio.Lock] = {}
 
 
 async def get_delivery_box_readiness(
@@ -709,24 +715,43 @@ async def retry_box_qr(
     *,
     actor_user_id: uuid.UUID | None,
 ) -> None:
-    box = await _get_box(session, tenant_id, supply_id, box_id)
-    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
-    if box.trbx is None:
+    # PostgreSQL serializes this with the supply row lock.  The in-process
+    # lock gives the same recovery boundary to the SQLite test environment,
+    # whose SELECT FOR UPDATE is a no-op, without broadening tenant/supply
+    # scope or introducing a durable queue/state.
+    lock = _recovery_locks.setdefault(supply_id, asyncio.Lock())
+    async with lock:
+        supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
+        box = await _get_box(session, tenant_id, supply_id, box_id)
+        if box.trbx_id is not None:
+            await _fetch_box_qrs(session, tenant_id, supply_id, http_client)
+            return
+
+        stored_key = box.creation_idempotency_key
+        if not stored_key:
+            raise FbsPackingBoxError("box_cargo_place_unresolved")
+        group, creation_key = await _recovery_group_and_raw_key(
+            session,
+            tenant_id,
+            supply,
+            box,
+            stored_key,
+        )
+        # A confirmed readback commits FbsTrbx before QR retrieval.  If the
+        # latter failed, the physical link may have rolled back.  Restore it
+        # from the same warehouse-box identity before consulting operation
+        # state or attempting another create.
+        await _link_existing_trbxes(session, supply.id, group)
+        box = await _get_box(session, tenant_id, supply_id, box_id)
+        if box.trbx_id is not None:
+            await _fetch_box_qrs(session, tenant_id, supply_id, http_client)
+            return
+
         # These are physical boxes from a completed operator action whose WB
         # create was rejected or lost after the local transaction.  Do not
         # invent a second group: create_boxes finds the original boxes by
         # their durable operator key and asks the cargo-operation journal to
         # reconcile an unknown result before it can issue another WB POST.
-        creation_key = box.creation_idempotency_key
-        if not creation_key:
-            raise FbsPackingBoxError("box_cargo_place_unresolved")
-        group = await _boxes_by_creation_key(
-            session,
-            tenant_id,
-            supply_id,
-            supply.seller_id,
-            creation_key,
-        )
         if not group or any(member.trbx_id is not None for member in group):
             # A partial link has no unambiguous physical-to-WB mapping.  It
             # must be resolved from WB, never completed by a guessed create.
@@ -762,11 +787,75 @@ async def retry_box_qr(
             recovery_wb_trbx_ids_before=before_raw,
         )
         return
+
+
+async def _fetch_box_qrs(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    http_client: httpx.AsyncClient,
+) -> None:
     try:
-        # This service only fetches/caches QR assets for existing WB cargo places.
         await pvz_svc.fetch_trbx_stickers(session, tenant_id, supply_id, http_client)
     except pvz_svc.FbsShipmentPvzError as exc:
         raise FbsPackingBoxError(exc.code) from exc
+
+
+async def _recovery_group_and_raw_key(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+    box: FbsPackingBox,
+    stored_key: str,
+) -> tuple[list[FbsPackingBox], str]:
+    """Return the exact physical group and its journal-proven raw retry key."""
+    group = await _boxes_by_stored_creation_keys(session, tenant_id, supply.id, [stored_key])
+    if not group or box.id not in {member.id for member in group}:
+        raise FbsPackingBoxError("box_cargo_place_unresolved")
+
+    direct = await get_cargo_operation_by_idempotency(session, supply.seller_id, stored_key)
+    if direct is not None and direct.local_entity_id == supply.id:
+        return group, stored_key
+
+    marker_prefix = next(
+        (
+            prefix
+            for prefix in (
+                WITHOUT_DISTRIBUTION_KEY_PREFIX,
+                RETIRED_WITHOUT_DISTRIBUTION_KEY_PREFIX,
+            )
+            if stored_key.startswith(prefix)
+        ),
+        None,
+    )
+    if marker_prefix is None:
+        raise FbsPackingBoxError("wb_pending_confirmation")
+    raw_prefix = stored_key[len(marker_prefix):]
+    candidates = list(
+        (
+            await session.scalars(
+                select(FbsWbOperation).where(
+                    FbsWbOperation.tenant_id == tenant_id,
+                    FbsWbOperation.seller_id == supply.seller_id,
+                    FbsWbOperation.operation_kind == OPERATION_KIND_CARGO_PLACES_CREATE,
+                    FbsWbOperation.local_entity_type == "fbs_supply",
+                    FbsWbOperation.local_entity_id == supply.id,
+                    FbsWbOperation.idempotency_key.startswith(raw_prefix),
+                )
+            )
+        ).all()
+    )
+    group_ids = {member.id for member in group}
+    proven = []
+    for candidate in candidates:
+        candidate_group = await _boxes_by_creation_key(
+            session, tenant_id, supply.id, supply.seller_id, candidate.idempotency_key
+        )
+        if {member.id for member in candidate_group} == group_ids:
+            proven.append(candidate.idempotency_key)
+    if len(set(proven)) != 1:
+        raise FbsPackingBoxError("wb_pending_confirmation")
+    return group, proven[0]
 
 
 async def get_boxes_for_workspace(

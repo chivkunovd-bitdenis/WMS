@@ -430,6 +430,16 @@ async def _reconcile_trbxes_from_wb(
     for idx, wb_trbx_id in enumerate(wb_trbx_ids):
         trbx = by_wb_id.get(wb_trbx_id)
         draft = boxes[idx] if idx < len(boxes) else None
+        if (
+            trbx is not None
+            and draft is not None
+            and trbx.packaging_box_id is not None
+            and trbx.packaging_box_id != draft.packaging_box_id
+        ):
+            # A WB ID already bound to another physical box is evidence that
+            # this pending delta is not attributable to the retrying group.
+            # Never reassign it merely because the number of remote IDs fits.
+            raise FbsShipmentPvzError("wb_pending_confirmation")
         if trbx is None:
             trbx = FbsTrbx(
                 supply_id=supply.id,
@@ -495,16 +505,22 @@ async def _ensure_cargo_qrs(
     *,
     trbxes: list[FbsTrbx] | None = None,
 ) -> None:
-    try:
-        await ensure_cargo_place_qr_assets(
-            session,
-            tenant_id,
-            supply,
-            http_client,
-            trbxes=trbxes,
-        )
-    except FbsPrintAssetError as exc:
-        raise _wrap_print_asset_error(exc) from exc
+    targets = trbxes if trbxes is not None else list(supply.trbxes)
+    for trbx in targets:
+        try:
+            await ensure_cargo_place_qr_assets(
+                session,
+                tenant_id,
+                supply,
+                http_client,
+                trbxes=[trbx],
+            )
+            # QR files are an independently recoverable projection.  Once WB
+            # returned a real label, retain it even when a later cargo-place
+            # request fails, so bulk print can use the ready part.
+            await session.commit()
+        except FbsPrintAssetError as exc:
+            raise _wrap_print_asset_error(exc) from exc
 
 
 async def list_cargo_places(
