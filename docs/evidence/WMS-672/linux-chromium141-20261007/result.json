@@ -1,0 +1,32 @@
+{
+  "scope": "isolated full print-regressions job; not full release candidate CI",
+  "run_id": 37532590419,
+  "job_id": 112505432837,
+  "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37532590419",
+  "run_sha": "9f96c0c53fa82c5343d4640eac59c1b886f640ab",
+  "product_parent": "646cb4b0cfd2ef465149e92ddb061ccf19fa43c0",
+  "changed_path": ".github/workflows/ci.yml",
+  "diagnostic_workflow_integrated": false,
+  "playwright": "1.56.1",
+  "chromium": "141.0.7390.37",
+  "c5": "PASS unchanged 300-label test plus explicit corrected retry",
+  "artifact_id": 11444889879,
+  "artifact_name": "release-print-9f96c0c53fa82c5343d4640eac59c1b886f640ab-37532590419-1",
+  "archive_sha256": "4ac4e9105e23fdc886cb8a1baa86fb89832fa22cdaf494f5cec0d304d7e3ae4c",
+  "counts": {
+    "672": 11,
+    "672_remaining": 6,
+    "673": 5,
+    "critical_fbs": 43
+  },
+  "failures": 0,
+  "skips": 0,
+  "raw_sha256": {
+    "672-remaining.tap": "d2c1e111c9f53cc5f8b35375d9ffeb5b0084bbc897ad8863659eecdd295e9b79",
+    "672.tap": "71e7ea9c94c99c5515f11ca258ce0223ef2b3b37499895a8873f0d69378d1312",
+    "critical-fbs-result.json": "0114c8019e8f49f64dedabc0571cfde8cf611ecfb9c5b52b75b4bf60196fb346",
+    "673.json": "4398d09bf4713495e08212ff0114dde6c7378dacdd57ed0f3b713119316bc77b"
+  },
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC"
+}
