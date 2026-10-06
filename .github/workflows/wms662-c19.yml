@@ -29,7 +29,7 @@ jobs:
           path: proof
       - uses: actions/checkout@v4
         with:
-          ref: 245b09e27288d09569b80a702711a4291793b864
+          ref: 7fb13f788a2d98efaa575493856b5b504363f3af
           path: product
       - uses: actions/setup-python@v5
         with:
