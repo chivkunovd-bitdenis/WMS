@@ -1,0 +1,31 @@
+2026-10-06T13:54:34.6126844Z ##[group]Run # Keep the frozen Docker-aware database identity guard and bind the
+2026-10-06T13:54:34.6127386Z [36;1m# Keep the frozen Docker-aware database identity guard and bind the[0m
+2026-10-06T13:54:34.6127830Z [36;1m# service alias only to this runner's published loopback port.[0m
+2026-10-06T13:54:34.6128223Z [36;1mecho '127.0.0.1 postgres' | sudo tee -a /etc/hosts[0m
+2026-10-06T13:54:34.6128692Z [36;1mpython -c "import socket; assert set(socket.gethostbyname_ex('postgres')[2]) == {'127.0.0.1'}"[0m
+2026-10-06T13:54:34.6130057Z [36;1mpython -c "import psycopg; c = psycopg.connect('***127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_675_incident'); c.close()"[0m
+2026-10-06T13:54:34.6130702Z [36;1mpytest -n 0 -q -s tests/test_wms675_recovery_scenario.py[0m
+2026-10-06T13:54:34.6169574Z shell: /usr/bin/bash -e {0}
+2026-10-06T13:54:34.6169957Z env:
+2026-10-06T13:54:34.6170263Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.16/x64
+2026-10-06T13:54:34.6170806Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib/pkgconfig
+2026-10-06T13:54:34.6171235Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+2026-10-06T13:54:34.6171592Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+2026-10-06T13:54:34.6172034Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.16/x64
+2026-10-06T13:54:34.6172403Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.16/x64/lib
+2026-10-06T13:54:34.6173074Z   WMS_TEST_DATABASE_URL: postgresql+psycopg_***postgres:5432/wms_test_675_incident
+2026-10-06T13:54:34.6173623Z ##[endgroup]
+2026-10-06T13:54:34.6282480Z 127.0.0.1 postgres
+2026-10-06T13:54:37.0017194Z warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+2026-10-06T13:54:48.5883639Z From https://github.com/chivkunovd-bitdenis/WMS
+2026-10-06T13:54:48.5884055Z  * [new branch]        etalon     -> origin/etalon
+2026-10-06T13:54:52.2381175Z WMS675 isolated database: wms_test_675_incident 172.18.0.2:5432
+2026-10-06T13:54:52.2381921Z WMS675 recovery verified: expense=26 reserve=16->1 facts=11->26 charges=22->52 existing IDs preserved; repeat expense/facts/charges delta=0; SKU deltas=4/8/5/0/2/7
+2026-10-06T13:54:52.4642017Z .
+2026-10-06T13:54:52.4643027Z =============================== warnings summary ===============================
+2026-10-06T13:54:52.4643752Z app/main.py:19
+2026-10-06T13:54:52.4645072Z   /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+2026-10-06T13:54:52.4647061Z     from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+2026-10-06T13:54:52.4647750Z 
+2026-10-06T13:54:52.4648175Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2026-10-06T13:54:52.4648990Z 1 passed, 1 warning in 3.58s
