@@ -1,0 +1,10 @@
+test_empty_active_permanent_reference_still_refuses_promotion (review_frozen_tests.PromoteGuardsTests.test_empty_active_permanent_reference_still_refuses_promotion) ... ok
+test_parses_every_br_and_semicolon_separated_permanent_reference (review_frozen_tests.PromoteGuardsTests.test_parses_every_br_and_semicolon_separated_permanent_reference) ... ok
+test_promotes_only_permanent_tests_and_updates_references (review_frozen_tests.PromoteGuardsTests.test_promotes_only_permanent_tests_and_updates_references) ... ok
+test_protected_original_stays_registered_and_second_promotion_is_idempotent (review_frozen_tests.PromoteGuardsTests.test_protected_original_stays_registered_and_second_promotion_is_idempotent) ... ok
+test_rejects_test_outside_supported_trees (review_frozen_tests.PromoteGuardsTests.test_rejects_test_outside_supported_trees) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.791s
+
+OK
