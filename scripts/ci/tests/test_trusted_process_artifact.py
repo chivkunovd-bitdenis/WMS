@@ -7,16 +7,16 @@ import json
 import unittest
 import zipfile
 
-from scripts.ci.tests.test_trusted_process_check import AnchorFixture, B, H, M, REPO
+from scripts.ci.tests.test_trusted_process_check import REPO, AnchorFixture, B, H, M
 
 
 class ArtifactFixture(AnchorFixture):
     def __init__(self):
         super().__init__()
-        self.metadata = dict(version=1, sha=M, head_sha=H, base_sha=B, run_id=10,
-                             run_attempt=1, policy_sha256=self.digest())
-        self.artifacts = [dict(id=90, name=f'process-proof-{M}-10-1', expired=False,
-                              size_in_bytes=2000, workflow_run={'id': 10, 'head_sha': H})]
+        self.metadata = {'version': 1, 'sha': M, 'head_sha': H, 'base_sha': B, 'run_id': 10,
+                         'run_attempt': 1, 'policy_sha256': self.digest()}
+        self.artifacts = [{'id': 90, 'name': f'process-proof-{M}-10-1', 'expired': False,
+                           'size_in_bytes': 2000, 'workflow_run': {'id': 10, 'head_sha': H}}]
         self.entries = [('execution.json', None)]
         self.advance_attempt = False
         self.run_reads = 0

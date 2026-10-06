@@ -4,13 +4,13 @@ import importlib
 import io
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from scripts.ci.tests.test_trusted_process_artifact import ArtifactFixture
-from scripts.ci.tests.test_trusted_process_check import H, REPO
+from scripts.ci.tests.test_trusted_process_check import REPO, H
 
 
 class TrustedCliTests(unittest.TestCase):
@@ -46,9 +46,8 @@ class TrustedCliTests(unittest.TestCase):
     def test_cli_cannot_publish_from_pr_flag_or_outside_workflow(self):
         for args, env in [(['--pr', '7', '--publish'], {}),
                           (['--pr', '7', '--publish'], {'GITHUB_ACTIONS': 'true'})]:
-            with self.subTest(args=args, env=env), contextlib.redirect_stderr(io.StringIO()):
-                with self.assertRaises(SystemExit):
-                    self.invoke(args, env)
+            with self.subTest(args=args, env=env), contextlib.redirect_stderr(io.StringIO()), self.assertRaises(SystemExit):
+                self.invoke(args, env)
 
     def test_missing_proof_publishes_failure_only_on_exact_pr_head(self):
         self.f.artifacts = []
