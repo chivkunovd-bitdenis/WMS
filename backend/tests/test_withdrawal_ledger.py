@@ -8,8 +8,10 @@ import importlib.util
 import io
 import json
 import uuid
+from contextvars import ContextVar
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -42,6 +44,7 @@ from app.models.marking_withdrawal import (
 from app.models.product import Product
 from app.models.seller import Seller
 from app.models.seller_staff_permissions import SellerStaffPermissions
+from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
 from app.models.tenant import Tenant
 from app.models.user import User
 from app.models.warehouse import Warehouse
@@ -67,10 +70,68 @@ from app.services.withdrawal_recovery import (
 from app.services.withdrawal_service import create_operation, retry_operation
 
 INN = "7701234567"
+_SYNTHETIC_SALES: dict[str, list[dict]] = {}
+_LEGACY_SALES_ENABLED = ContextVar("legacy_sales_enabled", default=False)
+
+
+@pytest.fixture(autouse=True)
+def legacy_sales_http(monkeypatch):
+    """Supply synthetic sale evidence at HTTP only for this legacy test module."""
+    _SYNTHETIC_SALES.clear()
+    original_send = httpx.AsyncClient.send
+    original_sleep = asyncio.sleep
+    enabled = _LEGACY_SALES_ENABLED.set(True)
+    from app.core.settings import settings
+    from app.services import wb_sales_report
+
+    class RedisBoundary:
+        async def eval(self, *args):
+            return 0
+
+        async def get(self, key):
+            return None
+
+        async def set(self, key, value, **kwargs):
+            pass
+
+        async def aclose(self):
+            pass
+
+    # The legacy boundary needs no real broker. Injecting a fake broker URL here
+    # also made unrelated runtime gate tests construct a CRPT HTTP client.
+    # Shared Redis/rate/cache contracts have their own explicit Redis fixture.
+    monkeypatch.setattr(settings, "celery_broker_url", None)
+    monkeypatch.setattr(wb_sales_report, "Redis", SimpleNamespace(
+        from_url=lambda *args, **kwargs: RedisBoundary()))
+
+    async def send(client, request, **kwargs):
+        if request.url.host and request.url.host.endswith("wildberries.ru"):
+            assert request.method == "GET"
+            assert request.url.path == "/api/v1/supplier/sales"
+            assert request.url.params["flag"] == "0"
+            rows = _SYNTHETIC_SALES.get(request.headers.get("Authorization", ""), [])
+            cursor = request.url.params["dateFrom"]
+            page = [] if not rows or cursor == rows[-1]["lastChangeDate"] else rows
+            return httpx.Response(200, json=page, request=request)
+        assert isinstance(client._transport, (httpx.MockTransport, httpx.ASGITransport))
+        return await original_send(client, request, **kwargs)
+
+    async def pause(seconds):
+        # Skip vendor minute waits only; preserve scheduling in concurrency cases.
+        if seconds < 30:
+            await original_sleep(seconds)
+
+    monkeypatch.setattr(httpx.AsyncClient, "send", send)
+    monkeypatch.setattr(asyncio, "sleep", pause)
+    yield
+    _SYNTHETIC_SALES.clear()
+    _LEGACY_SALES_ENABLED.reset(enabled)
 
 
 async def seed(
     session: AsyncSession,
+    *,
+    sales_evidence: bool | None = None,
 ) -> tuple[WithdrawalScope, FbsOrderMarking, FbsOrder, FbsSupply]:
     tenant = Tenant(name="withdrawal", slug=uuid.uuid4().hex)
     session.add(tenant)
@@ -111,6 +172,34 @@ async def seed(
     )
     session.add(order)
     await session.flush()
+    if _LEGACY_SALES_ENABLED.get() if sales_evidence is None else sales_evidence:
+        if _LEGACY_SALES_ENABLED.get():
+            from app.core.settings import settings
+
+            # Activate the fake sales broker only when synthetic sale data is
+            # seeded. Gate-only tests create no sales and keep broker=None.
+            # The shared fixture's monkeypatch restores the original setting.
+            settings.celery_broker_url = "redis://legacy-fixture.invalid/0"
+        order.wb_rid = f"legacy-fixture-{order.id}"
+        token = f"legacy-fixture-{seller.id}"
+        session.add(
+            SellerWildberriesCredentials(
+                seller_id=seller.id,
+                marketplace_token_encrypted=encrypt_secret(token),
+                marketplace_scope_ok=True,
+            )
+        )
+        _SYNTHETIC_SALES[token] = [
+            {
+                "srid": order.wb_rid,
+                "saleID": f"S-{order.id}",
+                "finishedPrice": "999999999999999.99",
+                "date": datetime.now(UTC).isoformat(),
+                "lastChangeDate": (datetime.now(UTC) + timedelta(seconds=1)).isoformat(),
+                "nmId": order.wb_nm_id,
+                "barcode": order.wb_barcode,
+            }
+        ]
     marking = FbsOrderMarking(
         tenant_id=tenant.id,
         order_id=order.id,
@@ -243,7 +332,7 @@ async def test_registry_server_scope_and_moscow_date(db_session: AsyncSession) -
 
 
 async def test_create_reload_and_overlap_resume_without_duplicate(db_session: AsyncSession) -> None:
-    scope, marking, _, _ = await seed(db_session)
+    scope, marking, order, _ = await seed(db_session)
     request_id = uuid.uuid4()
     op = await create_operation(
         db_session, scope, row_ids=[marking.id], client_request_id=request_id
@@ -264,7 +353,21 @@ async def test_create_reload_and_overlap_resume_without_duplicate(db_session: As
     assert await db_session.scalar(select(func.count()).select_from(WithdrawalItem)) == 1
     item = (await current_items(db_session, scope, op.id))[0]
     assert item.cis == marking.value and item.product_cost == 99999999999999999
-    assert item.price_snapshot_id is not None
+    # R20/R22: a persisted exact sales source replaces the old WMS price snapshot.
+    async with SessionLocal() as reader:
+        reloaded = (await current_items(reader, scope, op.id))[0]
+        evidence = reloaded.preflight_evidence["wb_sale"]
+        raw = _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]
+        assert reloaded.id == item.id and reloaded.product_cost == 99999999999999999
+        assert evidence["source"] == "/api/v1/supplier/sales"
+        assert evidence["order_id"] == str(order.id) and evidence["srid"] == order.wb_rid
+        assert evidence["saleID"] == raw["saleID"]
+        assert evidence["finishedPrice"] == "999999999999999.99"
+        assert evidence["date"] == raw["date"]
+        assert evidence["lastChangeDate"] == raw["lastChangeDate"]
+        assert evidence["raw_sale"] == raw
+        assert evidence["complete"] is True and evidence["received_at"]
+        assert evidence["pages"] == 2 and evidence["row_count"] == 1
     with pytest.raises(WithdrawalError, match="idempotency_selection_mismatch"):
         await create_operation(
             db_session, scope, row_ids=[uuid.uuid4()], client_request_id=request_id
@@ -312,16 +415,19 @@ async def test_price_less_order_feed_keeps_price_sent_with_new_order(
 
 async def test_registry_missing_price_is_an_actual_local_error(db_session: AsyncSession) -> None:
     scope, _, order, _ = await seed(db_session)
+    # The valid historical snapshot is deliberately unable to rescue missing sale price.
     await capture_wb_price_snapshot(
         db_session,
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"currencyCode": 840, "finalPrice": 100},
+        row={"currencyCode": 643, "finalPrice": 12345},
     )
+    _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]["finishedPrice"] = None
+    await db_session.commit()
     rows, _ = await registry(db_session, scope)
     assert rows[0]["status"] == "error"
-    assert rows[0]["error"]["code"] == "missing_rub_final_price"
+    assert rows[0]["error"]["code"] == "invalid_sale_price"
 
 
 async def test_partial_success_survives_neighbour_failure_and_retry(
@@ -423,28 +529,47 @@ async def test_retry_retains_old_price_error_and_new_attempt(db_session: AsyncSe
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"finalPrice": 100, "currencyCode": 840},
+        row={"finalPrice": 77700, "currencyCode": 643},
     )
+    raw_sale = _SYNTHETIC_SALES[f"legacy-fixture-{scope.seller_id}"][0]
+    raw_sale["finishedPrice"] = None
     op = await create_operation(
         db_session, scope, row_ids=[marking.id], client_request_id=uuid.uuid4()
     )
     await db_session.commit()
     old = (await current_items(db_session, scope, op.id))[0]
-    assert op.state == "failed" and old.error["code"] == "missing_rub_final_price"
+    assert op.state == "failed" and old.error["code"] == "invalid_sale_price"
+    old_evidence = json.dumps(old.preflight_evidence, sort_keys=True)
+    assert old.preflight_evidence["wb_sale"]["raw_sale"]["finishedPrice"] is None
+    assert old.preflight_evidence["wb_sale"]["srid"] == order.wb_rid
+    assert old.preflight_evidence["wb_sale"]["complete"] is True
     await capture_wb_price_snapshot(
         db_session,
         tenant_id=scope.tenant_id,
         seller_id=scope.seller_id,
         order_id=order.id,
-        row={"finalPrice": 12345, "currencyCode": 643},
+        row={"finalPrice": 88800, "currencyCode": 643},
     )
+    # One fresh complete report, not two contradictory versions in the same scan.
+    raw_sale["finishedPrice"] = "123.45"
+    raw_sale["lastChangeDate"] = (datetime.now(UTC) + timedelta(seconds=2)).isoformat()
     await db_session.commit()
     await retry_operation(db_session, scope, op.id, expected_attempt=1)
     await db_session.commit()
     new = (await current_items(db_session, scope, op.id))[0]
     assert new.attempt == 2 and new.product_cost == 12345 and new.document_id is None
-    assert old.state == "failed" and old.error["code"] == "missing_rub_final_price"
-    assert not old.holds_claim and old.price_snapshot_id != new.price_snapshot_id
+    assert old.state == "failed" and old.error["code"] == "invalid_sale_price"
+    assert not old.holds_claim and new.holds_claim
+    assert json.dumps(old.preflight_evidence, sort_keys=True) == old_evidence
+    assert new.preflight_evidence["wb_sale"]["finishedPrice"] == "123.45"
+    assert new.preflight_evidence["wb_sale"]["raw_sale"] == raw_sale
+    assert new.preflight_evidence["wb_sale"]["source"] == "/api/v1/supplier/sales"
+    assert new.preflight_evidence["wb_sale"]["order_id"] == str(order.id)
+    assert new.preflight_evidence["wb_sale"]["srid"] == order.wb_rid
+    assert new.preflight_evidence["wb_sale"]["complete"] is True
+    assert await db_session.scalar(select(func.count(WithdrawalItem.id)).where(
+        WithdrawalItem.operation_id == op.id, WithdrawalItem.holds_claim.is_(True),
+    )) == 1
     assert (await retry_operation(db_session, scope, op.id, expected_attempt=1)).attempt == 2
 
 

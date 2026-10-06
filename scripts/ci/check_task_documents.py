@@ -10,6 +10,38 @@ from pathlib import Path, PurePosixPath
 SCRIPT_PATH = "scripts/ci/check_task_documents.py"
 CONTRACT_CORRECTIONS_DIR = "docs/reviews/contract-corrections"
 
+# An exact-content allowlist, NOT a generic permission to edit fixture code.
+# Each pair is the entire historical file, including assertions, test names,
+# decorators, imports and control flow. Changing even one other byte is denied.
+# New pairs require a process change with RED regressions and independent review.
+FIXTURE_BLOB_PAIRS = {
+    "wms517-uuid-before-rollback": (
+        "WMS-517", "backend/tests/test_wms517_sales_contract.py",
+        "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",
+        "393cb668b7b7fb702f75d949ba41421a46f5676e",
+    ),
+    "wms517-explicit-sales-fixture": (
+        "WMS-517", "backend/tests/test_wms517_sales_contract.py",
+        "393cb668b7b7fb702f75d949ba41421a46f5676e",
+        "b5ddcb3b42810902b05da09726222b7e500684cf",
+    ),
+    "wms663-uuid-before-expire": (
+        "WMS-663", "backend/tests/test_wms663_customs_documents_contract.py",
+        "5fb61d0c51a6b4f2d84f3b5bf17397f622059283",
+        "4e1aff5a80445fa61b5697d60a26985427dfd28e",
+    ),
+    "wms663-exemplar-save-selector": (
+        "WMS-663", "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+        "21baad5243f664aca69ff817407ea17e66f59155",
+        "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
+    ),
+}
+LEGACY_SALES_COMPANION = {
+    "path": "backend/tests/test_withdrawal_ledger.py",
+    "before_blob": "d7f0d01d0f417aea487d0d7f616ba240b133f5a4",
+    "after_blob": "a7ba000fd763b978784d0a5b6f4120df188c3084",
+}
+
 
 def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
@@ -186,18 +218,173 @@ def is_task_contract_commit(root: Path, commit: str, task_id: str) -> bool:
     ).returncode == 0
 
 
+def git_blob(root: Path, commit: str, path: str) -> str | None:
+    result = subprocess.run(
+        ["git", "ls-tree", "-z", "--full-tree", commit, "--", path], cwd=root,
+        check=False, capture_output=True, text=True,
+    )
+    if result.returncode != 0 or "\t" not in result.stdout:
+        return None
+    metadata, found_path = result.stdout.removesuffix("\0").split("\t", 1)
+    fields = metadata.split()
+    # A matching blob in a symlink, executable or gitlink is not this test file.
+    if len(fields) != 3 or fields[:2] != ["100644", "blob"] or found_path != path:
+        return None
+    return fields[2]
+
+
+def ancestor(root: Path, older: str, newer: str) -> bool:
+    return subprocess.run(
+        ["git", "merge-base", "--is-ancestor", older, newer], cwd=root,
+        check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    ).returncode == 0
+
+
+def exact_fixture_corrections(
+    root: Path, task_id: str, contract_commit: str, ledger: dict,
+) -> tuple[dict[str, set[str]], list[str]]:
+    """Validate an explicit, exact-content chain without relaxing legacy rules.
+
+    The committed ledger binds each independent review to one exact source and
+    correction. Git facts and artifacts are checked here; obtaining a real
+    independent Astra high verdict remains the controller's responsibility.
+    Companions prove the whole correction commit's scope but are not silently
+    promoted into frozen business contracts.
+    """
+    def fail(reason: str) -> tuple[dict[str, set[str]], list[str]]:
+        return {}, [f"{task_id}: fixture-only: {reason}"]
+
+    head = git(root, "rev-parse", "HEAD")
+    entries = ledger.get("fixture_corrections")
+    if (
+        ledger.get("task") != task_id or not isinstance(entries, list) or not entries
+        or any(key in ledger for key in (
+            "corrections", "contract_commit", "correction_commit", "files", "review",
+        ))
+    ):
+        return fail("неполный или смешанный формат")
+    # Per original contract and file, track exact reviewed SHA and content.
+    frontier: dict[str, dict[str, tuple[str, str]]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return fail("запись должна быть объектом")
+        original = entry.get("contract_commit")
+        source = entry.get("source_commit")
+        correction = entry.get("correction_commit")
+        if any(not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha)
+               for sha in (original, source, correction)):
+            return fail("нужны полные SHA исходного контракта, источника и коррекции")
+        if not is_task_contract_commit(root, original, task_id):
+            return fail("неизвестный исходный контракт")
+        if (source == correction or not ancestor(root, original, source)
+                or not ancestor(root, source, correction)
+                or not ancestor(root, correction, head)):
+            return fail("неверная последовательность коммитов")
+        parents = git(root, "rev-list", "--parents", "-n", "1", correction).split()
+        if len(parents) != 2:
+            return fail("коррекция должна быть обычным коммитом с одним родителем")
+        parent = parents[1]
+        frozen = {path for path in commit_changed_paths(root, original)
+                  if not path.startswith("docs/requirements/")}
+        if original not in frontier:
+            originals = {path: git_blob(root, original, path) for path in frozen}
+            if any(blob is None for blob in originals.values()):
+                return fail("исходные frozen файлы должны быть обычными Git blob")
+            frontier[original] = {path: (original, blob) for path, blob in originals.items()}
+        state = frontier[original]
+        files = entry.get("files")
+        companions = entry.get("companion_files", [])
+        if (not isinstance(files, list) or not files
+                or not isinstance(companions, list)):
+            return fail("нужны точные списки файлов")
+        expected: set[str] = set()
+        transforms = set()
+        for item in files:
+            if not isinstance(item, dict) or not isinstance(item.get("transform"), str):
+                return fail("неверное описание преобразования")
+            transform = item["transform"]
+            allowed = FIXTURE_BLOB_PAIRS.get(transform)
+            if allowed is None or allowed != (
+                task_id, item.get("path"), item.get("before_blob"), item.get("after_blob"),
+            ):
+                return fail("неподдерживаемое преобразование или изменены frozen expectations")
+            _, path, before, after = allowed
+            if path not in frozen or path in expected:
+                return fail("повторный или незамороженный файл")
+            expected.add(path)
+            transforms.add(transform)
+            prior_sha, prior_blob = state.get(path, (original, git_blob(root, original, path)))
+            if (source != prior_sha or before != prior_blob
+                    or git_blob(root, source, path) != before
+                    or git_blob(root, parent, path) != before
+                    or git_blob(root, correction, path) != after):
+                return fail("подменён source/blob или пропущена дельта цепочки")
+            state[path] = (correction, after)
+        required_companions = ([LEGACY_SALES_COMPANION]
+                               if "wms517-explicit-sales-fixture" in transforms else [])
+        if companions != required_companions:
+            return fail("неподдерживаемые дополнительные файлы")
+        for companion in required_companions:
+            path = companion["path"]
+            if (path in expected or path in frozen
+                    or git_blob(root, parent, path) != companion["before_blob"]
+                    or git_blob(root, correction, path) != companion["after_blob"]):
+                return fail("подменён точный companion blob")
+            expected.add(path)
+        if commit_changed_paths(root, correction) != expected:
+            return fail("коммит меняет не ровно перечисленные файлы")
+        review = entry.get("review")
+        if (not isinstance(review, dict) or review.get("model") != "gpt-6-astra"
+                or review.get("effort") != "high" or review.get("verdict") != "PASS"
+                or review.get("source_commit") != source
+                or review.get("correction_commit") != correction):
+            return fail("нет отдельного Astra high PASS точной дельты")
+        evidence_commit = review.get("evidence_commit")
+        evidence_blob = review.get("evidence_blob")
+        evidence = review.get("evidence")
+        if (not isinstance(evidence_commit, str)
+                or not re.fullmatch(r"[0-9a-f]{40}", evidence_commit)
+                or not isinstance(evidence_blob, str)
+                or not re.fullmatch(r"[0-9a-f]{40}", evidence_blob)
+                or not isinstance(evidence, str)
+                or not evidence.startswith("docs/reviews/")
+                or not evidence.endswith(".md")
+                or str(PurePosixPath(evidence)) != evidence
+                or ".." in PurePosixPath(evidence).parts
+                or correction == evidence_commit
+                or not ancestor(root, correction, evidence_commit)
+                or not ancestor(root, evidence_commit, head)
+                or git_blob(root, evidence_commit, evidence) != evidence_blob
+                or git_blob(root, head, evidence) != evidence_blob
+                or evidence not in commit_changed_paths(root, evidence_commit)):
+            return fail("нет неизменного отдельного review artifact в HEAD")
+        # Historical reports sometimes spell an unambiguous 9-character SHA.
+        evidence_text = git(root, "show", f"{evidence_commit}:{evidence}")
+        if not any(correction.startswith(token)
+                   for token in re.findall(r"\b[0-9a-f]{9,40}\b", evidence_text)):
+            return fail("review artifact не называет проверенную коррекцию")
+    baselines: dict[str, set[str]] = {}
+    for original, state in frontier.items():
+        for path, (sha, blob) in state.items():
+            if git_blob(root, head, path) != blob:
+                return fail(f"последующая мутация HEAD: {path}")
+            if original == contract_commit and sha != original:
+                baselines.setdefault(sha, set()).add(path)
+    if git(root, "rev-parse", "HEAD") != head:
+        return fail("HEAD изменился во время проверки; нужен повтор на точном SHA")
+    return baselines, []
+
+
 def reviewed_contract_correction(
     root: Path,
     task_id: str,
     contract_commit: str,
-    task_contracts: set[str],
-    frozen: list[str],
-) -> tuple[str | None, set[str], list[str]]:
-    """Return the reviewed correction SHA, or explain why its ledger is invalid.
+) -> tuple[dict[str, set[str]], list[str]]:
+    """Return independent correction baselines, or explain an invalid ledger.
 
     A correction is deliberately stricter than an ordinary follow-up commit: it
     may touch only files frozen by the original contract and must have a separate
-    machine-readable ledger recording the independent Astra-high PASS.  CI can
+    machine-readable ledger recording the independent Astra-high PASS. CI can
     validate the Git facts; the controller remains responsible for obtaining
     and recording the review before the ledger is committed.
     """
@@ -207,76 +394,93 @@ def reviewed_contract_correction(
         capture_output=True, text=True,
     )
     if ledger_result.returncode != 0:
-        return None, set(), []
+        return {}, []
     ledger_text = ledger_result.stdout.strip()
     try:
         ledger = json.loads(ledger_text)
     except json.JSONDecodeError:
-        return None, set(), [
+        return {}, [
             f"{task_id}: некорректный реестр коррекции контракта {ledger_rel}"
         ]
     if not isinstance(ledger, dict):
-        return None, set(), [
+        return {}, [
             f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
         ]
-    ledger_contract = str(ledger.get("contract_commit") or "")
-    correction = str(ledger.get("correction_commit") or "")
-    files = ledger.get("files")
-    review = ledger.get("review")
-    if (
-        ledger.get("task") != task_id
-        or not re.fullmatch(r"[0-9a-f]{40}", ledger_contract)
-        or not re.fullmatch(r"[0-9a-f]{40}", correction)
-        or not isinstance(files, list)
-        or not files
-        or any(not isinstance(path, str) or not path for path in files)
-        or not isinstance(review, dict)
-        or review.get("model") != "gpt-6-astra"
-        or review.get("effort") != "high"
-        or review.get("verdict") != "PASS"
-    ):
-        return None, set(), [
-            f"{task_id}: реестр коррекции контракта заполнен не полностью"
-        ]
-    if ledger_contract != contract_commit:
-        # One task may acquire several independent contract commits.  Its one
-        # correction ledger applies only to the exact existing contract named
-        # there; an absent or invented source commit must not disappear merely
-        # because this invocation is currently checking another contract.
-        if ledger_contract in task_contracts or is_task_contract_commit(
-            root, ledger_contract, task_id
+    if "fixture_corrections" in ledger:
+        return exact_fixture_corrections(root, task_id, contract_commit, ledger)
+    incomplete = [
+        f"{task_id}: реестр коррекции контракта заполнен не полностью"
+    ]
+    if ledger.get("task") != task_id:
+        return {}, incomplete
+    array_format = "corrections" in ledger
+    if array_format:
+        entries = ledger["corrections"]
+        if (
+            not isinstance(entries, list) or not entries
+            or any(key in ledger for key in ("contract_commit", "correction_commit", "files", "review"))
         ):
-            return None, set(), []
-        return None, set(), [
-            f"{task_id}: реестр ссылается на неизвестный исходный контракт"
-        ]
-    if correction == contract_commit:
-        return None, set(), [
-            f"{task_id}: коррекция должна быть отдельным последующим коммитом"
-        ]
-    for older, newer, label in (
-        (contract_commit, correction, "коррекция не следует за исходным контрактом"),
-        (correction, "HEAD", "коррекция отсутствует в текущей версии"),
-    ):
-        if subprocess.run(
-            ["git", "merge-base", "--is-ancestor", older, newer], cwd=root,
-            check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        ).returncode != 0:
-            return None, set(), [f"{task_id}: {label}"]
-    expected = set(files)
-    frozen_set = set(frozen)
-    if not expected.issubset(frozen_set) or (
-        len(frozen_set) > 1 and expected == frozen_set
-    ):
-        return None, set(), [
-            f"{task_id}: коррекция должна менять только часть исходного контракта"
-        ]
-    changed = commit_changed_paths(root, correction)
-    if changed != expected:
-        return None, set(), [
-            f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"
-        ]
-    return correction, expected, []
+            return {}, incomplete
+    else:
+        entries = [ledger]
+
+    baselines: dict[str, set[str]] = {}
+    corrected_by_contract: dict[str, set[str]] = {}
+    for entry in entries:
+        if not isinstance(entry, dict):
+            return {}, incomplete
+        original = str(entry.get("contract_commit") or "")
+        correction = str(entry.get("correction_commit") or "")
+        files = entry.get("files")
+        review = entry.get("review")
+        if (
+            not re.fullmatch(r"[0-9a-f]{40}", original)
+            or not re.fullmatch(r"[0-9a-f]{40}", correction)
+            or not isinstance(files, list) or not files
+            or any(not isinstance(path, str) or not path for path in files)
+            or len(files) != len(set(files))
+            or not isinstance(review, dict)
+            or review.get("model") != "gpt-6-astra"
+            or review.get("effort") != "high"
+            or review.get("verdict") != "PASS"
+        ):
+            return {}, incomplete
+        # Validate every entry, even when its original is before the CI range.
+        # A second contract for the task must not hide an invented source or
+        # an invalid correction of the first contract.
+        if not is_task_contract_commit(root, original, task_id):
+            return {}, [f"{task_id}: реестр ссылается на неизвестный исходный контракт"]
+        if correction == original:
+            return {}, [f"{task_id}: коррекция должна быть отдельным последующим коммитом"]
+        for older, newer, label in (
+            (original, correction, "коррекция не следует за исходным контрактом"),
+            (correction, "HEAD", "коррекция отсутствует в текущей версии"),
+        ):
+            if subprocess.run(
+                ["git", "merge-base", "--is-ancestor", older, newer], cwd=root,
+                check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+            ).returncode != 0:
+                return {}, [f"{task_id}: {label}"]
+        expected = set(files)
+        frozen = {
+            path for path in commit_changed_paths(root, original)
+            if not path.startswith("docs/requirements/")
+        }
+        # Preserve the historical single-file legacy ledger only. New array
+        # entries must always be strict subsets of their original contract.
+        if not expected.issubset(frozen) or (
+            expected == frozen and (array_format or len(frozen) > 1)
+        ):
+            return {}, [f"{task_id}: коррекция должна менять только часть исходного контракта"]
+        if commit_changed_paths(root, correction) != expected:
+            return {}, [f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"]
+        already_corrected = corrected_by_contract.setdefault(original, set())
+        if already_corrected & expected:
+            return {}, [f"{task_id}: файлы коррекций одного контракта пересекаются"]
+        already_corrected.update(expected)
+        if original == contract_commit:
+            baselines.setdefault(correction, set()).update(expected)
+    return baselines, []
 
 
 def contract_change_errors(root: Path, base: str) -> list[str]:
@@ -289,7 +493,6 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
     commits = git(root, "rev-list", "--reverse", f"{base}..HEAD").splitlines()
     errors = []
     contracts = []
-    contracts_by_task: dict[str, set[str]] = {}
     for commit in commits:
         subject = git(root, "show", "-s", "--format=%s", commit)
         match = re.fullmatch(r"(WMS-\d+): контракт тестов", subject)
@@ -303,25 +506,24 @@ def contract_change_errors(root: Path, base: str) -> list[str]:
             continue
         task_id = match[1]
         contracts.append((commit, task_id, frozen))
-        contracts_by_task.setdefault(task_id, set()).add(commit)
     for commit, task_id, frozen in contracts:
-        correction, corrected, correction_errors = reviewed_contract_correction(
-            root, task_id, commit, contracts_by_task[task_id], frozen
+        baselines, correction_errors = reviewed_contract_correction(
+            root, task_id, commit
         )
         errors.extend(correction_errors)
         if correction_errors:
             continue
         overlap = set()
+        corrected = set().union(*baselines.values())
         untouched = sorted(set(frozen) - corrected)
         if untouched:
             overlap.update(
                 git(root, "diff", "--no-renames", "--name-only", commit, "HEAD", "--", *untouched)
                 .splitlines()
             )
-        if corrected:
-            assert correction is not None
+        for correction, paths in baselines.items():
             overlap.update(
-                git(root, "diff", "--no-renames", "--name-only", correction, "HEAD", "--", *sorted(corrected))
+                git(root, "diff", "--no-renames", "--name-only", correction, "HEAD", "--", *sorted(paths))
                 .splitlines()
             )
         overlap = sorted(overlap)

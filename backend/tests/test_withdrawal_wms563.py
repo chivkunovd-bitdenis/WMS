@@ -7,7 +7,10 @@ from unittest.mock import Mock
 
 import httpx
 import pytest
-from test_withdrawal_ledger import seed
+from test_withdrawal_ledger import (
+    legacy_sales_http,  # noqa: F401 -- same synthetic I/O fixture
+    seed,
+)
 
 from app.api.deps import get_current_user
 from app.main import create_app

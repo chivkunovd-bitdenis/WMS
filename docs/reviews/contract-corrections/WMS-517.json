@@ -1,0 +1,83 @@
+{
+  "task": "WMS-517",
+  "fixture_corrections": [
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-uuid-before-rollback",
+          "before_blob": "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",
+          "after_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+        "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+        "evidence_commit": "445c78a378d04def5483e416b526d3cedc0c4e41",
+        "evidence": "docs/reviews/wms517-astra-096475c.md",
+        "evidence_blob": "e8ed0a702524e0717796846dbeba9e0b13756031"
+      }
+    },
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "correction_commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-explicit-sales-fixture",
+          "before_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e",
+          "after_blob": "b5ddcb3b42810902b05da09726222b7e500684cf"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "backend/tests/test_withdrawal_ledger.py",
+          "before_blob": "d7f0d01d0f417aea487d0d7f616ba240b133f5a4",
+          "after_blob": "a7ba000fd763b978784d0a5b6f4120df188c3084"
+        }
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+        "correction_commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+        "evidence_commit": "2882b25042cdd7b2b55818936c4aa2e5d53512aa",
+        "evidence": "docs/reviews/wms517-fixture-432516e8-astra.md",
+        "evidence_blob": "1b9f5e7838a45f25cf2ac43f8030e5ad3fd2dd27"
+      }
+    }
+  ],
+  "excluded_changes": [
+    {
+      "commit": "9b90320b58c51f8f5d35e6e90db3b855207834fb",
+      "source_commit": "3243caa2605ad8b3821d8f685920bfb70341dbdc",
+      "classification": "scope-only fake adapter; not a checker-supported original contract",
+      "reason": "Source subject includes R19 suffix and does not exactly equal WMS-517: контракт тестов. It cannot be an array correction source under this protocol.",
+      "verification": "Three added optional-argument fake lines; all 9 Python assertions and test names unchanged. No scoped independent correction PASS is inferred from product test success."
+    },
+    {
+      "commit": "427fc2cba5d09c78c691ca12277e66cff804fc69",
+      "classification": "approved business assertion migration; not scope-only",
+      "approval_commit": "6b85381722dafb690c3a2c4b90cce762b4b3643b",
+      "reason": "Price source, expected error code and retry evidence expectations change to finishedPrice sales. Commit also adds tests, a diagnostic and a review document; it is not a strict-subset frozen-file correction.",
+      "review_evidence": "docs/reviews/wms517-astra-096475c.md"
+    }
+  ],
+  "protocol_commit": "de8e8973549eaedbd3f6c34e779405a44a5141ad",
+  "protocol_review": {
+    "evidence_commit": "bed11e717fc9d30073550b71e7ddc19e332ef683",
+    "evidence": "docs/reviews/2026-10-06-wms652-astra-de8e897.md",
+    "verdict": "PASS",
+    "scope": "checker R36–R38 only; not product acceptance"
+  },
+  "scope": "Exact reviewed fixture-only corrections; business migration 427fc2 remains excluded. Product acceptance, full CI and release are separate evidence."
+}

@@ -233,6 +233,204 @@ class GitTests(unittest.TestCase):
         self.assertEqual(len(errors), 1)
         self.assertIn("изменён контракт тестов WMS-710", errors[0])
 
+    def sol61_correction_errors(self, effort):
+        rollout = self.rollout()
+        path = "backend/tests/test_contract.py"
+        self.write(path, "def test_contract(): assert old_check()\n")
+        contract = self.commit("WMS-722: контракт тестов")
+        self.write(path, "def test_contract(): assert corrected_check()\n")
+        correction = self.commit("WMS-722: correction")
+        ledger = {
+            "task": "WMS-722", "contract_commit": contract,
+            "correction_commit": correction, "files": [path],
+            "review": {"model": "gpt-6.1-sol", "effort": effort, "verdict": "PASS"},
+        }
+        self.write("docs/reviews/contract-corrections/WMS-722.json", json.dumps(ledger) + "\n")
+        self.commit("WMS-722: correction ledger")
+        return checker.contract_change_errors(self.root, rollout)
+
+    def test_sol61_high_review_cannot_accept_corrected_contract(self):
+        self.assertTrue(any("реестр коррекции" in error
+                            for error in self.sol61_correction_errors("high")))
+
+    def test_sol61_low_review_cannot_accept_corrected_contract(self):
+        self.assertTrue(any("реестр коррекции" in error
+                            for error in self.sol61_correction_errors("low")))
+
+    def disjoint_corrections(self):
+        rollout = self.rollout()
+        paths = [f"frontend/test_{name}.ts" for name in ("dom", "scope", "atomicity")]
+        for path in paths:
+            self.write(path, "assert original_check()\n")
+        contract = self.commit("WMS-723: контракт тестов")
+        entries = []
+        for path in paths[:2]:
+            self.write(path, "assert corrected_check()\n")
+            correction = self.commit("WMS-723: correct one test")
+            entries.append({
+                "contract_commit": contract, "correction_commit": correction,
+                "files": [path],
+                "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+            })
+        return rollout, paths, contract, entries
+
+    def save_corrections(self, entries, **extra):
+        ledger = {"task": "WMS-723", "corrections": entries, **extra}
+        self.write("docs/reviews/contract-corrections/WMS-723.json", json.dumps(ledger) + "\n")
+        self.commit("WMS-723: correction ledger")
+
+    def test_two_disjoint_corrections_keep_independent_frozen_baselines(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        self.save_corrections(entries)
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_array_corrections_reject_overlapping_files(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        self.write(paths[0], "assert another_correction()\n")
+        entries.append({**entries[0], "correction_commit": self.commit("WMS-723: second DOM correction")})
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("пересекаются" in error for error in errors), errors)
+
+    def test_array_corrections_reject_low_effort_review(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["review"]["effort"] = "low"
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_reject_sol_high_review(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["review"]["model"] = "gpt-6.1-sol"
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_reject_non_pass_review(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["review"]["verdict"] = "FAIL"
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_reject_unknown_original_contract(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["contract_commit"] = "f" * 40
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("неизвестный исходный контракт" in error for error in errors), errors)
+
+    def test_array_corrections_reject_non_contract_ancestor(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["contract_commit"] = rollout
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("неизвестный исходный контракт" in error for error in errors), errors)
+
+    def test_array_corrections_reject_extra_file_in_correction_commit(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        self.write(paths[1], "assert reviewed_scope_check()\n")
+        self.write("frontend/product.ts", "unapproved_product_change()\n")
+        entries[1]["correction_commit"] = self.commit("WMS-723: correction plus product change")
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("ровно перечисленные файлы" in error for error in errors), errors)
+
+    def test_array_corrections_reject_non_frozen_file(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        entries[1]["files"] = ["frontend/product.ts"]
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("только часть исходного контракта" in error for error in errors), errors)
+
+    def test_array_corrections_do_not_absorb_later_mutation_of_first_file(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        self.write(paths[0], "assert True\n")
+        self.commit("WMS-723: weaken first corrected file")
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any(paths[0] in error for error in errors), errors)
+
+    def test_array_corrections_preserve_untouched_original_file(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        self.write(paths[2], "assert True\n")
+        self.commit("WMS-723: weaken untouched test")
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any(paths[2] in error for error in errors), errors)
+
+    def test_array_corrections_reject_wholesale_replacement_in_one_commit(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        for path in paths:
+            self.write(path, "assert all_new_checks()\n")
+        entries = [{**entries[0], "files": paths,
+                    "correction_commit": self.commit("WMS-723: replace entire contract")}]
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("только часть исходного контракта" in error for error in errors), errors)
+
+    def test_array_corrections_reject_original_commit_as_correction(self):
+        rollout, _, contract, entries = self.disjoint_corrections()
+        entries[1]["correction_commit"] = contract
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("отдельным последующим коммитом" in error for error in errors), errors)
+
+    def test_array_corrections_reject_correction_outside_head_history(self):
+        rollout, paths, contract, entries = self.disjoint_corrections()
+        branch = self.git("branch", "--show-current")
+        self.git("checkout", "-q", "-b", "detached-correction", contract)
+        self.write(paths[1], "assert divergent_correction()\n")
+        entries[1]["correction_commit"] = self.commit("WMS-723: divergent correction")
+        self.git("checkout", "-q", branch)
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("отсутствует в текущей версии" in error for error in errors), errors)
+
+    def test_array_corrections_reject_empty_array(self):
+        rollout, _, _, _ = self.disjoint_corrections()
+        self.save_corrections([])
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_reject_non_object_entry(self):
+        rollout, _, _, entries = self.disjoint_corrections()
+        self.save_corrections([entries[0], "invalid"])
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_reject_ambiguous_legacy_fields(self):
+        rollout, _, contract, entries = self.disjoint_corrections()
+        self.save_corrections(entries, contract_commit=contract)
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("заполнен не полностью" in error for error in errors), errors)
+
+    def test_array_corrections_require_strict_subset_even_for_single_file_contract(self):
+        rollout = self.rollout()
+        path = "frontend/test_dom.ts"
+        self.write(path, "assert original_check()\n")
+        contract = self.commit("WMS-723: контракт тестов")
+        self.write(path, "assert corrected_check()\n")
+        correction = self.commit("WMS-723: correct only contract file")
+        self.save_corrections([{
+            "contract_commit": contract, "correction_commit": correction, "files": [path],
+            "review": {"model": "gpt-6-astra", "effort": "high", "verdict": "PASS"},
+        }])
+        errors = checker.contract_change_errors(self.root, rollout)
+        self.assertTrue(any("только часть исходного контракта" in error for error in errors), errors)
+
+    def test_array_corrections_validate_entries_for_contract_before_base(self):
+        rollout, paths, _, entries = self.disjoint_corrections()
+        self.save_corrections(entries)
+        later_base = self.git("rev-parse", "HEAD")
+        self.write("frontend/test_later.ts", "assert later_check()\n")
+        self.commit("WMS-723: контракт тестов")
+        self.assertEqual(checker.contract_change_errors(self.root, later_base), [])
+        entries[0]["files"] = [paths[2]]
+        self.save_corrections(entries)
+        errors = checker.contract_change_errors(self.root, later_base)
+        self.assertTrue(any("ровно перечисленные файлы" in error for error in errors), errors)
+
     def test_contract_correction_ledger_rejects_unreviewed_or_extra_files(self):
         rollout = self.rollout()
         path = "backend/tests/test_contract.py"
