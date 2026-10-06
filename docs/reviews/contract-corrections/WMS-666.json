@@ -4,7 +4,9 @@
     {
       "contract_commit": "0e078418bcb7ee45fa654b0d829e5de0ec80ebb0",
       "correction_commit": "a29e3b33b7dec663bceb8b4a56125f3ac8964729",
-      "files": ["frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx"],
+      "files": [
+        "frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx"
+      ],
       "review": {
         "model": "gpt-6-astra",
         "effort": "high",
@@ -13,28 +15,34 @@
     },
     {
       "contract_commit": "0e078418bcb7ee45fa654b0d829e5de0ec80ebb0",
-      "correction_commit": "5e10a98683b2ae91ce90d2e9078cc3ce86da23da",
-      "files": ["frontend/src/screens/v2/wms666ChangeScope.test.ts"],
+      "correction_commit": "b1d7e39d8a812e36b47685a409267a906c85ae55",
+      "files": [
+        "frontend/src/screens/v2/wms666ChangeScope.test.ts"
+      ],
       "review": {
         "model": "gpt-6-astra",
         "effort": "high",
-        "verdict": "PASS",
-        "session_id": "01a10fde-71bf-7242-9dda-4a1ad3572219",
-        "checker_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
-        "evidence": "Exact WMS-666 JSON allowance; adjacent task JSON and Markdown rejected; original rejection expectations intact; corrections disjoint within original contract. Proposed ledger accepted in memory with no contract-change errors."
+        "verdict": "PENDING",
+        "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+        "correction_commit": "b1d7e39d8a812e36b47685a409267a906c85ae55",
+        "evidence": "docs/reviews/wms666-task-scope-correction-20261006.md",
+        "reason": "Published test-only delta awaits actual independent review; no PASS is inferred from local tests."
       }
     },
     {
       "contract_commit": "071a05daca43a9c29a4152c6666601a9d9a5e5cd",
-      "correction_commit": "5e10a98683b2ae91ce90d2e9078cc3ce86da23da",
-      "files": ["frontend/src/screens/v2/wms666ChangeScope.test.ts"],
+      "correction_commit": "b1d7e39d8a812e36b47685a409267a906c85ae55",
+      "files": [
+        "frontend/src/screens/v2/wms666ChangeScope.test.ts"
+      ],
       "review": {
         "model": "gpt-6-astra",
         "effort": "high",
-        "verdict": "PASS",
-        "session_id": "01a10fde-71bf-7242-9dda-4a1ad3572219",
-        "checker_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
-        "evidence": "Only scope-test comment changed after this contract; scan fixture byte-identical to 071a05da. Strict subset and exact changed paths confirmed."
+        "verdict": "PENDING",
+        "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+        "correction_commit": "b1d7e39d8a812e36b47685a409267a906c85ae55",
+        "evidence": "docs/reviews/wms666-task-scope-correction-20261006.md",
+        "reason": "Published test-only delta awaits actual independent review; no PASS is inferred from local tests."
       }
     }
   ]
