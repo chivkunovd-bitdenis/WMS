@@ -48,9 +48,13 @@ class WbFbwPackagingXlsxExport:
 
 @dataclass(frozen=True)
 class _ExportRow:
-    box_id: uuid.UUID
-    box_created_at: datetime
+    request_marketplace: str
+    request_warehouse_id: uuid.UUID
+    box_id: uuid.UUID | None
+    box_created_at: datetime | None
     box_barcode: str | None
+    box_tenant_id: uuid.UUID | None
+    box_warehouse_id: uuid.UUID | None
     request_seller_id: uuid.UUID | None
     line_id: uuid.UUID | None
     line_created_at: datetime | None
@@ -62,6 +66,15 @@ class _ExportRow:
     product_wb_barcode: str | None
     product_wb_shelf_life: str | None
     barcode: str | None
+
+
+@dataclass(frozen=True)
+class _WorkbookRow:
+    product_barcode: str
+    quantity: int
+    box_barcode: str
+    box_id: uuid.UUID
+    line_id: uuid.UUID
 
 
 def _normalized(value: str | None) -> str | None:
@@ -116,9 +129,13 @@ async def export_wb_fbw_packaging_xlsx(
     """Build a read-only, one-query snapshot of a WB shipment's existing boxes."""
     rows_result = await session.execute(
         select(
+            MarketplaceUnloadRequest.marketplace,
+            MarketplaceUnloadRequest.warehouse_id,
             MarketplaceUnloadBox.id,
             MarketplaceUnloadBox.created_at,
             WarehouseBox.internal_barcode,
+            WarehouseBox.tenant_id,
+            WarehouseBox.warehouse_id,
             MarketplaceUnloadRequest.seller_id,
             MarketplaceUnloadBoxLine.id,
             MarketplaceUnloadBoxLine.created_at,
@@ -132,7 +149,10 @@ async def export_wb_fbw_packaging_xlsx(
             ProductBarcode.barcode,
         )
         .select_from(MarketplaceUnloadRequest)
-        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.request_id == MarketplaceUnloadRequest.id)
+        .outerjoin(
+            MarketplaceUnloadBox,
+            MarketplaceUnloadBox.request_id == MarketplaceUnloadRequest.id,
+        )
         .outerjoin(WarehouseBox, WarehouseBox.id == MarketplaceUnloadBox.warehouse_box_id)
         .outerjoin(
             MarketplaceUnloadBoxLine,
@@ -152,37 +172,40 @@ async def export_wb_fbw_packaging_xlsx(
             MarketplaceUnloadRequest.id == request_id,
             MarketplaceUnloadRequest.tenant_id == tenant_id,
         )
-        .where(MarketplaceUnloadRequest.marketplace == "wb")
     )
     raw_rows = [
         _ExportRow(*row)
         for row in rows_result.tuples().all()
     ]
     if not raw_rows:
-        request = await session.scalar(
-            select(MarketplaceUnloadRequest).where(
-                MarketplaceUnloadRequest.id == request_id,
-                MarketplaceUnloadRequest.tenant_id == tenant_id,
-            )
-        )
-        if request is None:
-            raise WbFbwPackagingExportError("Отгрузка не найдена или недоступна.")
+        raise WbFbwPackagingExportError("Отгрузка не найдена или недоступна.")
+    if raw_rows[0].request_marketplace != "wb":
         raise WbFbwPackagingExportError("Выгрузка XLSX доступна только для отгрузки WB.")
+    if not any(row.box_id is not None for row in raw_rows):
+        raise WbFbwPackagingExportError(
+            "В WB-отгрузке ещё нет коробов: создайте или привяжите существующий короб."
+        )
 
     wb_barcodes_by_product: dict[uuid.UUID, set[str]] = {}
     for row in raw_rows:
         if row.product_id is not None and (barcode := _normalized(row.barcode)) is not None:
             wb_barcodes_by_product.setdefault(row.product_id, set()).add(barcode)
 
-    export_rows: list[tuple[str, int, str]] = []
+    export_rows: list[_WorkbookRow] = []
     warnings: list[str] = []
     warned_product_ids: set[uuid.UUID] = set()
     handled_line_ids: set[uuid.UUID] = set()
     for row in raw_rows:
+        if row.box_id is None:
+            continue
         box_barcode = _normalized(row.box_barcode)
-        if box_barcode is None:
+        if (
+            box_barcode is None
+            or row.box_tenant_id != tenant_id
+            or row.box_warehouse_id != row.request_warehouse_id
+        ):
             raise WbFbwPackagingExportError(
-                f"У короба {row.box_id} нет связи с WarehouseBox или внутреннего ШК."
+                f"У короба {row.box_id} неверная связь с WarehouseBox или внутренний ШК."
             )
         if row.line_id is None:
             continue
@@ -224,7 +247,15 @@ async def export_wb_fbw_packaging_xlsx(
                     f"У товара «{row.product_name}» нет WB-баркода для выгрузки."
                 )
 
-        export_rows.append((product_barcode, row.quantity, box_barcode))
+        export_rows.append(
+            _WorkbookRow(
+                product_barcode=product_barcode,
+                quantity=row.quantity,
+                box_barcode=box_barcode,
+                box_id=row.box_id,
+                line_id=row.line_id,
+            )
+        )
         if (
             _normalized(row.product_wb_shelf_life) is not None
             and row.product_id not in warned_product_ids
@@ -236,4 +267,18 @@ async def export_wb_fbw_packaging_xlsx(
             )
             warned_product_ids.add(row.product_id)
 
-    return WbFbwPackagingXlsxExport(content=_workbook(export_rows), warnings=tuple(warnings))
+    # SQL row order is not a contract.  Define a stable file order and retain
+    # immutable ids as final tie-breakers, so retried reads of unchanged data
+    # produce the same XLSX even when the database chooses another scan order.
+    export_rows.sort(key=lambda row: str(row.line_id))
+    export_rows.sort(key=lambda row: str(row.box_id))
+    export_rows.sort(key=lambda row: row.product_barcode, reverse=True)
+    export_rows.sort(key=lambda row: 0 if row.product_barcode[:1].isdigit() else 1)
+    export_rows.sort(key=lambda row: row.box_barcode, reverse=True)
+
+    return WbFbwPackagingXlsxExport(
+        content=_workbook(
+            [(row.product_barcode, row.quantity, row.box_barcode) for row in export_rows]
+        ),
+        warnings=tuple(warnings),
+    )
