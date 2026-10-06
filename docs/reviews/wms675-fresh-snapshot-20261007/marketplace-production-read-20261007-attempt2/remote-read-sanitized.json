@@ -1,0 +1,1634 @@
+{
+  "transport": "production_api_scoped_HttpxOzonMarketplaceTransport",
+  "endpoint": "/v3/posting/fbs/get",
+  "semantic_operation": "read",
+  "writes": 0,
+  "config_changed": false,
+  "started_at_utc": "2026-10-06T20:56:24.628194+00:00",
+  "seed_count": 31,
+  "records": [
+    {
+      "posting_number": "0113371235-0054-3",
+      "started_at_utc": "2026-10-06T20:56:25.292436+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0113371235-0054-3",
+        "order_id": 39274172147,
+        "order_number": "0113371235-0054",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T18:44:34Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:43Z",
+        "fact_delivery_date": "2026-10-02T15:19:43.226019Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.485604+00:00"
+    },
+    {
+      "posting_number": "0144953533-0124-1",
+      "started_at_utc": "2026-10-06T20:56:25.485622+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0144953533-0124-1",
+        "order_id": 40046924285,
+        "order_number": "0144953533-0124",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T08:24:38Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:56Z",
+        "fact_delivery_date": "2026-10-02T15:20:55.858025Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.561023+00:00"
+    },
+    {
+      "posting_number": "0148656673-0134-1",
+      "started_at_utc": "2026-10-06T20:56:25.561034+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0148656673-0134-1",
+        "order_id": 40638364641,
+        "order_number": "0148656673-0134",
+        "status": "cancelled",
+        "substatus": "posting_canceled",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T13:21:09Z",
+        "shipment_date": "2026-10-01T15:00:00Z",
+        "delivering_date": null,
+        "fact_delivery_date": null,
+        "products": [
+          {
+            "sku": 1695134284,
+            "quantity": 1,
+            "offer_id": "video.nanny3"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 359,
+          "cancellation_type": "seller",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.633091+00:00"
+    },
+    {
+      "posting_number": "0153677007-0258-1",
+      "started_at_utc": "2026-10-06T20:56:25.633104+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0153677007-0258-1",
+        "order_id": 40148853279,
+        "order_number": "0153677007-0258",
+        "status": "delivering",
+        "substatus": "posting_on_way_to_city",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T06:20:42Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:03Z",
+        "fact_delivery_date": "2026-10-02T15:19:02.969458Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.704609+00:00"
+    },
+    {
+      "posting_number": "0164033835-0039-1",
+      "started_at_utc": "2026-10-06T20:56:25.704621+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0164033835-0039-1",
+        "order_id": 39653835419,
+        "order_number": "0164033835-0039",
+        "status": "delivering",
+        "substatus": "posting_on_way_to_city",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T18:45:38Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:01Z",
+        "fact_delivery_date": "2026-10-02T15:20:57.931504Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.770335+00:00"
+    },
+    {
+      "posting_number": "0172663629-0081-1",
+      "started_at_utc": "2026-10-06T20:56:25.770349+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0172663629-0081-1",
+        "order_id": 38968900845,
+        "order_number": "0172663629-0081",
+        "status": "delivering",
+        "substatus": "posting_on_way_to_city",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T12:05:47Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:40Z",
+        "fact_delivery_date": "2026-10-02T15:20:40.009774Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.843036+00:00"
+    },
+    {
+      "posting_number": "0181745532-0045-3",
+      "started_at_utc": "2026-10-06T20:56:25.843052+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0181745532-0045-3",
+        "order_id": 39627806012,
+        "order_number": "0181745532-0045",
+        "status": "cancelled",
+        "substatus": "posting_canceled",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T05:27:59Z",
+        "shipment_date": "2026-10-01T15:00:00Z",
+        "delivering_date": null,
+        "fact_delivery_date": null,
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 359,
+          "cancellation_type": "seller",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.914175+00:00"
+    },
+    {
+      "posting_number": "0187441457-0073-1",
+      "started_at_utc": "2026-10-06T20:56:25.914188+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0187441457-0073-1",
+        "order_id": 39504480305,
+        "order_number": "0187441457-0073",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T08:50:26Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:10Z",
+        "fact_delivery_date": "2026-10-02T15:20:10.500856Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:25 GMT",
+      "finished_at_utc": "2026-10-06T20:56:25.986069+00:00"
+    },
+    {
+      "posting_number": "0190055173-0461-1",
+      "started_at_utc": "2026-10-06T20:56:25.986085+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0190055173-0461-1",
+        "order_id": 38618170773,
+        "order_number": "0190055173-0461",
+        "status": "delivering",
+        "substatus": "posting_on_way_to_city",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T09:19:52Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:47Z",
+        "fact_delivery_date": "2026-10-02T15:20:46.985296Z",
+        "products": [
+          {
+            "sku": 1586484429,
+            "quantity": 1,
+            "offer_id": "video.nanny"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.058765+00:00"
+    },
+    {
+      "posting_number": "0236443586-0012-1",
+      "started_at_utc": "2026-10-06T20:56:26.058783+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0236443586-0012-1",
+        "order_id": 39416986082,
+        "order_number": "0236443586-0012",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T15:54:46Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:12Z",
+        "fact_delivery_date": "2026-10-02T15:21:08.150094Z",
+        "products": [
+          {
+            "sku": 1586466682,
+            "quantity": 1,
+            "offer_id": "aqua.skreb"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.131843+00:00"
+    },
+    {
+      "posting_number": "0249035122-0351-1",
+      "started_at_utc": "2026-10-06T20:56:26.131861+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0249035122-0351-1",
+        "order_id": 39172316514,
+        "order_number": "0249035122-0351",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T11:22:12Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:48Z",
+        "fact_delivery_date": "2026-10-02T15:20:48.771393Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.203479+00:00"
+    },
+    {
+      "posting_number": "0282817049-0013-1",
+      "started_at_utc": "2026-10-06T20:56:26.203499+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "0282817049-0013-1",
+        "order_id": 40152464633,
+        "order_number": "0282817049-0013",
+        "status": "cancelled",
+        "substatus": "posting_canceled",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T12:08:30Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": null,
+        "fact_delivery_date": null,
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 359,
+          "cancellation_type": "seller",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.273897+00:00"
+    },
+    {
+      "posting_number": "06383353-1897-1",
+      "started_at_utc": "2026-10-06T20:56:26.273919+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "06383353-1897-1",
+        "order_id": 44618021785,
+        "order_number": "06383353-1897",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T07:02:34Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:51Z",
+        "fact_delivery_date": "2026-10-02T15:20:50.856340Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.347803+00:00"
+    },
+    {
+      "posting_number": "21052558-0445-1",
+      "started_at_utc": "2026-10-06T20:56:26.347825+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "21052558-0445-1",
+        "order_id": 39867547310,
+        "order_number": "21052558-0445",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T19:16:37Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:40Z",
+        "fact_delivery_date": "2026-10-02T15:19:40.737314Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.424394+00:00"
+    },
+    {
+      "posting_number": "23388119-0163-1",
+      "started_at_utc": "2026-10-06T20:56:26.424407+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "23388119-0163-1",
+        "order_id": 39831678151,
+        "order_number": "23388119-0163",
+        "status": "delivering",
+        "substatus": "posting_on_way_to_city",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T15:17:52Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:03Z",
+        "fact_delivery_date": "2026-10-02T15:19:02.887331Z",
+        "products": [
+          {
+            "sku": 1586484429,
+            "quantity": 1,
+            "offer_id": "video.nanny"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.501261+00:00"
+    },
+    {
+      "posting_number": "28508065-0594-1",
+      "started_at_utc": "2026-10-06T20:56:26.501279+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "28508065-0594-1",
+        "order_id": 38957698097,
+        "order_number": "28508065-0594",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T18:41:10Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:35Z",
+        "fact_delivery_date": "2026-10-02T15:20:35.392288Z",
+        "products": [
+          {
+            "sku": 1586484429,
+            "quantity": 1,
+            "offer_id": "video.nanny"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.569915+00:00"
+    },
+    {
+      "posting_number": "31853470-0198-1",
+      "started_at_utc": "2026-10-06T20:56:26.569932+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "31853470-0198-1",
+        "order_id": 38458982974,
+        "order_number": "31853470-0198",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T10:37:41Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:18Z",
+        "fact_delivery_date": "2026-10-02T15:21:18.745387Z",
+        "products": [
+          {
+            "sku": 1586466682,
+            "quantity": 1,
+            "offer_id": "aqua.skreb"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.641801+00:00"
+    },
+    {
+      "posting_number": "45035035-0211-1",
+      "started_at_utc": "2026-10-06T20:56:26.641820+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "45035035-0211-1",
+        "order_id": 39985753611,
+        "order_number": "45035035-0211",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T12:17:04Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:41Z",
+        "fact_delivery_date": "2026-10-02T15:19:41.008986Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.712543+00:00"
+    },
+    {
+      "posting_number": "50261136-0017-1",
+      "started_at_utc": "2026-10-06T20:56:26.712563+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "50261136-0017-1",
+        "order_id": 38827053216,
+        "order_number": "50261136-0017",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T14:56:18Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:14Z",
+        "fact_delivery_date": "2026-10-02T15:20:14.406982Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.785201+00:00"
+    },
+    {
+      "posting_number": "55322493-0272-1",
+      "started_at_utc": "2026-10-06T20:56:26.785221+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "55322493-0272-1",
+        "order_id": 39036111917,
+        "order_number": "55322493-0272",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T12:15:49Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:20Z",
+        "fact_delivery_date": "2026-10-02T15:19:20.269369Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.856492+00:00"
+    },
+    {
+      "posting_number": "56845110-0045-1",
+      "started_at_utc": "2026-10-06T20:56:26.856504+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "56845110-0045-1",
+        "order_id": 38626480822,
+        "order_number": "56845110-0045",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T03:04:09Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:17Z",
+        "fact_delivery_date": "2026-10-02T15:19:17.710616Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.925493+00:00"
+    },
+    {
+      "posting_number": "56907807-0024-1",
+      "started_at_utc": "2026-10-06T20:56:26.925509+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "56907807-0024-1",
+        "order_id": 39961216175,
+        "order_number": "56907807-0024",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T03:39:43Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:46Z",
+        "fact_delivery_date": "2026-10-02T15:20:46.825463Z",
+        "products": [
+          {
+            "sku": 1586484429,
+            "quantity": 1,
+            "offer_id": "video.nanny"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:26 GMT",
+      "finished_at_utc": "2026-10-06T20:56:26.996753+00:00"
+    },
+    {
+      "posting_number": "59814512-0364-3",
+      "started_at_utc": "2026-10-06T20:56:26.996774+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "59814512-0364-3",
+        "order_id": 39913414720,
+        "order_number": "59814512-0364",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T11:25:44Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:10Z",
+        "fact_delivery_date": "2026-10-02T15:20:10.275240Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.066267+00:00"
+    },
+    {
+      "posting_number": "62035277-0532-1",
+      "started_at_utc": "2026-10-06T20:56:27.066283+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "62035277-0532-1",
+        "order_id": 39631915453,
+        "order_number": "62035277-0532",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T07:23:40Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:21Z",
+        "fact_delivery_date": "2026-10-02T15:21:20.892447Z",
+        "products": [
+          {
+            "sku": 1586466682,
+            "quantity": 1,
+            "offer_id": "aqua.skreb"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.152030+00:00"
+    },
+    {
+      "posting_number": "66144885-0156-18",
+      "started_at_utc": "2026-10-06T20:56:27.152047+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "66144885-0156-18",
+        "order_id": 39076122677,
+        "order_number": "66144885-0156",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T10:25:50Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:01Z",
+        "fact_delivery_date": "2026-10-02T15:20:01.117427Z",
+        "products": [
+          {
+            "sku": 1695128938,
+            "quantity": 1,
+            "offer_id": "video.nanny2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.237204+00:00"
+    },
+    {
+      "posting_number": "80034639-0273-1",
+      "started_at_utc": "2026-10-06T20:56:27.237221+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "80034639-0273-1",
+        "order_id": 39347026991,
+        "order_number": "80034639-0273",
+        "status": "cancelled",
+        "substatus": "posting_canceled",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T01:48:16Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:42Z",
+        "fact_delivery_date": "2026-10-02T15:20:42.079085Z",
+        "products": [
+          {
+            "sku": 1586484429,
+            "quantity": 1,
+            "offer_id": "video.nanny"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 505,
+          "cancellation_type": "client",
+          "cancelled_after_ship": true
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.314566+00:00"
+    },
+    {
+      "posting_number": "81035721-0742-1",
+      "started_at_utc": "2026-10-06T20:56:27.314581+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "81035721-0742-1",
+        "order_id": 39414240457,
+        "order_number": "81035721-0742",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T21:56:08Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:09Z",
+        "fact_delivery_date": "2026-10-02T15:21:09.829990Z",
+        "products": [
+          {
+            "sku": 1586466682,
+            "quantity": 1,
+            "offer_id": "aqua.skreb"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.382691+00:00"
+    },
+    {
+      "posting_number": "83893932-0680-2",
+      "started_at_utc": "2026-10-06T20:56:27.382704+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "83893932-0680-2",
+        "order_id": 39897297852,
+        "order_number": "83893932-0680",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T23:28:47Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:10Z",
+        "fact_delivery_date": "2026-10-02T15:21:04.890778Z",
+        "products": [
+          {
+            "sku": 1589998415,
+            "quantity": 1,
+            "offer_id": "sausage2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.449943+00:00"
+    },
+    {
+      "posting_number": "85257535-0274-1",
+      "started_at_utc": "2026-10-06T20:56:27.449956+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "85257535-0274-1",
+        "order_id": 39779013391,
+        "order_number": "85257535-0274",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-02T04:13:59Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:21:16Z",
+        "fact_delivery_date": "2026-10-02T15:21:14.121423Z",
+        "products": [
+          {
+            "sku": 1586466682,
+            "quantity": 1,
+            "offer_id": "aqua.skreb"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.524849+00:00"
+    },
+    {
+      "posting_number": "99185584-1963-5",
+      "started_at_utc": "2026-10-06T20:56:27.524860+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "99185584-1963-5",
+        "order_id": 39206445040,
+        "order_number": "99185584-1963",
+        "status": "cancelled",
+        "substatus": "posting_canceled",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T18:39:04Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:19:20Z",
+        "fact_delivery_date": "2026-10-02T15:19:19.968351Z",
+        "products": [
+          {
+            "sku": 1697770458,
+            "quantity": 1,
+            "offer_id": "doorBell"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 79,
+          "cancellation_type": "client",
+          "cancelled_after_ship": true
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.593962+00:00"
+    },
+    {
+      "posting_number": "99630148-0017-1",
+      "started_at_utc": "2026-10-06T20:56:27.593974+00:00",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "status": "ok",
+      "card": {
+        "posting_number": "99630148-0017-1",
+        "order_id": 38806247236,
+        "order_number": "99630148-0017",
+        "status": "delivering",
+        "substatus": "posting_in_pickup_point",
+        "tpl_integration_type": "ozon",
+        "integration_type_flow": "ozon",
+        "in_process_at": "2026-10-01T18:20:29Z",
+        "shipment_date": "2026-10-02T15:00:00Z",
+        "delivering_date": "2026-10-02T15:20:01Z",
+        "fact_delivery_date": "2026-10-02T15:20:01.301548Z",
+        "products": [
+          {
+            "sku": 1695128938,
+            "quantity": 1,
+            "offer_id": "video.nanny2"
+          }
+        ],
+        "related_postings": {
+          "related_posting_numbers": []
+        },
+        "related_postings_present": true,
+        "related_weight_postings": [],
+        "cancellation": {
+          "cancel_reason_id": 0,
+          "cancellation_type": "",
+          "cancelled_after_ship": false
+        }
+      },
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 20:56:27 GMT",
+      "finished_at_utc": "2026-10-06T20:56:27.662009+00:00"
+    }
+  ],
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "supply_status": "draft",
+    "positions": [
+      {
+        "order_id": "8bf9d518-2702-4c29-89ab-4ed002c0f416",
+        "posting_number": "0113371235-0054-3",
+        "position_id": "6f15aee8-99db-4b0b-bef0-07123a494574",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "b05ef83a-01c3-4f14-bafd-41669614d4c1",
+        "posting_number": "0144953533-0124-1",
+        "position_id": "59e67251-a7c4-4d92-9743-66c695d23c06",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+        "posting_number": "0148656673-0134-1",
+        "position_id": "e73d0d92-41c3-435d-abc6-4e1bf95ee5d9",
+        "product_id": "605bdc71-baae-43dd-9ed4-fb37e07906c0",
+        "sku": 1695134284,
+        "offer_id": "video.nanny3",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "cancelled"
+      },
+      {
+        "order_id": "3470f8fc-008d-4fe3-8a72-d9c73a46af42",
+        "posting_number": "0153677007-0258-1",
+        "position_id": "735f391b-95b5-478c-9b6e-3262b7309bab",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "eaabb48b-0174-414e-96b9-518f9220400e",
+        "posting_number": "0164033835-0039-1",
+        "position_id": "bc5913fc-5984-4e95-b4fb-ee34a2196dfa",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "64a9b26b-3e27-48f7-ae18-c4d2c10ad5a1",
+        "posting_number": "0172663629-0081-1",
+        "position_id": "5ace2b40-2451-4c1a-b2b6-9394f4c66c05",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "27da526e-9e2c-4798-a978-ec15582183f1",
+        "posting_number": "0181745532-0045-3",
+        "position_id": "9ed595e4-81cb-4272-92fd-dc89f13df672",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "cancelled"
+      },
+      {
+        "order_id": "558f8beb-a0b6-489a-a8b6-5dd3a5a494b5",
+        "posting_number": "0187441457-0073-1",
+        "position_id": "2dba4246-8711-4a0c-90d3-39f79b62b46d",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "32427a22-b4dd-4c8a-9278-76a067ab41d2",
+        "posting_number": "0190055173-0461-1",
+        "position_id": "a1dfbe31-ad0f-456f-b89e-978e9ea113fe",
+        "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+        "sku": 1586484429,
+        "offer_id": "video.nanny",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "2c6241b2-dc71-4b21-bc9d-534c63b8d4ba",
+        "posting_number": "0236443586-0012-1",
+        "position_id": "70b7f6a5-47da-400f-a395-2571e3637a48",
+        "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+        "sku": 1586466682,
+        "offer_id": "aqua.skreb",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "c2d7a754-f334-431f-89ed-5e47d3e0c7a4",
+        "posting_number": "0249035122-0351-1",
+        "position_id": "df4973be-db60-4eda-b0da-2ba1d4f928e6",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "66f61455-fea9-42a2-b52a-b7a754bb660d",
+        "posting_number": "0282817049-0013-1",
+        "position_id": "c60d4df6-37a5-415a-89fd-f4030b1f97dc",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "cancelled"
+      },
+      {
+        "order_id": "e203f00e-db36-46c0-aa1b-192539ab88b8",
+        "posting_number": "06383353-1897-1",
+        "position_id": "155fedf4-0ecf-4974-b043-0db8d23fa278",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "b7216c03-b13d-49d8-a3e8-a7c99c29bda6",
+        "posting_number": "21052558-0445-1",
+        "position_id": "9c51b88c-1c35-40e5-8936-40e5da3579b5",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "958ac70f-79b5-4d9c-b0b1-dc2f5237cd25",
+        "posting_number": "23388119-0163-1",
+        "position_id": "e9b05ba5-9713-4768-9acc-3118aa28d32a",
+        "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+        "sku": 1586484429,
+        "offer_id": "video.nanny",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "ccdd5eaf-cd9b-456c-8415-0868a52fa0af",
+        "posting_number": "28508065-0594-1",
+        "position_id": "f6ab08a3-dab6-4035-9d58-a508034fa789",
+        "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+        "sku": 1586484429,
+        "offer_id": "video.nanny",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "0d45ad7d-956e-4625-9dc5-f10c2e5b453a",
+        "posting_number": "31853470-0198-1",
+        "position_id": "76bc0f7f-373d-4d28-9027-ed8469e98d24",
+        "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+        "sku": 1586466682,
+        "offer_id": "aqua.skreb",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "6c283f46-7f5b-4620-a322-096f37027c8c",
+        "posting_number": "45035035-0211-1",
+        "position_id": "b2b5c626-6db4-4073-b2b2-527a73cc581b",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "c5177e7d-9db8-437a-ae64-9504275b6bad",
+        "posting_number": "50261136-0017-1",
+        "position_id": "9529c313-8aec-4f1c-8c72-4a9539fc7b79",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "78de0390-f016-4d31-ac4e-7d6de97a20ac",
+        "posting_number": "55322493-0272-1",
+        "position_id": "7ddb0838-54c4-42a3-9020-10dbab6a87ad",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "6fc67946-d062-49ba-ad8e-9c061a1177e1",
+        "posting_number": "56845110-0045-1",
+        "position_id": "f742d910-2fcf-4d96-9ed9-ea46d2a4bbd4",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "870e99a1-6435-4291-ac7d-cf0a81ab0572",
+        "posting_number": "56907807-0024-1",
+        "position_id": "ebf2b86b-f65c-4ec1-99ee-bc57b1b600ab",
+        "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+        "sku": 1586484429,
+        "offer_id": "video.nanny",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "4c9f0057-d363-4ec3-9c9b-4006c7f50516",
+        "posting_number": "59814512-0364-3",
+        "position_id": "53ade029-83af-44f8-ba05-b3e3fa88bd03",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "6444a2d9-23e0-4ddf-aa43-87abd03f27a7",
+        "posting_number": "62035277-0532-1",
+        "position_id": "8ca6064a-f01f-4401-9ba6-6952f43ab6e9",
+        "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+        "sku": 1586466682,
+        "offer_id": "aqua.skreb",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+        "posting_number": "66144885-0156-18",
+        "position_id": "f89ee8d2-ff80-49f3-b7d5-154210aa2f0b",
+        "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+        "sku": 1695128938,
+        "offer_id": "video.nanny2",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "c614ec4d-3c05-49f4-a986-fb6048642456",
+        "posting_number": "80034639-0273-1",
+        "position_id": "21fd26d1-9665-47bf-9512-37b65ac3afd0",
+        "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+        "sku": 1586484429,
+        "offer_id": "video.nanny",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "cancelled"
+      },
+      {
+        "order_id": "d46f4e6a-c28c-4ec6-a8b7-3c9734528f53",
+        "posting_number": "81035721-0742-1",
+        "position_id": "951794c1-c0c0-4902-8aa4-04b8ad6a9122",
+        "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+        "sku": 1586466682,
+        "offer_id": "aqua.skreb",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "a8e915f1-3a6f-45de-9cfb-f9f5cae5acde",
+        "posting_number": "83893932-0680-2",
+        "position_id": "7f6e10b9-f224-4fd5-b59c-ffb9234fd198",
+        "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+        "sku": 1589998415,
+        "offer_id": "sausage2",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "done"
+      },
+      {
+        "order_id": "cfc68d5f-0694-486e-84b0-136e51ce2532",
+        "posting_number": "85257535-0274-1",
+        "position_id": "5107cc5c-7c44-4d7c-a9ba-a788e0198d83",
+        "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+        "sku": 1586466682,
+        "offer_id": "aqua.skreb",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      },
+      {
+        "order_id": "e014ba26-8cbc-4480-8ad5-581f9f500f51",
+        "posting_number": "99185584-1963-5",
+        "position_id": "72ef64f7-dba8-45fd-a69e-b526f7fddf78",
+        "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+        "sku": 1697770458,
+        "offer_id": "doorBell",
+        "quantity": 1,
+        "reserved_quantity": 0,
+        "local_status": "cancelled"
+      },
+      {
+        "order_id": "604b0a9f-910c-42ba-8c14-88b459ef6d12",
+        "posting_number": "99630148-0017-1",
+        "position_id": "e5733b53-b0de-4d41-99e9-972b5eb6602a",
+        "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+        "sku": 1695128938,
+        "offer_id": "video.nanny2",
+        "quantity": 1,
+        "reserved_quantity": 1,
+        "local_status": "in_delivery"
+      }
+    ]
+  },
+  "finished_at_utc": "2026-10-06T20:56:27.662269+00:00",
+  "execution_status": "READ_COMPLETE_EXACT31"
+}
