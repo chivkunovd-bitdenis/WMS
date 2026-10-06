@@ -16,6 +16,22 @@ export function demoTransform(): Plugin {
     name: "wms686-isolated-extensions",
     enforce: "pre",
     transform(code, id) {
+      // Existing print controls keep their markup; only native print calls are
+      // replaced in this demo bundle, including calls on iframe windows.
+      if (/\/frontend\/src\/utils\/print[^/]+\.ts$/.test(id)) {
+        const nativePrint = /\b[A-Za-z_$][\w$]*\.print\(\)/g;
+        if (nativePrint.test(code)) {
+          const guarded = code.replace(
+            nativePrint,
+            "window.dispatchEvent(new Event('wms686-print-blocked'))",
+          );
+          if (/\.\s*print\s*\(/.test(guarded))
+            throw new Error(
+              "WMS686: новый неперехваченный вызов печати: " + id,
+            );
+          return guarded;
+        }
+      }
       if (id.endsWith("/unload-pick/UnloadPickScreen.tsx")) {
         code =
           `import {FboPickActions} from ${JSON.stringify(controls)};\n` + code;

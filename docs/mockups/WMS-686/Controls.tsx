@@ -145,6 +145,12 @@ export function FboPackingActions() {
     [product, setProduct] = useState<string | null>(null),
     [pending, setPending] = useState<Unit | null>(null),
     [message, setMessage] = useState("");
+  useEffect(() => {
+    const feedback = () =>
+      setMessage("Макет: на принтер ничего не отправлялось.");
+    window.addEventListener("wms686-print-blocked", feedback);
+    return () => window.removeEventListener("wms686-print-blocked", feedback);
+  }, []);
   if (isBaseline()) return null;
   const boxId =
     selected && state.shipmentBoxes.some((b) => b.id === selected)
@@ -206,6 +212,21 @@ export function FboPackingActions() {
       setPending(unit);
       setMessage("КИЗ выбран. Отсканируйте короб назначения.");
       return;
+    }
+    if (
+      product &&
+      /^DEMO-(?:NEW-)?KIZ(?:-[A-Z0-9]+)*$/.test(code) &&
+      !state.kizHistory[code]
+    ) {
+      const unmarked = [
+        ...(box?.units ?? []),
+        ...state.sourceBoxes.flatMap((sourceBox) => sourceBox.units),
+      ].find((candidate) => candidate.productId === product && !candidate.kiz);
+      if (unmarked) {
+        setPending({ ...unmarked, kiz: code, intakeId: null });
+        setMessage("Нанесённый КИЗ выбран. Отсканируйте короб назначения.");
+        return;
+      }
     }
     setMessage(
       "Код не относится к выбранному товару/коробу. Сканируйте ШК товара, затем его КИЗ и короб.",

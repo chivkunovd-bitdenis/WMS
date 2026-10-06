@@ -167,14 +167,24 @@ export function reduceDemo(
     );
     if (action.quantity > candidates.length)
       return reject("В коробе недостаточно выбранного товара");
-    const marked = candidates.filter((u) => u.kiz);
-    if (marked.length && new Set(action.kizCodes).size !== action.quantity)
+    if (new Set(action.kizCodes).size !== action.quantity)
       return reject("Отсканируйте конкретные КИЗ выбранных единиц");
-    let selected = marked.length
-      ? candidates.filter((u) => u.kiz && action.kizCodes.includes(u.kiz))
-      : candidates.slice(0, action.quantity);
-    if (selected.length !== action.quantity)
-      return reject("КИЗ не относится к выбранному товару и коробу");
+    const selected: Unit[] = [];
+    for (const code of action.kizCodes) {
+      let unit = candidates.find((candidate) => candidate.kiz === code);
+      if (!unit && !s.kizHistory[code]) {
+        unit = candidates.find(
+          (candidate) => !candidate.kiz && !selected.includes(candidate),
+        );
+        if (unit) {
+          unit.kiz = code;
+          unit.intakeId = null;
+        }
+      }
+      if (!unit || selected.includes(unit))
+        return reject("КИЗ не относится к выбранному товару и коробу");
+      selected.push(unit);
+    }
     const target =
       s.shipmentBoxes.find((b) => b.id === s.selectedBoxId && !b.closed) ||
       newBox(s);
@@ -195,10 +205,19 @@ export function reduceDemo(
     if (!box) return reject("Выберите короб отгрузки");
     const all = s.shipmentBoxes.flatMap((b) => b.units);
     const prior = all.find((u) => u.id === action.unit.id);
-    if (prior) return { state };
     const h = action.unit.kiz ? s.kizHistory[action.unit.kiz] : null;
     if (h && h.unitId !== action.unit.id)
       return reject("Этот КИЗ уже принадлежит другой единице");
+    if (prior) {
+      if (prior.kiz === action.unit.kiz) return { state };
+      if (prior.kiz) return reject("У этой единицы уже учтён другой КИЗ");
+      if (!box.units.some((unit) => unit.id === prior.id))
+        return reject("Единица находится в другом коробе");
+      prior.kiz = action.unit.kiz;
+      prior.intakeId = action.unit.intakeId;
+      track(s, [prior]);
+      return { state: s };
+    }
     if (box.closed)
       return reject("Короб закрыт: откройте его состав для изменения");
     for (const b of s.sourceBoxes)

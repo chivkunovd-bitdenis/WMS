@@ -162,8 +162,38 @@ export function createMockFetch(): typeof fetch {
           : input.url,
       "http://wms686.local",
     ).pathname;
-    const method = init?.method ?? "GET";
-    const body = init?.body ? JSON.parse(String(init.body)) : {};
+    const method = (
+      init?.method ?? (input instanceof Request ? input.method : "GET")
+    ).toUpperCase();
+    const base = "/api/operations/marketplace-unload-requests/demo-shipment";
+    const known = new Set([
+      "GET /api/products/linked-wb-catalog",
+      "GET /api/operations/wb-mp-warehouses",
+      "GET /api/operations/marketplace-unload-requests/available-products",
+      `GET ${base}`,
+      `GET ${base}/pick-options`,
+      "GET /api/operations/packaging-tasks/demo-pack",
+      "GET /api/operations/packaging-tasks/by-unload/demo-shipment",
+      ...[
+        "pick/scan",
+        "pick/set",
+        "boxes/batch",
+        "boxes/attach",
+        "ship",
+        "cancel",
+      ].map((action) => `POST ${base}/${action}`),
+    ]);
+    if (!known.has(`${method} ${path}`))
+      return json(
+        { detail: `Неизвестный маршрут локального макета: ${method} ${path}` },
+        400,
+      );
+    let body: Record<string, unknown> = {};
+    try {
+      body = init?.body ? JSON.parse(String(init.body)) : {};
+    } catch {
+      return json({ detail: "Некорректный JSON в запросе макета" }, 400);
+    }
     if (path.includes("linked-wb-catalog")) return json(products);
     if (path.endsWith("/wb-mp-warehouses"))
       return json([{ wb_warehouse_id: 1, name: "Демо · Краснодар" }]);
@@ -201,7 +231,9 @@ export function createMockFetch(): typeof fetch {
                   const initialQuantity = initBox.units.filter(
                     (u) => u.productId === p.id,
                   ).length;
-                  const quantity = b.units.filter((u) => u.productId === p.id).length;
+                  const quantity = b.units.filter(
+                    (u) => u.productId === p.id,
+                  ).length;
                   return {
                     quantity,
                     is_loose: false,
@@ -290,9 +322,17 @@ export function createMockFetch(): typeof fetch {
 }
 export function installMockApi() {
   if (typeof localStorage !== "undefined" && !isBaseline()) {
-    state = new URLSearchParams(location.search).has("reset")
-      ? createDemoState()
-      : loadDemoState(localStorage);
+    const reset = new URLSearchParams(location.search).has("reset");
+    const fresh = reset || !localStorage.getItem("wms686-demo-v1");
+    state = fresh ? createDemoState() : loadDemoState(localStorage);
+    if (fresh) {
+      // The last physical unit is known as stock, but its individual marking
+      // was never scanned on intake. Recording its label must not add stock.
+      const unit = state.sourceBoxes[1].units[1];
+      if (unit.kiz) delete state.kizHistory[unit.kiz];
+      unit.kiz = null;
+      unit.intakeId = null;
+    }
     saveDemoState(state, localStorage);
   }
   globalThis.fetch = createMockFetch();
