@@ -112,6 +112,14 @@
       "mode": "merge final scoped HEAD retaining exact accepted product and reader proof ancestry",
       "conflicts": [],
       "remaining": "New read-only helper independently reviewed as short delta; Vitalik local signature/send remains operator action"
+    },
+    {
+      "task": "WMS-675 initial scoped operational evidence/read-only collector",
+      "source": "749b80cb85e3a15344c23fe83012d38af1ae99d4",
+      "base": "8fa213151859c82d8db27439a31da9b707f2729e",
+      "mode": "merge operational evidence only; no application runtime added",
+      "conflicts": [],
+      "pending": "New 31 real Ozon card proofs and resulting honest requirements/acceptance from independent analyst are expected next"
     }
   ]
 }
