@@ -168,6 +168,8 @@ type InboundLine = {
   product_id: string
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   wb_barcode: string | null
   requires_honest_sign: boolean
   length_mm: number | null
@@ -2571,6 +2573,8 @@ export function FfInboundRequestView({
                           wb_nm_id: meta.wb_nm_id,
                           photo_url: meta.wb_primary_image_url,
                           expected_qty: ln.expected_qty,
+                          size: ln.size,
+                          color: ln.color,
                         }
                       }),
                     })

@@ -2,6 +2,8 @@ import { escapeLabelHtml } from './productLabelText'
 
 export type InboundReceivingSheetItem = {
   product_name: string
+  size?: string | null
+  color?: string | null
   /** Артикул продавца (vendor code); при отсутствии — SKU. */
   vendor_code: string
   sku_code: string
@@ -45,6 +47,8 @@ function itemRow(item: InboundReceivingSheetItem, index: number): string {
   <td class="rs-product-cell">
     <p class="rs-name">${escapeLabelHtml(item.product_name)}</p>
     ${productMeta ? `<p class="rs-meta">${productMeta}</p>` : ''}
+    <p class="rs-meta">Размер: ${escapeLabelHtml(item.size?.trim() || '—')}</p>
+    <p class="rs-meta">Цвет: ${escapeLabelHtml(item.color?.trim() || '—')}</p>
   </td>
   <td class="rs-barcode-cell" data-testid="receiving-sheet-barcode">${escapeLabelHtml(barcode)}</td>
   <td class="rs-expected-cell" data-testid="receiving-sheet-expected">${item.expected_qty}</td>

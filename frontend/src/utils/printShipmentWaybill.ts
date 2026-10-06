@@ -1,6 +1,8 @@
 export type WaybillLine = {
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   quantity: number
   shipped_qty?: number
   received_qty?: number | null
@@ -92,10 +94,12 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
 
   const lineRows = data.lines
     .map((ln, i) => {
+      const variant = `<div class="variant">Размер: ${escapeHtml(ln.size?.trim() || '—')}</div>
+        <div class="variant">Цвет: ${escapeHtml(ln.color?.trim() || '—')}</div>`
       if (isInbound) {
         const factQty = ln.received_qty ?? 0
         return `<tr>
-          <td><strong>${escapeHtml(ln.sku_code)}</strong><br><span>${escapeHtml(ln.product_name)}</span></td>
+          <td><strong>${escapeHtml(ln.sku_code)}</strong><br><span>${escapeHtml(ln.product_name)}</span>${variant}</td>
           <td align="right">${ln.quantity}</td>
           <td align="right">${factQty}</td>
           <td>${escapeHtml(discrepancyText(ln.quantity, factQty))}</td>
@@ -117,7 +121,7 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       return `<tr>
           <td>${i + 1}</td>
           <td>${escapeHtml(ln.sku_code)}</td>
-          <td>${escapeHtml(ln.product_name)}</td>
+          <td class="product">${escapeHtml(ln.product_name)}${variant}</td>
           ${cell}
           <td align="right">${qtyLabel}</td>
           ${received}
@@ -203,6 +207,9 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       table { width: 100%; border-collapse: collapse; }
       th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
       th { background: #f5f5f5; }
+      .product, .variant { overflow-wrap: anywhere; word-break: break-word; }
+      .variant { margin-top: 2px; color: #555; }
+      tr { break-inside: avoid; }
       .foot { margin-top: 24px; font-size: 11px; color: #555; }
     </style>
   </head>

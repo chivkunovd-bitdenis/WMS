@@ -27,6 +27,8 @@ type OutboundLineRow = {
   product_id: string
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   quantity: number
   shipped_qty: number
   storage_location_id: string | null
@@ -239,6 +241,8 @@ export function OutboundScreen(props: Props) {
                           product_name: ln.product_name,
                           quantity: ln.quantity,
                           shipped_qty: ln.shipped_qty,
+                          size: ln.size,
+                          color: ln.color,
                           storage_location_code: addressStorageEnabled
                             ? ln.storage_location_code
                             : null,

@@ -294,6 +294,7 @@ export function metadataKindLabel(kind: string) {
 export type FbsPickingListPrintRow = {
   name: string
   size: string | null
+  color?: string | null
   imageUrl: string | null
   identifiers: string[]
   locations: string[]
@@ -364,7 +365,8 @@ export function fbsBuildPickingRows(
       ? order.positions.map((position) => ({
         key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
         name: position.name,
-        size: null,
+        size: position.size ?? null,
+        color: position.color ?? null,
         imageUrl: position.image_url ?? null,
         identifiers: [
           position.seller_article,
@@ -378,6 +380,7 @@ export function fbsBuildPickingRows(
         key: order.product.id ?? `unmapped-${order.id}`,
         name: order.product.name,
         size: order.product.size,
+        color: order.product.color ?? null,
         imageUrl: order.product.image_url,
         identifiers: [
           order.product.seller_article,
@@ -501,9 +504,10 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
         <td class="image">${imageUrl ? `<img src="${imageUrl}" alt="" />` : '<span>—</span>'}</td>
         <td>
           <strong>${escapePrintHtml(row.name)}</strong>
+          <div class="muted">Цвет: ${escapePrintHtml(row.color?.trim() || '—')}</div>
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
-        <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
+        <td class="size">${escapePrintHtml(row.size?.trim() || '—')}</td>
         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
