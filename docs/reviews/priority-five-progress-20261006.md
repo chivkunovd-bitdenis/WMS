@@ -291,3 +291,11 @@ Current integration: `4982e8fd6` includes live read-only663 source `5fb403a702f3
 675 test is collected by ordinary full pytest with no skip and now has an explicit serial PostgreSQL CI step on a newly created loopback database `wms_test_675_incident`; standard conftest and server identity guards remain. The test uses real accounting/reservation/billing services; live external calls cannot occur.
 
 CI2 on `5ddd09aac4df17e7ecdefaf1625462c05f8039ce`: Ruff/Mypy/guards passed, backend pytest running; frontend fixture incompatibilities and raw662 contract formatting caused failures. Formatting AST is identical; its actual Sol review and strict one-file correction provenance are coordinated with original tester663. No Ruff exclusions or checker scope relaxation. The narrow652 reviewer-model compatibility change will follow independent RED regressions. The next single push waits for the coordinated fixture/correction sources.
+
+## Narrow process correction and functional validation · 06.10.2026
+
+Exact checker-only correction `f263064f4c5735a477b91bd92bea982c9eeceaf5` follows separate tester source `2e94cf5f04a7863cf8abbe028126a6e48f8aee95`. Before code: 3 RED /67 PASS reproduced locally. After code:61 generic +9 exact fixture tests PASS, preserving all negative scope/SHA/blob/model/effort controls. Only actual Sol6.1 high joins historical Astra high; no product refactor or guard allowance. Independent narrow review assigned by leading agent.
+
+Isolated formatting provenance662 `5feca959614667eb95e56a85e7b94efa497feeff` is retained by tree-identical ours merge `09dfb3c7ec4a591929e9db8c974c12c92b0772aa`; final662 blob identical to current formatted candidate. Original tester records the single-file ledger only after actual review artifact.
+
+Shared675 incident test on integrated tree:1 SQLite PASS in3.12s; full backend Ruff PASS. Dedicated PostgreSQL step is retained for common CI; independent reviewer separately confirmed2 SQLite+2 PostgreSQL PASS without skips. Progress waits only for concrete fixture corrections/ledgers and exact narrow review reports before one grouped push.

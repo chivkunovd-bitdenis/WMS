@@ -215,6 +215,43 @@
       "mode": "merge final four operational plan documents; no runtime suppression/override",
       "conflicts": [],
       "boundary": "Only existing WMS-662 after checked combined deployment, normal background stock publishing, fresh scope/ledger/missing delta reread before apply; no repair applied"
+    },
+    {
+      "task": "WMS-663 live read-only status proof",
+      "source": "5fb403a702f31edb5ba8508f3229fda803e6b904",
+      "integration": "37e651058",
+      "mode": "merge proof/reader/requirements only; runtime/tests unchanged",
+      "conflicts": [],
+      "facts": "2 HTTP200 on real posting; existing exemplar and blank fields confirmed; nonempty enum/true absence/operator set remain unverified"
+    },
+    {
+      "task": "WMS-675 actual functional incident regression",
+      "source": "f98960a1e3d8adcc52264aafdad715f63e2397c5",
+      "integration": "4982e8fd6",
+      "mode": "merge original test/proof ancestry and actual acceptance",
+      "conflicts": [
+        {
+          "path": "docs/requirements/WMS-675.md",
+          "resolution": "Preserve ordinary recovery plan ced5a713 and add actual isolated functional PASS; no production recovery claimed"
+        }
+      ],
+      "facts": "real accounting/reserve/billing;26 positive/5 excluded;reserve16->1;facts11->26;charges22->52;old IDs preserved;replay0"
+    },
+    {
+      "task": "WMS-675 independent functional review",
+      "source": "c3c6ee210fc92958e84ee58d86c4a606f54cba6c",
+      "integration": "804a7dc99",
+      "mode": "exact report-only cherry-pick; no historical product source merged",
+      "conflicts": [],
+      "verdict": "PASS;2 SQLite +2 PostgreSQL runs,0 skip"
+    },
+    {
+      "task": "WMS-652 actual Sol6.1 review model RED contract",
+      "source": "2e94cf5f04a7863cf8abbe028126a6e48f8aee95",
+      "integration": "c3ac68cc0",
+      "mode": "test-only source before checker fix",
+      "conflicts": [],
+      "red": "67 PASS /3 RED reported by separate test writer; strict model/effort/scope/SHA/blob controls retained"
     }
   ],
   "local_product_fixes": [
@@ -236,12 +273,12 @@
     {
       "task": "WMS-651",
       "path": "docs/requirements/WMS-651.md",
-      "change": "C5/R5 reference Select all\u2192Print QR; preserved scan assertions confirmed by separate tester on acd0523e9"
+      "change": "C5/R5 reference Select all→Print QR; preserved scan assertions confirmed by separate tester on acd0523e9"
     },
     {
       "task": "WMS-657",
       "path": "docs/requirements/WMS-657.md",
-      "change": "C2 test reference ten\u2192eleven columns after authorized WMS-673 color migration; existing assertions/ledger untouched"
+      "change": "C2 test reference ten→eleven columns after authorized WMS-673 color migration; existing assertions/ledger untouched"
     }
   ],
   "formatting_only_corrections": {
