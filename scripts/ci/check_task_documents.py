@@ -51,6 +51,52 @@ FIXTURE_BLOB_PAIRS = {
         "d96fd44965a7f0b8806d87fe3d4f88243cad1f5e",
     ),
 }
+
+# Published Sol high exact chains: fixed whole-file blobs, no generic exemption.
+NIGHT_REVIEWED_FIXTURE_PAIRS = {'wms-658-reviewed-1-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               '9661a123265f1ea75d084fbf1b6da13d34481856',
+                                                               '0a267634279a868660cbc014c6312bbf4cfc7798'),
+ 'wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_wb_honest_sign_contract.py',
+                                                               '9bf03cba6847065ee8b59030aece6f1695b4d22d',
+                                                               '946ec81ef52d7fb888379b327dcd74be8ce52a99'),
+ 'wms-658-reviewed-2-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               '0a267634279a868660cbc014c6312bbf4cfc7798',
+                                                               'ff481b1e693884c103e46624a05807f3120bc040'),
+ 'wms-658-reviewed-3-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               'ff481b1e693884c103e46624a05807f3120bc040',
+                                                               'cee12538b9d752f040edcc2c7a892726d307d68d'),
+ 'wms-658-reviewed-4-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               'cee12538b9d752f040edcc2c7a892726d307d68d',
+                                                               '6e76bf1d4bcf38ff59341e6d3459346313421e6c'),
+ 'wms-681-reviewed-1-test_fbs_packing_box.py': ('WMS-681',
+                                                'backend/tests/test_fbs_packing_box.py',
+                                                '7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3',
+                                                'bf92738de529c1ca4882240a0b617df5db82dedd'),
+ 'wms-681-reviewed-1-FfFbsSupplyWorkspace.assembly.dom.test.tsx': ('WMS-681',
+                                                                   'frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx',
+                                                                   'c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4',
+                                                                   'c809482c9eb151425e9031e33b06246cb1e6039a'),
+ 'wms-681-reviewed-2-test_fbs_packing_box.py': ('WMS-681',
+                                                'backend/tests/test_fbs_packing_box.py',
+                                                'bf92738de529c1ca4882240a0b617df5db82dedd',
+                                                '1cca9c86a4e50842919d0ca4aec4c57607c0fe7a'),
+ 'wms-681-reviewed-2-FfFbsSupplyWorkspace.assembly.dom.test.tsx': ('WMS-681',
+                                                                   'frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx',
+                                                                   'c809482c9eb151425e9031e33b06246cb1e6039a',
+                                                                   '58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3')}
+NIGHT_REVIEWED_COMPANIONS = {'wms-658-reviewed-1-test_wms658_marking_import_contract.py': [{'path': 'docs/requirements/WMS-658.md',
+                                                                'before_blob': '88a79ede1de989790d4cf814d208f3615420740f',
+                                                                'after_blob': 'a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58'}],
+ 'wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py': [{'path': 'docs/requirements/WMS-658.md',
+                                                                'before_blob': '88a79ede1de989790d4cf814d208f3615420740f',
+                                                                'after_blob': 'a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58'}]}
+FIXTURE_BLOB_PAIRS.update(NIGHT_REVIEWED_FIXTURE_PAIRS)
+
 POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"
 POSITIVE_STATUS_HANDOFF = (
     "docs/reviews/wms663-healthy-positive-fixture-correction-handoff.md",
@@ -367,7 +413,7 @@ def exact_fixture_corrections(
             # Only this reviewed fifth pair has a later product source. Reject
             # even a reverted intervening mutation, not merely differing bytes.
             source_matches = source == prior_sha
-            if transform == POSITIVE_STATUS_TRANSFORM and not source_matches:
+            if (transform == POSITIVE_STATUS_TRANSFORM or transform in NIGHT_REVIEWED_FIXTURE_PAIRS) and not source_matches:
                 source_matches = ancestor(root, prior_sha, source) and not git(
                     root, "log", "--full-history", "--format=%H", f"{prior_sha}..{source}",
                     "--", path,
@@ -380,6 +426,12 @@ def exact_fixture_corrections(
             state[path] = (correction, after)
         required_companions = ([LEGACY_SALES_COMPANION]
                                if "wms517-explicit-sales-fixture" in transforms else [])
+        if transforms & NIGHT_REVIEWED_FIXTURE_PAIRS.keys():
+            required_companions = []
+            for transform in sorted(transforms):
+                for companion in NIGHT_REVIEWED_COMPANIONS.get(transform, []):
+                    if companion not in required_companions:
+                        required_companions.append(companion)
         if companions != required_companions:
             return fail("неподдерживаемые дополнительные файлы")
         for companion in required_companions:
