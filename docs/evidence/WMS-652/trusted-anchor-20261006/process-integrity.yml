@@ -1,0 +1,44 @@
+# PREPARED ONLY. Installing this file in main requires separate owner approval.
+name: Process integrity anchor
+
+on:
+  pull_request_target:
+    branches: [etalon]
+    types: [opened, synchronize, reopened, ready_for_review]
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+  actions: read
+  pull-requests: read
+  checks: write
+
+concurrency:
+  group: process-integrity-${{ github.event.pull_request.number || github.event.workflow_run.id }}
+  cancel-in-progress: false
+
+jobs:
+  process-integrity:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Read trusted default main only
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository }}
+          ref: main
+          persist-credentials: false
+          fetch-depth: 1
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Verify metadata without running candidate code
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python scripts/ci/trusted_process_check.py
+          --repository "$GITHUB_REPOSITORY"
+          --event "$GITHUB_EVENT_PATH"
+          --publish
