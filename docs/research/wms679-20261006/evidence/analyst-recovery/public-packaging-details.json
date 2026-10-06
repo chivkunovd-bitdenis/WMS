@@ -1,0 +1,8 @@
+{
+  "url": "https://static-basket-02.wbbasket.ru/vol20/supplies-managment-front/v2.7.64/9395.chunk.fc3528aae09ca9cecf6e.js",
+  "matches": {
+    "module_name": [
+      "Filter\",r=[s.SC,s.PVZ,s.PPT,s.PWH],l={[s.SC]:n.hX.pointTypeScPopoverTitle,[s.PVZ]:n.hX.pointTypePvzPopoverTitle,[s.PPT]:n.hX.pointTypePptPopoverTitle,[s.PWH]:n.hX.pointTypePwhPopoverTitle,[s.WH]:n.hX.pointTypeScPopoverTitle}},81370:(e,t,A)=>{\"use strict\";A.d(t,{c:()=>n});const n=\"menu.supply-detail-packaging-nano\"},18027:(e,t,A)=>{\"use strict\";A.d(t,{n:()=>n});const n=e=>async t=>{var A;const n=await(null===t||void 0===t||null===(A=t.routes[0])||void 0===A?void 0:A.loadAction()),s=await(null===n||void 0===n?void 0:n.default(e));return{default:()=>null===s||void 0===s?void 0:s.content}}},49478:(e,t,A)=>{\"use strict\";A.d(t,{k:()=>d});var n=A(8156),s=A(53041),a=A.n(s),i=A(38225);var r=A(77179);const l=a().bind({\"Custom-popup__children\":\"Custom-popup__c"
+    ]
+  }
+}

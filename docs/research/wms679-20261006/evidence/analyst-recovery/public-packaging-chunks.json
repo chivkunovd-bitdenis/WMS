@@ -1,0 +1,155 @@
+[
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/14.chunk.a39df647f57ba8a0c2e7.js",
+    "status": "200",
+    "bytes": 2238,
+    "sha256": "a36039d6e0dc98c49757c5d5bf0bf7e790602c3888c4d30dafee409b9f950feb",
+    "matches": {}
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/119.chunk.c5b4f928437c3708c01f.js",
+    "status": "200",
+    "bytes": 2243,
+    "sha256": "1ff475c260a35635ca8ae0c9abe48a69d36b14fe69b38f0f18fceb42a617a6cd",
+    "matches": {}
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/304.chunk.add2712315d2c4ffb3cd.js",
+    "status": "200",
+    "bytes": 204107,
+    "sha256": "5981383d0db9194d2af2fdf066ef2f866b1d404b7ea3225a8715a3dc772f6a19",
+    "matches": {}
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/643.chunk.6f85a20bd532171ce9d4.js",
+    "status": "200",
+    "bytes": 24114,
+    "sha256": "8f1be8a69b77c47dc594548bfcfdb922dc4d591f30e11c8f750127720328d7f8",
+    "matches": {}
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/645.chunk.fa4c5ad064581d15d891.js",
+    "status": "200",
+    "bytes": 240833,
+    "sha256": "175e1a59424b86bbbb15ad7d8a577ff2acd263dfca1661ba1395cb70e9186a67",
+    "matches": {
+      "ENDPOINT_SHK_DOWNLOAD_EXCEL": [
+        {
+          "offset": 66587,
+          "text": "L\"))&&void 0!==qi?qi:\"\",Ki=e=>(new Fi.JSONRPCRequest).makeRequest({endpoint:Vi,translateFunction:K,body:{params:e},responseSchema:Wi,isErrorTextStraightToOutput:!0,credentials:\"include\"}),Qi=M().object({});var Hi;const Zi=null!==(Hi=R.envsStore.get(\"ENDPOINT_SHK_DOWNLOAD_EXCEL\"))&&void 0!==Hi?Hi:\"\",Xi=e=>(new Fi.JSONRPCRequest).makeRequest({endpoint:Zi,body:{params:e},responseSchema:Qi,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\"}),Yi=\"shk-barcodes-module_STOP_LOADDING_DOWNLOAD_EXCEL\",Ji=()=>({type:Yi});Ji.type=Yi;const en=\"shk-barcodes-module_START_LOADDING_DOWNLOAD_EXCEL\",tn=()=>({type:en});tn.type=en;const an={isLoaddingDownloadExcel:!1},on=(e=an,t)=>{switch(t.type){case tn.type:return{...e,isLoaddingDownloadExcel:!0};case Ji.type:return{...e,isLoaddingDownloadExcel:!1};default:return e}},nn=\"shk-barcodes-module_SHK_BARCODES_REDUCER_NAME\",sn=e=>(e=>e[nn]||an)(e).isLoaddingDownloadExc"
+        }
+      ],
+      "ШК короба": [
+        {
+          "offset": 99940,
+          "text": "ors.banMixFromTheSupplier),\"Ограничение завоза категорий Питание, Бад, Спортпит, Корма и лакомства для животных\":r().t(de.barcodeErrors.importRestrictionsOfNutritionDietarySupplementsSportsNutritionAnimalFeedAndTreats),\"при самостоятельной генерации ШК короба код не должен начинаться с “WB_”. Пожалуйста, используйте другой код\":r().t(a?de.barcodeErrors.codeShouldNotStartWithUseDifferentCodeForPalleta:de.barcodeErrors.codeShouldNotStartWithUseDifferentCode),\"Есть горючее вещество - разрешено только на склады: Ижевск Гагарина РЦ, Щербинка\":r().t(de.barcodeErrors.combustibleSubstanceAllowedIzhevskGagarinaRCShcherbinka),\"ШК паллеты должны быть все моно\":r().t(de.barcodeErrors.wkPalletsMustBeAllMono),\"Количество меньше 1; Кол-во штук не может быть меньше 1\":r().t(de.barcodeErrors.quantityMinError,{count:1}),\"Кол-во штук не может быть меньше 1\":r().t(de.barcodeErrors.quantityMinError,{count:1}),\"Срок г"
+        }
+      ],
+      ".xlsx": [
+        {
+          "offset": 76518,
+          "text": "AllPage:X,onDownloadAllShk:Y,onDownloadPickingList:J}=(e=>{const t=(0,d.useDispatch)(),[a]=Qa.usePackingListXlsxMutation();return{onDownloadAllPage:()=>{t((0,n.downloadFilesManagerSagaAction)(rn({downloadFileRequest:Ki,incomeID:e,fileName:\"page-excel.xlsx\"})))},onDownloadAllShk:()=>{t((0,n.downloadFilesManagerSagaAction)(rn({downloadFileRequest:Xi,incomeID:e,fileName:\"shk-excel.xlsx\"})))},onDownloadPickingList:async()=>{t(tn());try{const{file:t,mime:o}=await a({incomeID:e}).unwrap();(0,n.downloadFile)({fileType:\"base64\",file:t,contentType:o,name:`picking-list-${e}.xlsx`})}catch(o){const{errorText:e}=null!==o&&void 0!==o?o:{};t((0,go.setModalAction)({status:\"error\",title:e||r().t(ce.error)}))}finally{t(Ji())}}}})(Number(null===t||void 0===t?void 0:t.supplyId)),ee=(({getBarcodeBoxesList:e})=>{const t=(0,d.useDispatch)(),[a]=Qa.useUploadShkExcelMutation(),o=gi(),[i]=Qa.useLazyGetPaidPackagingPla"
+        },
+        {
+          "offset": 76648,
+          "text": "onDownloadAllPage:()=>{t((0,n.downloadFilesManagerSagaAction)(rn({downloadFileRequest:Ki,incomeID:e,fileName:\"page-excel.xlsx\"})))},onDownloadAllShk:()=>{t((0,n.downloadFilesManagerSagaAction)(rn({downloadFileRequest:Xi,incomeID:e,fileName:\"shk-excel.xlsx\"})))},onDownloadPickingList:async()=>{t(tn());try{const{file:t,mime:o}=await a({incomeID:e}).unwrap();(0,n.downloadFile)({fileType:\"base64\",file:t,contentType:o,name:`picking-list-${e}.xlsx`})}catch(o){const{errorText:e}=null!==o&&void 0!==o?o:{};t((0,go.setModalAction)({status:\"error\",title:e||r().t(ce.error)}))}finally{t(Ji())}}}})(Number(null===t||void 0===t?void 0:t.supplyId)),ee=(({getBarcodeBoxesList:e})=>{const t=(0,d.useDispatch)(),[a]=Qa.useUploadShkExcelMutation(),o=gi(),[i]=Qa.useLazyGetPaidPackagingPlanQuery();return(0,Ja.useCallback)(({file:s,incomeID:d,boxType:c,shks:u,setBindedUpdateDataWithoutError:p,callbackOnSuccess:g,suppl"
+        },
+        {
+          "offset": 76838,
+          "text": "n)(rn({downloadFileRequest:Xi,incomeID:e,fileName:\"shk-excel.xlsx\"})))},onDownloadPickingList:async()=>{t(tn());try{const{file:t,mime:o}=await a({incomeID:e}).unwrap();(0,n.downloadFile)({fileType:\"base64\",file:t,contentType:o,name:`picking-list-${e}.xlsx`})}catch(o){const{errorText:e}=null!==o&&void 0!==o?o:{};t((0,go.setModalAction)({status:\"error\",title:e||r().t(ce.error)}))}finally{t(Ji())}}}})(Number(null===t||void 0===t?void 0:t.supplyId)),ee=(({getBarcodeBoxesList:e})=>{const t=(0,d.useDispatch)(),[a]=Qa.useUploadShkExcelMutation(),o=gi(),[i]=Qa.useLazyGetPaidPackagingPlanQuery();return(0,Ja.useCallback)(({file:s,incomeID:d,boxType:c,shks:u,setBindedUpdateDataWithoutError:p,callbackOnSuccess:g,supplyId:m,callbackOnFinish:b,errorNotificationHoldTimeout:x})=>new Promise((h,y)=>{(async()=>{try{const x=(await(0,n.blobToBase64)(s)).slice(78),{error:k,data:v}=await a({xlsBytes:x,incomeID:d})"
+        },
+        {
+          "offset": 197552,
+          "text": "er:[\"manual\"],use:\"cloudy\",zIndex:79,children:(0,Xa.jsx)(Uo.x,{\"data-testid\":e(),label:r().t(t?se.viaExcel:se.excel),loading:P,onClick:()=>y(e=>!e),radius:\"primary\",size:\"lg\",trailingIcon:wc.g,use:\"neutral\"})}),(0,Xa.jsx)(\"input\",{ref:_,accept:\".xls,.xlsx\",className:Rc(`${Gc}__fileInput`),\"data-testid\":e(\"file-input\"),onChange:B,type:\"file\"})]})};let Wc=function(e){return e.INSTRUCTION=\"Instruction\",e.CLOSE=\"Close\",e}({});const qc=e=>({preorderID:(null===e||void 0===e?void 0:e.preorderId)||\"\",supplyID:(null===e||void 0===e?void 0:e.supplyId)||\"\"}),Vc=\"Picking-list-onboarding-content\",Kc=Do().bind({\"Picking-list-onboarding-content\":\"Picking-list-onboarding-content__+TE5hgS154\",\"Picking-list-onboarding-content__actions\":\"Picking-list-onboarding-content__actions__ieVXwkb9Az\"}),Qc=e=>(0,l.BA)({block:Vc,elementName:e}),Hc=({title:e,description:t,onClose:a,onShown:o,supplyDetail:i})=>{const n=e=>{("
+        }
+      ],
+      "credentials:\"include\"": [
+        {
+          "offset": 2918,
+          "text": "const F=null!==(G=R.envsStore.get(\"SUPPLY_DETAILS_ENDPOINT\"))&&void 0!==G?G:\"\",W=({pageNumber:e,pageSize:t,search:a,supplyID:o})=>{const i=F;return{endpoint:i,body:{params:{pageNumber:e,pageSize:t,search:a,supplyID:Number(o)||null}},responseSchema:U,credentials:\"include\",isErrorTextStraightToOutput:!0,abortRequestId:\"supply-details\",browserCacheParams:{...j,strategy:O,requestCacheKey:z({endpoint:i,pageNumber:e,pageSize:t,supplyID:o})}}};var q=a(42435);const V=\"backend-errors\",K=(e,t)=>t?r().t(`${x.P}:${V}.${e}`,t):r().t(`${x.P}:${V}.${e}`),Q=(0,b.getLocale)({isFromCookie:!0}),H=Object.keys(q.D);var Z=a(17052);const X=Z.z.any();var Y;const J=null!==(Y=R.envsStore.get(\"ENDPOINT_BARCODES_AND_NAMES\"))&&void 0!==Y?Y:\"\",ee=({supplyId:e})=>({endpoint:J,body:{method:\"goodsDetails\",params:{supplyId:e}},schema:X,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\"}),te=\"main-page\",ae=\"supply-detail"
+        },
+        {
+          "offset": 3533,
+          "text": ");const X=Z.z.any();var Y;const J=null!==(Y=R.envsStore.get(\"ENDPOINT_BARCODES_AND_NAMES\"))&&void 0!==Y?Y:\"\",ee=({supplyId:e})=>({endpoint:J,body:{method:\"goodsDetails\",params:{supplyId:e}},schema:X,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\"}),te=\"main-page\",ae=\"supply-detail\",oe=\"common-translates\",ie=\"packaging\",ne=\"custom-banner\",se={containerPackagingInfo:`${x.P}:${ie}.containerPackagingInfo`,attentionToExpirationDate:`${x.P}:${ie}.attentionToExpirationDate`,copyToNewBox:`${x.P}:${ie}.copyToNewBox`,copyToNewPallet:`${x.P}:${ie}.copyToNewPallet`,emptyTemplate:`${x.P}:${ie}.emptyTemplate`,barcode:`${x.P}:${ie}.barcode`,good:`${x.P}:${ie}.good`,templateWithAllShk:`${x.P}:${ie}.templateWithAllShk`,toEdit:`${x.P}:${ie}.toEdit`,lastTextDescriptionKiz:`${x.P}:${ie}.lastTextDescriptionKiz`,lastBoldTextDescriptionKiz:`${x.P}:${ie}.lastBoldTextDescriptionKiz`,titleFirstBoldTextDescrip"
+        },
+        {
+          "offset": 31801,
+          "text": "e,data:t,key:a})=>e.boxTypeName===yt[a]?{availableVendorCodesAmount:e.articlesQuantity||0,goods:t.map(e=>({id:e.barcode,...e}))}:{availableVendorCodesAmount:0,goods:[]};let Dt=null;const Bt=S({reducerPath:f,baseQuery:(0,n.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),tagTypes:[E],endpoints:e=>({fetchSupplyDetails:e.query({query:W,transformResponse:e=>(({data:e,supply:t,total:a,totalCount:o,itemsQuantity:i})=>({data:e,supply:t,total:a,boxesInfo:{box:Tt({data:e,supply:t,key:\"box\"}),palette:Tt({data:e,supply:t,key:\"palette\"}),boxOnPallet:Tt({data:e,supply:t,key:\"boxOnPallet\"}),safe:Tt({data:e,supply:t,key:\"superSafe\"})},totalCount:o,itemsQuantity:i}))(e).supply,providesTags:()=>[C]}),getBarcodesAndName:e.query({query:ee}),...l.uh.Hv.get(e,()=>Dt)})});Dt=Bt;const ft=`@${y}/cross-dock-api`,Et=\"cargo\",Ct={type:Et,id:\"cargoDataId\"},It=M().object({address:M().object({addressLine:M().string(),la"
+        },
+        {
+          "offset": 33342,
+          "text": "(),isMoversRequired:M().string(),sizesUpdateRequired:M().boolean()});var $t;const wt=null!==($t=R.envsStore.get(\"GET_CARGO\"))&&void 0!==$t?$t:\"\",At=e=>({endpoint:wt,translateFunction:K,responseSchema:It,body:{params:e},isErrorTextStraightToOutput:!0,credentials:\"include\"}),Nt=S({reducerPath:ft,baseQuery:(0,n.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),tagTypes:[Et],endpoints:e=>({fetchCargo:e.query({query:At,transformResponse:e=>e.response,providesTags:()=>[Ct]})})}),jt=`@${y}/seller-api`,Ot=Z.z.object({additionalErrors:Z.z.unknown().optional(),error:Z.z.boolean(),errorText:Z.z.string().optional(),data:Z.z.record(Z.z.string(),Z.z.object({advertCampaigns:Z.z.number(),boxAmount:Z.z.number(),calcOptionParam:Z.z.any(),calcTypeID:Z.z.number(),comment:Z.z.string().nullable(),cost:Z.z.number(),costInSupplierCurrency:Z.z.object({currencyCode:Z.z.string(),currencyRate:Z.z.number(),amountWithVa"
+        },
+        {
+          "offset": 33430,
+          "text": "l!==($t=R.envsStore.get(\"GET_CARGO\"))&&void 0!==$t?$t:\"\",At=e=>({endpoint:wt,translateFunction:K,responseSchema:It,body:{params:e},isErrorTextStraightToOutput:!0,credentials:\"include\"}),Nt=S({reducerPath:ft,baseQuery:(0,n.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),tagTypes:[Et],endpoints:e=>({fetchCargo:e.query({query:At,transformResponse:e=>e.response,providesTags:()=>[Ct]})})}),jt=`@${y}/seller-api`,Ot=Z.z.object({additionalErrors:Z.z.unknown().optional(),error:Z.z.boolean(),errorText:Z.z.string().optional(),data:Z.z.record(Z.z.string(),Z.z.object({advertCampaigns:Z.z.number(),boxAmount:Z.z.number(),calcOptionParam:Z.z.any(),calcTypeID:Z.z.number(),comment:Z.z.string().nullable(),cost:Z.z.number(),costInSupplierCurrency:Z.z.object({currencyCode:Z.z.string(),currencyRate:Z.z.number(),amountWithVat:Z.z.number(),nds:Z.z.number()}),amountWithVat:Z.z.number(),currencyCode:Z.z.string(),c"
+        },
+        {
+          "offset": 34515,
+          "text": "ber(),volume:Z.z.number(),weight:Z.z.number()}).partial())});var zt;const Lt=null!==(zt=R.envsStore.get(\"ENDPOINT_SUPPLY_COST\"))&&void 0!==zt?zt:\"\",Mt=e=>({endpoint:Lt,body:e,method:\"POST\",schema:Ot,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\",isBatchRequest:!0}),Ut=S({reducerPath:jt,baseQuery:(0,n.baseRestRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),endpoints:e=>({getSupplyCost:e.query({query:Mt})})}),Gt=`@${y}/sm-api`,Rt=Z.z.object({details:Z.z.object({trns:Z.z.array(Z.z.object({seatsAmount:Z.z.number().optional(),passengers:Z.z.array(Z.z.object({passengerName:Z.z.string(),passengerSurname:Z.z.string()})).optional(),isSaving:Z.z.boolean().optional(),isDeleting:Z.z.boolean().optional(),boxType:Z.z.string().optional(),id:Z.z.number(),barcode:Z.z.object({barcodeId:Z.z.number(),barcodePrefix:Z.z.string(),giId:Z.z.number(),hasTrn:Z.z.boolean()}),firstName:Z.z.string()"
+        },
+        {
+          "offset": 34622,
+          "text": "DPOINT_SUPPLY_COST\"))&&void 0!==zt?zt:\"\",Mt=e=>({endpoint:Lt,body:e,method:\"POST\",schema:Ot,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\",isBatchRequest:!0}),Ut=S({reducerPath:jt,baseQuery:(0,n.baseRestRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),endpoints:e=>({getSupplyCost:e.query({query:Mt})})}),Gt=`@${y}/sm-api`,Rt=Z.z.object({details:Z.z.object({trns:Z.z.array(Z.z.object({seatsAmount:Z.z.number().optional(),passengers:Z.z.array(Z.z.object({passengerName:Z.z.string(),passengerSurname:Z.z.string()})).optional(),isSaving:Z.z.boolean().optional(),isDeleting:Z.z.boolean().optional(),boxType:Z.z.string().optional(),id:Z.z.number(),barcode:Z.z.object({barcodeId:Z.z.number(),barcodePrefix:Z.z.string(),giId:Z.z.number(),hasTrn:Z.z.boolean()}),firstName:Z.z.string(),lastName:Z.z.string(),carNumber:Z.z.string(),carModel:Z.z.string(),comment:Z.z.string().optional(),supplie"
+        },
+        {
+          "offset": 36005,
+          "text": "Ft=R.envsStore.get(\"ENDPOINT_ALL_PASSES_LIST\"))&&void 0!==Ft?Ft:\"\",qt=({suppliesIDs:e})=>({endpoint:Wt,body:e.map(e=>({method:\"TRNDetails\",params:{supplyId:e,isPassPreCreate:!1}})),responseSchema:Rt,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\",isBatchRequest:!0}),Vt=S({reducerPath:Gt,baseQuery:(0,n.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),endpoints:e=>({getAllPassesList:e.query({query:qt})})}),Kt=`@${y}/sm-box-api`,Qt=\"addBoxesCacheKey\",Ht=\"bindBarcodesCacheKey\",Zt=Z.z.any();var Xt;const Yt=null!==(Xt=R.envsStore.get(\"ENDPOINT_BIND_BARCODES\"))&&void 0!==Xt?Xt:\"\",Jt=e=>({endpoint:Yt,body:{params:e},schema:Zt,isErrorTextStraightToOutput:!0,translateFunction:K,credentials:\"include\"});var ea;const ta=null!==(ea=R.envsStore.get(\"ENDPOINT_DELETE_ALL_BOXES\"))&&void 0!==ea?ea:\"\",aa=e=>({endpoint:ta,body:{params:e},isErrorTextStraightToOutput:!0,translateFunction"
+        }
+      ],
+      "downloadTemplate": [
+        {
+          "offset": 19316,
+          "text": "ie}.paidPackagingBarcodeChipsButton`,barcodeAbbr:`${x.P}:${ie}.barcodeAbbr`,viaExcel:`${x.P}:${ie}.viaExcel`,excel:`${x.P}:${ie}.excel`,searchPlaceholder:`${x.P}:${ie}.searchPlaceholder`,searchPlaceholderMobile:`${x.P}:${ie}.searchPlaceholderMobile`,downloadTemplateWithBarcodes:`${x.P}:${ie}.downloadTemplateWithBarcodes`,downloadEmptyTemplate:`${x.P}:${ie}.downloadEmptyTemplate`,uploadViaExcel:`${x.P}:${ie}.uploadViaExcel`,downloadPageData:`${x.P}:${ie}.downloadPageData`,downloadPickingList:`${x.P}:${ie}.downloadPickingList`,pickingListDisabledTooltip:`${x.P}:${ie}.pickingListDisabledTooltip`,pickingListOnboardingTitle:`${x.P}:${ie}.pickingListOnboardingTitle`,pickingListOnboardingText:`${x.P}:${ie}.pickingListOnboardingText`,pickingListOnboardingGuideButton:`${x.P}:${ie}.pickingListOnboardingGuideButton`,pickingListTooltipCloseButton:`${x.P}:${ie}.pickingListTooltipCloseButton`,boxCountPlaceholder:`${x"
+        },
+        {
+          "offset": 19359,
+          "text": "eAbbr:`${x.P}:${ie}.barcodeAbbr`,viaExcel:`${x.P}:${ie}.viaExcel`,excel:`${x.P}:${ie}.excel`,searchPlaceholder:`${x.P}:${ie}.searchPlaceholder`,searchPlaceholderMobile:`${x.P}:${ie}.searchPlaceholderMobile`,downloadTemplateWithBarcodes:`${x.P}:${ie}.downloadTemplateWithBarcodes`,downloadEmptyTemplate:`${x.P}:${ie}.downloadEmptyTemplate`,uploadViaExcel:`${x.P}:${ie}.uploadViaExcel`,downloadPageData:`${x.P}:${ie}.downloadPageData`,downloadPickingList:`${x.P}:${ie}.downloadPickingList`,pickingListDisabledTooltip:`${x.P}:${ie}.pickingListDisabledTooltip`,pickingListOnboardingTitle:`${x.P}:${ie}.pickingListOnboardingTitle`,pickingListOnboardingText:`${x.P}:${ie}.pickingListOnboardingText`,pickingListOnboardingGuideButton:`${x.P}:${ie}.pickingListOnboardingGuideButton`,pickingListTooltipCloseButton:`${x.P}:${ie}.pickingListTooltipCloseButton`,boxCountPlaceholder:`${x.P}:${ie}.boxCountPlaceholder`,emptySearchT"
+        },
+        {
+          "offset": 196015,
+          "text": "lick()},[T]),B=(0,Ja.useCallback)(e=>{var t;const a=null===(t=e.target.files)||void 0===t?void 0:t[0];a&&(g(a,{onSuccess:x}),e.target.value=\"\")},[x,g]),f=(0,Ja.useMemo)(()=>[{id:\"download-excel-template\",label:r().t(0===k?se.downloadEmptyTemplate:se.downloadTemplateWithBarcodes),disabled:P,onClick:u},!n&&{id:\"upload-via-excel\",label:r().t(se.uploadViaExcel),disabled:S,onClick:D},{id:\"download-picking-list\",label:r().t(se.downloadPickingList),disabled:P||v,tooltip:v?r().t(se.pickingListDisabledTooltip):void 0,onClick:p},{id:\"download-page-data\",label:r().t(se.downloadPageData),disabled:P||v,onClick:c}].filter(Boolean).map(e=>({id:e.id,cursor:e.disabled?\"default\":\"pointer\",disabled:e.disabled,label:e.label,onClick:t=>{e.disabled||(e.onClick(),y(!1))},size:\"lg\",tooltip:e.tooltip,variant:\"normal\"})),[k,D,c,u,p,P,S,n,v]),E=(0,Ja.useCallback)((e,t)=>{var a;const o=(0,Xa.jsx)(Cd.Py,{cursor:e.cursor,disabled:e."
+        }
+      ]
+    }
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/682.chunk.62a936cb1e32b56a5e15.js",
+    "status": "200",
+    "bytes": 157879,
+    "sha256": "d4dce6f6e94659609d8d77e0dc4426d0bcd5df4c0c167d6c33d95a8aa60181c9",
+    "matches": {}
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/690.chunk.db66a0365a4ebe175dcf.js",
+    "status": "200",
+    "bytes": 2481548,
+    "sha256": "c3bfc8b3e938a30f1bfdb3468432202a546c226cc507b5d5499e803e90f53288",
+    "matches": {
+      ".xlsx": [
+        {
+          "offset": 1412050,
+          "text": "G=\"image/jpg\",e.JPEG=\"image/jpeg\",e.PNG=\"image/png\",e.SVG=\"image/svg+xml\",e.WEBP=\"image/webp\",e.TXT=\"text/plain\",e.CSV=\"text/csv, .csv\",e.XLS=\"application/vnd.ms-excel, .xls\",e.XLSX=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .xlsx\",e.DOCX=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document, .docx\",e.XML=\"application/xml, text/xml\",e.PDF=\"application/pdf\",e.PDF_IMAGE=\"image/pdf\",e.ZIP=\"application/zip, application/x-zip-compressed\",e.MP4=\"video/mp4\",e.GPP3=\"video/3gpp\",e.FLV=\"video/x-flv\",e.MOV=\"video/quicktime\",e.MSVIDEO=\"video/x-msvideo\",e.MS_WMV=\"video/x-ms-wmv\",e.WEBM=\"video/webm\",e.OGG=\"video/ogg\",e.ALL=\"*\"}(n||(n={}))},7263:(e,t,r)=>{\"use strict\";r.d(t,{K:()=>o});var n=r(8156),i=r.n(n),o=function(e){var t=e.paths,r=e.viewBox;return function(e){return function(n){var o=n.colorType,a=n.size,s=n.useCurrentColor;return i().createElement(e,{colorT"
+        },
+        {
+          "offset": 1419124,
+          "text": "G=\"image/jpg\",e.JPEG=\"image/jpeg\",e.PNG=\"image/png\",e.SVG=\"image/svg+xml\",e.WEBP=\"image/webp\",e.TXT=\"text/plain\",e.CSV=\"text/csv, .csv\",e.XLS=\"application/vnd.ms-excel, .xls\",e.XLSX=\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, .xlsx\",e.DOCX=\"application/vnd.openxmlformats-officedocument.wordprocessingml.document, .docx\",e.XML=\"application/xml, text/xml\",e.PDF=\"application/pdf\",e.PDF_IMAGE=\"image/pdf\",e.ZIP=\"application/zip, application/x-zip-compressed\",e.MP4=\"video/mp4\",e.GPP3=\"video/3gpp\",e.FLV=\"video/x-flv\",e.MOV=\"video/quicktime\",e.MSVIDEO=\"video/x-msvideo\",e.MS_WMV=\"video/x-ms-wmv\",e.WEBM=\"video/webm\",e.OGG=\"video/ogg\",e.ALL=\"*\"}(n||(n={}));var d=function(e){var t=e.name.split(\".\")[1];return\"xlsx\"===t||\"xls\"===t||\"docx\"===t},f=function(e,t,r){if(r||2===arguments.length)for(var n,i=0,o=t.length;i<o;i++)!n&&i in t||(n||(n=Array.prototype.slice.call(t,0,i)),n[i]=t[i])"
+        }
+      ],
+      "credentials:\"include\"": [
+        {
+          "offset": 125613,
+          "text": "ata:ue})),fe=n(73129),pe=function(e){var t;return{endpoint:null!==(t=fe.envsStore.get(\"ENDPOINT_ABAC_FEATURES\"))&&void 0!==t?t:\"\",schema:de,body:e.features.map(function(e){return{method:\"abacv2.checkaccess\",params:e}}),isErrorTextStraightToOutput:!0,credentials:\"include\",isBatchRequest:!0,selectData:\"data\"}},he=function(){return he=Object.assign||function(e){for(var t,r=1,n=arguments.length;r<n;r++)for(var i in t=arguments[r])Object.prototype.hasOwnProperty.call(t,i)&&(e[i]=t[i]);return e},he.apply(this,arguments)},me=n(31908),ge=(le=(0,me.createLocalContext)()).createApi,_e=le.LocalContext,ve=ge({reducerPath:\"@shared-const-utils/abac-features-api\",baseQuery:(0,me.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),endpoints:function(e){return{abacFeatures:e.query({query:pe,transformResponse:function(e,t,r){return function(e){var t=e.data,r=e.features;return t.reduce(function(e,t,n){var i=r[n"
+        },
+        {
+          "offset": 126064,
+          "text": "wnProperty.call(t,i)&&(e[i]=t[i]);return e},he.apply(this,arguments)},me=n(31908),ge=(le=(0,me.createLocalContext)()).createApi,_e=le.LocalContext,ve=ge({reducerPath:\"@shared-const-utils/abac-features-api\",baseQuery:(0,me.baseRpcRequest)({baseUrl:\"\",credentials:\"include\",priority:\"auto\"}),endpoints:function(e){return{abacFeatures:e.query({query:pe,transformResponse:function(e,t,r){return function(e){var t=e.data,r=e.features;return t.reduce(function(e,t,n){var i=r[n];if(!i)return e;var o=i.scope,a=i.featureKey,s=he({},e[o]||{});s[a]=t.data;var l=he({},e);return l[o]=s,l},{})}({data:e,features:r.features})}})}}}),be=function(){return be=Object.assign||function(e){for(var t,r=1,n=arguments.length;r<n;r++)for(var i in t=arguments[r])Object.prototype.hasOwnProperty.call(t,i)&&(e[i]=t[i]);return e},be.apply(this,arguments)},ye=function(e,t){return ve.useAbacFeaturesQuery({features:e},be(be({},t),{skip:0===e.lengt"
+        },
+        {
+          "offset": 132167,
+          "text": "t=function(e){return e.query({query:function(e){var t,r,n;return function(e){var t;return{endpoint:et,body:{params:{pageNumber:e.pageNumber,pageSize:e.pageSize,preorderID:Number(e.preorderID)||null,search:e.search,supplyID:Number(e.supplyID)||null}},credentials:\"include\",isErrorTextStraightToOutput:!0,abortRequestId:\"supply-details\",schema:tt,browserCacheParams:{storageCacheName:\"shared-const-utils__\".concat(Ge,\"__requests-cache\"),debug:!0,disabledCache:\"true\"===(null===(t=null===window||void 0===window?void 0:window.ENVS)||void 0===t?void 0:t.DISABLED_API_CACHE),expires:12096e5,strategy:\"NetworkFirst\",requestCacheKey:Je({endpoint:et,userID:e.userID,supplierID:e.supplierID,pageNumber:e.pageNumber,pageSize:e.pageSize,preorderID:e.preorderID,supplyID:e.supplyID,search:e.search})}}}(nt(nt({},e),{search:null!==(t=e.search)&&void 0!==t?t:\"\",pageNumber:null!==(r=e.pageNumber)&&void 0!==r?r:1,pageSize:null!==(n=e.p"
+        }
+      ]
+    }
+  }
+]
