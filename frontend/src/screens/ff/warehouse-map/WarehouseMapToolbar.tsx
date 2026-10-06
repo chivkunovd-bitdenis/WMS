@@ -12,6 +12,7 @@ import {
   SelectInput,
   TextInput,
   NumberInput,
+  PreferenceSwitch,
 } from '../../../ui-kit'
 import { searchTokens, type MapFilters } from './WarehouseMapRows'
 import {
@@ -21,6 +22,16 @@ import {
 } from '../../../utils/formatLocationCode'
 import { WarehouseMapWarehouseSwitch } from './WarehouseMapWarehouseSwitch'
 import type { WarehouseOption } from './WarehouseMapTypes'
+
+export type CreateCellBody = {
+  code: string
+  rack_name: string
+  side: 1 | 2 | null
+  tier: number | null
+  position: number
+  use_sides: boolean
+  use_tiers: boolean
+}
 
 // Склады занимали полэкрана под список, который меняется раз в квартал. Здесь они
 // стали переключателем в строке фильтров: высота растёт от числа складов, а место
@@ -156,60 +167,58 @@ export function WarehouseMapToolbar({
   )
 }
 
-export function CreateCellDialog({
-  open,
-  warehouseName,
-  existingCodes,
-  onClose,
-  onCreate,
-}: {
+type CreateCellDialogBase = {
   open: boolean
   warehouseName: string
   existingCodes: string[]
   onClose: () => void
-  onCreate: (code: string) => void
-}) {
-  if (!open) {
+}
+type CreateCellDialogProps = CreateCellDialogBase & (
+  | { addressing: true; onCreate: (body: CreateCellBody) => Promise<boolean> | boolean }
+  | { addressing?: false; onCreate: (code: string) => void }
+)
+
+export function CreateCellDialog(props: CreateCellDialogProps) {
+  if (!props.open) {
     return null
   }
   // Черновик формы живёт ровно столько, сколько открыт диалог: закрыли — забыли.
-  return (
-    <CreateCellDialogBody
-      warehouseName={warehouseName}
-      existingCodes={existingCodes}
-      onClose={onClose}
-      onCreate={onCreate}
-    />
-  )
+  return <CreateCellDialogBody {...props} />
 }
 
-function CreateCellDialogBody({
-  warehouseName,
-  existingCodes,
-  onClose,
-  onCreate,
-}: {
-  warehouseName: string
-  existingCodes: string[]
-  onClose: () => void
-  onCreate: (code: string) => void
-}) {
+function CreateCellDialogBody(props: CreateCellDialogProps) {
+  const { warehouseName, existingCodes, onClose } = props
+  const addressing = props.addressing === true
   const [rack, setRack] = useState('')
+  // Старые вызовы диалога всегда создавали адрес «ряд · сторона · позиция».
+  // Только WMS-654 умеет отключать сторону.
+  const [useSides, setUseSides] = useState(true)
+  const [useTiers, setUseTiers] = useState(addressing)
   const [side, setSide] = useState('1')
-  // Позицию подставляем сами — первую свободную. Ручной ввод помним только для
-  // того стеллажа и стороны, для которых его набрали: сменил стеллаж — снова
-  // подсказка, а не число от прошлого ряда.
+  const [tier, setTier] = useState<number | null>(1)
+  // Ручной номер относится только к его контексту: смена ряда, стороны или
+  // яруса снова показывает подсказку, а не старое число.
   const [manual, setManual] = useState<{ signature: string; value: number | null } | null>(null)
 
   const sideNumber = side === '2' ? 2 : 1
-  const signature = `${normalizeRackName(rack)}|${side}`
+  const effectiveSide = useSides ? sideNumber : null
+  const effectiveTier = useTiers ? tier : null
+  const signature = `${normalizeRackName(rack)}|${effectiveSide ?? ''}|${effectiveTier ?? ''}`
   const suggestion = useMemo(
-    () => (rack.trim() ? suggestNextLocationForRack(rack, sideNumber, existingCodes) : null),
-    [existingCodes, rack, sideNumber],
+    () => (rack.trim() ? suggestNextLocationForRack(rack, effectiveSide, effectiveTier, existingCodes) : null),
+    [effectiveSide, effectiveTier, existingCodes, rack],
   )
   const position =
     manual && manual.signature === signature ? manual.value : (suggestion?.position ?? null)
-  const code = rack.trim() && position !== null ? formatLocationCode(rack, sideNumber, position) : ''
+  const code = rack.trim() && position !== null
+    ? formatLocationCode(rack, effectiveSide, effectiveTier, position)
+    : ''
+  const body: CreateCellBody | null = code && position !== null
+    ? {
+        rack_name: rack.trim(), side: effectiveSide, tier: effectiveTier, position,
+        use_sides: useSides, use_tiers: useTiers, code,
+      }
+    : null
 
   return (
     <AppDialog
@@ -223,8 +232,12 @@ function CreateCellDialogBody({
             Отмена
           </SecondaryAction>
           <PrimaryAction
-            onClick={() => onCreate(code)}
-            disabledReason={code ? undefined : 'Укажите стеллаж'}
+            onClick={() => {
+              if (!body) return
+              if (props.addressing) void props.onCreate(body)
+              else props.onCreate(body.code)
+            }}
+            disabledReason={body ? undefined : 'Укажите стеллаж'}
             data-testid="warehouse-map-cell-submit"
           >
             Создать
@@ -236,6 +249,10 @@ function CreateCellDialogBody({
         <Typography variant="body2" color="text.secondary">
           Склад: {warehouseName}
         </Typography>
+        {addressing ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+          <PreferenceSwitch label="Учитывать стороны" checked={useSides} onChange={setUseSides} testId="wms-654-use-sides" />
+          <PreferenceSwitch label="Учитывать ярусы" checked={useTiers} onChange={setUseTiers} testId="wms-654-use-tiers" />
+        </Stack> : null}
         <TextInput
           label="Стеллаж"
           value={rack}
@@ -244,7 +261,7 @@ function CreateCellDialogBody({
           helperText="Как написано на стеллаже: А, Б, В1"
           testId="warehouse-map-cell-rack"
         />
-        <SelectInput
+        {useSides ? <SelectInput
           label="Сторона"
           value={side}
           onChange={setSide}
@@ -253,7 +270,14 @@ function CreateCellDialogBody({
             { value: '2', label: 'Сторона 2' },
           ]}
           testId="warehouse-map-cell-side"
-        />
+        /> : null}
+        {useTiers ? <NumberInput
+          label="Ярус"
+          value={tier}
+          onChange={setTier}
+          min={1}
+          testId="warehouse-map-cell-tier"
+        /> : null}
         <NumberInput
           label="Позиция"
           value={position}

@@ -7,6 +7,7 @@ import { WarehousePrinterDialog } from './WarehousePrinterDialog'
 import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
 import type { MapRow } from './WarehouseMapRows'
 import type { WarehouseMapData } from './WarehouseMapTypes'
+import type { CreateCellBody } from './WarehouseMapToolbar'
 import {
   mapErrorMessage,
   humanError,
@@ -131,23 +132,25 @@ export function FfWarehouseMapPage({ token, warehouses, isAdmin }: Props) {
     onError: setOperationError,
   })
 
-  async function createCell(code: string) {
+  async function createCell(body: CreateCellBody): Promise<boolean> {
     const requestWarehouseId = selectedWarehouseRef.current
     if (!requestWarehouseId) {
       setOperationError('Сначала выберите склад: ячейка создаётся внутри склада.')
-      return
+      return false
     }
     setOperationError(null)
     try {
       const res = await fetch(apiUrl(`/warehouses/${requestWarehouseId}/locations`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers(token) },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error(await mapErrorMessage(res))
       await load({ preserveOperationError: true })
+      return true
     } catch (err) {
       setOperationError(humanError(err, 'Не удалось создать ячейку'))
+      return false
     }
   }
 
@@ -175,13 +178,14 @@ export function FfWarehouseMapPage({ token, warehouses, isAdmin }: Props) {
         <ErrorNotice testId="warehouse-map-operation-error">{operationError}</ErrorNotice>
       ) : null}
       <FfWarehouseMapScreen
+        addressing
         data={data}
         loading={loading}
         error={loadError}
         warehouseId={warehouseId}
         onWarehouseChange={selectWarehouse}
         onMove={actions.move}
-        onCreateCell={(code: string) => void createCell(code)}
+        onCreateCell={createCell}
         onCreateWarehouse={(name: string, code: string) => void createWarehouse(name, code)}
         onPrinter={() => setPrinterOpen(true)}
         onPrintCell={actions.printCell}

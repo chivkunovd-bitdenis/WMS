@@ -84,7 +84,12 @@ class LocationCreate(BaseModel):
     code: str | None = Field(default=None, min_length=1, max_length=64)
     rack_name: str | None = Field(default=None, min_length=1, max_length=32)
     side: int | None = Field(default=None, ge=1, le=2)
+    tier: int | None = Field(default=None, ge=1)
     position: int | None = Field(default=None, ge=1, le=9999)
+    # Their presence selects WMS-654 addressing.  Absent fields deliberately
+    # preserve the legacy rack+side+position API.
+    use_sides: bool | None = None
+    use_tiers: bool | None = None
 
 
 class LocationPatch(BaseModel):
@@ -105,6 +110,9 @@ class LocationOut(BaseModel):
     code: str
     warehouse_id: str
     barcode: str
+    side: int | None = None
+    tier: int | None = None
+    position: int | None = None
 
 
 class WarehouseMapProductOut(BaseModel):
@@ -810,6 +818,9 @@ async def list_locations(
             code=x.code,
             warehouse_id=str(x.warehouse_id),
             barcode=x.barcode,
+            side=x.side,
+            tier=x.tier,
+            position=x.position,
         )
         for x in rows
     ]
@@ -825,17 +836,29 @@ async def post_location(
     await _require_address_storage(session, user.tenant_id)
     try:
         if body.rack_name is not None:
-            if body.side is None:
+            new_addressing = body.use_sides is not None or body.use_tiers is not None
+            if not new_addressing and body.side is None:
                 raise HTTPException(
                     status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                     detail="side_required",
+                )
+            if new_addressing and body.use_sides and body.side is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="side_required",
+                )
+            if new_addressing and body.use_tiers and body.tier is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="tier_required",
                 )
             loc = await create_location_from_rack(
                 session,
                 user.tenant_id,
                 warehouse_id,
                 rack_name=body.rack_name,
-                side=body.side,
+                side=body.side if not new_addressing or body.use_sides else None,
+                tier=body.tier if new_addressing and body.use_tiers else None,
                 position=body.position,
             )
         else:
@@ -872,6 +895,9 @@ async def post_location(
         code=loc.code,
         warehouse_id=str(loc.warehouse_id),
         barcode=loc.barcode,
+        side=loc.side,
+        tier=loc.tier,
+        position=loc.position,
     )
 
 
@@ -919,6 +945,9 @@ async def patch_location(
         code=loc.code,
         warehouse_id=str(loc.warehouse_id),
         barcode=loc.barcode,
+        side=loc.side,
+        tier=loc.tier,
+        position=loc.position,
     )
 
 
@@ -980,7 +1009,10 @@ async def suggest_location(
     user: Annotated[User, Depends(get_current_user)],
     session: Annotated[AsyncSession, Depends(get_db)],
     rack_name: str = Query(min_length=1, max_length=32),
-    side: int = Query(ge=1, le=2),
+    side: int | None = Query(default=None, ge=1, le=2),
+    tier: int | None = Query(default=None, ge=1),
+    use_sides: bool | None = None,
+    use_tiers: bool | None = None,
 ) -> LocationSuggestOut:
     await _require_address_storage(session, user.tenant_id)
     wh = await get_warehouse(session, user.tenant_id, warehouse_id)
@@ -990,18 +1022,40 @@ async def suggest_location(
             detail="warehouse_not_found",
         )
     try:
+        new_addressing = use_sides is not None or use_tiers is not None
+        if not new_addressing and side is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="side_required",
+            )
+        if new_addressing and use_sides and side is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="side_required",
+            )
+        if new_addressing and use_tiers and tier is None:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="tier_required",
+            )
         pos, code = await suggest_next_location_for_rack(
             session,
             user.tenant_id,
             warehouse_id,
             rack_name=rack_name,
-            side=side,
+            side=side if not new_addressing or use_sides else None,
+            tier=tier if new_addressing and use_tiers else None,
         )
     except CatalogError as exc:
         if exc.code == "invalid_side":
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                 detail="invalid_side",
+            ) from None
+        if exc.code == "invalid_tier":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="invalid_tier",
             ) from None
         raise
     return LocationSuggestOut(position=pos, code=code)

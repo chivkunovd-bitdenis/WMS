@@ -1157,8 +1157,11 @@ export default function App() {
   async function onCreateLocation(body: {
     code?: string
     rack_name?: string
-    side?: 1 | 2
+    side?: 1 | 2 | null
+    tier?: number | null
     position?: number
+    use_sides?: boolean
+    use_tiers?: boolean
   }): Promise<boolean> {
     if (!token || !selectedWarehouseId) {
       return false
@@ -1170,7 +1173,7 @@ export default function App() {
       setCatalogError('Укажите стеллаж или код ячейки.')
       return false
     }
-    if (hasRack && !body.side) {
+    if (hasRack && body.use_sides !== false && !body.side) {
       setCatalogError('Укажите сторону (1 или 2).')
       return false
     }
@@ -1194,7 +1197,10 @@ export default function App() {
               ? {
                   rack_name: trimmedRack,
                   side: body.side,
+                  tier: body.tier,
                   position: body.position,
+                  use_sides: body.use_sides,
+                  use_tiers: body.use_tiers,
                   code: trimmedCode,
                 }
               : { code: trimmedCode },
@@ -1429,13 +1435,24 @@ export default function App() {
   async function onSuggestLocation(
     warehouseId: string,
     rackName: string,
-    side: 1 | 2,
+    side: 1 | 2 | null,
+    options: { tier: number | null; use_sides: boolean; use_tiers: boolean } = {
+      tier: null,
+      use_sides: true,
+      use_tiers: false,
+    },
   ): Promise<{ position: number; code: string } | null> {
     if (!token) {
       return null
     }
     try {
-      const params = new URLSearchParams({ rack_name: rackName, side: String(side) })
+      const params = new URLSearchParams({
+        rack_name: rackName,
+        use_sides: String(options.use_sides),
+        use_tiers: String(options.use_tiers),
+      })
+      if (side !== null) params.set('side', String(side))
+      if (options.tier !== null) params.set('tier', String(options.tier))
       const res = await fetch(apiUrl(`/warehouses/${warehouseId}/locations/suggest?${params}`), {
         headers: authHeaders(token),
       })
