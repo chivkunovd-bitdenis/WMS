@@ -390,6 +390,18 @@ async function flagContracts(){
       const selections=requestLog.filter(r=>r.path.endsWith('/scan-auto-print')&&r.body?.order_id);
       assert.deepEqual(selections.map(r=>r.body.order_id),server?
         (variant==='remount-after-lost-ack'?['wb-a-order','wb-a-order','wb-next-order']:['wb-a-order','wb-next-order']):[]);
+      if(variant==='remount-after-lost-ack'){
+        const resumed=selections.filter(r=>r.body.order_id==='wb-a-order');
+        assert.equal(resumed.length,2,'one initial and one restored explicit selection');
+        assert(resumed.every(r=>typeof r.body.idempotency_key==='string'&&r.body.idempotency_key.trim().length>0),
+          'initial/restored explicit selection keys must be nonempty');
+        assert.equal(resumed[1].body.idempotency_key,resumed[0].body.idempotency_key,
+          'restored explicit selection must reuse initial idempotency key');
+        assert.deepEqual(resumed.map(r=>[r.path,r.body.order_id,r.body.barcode]),[
+          ['/operations/fbs-supplies/wb-a/scan-auto-print','wb-a-order',qrCodes[0]],
+          ['/operations/fbs-supplies/wb-a/scan-auto-print','wb-a-order',qrCodes[0]],
+        ],'restored selection must preserve actual supply/order/sticker identity');
+      }
       assert(selections.every(r=>r.body.print_chz===false),'explicit sticker may never allocate pool CIS');
       assert(selections.every(r=>r.body.await_honest_sign===true));
       const commits=requestLog.filter(r=>r.path==='/operations/fbs-orders/kiz/commit');
