@@ -12,7 +12,6 @@ import pytest
 
 from app.services.fbs_observed_handoff_service import ozon_proves_handoff
 
-
 LIVE_PROOF = (
     Path(__file__).parents[2]
     / "docs/reviews/wms675-evidence-20261006/live-ozon-run-20261006-attempt1"
