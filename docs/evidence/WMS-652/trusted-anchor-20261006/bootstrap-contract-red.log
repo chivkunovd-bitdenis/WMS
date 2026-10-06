@@ -1,0 +1,372 @@
+FEEEEEEEEEEEEEEEEEEEEEE
+======================================================================
+ERROR: test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 120, in test_existing_baseline_priority_never_reads_seed_even_with_wrong_pin
+    result = self.verify({'base_sha': 'e'*40, 'source_sha': S})
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed) (mutation='outage')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 132, in test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed) (mutation='malformed')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 132, in test_existing_corrupt_policy_or_api_outage_never_replaced_by_seed
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_loader_absent_refuses_malformed_and_accepts_only_two_exact_sha_fields (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_loader_absent_refuses_malformed_and_accepts_only_two_exact_sha_fields)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 147, in test_loader_absent_refuses_malformed_and_accepts_only_two_exact_sha_fields
+    self.assertIsNone(self.m.load_approved_bootstrap())
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AttributeError: module 'scripts.ci.trusted_process_check' has no attribute 'load_approved_bootstrap'
+
+======================================================================
+ERROR: test_missing_policy_only_exact_explicit_pin_accepts_with_real_ci_base (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_missing_policy_only_exact_explicit_pin_accepts_with_real_ci_base)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 78, in test_missing_policy_only_exact_explicit_pin_accepts_with_real_ci_base
+    result = self.verify()
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin=None)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', 'source_sha': 'dddddddddddddddddddddddddddddddddddddddd'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'source_sha': 'main'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'source_sha': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', 'source_sha': 'dddddddddddddddddddddddddddddddddddddddd', 'allow': True})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap) (pin={'base_sha': 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'})
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 94, in test_no_pin_wrong_base_or_invalid_source_never_auto_bootstrap
+    self.reject(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses) (mutation='unavailable')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 104, in test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses) (mutation='missing-policy')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 104, in test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses) (mutation='base-tree-outage')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 104, in test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses) (mutation='truncated')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 104, in test_seed_api_unavailable_missing_policy_or_truncated_tree_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_does_not_exempt_required_ci_jobs_or_final_attempt_reread (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_does_not_exempt_required_ci_jobs_or_final_attempt_reread)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 137, in test_seed_does_not_exempt_required_ci_jobs_or_final_attempt_reread
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='blob')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='mode')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='missing')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='selfhash')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+ERROR: test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse) (mutation='case')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 115, in test_seed_file_bytes_or_mode_mismatch_and_self_updated_hash_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 75, in reject
+    self.verify(pin)
+    ~~~~~~~~~~~^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 70, in verify
+    return self.m.verify_pr_evidence(self.f.get, self.f.download, REPO, 7,
+           ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+                                     approved_bootstrap=pin)
+                                     ^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: verify_pr_evidence() got an unexpected keyword argument 'approved_bootstrap'
+
+======================================================================
+FAIL: test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact (scripts.ci.tests.test_trusted_process_bootstrap.ExplicitBootstrapTests.test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_bootstrap.py", line 166, in test_cli_reads_only_sibling_trusted_pin_and_still_requires_artifact
+    self.assertEqual(self.m.main(), 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: 2 != 0
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.009s
+
+FAILED (failures=1, errors=22)
