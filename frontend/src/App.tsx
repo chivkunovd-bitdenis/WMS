@@ -3835,7 +3835,9 @@ export default function App() {
                 <FfInboundRequestView
                   token={token}
                   requestId={selectedInboundId}
-                  isFulfillmentAdmin={canReceptionOps}
+                  isFulfillmentAdmin={isFulfillmentAdmin}
+                  canReceptionOps={canReceptionOps}
+                  canManageCatalog={isFulfillmentAdmin}
                   workspace={ffInboundWorkspace}
                   sellers={sellers}
                   addressStorageEnabled={me?.address_storage_enabled !== false}

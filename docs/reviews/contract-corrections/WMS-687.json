@@ -1,0 +1,22 @@
+{
+  "task": "WMS-687",
+  "contract_commit": "b1b2b5fde77a4934bfb1b8fef9246516fe5a579a",
+  "correction_commit": "239f34c655ad0837cdbedab3c5a059ec70b11852",
+  "files": [
+    "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+  ],
+  "ancillary_files": [
+    "docs/requirements/WMS-687.md",
+    "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts",
+    "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "report": "docs/reviews/WMS-687-contract-correction-review.md",
+    "report_commit": "f938072e43c5c4bb90d5b113b0c1900e671c0e3d",
+    "summary": "Frozen oldDOM retains both original scenarios and all expectations byte-for-byte when only the additive permission scenario/type declarations are removed. Other frozen backend file is unchanged. Exact correction has only the declared frozen file, two new task-owned tests, and this task requirement Test-column links; no product changes. Independent reviewer read all four paths; additional tests precede product fix. This receipt does not claim validator compatibility or complete product acceptance."
+  },
+  "validator_status": "pending_compatibility"
+}
