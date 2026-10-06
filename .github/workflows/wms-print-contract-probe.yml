@@ -20,8 +20,6 @@ jobs:
     timeout-minutes: 10
     env:
       WMS672_TEST_URL: http://127.0.0.1:16724
-      WMS672_EVIDENCE_DIR: ${{ runner.temp }}/print-contract/672
-      WMS673_RENDERED_ARTIFACTS_DIR: ${{ runner.temp }}/print-contract/673
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -40,6 +38,9 @@ jobs:
           node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
       - name: Run sequential synthetic browser and PDF contracts
         shell: bash
+        env:
+          WMS672_EVIDENCE_DIR: ${{ runner.temp }}/print-contract/672
+          WMS673_RENDERED_ARTIFACTS_DIR: ${{ runner.temp }}/print-contract/673
         run: |
           set -uo pipefail
           cd frontend
