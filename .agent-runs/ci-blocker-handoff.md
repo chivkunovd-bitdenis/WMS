@@ -180,3 +180,20 @@ positive reaches `verify_registered_case` and fails specifically on template
 `C6 independent coordinates sides=%s tiers=%s` lacking an expanded case/report
 binding, proving the prior template contract is exercising the new matcher
 rather than the old unsplit-reference path.
+
+## Stage handoff: legacy WMS-654 report versus ancillary WMS-687 proof
+
+Two focused document-gate contracts distinguish compatibility from a new
+exception. The accepted-style WMS-654 exact-files ledger changes only its
+frozen test and retains valid `model=gpt-6-astra`, `effort=high`, `verdict=PASS`
+and historical `report`, deliberately without `report_commit`; it must pass.
+The WMS-687 counterpart uses an allowed new own-task test and Test-link
+companion but has `report` without `report_commit`; it must reject.
+
+Running these tests by importing the current integration
+`check_task_documents.py` reproduces the defect in the first case: it returns
+the correction-scope error because `correction_companions` unconditionally
+requires `report_commit` whenever any report field exists. The second case
+still rejects. The fix therefore must make the proof-SHA requirement specific
+to the new ancillary WMS-687 path, while retaining frozen-file equality and
+existing model/effort/verdict validation for WMS-654.
