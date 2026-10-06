@@ -81,3 +81,17 @@ valid barcode PNG и iframe. Только отсутствующий у jsdom `s
 technical marks. Existing C5, его 300 labels, timeout и assertions не менялись.
 Разработчику нельзя менять этот контракт; после product change обязательны
 повтор C5a и unchanged Linux141 C5.
+
+## Stage handoff: WMS-652 SOURCE binding transition contract
+
+`ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference`
+сохраняет literal `d61805978b3e7878d1056c99b4e6e0823edf49a5` без послабления.
+Новая fixture `wms652_source_binding_transition.json` формализует состояние
+`pending-final-independent-freeze`: финальный SHA отсутствует намеренно, текущий
+integration candidate `f71b99c0f19bdbf48e8e0b95b62aefe8709307fc` не получает
+доверие. Контракт отдельно отвергает `HEAD`, `${GITHUB_SHA}` и этот unreviewed
+candidate при сохранении настоящей команды `product_scope`, а не dummy command.
+
+После independent acceptance/freeze интегратор должен одновременно заменить
+final fixture pin и literal workflow pin на один опубликованный 40-hex SHA.
+До этого workflow, policy, checker и production code не менялись.
