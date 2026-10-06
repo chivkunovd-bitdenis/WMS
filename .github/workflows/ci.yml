@@ -119,14 +119,6 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install frontend helpers for backend HTTP contract tests
         run: npm ci --prefix ../frontend
-      - name: Pytest
-        # -n auto раскладывает прогон по ядрам раннера. Вместе со сборкой схемы
-        # один раз за прогон (tests/conftest.py) это увело полный набор
-        # с 20 минут 38 секунд до 4 минут 48 секунд при том же составе тестов:
-        # 1431 до, 1431 после, ни один не сменил исход.
-        # These two contracts require their own idle PostgreSQL clusters.
-        # Both run below unchanged, serially, without skip/xfail.
-        run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py
       - name: WMS-662 isolated batch lock order on real PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55466/wms_test_662_batch
@@ -159,6 +151,14 @@ jobs:
           alembic upgrade head
           alembic downgrade 20260923_0517
           alembic upgrade head
+      - name: Pytest
+        # -n auto раскладывает прогон по ядрам раннера. Вместе со сборкой схемы
+        # один раз за прогон (tests/conftest.py) это увело полный набор
+        # с 20 минут 38 секунд до 4 минут 48 секунд при том же составе тестов:
+        # 1431 до, 1431 после, ни один не сменил исход.
+        # These two contracts require their own idle PostgreSQL clusters.
+        # Both run below unchanged, serially, without skip/xfail.
+        run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py
 
   frontend-build:
     timeout-minutes: 20
