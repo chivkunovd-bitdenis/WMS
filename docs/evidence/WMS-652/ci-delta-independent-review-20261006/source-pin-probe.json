@@ -1,0 +1,27 @@
+{
+  "approvedBootstrap": {
+    "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "source_sha": "0151a555ac429957d0eee591317cc4326e909dfd"
+  },
+  "policySha256": "24832907fc361fcc85f7a3940394445bfead9846c4c979a657f89d45b34fae53",
+  "protectedFiles": 222,
+  "exactCases": 1146,
+  "oldFilesPreserved": 210,
+  "oldCasesPreserved": 955,
+  "changedPriorHashes": [
+    ".github/workflows/ci.yml",
+    "frontend/tests-e2e/wms652-critical/browser.mjs",
+    "frontend/tests-e2e/wms652-critical/cases.json",
+    "scripts/ops/tests/wms517-mac-dom.test.cjs",
+    "scripts/ops/tests/wms517-mac-launcher.test.cjs"
+  ],
+  "protectedBrowserClosure": 12,
+  "fixtureClosureFixed": true,
+  "actualNewReports": {
+    "shards": 20,
+    "scope": 51,
+    "mac": 110,
+    "browser": 43
+  },
+  "fullCiOrActivationClaimed": false
+}
