@@ -440,6 +440,17 @@ function inboundStatusChipColor(
 const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
 const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
 
+function inboundReceiptDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '—'
+  const pieces = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => pieces.find((item) => item.type === type)?.value ?? '—'
+  return `${part('day')}.${part('month')}.${part('year')}`
+}
+
 function isGeneratedInboundBoxBarcode(barcode: string): boolean {
   return (
     GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode) ||
@@ -477,13 +488,13 @@ export function FfInboundRequestView({
 }: Props) {
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [acceptanceActLoading, setAcceptanceActLoading] = useState(false)
-  // WMS-586: «Акт приёмки» — Excel завершённой приёмки (план, факт, расхождение).
+  // WMS-586: «Акт приёмки» завершённой приёмки (план, факт, расхождение).
   // Имя файла приходит от сервера в Content-Disposition.
-  const downloadAcceptanceAct = async () => {
+  const downloadAcceptanceAct = async (format: 'xlsx' | 'pdf') => {
     if (acceptanceActLoading) return
     setAcceptanceActLoading(true)
     try {
-      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/acceptance-act.xlsx`), {
+      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/acceptance-act.${format}`), {
         headers: authHeaders,
       })
       if (!response.ok) {
@@ -493,7 +504,7 @@ export function FfInboundRequestView({
       const blob = await response.blob()
       const header = response.headers.get('content-disposition') ?? ''
       const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-      let filename = 'acceptance-act.xlsx'
+      let filename = `acceptance-act.${format}`
       try { if (encoded) filename = decodeURIComponent(encoded) } catch { /* keep fallback name */ }
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -1627,6 +1638,11 @@ export function FfInboundRequestView({
           : `Грузоместо № ${target.number}`,
         barcode: target.barcode,
         barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
+        metadata: target.kind === 'box' ? [
+          `Короб № ${target.number}`,
+          detail?.seller_name?.trim() || '—',
+          `Приёмка ${(detail?.display_number || detail?.document_number || '—').trim() || '—'} от ${inboundReceiptDate(detail?.created_at)}`,
+        ] : undefined,
         labelSize,
         layout: 'internalBox' as const,
       })))
@@ -2581,15 +2597,25 @@ export function FfInboundRequestView({
               ) : null}
 
               {receptionClosed && detail.lines.length > 0 ? (
-                <Button
-                  variant="outlined"
-                  startIcon={<DownloadOutlined />}
-                  disabled={busy || acceptanceActLoading}
-                  data-testid="ff-inbound-acceptance-act"
-                  onClick={() => void downloadAcceptanceAct()}
-                >
-                  Акт приёмки
-                </Button>
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadOutlined />}
+                    disabled={busy || acceptanceActLoading}
+                    data-testid="ff-inbound-acceptance-act"
+                    onClick={() => void downloadAcceptanceAct('xlsx')}
+                  >
+                    Акт приёмки · Excel
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadOutlined />}
+                    disabled={busy || acceptanceActLoading}
+                    onClick={() => void downloadAcceptanceAct('pdf')}
+                  >
+                    PDF
+                  </Button>
+                </Stack>
               ) : null}
 
               <Button

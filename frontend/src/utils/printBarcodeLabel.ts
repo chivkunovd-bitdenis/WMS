@@ -24,6 +24,8 @@ export type BarcodeLabelPrintOptions = {
   title: string
   barcode: string
   barcodeDataUrl: string
+  /** Receipt fields are rendered only by the intake-box caller. */
+  metadata?: readonly string[]
   /** Физический размер этикетки (см. utils/labelSize.ts). Без него — прежнее поведение (авто-размер листа браузера). */
   labelSize?: LabelSize
   /** Ячейки печатаются на крупной складской этикетке, а не на товарном термоформате. */
@@ -31,13 +33,14 @@ export type BarcodeLabelPrintOptions = {
 }
 
 function labelPageHtml(options: BarcodeLabelPrintOptions, index: number, total: number): string {
-  const { title, barcode, barcodeDataUrl } = options
+  const { title, barcode, barcodeDataUrl, metadata = [] } = options
   const safeTitle = escapeHtml(title)
   const safeBarcode = escapeHtml(barcode)
   const safeBarcodeDataUrl = escapeHtml(barcodeDataUrl)
   return `<section class="label${index + 1 < total ? ' label--next' : ''}" data-barcode="${safeBarcode}">
       <div class="wrap">
         <div class="title">${safeTitle}</div>
+        ${metadata.length ? `<div class="metadata">${metadata.map((value) => `<div>${escapeHtml(value)}</div>`).join('')}</div>` : ''}
         <img class="barcode" src="${safeBarcodeDataUrl}" alt="barcode" />
         <div class="code">${safeBarcode}</div>
       </div>
@@ -67,10 +70,11 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
       html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
       .label { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; box-sizing: border-box; }
       .label--next { break-after: page; page-break-after: always; }
-      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto 1fr auto; gap: 1mm; justify-items: stretch; align-items: center; }
-      .title { font-size: 13pt; font-weight: 800; text-align: center; }
-      .code { font-size: 9pt; text-align: center; }
-      .barcode { width: 100%; max-width: none; height: auto; max-height: none; display: block; image-rendering: pixelated; }`
+      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 1mm; justify-items: stretch; align-items: center; }
+      .title { font-size: 10pt; font-weight: 800; text-align: center; }
+      .metadata { font-size: 5.2pt; line-height: 1; text-align: center; overflow-wrap: anywhere; }
+      .code { font-size: 7pt; text-align: center; }
+      .barcode { width: 100%; max-width: none; min-height: 0; height: 100%; max-height: none; display: block; object-fit: fill; image-rendering: pixelated; }`
     : labelSize
       ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
       html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
