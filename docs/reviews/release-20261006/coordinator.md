@@ -239,3 +239,11 @@ Run 37535645145, attempt1, повторил C5 FAILURE: peer2/native7 PASS, ош
 Перед следующим разрешённым capture интегратор прочитал [категории каждого сохранённого нужного события](../../evidence/WMS-672/cache-clock-trace-linux-20261007/retained-event-category-check.json): GetTask, AddBudget, RemoveBudget, Unref, DecodeImageIfNecessary, DoDecodeImage и LayerTreeHostImpl Queue — cc.debug; clock_sync — metadata. Необходимые поля сохранились при исключении широкого cc. Проверенный standalone e563f2883b57640a3047e14101db658ebde542f2 отличается только этим category removal и именами diagnostic job/artifact; пять product/frozen paths равны47817,2+7/C5/native forwarding/32MiB/light250ms/шесть clocks не изменены.
 
 Единственный разрешённый debug-only dispatch37538174978 attempt1 выполнен интегратором; result pending. Это ремонт потери telemetry, не новая product/window правка или fullCI попытка. Все source/ref/pin/release условия сохраняются, production8f11d912 и stagingcc8e не изменены.
+
+## Checkpoint 22:14 UTC: debug-only trace ещё не дошёл до поздней ошибки
+
+Actual run37538174978 attempt1 на e563f2883b57640a3047e14101db658ebde542f2 завершён FAILURE; job112524366575 setup/source guards и raw upload завершились SUCCESS. Peer2/native7 PASS, прежний C5 снова получил native EncodingError на correctedretry232–240/cumulative532–540 после правильной injection299, pending0 и без передачи. Никакой product/window или frozen assertions правки не сделано.
+
+Capture по сообщению исполнителя всё ещё inconclusive:32MiB заполнены во время первого150/renderTape,26592events/742GetTask/656Add/556Remove/23image snapshots/2clocks, dataLoss=true; истинная поздняя ошибка находится после сохранённого конца. Исполнитель сохраняет полный evidence-only checkpoint. Ведущий разрешил обоснованный collector repair: собирать failing second fixture и завершать запись после настоящего native refusal, заранее оценив объём нужных snapshots/events и disk bounds. Native вызовы, продукт, обычный C5 и его таймауты остаются неизменными. Новый ref ещё не получен и dispatch не выполнен.
+
+Current prepared policy228files/1170caseIDs, product47817 bytes; ref d618/mainSOURCE0151 сохраняются до доказанной коррекции, независимого ревью и отдельной приёмки. PR387f606/fullCI failed37523087363, production8f11d912 и stagingcc8e не изменены.
