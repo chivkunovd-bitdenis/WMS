@@ -1,0 +1,156 @@
+F.F.FFFFF.                                                          [100%]
+=================================== FAILURES ===================================
+_ GitTests.test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case _
+
+self = <test_check_task_documents.GitTests testMethod=test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case>
+
+    def test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case(self):
+        _, inbound, _, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(inbound), self.root)
+>       self.assertEqual(errors, [])
+E       AssertionError: Lists differ: ['В frontend/src/screens/ff/FfInboundReque[130 chars]er.'] != []
+E       
+E       First list contains 1 additional elements.
+E       First extra element 0:
+E       'В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer.'
+E       
+E       + []
+E       - ['В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не '
+E       -  'найдено имя теста inbound selects only document products and opens the '
+E       -  'catalog FbsStockDialogContainer.']
+
+scripts/ci/test_check_task_documents.py:932: AssertionError
+_ GitTests.test_protected_wms687_expanded_return_reference_uses_exact_receipt_case _
+
+self = <test_check_task_documents.GitTests testMethod=test_protected_wms687_expanded_return_reference_uses_exact_receipt_case>
+
+    def test_protected_wms687_expanded_return_reference_uses_exact_receipt_case(self):
+        _, _, returned, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(returned), self.root)
+>       self.assertEqual(errors, [])
+E       AssertionError: Lists differ: ['В frontend/src/screens/ff/FfInboundReque[129 chars]er.'] != []
+E       
+E       First list contains 1 additional elements.
+E       First extra element 0:
+E       'В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста return selects only document products and opens the catalog FbsStockDialogContainer.'
+E       
+E       + []
+E       - ['В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не '
+E       -  'найдено имя теста return selects only document products and opens the '
+E       -  'catalog FbsStockDialogContainer.']
+
+scripts/ci/test_check_task_documents.py:937: AssertionError
+_ PromoteGuardsTests.test_protected_wms687_each_rejects_arbitrary_describe_group_prefix _
+ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+During handling of the above exception, another exception occurred:
+
+self = <test_promote_guards.PromoteGuardsTests testMethod=test_protected_wms687_each_rejects_arbitrary_describe_group_prefix>
+
+    def test_protected_wms687_each_rejects_arbitrary_describe_group_prefix(self):
+        owner = "src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        cases = self.wms687_actual_cases(owner)
+        cases[0] = cases[0].replace(
+            "WMS-687 shared FBS stock dialog from an inbound document",
+            "arbitrary describe group",
+        )
+        self.wms687_protected_each_fixture(cases=cases)
+    
+>       with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: "обязательного case/report" does not match "В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer"
+
+scripts/ci/tests/test_promote_guards.py:428: AssertionError
+__ PromoteGuardsTests.test_protected_wms687_each_rejects_changed_source_hash ___
+ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+During handling of the above exception, another exception occurred:
+
+self = <test_promote_guards.PromoteGuardsTests testMethod=test_protected_wms687_each_rejects_changed_source_hash>
+
+    def test_protected_wms687_each_rejects_changed_source_hash(self):
+        self.wms687_protected_each_fixture(digest="0" * 64)
+    
+>       with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: "Изменён защищённый original тест" does not match "В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer"
+
+scripts/ci/tests/test_promote_guards.py:416: AssertionError
+___ PromoteGuardsTests.test_protected_wms687_each_rejects_missing_exact_case ___
+ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+During handling of the above exception, another exception occurred:
+
+self = <test_promote_guards.PromoteGuardsTests testMethod=test_protected_wms687_each_rejects_missing_exact_case>
+
+    def test_protected_wms687_each_rejects_missing_exact_case(self):
+        owner = "src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        self.wms687_protected_each_fixture(cases=self.wms687_actual_cases(owner)[:-1])
+    
+>       with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: "обязательного case/report" does not match "В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer"
+
+scripts/ci/tests/test_promote_guards.py:404: AssertionError
+______ PromoteGuardsTests.test_protected_wms687_each_rejects_wrong_report ______
+ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+During handling of the above exception, another exception occurred:
+
+self = <test_promote_guards.PromoteGuardsTests testMethod=test_protected_wms687_each_rejects_wrong_report>
+
+    def test_protected_wms687_each_rejects_wrong_report(self):
+        self.wms687_protected_each_fixture(report="other-vitest-report.json")
+    
+>       with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       AssertionError: "обязательного case/report" does not match "В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer"
+
+scripts/ci/tests/test_promote_guards.py:410: AssertionError
+_ PromoteGuardsTests.test_protected_wms687_each_uses_the_two_exact_executed_case_ids _
+
+self = <test_promote_guards.PromoteGuardsTests testMethod=test_protected_wms687_each_uses_the_two_exact_executed_case_ids>
+
+    def test_protected_wms687_each_uses_the_two_exact_executed_case_ids(self):
+        source, _ = self.wms687_protected_each_fixture()
+        original_document = (self.root / "docs/requirements/WMS-687.md").read_text()
+    
+>       promoter.promote(self.root, "WMS-687")
+
+scripts/ci/tests/test_promote_guards.py:391: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+root = PosixPath('/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/tmp_cxjwm1z')
+task = 'WMS-687'
+
+    def promote(root: Path, task: str) -> list[str]:
+        if not re.fullmatch(r"WMS-\d+", task):
+            raise ValueError("Номер задачи должен иметь вид WMS-NNN")
+        document = root / "docs" / "requirements" / f"{task}.md"
+        if not document.is_file():
+            raise ValueError(f"Нет документа {document.relative_to(root)}")
+        lines = document.read_text(encoding="utf-8").splitlines()
+        references = permanent_references(lines)
+        if not references:
+            return []
+    
+        policy = saved_process_policy(root)
+        moves: dict[PurePosixPath, PurePosixPath] = {}
+        for _, _, source, test_name in references:
+            path = root / source
+            if not path.is_file():
+                raise ValueError(f"Нет файла теста {source}")
+            if test_name not in path.read_text(encoding="utf-8"):
+>               raise ValueError(f"В {source} не найдено имя теста {test_name}")
+E               ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+scripts/ci/promote_guards.py:230: ValueError
+=========================== short test summary info ============================
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_protected_wms687_expanded_return_reference_uses_exact_receipt_case
+FAILED scripts/ci/tests/test_promote_guards.py::PromoteGuardsTests::test_protected_wms687_each_rejects_arbitrary_describe_group_prefix
+FAILED scripts/ci/tests/test_promote_guards.py::PromoteGuardsTests::test_protected_wms687_each_rejects_changed_source_hash
+FAILED scripts/ci/tests/test_promote_guards.py::PromoteGuardsTests::test_protected_wms687_each_rejects_missing_exact_case
+FAILED scripts/ci/tests/test_promote_guards.py::PromoteGuardsTests::test_protected_wms687_each_rejects_wrong_report
+FAILED scripts/ci/tests/test_promote_guards.py::PromoteGuardsTests::test_protected_wms687_each_uses_the_two_exact_executed_case_ids
+7 failed, 3 passed, 88 deselected, 5 subtests passed in 3.00s

@@ -142,6 +142,12 @@ jobs:
         run: |
           python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_654_combined'); c.close()"
           pytest -n 0 -q tests/test_wms654_migration.py::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner --junitxml="$RUNNER_TEMP/release-postgres/654.xml"
+      - name: WMS-681 two-worker QR checkpoint recovery on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_681_recovery
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_681_recovery'); c.close()"
+          pytest -n 0 -q tests/test_wms681_postgres_recovery.py::test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoint --junitxml="$RUNNER_TEMP/release-postgres/681.xml"
       - name: Required PostgreSQL handoff cancellation documents and catalog contracts
         run: bash ../scripts/ci/run_release_postgres.sh
       - name: WMS-675 real incident recovery on isolated PostgreSQL
@@ -433,7 +439,7 @@ jobs:
           scripts/ci/tests/test_promote_guards.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - name: WMS-687 strict reviewed correction compatibility
-        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k "wms687 or accepted_report_without_report_commit or exact_chain or two_by_two or binding_canary" --junitxml="$RUNNER_TEMP/docgate-687.xml"
+        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k "wms687 or accepted_report_without_report_commit or exact_chain or two_by_two or binding_canary or protected_wms687_expanded or unprotected_legacy_test_reference or wms680" --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

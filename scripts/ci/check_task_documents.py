@@ -138,6 +138,104 @@ OWNER_UI_REQUEST = {
 }
 
 
+# One reviewed owner-supersession chain, immutable published Git objects.
+WMS680_CLOSED_CHAIN = {'reviewed_source_commit': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
+ 'original_contract': '24009478c3a58b558ad8a661d83dc5920108cb00',
+ 'final_correction_commit': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
+ 'report': {'path': 'docs/reviews/WMS-680-frozen-corrections-review-20261007.md',
+            'commit': 'd0de155adcc31a7d33dca43d857a22e49897b981',
+            'blob': 'e4d18d7879c31d31b4841167173a48f8dc50c9eb'},
+ 'owner': {'source': '7015448e255f606ef74b69e04e81f53777a099d5',
+           'correction': '3be84bb091712caa2e32226f989e3008e47618a5',
+           'artifacts': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': [None,
+                                                                                            '2d399ace6c00df72c28843d7e0802687a089e632'],
+                         'docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html': [None,
+                                                                                                         'b507fdd97763f9227137321f32c0b4d5696e984b'],
+                         'docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html': [None,
+                                                                                                         'c9a1711a963b8ec88b38ea26fad7f337705888a9'],
+                         'docs/requirements/WMS-680.md': ['aad7a41a3ea194fdcf2eb596643a30a0096ac488',
+                                                          'b765c124dc7641ea83a6347fe4b1cc50e648ec4d']}},
+ 'contracts': {'24009478c3a58b558ad8a661d83dc5920108cb00': {'backend/tests/test_wms680_print_payload_contract.py': ['f7510d80221621aa192dacfe0fd0f7837a18385e',
+                                                                                                                    'f7510d80221621aa192dacfe0fd0f7837a18385e'],
+                                                            'frontend/src/utils/wms680PrintContract.test.ts': ['c8847911821967052947bd9f90691892188193e1',
+                                                                                                               '799f895bb38acca23867042e7b31c6cba96e7884']},
+               '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                                                           '299ff644942016a7cee5ee665cbc321ebddbddbc'],
+                                                            'frontend/src/utils/printInboundReceivingSheet.test.ts': ['c4cc01c1726331f4ee5f912606017638ba6aea76',
+                                                                                                                      'c4cc01c1726331f4ee5f912606017638ba6aea76'],
+                                                            'frontend/src/utils/printShipmentPackagingSheet.test.ts': ['f59bd4972d9c4a716263b24ab417c74c80377888',
+                                                                                                                       'f59bd4972d9c4a716263b24ab417c74c80377888'],
+                                                            'frontend/src/utils/wms680PrintContract.test.ts': ['f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                                                               '799f895bb38acca23867042e7b31c6cba96e7884'],
+                                                            'frontend/src/utils/wms680PrintGeometry.test.ts': ['11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                                                               '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']},
+               '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                                                               '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}},
+ 'steps': [{'kind': 'owner_ui_supersession',
+            'source': '8baaa27bf91851327ba30d6e93b29fbfb5c423fd',
+            'correction': '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e',
+            'files': {'frontend/src/utils/wms680PrintContract.test.ts': ['c8847911821967052947bd9f90691892188193e1',
+                                                                         'f3b12dd1617453a445a5624e19c19692c70a4693'],
+                      'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['f01723a9ccee9cc4466797875c9d16a79f50a608',
+                                                                                     'ab978dfabfb1f41076e0a16666e94fa081f3ec21'],
+                      'frontend/src/utils/wms680PrintGeometry.test.ts': [None,
+                                                                         '11ec2e43dcf3b696288bcaa55d6cd83a454858d8']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-size-zero-exact-cells',
+            'source': '1d335e8aead87fc27895a9577253cb8abdf9ca5a',
+            'correction': '7ad0aa781d175ef7f4e1d16074a12b47eed655f2',
+            'files': {'frontend/src/utils/wms680PrintContract.test.ts': ['f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                         '799f895bb38acca23867042e7b31c6cba96e7884']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-product-anchor',
+            'source': 'e8638be207559fee31a069734026cda1d4fcccb4',
+            'correction': '11806bd237c48a030a4e0ff49bb12dd90dfe6778',
+            'files': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                     '299ff644942016a7cee5ee665cbc321ebddbddbc']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-safe-filenames',
+            'source': '363e3b58110c61283f44cbb0cfdba5ee227de9aa',
+            'correction': '739bcadf1be4fe92e24af3d30b42f892f858e598',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                         '34f4ef6ca82d72cf65583d6ba6bdcefb689128a6']}},
+           {'kind': 'additive_bug_coverage',
+            'transform': 'wms680-numeric-subtable',
+            'source': '739bcadf1be4fe92e24af3d30b42f892f858e598',
+            'parent': 'd300851544c9587d6563462c23a60c3b67d1af12',
+            'correction': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
+            'model': 'gpt-6.1-sol',
+            'effort': 'high',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                         '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}}]}
+WMS680_CLOSED_SCOPES = {'3be84bb091712caa2e32226f989e3008e47618a5': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': (None,
+                                                                                                                 '2d399ace6c00df72c28843d7e0802687a089e632'),
+                                              'docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html': (None,
+                                                                                                                              'b507fdd97763f9227137321f32c0b4d5696e984b'),
+                                              'docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html': (None,
+                                                                                                                              'c9a1711a963b8ec88b38ea26fad7f337705888a9'),
+                                              'docs/requirements/WMS-680.md': ('aad7a41a3ea194fdcf2eb596643a30a0096ac488',
+                                                                               'b765c124dc7641ea83a6347fe4b1cc50e648ec4d')},
+ '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e': {'docs/requirements/WMS-680.md': ('b765c124dc7641ea83a6347fe4b1cc50e648ec4d',
+                                                                               '20fcef00da292c0a1a0cec6a100bfb8a0e4e464e'),
+                                              'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ('f01723a9ccee9cc4466797875c9d16a79f50a608',
+                                                                                                             'ab978dfabfb1f41076e0a16666e94fa081f3ec21'),
+                                              'frontend/src/utils/printInboundReceivingSheet.test.ts': ('e71e18dddc41804c8cbf370362e58bd11154ea04',
+                                                                                                        'c4cc01c1726331f4ee5f912606017638ba6aea76'),
+                                              'frontend/src/utils/printShipmentPackagingSheet.test.ts': ('9a11e5b4b88fe257622865dd0e0fb15c9083cf2e',
+                                                                                                         'f59bd4972d9c4a716263b24ab417c74c80377888'),
+                                              'frontend/src/utils/wms680PrintContract.test.ts': ('c8847911821967052947bd9f90691892188193e1',
+                                                                                                 'f3b12dd1617453a445a5624e19c19692c70a4693'),
+                                              'frontend/src/utils/wms680PrintGeometry.test.ts': (None,
+                                                                                                 '11ec2e43dcf3b696288bcaa55d6cd83a454858d8')},
+ '7ad0aa781d175ef7f4e1d16074a12b47eed655f2': {'frontend/src/utils/wms680PrintContract.test.ts': ('f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                                                 '799f895bb38acca23867042e7b31c6cba96e7884')},
+ '11806bd237c48a030a4e0ff49bb12dd90dfe6778': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ('ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                                             '299ff644942016a7cee5ee665cbc321ebddbddbc')},
+ '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                                                 '34f4ef6ca82d72cf65583d6ba6bdcefb689128a6')},
+ 'f2de20008df3b21c1decead0e1051dbda4a4a08a': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                                                 '0c7cc8f9f06fad5df0f7f3bd924dde607179a068')}}
+
 def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
 
@@ -215,6 +313,22 @@ def test_reference_errors(root: Path, reference: str) -> list[str]:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return [f"Файл теста {path_text} не является текстовым."]
+    # Exact saved original/hash/case/report proof also covers it.each expansion.
+    # Unprotected legacy references still use the literal source contract.
+    import sys
+    project_root = str(Path(__file__).resolve().parents[2])
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from scripts.ci.promote_guards import saved_process_policy, verify_registered_case
+    try:
+        policy = (saved_process_policy(root)
+                  if (root / "guards/PROCESS_CONTRACTS.json").exists()
+                  or (root / "guards/PROCESS_CONTRACTS.json").is_symlink() else None)
+        if policy is not None and path_text in policy["files"]:
+            if verify_registered_case(root, policy, pure, test_name):
+                return []
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        return [f"Не подтверждена постоянная охрана {path_text}::{test_name}: {exc}"]
     if test_name not in content:
         return [f"В {path_text} не найдено имя теста {test_name}."]
     return []
@@ -651,6 +765,116 @@ def correction_companions(root: Path, task_id: str, correction: str, frozen: set
     return True
 
 
+def wms680_closed_correction(root: Path, ledger: dict, contract_commit: str):
+    """Validate only the published owner request and closed reviewed 680 graph."""
+    def fail(reason):
+        return {}, [f"WMS-680: reviewed-closed-chain: {reason}"]
+    blob_cache = {}
+    def blob(sha, file):
+        key = (sha, file)
+        if key not in blob_cache:
+            blob_cache[key] = git_blob(root, sha, file)
+        return blob_cache[key]
+    record = WMS680_CLOSED_CHAIN
+    semantic, report = record["steps"][0], record["report"]
+    source = semantic["source"]
+    path = "frontend/src/utils/wms680PrintContract.test.ts"
+    before, after = semantic["files"][path]
+    def review(source, correction):
+        return {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": correction,
+                "evidence": report["path"], "evidence_commit": report["commit"],
+                "evidence_blob": report["blob"]}
+    owner_path = "docs/evidence/WMS-680/acceptance-20261007/baseline-source.json"
+    owner = {"contract_commit": record["original_contract"],
+             "prior_commit": record["original_contract"], "source_commit": source,
+             "path": path, "before_blob": before,
+             "changes": [[semantic["correction"], after]],
+             "companion_files": [{"path": name, "before_blob": pair[0], "after_blob": pair[1]}
+                                 for name, pair in semantic["files"].items() if name != path],
+             "owner_request": {"commit": record["owner"]["correction"], "path": owner_path,
+                               "blob": record["owner"]["artifacts"][owner_path][1]},
+             "review": review(source, semantic["correction"])}
+    entries = []
+    for step in record["steps"][1:]:
+        originals = [semantic["correction"]]
+        if step["correction"] == record["final_correction_commit"]:
+            originals.append(step["source"])
+        for original in originals:
+            entries.append({"contract_commit": original, "source_commit": step["source"],
+                            "correction_commit": step["correction"],
+                            "files": [{"transform": step["transform"], "path": name,
+                                       "before_blob": pair[0], "after_blob": pair[1]}
+                                      for name, pair in step["files"].items()],
+                            "companion_files": [],
+                            "review": review(step["source"], step["correction"])})
+    expected = {"task": "WMS-680", "owner_supersessions": [owner], "fixture_corrections": entries}
+    contracts = dict(record["contracts"])
+    # Several fixed corrections are also saved test contracts. Their exact
+    # newly frozen files need the same final protection, including f2de.
+    final_versions = {file: pair[1] for paths in contracts.values() for file, pair in paths.items()}
+    for step in record["steps"]:
+        correction = step["correction"]
+        if correction not in contracts and is_task_contract_commit(root, correction, "WMS-680"):
+            contracts[correction] = {
+                file: [pair[1], final_versions[file]]
+                for file, pair in WMS680_CLOSED_SCOPES[correction].items()
+                if not file.startswith("docs/requirements/")
+            }
+    if ledger != expected or contract_commit not in contracts:
+        return fail("не совпадает точная запись source/owner/scope/review/blob/цепочки")
+    head = git(root, "rev-parse", "HEAD")
+    if (not ancestor(root, report["commit"], head)
+            or blob(report["commit"], report["path"]) != report["blob"]
+            or blob(head, report["path"]) != report["blob"]):
+        return fail("подменён независимый review artifact")
+    report_text = git(root, "show", f"{report['commit']}:{report['path']}")
+    if record["final_correction_commit"] not in report_text or "PASS" not in report_text:
+        return fail("review не подтверждает точный final SHA")
+    for artifact, pair in record["owner"]["artifacts"].items():
+        if (blob(record["owner"]["source"], artifact) != pair[0]
+                or blob(record["owner"]["correction"], artifact) != pair[1]):
+            return fail("подменён historical owner-request blob")
+        if artifact.startswith("docs/evidence/") and blob(head, artifact) != pair[1]:
+            return fail("подменён сохранённый owner-request artifact")
+    for step in [record["owner"], *record["steps"]]:
+        correction, source = step["correction"], step.get("parent", step["source"])
+        parents = git(root, "rev-list", "--parents", "-n", "1", correction).split()
+        expected_paths = WMS680_CLOSED_SCOPES[correction]
+        if (parents != [correction, source] or not ancestor(root, correction, report["commit"])
+                or commit_changed_paths(root, correction) != set(expected_paths)):
+            return fail("не совпадает exact commit scope/родитель")
+        for file, pair in expected_paths.items():
+            if blob(source, file) != pair[0] or blob(correction, file) != pair[1]:
+                return fail("не совпадает exact whole-file blob")
+    baselines = {}
+    for original, paths in contracts.items():
+        if not is_task_contract_commit(root, original, "WMS-680"):
+            return fail("нет сохранённого исходного контракта")
+        for file, pair in paths.items():
+            if blob(original, file) != pair[0] or blob(head, file) != pair[1]:
+                return fail(f"последующая мутация frozen HEAD: {file}")
+            allowed = {pair[0], pair[1]}
+            for step in record["steps"]:
+                if file in step["files"]:
+                    allowed.update(step["files"][file])
+            for row in git(root, "rev-list", "--parents", "--ancestry-path", f"{original}..{head}").splitlines():
+                sha, *parents = row.split()
+                current = blob(sha, file)
+                if current not in allowed:
+                    return fail(f"непроверенная промежуточная мутация: {file}")
+                if sha not in WMS680_CLOSED_SCOPES and current not in {
+                        blob(parent, file) for parent in parents}:
+                    return fail(f"непроверенная дельта frozen файла: {file}")
+            if original == contract_commit and pair[0] != pair[1]:
+                final = next(step["correction"] for step in reversed(record["steps"])
+                             if step["files"].get(file, [None, None])[1] == pair[1])
+                baselines.setdefault(final, set()).add(file)
+    if git(root, "rev-parse", "HEAD") != head:
+        return fail("HEAD изменился во время проверки")
+    return baselines, []
+
+
 def reviewed_contract_correction(
     root: Path,
     task_id: str,
@@ -682,6 +906,8 @@ def reviewed_contract_correction(
         return {}, [
             f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
         ]
+    if task_id == "WMS-680":
+        return wms680_closed_correction(root, ledger, contract_commit)
     owner_baselines, owner_frontier, owner_errors = owner_ui_supersessions(root, task_id, ledger)
     if owner_errors:
         return {}, owner_errors

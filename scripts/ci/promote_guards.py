@@ -161,6 +161,12 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
     saved = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{source}"])
     if hashlib.sha256(path.read_bytes()).hexdigest() != digest or saved != path.read_bytes():
         raise ValueError(f"Изменён защищённый original тест: {source}")
+    known_687_groups = {
+        "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx": "WMS-687 shared FBS stock dialog from an inbound document",
+        "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx": "WMS-687 real shared stock dialog",
+        "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts": "WMS-687 catalog permission wiring",
+    }
+    group = known_687_groups.get(str(source))
     module = ".".join(source.with_suffix("").parts[1:])
     frontend = str(source).removeprefix("frontend/")
     for suite in policy["suites"].values():
@@ -190,6 +196,10 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
                 )
             elif suite["format"] == "vitest":
                 matches = owner == frontend and (name == test_name or name.endswith(" " + test_name))
+                if group is not None:
+                    matches = (suite["report"] == "frontend-all.json" and owner == frontend
+                               and (name == group + " " + test_name
+                                    or name == test_name and name.startswith(group + " ")))
             else:
                 matches = not separator and case == test_name
             if matches:
@@ -226,9 +236,9 @@ def promote(root: Path, task: str) -> list[str]:
         path = root / source
         if not path.is_file():
             raise ValueError(f"Нет файла теста {source}")
-        if test_name not in path.read_text(encoding="utf-8"):
-            raise ValueError(f"В {source} не найдено имя теста {test_name}")
         registered = policy is not None and verify_registered_case(root, policy, source, test_name)
+        if not registered and test_name not in path.read_text(encoding="utf-8"):
+            raise ValueError(f"В {source} не найдено имя теста {test_name}")
         target = source if registered else guard_target(source)
         if target in moves.values() and moves.get(source) != target:
             raise ValueError(f"Несколько тестов претендуют на {target}")

@@ -1,0 +1,10 @@
+[
+  {
+    "name": "WMS-658 C4: оба выбора товара используют прежнюю область без фильтра ЧЗ > C4: показывает true, false и общую строку, но не товары чужого селлера",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/shared/MarkingImportDialog.wms658.test.ts"
+  },
+  {
+    "name": "WMS-658 C4: оба выбора товара используют прежнюю область без фильтра ЧЗ > не теряет длинные данные и ищет допустимый товар по артикулу и штрихкоду",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/shared/MarkingImportDialog.wms658.test.ts"
+  }
+]
