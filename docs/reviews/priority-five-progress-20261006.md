@@ -209,3 +209,17 @@ sideeffects разбор6products и существующего billedquantityre
 ## Интеграция 20 — WMS-675 currentrequirements/exactplan
 
 База `d10b8ca786b912794c23912b1bdca13b42a3173c`; source `53299b0b7567a6f1b4c67b46fe4da8d0a039f36b` включён, восстановлентекущийrequirements675. Единственныйконфликтдобавленияbacklog675решён сохранениемвсехпрежнихсекций иточнойновой675. FreshSQL: missing26,reserve16→1;11facts/22chargesпереиспользуются,ожидаются15newfacts/30newcharges. Планнеприменён. Исходный675исполнительсейчасубираетизплана custom suppression и явноучитываетнормальнуюфоновуюstockpublication послеобщегопроверенногодеплоя. Этоещёdoccommit, runtimeне меняется. Scope666узкийP2fix30aea1fb проходитreview; ledgerPASSещёожидается. Подготовкаобщеготестовогоэтапаидёт, ни CI ни deployне запущены.
+
+## Интеграция 21 — реальный scope666 PASS ledger
+
+База `47afb0768b853d619d1790548d521a45c3d46b81`; конечныйreviewedsource `ef8aae5c469e94bcc44fd4acbdcbbf1ba80e817f` включёнбезконфликтов.
+Actualcontract30aea1fbf/review2c24d7bb,обеcanonicalrefs записаныAstrahighPASS;
+староеprovenance/FINDINGS сохранены. Runtime/checker неизменены. Всеproductdelta
+и новыеузкиеreviews теперьвключены; общийтестовыйэтап начинается.
+
+Предварительныйdocgateна47afb0768 нашёл реальные2стыкаимен:WMS651C5/R5scanner
+иWMS657C2pickingprint. Не найдено точноезаявленноеимя в существующемtestfile.
+Неослабленныетесты/ожидания интеграторомнеизменяются; parentполучилточныеошибки
+для отдельнойсверкиexistingsemanticcoverage иcanonicaltestref/ledger.
+PR/fullCI запускаются послеисправленияреальныхgateошибок,не ждуткосметики.
+675ещёсохраняетdoc-onlyplan с обычнойstockpublication.

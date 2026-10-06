@@ -197,6 +197,16 @@
       ],
       "facts": "Missing26;reserve16 to1;reuse11facts/22charges;new15facts/30charges expected; no mutation applied",
       "pending": "One short plan correction removes proposed custom suppression and states ordinary publication after checked combined deployment"
+    },
+    {
+      "task": "WMS-666 reviewed task scope contract correction",
+      "source": "ef8aae5c469e94bcc44fd4acbdcbbf1ba80e817f",
+      "base": "47afb0768b853d619d1790548d521a45c3d46b81",
+      "mode": "merge dedicated tester history and actual independent Astra high PASS ledger",
+      "conflicts": [],
+      "reviewed_contract_sha": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+      "review_sha": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
+      "preservation": "Original runtime/checker and negative boundaries unchanged; staged-counteredit P2 closed"
     }
   ],
   "local_product_fixes": [
