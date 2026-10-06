@@ -1,0 +1,53 @@
+[
+  {
+    "path": "/operations/packaging-tasks/task-wms663",
+    "method": "GET",
+    "body": null
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "GET",
+    "body": null
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "PUT",
+    "body": {
+      "product_id": 663001,
+      "exemplar_id": 81,
+      "gtd": "001/ABC-09",
+      "is_gtd_absent": false,
+      "rnpt": null,
+      "is_rnpt_absent": false,
+      "expected_version": 4
+    }
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "PUT",
+    "body": {
+      "product_id": 663001,
+      "exemplar_id": 81,
+      "gtd": "001/ABC-10",
+      "is_gtd_absent": false,
+      "rnpt": null,
+      "is_rnpt_absent": false,
+      "expected_version": 5
+    }
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "GET",
+    "body": null
+  },
+  {
+    "path": "/operations/packaging-tasks/task-wms663",
+    "method": "GET",
+    "body": null
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "GET",
+    "body": null
+  }
+]
