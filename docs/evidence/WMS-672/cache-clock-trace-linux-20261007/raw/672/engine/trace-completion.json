@@ -1,0 +1,403 @@
+{
+  "dataLossOccurred": true,
+  "stream": "1",
+  "traceFormat": "json",
+  "streamCompression": "gzip",
+  "usage": [
+    {
+      "percentFull": 0.2084544599056244,
+      "eventCount": 0,
+      "value": 0.2084544599056244
+    },
+    {
+      "percentFull": 0.21935561299324036,
+      "eventCount": 0,
+      "value": 0.21935561299324036
+    },
+    {
+      "percentFull": 0.28984981775283813,
+      "eventCount": 0,
+      "value": 0.28984981775283813
+    },
+    {
+      "percentFull": 0.3310319781303406,
+      "eventCount": 0,
+      "value": 0.3310319781303406
+    },
+    {
+      "percentFull": 0.38844478130340576,
+      "eventCount": 0,
+      "value": 0.38844478130340576
+    },
+    {
+      "percentFull": 0.48352712392807007,
+      "eventCount": 0,
+      "value": 0.48352712392807007
+    },
+    {
+      "percentFull": 0.7039728760719299,
+      "eventCount": 0,
+      "value": 0.7039728760719299
+    },
+    {
+      "percentFull": 0.9133962988853455,
+      "eventCount": 0,
+      "value": 0.9133962988853455
+    },
+    {
+      "percentFull": 0.9953972697257996,
+      "eventCount": 0,
+      "value": 0.9953972697257996
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    },
+    {
+      "percentFull": 0.996608555316925,
+      "eventCount": 0,
+      "value": 0.996608555316925
+    }
+  ]
+}
