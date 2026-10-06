@@ -39,7 +39,7 @@ existing always-upload собирает raw directory, process-proof получ�
 
 Closure сравнен с ранее просмотренным `296107aafcf44d1ac5afa623d32c644fa5396233`:
 единственный новый защищённый файл — `wms672-peer-drain.test.mjs`, единственный
-изменённый прежний hash — reviewed one-line CI addition. Остальные 227 hashes
+изменённый прежний hash — reviewed one-line CI addition. Остальные 226 прежних hashes
 сохранены; **все actual Git blobs 228 файлов совпадают с registry**.
 Все прежние suite definitions/1168 case IDs сохранены; итог **20 suites/1170 IDs**.
 Utility/screen/package/lock dependencies нового теста уже protected.
