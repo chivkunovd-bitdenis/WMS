@@ -83,7 +83,8 @@ class TelegramClient:
         return str(self._call("sendMessage", payload)["message_id"])
 
     def send_document(
-        self, chat_id: int, path: str, caption: str = "", reply_to: str | None = None
+        self, chat_id: int, path: str, caption: str = "", reply_to: str | None = None,
+        *, file_bytes: bytes | None = None,
     ) -> str:
         payload: dict[str, Any] = {"chat_id": str(chat_id)}
         if caption:
@@ -93,7 +94,8 @@ class TelegramClient:
             payload["allow_sending_without_reply"] = "true"
         file = Path(path)
         result = self._call("sendDocument", payload, timeout=120,
-                            files={"document": (file.name, file.read_bytes())})
+                            files={"document": (file.name, file.read_bytes() if file_bytes is None
+                                                 else file_bytes)})
         return str(result["message_id"])
 
     def download_file(self, file_id: str) -> bytes:
@@ -306,19 +308,30 @@ def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
             folder.mkdir(parents=True, exist_ok=True)
             long_text_path = folder / f"message-{item['id']}.txt"
             long_text_path.write_text(item["text"], encoding="utf-8")
+        document_path = item["file_path"] or (str(long_text_path) if long_text_path is not None else None)
+        # Freeze document contents before claim, including ordinary attachments.
+        # Legacy recording senders keep their path-based interface; the network
+        # client receives these bytes and performs no file IO after claim.
+        document_options = {}
+        if document_path is not None:
+            file_bytes = Path(document_path).read_bytes()
+            if isinstance(tg, TelegramClient):
+                document_options["file_bytes"] = file_bytes
         if not store.claim_outbox(item["id"], owner_user_id=cfg.telegram.owner_user_id,
                                   owner_chat_id=cfg.telegram.owner_chat_id, expected_item=item):
             continue
         try:
             if item["file_path"]:
                 message_id = tg.send_document(
-                    item["chat_id"], item["file_path"], item["text"], item["reply_to"]
+                    item["chat_id"], item["file_path"], item["text"], item["reply_to"],
+                    **document_options,
                 )
             elif long_text_path is not None:
                 # Длинное служебное сообщение уходит целиком файлом, а не обрезанным текстом.
                 message_id = tg.send_document(
                     item["chat_id"], str(long_text_path), item["text"][:900] + "…\n(полный текст в файле)",
                     item["reply_to"],
+                    **document_options,
                 )
             else:
                 message_id = tg.send_message(item["chat_id"], item["text"], item["reply_to"])
