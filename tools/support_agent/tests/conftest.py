@@ -16,6 +16,9 @@ from support_agent.store import Store
 from support_agent.telegram import Inbound, TelegramError
 from support_agent.trello import TrelloError
 
+# Share the existing installation-fake adapter with ordinary pytest collection.
+pytest_plugins = ("tests.test_install_model_migration_races",)
+
 CLIENT_CHAT = -100111
 PARTNER_CHAT = -100222
 OWNER_CHAT = -100999
