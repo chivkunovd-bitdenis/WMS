@@ -109,6 +109,12 @@ jobs:
         run: |
           pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py
           pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe
+      - name: WMS-675 real incident recovery on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_675_incident
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_675_incident'); c.close()"
+          pytest -n 0 -q -s tests/test_wms675_recovery_scenario.py
       - name: Fresh PostgreSQL migration chain and withdrawal rollback
         env:
           DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517_migrations

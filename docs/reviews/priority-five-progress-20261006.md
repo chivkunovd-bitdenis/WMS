@@ -283,3 +283,11 @@ CIбылshallow. Backend/frontendcheckouts теперьfetch-depth0, какdoc/g
 НовыйCI37460722630идётна5ddd09aacпослеформатирования; онневыдаётсязаPASS.
 Этотworkflowfixсохранитсяследующимкоммитом, когдавключаетсяfrontfixили675test,
 чтобынеcancelполезныйbackendпрогонещёоднимнемедленнымheadupdate.
+
+## CI corrections grouped before next push · 06.10.2026
+
+Current integration: `4982e8fd6` includes live read-only663 source `5fb403a702f31edb5ba8508f3229fda803e6b904` and functional675 source `f98960a1e3d8adcc52264aafdad715f63e2397c5`. The conflict in requirements675 retained the newer ordinary recovery/publication plan `ced5a713e56d3bb4fe2c310d3813306f08446ce2` and added actual isolated testDB acceptance. No runtime change. Independent675 review `c3c6ee210fc92958e84ee58d86c4a606f54cba6c` is included as its exact report-only commit.
+
+675 test is collected by ordinary full pytest with no skip and now has an explicit serial PostgreSQL CI step on a newly created loopback database `wms_test_675_incident`; standard conftest and server identity guards remain. The test uses real accounting/reservation/billing services; live external calls cannot occur.
+
+CI2 on `5ddd09aac4df17e7ecdefaf1625462c05f8039ce`: Ruff/Mypy/guards passed, backend pytest running; frontend fixture incompatibilities and raw662 contract formatting caused failures. Formatting AST is identical; its actual Sol review and strict one-file correction provenance are coordinated with original tester663. No Ruff exclusions or checker scope relaxation. The narrow652 reviewer-model compatibility change will follow independent RED regressions. The next single push waits for the coordinated fixture/correction sources.
