@@ -146,6 +146,7 @@ export function PreviewHarness() {
         />
         <Box sx={{ flexGrow: 1, minWidth: 0, p: 3 }}>
           <FfWarehouseMapScreen
+            legacyCreateCell
             data={shown}
             loading={state === 'loading'}
             error={state === 'error' ? 'Не удалось загрузить карту склада. Обновите страницу.' : null}

@@ -1,6 +1,6 @@
 import { Box, Stack, Typography } from '@mui/material'
 import AddOutlined from '@mui/icons-material/AddOutlined'
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   ActionGroup,
   AppDialog,
@@ -32,6 +32,16 @@ export type CreateCellBody = {
   use_sides: boolean
   use_tiers: boolean
 }
+
+export type CreateCellSuggestion = {
+  position: number
+  code: string
+}
+
+export type CreateCellSuggestionRequest = Pick<
+  CreateCellBody,
+  'rack_name' | 'side' | 'tier' | 'use_sides' | 'use_tiers'
+>
 
 // Склады занимали полэкрана под список, который меняется раз в квартал. Здесь они
 // стали переключателем в строке фильтров: высота растёт от числа складов, а место
@@ -174,8 +184,12 @@ type CreateCellDialogBase = {
   onClose: () => void
 }
 type CreateCellDialogProps = CreateCellDialogBase & (
-  | { addressing: true; onCreate: (body: CreateCellBody) => Promise<boolean> | boolean }
-  | { addressing?: false; onCreate: (code: string) => void }
+  | {
+      legacyCreateCell?: false
+      onCreate: (body: CreateCellBody) => Promise<boolean> | boolean
+      onSuggest?: (request: CreateCellSuggestionRequest) => Promise<CreateCellSuggestion | null>
+    }
+  | { legacyCreateCell: true; onCreate: (code: string) => void }
 )
 
 export function CreateCellDialog(props: CreateCellDialogProps) {
@@ -188,12 +202,11 @@ export function CreateCellDialog(props: CreateCellDialogProps) {
 
 function CreateCellDialogBody(props: CreateCellDialogProps) {
   const { warehouseName, existingCodes, onClose } = props
-  const addressing = props.addressing === true
+  const legacyCreateCell = props.legacyCreateCell === true
+  const onSuggest = 'onSuggest' in props ? props.onSuggest : undefined
   const [rack, setRack] = useState('')
-  // Старые вызовы диалога всегда создавали адрес «ряд · сторона · позиция».
-  // Только WMS-654 умеет отключать сторону.
   const [useSides, setUseSides] = useState(true)
-  const [useTiers, setUseTiers] = useState(addressing)
+  const [useTiers, setUseTiers] = useState(true)
   const [side, setSide] = useState('1')
   const [tier, setTier] = useState<number | null>(1)
   // Ручной номер относится только к его контексту: смена ряда, стороны или
@@ -204,10 +217,47 @@ function CreateCellDialogBody(props: CreateCellDialogProps) {
   const effectiveSide = useSides ? sideNumber : null
   const effectiveTier = useTiers ? tier : null
   const signature = `${normalizeRackName(rack)}|${effectiveSide ?? ''}|${effectiveTier ?? ''}`
-  const suggestion = useMemo(
+  const localSuggestion = useMemo(
     () => (rack.trim() ? suggestNextLocationForRack(rack, effectiveSide, effectiveTier, existingCodes) : null),
     [effectiveSide, effectiveTier, existingCodes, rack],
   )
+  const [suggestion, setSuggestion] = useState<CreateCellSuggestion | null>(null)
+  const suggestionRequestVersion = useRef(0)
+
+  useEffect(() => {
+    const requestVersion = suggestionRequestVersion.current + 1
+    suggestionRequestVersion.current = requestVersion
+    if (!rack.trim()) {
+      setSuggestion(null)
+      return
+    }
+    if (legacyCreateCell || !onSuggest) {
+      setSuggestion(localSuggestion)
+      return
+    }
+
+    setSuggestion(null)
+    void onSuggest({
+      rack_name: rack.trim(),
+      side: effectiveSide,
+      tier: effectiveTier,
+      use_sides: useSides,
+      use_tiers: useTiers,
+    }).then((next) => {
+      if (requestVersion === suggestionRequestVersion.current && next) {
+        setSuggestion(next)
+      }
+    })
+  }, [
+    effectiveSide,
+    effectiveTier,
+    legacyCreateCell,
+    localSuggestion,
+    onSuggest,
+    rack,
+    useSides,
+    useTiers,
+  ])
   const position =
     manual && manual.signature === signature ? manual.value : (suggestion?.position ?? null)
   const code = rack.trim() && position !== null
@@ -234,7 +284,7 @@ function CreateCellDialogBody(props: CreateCellDialogProps) {
           <PrimaryAction
             onClick={() => {
               if (!body) return
-              if (props.addressing) void props.onCreate(body)
+              if (!legacyCreateCell) void props.onCreate(body)
               else props.onCreate(body.code)
             }}
             disabledReason={body ? undefined : 'Укажите стеллаж'}
@@ -249,7 +299,7 @@ function CreateCellDialogBody(props: CreateCellDialogProps) {
         <Typography variant="body2" color="text.secondary">
           Склад: {warehouseName}
         </Typography>
-        {addressing ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+        {!legacyCreateCell ? <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
           <PreferenceSwitch label="Учитывать стороны" checked={useSides} onChange={setUseSides} testId="wms-654-use-sides" />
           <PreferenceSwitch label="Учитывать ярусы" checked={useTiers} onChange={setUseTiers} testId="wms-654-use-tiers" />
         </Stack> : null}

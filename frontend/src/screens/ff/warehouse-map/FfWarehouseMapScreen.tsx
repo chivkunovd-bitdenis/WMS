@@ -9,6 +9,8 @@ import {
   CreateWarehouseDialog,
   WarehouseMapToolbar,
   type CreateCellBody,
+  type CreateCellSuggestion,
+  type CreateCellSuggestionRequest,
 } from './WarehouseMapToolbar'
 import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../../utils/labelSize'
@@ -57,8 +59,12 @@ type CommonProps = {
   historyFor: (row: MapRow) => MovementEntry[]
 }
 type Props = CommonProps & (
-  | { addressing: true; onCreateCell: (body: CreateCellBody) => Promise<boolean> | boolean }
-  | { addressing?: false; onCreateCell: (code: string) => void }
+  | {
+      legacyCreateCell?: false
+      onCreateCell: (body: CreateCellBody) => Promise<boolean> | boolean
+      onSuggestCell?: (request: CreateCellSuggestionRequest) => Promise<CreateCellSuggestion | null>
+    }
+  | { legacyCreateCell: true; onCreateCell: (code: string) => void }
 )
 
 export function FfWarehouseMapScreen(props: Props) {
@@ -292,25 +298,26 @@ export function FfWarehouseMapScreen(props: Props) {
         entries={historyRow ? historyFor(historyRow) : []}
         onClose={() => setHistoryRow(null)}
       />
-      {props.addressing ? <CreateCellDialog
-        addressing
+      {props.legacyCreateCell ? <CreateCellDialog
         open={cellDialogOpen}
         warehouseName={currentWarehouse?.name ?? ''}
         existingCodes={cellCodes}
         onClose={() => setCellDialogOpen(false)}
-        onCreate={async (body) => {
-          const created = await props.onCreateCell(body)
-          if (created) setCellDialogOpen(false)
-          return created
+        legacyCreateCell
+        onCreate={(code) => {
+          props.onCreateCell(code)
+          setCellDialogOpen(false)
         }}
       /> : <CreateCellDialog
         open={cellDialogOpen}
         warehouseName={currentWarehouse?.name ?? ''}
         existingCodes={cellCodes}
         onClose={() => setCellDialogOpen(false)}
-        onCreate={(code) => {
-          props.onCreateCell(code)
-          setCellDialogOpen(false)
+        onSuggest={props.onSuggestCell}
+        onCreate={async (body) => {
+          const created = await props.onCreateCell(body)
+          if (created) setCellDialogOpen(false)
+          return created
         }}
       />}
       <BoxLabelPrintDialog
