@@ -1,0 +1,71 @@
+name: WMS-672 remaining functional finish
+on:
+  push:
+    branches: [codex/wms672-functional-finish-20261006]
+    paths: [.github/workflows/wms672-functional-finish.yml]
+permissions:
+  contents: read
+jobs:
+  remaining:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Pin candidate and frozen contracts
+        run: |
+          mkdir -p "$RUNNER_TEMP/proof"
+          printf 'runner=%s\ncandidate=5ddd09aac\n' "$GITHUB_SHA" > "$RUNNER_TEMP/proof/pins.txt"
+          git rev-parse 5ddd09aac >> "$RUNNER_TEMP/proof/pins.txt"
+          git ls-tree -r HEAD -- frontend/src backend > "$RUNNER_TEMP/proof/product.manifest"
+          git diff 5ddd09aac HEAD -- frontend/src backend frontend/tests-e2e > "$RUNNER_TEMP/proof/candidate.diff"
+          test ! -s "$RUNNER_TEMP/proof/candidate.diff"
+          sha256sum frontend/tests-e2e/wms672-remaining.test.mjs frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx backend/tests/test_wms659_bulk_inbound_boxes.py > "$RUNNER_TEMP/proof/contracts.sha256"
+      - name: Prepare existing disposable Linux browser contour
+        run: |
+          npm ci --prefix frontend > "$RUNNER_TEMP/proof/npm-ci.log" 2>&1
+          npm install --prefix "$RUNNER_TEMP/runner-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/proof/runner-tools.log" 2>&1
+          pip install -e 'backend[dev]' > "$RUNNER_TEMP/proof/pip.log" 2>&1
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/runner-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "WMS672_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - name: C10 existing WMS659 backend contracts
+        run: |
+          cd backend
+          set -o pipefail
+          pytest -n auto tests/test_wms659_bulk_inbound_boxes.py 2>&1 | tee "$RUNNER_TEMP/proof/backend659.log"
+      - name: C10 existing WMS659 DOM contracts
+        if: always()
+        run: |
+          cd frontend
+          set -o pipefail
+          node node_modules/vitest/vitest.mjs run src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/dom659.log"
+      - name: C7 explicit reprint and C10 C11 actual components only
+        if: always()
+        env:
+          WMS672_TEST_URL: http://127.0.0.1:16724
+        run: |
+          set -uo pipefail
+          export WMS672_EVIDENCE_DIR="$RUNNER_TEMP/proof/browser"
+          cd frontend
+          node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/proof/vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
+          timeout 240s node --test --test-concurrency=1 tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining-browser.log"
+          result=${PIPESTATUS[0]}
+          printf 'browser=%s\n' "$result" > "$RUNNER_TEMP/proof/exits.txt"
+          git diff --exit-code HEAD -- src ../backend tests-e2e || exit 2
+          test "$result" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms672-functional-finish-${{ github.sha }}
+          path: ${{ runner.temp }}/proof
+          retention-days: 14
