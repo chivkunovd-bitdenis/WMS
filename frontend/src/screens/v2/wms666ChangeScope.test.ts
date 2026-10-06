@@ -41,7 +41,11 @@ export function wms666TaskChangedPaths(
     for (const path of changed.split('\0')) if (path) paths.add(path)
   }
   // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
-  for (const changed of [git('diff', '--name-only', '-z', head, '--'), git('ls-files', '--others', '--exclude-standard', '-z')]) {
+  for (const changed of [
+    git('diff', '--name-only', '-z', head, '--'),
+    git('diff', '--cached', '--name-only', '-z', head, '--'),
+    git('ls-files', '--others', '--exclude-standard', '-z'),
+  ]) {
     for (const path of changed.split('\0')) if (path) paths.add(path)
   }
   expect(git('rev-parse', 'HEAD').trim()).toBe(head)
@@ -135,6 +139,15 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       repo.write(path, 'uncommitted forbidden change\n')
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
       repo.git('add', path)
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.git('reset', '--hard', accepted)
+      repo.write(path, 'existing foreign inventory\n')
+      repo.commit('WMS-663: independent existing inventory fixture')
+      repo.write(path, 'forbidden staged inventory\n')
+      repo.git('add', path)
+      repo.write(path, 'existing foreign inventory\n')
+      expect(repo.git('diff', '--name-only', 'HEAD', '--', path)).toBe('')
+      expect(repo.git('diff', '--cached', '--name-only', '--', path)).toBe(path)
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
     } finally {
       repo.close()
