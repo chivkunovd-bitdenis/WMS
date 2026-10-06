@@ -70,9 +70,14 @@ describe('buildShipmentPackagingSheetHtml', () => {
     expect(html).not.toContain('ШК: 2000000000015')
   })
 
-  it('renders only name, articles and barcode — no size/composition/description', () => {
-    const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).not.toContain('Размер:')
+  it('renders required size and color, but no composition/description', () => {
+    const html = buildShipmentPackagingSheetHtml({
+      ...base,
+      items: [makeItem({ size: '42', color: 'Графит' })],
+    })
+    // R1/R4 WMS-680: FBO is a waybill, therefore both variant fields are required.
+    expect(html).toContain('Размер: 42')
+    expect(html).toContain('Цвет: Графит')
     expect(html).not.toContain('Состав:')
   })
 
