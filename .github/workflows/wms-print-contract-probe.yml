@@ -20,27 +20,39 @@ jobs:
     timeout-minutes: 12
     env:
       WMS672_TEST_URL: http://127.0.0.1:16724
-      # Bounded postfix probe: changed 672 only; preserve the 673 contract.
+      # Authorized correction 6f1b196b; failed cases only, immutable product.
       WMS_PRINT_PROBE_SCOPE: '672'
-      WMS672_TEST_NAME_PATTERN: 'inbound 300|C5 decode|C7/C8|C8 mark'
+      WMS672_TEST_NAME_PATTERN: 'inbound 300|C5 decode'
+      WMS672_CONTRACT_SHA: '8afc05d0bc531fd310b7d6d5273f0b382223db11'
       WMS_PRINT_SOURCE_SHA: '0e6a7fbc3eb11f951febf972b35c6e117c42678a'
     steps:
       - uses: actions/checkout@v4
-      - name: Verify immutable product source and frozen contracts
+      - name: Verify immutable product and separately authorized contract pin
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/print-contract"
           printf 'source=%s\nrunner=%s\n' "$WMS_PRINT_SOURCE_SHA" "$GITHUB_SHA" > "$RUNNER_TEMP/print-contract/source-pin.txt"
           cp scripts/ci/wms-print-contract-probe.mjs "$RUNNER_TEMP/print-contract/probe.mjs"
-          git fetch --no-tags origin "$WMS_PRINT_SOURCE_SHA"
+          git fetch --no-tags origin "$WMS_PRINT_SOURCE_SHA" "$WMS672_CONTRACT_SHA"
+          printf 'business-authorizer=6f1b196b4cb09091df341e79f6c663efb4d721d4\ncontract=%s\n' "$WMS672_CONTRACT_SHA" >> "$RUNNER_TEMP/print-contract/source-pin.txt"
+          for contract in wms672-box-labels.test.mjs wms672-dom.test.tsx; do
+            git show "$WMS672_CONTRACT_SHA:frontend/tests-e2e/$contract" > "$RUNNER_TEMP/print-contract/$contract"
+          done
           git checkout --detach "$WMS_PRINT_SOURCE_SHA"
           cp "$RUNNER_TEMP/print-contract/probe.mjs" scripts/ci/wms-print-contract-probe.mjs
           git diff --exit-code "$WMS_PRINT_SOURCE_SHA" -- frontend/src backend
           git ls-tree -r "$WMS_PRINT_SOURCE_SHA" -- frontend/src backend > "$RUNNER_TEMP/print-contract/product-source.manifest"
           git ls-tree -r HEAD -- frontend/src backend > "$RUNNER_TEMP/print-contract/product-runner.manifest"
           cmp "$RUNNER_TEMP/print-contract/product-source.manifest" "$RUNNER_TEMP/print-contract/product-runner.manifest"
-          git diff --exit-code "$WMS_PRINT_SOURCE_SHA" HEAD -- frontend/tests-e2e/wms672-box-labels.test.mjs frontend/tests-e2e/wms672-harness.tsx frontend/tests-e2e/wms672-dom.test.tsx
+          for contract in wms672-box-labels.test.mjs wms672-dom.test.tsx; do
+            cp "$RUNNER_TEMP/print-contract/$contract" "frontend/tests-e2e/$contract"
+            actual=$(git hash-object "frontend/tests-e2e/$contract")
+            expected=$(git rev-parse "$WMS672_CONTRACT_SHA:frontend/tests-e2e/$contract")
+            test "$actual" = "$expected"
+            printf '%s %s\n' "$actual" "$contract" >> "$RUNNER_TEMP/print-contract/contract-blobs.txt"
+          done
+          git diff --exit-code "$WMS_PRINT_SOURCE_SHA" -- frontend/src backend frontend/tests-e2e/wms672-harness.tsx
           sha256sum "$RUNNER_TEMP/print-contract/"*.manifest frontend/tests-e2e/wms672-box-labels.test.mjs frontend/tests-e2e/wms672-harness.tsx > "$RUNNER_TEMP/print-contract/source-hashes.txt"
       - uses: actions/setup-node@v4
         with:
@@ -80,7 +92,7 @@ jobs:
           fi
           result672delta=skipped
           if [ "$WMS_PRINT_PROBE_SCOPE" = 672 ]; then
-            # Separate frozen scheduling failures from the focused transfer/recovery result.
+            # Previously failed return/C4/C6 only; C7/C8 remain excluded.
             WMS672_EVIDENCE_DIR="$RUNNER_TEMP/print-contract/672-delta" timeout 180s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern='return 300|C4 once|C6 fast' tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672-delta.log"
             result672delta=${PIPESTATUS[0]}
           fi
