@@ -53,7 +53,7 @@ async function evaluate(expression) {
 }
 async function until(expression, ms = 25000) {
   const end = Date.now() + ms;
-  while (Date.now() < end) { if (await evaluate(expression)) return; await sleep(150); }
+  while (Date.now() < end) { if (await evaluate(`Boolean(${expression})`)) return; await sleep(150); }
   throw Error(`UI timeout: ${expression}`);
 }
 async function fulfill(id, body, status = 200, type = 'application/json') {
