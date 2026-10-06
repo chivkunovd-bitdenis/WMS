@@ -364,11 +364,11 @@ def exact_fixture_corrections(
         if commit_changed_paths(root, correction) != expected:
             return fail("коммит меняет не ровно перечисленные файлы")
         review = entry.get("review")
-        if (not isinstance(review, dict) or review.get("model") != "gpt-6-astra"
+        if (not isinstance(review, dict) or review.get("model") not in ("gpt-6-astra", "gpt-6.1-sol")
                 or review.get("effort") != "high" or review.get("verdict") != "PASS"
                 or review.get("source_commit") != source
                 or review.get("correction_commit") != correction):
-            return fail("нет отдельного Astra high PASS точной дельты")
+            return fail("нет отдельного разрешённого high PASS точной дельты")
         evidence_commit = review.get("evidence_commit")
         evidence_blob = review.get("evidence_blob")
         evidence = review.get("evidence")
@@ -414,7 +414,7 @@ def reviewed_contract_correction(
 
     A correction is deliberately stricter than an ordinary follow-up commit: it
     may touch only files frozen by the original contract and must have a separate
-    machine-readable ledger recording the independent Astra-high PASS. CI can
+    machine-readable ledger recording the independent approved-model high PASS. CI can
     validate the Git facts; the controller remains responsible for obtaining
     and recording the review before the ledger is committed.
     """
@@ -470,7 +470,7 @@ def reviewed_contract_correction(
             or any(not isinstance(path, str) or not path for path in files)
             or len(files) != len(set(files))
             or not isinstance(review, dict)
-            or review.get("model") != "gpt-6-astra"
+            or review.get("model") not in ("gpt-6-astra", "gpt-6.1-sol")
             or review.get("effort") != "high"
             or review.get("verdict") != "PASS"
         ):
