@@ -11,7 +11,7 @@ orders = root / 'frontend/src/screens/v2/FfFbsOrdersScreen.tsx'
 mutations = [
  ('hide-packing-print-action', workspace,
   'aria-label="Печать ЧЗ и ШК" data-task-id="FBS-10"',
-  'aria-label="Печать ЧЗ и ШК" style={{ display: "none" }} data-task-id="FBS-10"',
+  'aria-label="Печать ЧЗ и ШК" style={{ opacity: 0 }} data-task-id="FBS-10"',
   ['WMS652.geometry[' + entry + ';1600x1000-long]' for entry in [
     'wb-single', 'wb-group-one', 'wb-group-many', 'ozon-single', 'ozon-group-one', 'ozon-group-many', 'mixed-group-many']]),
  ('overlap-order-seller-header', orders,
@@ -20,7 +20,7 @@ mutations = [
   ['WMS652.geometry[orders-expired;1600x1000-long]', 'WMS652.geometry[orders-cancelled;1600x1000-long]']),
  ('hide-selected-action-only-for-long-data', orders,
   'data-testid="fbs-selected-open"',
-  'data-testid="fbs-selected-open" style={{ display: selectedOrders.some(o => o.product.name.includes("длинное название товара")) ? "none" : undefined }}',
+  'data-testid="fbs-selected-open" style={{ opacity: selectedOrders.some(o => o.product.name.includes("длинное название товара")) ? 0 : undefined }}',
   ['WMS652.geometry[selection;1600x1000-long]']),
 ]
 results = []
