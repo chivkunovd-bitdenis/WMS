@@ -295,6 +295,9 @@ def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
     bots = as_bots(tg, cfg.telegram.owner_chat_id)
     sent = 0
     for item in store.outbox_pending():
+        if not store.outbox_delivery_allowed(item, owner_user_id=cfg.telegram.owner_user_id,
+                                            owner_chat_id=cfg.telegram.owner_chat_id):
+            continue
         if not store.claim_outbox(item["id"]):
             continue
         tg = bots.for_chat(item["chat_id"])

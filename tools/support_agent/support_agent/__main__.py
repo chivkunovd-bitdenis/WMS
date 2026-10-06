@@ -77,14 +77,46 @@ def check_bots(path: str | None) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(prog="support_agent")
-    parser.add_argument("command", choices=["run", "check-config", "check-bots"])
+    parser.add_argument("command", choices=["run", "check-config", "check-bots",
+                                            "pause-client-replies", "approve-client-reply"])
     parser.add_argument("--config", default=None)
+    parser.add_argument("--chat-id", type=int)
+    parser.add_argument("--source-message-id", type=int)
+    parser.add_argument("--ticket-id", type=int, action="append", default=[])
+    parser.add_argument("--version")
+    parser.add_argument("--text-file", type=Path)
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
     if args.command == "check-config":
         return check_config(args.config)
     if args.command == "check-bots":
         return check_bots(args.config)
+    if args.command in {"pause-client-replies", "approve-client-reply"}:
+        if args.chat_id is None or args.source_message_id is None:
+            parser.error("--chat-id and --source-message-id are required")
+        from .store import Store
+
+        cfg = load_config(args.config)
+        store = Store(cfg.db_path)
+        try:
+            if args.command == "pause-client-replies":
+                store.pause_client_replies(chat_id=args.chat_id, ticket_ids=args.ticket_id,
+                    owner_user_id=cfg.telegram.owner_user_id, source_message_id=args.source_message_id)
+                print(f"Client replies paused for chat {args.chat_id}.")
+            else:
+                if len(args.ticket_id) != 1 or not args.version or args.text_file is None:
+                    parser.error("one --ticket-id, --version and --text-file are required")
+                key = store.approve_client_reply(chat_id=args.chat_id, ticket_id=args.ticket_id[0],
+                    version=args.version, text=args.text_file.read_text(encoding="utf-8"),
+                    owner_user_id=cfg.telegram.owner_user_id, owner_chat_id=cfg.telegram.owner_chat_id,
+                    source_message_id=args.source_message_id)
+                print(f"One specific reply queued: {key}. Chat remains paused.")
+            return 0
+        except ValueError as exc:
+            print(f"Reply policy rejected: {exc}")
+            return 1
+        finally:
+            store.db.close()
     build_agent(load_config(args.config)).run_forever()
     return 0
 

@@ -394,6 +394,102 @@ class Store:
         self.set_ticket(ticket_id, last_activity=now if now is not None else time.time())
 
     # -- outbox --------------------------------------------------------------------
+    def client_reply_pause(self, chat_id: int) -> dict[str, Any]:
+        policy = self.kv_get(f"owner_client_reply_pause:{chat_id}", {})
+        return policy if isinstance(policy, dict) and policy.get("paused") is True else {}
+
+    def pause_client_replies(
+        self, *, chat_id: int, ticket_ids: list[int], owner_user_id: int, source_message_id: int
+    ) -> None:
+        """Operator action backed by the configured owner's actual source message."""
+        with self.transaction():
+            source = self.row("SELECT * FROM messages WHERE id=?", (source_message_id,))
+            if (not owner_user_id or source is None or source["source"] != "telegram"
+                    or str(source["author_id"]) != str(owner_user_id)
+                    or source["chat_id"] != chat_id or not source["text"].strip()):
+                raise ValueError("owner_pause_source_mismatch")
+            previous = self.client_reply_pause(chat_id)
+            if source_message_id < int(previous.get("source_message_id", 0)):
+                raise ValueError("stale_owner_pause_source")
+            for tid in ticket_ids:
+                ticket = self.row("SELECT * FROM tickets WHERE id=?", (tid,))
+                if ticket is None or ticket["chat_id"] != chat_id:
+                    raise ValueError("pause_ticket_chat_mismatch")
+            self.kv_set(f"owner_client_reply_pause:{chat_id}", {
+                "paused": True, "chat_id": chat_id, "ticket_ids": sorted(set(ticket_ids)),
+                "owner_user_id": owner_user_id, "source_message_id": source_message_id,
+            })
+
+    @staticmethod
+    def client_reply_approval_text(chat_id: int, ticket_id: int, version: str, text: str) -> str:
+        return (f"Разрешаю отправить в чат {chat_id} ответ по обращению {ticket_id}, "
+                f"версия {version}:\n{text}")
+
+    def approve_client_reply(
+        self, *, chat_id: int, ticket_id: int, version: str, text: str,
+        owner_user_id: int, owner_chat_id: int, source_message_id: int,
+    ) -> str:
+        """Approve one new frozen reply; never release an older queue or unpause."""
+        text = text.strip()
+        with self.transaction():
+            policy = self.client_reply_pause(chat_id)
+            source = self.row("SELECT * FROM messages WHERE id=?", (source_message_id,))
+            ticket = self.row("SELECT * FROM tickets WHERE id=?", (ticket_id,))
+            expected_source = self.client_reply_approval_text(chat_id, ticket_id, version, text)
+            if (not policy or policy.get("chat_id") != chat_id
+                    or policy.get("owner_user_id") != owner_user_id or not text or not version
+                    or source is None or source["source"] != "telegram"
+                    or str(source["author_id"]) != str(owner_user_id)
+                    or source["chat_id"] not in {chat_id, owner_chat_id}
+                    or source_message_id <= int(policy.get("source_message_id", 0))
+                    or source["text"].strip() != expected_source
+                    or ticket is None or ticket["chat_id"] != chat_id
+                    or (self.data(ticket_id).get("agent") or {}).get("version") != version):
+                raise ValueError("specific_owner_reply_approval_required")
+            key = f"owner_client_reply:{chat_id}:{source_message_id}"
+            prior = self.outbox_by_key(key)
+            approval = {
+                "key": key, "ticket_id": ticket_id, "version": version, "text": text,
+                "source_message_id": source_message_id, "source_revision": source["revision"],
+            }
+            if prior is not None:
+                if policy.get("approved_reply") != approval:
+                    raise ValueError("owner_reply_approval_already_used")
+                return key
+            if self.scrubber(text) != text:
+                raise ValueError("approved_reply_text_would_change")
+            self.queue_message(key=key, chat_id=chat_id, ticket_id=ticket_id, text=text,
+                               purpose="owner_authorized", repeat_ok=False)
+            self.kv_set(f"owner_client_reply_pause:{chat_id}", {
+                **policy, "approved_reply": approval,
+            })
+            return key
+
+    def outbox_delivery_allowed(self, item: Any, *, owner_user_id: int, owner_chat_id: int) -> bool:
+        policy = self.client_reply_pause(item["chat_id"])
+        if not policy:
+            return True
+        approval = policy.get("approved_reply") or {}
+        if (not isinstance(approval, dict) or policy.get("chat_id") != item["chat_id"]
+                or policy.get("owner_user_id") != owner_user_id
+                or approval.get("key") != item["key"] or item["purpose"] != "owner_authorized"
+                or item["file_path"] or approval.get("text") != item["text"]
+                or approval.get("ticket_id") != item["ticket_id"]):
+            return False
+        source = self.row("SELECT * FROM messages WHERE id=?", (approval.get("source_message_id"),))
+        ticket = self.row("SELECT * FROM tickets WHERE id=?", (item["ticket_id"],))
+        version = approval.get("version")
+        return bool(
+            source is not None and ticket is not None and ticket["chat_id"] == item["chat_id"]
+            and version and (self.data(item["ticket_id"]).get("agent") or {}).get("version") == version
+            and source["source"] == "telegram" and str(source["author_id"]) == str(owner_user_id)
+            and source["chat_id"] in {item["chat_id"], owner_chat_id}
+            and source["id"] > int(policy.get("source_message_id", 0))
+            and source["revision"] == approval.get("source_revision")
+            and source["text"].strip() == self.client_reply_approval_text(
+                item["chat_id"], item["ticket_id"], version, item["text"])
+        )
+
     def queue_message(
         self,
         *,

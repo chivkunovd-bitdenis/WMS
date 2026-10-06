@@ -486,6 +486,8 @@ class AgentTools:
     def _tool_queue_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         tid = int(args.get("ticket_id") or 0)
         chat_id = int(args["chat_id"])
+        if self.store.client_reply_pause(chat_id):
+            raise ToolDenied("owner_client_reply_paused")
         if (chat_id != self.p.cfg.telegram.owner_chat_id
                 and chat_id not in self.p.cfg.telegram.chats
                 and self.store.binding(chat_id) is None):
@@ -525,6 +527,8 @@ class AgentTools:
     def _tool_queue_process_reply(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         tid = int(args["ticket_id"])
         ticket = self._ticket(tid, event, owner)
+        if self.store.client_reply_pause(ticket["chat_id"]):
+            raise ToolDenied("owner_client_reply_paused")
         kind = str(args.get("kind") or "")
         if kind not in {"necessary_question", "description_confirmation"}:
             raise ToolDenied("process_reply_only")
