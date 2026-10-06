@@ -1,0 +1,8 @@
+test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference) ... ok
+test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact) ... ok
+test_existing_517_pg_run_produces_report_without_duplicate_run (scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_existing_517_pg_run_produces_report_without_duplicate_run) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+OK

@@ -1,0 +1,44 @@
+[
+  {
+    "path": "scripts/ci/tests/test_product_scope.py",
+    "base_sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+    "current_sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+    "byte_identical": true
+  },
+  {
+    "path": "scripts/ci/product_scope.py",
+    "base_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+    "current_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+    "byte_identical": true
+  },
+  {
+    "path": ".github/workflows/ci.yml",
+    "base_sha256": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+    "current_sha256": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+    "byte_identical": true
+  },
+  {
+    "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+    "base_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+    "current_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+    "byte_identical": true
+  },
+  {
+    "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+    "base_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "current_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "byte_identical": true
+  },
+  {
+    "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+    "base_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+    "current_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+    "byte_identical": true
+  },
+  {
+    "path": "frontend/tests-e2e/wms672-box-labels.test.mjs",
+    "base_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "current_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "byte_identical": true
+  }
+]
