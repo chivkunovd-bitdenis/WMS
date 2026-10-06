@@ -1,0 +1,57 @@
+{
+  "started_at_utc": "2026-10-06T12:54:59.021666+00:00",
+  "target_supply_id": "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57",
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+  "service_id": "e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc",
+  "execution_status": "READ_ONLY_PREFLIGHT_FINISHED",
+  "mutation_calls": [],
+  "commit_called": false,
+  "runtime_identity_verified": true,
+  "found": true,
+  "supply_rows": 1,
+  "supply": {
+    "id": "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57",
+    "tenant_id": "9c31f3f4-ce62-4c1f-891a-295b278f1e69",
+    "seller_id": "e29e0469-9c4c-5487-9fdd-7b17087be9fc",
+    "warehouse_id": "307c0ccd-9a6b-41df-9180-f8ed68022237",
+    "marketplace": "ozon",
+    "name": "WMS617 ozon",
+    "status": "assembling",
+    "source": "wms",
+    "read_only": "on"
+  },
+  "composition": [
+    {
+      "order_id": "476b9650-36f0-596f-a60d-b20f3b5916a7",
+      "marketplace": "ozon",
+      "status": "in_supply",
+      "external_order_id": "WMS617-000011",
+      "wb_order_id": 617000011,
+      "position_id": "3cc5b8e2-707c-5568-84f9-ea7483ffec38",
+      "ozon_sku": 617106,
+      "quantity": 1
+    },
+    {
+      "order_id": "52fb8c88-1d7a-53fc-bf41-a9c164e3f103",
+      "marketplace": "ozon",
+      "status": "in_supply",
+      "external_order_id": "WMS617-000012",
+      "wb_order_id": 617000012,
+      "position_id": "21886110-37ca-559f-af85-5c5d12feec20",
+      "ozon_sku": 617104,
+      "quantity": 1
+    },
+    {
+      "order_id": "fc3e3285-9d3c-5164-b875-e124b24ccaa3",
+      "marketplace": "ozon",
+      "status": "in_supply",
+      "external_order_id": "WMS617-000010",
+      "wb_order_id": 617000010,
+      "position_id": "a9001dde-7ffc-56e5-83ff-67f8153662a2",
+      "ozon_sku": 617105,
+      "quantity": 3
+    }
+  ],
+  "finished_at_utc": "2026-10-06T12:54:59.430147+00:00"
+}

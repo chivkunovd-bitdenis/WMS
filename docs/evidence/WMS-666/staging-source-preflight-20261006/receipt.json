@@ -1,0 +1,14 @@
+{
+  "started_at_utc": "2026-10-06T12:54:56.010126+00:00",
+  "reader_sha256": "3574e0aa2bef6d5ea0a6b56418c2cafe364353f3f7e5cafe243117483fb30305",
+  "reader_commit": "1090159614abbac76fd1f3e9e4b4cd3f4537966a",
+  "project": "loyal-wonder",
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+  "service": "WMS",
+  "service_id": "e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc",
+  "web_domain_verified": "web-production-9e7c1.up.railway.app",
+  "exit_code": 0,
+  "stderr_bytes": 88,
+  "stderr_sha256": "a5c548f28a5ef38f00bc08625d9087dc2f43bdf9db186ab890438ca027ca71e9"
+}
