@@ -192,8 +192,16 @@ Production environment negative canary subsequently executed as separately autho
 
 Это доказанный controlled lifecycle дефект, но не доказательство причины nativeChromeFAIL: saved actual299cleanup имеет11outerunfinished peers, nativepending в прежней telemetry не измерено;150 с15unfinished peers прошёл исправленный повтор. Разработчик активен в прежней отдельной Sol сессии, выполняет только drain active cohort/rethrow firsterror после frozenконтракта; numeric tuning, native bypass и новая слепая CI попытка не разрешены. Новый productfix/LINUXcheck ещё не объявлены. Scope/mainSOURCEpin остаются прежними, PR387/fullCI/staging/production не изменены.
 
-## Checkpoint21:16UTC: active cohort механизм и один bounded Linux запуск
+## Checkpoint21:17UTC: active cohort механизм и один bounded Linux запуск
 
 Product47817f76589701ea36ba1f8b30fca84b6a136208 опубликован после frozena0e: только utility10insertions/1deletion, async active promises захватывают synchronous throw, Promise.all catch ждёт allSettled уже начатого cohort и повторно бросает тот же первый error. Окно16, yield, strict all-success и non-handoff не изменены. Local2+7 PASS/0skip, typecheck/build PASS из docs-only69065b3db93b1036c6c399c1bebe8fe71527e68b включены в commonafbda45a3 вместе с точным preparedhash. Независимое ревью новой реализации и приёмка ещё требуются.
 
 Разрешённый один actual Linux comparison37532767928 attempt1 запущен с standalonecef4cffd5d6bd1b76e691c596b87c9ad719e7d4f: product и пять frozen source/test paths сравниваются с47817, команды2peer+7native+ONLYoldC5, Linux141/Node24.21, прежние assertions/timeouts/420seconds, mute/noexternalnetwork. Observation-only adapter добавляет native fulfillment/pending counters, чтобы не смешивать внешнюю готовность с настоящим native completion. Сокращённый diagnostic CI не входит в общий кандидат. Result ещё не объявлен. Никакого fullCI/refmigration/mainpin/deploy после прежнего FAILURE нет.
+
+## Checkpoint21:31UTC: native pending измерено; основной C5 всё ещё FAILURE
+
+Actual37532767928 attempt1 завершён FAILURE на unchangedC5 за70.15s, setup/upload/source-byte guards PASS, peer2+native7 PASS/0skip. [Полные raw доказательства](../../evidence/WMS-672/peer-drain-linux-comparison-20261007/comparison-result.md) опубликованы отдельным978e5fd484411d2b707822774eb17c0889469ae1:39 docs files, все38 manifest members включая14 rejectedPNG проверены и включены в common. Diagnostic workflow/config/adapter не перенесены.
+
+Fixture1: известная ошибка150 дошла правильно, cleanup измерил nativePending0/removedFramePending0; correctedretry300 readiness/300POST/renderTape PASS,459native fulfilled/0rejected/0pending. Fixture2: первая подготовка получила14 native EncodingError227–240 ДО injection299/retry;240started,226fulfilled,14rejected. Изображения836×356 complete, все14PNG CRC/pixel valid; после allSettled cleanup nativePending0/removedFramePending0,0POST/transfer. C5 ожидание299alert line308 отказало. Same nativeFrameId3: firststart→error510ms, firstcohortend→error469ms, поэтому простой довод «ещё не прошло250ms» не подтверждается.
+
+Peer-drain controlled defect исправлен, но он не закрывает Chrome отказ валидных изображений. Нет новой правки/dispatch, numeric tuning или native bypass. Следующий разбор должен искать подтверждённые CC cache budget/lock/DecodeResult данные в bounded native lane; source/ref/pin migration, отдельная аналитическая приёмка и fullCI ещё не приняты. Production8f11d912/stagingcc8e/PR387f606/mainpin0151 не изменены.
