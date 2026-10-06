@@ -219,7 +219,11 @@ export function reduceDemo(
     const unit = box?.units.find((u) => u.id === action.unitId);
     if (!box || !unit) return reject("Единица не найдена");
     box.units = box.units.filter((u) => u.id !== unit.id);
-    const source = s.sourceBoxes.find((b) => b.id === "source1")!;
+    const original = createDemoState().sourceBoxes.find((b) =>
+      b.units.some((candidate) => candidate.id === unit.id),
+    );
+    const source = s.sourceBoxes.find((b) => b.id === original?.id);
+    if (!source) return reject("Исходное место единицы неизвестно");
     source.units.push(unit);
     if (unit.kiz)
       s.kizHistory[unit.kiz] = {

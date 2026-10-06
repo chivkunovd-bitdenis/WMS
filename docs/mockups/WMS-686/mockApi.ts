@@ -189,7 +189,7 @@ export function createMockFetch(): typeof fetch {
             {
               storage_location_id: "cell1",
               location_code: "А-1-1",
-              quantity: i ? 4 : 8,
+              quantity: (i ? 4 : 8) - count(p.id),
               reserved: 0,
               available: (i ? 4 : 8) - count(p.id),
               picked: count(p.id),
@@ -198,16 +198,15 @@ export function createMockFetch(): typeof fetch {
                   const initBox = initial.sourceBoxes.find(
                     (x) => x.id === b.id,
                   )!;
-                  const quantity = initBox.units.filter(
+                  const initialQuantity = initBox.units.filter(
                     (u) => u.productId === p.id,
                   ).length;
+                  const quantity = b.units.filter((u) => u.productId === p.id).length;
                   return {
                     quantity,
                     is_loose: false,
                     source_label: "Короб " + b.code,
-                    picked:
-                      quantity -
-                      b.units.filter((u) => u.productId === p.id).length,
+                    picked: initialQuantity - quantity,
                     container_path: [
                       {
                         kind: "box",
@@ -218,7 +217,7 @@ export function createMockFetch(): typeof fetch {
                     ],
                   };
                 })
-                .filter((s) => s.quantity),
+                .filter((s) => s.quantity || s.picked),
             },
           ],
         })),
