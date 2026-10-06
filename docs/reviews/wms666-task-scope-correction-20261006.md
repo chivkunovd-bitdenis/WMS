@@ -105,3 +105,43 @@ Astra high ревью. Проверка документов относител�
   }
 ]
 ```
+
+
+## Независимое ревью опубликованной коррекции — Sol 6.1
+
+06.10.2026. Отдельная сессия `/root/priority_666`, `gpt-6.1-sol`, не автор
+исходного scope-теста и не автор его коррекции. Ранее выполняла интеграцию
+принятого продукта666; эта коррекция product не меняет.
+**PASS для технической коррекции `b1d7e39d8a812e36b47685a409267a906c85ae55`**,
+опубликованной с proof/ledger на `0455cd0a820c362866aba814195554f64e300f07`.
+
+Собственно проверены Git delta (ровно один scope-файл), побайтная сохранность
+всего исходного отрицательного test-case, ancestry обоих исходных контрактов
+и прежней5e10коррекции, неизменность backend/product/checker. Прочитаны
+новый collector/allowlist, три Git-negative controls и сохранённый результат
+тестировщика5/5 PASS. Общий или повторный Vitest-прогон здесь не выполнялся.
+
+Task paths выбираются по реальной ancestry/primary666 subject; forbidden paths
+не удаляются до классификации. Missing original history вызывает отказ, HEAD
+сверяется до/после. Новые666backend/model/migration/stock/guards/чужие correction
+включаются в проверку и отвергаются; import чужогоbackend другого task сам по
+себе не считается666дельтой. Новый task commit, unstaged/staged/untracked и
+собственная новая merge resolution сохранены в границе. Точные собственные
+runner/reviews и evidence666 разрешены; adjacent proof/correction namespaces
+остаются запрещёнными. Общие два proof-пути разрешены точно, не по всемdocs.
+Ожидания продукта/остатка/печати не ослаблены; тест исправляет неверную атрибуцию
+старого полного base diff, не скрывает продуктовую правку.
+
+Canonical cumulative refs для0e078 и071a05 на b1d7e39 честно PENDING; прежняя
+DOM correction а29 сохранена. Замена обеих scope-baselines cumulative версией
+соответствует exact test-only файлу и сохраняет исходные negative assertions.
+Технический PASS этого review не является PASS полной CI-проверки ledger.
+
+**Конкретное препятствие gate:** текущий checker generic corrections требует
+`review.model == gpt-6-astra`, `effort == high`, `verdict == PASS` (строки473–475).
+Фактически выполнено отдельное Sol6.1 ревью; его нельзя записать как Astra high.
+Ведущий и tester уведомлены. Нужно честное соответствие gate разрешённой модели
+либо отдельный реальный Astra-high review. Reviewer не меняет checker/ledger и
+не выдаёт наличие PENDING/локальный5/5 за пройденный полный etalon gate.
+Новые продуктовые тесты/CI, docs-review, merge/deploy и внешние действия не
+выполнялись. Report опубликован отдельным документальным commit.
