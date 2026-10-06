@@ -1,0 +1,50 @@
+name: WMS-667 isolated visual probe
+on:
+  push:
+    branches: [codex/wms667-visual-runner]
+    paths: [.github/workflows/wms667-visual-probe.yml, scripts/ci/wms667-visual-probe.mjs]
+permissions:
+  contents: read
+concurrency:
+  group: wms667-visual-probe
+  cancel-in-progress: false
+jobs:
+  visual:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: c4142888f32830c0138cf221987affcbd3f2ac7e
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          ref: 463b03825dec5fdca43a39c117e7afc4080c0508
+          path: baseline
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated runner dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/wms667-evidence"
+          npm ci --prefix source/frontend > "$RUNNER_TEMP/wms667-evidence/npm-ci.log" 2>&1
+          ln -s "$GITHUB_WORKSPACE/source/frontend/node_modules" baseline/frontend/node_modules
+          npm install --prefix "$RUNNER_TEMP/wms667-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/wms667-evidence/playwright-install.log" 2>&1
+          node "$RUNNER_TEMP/wms667-tools/node_modules/playwright/cli.js" install --with-deps chromium > "$RUNNER_TEMP/wms667-evidence/chromium-install.log" 2>&1
+      - name: Run exact source with synthetic API and compare original design
+        env:
+          PLAYWRIGHT_MODULE: ${{ runner.temp }}/wms667-tools/node_modules/playwright/index.mjs
+          WMS667_EVIDENCE_DIR: ${{ runner.temp }}/wms667-evidence
+        run: timeout 300s node scripts/ci/wms667-visual-probe.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms667-visual-${{ github.sha }}
+          path: ${{ runner.temp }}/wms667-evidence
+          retention-days: 14
+          if-no-files-found: error
