@@ -22,8 +22,8 @@ jobs:
       WMS672_TEST_URL: http://127.0.0.1:16724
       # Authorized correction 6f1b196b; failed cases only, immutable product.
       WMS_PRINT_PROBE_SCOPE: '672'
-      WMS672_TEST_NAME_PATTERN: 'inbound 300|C5 decode'
-      WMS672_CONTRACT_SHA: '8afc05d0bc531fd310b7d6d5273f0b382223db11'
+      WMS672_TEST_NAME_PATTERN: 'C5 decode'
+      WMS672_CONTRACT_SHA: '6b6a47e748769d0b88c26178aafe88f4803c5ee8'
       WMS_PRINT_SOURCE_SHA: '0e6a7fbc3eb11f951febf972b35c6e117c42678a'
     steps:
       - uses: actions/checkout@v4
@@ -92,8 +92,8 @@ jobs:
           fi
           result672delta=skipped
           if [ "$WMS_PRINT_PROBE_SCOPE" = 672 ]; then
-            # Previously failed return/C4/C6 only; C7/C8 remain excluded.
-            WMS672_EVIDENCE_DIR="$RUNNER_TEMP/print-contract/672-delta" timeout 180s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern='return 300|C4 once|C6 fast' tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672-delta.log"
+            # Remaining C4 failure only; successful C1/C2/C6/C7/C8 excluded.
+            WMS672_EVIDENCE_DIR="$RUNNER_TEMP/print-contract/672-delta" timeout 180s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern='C4 once' tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672-delta.log"
             result672delta=${PIPESTATUS[0]}
           fi
           renderer=skipped
