@@ -1,0 +1,18 @@
+TAP version 13
+# C5 environment {"node":"v24.21.0","platform":"linux","arch":"x64","browser":"141.0.7390.37"}
+# C5 engine trace {"bytes":4477535,"reason":"fixture-2-context-close","dataLossOccurred":true,"maxBufferUsage":0.9982976913452148}
+# Subtest: C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+ok 1 - C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+  ---
+  duration_ms: 83160.485359
+  type: 'test'
+  ...
+1..1
+# tests 1
+# suites 0
+# pass 1
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 83783.699316
