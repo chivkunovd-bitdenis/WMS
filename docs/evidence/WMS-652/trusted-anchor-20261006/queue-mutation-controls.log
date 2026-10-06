@@ -1,0 +1,112 @@
+remove queue max
+exit=1
+
+FFF
+======================================================================
+FAIL: test_declared_global_queue_retains_pending_and_never_cancels_running (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_declared_global_queue_retains_pending_and_never_cancels_running)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 57, in test_declared_global_queue_retains_pending_and_never_cancels_running
+    self.assertEqual(config.get('queue', 'single'), 'max')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'single' != 'max'
+- single
++ max
+
+
+======================================================================
+FAIL: test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 78, in test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure
+    self.assertEqual(len(queue.pending), 100)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 100
+
+======================================================================
+FAIL: test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 65, in test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr
+    self.assertEqual(queue.cancelled, [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('A-new', 'head-A', 'failure')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+('A-new', 'head-A', 'failure')
+
+- [('A-new', 'head-A', 'failure')]
++ []
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+FAILED (failures=3)
+
+explicit single
+exit=1
+
+FFF
+======================================================================
+FAIL: test_declared_global_queue_retains_pending_and_never_cancels_running (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_declared_global_queue_retains_pending_and_never_cancels_running)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 57, in test_declared_global_queue_retains_pending_and_never_cancels_running
+    self.assertEqual(config.get('queue', 'single'), 'max')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'single' != 'max'
+- single
++ max
+
+
+======================================================================
+FAIL: test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 78, in test_max_has_100_pending_limit_and_cancels_overflow_not_earlier_failure
+    self.assertEqual(len(queue.pending), 100)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 100
+
+======================================================================
+FAIL: test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 65, in test_unrelated_third_event_cannot_replace_pending_failure_for_running_pr
+    self.assertEqual(queue.cancelled, [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('A-new', 'head-A', 'failure')] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+('A-new', 'head-A', 'failure')
+
+- [('A-new', 'head-A', 'failure')]
++ []
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.001s
+
+FAILED (failures=3)
+
+cancel running
+exit=1
+
+F..
+======================================================================
+FAIL: test_declared_global_queue_retains_pending_and_never_cancels_running (scripts.ci.tests.test_trusted_process_queue.BoundedPublisherQueueTests.test_declared_global_queue_retains_pending_and_never_cancels_running)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_queue.py", line 56, in test_declared_global_queue_retains_pending_and_never_cancels_running
+    self.assertEqual(config['cancel-in-progress'], 'false')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'true' != 'false'
+- true
++ false
+
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.002s
+
+FAILED (failures=1)

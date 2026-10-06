@@ -16,9 +16,10 @@ permissions:
   checks: write
 
 concurrency:
-  # One queue includes all PR-target and workflow-run publishers. A delayed old
-  # success POST cannot complete after a newer publisher's failure POST.
+  # One queue includes all PR-target and workflow-run publishers. Retain up to
+  # 100 pending runs; GitHub cancels new arrivals if the queue is full.
   group: process-integrity-publishers
+  queue: max
   cancel-in-progress: false
 
 jobs:
