@@ -1,0 +1,2 @@
+backend	UNKNOWN STEP	2026-10-04T13:20:01.7300522Z FAILED tests/test_fbs_kiz.py::test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[transport-filled] - AssertionError: assert {'claimed': T...958d836', ...} == {'claimed': T...KIZUNCERTAIN'}
+backend	UNKNOWN STEP	2026-10-04T13:20:01.7307342Z = 1 failed, 4014 passed, 179 skipped, 1 xfailed, 69 warnings in 1204.52s (0:20:04) =

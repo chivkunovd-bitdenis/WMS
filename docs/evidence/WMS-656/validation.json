@@ -1,0 +1,97 @@
+{
+  "sourceSha": "5e599076f2082bcf6dbdd0e29f0a0fb583e76735",
+  "acceptanceHead": "a6d266917e8fc70de71005c796d46923f34cccf2",
+  "fixture": "synthetic saved full label; not seller original",
+  "checks": [
+    {
+      "paper": "58x40",
+      "page": 1,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "58x40",
+      "page": 2,
+      "decoded": "WMS656-ORDER",
+      "nonblank": true
+    },
+    {
+      "paper": "58x40",
+      "page": 3,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "60x80",
+      "page": 1,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "60x80",
+      "page": 2,
+      "decoded": "WMS656-ORDER",
+      "nonblank": true
+    },
+    {
+      "paper": "60x80",
+      "page": 3,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "60x40",
+      "page": 1,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "60x40",
+      "page": 2,
+      "decoded": "WMS656-ORDER",
+      "nonblank": true
+    },
+    {
+      "paper": "60x40",
+      "page": 3,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "70x120",
+      "page": 1,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "70x120",
+      "page": 2,
+      "decoded": "WMS656-ORDER",
+      "nonblank": true
+    },
+    {
+      "paper": "70x120",
+      "page": 3,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "58x39-driver",
+      "page": 1,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    },
+    {
+      "paper": "58x39-driver",
+      "page": 2,
+      "decoded": "WMS656-ORDER",
+      "nonblank": true
+    },
+    {
+      "paper": "58x39-driver",
+      "page": 3,
+      "decoded": "010460055555555521WMS656TEST",
+      "nonblank": true
+    }
+  ]
+}
