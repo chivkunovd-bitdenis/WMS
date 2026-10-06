@@ -269,6 +269,136 @@ class GitTests(unittest.TestCase):
         return {"task": "WMS-680", "owner_supersessions": [owner],
                 "fixture_corrections": fixtures}
 
+    def wms681_integration_fixture_ledger(self, correction=None, publication=None):
+        """Bind the ordinary 681 chain plus its one later reviewed DOM delta.
+
+        The new source is deliberately its real parent, not the reviewer branch
+        commit.  The independently authored report is retained as provenance,
+        while ``publication_commit`` is the only immutable publication that is
+        actually descended from the correction.
+        """
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        integration = record["integration_fixture"]
+        report = record["report"]
+
+        def review(source, fixed, *, evidence, evidence_commit, evidence_blob):
+            return {
+                "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": fixed,
+                "evidence": evidence, "evidence_commit": evidence_commit,
+                "evidence_blob": evidence_blob,
+            }
+
+        entries = []
+        for number, step in enumerate(record["steps"], 1):
+            entries.append({
+                "contract_commit": record["original_contract"],
+                "source_commit": step["source"], "correction_commit": step["correction"],
+                "files": [
+                    {"transform": self.exact_transform("WMS-681", number, path),
+                     "path": path, "before_blob": pair[0], "after_blob": pair[1]}
+                    for path, pair in step["files"].items()
+                ],
+                "companion_files": [],
+                "review": review(step["source"], step["correction"],
+                                 evidence=report["path"], evidence_commit=report["commit"],
+                                 evidence_blob=report["blob"]),
+            })
+        fixed = correction or integration["correction_commit"]
+        published = publication or integration["publication_commit"]
+        entries.append({
+            "contract_commit": record["original_contract"],
+            "source_commit": integration["source_commit"], "correction_commit": fixed,
+            "files": [{
+                "transform": integration["transform"], "path": integration["path"],
+                "before_blob": integration["before_blob"], "after_blob": integration["after_blob"],
+            }],
+            "companion_files": [],
+            "review": review(integration["source_commit"], fixed,
+                             evidence=integration["report_path"], evidence_commit=published,
+                             evidence_blob=integration["report_blob"]),
+        })
+        return {"task": "WMS-681", "fixture_corrections": entries}
+
+    @contextmanager
+    def wms681_integration_real_git_graph(self, tamper=None):
+        """Run the actual contract gate over immutable 681 objects only.
+
+        The temporary repository borrows object storage through ``alternates``;
+        no refs, worktree files, or candidate code in the integration checkout
+        can be changed by this test.
+        """
+        project = Path(__file__).resolve().parents[2]
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        integration = record["integration_fixture"]
+        run_dir = project / ".agent-runs"
+        run_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="wms681-integration-gate-", dir=run_dir) as directory:
+            root = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+            def save(path, text):
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+                git("add", "--", path)
+
+            def commit(message):
+                git("commit", "-q", "-m", message)
+                return git("rev-parse", "HEAD")
+
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            objects = checker.git(project, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+            (root / ".git/objects/info/alternates").write_text(objects + "\n", encoding="utf-8")
+            git("update-ref", "HEAD", integration["publication_commit"])
+            git("read-tree", integration["publication_commit"])
+            ledger = self.wms681_integration_fixture_ledger()
+            entry = ledger["fixture_corrections"][-1]
+
+            if tamper == "wrong-before":
+                entry["files"][0]["before_blob"] = "0" * 40
+            elif tamper == "wrong-after":
+                entry["files"][0]["after_blob"] = "0" * 40
+            elif tamper == "wrong-report":
+                entry["review"]["evidence_blob"] = "0" * 40
+            elif tamper == "wrong-publication":
+                # Same bytes, but this genuine independent review is not a
+                # descendant of 879 and therefore cannot be substituted.
+                entry["review"]["evidence_commit"] = integration["original_independent_review_commit"]
+            elif tamper == "wrong-source-parent":
+                entry["source_commit"] = entry["correction_commit"]
+                entry["review"]["source_commit"] = entry["source_commit"]
+            elif tamper == "extra-scope":
+                # Construct a private canary with the approved test bytes plus
+                # one product path. Exact pair registration must not bless it.
+                git("update-ref", "HEAD", integration["source_commit"])
+                git("read-tree", integration["source_commit"])
+                save(integration["path"], self.immutable_blob(
+                    integration["correction_commit"], integration["path"]))
+                save("backend/app/wms681_unreviewed.py", "unreviewed = True\n")
+                canary = commit("WMS-681: canary changes fixture and product")
+                save(integration["report_path"], self.immutable_blob(
+                    integration["publication_commit"], integration["report_path"]))
+                published = commit("WMS-681: canary publishes copied report")
+                ledger = self.wms681_integration_fixture_ledger(canary, published)
+                entry = ledger["fixture_corrections"][-1]
+            elif tamper not in (None, "unreviewed-mutation"):
+                raise AssertionError(f"Unknown canary: {tamper}")
+
+            save("docs/reviews/contract-corrections/WMS-681.json", json.dumps(ledger) + "\n")
+            commit("WMS-681: store exact integration fixture correction")
+            if tamper == "unreviewed-mutation":
+                save(integration["path"], checker.git(
+                    root, "show", f"HEAD:{integration['path']}") + "\n// unreviewed mutation\n")
+                commit("WMS-681: unreviewed post-ledger mutation")
+
+            self.assertTrue(checker.ancestor(root, entry["correction_commit"], "HEAD"))
+            yield root
+
     @contextmanager
     def wms680_real_git_graph(self, tamper=None):
         """Preserve published trees, commits and parents; never rewrite history.
@@ -1346,6 +1476,63 @@ class GitTests(unittest.TestCase):
                     for path, (before, after) in step.get("ancillary", {}).items():
                         self.assertEqual(checker.git_blob(project, step["source"], path), before)
                         self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+
+    def test_wms681_integration_fixture_keeps_review_identity_but_uses_descendant_publication(self):
+        """The review bytes alone are not a substitute for proof ancestry."""
+        project = Path(__file__).resolve().parents[2]
+        integration = EXACT_REVIEWED_CHAINS["WMS-681"]["integration_fixture"]
+        parent = checker.git(
+            project, "rev-list", "--parents", "-n", "1", integration["correction_commit"],
+        ).split()[1]
+        self.assertEqual(parent, integration["source_commit"])
+        self.assertEqual(
+            checker.git_blob(project, integration["source_commit"], integration["path"]),
+            integration["before_blob"],
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["correction_commit"], integration["path"]),
+            integration["after_blob"],
+        )
+        self.assertEqual(
+            checker.commit_changed_paths(project, integration["correction_commit"]),
+            {integration["path"]},
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["original_independent_review_commit"],
+                             integration["report_path"]),
+            integration["report_blob"],
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["publication_commit"], integration["report_path"]),
+            integration["report_blob"],
+        )
+        self.assertTrue(checker.ancestor(
+            project, integration["correction_commit"], integration["publication_commit"],
+        ))
+        self.assertFalse(checker.ancestor(
+            project, integration["original_independent_review_commit"], integration["publication_commit"],
+        ))
+
+    def test_wms681_integration_fixture_exact_pair_is_accepted_after_registration(self):
+        """Real published 681 graph: old pair is preserved and 879 is additive."""
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        with self.wms681_integration_real_git_graph() as root:
+            errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+            self.assertEqual([error for error in errors if "WMS-681" in error], [])
+
+    def test_wms681_integration_fixture_rejects_every_exact_binding_canary(self):
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        for tamper in ("wrong-before", "wrong-after", "wrong-report",
+                       "wrong-publication", "wrong-source-parent", "extra-scope",
+                       "unreviewed-mutation"):
+            with self.subTest(tamper=tamper):
+                with self.wms681_integration_real_git_graph(tamper) as root:
+                    # Exercise the gate's real ledger validator directly: the
+                    # positive above already scans the full published history.
+                    _, errors = checker.reviewed_contract_correction(
+                        root, "WMS-681", record["original_contract"],
+                    )
+                    self.assertTrue([error for error in errors if "WMS-681" in error], errors)
 
     def test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly(self):
         """Run the real gate over every published 680 contract, including f2de."""
