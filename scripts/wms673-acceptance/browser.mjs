@@ -61,21 +61,33 @@ try {
       const previewPromise = browser.waitForTarget(t => t.url().startsWith('chrome://print'), { timeout: 30000 })
       await popup.evaluate(() => { setTimeout(() => window.__nativePrint(), 0) })
       const previewTarget = await previewPromise
-      const preview = await previewTarget.page()
-      if (!preview) throw new Error('Native print-preview target has no accessible page')
-      await preview.waitForFunction(() => {
+      // Chromium exposes its native print UI as target type `other`, not `page`.
+      const session = await previewTarget.createCDPSession()
+      const evaluatePreview = async (fn) => {
+        const value = await session.send('Runtime.evaluate', { expression: `(${fn.toString()})()`, returnByValue: true, awaitPromise: true })
+        if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails))
+        return value.result.value
+      }
+      const previewReady = () => {
         const app = document.querySelector('print-preview-app')
         const area = app?.shadowRoot?.querySelector('print-preview-preview-area')
         return area && area.previewState === 2
-      }, { timeout: 60000 })
-      const previewState = await preview.evaluate(() => {
+      }
+      let ready = false
+      for (let attempt = 0; attempt < 120; attempt++) {
+        if (await evaluatePreview(previewReady)) { ready = true; break }
+        await new Promise(resolve => setTimeout(resolve, 500))
+      }
+      execFileSync('import', ['-window', 'root', `${out}/${kind}-${repeat}-native-preview.png`])
+      const previewState = await evaluatePreview(() => {
         const app = document.querySelector('print-preview-app')
         const model = app.shadowRoot.querySelector('print-preview-model')
-        return { title: document.title, url: location.href, settings: model?.settings, text: app.shadowRoot.textContent }
+        const area = app.shadowRoot.querySelector('print-preview-preview-area')
+        return { title: document.title, url: location.href, previewState: area.previewState, settings: model?.settings, text: app.shadowRoot.textContent }
       })
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
-      execFileSync('import', ['-window', 'root', `${out}/${kind}-${repeat}-native-preview.png`])
-      await preview.evaluate(() => {
+      assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
+      await evaluatePreview(() => {
         document.querySelector('print-preview-app').shadowRoot.querySelector('print-preview-sidebar').shadowRoot.querySelector('print-preview-button-strip').shadowRoot.querySelector('.cancel-button').click()
       })
       await popup.close()

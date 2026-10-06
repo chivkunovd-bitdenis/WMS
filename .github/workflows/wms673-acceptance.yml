@@ -39,6 +39,7 @@ jobs:
           cp "$RUNNER_TEMP/harness/browser.mjs" frontend/acceptance/
       - name: Actual components, popups, PDF and native print preview
         run: |
+          set -euo pipefail
           cd frontend
           node node_modules/vite/bin/vite.js --host 127.0.0.1 > "$WMS673_PROOF_DIR/vite.log" 2>&1 &
           for attempt in $(seq 1 30); do curl -sf http://127.0.0.1:5173/acceptance/index.html >/dev/null && break; sleep 1; done
