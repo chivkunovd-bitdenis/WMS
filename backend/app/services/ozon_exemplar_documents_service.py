@@ -333,6 +333,12 @@ async def get_exemplar_documents(
 
 def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
     status = raw.get("status")
+    if data.get("state") == "accepted":
+        # Acceptance completes this intent. Later cabinet changes describe the
+        # posting, not an unresolved write of the historical choice. Keep that
+        # history without making it an overlay or a target for matching again.
+        data.update(status=status, errors=[], document_errors={}, last_status=raw)
+        return
     data.update(status=status, state="unknown", errors=[], document_errors={}, last_status=raw)
     targets = data.get("choices", {}) if data.get("kind") == "documents" else {}
     remote = {
@@ -407,6 +413,7 @@ async def resume_exemplar_document_check(
 
     order = await document_order(session, tenant_id, order_id)
     data = document_data(order)
+    completed = data.get("state") == "accepted"
     # Preparing has not checkpointed /set; a reader cannot release the writer's claim.
     if data.get("in_flight"):
         lease_until = datetime.fromisoformat(data["lease_until"])
@@ -448,7 +455,9 @@ async def resume_exemplar_document_check(
         )
         raw = response.model_dump(exclude_none=True)
         if response.posting_number and response.posting_number != order.external_order_id:
-            data.update(state="unknown", errors=["ozon_posting_mismatch"])
+            data.update(
+                state="accepted" if completed else "unknown", errors=["ozon_posting_mismatch"]
+            )
         else:
             classify_document_status(data, raw)
             # Refresh remote values while retaining requirement flags and fields
@@ -473,7 +482,9 @@ async def resume_exemplar_document_check(
             snapshot["products"] = list(previous_products.values())
             data["snapshot"] = snapshot
     except (MarketplaceProviderError, OzonFbsProcessError) as exc:
-        data.update(state="unknown", errors=[exc.code])
+        # A failed read cannot undo a previously confirmed write. An unresolved
+        # write still stays unknown and cannot be repeated blindly.
+        data.update(state="accepted" if completed else "unknown", errors=[exc.code])
     await checkpoint(session, tenant_id, order_id, data)
     order = await document_order(session, tenant_id, order_id)
     return await document_view(session, order)
