@@ -1,0 +1,10 @@
+E
+==================================== ERRORS ====================================
+___ ERROR at setup of test_unchanged_product_and_process_only_additions_pass ___
+scripts/ci/tests/test_product_scope.py:25: in verify
+    pytest.fail("WMS-652 product_scope callable is not implemented; tests precede code")
+E   Failed: WMS-652 product_scope callable is not implemented; tests precede code
+=========================== short test summary info ============================
+ERROR scripts/ci/tests/test_product_scope.py::test_unchanged_product_and_process_only_additions_pass
+!!!!!!!!!!!!!!!!!!!!!!!!!! stopping after 1 failures !!!!!!!!!!!!!!!!!!!!!!!!!!!
+1 error in 0.21s
