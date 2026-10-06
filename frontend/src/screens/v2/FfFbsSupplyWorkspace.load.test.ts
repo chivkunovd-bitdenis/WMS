@@ -7,7 +7,11 @@ import { describe, expect, it } from 'vitest'
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
 const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 const hooks: Record<string, string> = {}
+let normalizeDeliveryErrorSource = ''
 function visit(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.getText(file) === 'normalizeDeliveryError') {
+    normalizeDeliveryErrorSource = node.getText(file)
+  }
   if (ts.isVariableDeclaration(node) && node.initializer && ts.isCallExpression(node.initializer)
       && node.initializer.expression.getText(file) === 'useCallback') {
     hooks[node.name.getText(file)] = node.initializer.arguments[0].getText(file)
@@ -19,6 +23,15 @@ const callback = hooks.load
 const beginWrite = hooks.beginWorkspaceWrite
 if (!callback) throw new Error('Production load callback not found')
 if (!beginWrite) throw new Error('Production beginWorkspaceWrite helper not found')
+if (!normalizeDeliveryErrorSource) throw new Error('Production normalizeDeliveryError helper not found')
+
+const normalizeDeliveryErrorJs = ts.transpileModule(
+  `const normalizeDeliveryError = ${normalizeDeliveryErrorSource}`,
+  { compilerOptions: { target: ts.ScriptTarget.ESNext } },
+).outputText
+const normalizeDeliveryError = (new Function(
+  `${normalizeDeliveryErrorJs}; return normalizeDeliveryError`,
+) as () => (value: unknown) => unknown)()
 
 function deferred() {
   let resolve!: (value: unknown) => void
@@ -49,7 +62,8 @@ function fixture(savedStages = new Map<string, string>()) {
     compilerOptions: { target: ts.ScriptTarget.ESNext },
   }).outputText
   const callbackFactory = new Function('fetchFbsWorkspace', 'beginWorkspaceWrite',
-    'setWorkspace', 'setStage', 'setError', 'setBusy', 'fbsErrorText',
+    'setWorkspace', 'setStage', 'setError', 'setBusy', 'normalizeDeliveryError',
+    'setDeliveryError', 'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
     'fbsStageAfterWorkspaceRefresh', 'visualStage', 'open', 'supplyId', 'token',
     'authHeaders', 'readFbsWorkspaceStage', `${callbackJs}; return load`) as (...args: unknown[]) => (
       silent?: boolean, onApplied?: (applied: unknown) => void) => Promise<unknown>
@@ -60,6 +74,7 @@ function fixture(savedStages = new Map<string, string>()) {
     (next: { supply: { id: string } }) => { visible.workspace = next; shownSupplyId.current = next.supply.id },
     (update: (previous: string) => string) => { visible.stage = update(visible.stage) },
     (next: string) => { visible.error = next }, (next: boolean) => { visible.busy = next },
+    normalizeDeliveryError, () => undefined, () => undefined, () => undefined,
     (message: string) => message, (_marketplace: string, _old: string, next: string) => next,
     (stage: string) => stage, true, id, 'synthetic', () => ({}),
     (supplyId: string) => savedStages.get(supplyId) ?? null,

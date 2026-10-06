@@ -1,14 +1,77 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from collections.abc import AsyncIterator
 from pathlib import Path
 
 import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
+from sqlalchemy import select
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncSession
+
+
+def _ensure_ci_etalon_history() -> None:
+    """Restore the comparison ref required by one-time scope contracts in CI.
+
+    The backend job uses actions/checkout with its default shallow history, while
+    WMS scope contracts compare the branch with ``origin/etalon``.  Fetch the
+    history only on GitHub Actions and only when the tracking ref has no common
+    ancestor with ``HEAD``; local test runs remain offline and unchanged.
+    """
+    if os.environ.get("GITHUB_ACTIONS") != "true":
+        return
+
+    root = Path(__file__).resolve().parents[2]
+    merge_base = subprocess.run(
+        ["git", "merge-base", "origin/etalon", "HEAD"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if merge_base.returncode == 0:
+        return
+
+    shallow = subprocess.run(
+        ["git", "rev-parse", "--is-shallow-repository"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    fetch = ["git", "fetch", "--no-tags", "--prune"]
+    if shallow == "true":
+        fetch.append("--unshallow")
+    fetch.extend(
+        (
+            "origin",
+            "+refs/heads/etalon:refs/remotes/origin/etalon",
+        )
+    )
+    subprocess.run(
+        fetch,
+        cwd=root,
+        check=True,
+    )
+
+    subprocess.run(
+        ["git", "merge-base", "origin/etalon", "HEAD"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    # xdist imports conftest in every worker.  Fetch once in the controller to
+    # avoid concurrent writes to Git's shallow/ref files.
+    if not hasattr(config, "workerinput"):
+        _ensure_ci_etalon_history()
+
 
 # Before importing app.db.session: same DATABASE_URL for routes and BackgroundTasks.
 os.environ.setdefault("JWT_SECRET_KEY", "test-jwt-secret-key-at-least-32-characters-long")
@@ -118,6 +181,38 @@ def isolated_withdrawal_gate(monkeypatch: pytest.MonkeyPatch) -> None:
 
     # Tests opt in only their own generated fixture sellers, never a production identity.
     monkeypatch.setattr(settings, "withdrawal_seller_allowlist", "")
+
+
+@pytest.fixture
+def enable_wb_marketplace_supplies_mock(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Make the shared WB supply mock available to cross-module contracts."""
+    from app.core.settings import settings
+    from app.models.fbs_order import FbsOrder
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+
+    async def fetch_actual_order_ids(
+        client: object,
+        *,
+        api_token: str,
+        wb_supply_id: str,
+        expected_order_ids: list[int] | None = None,
+    ) -> list[int]:
+        async with SessionLocal() as session:
+            return list(
+                (
+                    await session.scalars(
+                        select(FbsOrder.wb_order_id).where(
+                            FbsOrder.wb_supply_id == wb_supply_id
+                        )
+                    )
+                ).all()
+            )
+
+    monkeypatch.setattr(
+        "app.services.fbs_supply_composition_service.fetch_wb_supply_order_ids",
+        fetch_actual_order_ids,
+    )
 
 
 @pytest.fixture(autouse=True)

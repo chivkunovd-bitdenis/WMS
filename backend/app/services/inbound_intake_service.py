@@ -2058,8 +2058,13 @@ async def apply_box_putaway(
     line_items: list[tuple[uuid.UUID, int]] | None = None,
     performer_id: uuid.UUID | None,
     commit: bool = True,
+    transfer_group_id: uuid.UUID | None = None,
 ) -> tuple[InboundIntakeRequest, int]:
-    """Разложить весь короб или указанные (product_id, qty) из сортировки в ячейку."""
+    """Разложить весь короб или указанные (product_id, qty) из сортировки в ячейку.
+
+    ``transfer_group_id`` — идентификатор операции экрана раскладки (WMS-650):
+    им помечаются все движения постановки, чтобы «назад» нашёл их как квитанцию.
+    """
     from app.services import inbound_intake_box_service as inbound_box_svc
 
     req, box = await _get_box_for_putaway(session, tenant_id, request_id, box_id)
@@ -2154,6 +2159,7 @@ async def apply_box_putaway(
                 source_container_id=box_id,
                 destination_container_kind="box" if whole_box else None,
                 destination_container_id=box_id if whole_box else None,
+                transfer_group_id=transfer_group_id,
             )
         except ValueError as exc:
             if str(exc) == "insufficient stock":

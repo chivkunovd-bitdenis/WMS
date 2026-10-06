@@ -599,3 +599,198 @@ def test_real_wb_refusal_from_2026_09_02_reads_as_an_instruction() -> None:
     assert "Честного знака выведен из оборота" in message
     assert "sgtinRetired" not in message
     assert retryable is True
+
+
+# WMS-653 C1: временное ожидание определяется только по полному набору строк,
+# а номера заказов в операторском сообщении не дублируются.
+def test_wms653_all_pending_sgtin_rows_have_human_waiting_message() -> None:
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        message="Meta validation failed",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=287890505,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh1111",
+                decision="pending",
+            ),
+            MetaValidationFailItem(
+                order_id=287890506,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh2222",
+                decision="pending",
+            ),
+            MetaValidationFailItem(
+                order_id=287890505,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh1111",
+                decision="pending",
+            ),
+        ],
+    )
+
+    message, retryable = _meta_validation_message(exc)
+
+    assert message == (
+        "Wildberries ещё обрабатывает КИЗы для заказов № 287890505, 287890506. "
+        "Подождите несколько минут и повторите передачу поставки"
+    )
+    assert retryable is True
+    assert message.count("287890505") == 1
+    assert "MetaValidationFail" not in message
+    assert "sgtin" not in message.lower()
+    assert "decision" not in message.lower()
+    assert "0104600000000017215AbCdEfGh" not in message
+
+
+# WMS-653 C2: один отличающийся признак обязан вывести ответ из ветки ожидания.
+@pytest.mark.parametrize(
+    ("item", "human_reason"),
+    [
+        (
+            MetaValidationFailItem(
+                order_id=287890511,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh3333",
+                decision="pending",
+                reason="КИЗ отклонён владельцем кода",
+            ),
+            "КИЗ отклонён владельцем кода",
+        ),
+        (
+            MetaValidationFailItem(
+                order_id=287890512,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh4444",
+                decision="invalid",
+                reason="КИЗ не прошёл проверку",
+            ),
+            "КИЗ не прошёл проверку",
+        ),
+        (
+            MetaValidationFailItem(
+                order_id=287890513,
+                key="uin",
+                value="9988776655",
+                decision="pending",
+                reason="УИН ещё не принят",
+            ),
+            "УИН ещё не принят",
+        ),
+    ],
+)
+def test_wms653_non_waiting_meta_validation_is_not_masked(
+    item: MetaValidationFailItem,
+    human_reason: str,
+) -> None:
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        meta_validation=[item],
+    )
+
+    message, _retryable = _meta_validation_message(exc)
+
+    assert human_reason in message
+    assert "ещё обрабатывает КИЗы" not in message
+    assert "Подождите несколько минут" not in message
+
+
+# WMS-653 C3: настоящий отказ остаётся отказом и называет заказ.
+def test_wms653_real_kiz_refusal_keeps_order_and_wb_reason() -> None:
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=287890521,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh5555",
+                decision="rejected",
+                reason="КИЗ принадлежит другому товару",
+            )
+        ],
+    )
+
+    message, _retryable = _meta_validation_message(exc)
+
+    assert "287890521" in message
+    assert "КИЗ принадлежит другому товару" in message
+    assert "Подождите" not in message
+    assert "0104600000000017215AbCdEfGh5555" not in message
+
+
+# WMS-653 C4: pending в смешанном ответе не скрывает настоящий отказ.
+def test_wms653_mixed_pending_and_refusal_keep_two_human_reasons() -> None:
+    exc = WildberriesBusinessError(
+        "meta_validation_fail",
+        wb_code="MetaValidationFail",
+        meta_validation=[
+            MetaValidationFailItem(
+                order_id=287890531,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh6666",
+                decision="pending",
+            ),
+            MetaValidationFailItem(
+                order_id=287890532,
+                key="sgtin",
+                value="0104600000000017215AbCdEfGh7777",
+                decision="rejected",
+                reason="КИЗ уже использован",
+            ),
+        ],
+    )
+
+    message, _retryable = _meta_validation_message(exc)
+
+    assert "Wildberries ещё обрабатывает КИЗы" in message
+    assert "287890531" in message
+    assert "Wildberries не принял КИЗы" in message
+    assert "287890532" in message
+    assert "КИЗ уже использован" in message
+
+
+# WMS-653 C5: пограничные ответы остаются безопасными и не получают выдуманный
+# номер заказа или ложный совет ждать.
+def test_wms653_edge_meta_validation_variants_are_safe_and_human() -> None:
+    empty_message, _ = _meta_validation_message(
+        WildberriesBusinessError("meta_validation_fail", meta_validation=[])
+    )
+    assert "ещё обрабатывает КИЗы" not in empty_message
+
+    unknown_decision, _ = _meta_validation_message(
+        WildberriesBusinessError(
+            "meta_validation_fail",
+            meta_validation=[
+                MetaValidationFailItem(
+                    order_id=287890541,
+                    key="sgtin",
+                    value="0104600000000017215AbCdEfGh8888",
+                    decision="brand-new-decision",
+                )
+            ],
+        )
+    )
+    assert "287890541" in unknown_decision
+    assert "ещё обрабатывает КИЗы" not in unknown_decision
+    assert "0104600000000017215AbCdEfGh8888" not in unknown_decision
+
+    missing_order, _ = _meta_validation_message(
+        WildberriesBusinessError(
+            "meta_validation_fail",
+            meta_validation=[
+                MetaValidationFailItem(
+                    order_id=None,
+                    key="sgtin",
+                    value="0104600000000017215AbCdEfGh9999",
+                    decision="rejected",
+                    reason="Новая человеческая причина WB",
+                )
+            ],
+        )
+    )
+    assert "Заказ не указан Wildberries" in missing_order
+    assert "Новая человеческая причина WB" in missing_order
+    assert "0104600000000017215AbCdEfGh9999" not in missing_order

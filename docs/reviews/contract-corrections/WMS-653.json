@@ -1,0 +1,13 @@
+{
+  "task": "WMS-653",
+  "contract_commit": "9f131c42bec5266b90abb499c56060c0f3bd4b70",
+  "correction_commit": "1329e272b916062597bc94dc818682a08e96dd22",
+  "files": [
+    "backend/tests/test_wms653_scope_contract.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS"
+  }
+}

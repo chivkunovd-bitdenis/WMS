@@ -3993,10 +3993,17 @@ async def test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_r
             headers=headers,
             json={"attempt_key": "reconciled-exact-bind"},
         )
+        async with SessionLocal() as session:
+            recovered_code_id = await session.scalar(select(MarkingCode.id).where(
+                MarkingCode.tenant_id == tenant_id, MarkingCode.cis_code == value,
+            ))
+        assert recovered_code_id is not None
         assert recovered_claim.json() == {
             "claimed": True,
             "started": False,
             "kiz": value,
+            "code_id": str(recovered_code_id),
+            "has_label_artifact": False,
         }
     # The fresh required/empty row authorizes one retry of the same KIZ.
     # Wrong-order, different-value and exact-pending rows remain GET-only.

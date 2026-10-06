@@ -43,6 +43,7 @@ def make_config(tmp_path: Any, **over: Any) -> Config:
         },
         "wms": {"base_url": "https://wms.test/api", "agent_key": "K" * 40, "poll_interval_sec": 60},
         "limits": {"quiet_sec": 120, "batch_wait_sec": 45, "urgency_wait_sec": 900,
+                   "ask_client_urgency": True,
                    "data_wait_sec": 7200, "ci_timeout_sec": 600, "deploy_timeout_sec": 600},
         "hotfix": {"backend_bin": "/venv/bin", "deployed_sha_cmd": "echo sha",
                    "public_base_url": "https://wms.test"},
@@ -129,6 +130,8 @@ class FakeTrello:
         self.comments_by: dict[str, list[str]] = {}
         self.creates = 0
         self.moves: list[tuple[str, str]] = []
+        self.updates: list[tuple[str, str]] = []
+        self.lose_update_response_once = False
         self.lose_response_once = False
         self.reject = False
         self.hide_after_lose = False
@@ -156,6 +159,15 @@ class FakeTrello:
 
     def get_card(self, card_id: str) -> dict[str, Any]:
         return self.cards[card_id]
+
+    def update_description(self, card_id: str, desc: str) -> None:
+        if self.reject:
+            raise TrelloError("http_400", rejected=True)
+        self.updates.append((card_id, desc))
+        self.cards[card_id]["desc"] = desc
+        if self.lose_update_response_once:
+            self.lose_update_response_once = False
+            raise TrelloError("transport_ReadTimeout")
 
     def comments(self, card_id: str) -> list[str]:
         return self.comments_by.get(card_id, [])

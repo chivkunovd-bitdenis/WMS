@@ -1,4 +1,4 @@
-"""F4/F5: необязательные sha и attempt_id в deploy.yml и prod-update.sh; без них поведение прежнее.
+"""F4/F5: необязательные sha и attempt_id в deploy.yml; выкладка всегда закреплена за точным SHA.
 
 Workflow и боевой скрипт не запускаются: проверяются разбор YAML и серверная часть на временных git-репозиториях
 (для боевого скрипта включён WMS_DEPLOY_GUARD_ONLY=1: остановка до сборки и базы)."""
@@ -26,6 +26,11 @@ def load() -> dict[str, Any]:
     return data  # type: ignore[no-any-return]
 
 
+def named_step(steps: list[dict[str, Any]], prefix: str) -> dict[str, Any]:
+    """Найти именованный шаг, не предполагая наличие name у uses-шагов."""
+    return next(step for step in steps if step.get("name", "").startswith(prefix))
+
+
 def test_workflow_yaml_has_optional_inputs_run_name_and_unchanged_triggers() -> None:
     wf = load()
     assert list(wf["on"]) == ["workflow_dispatch"]  # по-прежнему только ручной запуск
@@ -34,10 +39,18 @@ def test_workflow_yaml_has_optional_inputs_run_name_and_unchanged_triggers() -> 
         assert inputs[name]["required"] is False and inputs[name]["default"] == ""
     assert "inputs.attempt_id" in wf["run-name"] and "'Deploy Production'" in wf["run-name"]
     steps = wf["jobs"]["deploy"]["steps"]
-    deploy = next(s for s in steps if s["name"].startswith("Deploy on server"))
-    assert deploy["env"]["DEPLOY_SHA"] == "${{ inputs.sha }}" and deploy["with"]["envs"] == "DEPLOY_SHA"
+    trusted = named_step(steps, "Require trusted dispatch branch")
+    validate = named_step(steps, "Validate optional inputs")
+    target = named_step(steps, "Resolve immutable target and verify its CI before SSH")
+    deploy = named_step(steps, "Deploy on server")
+    assert "refs/heads/etalon" in trusted["run"]
+    assert "^[0123456789abcdef]{40}$" in validate["run"]
+    assert "scripts/ci/verify_ci.py" in target["run"] and "sha=$target_sha" in target["run"]
+    assert steps.index(validate) < steps.index(target) < steps.index(deploy)
+    assert deploy["env"]["DEPLOY_SHA"] == "${{ steps.target.outputs.sha }}"
+    assert deploy["with"]["envs"] == "DEPLOY_SHA"
     assert "prod-update.sh" in deploy["with"]["script"] and "docker" not in deploy["with"]["script"]
-    assert any(s["name"].startswith("Smoke check") for s in steps)  # проверка адресов осталась
+    assert any(s.get("name", "").startswith("Smoke check") for s in steps)  # проверка адресов осталась
     assert wf["concurrency"] == {"group": "deploy-production", "cancel-in-progress": False}
 
 
@@ -81,27 +94,27 @@ def stub_script(tag: str) -> str:
 
 
 def run_remote_part(
-    clone: Path, tmp_path: Path, deploy_sha: str | None, extra_env: dict[str, str] | None = None
+    clone: Path, tmp_path: Path, deploy_sha: str, extra_env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     wf = load()
-    deploy = next(s for s in wf["jobs"]["deploy"]["steps"] if s["name"].startswith("Deploy on server"))
+    deploy = named_step(wf["jobs"]["deploy"]["steps"], "Deploy on server")
     env = {k: v for k, v in os.environ.items() if k != "GIT_CONFIG_GLOBAL"}
     (tmp_path / "home").mkdir(exist_ok=True)
-    env.update({"WMS_REPO_DIR": str(clone), "HOME": str(tmp_path / "home")})
+    env.update({
+        "WMS_REPO_DIR": str(clone),
+        "HOME": str(tmp_path / "home"),
+        "DEPLOY_SHA": deploy_sha,
+    })
     env.update(extra_env or {})
-    if deploy_sha is not None:
-        env["DEPLOY_SHA"] = deploy_sha
     return subprocess.run(["bash", "-c", deploy["with"]["script"]], env=env, capture_output=True, text=True,
                           cwd=tmp_path)
 
 
-def test_workflow_server_part_without_inputs_deploys_head_of_etalon_like_before(tmp_path: Path) -> None:
+def test_workflow_server_part_uses_resolved_head_of_etalon_as_immutable_target(tmp_path: Path) -> None:
     origin, clone, shas = make_remote(tmp_path, stub_script)
-    res = run_remote_part(clone, tmp_path, None)  # переменная даже не задана
+    res = run_remote_part(clone, tmp_path, shas["c3"])  # target-шаг разрешил пустой input в голову etalon
     assert res.returncode == 0, res.stderr
-    assert f"STUB script=c3 pin= head={shas['c3']}" in res.stdout or "STUB script=c3 pin=" in res.stdout
-    res = run_remote_part(clone, tmp_path, "")
-    assert res.returncode == 0 and "script=c3 pin=" in res.stdout
+    assert f"STUB script=c3 pin={shas['c3']} head={shas['c3']}" in res.stdout
 
 
 def test_workflow_server_part_pinned_uses_that_commit_script_and_pin(tmp_path: Path) -> None:
@@ -113,7 +126,7 @@ def test_workflow_server_part_pinned_uses_that_commit_script_and_pin(tmp_path: P
 
 def test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything(tmp_path: Path) -> None:
     origin, clone, shas = make_remote(tmp_path, stub_script)
-    for bad in (shas["side"], "abc123", "G" * 40, "0" * 40, shas["c2"].upper()):
+    for bad in (shas["side"], "", "abc123", "G" * 40, "0" * 40):
         res = run_remote_part(clone, tmp_path, bad)
         assert res.returncode != 0 and "STUB" not in res.stdout, bad
 
@@ -181,7 +194,7 @@ def test_old_script_in_pinned_sha_is_refused_before_it_runs(tmp_path: Path) -> N
     before = git("rev-parse", "HEAD", cwd=clone)
     res = run_remote_part(clone, tmp_path, shas["c1"], {"WMS_DEPLOY_GUARD_ONLY": "1"})
     assert res.returncode != 0
-    assert "without pinned-version support" in res.stderr
+    assert "no pinned-version support" in res.stderr
     assert "Deploy guard passed" not in res.stdout and "checkout deploy branch" not in res.stdout
     assert git("rev-parse", "HEAD", cwd=clone) == before  # ничего не переключалось
     # коммит с новым скриптом проходит и выкатывается ровно закреплённый
@@ -189,10 +202,10 @@ def test_old_script_in_pinned_sha_is_refused_before_it_runs(tmp_path: Path) -> N
     assert ok.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c2"], ok.stderr
 
 
-def test_plain_deploy_without_inputs_still_works_even_if_target_has_old_script(tmp_path: Path) -> None:
+def test_resolved_etalon_head_still_works_when_older_commit_has_old_script(tmp_path: Path) -> None:
     new = UPDATE.read_text(encoding="utf-8")
     origin, clone, shas = make_remote(tmp_path, lambda tag: old_script() if tag == "c1" else new)
-    res = run_remote_part(clone, tmp_path, None, {"WMS_DEPLOY_GUARD_ONLY": "1"})
+    res = run_remote_part(clone, tmp_path, shas["c3"], {"WMS_DEPLOY_GUARD_ONLY": "1"})
     assert res.returncode == 0 and git("rev-parse", "HEAD", cwd=clone) == shas["c3"], res.stderr
 
 

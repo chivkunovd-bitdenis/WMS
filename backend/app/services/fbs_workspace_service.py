@@ -40,6 +40,7 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
+from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED, FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.storage_location import StorageLocation
@@ -49,6 +50,7 @@ from app.services import ozon_box_assembly_service as ozon_assembly_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.fbs_packing_box_service import get_boxes_for_workspace
 from app.services.fbs_picking_order_service import picking_list_order_key
+from app.services.fbs_supply_reconcile_service import OPERATION_KIND_SUPPLY_DELIVER
 from app.services.fbs_supply_validator_service import order_delivery_route
 from app.services.fbs_tracking_service import (
     build_partial_rejection_summary,
@@ -153,6 +155,7 @@ async def get_supply_workspace(
         tracking_summary = build_tracking_summary(supply, orders, server_now=server_now)
         partial_rejection = build_partial_rejection_summary(orders, server_now=server_now)
         wb_sync_stale = is_tracking_sync_stale(supply.last_wb_sync_at, server_now=server_now)
+    last_delivery_error = await _last_delivery_error(session, tenant_id, supply)
     return {
         "supply": {
             "id": str(supply.id),
@@ -213,7 +216,50 @@ async def get_supply_workspace(
         "partial_rejection": partial_rejection,
         "picking_auto_passed_reason": picking_auto_passed_reason,
         "wb_sync_stale": wb_sync_stale,
+        "last_delivery_error": last_delivery_error,
         "server_now": server_now.isoformat(),
+    }
+
+
+async def _last_delivery_error(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply: FbsSupply,
+) -> dict[str, Any] | None:
+    """Expose only the safe presentation from the latest failed delivery attempt."""
+    if supply.status in {FBS_SUPPLY_STATUS_IN_DELIVERY, FBS_SUPPLY_STATUS_DONE}:
+        return None
+    operation = await session.scalar(
+        select(FbsWbOperation)
+        .where(
+            FbsWbOperation.tenant_id == tenant_id,
+            FbsWbOperation.seller_id == supply.seller_id,
+            FbsWbOperation.operation_kind == OPERATION_KIND_SUPPLY_DELIVER,
+            FbsWbOperation.local_entity_type == "fbs_supply",
+            FbsWbOperation.local_entity_id == supply.id,
+        )
+        .order_by(
+            FbsWbOperation.created_at.desc(),
+            FbsWbOperation.id.desc(),
+        )
+        .limit(1)
+    )
+    if (
+        operation is None
+        or operation.state != WB_OPERATION_STATE_FAILED
+        or operation.error_code != "meta_validation_fail"
+    ):
+        return None
+    stored = operation.error_context_json or {}
+    operator_errors = stored.get("operator_errors")
+    operator_message = stored.get("operator_message")
+    if not isinstance(operator_errors, list) or not isinstance(operator_message, str):
+        return None
+    return {
+        "code": "meta_validation_fail",
+        "message": operator_message,
+        "retryable": stored.get("operator_retryable") is True,
+        "context": {"operator_errors": operator_errors},
     }
 
 

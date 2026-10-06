@@ -1070,6 +1070,7 @@ export function SellerInboundDraftScreen({
                         >
                           <ProductBarcodeCell
                             barcode={barcode}
+                            barcodes={cat?.wb_barcodes ?? (ln.wb_barcode ? [ln.wb_barcode] : [])}
                             wb_size={cat?.wb_size}
                             wb_composition={cat?.wb_composition}
                           />

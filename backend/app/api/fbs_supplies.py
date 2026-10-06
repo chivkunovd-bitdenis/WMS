@@ -472,6 +472,8 @@ class FbsScanAutoPrintTargetClaimOut(BaseModel):
 
 class FbsScanAutoPrintReprintClaimOut(FbsScanAutoPrintTargetClaimOut):
     kiz: str | None = None
+    code_id: str | None = None
+    has_label_artifact: bool = False
 
 
 class FbsDirectKizReprintBody(BaseModel):
@@ -490,6 +492,8 @@ class FbsDirectKizReprintOut(BaseModel):
     created_at: str
     print_started_at: str | None
     replayed: bool = False
+    code_id: str | None = None
+    has_label_artifact: bool = False
 
 
 class FbsDirectKizPrintClaimOut(BaseModel):
@@ -731,6 +735,23 @@ class FbsDeliveryPreflightOut(BaseModel):
     cancelled_orders: list[FbsCancelledDeliveryOrderOut] = Field(default_factory=list)
 
 
+class FbsDeliveryOperatorErrorOut(BaseModel):
+    title: str
+    orders: list[int | None]
+    message: str | None = None
+
+
+class FbsLastDeliveryErrorContextOut(BaseModel):
+    operator_errors: list[FbsDeliveryOperatorErrorOut]
+
+
+class FbsLastDeliveryErrorOut(BaseModel):
+    code: str
+    message: str
+    retryable: bool
+    context: FbsLastDeliveryErrorContextOut
+
+
 class FbsSupplyDeliverBody(BaseModel):
     idempotency_key: str = Field(min_length=1, max_length=128)
     confirmed_preflight_version: str | None = Field(default=None, min_length=1, max_length=128)
@@ -768,6 +789,7 @@ class FbsWorkspaceOut(BaseModel):
     partial_rejection: dict[str, object] | None = None
     picking_auto_passed_reason: str | None = None
     wb_sync_stale: bool = False
+    last_delivery_error: FbsLastDeliveryErrorOut | None = None
     server_now: str
 
 
@@ -2623,6 +2645,7 @@ async def scan_fbs_supply_product_for_auto_print(
 @router.post(
     "/{supply_id}/scan-auto-print/{scan_id}/reprint-claim",
     response_model=FbsScanAutoPrintReprintClaimOut,
+    response_model_exclude_unset=True,
 )
 async def claim_fbs_scan_auto_print_reprint(
     supply_id: uuid.UUID,
@@ -2642,12 +2665,22 @@ async def claim_fbs_scan_auto_print_reprint(
         )
     except scan_print_svc.FbsScanAutoPrintError as exc:
         _raise_from_scan_auto_print(exc)
+    code_id, has_label_artifact = None, False
+    if result.kiz is not None:
+        supply = await _require_wb_supply_for_direct_reprint(session, user.tenant_id, supply_id)
+        code_id, has_label_artifact = await kiz_reprint_svc.reprint_label_metadata(
+            session, user.tenant_id, supply.seller_id, result.kiz
+        )
     await session.commit()
-    return FbsScanAutoPrintReprintClaimOut(
+    output = FbsScanAutoPrintReprintClaimOut(
         claimed=result.claimed,
         started=result.started,
         kiz=result.kiz,
     )
+    if code_id is not None:
+        output.code_id = code_id
+        output.has_label_artifact = has_label_artifact
+    return output
 
 
 @router.post(
@@ -2866,7 +2899,11 @@ async def save_fbs_supply_direct_kiz_reprint(
         )
     except kiz_reprint_svc.KizReprintServiceError as exc:
         _raise_from_direct_kiz_reprint(exc)
-    return _direct_kiz_reprint_out(result.row, replayed=result.replayed)
+    output = _direct_kiz_reprint_out(result.row, replayed=result.replayed)
+    output.code_id, output.has_label_artifact = await kiz_reprint_svc.reprint_label_metadata(
+        session, user.tenant_id, supply.seller_id, result.row.kiz
+    )
+    return output
 
 
 @router.post(

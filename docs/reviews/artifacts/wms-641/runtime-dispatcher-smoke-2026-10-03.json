@@ -1,0 +1,38 @@
+{
+  "purpose": "bounded synthetic readonly dispatcher smoke",
+  "model_requested": "gpt-5.6-sol",
+  "model_actual": "gpt-5.6-sol",
+  "provider_actual": "codex",
+  "effort": "medium",
+  "mode": "readonly",
+  "include_project_tools": false,
+  "dynamic_tools": [],
+  "inherited_mcp_names": [
+    "openaiDeveloperDocs",
+    "computer-use",
+    "node_repl"
+  ],
+  "all_mcp_disabled_verified_by_runtime": true,
+  "progress_callback_messages": [
+    "Маршрут проверяю"
+  ],
+  "final_text": "synthetic route ok",
+  "elapsed_seconds": 4.41,
+  "success": true,
+  "external_actions": 0,
+  "effective_mcp": [
+    {
+      "name": "openaiDeveloperDocs",
+      "enabled": false
+    },
+    {
+      "name": "computer-use",
+      "enabled": false
+    },
+    {
+      "name": "node_repl",
+      "enabled": false
+    }
+  ],
+  "mcp_evidence_method": "AppServerTurn.run config/read rejects the turn unless every effective server reports enabled=false before thread/start"
+}

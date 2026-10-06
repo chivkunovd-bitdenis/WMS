@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Проверка макета WMS</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f2f4f7;
+      color: #1a1d23;
+      min-height: 100vh;
+      padding: 16px;
+    }
+
+    .page-header {
+      margin-bottom: 16px;
+    }
+
+    .page-header h1 {
+      font-size: 20px;
+      font-weight: 700;
+      line-height: 1.3;
+    }
+
+    .badge {
+      display: inline-block;
+      margin-top: 6px;
+      padding: 2px 10px;
+      background: #fff3cd;
+      color: #856404;
+      border: 1px solid #ffc107;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+
+    .card-title {
+      padding: 12px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #6b7280;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      border-bottom: 1px solid #f0f2f5;
+    }
+
+    .cell-row {
+      display: flex;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid #f0f2f5;
+    }
+    .cell-row:last-child { border-bottom: none; }
+
+    .cell-icon {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      background: #eff3ff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-right: 12px;
+    }
+
+    .cell-icon svg { width: 18px; height: 18px; fill: #4361ee; }
+
+    .cell-info { flex: 1; }
+    .cell-name { font-size: 15px; font-weight: 600; }
+    .cell-sub  { font-size: 12px; color: #9ca3af; margin-top: 2px; }
+
+    .cell-qty {
+      font-size: 14px;
+      font-weight: 700;
+      color: #4361ee;
+    }
+
+    .btn {
+      display: block;
+      width: 100%;
+      padding: 14px 16px;
+      border: none;
+      border-radius: 10px;
+      background: #4361ee;
+      color: #fff;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s;
+    }
+    .btn:active { background: #3451d1; }
+
+    .detail-block {
+      display: none;
+      margin-top: 12px;
+      padding: 14px 16px;
+      background: #ffffff;
+      border-radius: 12px;
+      box-shadow: 0 1px 4px rgba(0,0,0,.08);
+      border-left: 4px solid #4361ee;
+    }
+    .detail-block.visible { display: block; }
+
+    .detail-block p {
+      font-size: 14px;
+      color: #374151;
+      line-height: 1.6;
+    }
+
+    .detail-block .ok-mark {
+      display: inline-block;
+      margin-right: 6px;
+      color: #16a34a;
+      font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="page-header">
+    <h1>Проверка макета WMS</h1>
+    <span class="badge">Тестовые данные</span>
+  </div>
+
+  <div class="card">
+    <div class="card-title">Ячейки</div>
+
+    <div class="cell-row">
+      <div class="cell-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3h18v4H3zm0 6h18v4H3zm0 6h18v4H3z"/>
+        </svg>
+      </div>
+      <div class="cell-info">
+        <div class="cell-name">A-01</div>
+        <div class="cell-sub">Зона A · Стеллаж 1</div>
+      </div>
+      <div class="cell-qty">12 шт</div>
+    </div>
+
+    <div class="cell-row">
+      <div class="cell-icon">
+        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+          <path d="M3 3h18v4H3zm0 6h18v4H3zm0 6h18v4H3z"/>
+        </svg>
+      </div>
+      <div class="cell-info">
+        <div class="cell-name">A-02</div>
+        <div class="cell-sub">Зона A · Стеллаж 2</div>
+      </div>
+      <div class="cell-qty">7 шт</div>
+    </div>
+  </div>
+
+  <button class="btn" id="toggleBtn" onclick="toggleDetail()">Показать детали</button>
+
+  <div class="detail-block" id="detailBlock">
+    <p><span class="ok-mark">✓</span>Интерактивность работает</p>
+  </div>
+
+  <script>
+    function toggleDetail() {
+      var block = document.getElementById('detailBlock');
+      var btn   = document.getElementById('toggleBtn');
+      var shown = block.classList.toggle('visible');
+      btn.textContent = shown ? 'Скрыть детали' : 'Показать детали';
+    }
+  </script>
+
+</body>
+</html>

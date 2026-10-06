@@ -285,6 +285,11 @@ class InboundCargoPlaceCreate(BaseModel):
     quantity: int = Field(default=1, ge=1, le=1000)
 
 
+class InboundBoxBatchCreate(BaseModel):
+    quantity: int = Field(ge=1, le=1000)
+    mutation_id: uuid.UUID | None = None
+
+
 class InboundBoxLineQuantityBody(BaseModel):
     mutation_id: uuid.UUID | None = None
     # WMS-566 R3: ручной ввод «В коробе»/«В грузоместе» — до 999 999 штук.
@@ -1055,21 +1060,34 @@ async def patch_inbound_request_planned(
 
 @router.post(
     "/{request_id}/boxes",
-    response_model=InboundIntakeBoxOut,
+    response_model=InboundIntakeBoxOut | list[InboundIntakeBoxOut],
     status_code=status.HTTP_201_CREATED,
 )
-async def create_inbound_box(
+async def create_inbound_boxes(
     request_id: uuid.UUID,
     user: Annotated[User, Depends(require_reception_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
-) -> InboundIntakeBoxOut:
+    body: InboundBoxBatchCreate | None = None,
+) -> InboundIntakeBoxOut | list[InboundIntakeBoxOut]:
     try:
-        box = await inbound_box_svc.create_open_box(
-            session, user.tenant_id, request_id
+        # The body-less form is the established one-box API used by the intake
+        # scanner. A JSON body is the WMS-659 atomic bulk action; an empty JSON
+        # object is still rejected by Pydantic because quantity is required.
+        if body is None:
+            box = await inbound_box_svc.create_open_box(
+                session, user.tenant_id, request_id
+            )
+            return _box_out(box)
+        boxes = await inbound_box_svc.create_box_batch(
+            session,
+            user.tenant_id,
+            request_id,
+            quantity=body.quantity,
+            mutation_id=body.mutation_id,
         )
     except InboundIntakeBoxError as exc:
         raise _map_inbound_box_err(exc) from None
-    return _box_out(box)
+    return [_box_out(box) for box in boxes]
 
 
 @router.post(

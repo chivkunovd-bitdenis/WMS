@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import time
 import uuid
 from pathlib import Path
@@ -48,7 +49,10 @@ from app.services import inventory_service
 from app.services.sorting_location_service import get_or_create_sorting_location
 from app.services.wb_marketplace_orders_service import upsert_order_from_wb_row
 from app.services.wildberries_client import WildberriesClientError
-from app.services.wildberries_errors import WildberriesBusinessError
+from app.services.wildberries_errors import (
+    MetaValidationFailItem,
+    WildberriesBusinessError,
+)
 from tests.fbs_seed_helpers import DEFAULT_WB_WAREHOUSE_ID, seed_fbs_warehouse_binding
 
 
@@ -2093,3 +2097,151 @@ async def test_supply_without_wb_number_does_not_break_the_whole_worklist(
     )
     assert worklist.status_code == 200, worklist.text
     assert any(item["wb_supply_id"] is None for item in worklist.json()["items"])
+
+
+# WMS-653 C1/C11: оператор получает только безопасное представление, а журнал
+# операции сохраняет исходную диагностику WB без обрезания полей задачи.
+@pytest.mark.asyncio
+async def test_wms653_pending_kiz_response_is_safe_but_operation_keeps_raw_context(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    wb_order_ids = [287890505, 287890506]
+    supply, order_ids = await _prepare_supply_with_orders(
+        async_client,
+        headers,
+        seller_id,
+        warehouse_id,
+        tenant_id,
+        wb_order_ids=wb_order_ids,
+        supply_name="WMS-653 pending KIZ",
+    )
+    await _create_and_fill_physical_box(async_client, headers, supply["id"], order_ids)
+
+    full_kiz_a = "0104600000000017215AbCdEfGh-WMS653-A"
+    full_kiz_b = "0104600000000017215AbCdEfGh-WMS653-B"
+    raw_body = json.dumps(
+        {
+            "code": "MetaValidationFail",
+            "message": "Meta validation failed",
+            "data": {
+                "orders": [
+                    {
+                        "id": wb_order_ids[0],
+                        "metaDetails": [
+                            {"key": "sgtin", "value": full_kiz_a, "decision": "pending"}
+                        ],
+                    },
+                    {
+                        "id": wb_order_ids[1],
+                        "metaDetails": [
+                            {"key": "sgtin", "value": full_kiz_b, "decision": "pending"}
+                        ],
+                    },
+                ]
+            },
+        },
+        ensure_ascii=False,
+    )
+    deliver_calls = 0
+
+    async def pending_kiz(*_args: object, **_kwargs: object) -> None:
+        nonlocal deliver_calls
+        deliver_calls += 1
+        raise WildberriesBusinessError(
+            "meta_validation_fail",
+            status_code=409,
+            wb_code="MetaValidationFail",
+            message="Meta validation failed",
+            endpoint="/api/v3/supplies/WB-GI-WMS653/deliver",
+            response_body=raw_body,
+            meta_validation=[
+                MetaValidationFailItem(
+                    order_id=wb_order_ids[0],
+                    key="sgtin",
+                    value=full_kiz_a,
+                    decision="pending",
+                ),
+                MetaValidationFailItem(
+                    order_id=wb_order_ids[1],
+                    key="sgtin",
+                    value=full_kiz_b,
+                    decision="pending",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr(
+        "app.services.fbs_shipment_service.deliver_marketplace_supply",
+        pending_kiz,
+    )
+    idempotency_key = str(uuid.uuid4())
+
+    response = await _deliver_with_preflight(
+        async_client,
+        headers,
+        supply["id"],
+        idempotency_key=idempotency_key,
+    )
+
+    assert response.status_code == 409, response.text
+    assert deliver_calls == 1
+    detail = response.json()["detail"]
+    assert detail["code"] == "meta_validation_fail"
+    assert detail["retryable"] is True
+    assert detail["message"] == (
+        "Wildberries ещё обрабатывает КИЗы для заказов № 287890505, 287890506. "
+        "Подождите несколько минут и повторите передачу поставки"
+    )
+    assert detail["context"]["operator_errors"] == [
+        {
+            "title": "Wildberries ещё обрабатывает КИЗы",
+            "orders": wb_order_ids,
+        }
+    ]
+    public_payload = json.dumps(detail, ensure_ascii=False)
+    assert "MetaValidationFail" not in public_payload
+    assert "sgtin" not in public_payload.lower()
+    assert "decision" not in public_payload.lower()
+    assert full_kiz_a not in public_payload
+    assert full_kiz_b not in public_payload
+
+    async with SessionLocal() as session:
+        operation = await session.scalar(
+            select(FbsWbOperation).where(
+                FbsWbOperation.idempotency_key == idempotency_key
+            )
+        )
+        assert operation is not None
+        assert operation.state == WB_OPERATION_STATE_FAILED
+        assert operation.error_code == "meta_validation_fail"
+        saved = operation.error_context_json
+        assert saved is not None
+        assert saved["wb_code"] == "MetaValidationFail"
+        assert saved["wb_response_body"] == raw_body
+        assert saved["meta_validation"] == [
+            {
+                "order_id": wb_order_ids[0],
+                "key": "sgtin",
+                "value": full_kiz_a,
+                "decision": "pending",
+                "reason": None,
+            },
+            {
+                "order_id": wb_order_ids[1],
+                "key": "sgtin",
+                "value": full_kiz_b,
+                "decision": "pending",
+                "reason": None,
+            },
+        ]
+
+        supply_row = await session.get(FbsSupply, uuid.UUID(supply["id"]))
+        assert supply_row is not None
+        assert supply_row.status == FBS_SUPPLY_STATUS_PACKED
+        assert supply_row.delivered_at is None

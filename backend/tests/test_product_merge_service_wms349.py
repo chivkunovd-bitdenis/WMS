@@ -240,6 +240,7 @@ async def test_merge_reports_stock_cap_collision_before_changing_any_balance(
     from app.models.fbs_binding_stock_pool import FbsBindingStockPool
     from app.models.fbs_warehouse_binding import FbsWarehouseBinding
     from app.models.storage_location import StorageLocation
+    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
 
     headers, tenant, seller, location, target, source = await _merge_fixture(async_client)
     async with SessionLocal() as seed:
@@ -262,6 +263,9 @@ async def test_merge_reports_stock_cap_collision_before_changing_any_balance(
             ]
         )
         await seed.commit()
+    # Stock setup schedules background publishing; finish its binding updates
+    # before the engine-wide capture checks that the merge itself writes nothing.
+    await drain_background_stock_publish_tasks()
     captured, handlers = _install_capture()
     try:
         response = await async_client.post(

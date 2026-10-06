@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import sqlite3
 import threading
 import time
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -17,10 +19,20 @@ CREATE TABLE IF NOT EXISTS messages (
   source TEXT NOT NULL, chat_id INTEGER NOT NULL, msg_id TEXT NOT NULL,
   role TEXT NOT NULL, author_id TEXT, author_name TEXT, ts REAL NOT NULL,
   kind TEXT NOT NULL DEFAULT 'text', text TEXT NOT NULL DEFAULT '', file_id TEXT,
+  caption TEXT NOT NULL DEFAULT '',
   status TEXT NOT NULL, ticket_id INTEGER, reply_to TEXT, attempts INTEGER NOT NULL DEFAULT 0,
+  revision INTEGER NOT NULL DEFAULT 1,
   UNIQUE (source, chat_id, msg_id)
 );
 CREATE INDEX IF NOT EXISTS ix_messages_status ON messages (status);
+CREATE TABLE IF NOT EXISTS message_revisions (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, message_id INTEGER NOT NULL,
+  revision INTEGER NOT NULL, text TEXT NOT NULL, kind TEXT NOT NULL, file_id TEXT,
+  caption TEXT NOT NULL DEFAULT '',
+  author_id TEXT, author_name TEXT, reply_to TEXT, edited_at REAL NOT NULL,
+  UNIQUE (message_id, revision)
+);
+CREATE INDEX IF NOT EXISTS ix_message_revisions_message ON message_revisions (message_id);
 CREATE TABLE IF NOT EXISTS tickets (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   kind TEXT NOT NULL, source TEXT NOT NULL, chat_id INTEGER, seller TEXT NOT NULL DEFAULT '',
@@ -82,11 +94,33 @@ class Store:
                 self.db.execute("ALTER TABLE outbox ADD COLUMN file_path TEXT")
             except sqlite3.OperationalError:
                 pass
+            try:
+                self.db.execute("ALTER TABLE messages ADD COLUMN revision INTEGER NOT NULL DEFAULT 1")
+            except sqlite3.OperationalError:
+                pass
+            for table in ("messages", "message_revisions"):
+                try:
+                    self.db.execute(f"ALTER TABLE {table} ADD COLUMN caption TEXT NOT NULL DEFAULT ''")
+                except sqlite3.OperationalError:
+                    pass
 
     # -- low level -----------------------------------------------------------------
     def execute(self, sql: str, params: tuple[Any, ...] = ()) -> sqlite3.Cursor:
         with self.lock:
             return self.db.execute(sql, params)
+
+    @contextmanager
+    def transaction(self) -> Iterator[None]:
+        """Короткая атомарная пачка локальных изменений; допускает вызовы методов Store внутри."""
+        with self.lock:
+            self.db.execute("BEGIN IMMEDIATE")
+            try:
+                yield
+            except BaseException:
+                self.db.execute("ROLLBACK")
+                raise
+            else:
+                self.db.execute("COMMIT")
 
     def rows(self, sql: str, params: tuple[Any, ...] = ()) -> list[sqlite3.Row]:
         with self.lock:
@@ -127,16 +161,131 @@ class Store:
         text: str,
         file_id: str | None,
         reply_to: str | None,
+        caption: str = "",
+        edited: bool = False,
+        edit_ts: float | None = None,
     ) -> int | None:
-        """None, если такое сообщение уже сохранено (повторная доставка, R35)."""
+        """Persist an inbound event; a changed Telegram edit replaces the current version.
+
+        The previous version stays in message_revisions. Duplicate deliveries of the
+        same edit return None, while a genuine edit reawakens the dispatcher.
+        """
+        if edited:
+            with self.transaction():
+                old = self.row("SELECT * FROM messages WHERE source=? AND chat_id=? AND msg_id=?",
+                               (source, chat_id, msg_id))
+                if old is None:
+                    # Telegram may deliver an edit after the original fell outside
+                    # polling history. Save only the version actually observed.
+                    return self.add_message(source=source, chat_id=chat_id, msg_id=msg_id,
+                        role=role, author_id=author_id, author_name=author_name, ts=ts,
+                        kind=kind, text=text, file_id=file_id, reply_to=reply_to,
+                        caption=caption)
+                # A voice transcript is derived from the same raw Telegram file.
+                # Telegram redelivers that edit with empty text after transcription;
+                # comparing against the transcript would create a false new version.
+                same_text = old["text"] == text or (old["kind"] == kind == "voice" and text == "")
+                if (same_text and old["kind"] == kind and old["file_id"] == file_id
+                        and old["reply_to"] == reply_to and old["caption"] == caption):
+                    return None
+                self.execute(
+                    "INSERT OR IGNORE INTO message_revisions(message_id,revision,text,kind,file_id,"
+                    "caption,author_id,author_name,reply_to,edited_at) VALUES(?,?,?,?,?,?,?,?,?,?)",
+                    (old["id"], old["revision"], old["text"], old["kind"], old["file_id"],
+                     old["caption"], old["author_id"], old["author_name"], old["reply_to"],
+                     edit_ts if edit_ts is not None else time.time()),
+                )
+                self.execute(
+                    "UPDATE messages SET text=?,kind=?,file_id=?,caption=?,reply_to=?,"
+                    "author_id=?,author_name=?,revision=revision+1,status=?,attempts=0 WHERE id=?",
+                    (text, kind, file_id, caption, reply_to, author_id, author_name,
+                     "transcribing" if kind == "voice" and not text else "new", old["id"]),
+                )
+                return int(old["id"])
         status = "transcribing" if kind == "voice" else "new"
         cur = self.execute(
             "INSERT OR IGNORE INTO messages(source,chat_id,msg_id,role,author_id,author_name,ts,"
-            "kind,text,file_id,status,reply_to) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "kind,text,file_id,caption,status,reply_to) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
             (source, chat_id, msg_id, role, author_id, author_name, ts, kind, text, file_id,
-             status, reply_to),
+             caption, status, reply_to),
         )
         return cur.lastrowid if cur.rowcount == 1 else None
+
+    @staticmethod
+    def _history_cursor(ts: float, direction: str, item_id: int) -> str:
+        blob = json.dumps([ts, direction, item_id], separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(blob).decode().rstrip("=")
+
+    @staticmethod
+    def _parse_history_cursor(cursor: str) -> tuple[float, str, int]:
+        try:
+            value = json.loads(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)))
+            ts, direction, item_id = value
+            if direction not in {"in", "out"} or int(item_id) < 1:
+                raise ValueError
+            return float(ts), str(direction), int(item_id)
+        except (ValueError, TypeError, UnicodeDecodeError) as exc:
+            raise ValueError("invalid history cursor") from exc
+
+    def history_page(self, chat_id: int, *, before: str | None = None,
+                     after: str | None = None, limit: int = 50,
+                     query: str | None = None) -> dict[str, Any]:
+        """Chronological archive of actually observed input and queued output.
+
+        Pages run newest-first internally, then return chronological items. Search
+        also finds text preserved from edited versions; it never queries Telegram.
+        """
+        if before and after:
+            raise ValueError("use before or after, not both")
+        count = max(1, min(int(limit), 100))
+        needle = f"%{query}%" if query else None
+        inbound_filter = (" AND (m.text LIKE ? OR EXISTS (SELECT 1 FROM message_revisions r "
+                          "WHERE r.message_id=m.id AND r.text LIKE ?))") if needle else ""
+        outgoing_filter = " AND o.text LIKE ?" if needle else ""
+        inbound_params: tuple[Any, ...] = (chat_id, needle, needle) if needle else (chat_id,)
+        outgoing_params: tuple[Any, ...] = (chat_id, needle) if needle else (chat_id,)
+        sql = (
+            "WITH history AS ("
+            "SELECT 'in' AS direction,m.id AS local_id,m.source,m.chat_id,m.msg_id AS telegram_id,"
+            "m.role,m.author_id,m.author_name,m.ts,m.kind,m.text,m.file_id,m.caption,m.reply_to,m.status,"
+            "m.ticket_id,m.revision,NULL AS sent_at FROM messages m WHERE m.chat_id=?"
+            + inbound_filter + " UNION ALL "
+            "SELECT 'out',o.id,'telegram',o.chat_id,o.tg_message_id,'bot','bot','WMS bot',"
+            "o.created_at,CASE WHEN o.file_path IS NULL THEN 'text' ELSE 'document' END,"
+            "o.text,o.file_path,'' AS caption,o.reply_to,o.status,o.ticket_id,1,o.sent_at "
+            "FROM outbox o WHERE o.chat_id=?" + outgoing_filter + ") "
+            "SELECT * FROM history"
+        )
+        params: tuple[Any, ...] = (*inbound_params, *outgoing_params)
+        if before or after:
+            relation = "<" if before else ">"
+            sql += f" WHERE (ts,direction,local_id) {relation} (?,?,?)"
+            params += self._parse_history_cursor(before or after or "")
+        order = "ASC" if after else "DESC"
+        sql += f" ORDER BY ts {order},direction {order},local_id {order} LIMIT ?"
+        raw = self.rows(sql, (*params, count + 1))
+        page = raw[:count]
+        ids = [int(row["local_id"]) for row in page if row["direction"] == "in"]
+        revisions: dict[int, list[dict[str, Any]]] = {item_id: [] for item_id in ids}
+        if ids:
+            marks = ",".join("?" for _ in ids)
+            for row in self.rows(
+                "SELECT message_id,revision,text,kind,file_id,caption,"
+                "author_id,author_name,reply_to,edited_at "
+                f"FROM message_revisions WHERE message_id IN ({marks}) ORDER BY revision", tuple(ids)
+            ):
+                revisions[int(row["message_id"])].append(dict(row))
+        items = []
+        for row in (page if after else reversed(page)):
+            item = dict(row)
+            item["id"] = f"{item['direction']}:{item.pop('local_id')}"
+            item["revisions"] = revisions.get(int(row["local_id"]), []) if row["direction"] == "in" else []
+            items.append(item)
+        edge = page[-1] if page else None
+        next_cursor = (self._history_cursor(edge["ts"], edge["direction"], edge["local_id"])
+                       if edge is not None and len(raw) > count else None)
+        return {"items": items, "next_before": None if after else next_cursor,
+                "next_after": next_cursor if after else None}
 
     def messages_with_status(self, status: str, limit: int = 100) -> list[sqlite3.Row]:
         return self.rows(
@@ -146,6 +295,15 @@ class Store:
     def set_message(self, message_id: int, **values: Any) -> None:
         keys = ", ".join(f"{k}=?" for k in values)
         self.execute(f"UPDATE messages SET {keys} WHERE id=?", (*values.values(), message_id))
+
+    def complete_transcription(self, message_id: int, revision: int, text: str) -> bool:
+        """Never let an old voice worker overwrite a later Telegram edit."""
+        cur = self.execute(
+            "UPDATE messages SET text=?,status='new' WHERE id=? AND revision=? "
+            "AND status='transcribing'",
+            (text, message_id, revision),
+        )
+        return cur.rowcount == 1
 
     def ticket_messages(self, ticket_id: int) -> list[sqlite3.Row]:
         return self.rows("SELECT * FROM messages WHERE ticket_id=? ORDER BY ts, id", (ticket_id,))
@@ -188,6 +346,12 @@ class Store:
     def tickets_in(self, *stages: str) -> list[sqlite3.Row]:
         marks = ",".join("?" for _ in stages)
         return self.rows(f"SELECT * FROM tickets WHERE stage IN ({marks}) ORDER BY id", stages)
+
+    def open_tickets(self) -> list[sqlite3.Row]:
+        """Все незакрытые обращения для актуального контекста беседы владельца."""
+        closed = ("done", "closed", "rejected", "failed")
+        marks = ",".join("?" for _ in closed)
+        return self.rows(f"SELECT * FROM tickets WHERE stage NOT IN ({marks}) ORDER BY id", closed)
 
     def open_chat_tickets(self, chat_id: int) -> list[sqlite3.Row]:
         closed = ("done", "closed", "rejected", "failed")
@@ -336,6 +500,13 @@ class Store:
 
     def proposal(self, proposal_id: int) -> sqlite3.Row | None:
         return self.row("SELECT * FROM binding_proposals WHERE id=?", (proposal_id,))
+
+    def open_proposals(self, requested_by: str, since: float) -> list[sqlite3.Row]:
+        return self.rows("SELECT * FROM binding_proposals WHERE status='open' AND requested_by=? "
+                         "AND created_at>=? ORDER BY id", (requested_by, since))
+
+    def all_open_proposals(self) -> list[sqlite3.Row]:
+        return self.rows("SELECT * FROM binding_proposals WHERE status='open' ORDER BY id")
 
     def close_proposal(self, proposal_id: int, status: str) -> None:
         self.execute("UPDATE binding_proposals SET status=? WHERE id=?", (status, proposal_id))

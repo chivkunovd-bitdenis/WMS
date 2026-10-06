@@ -126,6 +126,31 @@ async def matching_scan_lines(
     return await _wb_card_variant_scan_lines(session, req, barcode)
 
 
+async def _scan_target_labels(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    cell_id: uuid.UUID,
+    to_id: uuid.UUID | None,
+) -> set[str]:
+    """Как журнал скана называет цель: ячейка или открытая тара."""
+    try:
+        _, _, _, label = await warehouse_map._destination(
+            session, tenant_id, warehouse_id, "cell", cell_id
+        )
+        if to_id is None:
+            return {label}
+        kind = await warehouse_map._sorting_destination_kind(
+            session, tenant_id, warehouse_id, to_id
+        )
+        _, _, _, label = await warehouse_map._destination(
+            session, tenant_id, warehouse_id, kind, to_id
+        )
+        return {label}
+    except warehouse_map.WarehouseMapError:
+        return set()
+
+
 async def scan_product(
     session: AsyncSession,
     *,
@@ -143,22 +168,58 @@ async def scan_product(
     req = await intake.get_request(session, tenant_id, inbound_request_id, for_update=True)
     if req is None or req.warehouse_id != warehouse_id:
         raise error("inbound_request_not_found")
-    # Bind the movement group to the complete intent. The existing distribution
-    # primary key serializes retries; no additional receipt table is necessary.
-    group_id = uuid.uuid5(
+    # WMS-650 Д2: movements of one scan carry the scanner's operation id, the
+    # receipt «назад» reverses. Scans recorded before that release used a group
+    # derived from the whole intent; their replays are still recognised.
+    group_id = operation_id
+    legacy_group_id = uuid.uuid5(
         operation_id, f"sorting-scan:{inbound_request_id}:{barcode}:{cell_id}:{to_id}"
     )
     prior = await session.get(InboundIntakeDistributionLine, operation_id)
-    if prior is not None:
-        evidence = await session.scalar(select(InventoryMovement.id).where(
+    event = await session.get(WarehouseMapEvent, operation_id)
+    if prior is not None and prior.request_id != req.id:
+        raise error("operation_conflict")
+    if prior is not None and await session.scalar(select(InventoryMovement.id).where(
+        InventoryMovement.tenant_id == tenant_id,
+        InventoryMovement.transfer_group_id == legacy_group_id,
+    ).limit(1)) is not None:
+        return {"id": str(operation_id), "moved_qty": 1, "reload": True}
+    if prior is not None or event is not None:
+        # Повтор узнаётся по квитанциям скана: строке журнала карты и движениям
+        # группы operation_id. Строка распределения могла уйти при выравнивании
+        # наборов (WMS-650), поэтому она — не обязательный признак.
+        evidence = list((await session.scalars(select(InventoryMovement).where(
             InventoryMovement.tenant_id == tenant_id,
             InventoryMovement.transfer_group_id == group_id,
-        ).limit(1))
-        if prior.request_id != req.id or evidence is None:
+        ))).all())
+        line_ids = {row.id for row in req.lines}
+        placed = [row for row in evidence
+                  if row.quantity_delta > 0 and row.storage_location_id == cell_id]
+        replayed_lines = await matching_scan_lines(session, req, barcode)
+        products = {row.product_id for row in evidence}
+        same_cell = (
+            prior.storage_location_id == cell_id
+            if prior is not None
+            else bool(placed) or (
+                event is not None
+                and event.to_label in await _scan_target_labels(
+                    session, tenant_id, warehouse_id, cell_id, to_id
+                )
+            )
+        )
+        if (
+            not evidence
+            or (event is not None and (
+                event.tenant_id != tenant_id or event.warehouse_id != warehouse_id
+            ))
+            or any(row.inbound_intake_line_id not in line_ids for row in evidence)
+            or len(products) != 1
+            or not same_cell
+            or any(row.container_id != to_id for row in placed)
+            or [row.product_id for row in replayed_lines] != list(products)
+        ):
             raise error("operation_conflict")
         return {"id": str(operation_id), "moved_qty": 1, "reload": True}
-    if await session.get(WarehouseMapEvent, operation_id) is not None:
-        raise error("operation_conflict")
     matches = await matching_scan_lines(session, req, barcode)
     if not matches:
         raise error("product_not_on_request")
@@ -319,5 +380,7 @@ async def scan_product(
                 target_id=str(target.id), product_id=str(line.product_id),
                 target_holder=f"obj:{to_id}" if to_id else f"cell:{cell_id}",
             )
+    # WMS-650: строки распределения по наборам (короб / россыпь) — как «разложено».
+    await warehouse_map.rebalance_distribution(session, req)
     await session.commit()
     return result

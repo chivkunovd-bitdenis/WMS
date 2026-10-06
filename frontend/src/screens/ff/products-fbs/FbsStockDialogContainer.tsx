@@ -15,12 +15,12 @@ import type { CabinetWarehouse, StockBinding } from './fbsStockBlocks'
 
 // Окно «Остаток для FBS» с сетью (WMS-469). Одно на три входа: каталог ФФ,
 // экран остатков FBS и кабинет селлера. Здесь — загрузка, сохранение правила,
-// добавление связки, смена склада ФФ и приём заказов; само окно про сеть не
-// знает и рисует то, что ему дали. Запросы и их исходы — в
+// добавление связки и смена склада ФФ; само окно про сеть не знает и рисует
+// то, что ему дали. Запросы и их исходы — в
 // fbsStockDialogSession.ts.
 //
-// Связка и приём заказов сохраняются сразу и относятся ко всему продавцу;
-// «Отмена» их не откатывает. Лимиты выбранных товаров уходят только по
+// Связка сохраняется сразу и относится ко всему продавцу; «Отмена» её не
+// откатывает. Лимиты выбранных товаров уходят только по
 // «Сохранить» и только для изменённых блоков. Любой отказ или потеря ответа
 // оставляют окно открытым с причиной и введённым черновиком, а состояние
 // связок перечитывается с сервера (R16, R17).
@@ -65,7 +65,7 @@ export function FbsStockDialogContainer({
   /** Администратор ФФ — да; кабинет селлера — нет (D4). */
   canEditBindings: boolean
   onClose: () => void
-  /** Что-то сохранено на сервере: правило, связка или приём заказов. */
+  /** Что-то сохранено на сервере: правило или связка. */
   onChanged?: () => void
   /** Окно не открылось: правила или привязки не загрузились. */
   onLoadError: (message: string) => void
@@ -248,15 +248,6 @@ export function FbsStockDialogContainer({
     void immediate(binding, () => ({ wms_warehouse_id: wmsWarehouseId }))
   }
 
-  function setServed(binding: StockBinding, served: boolean) {
-    // Включение приёма сервер принимает только вместе со складом ФФ — берём
-    // его из состояния, которому верим, а не из того, что было до сбоя.
-    // Выключение — одно поле.
-    void immediate(binding, (current) =>
-      served ? { served: true, wms_warehouse_id: (current ?? binding).wmsWarehouseId } : { served: false },
-    )
-  }
-
   function save(byBinding: Record<string, BindingRuleBody>) {
     if (!data) return
     void (async () => {
@@ -332,7 +323,6 @@ export function FbsStockDialogContainer({
     onSave: save,
     onAddBinding: canEditBindings ? addBinding : undefined,
     onChangeWmsWarehouse: canEditBindings ? changeWmsWarehouse : undefined,
-    onServedChange: canEditBindings ? setServed : undefined,
     actionError,
     wbWarehousesError: data.wbWarehousesError,
     ozonWarehousesError: data.ozonWarehousesError,

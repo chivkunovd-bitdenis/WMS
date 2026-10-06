@@ -42,6 +42,7 @@ import { alpha } from '@mui/material/styles'
 import { FfUnloadPickPage } from '../ff/unload-pick/FfUnloadPickPage'
 import CloseIcon from '@mui/icons-material/Close'
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
+import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
 import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
 import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
 import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
@@ -142,6 +143,8 @@ import {
   type FbsPrintAsset,
   type FbsPrintBatch,
   type FbsDeliveryPreflight,
+  type FbsDeliveryError,
+  type FbsDeliveryOperatorError,
   type FbsScanAutoPrintReprintClaim,
   type FbsWorkspace,
   type FbsWorklistOrder,
@@ -332,6 +335,55 @@ export function fbsPackingShowsSize(orders: PackingSizeOrder[], isOzon: boolean)
   return orders.some((order) => fbsPackingSizes(order, isOzon).some((size) => size !== null))
 }
 
+function normalizeDeliveryError(value: unknown): FbsDeliveryError | null {
+  if (!value || typeof value !== 'object') return null
+  const source = value as Record<string, unknown>
+  const context = source.context
+  if (!context || typeof context !== 'object') return null
+  const rawGroups = (context as Record<string, unknown>).operator_errors
+  if (!Array.isArray(rawGroups)) return null
+  const groups: FbsDeliveryOperatorError[] = []
+  for (const rawGroup of rawGroups) {
+    if (!rawGroup || typeof rawGroup !== 'object') continue
+    const group = rawGroup as Record<string, unknown>
+    const title = typeof group.title === 'string' ? group.title.trim() : ''
+    if (!title || !Array.isArray(group.orders)) continue
+    const orders: Array<number | null> = []
+    for (const order of group.orders) {
+      if (order !== null && (typeof order !== 'number' || !Number.isFinite(order))) continue
+      if (!orders.includes(order)) orders.push(order)
+    }
+    const message = typeof group.message === 'string' && group.message.trim()
+      ? group.message.trim()
+      : undefined
+    groups.push({ title, orders, ...(message ? { message } : {}) })
+  }
+  if (groups.length === 0) return null
+  return {
+    code: typeof source.code === 'string' ? source.code : 'meta_validation_fail',
+    message: typeof source.message === 'string' ? source.message : groups[0]!.title,
+    retryable: source.retryable === true,
+    context: { operator_errors: groups },
+  }
+}
+
+function deliveryErrorFromCause(cause: unknown): FbsDeliveryError | null {
+  if (!(cause instanceof FbsApiError) || cause.code !== 'meta_validation_fail') return null
+  return normalizeDeliveryError({
+    code: cause.code,
+    message: cause.message,
+    retryable: cause.retryable,
+    context: cause.context,
+  })
+}
+
+function deliveryErrorEntryCount(error: FbsDeliveryError | null): number {
+  return error?.context.operator_errors.reduce(
+    (count, group) => count + Math.max(1, group.orders.length),
+    0,
+  ) ?? 0
+}
+
 function PackingSizeCell({ value, withCaption, valueColor }: {
   value: string | null
   withCaption: boolean
@@ -511,6 +563,13 @@ export function FfFbsSupplyWorkspace({
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
+  const [deliveryError, setDeliveryError] = useState<FbsDeliveryError | null>(
+    () => normalizeDeliveryError(initialWorkspace?.last_delivery_error),
+  )
+  const [deliveryErrorsOpen, setDeliveryErrorsOpen] = useState(false)
+  const [expandedDeliveryErrorGroups, setExpandedDeliveryErrorGroups] = useState<Set<number>>(
+    () => new Set(initialWorkspace?.last_delivery_error?.context.operator_errors.map((_, index) => index) ?? []),
+  )
   // История заказа открывается прямо из состава поставки: оператор смотрит,
   // что с заказом происходило, там же, где увидел сам заказ.
   const [historyOpen, setHistoryOpen] = useState(false)
@@ -783,6 +842,12 @@ export function FfFbsSupplyWorkspace({
         if (!write.isCurrent()) return
         if (!write.isLatest()) return next
         setWorkspace(next)
+        const restoredDeliveryError = normalizeDeliveryError(next.last_delivery_error)
+        setDeliveryError(restoredDeliveryError)
+        if (!restoredDeliveryError) setDeliveryErrorsOpen(false)
+        setExpandedDeliveryErrorGroups(new Set(
+          restoredDeliveryError?.context.operator_errors.map((_, index) => index) ?? [],
+        ))
         onApplied?.(next)
         if (!silent) {
           setStage((current) => readFbsWorkspaceStage(supplyId) ?? fbsStageAfterWorkspaceRefresh(
@@ -803,9 +868,15 @@ export function FfFbsSupplyWorkspace({
 
   useEffect(() => {
     if (!open || !supplyId) return
+    const restoredDeliveryError = normalizeDeliveryError(initialWorkspace?.last_delivery_error)
     setBusy(false)
     setError(null)
     setNotice(null)
+    setDeliveryError(restoredDeliveryError)
+    setDeliveryErrorsOpen(false)
+    setExpandedDeliveryErrorGroups(new Set(
+      restoredDeliveryError?.context.operator_errors.map((_, index) => index) ?? [],
+    ))
     // «Повторить» держит операцию прежней поставки. Оставленная кнопка либо
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
@@ -988,6 +1059,7 @@ export function FfFbsSupplyWorkspace({
     // функция сохраняется и для «Повторить», чтобы повтор дал то же уведомление.
     success: string | ((next: FbsWorkspace) => string),
     onError?: (cause: unknown) => void,
+    onSuccess?: (next: FbsWorkspace) => void,
   ) => {
     const write = beginWorkspaceWrite()
     setBusy(true)
@@ -1027,16 +1099,34 @@ export function FfFbsSupplyWorkspace({
       if (typeof success === 'string') message = success
       else if (applied) message = success(next)
       if (message) setNotice(message)
+      onSuccess?.(next)
       return next
     } catch (cause) {
       if (!write.isCurrent()) return null
       onError?.(cause)
-      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
+      const structuredDeliveryError = deliveryErrorFromCause(cause)
+      if (structuredDeliveryError) {
+        // A silent workspace read may have started after this delivery request
+        // but completed against the database before the failure was saved. Its
+        // stale last_delivery_error must not overwrite the result the operator
+        // has just received. Advance the shared sequence so every read already
+        // in flight loses the same race as any other stale workspace snapshot.
+        workspaceWriteSeq.current += 1
+        setDeliveryError(structuredDeliveryError)
+        setDeliveryErrorsOpen(false)
+        setExpandedDeliveryErrorGroups(new Set(
+          structuredDeliveryError.context.operator_errors.map((_, index) => index),
+        ))
+      } else {
+        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
+      }
       if (cause instanceof FbsApiError && cause.retryable) {
         // Кнопка живёт в общем Alert окна. Повторяем только пока открыта та же
         // поставка, в которой ошибка возникла: иначе нажатие отправило бы её
         // операцию, а ответ лёг бы на состав открытой сейчас поставки.
-        setRetryAction(() => () => { if (write.isCurrent()) void run(operation, success, onError) })
+        setRetryAction(() => () => {
+          if (write.isCurrent()) void run(operation, success, onError, onSuccess)
+        })
       }
       return null
     } finally {
@@ -2353,33 +2443,41 @@ export function FfFbsSupplyWorkspace({
 
   const deliver = async () => {
     if (!workspace || deliveryConfirmed) return
-    const next = await run(
-      () =>
-        deliverFbsSupply(token, authHeaders, workspace.supply.id, {
-          // RetryAction stores this callback.  Read the current ref at click
-          // time so a definitive failure cannot replay the key that the error
-          // handler has already replaced.
-          idempotency_key: deliveryKeyRef.current,
-          confirmed_preflight_version: deliveryPreflight?.version,
-      }),
+    const supplyIdAtStart = workspace.supply.id
+    const performDelivery = async () => {
+      // Каждое ручное нажатие создаёт новый текущий результат. Пока запрос идёт,
+      // прежние причины больше не выдаются за ответ новой попытки.
+      setDeliveryError(null)
+      setDeliveryErrorsOpen(false)
+      const delivered = await deliverFbsSupply(token, authHeaders, supplyIdAtStart, {
+        // RetryAction stores this callback. Read the current ref at click time,
+        // so a definitive failure cannot replay an already replaced key.
+        idempotency_key: deliveryKeyRef.current,
+        confirmed_preflight_version: deliveryPreflight?.version,
+      })
+      return delivered
+    }
+    await run(
+      performDelivery,
       '',
       (cause) => {
         if (
           cause instanceof FbsApiError
           && fbsDeliveryErrorKeepsIdempotencyKey(cause)
         ) return
-        clearPersistentOperationKey(workspace.supply.id, 'delivery')
-        const replacementKey = persistentOperationKey(workspace.supply.id, 'delivery')
+        clearPersistentOperationKey(supplyIdAtStart, 'delivery')
+        const replacementKey = persistentOperationKey(supplyIdAtStart, 'delivery')
         deliveryKeyRef.current = replacementKey
       },
+      () => {
+        clearPersistentOperationKey(supplyIdAtStart, 'delivery')
+        deliveryKeyRef.current = createFbsIdempotencyKey()
+        setDeliverySubmitted(true)
+        setDeliveryError(null)
+        setDeliveryErrorsOpen(false)
+        selectStage('boxes')
+      },
     )
-    if (next) {
-      clearPersistentOperationKey(workspace.supply.id, 'delivery')
-      const nextKey = createFbsIdempotencyKey()
-      deliveryKeyRef.current = nextKey
-      setDeliverySubmitted(true)
-      selectStage('boxes')
-    }
   }
 
   const openDeliveryConfirmation = async () => {
@@ -3260,6 +3358,46 @@ export function FfFbsSupplyWorkspace({
   // Разметка та же; в обычной карточке они стоят на прежних местах.
   const workspaceMessages = (
     <>
+          {deliveryError && deliveryErrorEntryCount(deliveryError) === 1 ? (() => {
+            const group = deliveryError.context.operator_errors[0]!
+            const order = group.orders[0] ?? null
+            return (
+              <Alert
+                severity="error"
+                sx={{ mb: 2 }}
+                action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
+              >
+                <Typography variant="subtitle2">{group.title}</Typography>
+                <Typography variant="body2">{deliveryError.message}</Typography>
+                {group.message ? <Typography variant="body2">{group.message}</Typography> : null}
+                <Typography variant="body2">
+                  {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
+                </Typography>
+              </Alert>
+            )
+          })() : null}
+          {deliveryError && deliveryErrorEntryCount(deliveryError) > 1 ? (
+            <Alert
+              severity="error"
+              sx={{ mb: 2 }}
+              action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
+            >
+              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
+                <IconButton
+                  color="error"
+                  size="small"
+                  aria-label="Показать ошибки передачи поставки"
+                  data-testid="fbs-delivery-errors-toggle"
+                  onClick={() => setDeliveryErrorsOpen(true)}
+                >
+                  <WarningAmberOutlinedIcon />
+                </IconButton>
+                <Typography variant="body2">
+                  {`Wildberries не принял передачу: ${deliveryErrorEntryCount(deliveryError)} ошибки`}
+                </Typography>
+              </Stack>
+            </Alert>
+          ) : null}
           {error ? <Alert severity="error" sx={{ mb: 2 }} action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}>{error}</Alert> : null}
           {notice ? <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert> : null}
           {stageIsCurrent && stageBlockers.length ? (
@@ -4016,6 +4154,63 @@ export function FfFbsSupplyWorkspace({
 
   const workspaceDialogs = (
     <>
+      {deliveryErrorsOpen && deliveryError ? (
+        <Dialog
+          open
+          onClose={() => setDeliveryErrorsOpen(false)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Ошибки передачи поставки</DialogTitle>
+          <DialogContent dividers data-testid="fbs-delivery-errors-dialog">
+            <Stack spacing={1}>
+              <Typography variant="body2">{deliveryError.message}</Typography>
+              {deliveryError.context.operator_errors.map((group, index) => {
+                const expanded = expandedDeliveryErrorGroups.has(index)
+                const orders = group.orders.length > 0 ? group.orders : [null]
+                return (
+                  <Box key={`${group.title}-${group.message ?? ''}-${index}`}>
+                    <Button
+                      fullWidth
+                      color="inherit"
+                      aria-expanded={expanded}
+                      onClick={() => setExpandedDeliveryErrorGroups((current) => {
+                        const next = new Set(current)
+                        if (next.has(index)) next.delete(index)
+                        else next.add(index)
+                        return next
+                      })}
+                      sx={{ justifyContent: 'space-between', textAlign: 'left' }}
+                    >
+                      <Typography component="span" variant="subtitle2">{group.title}</Typography>
+                      <Typography component="span" variant="caption" color="text.secondary">
+                        {expanded ? 'Свернуть' : 'Раскрыть'}
+                      </Typography>
+                    </Button>
+                    <Collapse in={expanded}>
+                      {group.message ? (
+                        <Typography variant="body2" sx={{ px: 1, pt: 0.5 }}>
+                          {group.message}
+                        </Typography>
+                      ) : null}
+                      <Box component="ol" sx={{ mt: 1, mb: 0, pl: 4 }}>
+                        {orders.map((order, orderIndex) => (
+                          <Typography component="li" variant="body2" key={`${order ?? 'missing'}-${orderIndex}`}>
+                            {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
+                          </Typography>
+                        ))}
+                      </Box>
+                    </Collapse>
+                  </Box>
+                )
+              })}
+            </Stack>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setDeliveryErrorsOpen(false)}>Закрыть</Button>
+          </DialogActions>
+        </Dialog>
+      ) : null}
       <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
         token={token}
         authHeaders={authHeaders}
@@ -4536,7 +4731,7 @@ export function FfFbsSupplyWorkspace({
   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).
   if (assemblyFrame) {
-    const frameMessages = error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
+    const frameMessages = deliveryError || error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
       ? (
         <>
           {workspaceMessages}

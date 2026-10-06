@@ -1,0 +1,19 @@
+{
+  "scope": "actual Sol5.6 medium via authenticated Codex CLI; synthetic SQLite; no real Telegram/Trello/Git writes",
+  "model": "gpt-5.6-sol",
+  "weak_source": "посмотри поставку",
+  "weak_approve_authorized": false,
+  "weak_reason": "Сообщение «посмотри поставку» просит осмотреть поставку, но не подтверждает описание «Обработано: версия v1» и не разрешает действие approve_task для задачи 1 версии v1.",
+  "strong_source": "Утверждаю описание задачи 1 «Обработано», версия v1.",
+  "strong_approve_authorized": true,
+  "strong_quote": "Утверждаю описание задачи 1 «Обработано», версия v1.",
+  "one_owner_message_topic_ids": [
+    "topic-3-1",
+    "topic-3-2"
+  ],
+  "one_owner_message_subrequests": [
+    "Разобрать причину неверной печати QR-кода на коробе и вернуть отдельный результат.",
+    "Разобрать причину долгой загрузки списка ячеек и вернуть отдельный результат."
+  ],
+  "passed": true
+}

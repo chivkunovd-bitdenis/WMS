@@ -1,0 +1,16 @@
+{
+  "installed_sha": "ceefe3a1a4bcf1ed1e16dd4b6896cc45954b6bb5",
+  "heartbeat_age_seconds": 0.06,
+  "owner_notification": {
+    "id": 30,
+    "status": "sent",
+    "tg_message_id": "36",
+    "sent_at": 1791052892.152535
+  },
+  "bot_identity": {
+    "owner": "@wms_korob_bot",
+    "intake": "@wms_korob_support_bot"
+  },
+  "client_scenario_executed": false,
+  "launchd_running": true
+}

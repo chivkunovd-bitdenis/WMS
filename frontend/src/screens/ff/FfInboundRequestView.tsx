@@ -82,6 +82,7 @@ import {
   type ProductLineDisplayMeta,
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
+import { normalizeProductBarcodes } from '../../utils/productBarcodes'
 import { printBarcodeLabel, printBarcodeLabels } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
@@ -110,6 +111,7 @@ import {
 import { suggestNextLocationCode } from '../../utils/suggestNextLocationCode'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 import { resolveProductIdByBarcode } from '../../utils/resolveProductByBarcode'
+import { randomId } from '../../utils/randomId'
 import { formatHumanDocumentNumber } from './documentDisplay'
 import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
 import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
@@ -198,7 +200,12 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
   printTestId,
   markingControl,
 }: InboundProductLineCellProps) {
-  const barcode = formatProductBarcodeDisplay(meta)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
+  const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : undefined
 
   return (
     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
@@ -255,10 +262,14 @@ const InboundProductLineCell = memo(function InboundProductLineCell({
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
               }}
-              title={barcode !== '—' ? barcode : undefined}
+              title={barcodeTitle}
               data-testid="ff-inbound-line-barcode"
             >
-              ШК {barcode}
+              {barcodes.length > 0 ? barcodes.map((barcode, index) => (
+                <Typography key={barcode} component="span" variant="inherit" sx={{ display: 'block' }}>
+                  {index === 0 ? 'ШК ' : ''}{barcode}
+                </Typography>
+              )) : 'ШК —'}
             </Typography>
           </Stack>
         </Box>
@@ -282,7 +293,12 @@ type InboundBoxContentLineProps = {
 
 /** Компактная строка товара в содержимом короба (фото, название, артикул+ШК, кол-во). */
 const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quantity }: InboundBoxContentLineProps) {
-  const barcode = formatProductBarcodeDisplay(meta)
+  const barcodes = normalizeProductBarcodes(
+    meta.wb_primary_barcode,
+    meta.wb_barcodes,
+    formatProductBarcodeDisplay(meta),
+  )
+  const barcodeTitle = barcodes.length > 0 ? barcodes.join('\n') : '—'
 
   return (
     <Stack direction="row" spacing={1} sx={{ alignItems: 'center', minWidth: 0 }}>
@@ -307,10 +323,17 @@ const InboundBoxContentLine = memo(function InboundBoxContentLine({ meta, quanti
           variant="caption"
           color="text.secondary"
           sx={{ display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-          title={`${meta.sku_code} · ШК ${barcode}`}
+          title={`${meta.sku_code} · ШК ${barcodeTitle}`}
           data-testid="ff-inbound-box-line-sku"
         >
-          {meta.sku_code} · ШК {barcode}
+          <Typography component="span" variant="inherit" sx={{ display: 'block' }}>
+            {meta.sku_code}
+          </Typography>
+          {barcodes.length > 0 ? barcodes.map((barcode, index) => (
+            <Typography key={barcode} component="span" variant="inherit" sx={{ display: 'block' }}>
+              {index === 0 ? 'ШК ' : ''}{barcode}
+            </Typography>
+          )) : 'ШК —'}
         </Typography>
       </Box>
       <Typography
@@ -525,6 +548,10 @@ export function FfInboundRequestView({
   const [importSuccessMsg, setImportSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
   const [packagesExpanded, setPackagesExpanded] = useState(false)
+  const [boxDialogOpen, setBoxDialogOpen] = useState(false)
+  const [boxCount, setBoxCount] = useState('1')
+  const [boxCreateError, setBoxCreateError] = useState<string | null>(null)
+  const [boxMutationId, setBoxMutationId] = useState<string | null>(null)
   const [cargoDialogOpen, setCargoDialogOpen] = useState(false)
   const [cargoCount, setCargoCount] = useState('1')
   const [cargoError, setCargoError] = useState<string | null>(null)
@@ -588,6 +615,7 @@ export function FfInboundRequestView({
       !pickerOpen &&
       dimensionsLine == null &&
       !finishConfirmOpen &&
+      !boxDialogOpen &&
       clearBoxTarget == null &&
       !distOpen &&
       !kizReprintOpen,
@@ -606,6 +634,7 @@ export function FfInboundRequestView({
       cargoAddDialogPlaceId == null &&
       !pickerOpen &&
       dimensionsLine == null &&
+      !boxDialogOpen &&
       clearBoxTarget == null &&
       !kizReprintOpen,
     onScan: (code) => {
@@ -1745,25 +1774,46 @@ export function FfInboundRequestView({
     }
   }
 
-  const createInboundBox = async (): Promise<string | null> => {
+  const openBoxCreateDialog = () => {
+    setBoxCount('1')
+    setBoxCreateError(null)
+    setBoxMutationId(randomId())
+    setBoxDialogOpen(true)
+  }
+
+  const createInboundBoxes = async (): Promise<void> => {
+    if (!/^\d+$/.test(boxCount) || Number(boxCount) < 1 || Number(boxCount) > 1000) {
+      setBoxCreateError('Укажите целое количество коробов от 1 до 1000.')
+      return
+    }
+    const mutationId = boxMutationId ?? randomId()
+    if (boxMutationId == null) setBoxMutationId(mutationId)
     setBusy(true)
-    setError(null)
+    setBoxCreateError(null)
     try {
       const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/boxes`), {
         method: 'POST',
-        headers: authHeaders,
+        headers: { ...authHeaders, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ quantity: Number(boxCount), mutation_id: mutationId }),
       })
       if (!res.ok) {
-        setError(scanErrorMessageRu(await readApiErrorMessage(res)))
-        return null
+        setBoxCreateError(scanErrorMessageRu(await readApiErrorMessage(res)))
+        return
       }
-      const box = (await res.json()) as { id: string }
-      await loadDetail()
+      const created = (await res.json()) as InboundBox[]
+      ++loadDetailSeq.current
+      setDetail((current) => {
+        if (!current || current.id !== requestId) return current
+        const boxesById = new Map(current.boxes.map((box) => [box.id, box]))
+        created.forEach((box) => boxesById.set(box.id, box))
+        return { ...current, boxes: [...boxesById.values()] }
+      })
       setPackagesExpanded(true)
-      return box.id
+      setBoxDialogOpen(false)
+      setBoxCount('1')
+      setBoxMutationId(null)
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось создать короб.')
-      return null
+      setBoxCreateError(e instanceof Error ? e.message : 'Не удалось создать короба.')
     } finally {
       setBusy(false)
     }
@@ -1775,10 +1825,6 @@ export function FfInboundRequestView({
 
   const openBoxAddDialog = (boxId: string) => {
     setBoxAddDialogBoxId(boxId)
-  }
-
-  const handleCreateBox = async () => {
-    await createInboundBox()
   }
 
   const createCargoPlaces = async () => {
@@ -2190,6 +2236,9 @@ export function FfInboundRequestView({
   )
 
   const actualEditable = isFulfillmentAdmin && (receivingActive || ffDraft)
+  const boxCreationEditable =
+    isFulfillmentAdmin &&
+    (receivingActive || ffDraft || (detail?.status === 'draft' && isReturnOperation))
 
   const hasPostedPartial = useMemo(
     () => (detail?.lines ?? []).some((ln) => (ln.posted_qty ?? 0) > 0),
@@ -2969,8 +3018,8 @@ export function FfInboundRequestView({
                   >
                     <Button
                       variant="contained"
-                      disabled={busy || !(receivingActive || ffDraft)}
-                      onClick={() => void handleCreateBox()}
+                      disabled={busy || !boxCreationEditable}
+                      onClick={openBoxCreateDialog}
                       data-testid="ff-inbound-add-to-box"
                     >
                       Создать короба
@@ -3841,6 +3890,61 @@ export function FfInboundRequestView({
           </Typography>
         </Stack>
       </AppDialog>
+
+      {boxDialogOpen ? (
+      <Dialog
+        open
+        onClose={() => {
+          if (!busy) setBoxDialogOpen(false)
+        }}
+        maxWidth="xs"
+        fullWidth
+        data-testid="ff-inbound-boxes-create-dialog"
+      >
+        <DialogTitle>Создать короба</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ mt: 1 }}>
+            {boxCreateError ? (
+              <Alert severity="error" data-testid="ff-inbound-boxes-create-error">
+                {boxCreateError}
+              </Alert>
+            ) : null}
+            <TextField
+              size="small"
+              label="Количество коробов"
+              type="number"
+              value={boxCount}
+              disabled={busy}
+              onChange={(event) => {
+                setBoxCount(event.target.value)
+                setBoxCreateError(null)
+              }}
+              slotProps={{
+                htmlInput: {
+                  min: 1,
+                  max: 1000,
+                  step: 1,
+                  'data-testid': 'ff-inbound-boxes-create-count',
+                },
+              }}
+            />
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={busy} onClick={() => setBoxDialogOpen(false)}>
+            Отмена
+          </Button>
+          <Button
+            variant="contained"
+            disabled={busy}
+            onClick={() => void createInboundBoxes()}
+            data-testid="ff-inbound-boxes-create-submit"
+          >
+            Создать
+          </Button>
+        </DialogActions>
+      </Dialog>
+      ) : null}
 
       <Dialog
         open={cargoDialogOpen}

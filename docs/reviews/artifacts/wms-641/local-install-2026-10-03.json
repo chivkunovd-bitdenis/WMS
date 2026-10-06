@@ -1,0 +1,46 @@
+{
+  "source_sha": "29e7dee3b548732a34724939e6a5e855a7a48144",
+  "before": {
+    "config_sha256": "6ee30ccb824d1a383f4886a3a97b93986e5c3bedbd6efa11e8e00d43cb9d1719",
+    "tickets": 1,
+    "client_outbox_ids": [
+      5,
+      8
+    ]
+  },
+  "tests": {
+    "passed": 489,
+    "failed": 1,
+    "failure": "pre-existing workflow uppercase SHA rejection test"
+  },
+  "ruff": "passed",
+  "mypy": "passed",
+  "after": {
+    "files_checked": 27,
+    "mismatches": [],
+    "launchd_state": "state = running",
+    "config_unchanged": true,
+    "tickets": 1,
+    "client_outbox_ids": [
+      5,
+      8
+    ]
+  },
+  "final_source_sha": "775f7ce64003eca02f708f55f8c7c00ee61bfc84",
+  "final_tests": {
+    "passed": 496,
+    "failed": 1,
+    "failure": "pre-existing workflow uppercase SHA rejection test"
+  },
+  "final_install": {
+    "files_checked": 27,
+    "mismatches": [],
+    "launchd_state": "state = running",
+    "config_unchanged": true,
+    "tickets": 1,
+    "client_outbox_ids": [
+      5,
+      8
+    ]
+  }
+}

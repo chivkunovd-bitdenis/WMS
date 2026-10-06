@@ -120,7 +120,6 @@ from app.services.wildberries_errors import (
     WildberriesClientError,
     log_wb_client_error,
     translate_wb_message,
-    truncate_wb_response_body,
     wb_error_context,
     wb_error_ref,
     wb_operator_message,
@@ -202,6 +201,92 @@ class FbsShipmentError(Exception):
         super().__init__(code)
 
 
+def _append_meta_validation_operator_error(
+    groups: list[dict[str, Any]],
+    *,
+    title: str,
+    order_id: int | None,
+    message: str | None = None,
+) -> None:
+    group = next(
+        (
+            item
+            for item in groups
+            if item["title"] == title and item.get("message") == message
+        ),
+        None,
+    )
+    if group is None:
+        group = {"title": title, "orders": []}
+        if message:
+            group["message"] = message
+        groups.append(group)
+    orders = group["orders"]
+    if order_id not in orders:
+        orders.append(order_id)
+
+
+def _meta_validation_operator_errors(
+    exc: WildberriesBusinessError,
+) -> list[dict[str, Any]]:
+    """Build the safe, human presentation without exposing WB metadata values."""
+    groups: list[dict[str, Any]] = []
+    for item in exc.meta_validation:
+        is_pending_kiz = (
+            item.key.casefold() == "sgtin"
+            and item.decision.casefold() == "pending"
+            and not (item.reason or "").strip()
+        )
+        if is_pending_kiz:
+            _append_meta_validation_operator_error(
+                groups,
+                title="Wildberries ещё обрабатывает КИЗы",
+                order_id=item.order_id,
+            )
+            continue
+
+        title = (
+            "Wildberries не принял КИЗы"
+            if item.key.casefold() == "sgtin"
+            else "Wildberries не принял метаданные заказа"
+        )
+        message: str | None = None
+        if item.reason and item.reason.strip():
+            human_reason = item.reason.strip()
+            if item.value:
+                human_reason = human_reason.replace(item.value, "КИЗ")
+            message = translate_wb_message(item.reason) or human_reason
+        elif item.decision:
+            # Only known translations are safe for the operator. An unknown
+            # decision is a technical value, so the human title remains enough.
+            message = translate_wb_message(item.decision)
+        _append_meta_validation_operator_error(
+            groups,
+            title=title,
+            order_id=item.order_id,
+            message=message,
+        )
+    return groups
+
+
+def _operator_error_orders_text(
+    orders: list[int | None],
+    *,
+    after_for: bool = False,
+) -> str:
+    known = [str(order_id) for order_id in orders if order_id is not None]
+    parts: list[str] = []
+    if known:
+        if after_for:
+            label = "заказа" if len(known) == 1 else "заказов"
+        else:
+            label = "заказ" if len(known) == 1 else "заказы"
+        parts.append(f"{label} № {', '.join(known)}")
+    if None in orders:
+        parts.append("Заказ не указан Wildberries")
+    return ", ".join(parts)
+
+
 def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
     raw_messages = [
         value.strip()
@@ -210,23 +295,51 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
     ]
     dispatch_pending = any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages)
 
-    details: list[str] = []
-    for item in exc.meta_validation:
-        prefix = f"Заказ WB {item.order_id}: " if item.order_id is not None else ""
-        # Причина может приехать и в reason, и в decision — переводим обе.
-        # Слово `sgtinRetired` кладовщику не говорит ничего, а «код Честного
-        # знака выведен из оборота» говорит, что делать.
-        raw_reason = item.reason or item.decision
+    operator_errors = _meta_validation_operator_errors(exc)
+    all_pending_kiz = bool(operator_errors) and all(
+        group["title"] == "Wildberries ещё обрабатывает КИЗы"
+        for group in operator_errors
+    )
+    if all_pending_kiz:
+        orders = _operator_error_orders_text(
+            operator_errors[0]["orders"],
+            after_for=True,
+        )
+        return (
+            f"Wildberries ещё обрабатывает КИЗы для {orders}. "
+            "Подождите несколько минут и повторите передачу поставки",
+            True,
+        )
+
+    # Одна обычная ошибка уже много лет показывается в компактном формате
+    # «Заказ WB …: причина». Сохраняем его для совместимости соседних сценариев,
+    # когда WB дал человеческую причину или известный перевод decision. Новое
+    # групповое представление нужно для смешанных/множественных ответов и для
+    # безопасного случая, когда WB прислал только неизвестное техническое
+    # значение decision.
+    if len(exc.meta_validation) == 1:
+        item = exc.meta_validation[0]
+        human_reason = (item.reason or "").strip()
+        if item.value:
+            human_reason = human_reason.replace(item.value, "КИЗ")
+        raw_reason = (item.reason or item.decision or "").strip()
         translated = translate_wb_message(raw_reason) if raw_reason else None
-        if translated:
-            reason = translated
-        elif item.reason:
-            reason = f"Wildberries ответил: {item.reason}"
-        else:
-            reason = f"маркировка {item.key} — {item.decision}"
-        rendered = f"{prefix}{reason}"
-        if rendered not in details:
-            details.append(rendered)
+        if item.order_id is not None and (translated or human_reason):
+            reason = translated or f"Wildberries ответил: {human_reason}"
+            head = (
+                "Wildberries не принял поставку и просит исправить заказы: "
+                if dispatch_pending
+                else ""
+            )
+            return f"{head}Заказ WB {item.order_id}: {reason}", True
+
+    details: list[str] = []
+    for group in operator_errors:
+        orders = _operator_error_orders_text(group["orders"])
+        detail = f"{group['title']}: {orders}"
+        if group.get("message"):
+            detail = f"{detail} — {group['message']}"
+        details.append(detail)
     # ⛔ Подробности по заказам показываем ВСЕГДА, если они есть.
     #
     # Раньше фраза WB «fix them to dispatch items» перехватывалась первой и
@@ -2580,6 +2693,7 @@ async def deliver_supply(
         )
     except WildberriesBusinessError as exc:
         meta_context = _meta_validation_context(exc)
+        operator_errors = _meta_validation_operator_errors(exc)
         message, retryable = _meta_validation_message(exc)
         await mark_operation_failed(
             session,
@@ -2596,8 +2710,11 @@ async def deliver_supply(
                 "meta_validation": meta_context,
                 "wb_code": exc.wb_code,
                 "wb_message": exc.message,
-                "wb_response_body": truncate_wb_response_body(exc.response_body),
+                "wb_response_body": exc.response_body,
                 "wb_endpoint": exc.endpoint,
+                "operator_errors": operator_errors,
+                "operator_message": message,
+                "operator_retryable": retryable,
             },
             wb_supply_id=supply.wb_supply_id,
             local_supply_id=supply.id,
@@ -2606,7 +2723,7 @@ async def deliver_supply(
         raise FbsShipmentError(
             "meta_validation_fail",
             message=message,
-            context={"meta_validation": meta_context},
+            context={"operator_errors": operator_errors},
             retryable=retryable,
             http_status=409,
         ) from exc

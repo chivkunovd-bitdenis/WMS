@@ -491,6 +491,8 @@ export type FbsScanAutoPrintTargetClaim = {
 
 export type FbsScanAutoPrintReprintClaim = FbsScanAutoPrintTargetClaim & {
   kiz: string | null
+  code_id?: string | null
+  has_label_artifact?: boolean
 }
 
 export type FbsDirectKizReprint = {
@@ -500,6 +502,8 @@ export type FbsDirectKizReprint = {
   created_at: string
   print_started_at: string | null
   replayed?: boolean
+  code_id?: string | null
+  has_label_artifact?: boolean
 }
 
 export type FbsDirectKizPrintClaim = {
@@ -603,6 +607,19 @@ export type FbsPartialRejection = {
   rejected_orders: Array<FbsTrackingOrder & { reason: string | null; remaining_deadline: string }>
 }
 
+export type FbsDeliveryOperatorError = {
+  title: string
+  orders: Array<number | null>
+  message?: string | null
+}
+
+export type FbsDeliveryError = {
+  code: string
+  message: string
+  retryable: boolean
+  context: { operator_errors: FbsDeliveryOperatorError[] }
+}
+
 export type FbsWorkspace = {
   supply: {
     id: string
@@ -651,6 +668,7 @@ export type FbsWorkspace = {
   partial_rejection?: FbsPartialRejection | null
   picking_auto_passed_reason?: string | null
   wb_sync_stale?: boolean
+  last_delivery_error?: FbsDeliveryError | null
 }
 
 type AuthHeaders = (token: string) => Record<string, string>
