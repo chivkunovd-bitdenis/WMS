@@ -19,6 +19,12 @@ function selected(data: Documents): boolean {
     && (!exemplar.rnpt_required || exemplar.is_rnpt_absent === true))
 }
 
+function knownWithoutRequiredDocuments(data: Documents): boolean {
+  // Empty or incomplete responses cannot establish the absence of requirements.
+  return data.products.length > 0 && data.products.every(product => product.exemplars.length > 0
+    && product.exemplars.every(exemplar => exemplar.gtd_required === false && exemplar.rnpt_required === false))
+}
+
 export function OzonDocumentsAbsence({ orderIds, token, authHeaders, onError }: {
   orderIds: string[]; token: string; authHeaders: (token: string) => Record<string, string>
   onError: (error: string | null) => void
@@ -66,8 +72,9 @@ export function OzonDocumentsAbsence({ orderIds, token, authHeaders, onError }: 
     // The supply-specific component key replaces this reader when the context changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ids])
-  const checked = orderIds.length > 0 && orderIds.every(id => documents[id] && selected(documents[id]))
-  const partial = !checked && orderIds.some(id => documents[id] && selected(documents[id]))
+  const requiredOrderIds = orderIds.filter(id => !documents[id] || !knownWithoutRequiredDocuments(documents[id]))
+  const checked = requiredOrderIds.length > 0 && requiredOrderIds.every(id => documents[id] && selected(documents[id]))
+  const partial = !checked && requiredOrderIds.some(id => documents[id] && selected(documents[id]))
   const unresolved = Object.values(documents).some(pending)
   useEffect(() => {
     if (!unresolved) return
@@ -98,6 +105,7 @@ export function OzonDocumentsAbsence({ orderIds, token, authHeaders, onError }: 
         let data = current.current[id]
         if (!data) { data = await read.current!('GET', id); retain(id, data) }
         if (!active.current || scope !== generation.current) return
+        if (knownWithoutRequiredDocuments(data)) continue
         if (pending(data) || selected(data)) {
           retain(id, await read.current!('GET', id))
           continue
