@@ -1,0 +1,113 @@
+{
+  "task": "WMS-658",
+  "fixture_corrections": [
+    {
+      "contract_commit": "6a5ff0e39ea05d0503908a7ca1cb9139018db24d",
+      "source_commit": "6e0926102c6d7e71aee001b1ccda7bc8fc9bdf1b",
+      "correction_commit": "4769712e70ca825dbc8d1f98ea632343e5b25b57",
+      "files": [
+        {
+          "transform": "wms-658-reviewed-1-test_wms658_marking_import_contract.py",
+          "path": "backend/tests/test_wms658_marking_import_contract.py",
+          "before_blob": "9661a123265f1ea75d084fbf1b6da13d34481856",
+          "after_blob": "0a267634279a868660cbc014c6312bbf4cfc7798"
+        },
+        {
+          "transform": "wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py",
+          "path": "backend/tests/test_wms658_wb_honest_sign_contract.py",
+          "before_blob": "9bf03cba6847065ee8b59030aece6f1695b4d22d",
+          "after_blob": "946ec81ef52d7fb888379b327dcd74be8ce52a99"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "docs/requirements/WMS-658.md",
+          "before_blob": "88a79ede1de989790d4cf814d208f3615420740f",
+          "after_blob": "a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58"
+        }
+      ],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "6e0926102c6d7e71aee001b1ccda7bc8fc9bdf1b",
+        "correction_commit": "4769712e70ca825dbc8d1f98ea632343e5b25b57",
+        "evidence": "docs/reviews/WMS-658-frozen-corrections-review-20261007.md",
+        "evidence_commit": "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+        "evidence_blob": "0a48a0167af6e83b156ff003b66a842df09c42c6"
+      }
+    },
+    {
+      "contract_commit": "6a5ff0e39ea05d0503908a7ca1cb9139018db24d",
+      "source_commit": "24fcbdabc5560012e5ac849c8ae229e4ba740d28",
+      "correction_commit": "16a58ac82df16fada0571d249b0827e8900527ad",
+      "files": [
+        {
+          "transform": "wms-658-reviewed-2-test_wms658_marking_import_contract.py",
+          "path": "backend/tests/test_wms658_marking_import_contract.py",
+          "before_blob": "0a267634279a868660cbc014c6312bbf4cfc7798",
+          "after_blob": "ff481b1e693884c103e46624a05807f3120bc040"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "24fcbdabc5560012e5ac849c8ae229e4ba740d28",
+        "correction_commit": "16a58ac82df16fada0571d249b0827e8900527ad",
+        "evidence": "docs/reviews/WMS-658-frozen-corrections-review-20261007.md",
+        "evidence_commit": "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+        "evidence_blob": "0a48a0167af6e83b156ff003b66a842df09c42c6"
+      }
+    },
+    {
+      "contract_commit": "6a5ff0e39ea05d0503908a7ca1cb9139018db24d",
+      "source_commit": "f6f382e684fab4d9da291d439a61b452a01666b2",
+      "correction_commit": "ff86e9126c0ac87b02cd0588c17a5884e964a246",
+      "files": [
+        {
+          "transform": "wms-658-reviewed-3-test_wms658_marking_import_contract.py",
+          "path": "backend/tests/test_wms658_marking_import_contract.py",
+          "before_blob": "ff481b1e693884c103e46624a05807f3120bc040",
+          "after_blob": "cee12538b9d752f040edcc2c7a892726d307d68d"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "f6f382e684fab4d9da291d439a61b452a01666b2",
+        "correction_commit": "ff86e9126c0ac87b02cd0588c17a5884e964a246",
+        "evidence": "docs/reviews/WMS-658-frozen-corrections-review-20261007.md",
+        "evidence_commit": "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+        "evidence_blob": "0a48a0167af6e83b156ff003b66a842df09c42c6"
+      }
+    },
+    {
+      "contract_commit": "6a5ff0e39ea05d0503908a7ca1cb9139018db24d",
+      "source_commit": "3df33bab79ab27d5612271e351f06f2a5edf17e6",
+      "correction_commit": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd",
+      "files": [
+        {
+          "transform": "wms-658-reviewed-4-test_wms658_marking_import_contract.py",
+          "path": "backend/tests/test_wms658_marking_import_contract.py",
+          "before_blob": "cee12538b9d752f040edcc2c7a892726d307d68d",
+          "after_blob": "6e76bf1d4bcf38ff59341e6d3459346313421e6c"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "3df33bab79ab27d5612271e351f06f2a5edf17e6",
+        "correction_commit": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd",
+        "evidence": "docs/reviews/WMS-658-frozen-corrections-review-20261007.md",
+        "evidence_commit": "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+        "evidence_blob": "0a48a0167af6e83b156ff003b66a842df09c42c6"
+      }
+    }
+  ]
+}
