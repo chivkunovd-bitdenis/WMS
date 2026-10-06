@@ -1,0 +1,35 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+_________ test_actual_race_rejects_wrong_pending_contract[generic-503] _________
+/tmp/test_wms652_race_negative.py:24: in test_actual_race_rejects_wrong_pending_contract
+    await _actual_race(async_client, None, monkeypatch)
+backend/tests/test_fbs_supply_from_orders.py:816: in test_parallel_from_orders_one_order_one_supply
+    assert detail["code"] == "operation_in_progress"
+E   AssertionError: assert 'arbitrary_database_error' == 'operation_in_progress'
+E     
+E     - operation_in_progress
+E     + arbitrary_database_error
+_____ test_actual_race_rejects_wrong_pending_contract[wrong-canonical-id] ______
+/tmp/test_wms652_race_negative.py:24: in test_actual_race_rejects_wrong_pending_contract
+    await _actual_race(async_client, None, monkeypatch)
+backend/tests/test_fbs_supply_from_orders.py:818: in test_parallel_from_orders_one_order_one_supply
+    assert detail["context"] == expected_context
+E   AssertionError: assert {'operation_i...WB-GI-MOCK-2'} == {'operation_i...WB-GI-MOCK-2'}
+E     
+E     Omitting 3 identical items, use -vv to show
+E     Differing items:
+E     {'operation_id': 'foreign-operation'} != {'operation_id': 'dc276381-3a39-481b-94ed-c55c59cc292d'}
+E     Use -v to get more diff
+________ test_actual_race_rejects_wrong_pending_contract[not-retryable] ________
+/tmp/test_wms652_race_negative.py:24: in test_actual_race_rejects_wrong_pending_contract
+    await _actual_race(async_client, None, monkeypatch)
+backend/tests/test_fbs_supply_from_orders.py:817: in test_parallel_from_orders_one_order_one_supply
+    assert detail["retryable"] is True
+E   assert False is True
+=========================== short test summary info ============================
+FAILED backend::test_actual_race_rejects_wrong_pending_contract[generic-503]
+FAILED backend::test_actual_race_rejects_wrong_pending_contract[wrong-canonical-id]
+FAILED backend::test_actual_race_rejects_wrong_pending_contract[not-retryable]
+3 failed in 8.17s
