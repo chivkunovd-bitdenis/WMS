@@ -88,6 +88,9 @@ let sameProductOrders: boolean
 let autoPrintOrders: string[]
 let qrFailureIds: string[]
 let qrRecoverWholeGroup: boolean
+// Real retry traverses every linked trbx in the supply.  It can persist A1,
+// fail on A2 and return only HTTP error — no successful workspace body.
+let qrPersistsFirstThenFails: boolean
 let supplyMarketplace: 'wb' | 'ozon'
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
@@ -181,6 +184,12 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   }
   if (path.endsWith('/retry-qr')) {
     const boxId = path.split('/').at(-2)!
+    if (qrPersistsFirstThenFails) {
+      boxes = boxes.map((one, index) => index === 0
+        ? { ...one, qr_asset: box(one.id, one.box_number, [], true).qr_asset }
+        : one)
+      return json({ detail: { code: 'wb_timeout', message: 'WB не ответил при получении QR.' } }, 504)
+    }
     if (qrFailureIds.includes(boxId)) {
       return json({ detail: { code: 'wb_timeout', message: 'WB не ответил при получении QR.' } }, 504)
     }
@@ -212,6 +221,7 @@ beforeEach(() => {
   autoPrintOrders = []
   qrFailureIds = []
   qrRecoverWholeGroup = false
+  qrPersistsFirstThenFails = false
   supplyMarketplace = 'wb'
   window.sessionStorage.clear()
   window.localStorage.clear()
@@ -483,6 +493,24 @@ describe('WMS-681 recovery · реальные WB QR по свежему сни�
     expect(document.body.textContent).toContain('WB не ответил')
     expect(calls.some((one) => one.path === '/qr/box-1.png')).toBe(true)
     expect(calls.some((one) => one.path === '/qr/box-2.png')).toBe(false)
+  })
+
+  it('C10/R6: HTTP-ошибка после сохранённого A1 перечитывает snapshot и печатает готовую часть', async () => {
+    boxes = [box('A1', 1, [], false), box('A2', 2, [], false)]
+    qrPersistsFirstThenFails = true
+    await startFrame()
+    calls = []
+
+    await clickAllBoxQr()
+
+    expect(calls.some((one) => one.path.endsWith('/retry-qr'))).toBe(true)
+    expect(calls.some((one) => one.method === 'GET' && one.path === `/operations/fbs-supplies/${SUPPLY_ID}/workspace`)).toBe(true)
+    expect(calls.some((one) => one.method === 'POST' && one.path === `/operations/fbs-supplies/${SUPPLY_ID}/boxes`)).toBe(false)
+    expect(document.body.textContent).toContain('Проверка перед печатью')
+    expect(document.body.textContent).toContain('WB не ответил')
+    expect(document.body.textContent).toContain('1')
+    expect(calls.some((one) => one.path === '/qr/A1.png')).toBe(true)
+    expect(calls.some((one) => one.path === '/qr/A2.png')).toBe(false)
   })
 
   it('C10: ноль готовых не открывает окно, повтор после сети получает QR', async () => {

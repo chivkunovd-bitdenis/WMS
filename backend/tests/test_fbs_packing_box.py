@@ -815,6 +815,7 @@ async def test_wms681_qr_partial_wb_sticker_success_is_durable_after_next_sticke
 
     original_fetch = print_svc.fetch_marketplace_trbx_stickers
     fetches = 0
+    creates = 0
 
     async def fetch_first_then_fail(*args: object, **kwargs: object) -> list[dict[str, object]]:
         nonlocal fetches
@@ -823,12 +824,19 @@ async def test_wms681_qr_partial_wb_sticker_success_is_durable_after_next_sticke
             raise WildberriesClientError("transport_error")
         return await original_fetch(*args, **kwargs)  # type: ignore[arg-type]
 
+    async def forbidden_create(*args: object, **kwargs: object) -> list[str]:
+        nonlocal creates
+        creates += 1
+        raise AssertionError("a linked group fetching QR must not create cargo places")
+
     monkeypatch.setattr(print_svc, "fetch_marketplace_trbx_stickers", fetch_first_then_fail)
+    monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", forbidden_create)
     response = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/boxes/{ids[0]}/retry-qr", headers=headers,
     )
     assert response.status_code in {502, 504}, response.text
     assert fetches == 2
+    assert creates == 0
     async with SessionLocal() as session:
         first_ready = await session.scalar(select(FbsPrintAsset).where(
             FbsPrintAsset.fbs_trbx_id == (
@@ -838,6 +846,18 @@ async def test_wms681_qr_partial_wb_sticker_success_is_durable_after_next_sticke
             FbsPrintAsset.status == PRINT_ASSET_STATUS_READY,
         ))
         assert first_ready is not None
+
+    # The failing retry has no success body, but a client may safely read this
+    # ordinary workspace projection afterwards.  It must expose the durable
+    # useful part (A1), not pretend that both labels remain absent.
+    fresh_workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers,
+    )
+    assert fresh_workspace.status_code == 200, fresh_workspace.text
+    fresh_boxes = {item["id"]: item for item in fresh_workspace.json()["boxes"]}
+    assert fresh_boxes[str(ids[0])]["qr_asset"]["status"] == PRINT_ASSET_STATUS_READY
+    assert fresh_boxes[str(ids[0])]["qr_asset"]["preview_url"]
+    assert fresh_boxes[str(ids[1])]["qr_asset"] is None
 
 
 @pytest.mark.asyncio
