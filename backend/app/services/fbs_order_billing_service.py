@@ -263,6 +263,7 @@ async def record_fbs_order_confirmed(
             document_number_snapshot=order_display_number(order),
             occurred_at=moment,
             item_quantity=quantity,
+            cumulative_handover=handed_over_quantities is not None,
             lines=[
                 line_input(products.get(product_id) if product_id else None, product_id, count)
                 for product_id, count in positions
@@ -290,6 +291,7 @@ async def record_fbs_order_confirmed(
                 occurred_at=moment,
                 performer_id=None,
                 respect_billing_start=False,
+                cumulative_handover=handed_over_quantities is not None,
                 warehouse_id=order.warehouse_id,
                 # Без строк ставка ищется только в старой таблице тарифов, а
                 # матрица — единственный живой экран — пишет в новую:

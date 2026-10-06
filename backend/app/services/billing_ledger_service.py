@@ -349,6 +349,76 @@ async def _resolve_v2_tariff(
     )
 
 
+async def _extend_handover_charge(
+    session: AsyncSession,
+    existing: BillingLedgerEntry,
+    quantity: Decimal,
+    lines: list[OperationalBillingLine],
+) -> BillingLedgerEntry:
+    """Extend a partial FBS quantity, retaining original dates, identities and tariffs."""
+    if existing.source_type != "fbs_order" or existing.service_code not in {
+        "fbs_order", PACKING_SERVICE_CODE,
+    }:
+        raise BillingLedgerError("invalid_cumulative_handover")
+    await session.refresh(existing, with_for_update=True)
+    await session.refresh(existing, attribute_names=["lines"])
+    by_product = {line.product_id: line for line in existing.lines}
+    for incoming in lines:
+        row = by_product.get(incoming.product_id)
+        if row is None:
+            tariff = await _resolve_v2_tariff(
+                session, tenant_id=existing.tenant_id, seller_id=existing.seller_id,
+                product_id=incoming.product_id, service_code=existing.service_code,
+                occurred_at=existing.occurred_at,
+            )
+            legacy = await session.get(BillingTariffVersion, existing.tariff_version_id) \
+                if existing.tariff_version_id else None
+            rate = tariff.rate if tariff is not None else (legacy.amount if legacy else None)
+            unit = tariff.unit if tariff is not None else existing.unit
+            row = BillingLedgerLine(
+                tenant_id=existing.tenant_id, product_id=incoming.product_id,
+                operation_fact_line_id=incoming.operation_fact_line_id,
+                product_snapshot=incoming.source_snapshot,
+                physical_quantity=Decimal(0), billing_quantity=Decimal(0),
+                billing_unit=unit, tariff_version_v2_id=tariff.id if tariff else None,
+                tariff_snapshot={
+                    "service_code": existing.service_code, "source": existing.source,
+                    "legacy_tariff_id": str(existing.tariff_version_id)
+                    if existing.tariff_version_id else None,
+                    "v2_tariff_id": str(tariff.id) if tariff else None,
+                    "scope": {"seller_id": str(existing.seller_id),
+                              "product_id": str(incoming.product_id), "unit": unit},
+                },
+                rate=rate, amount=None,
+            )
+            existing.lines.append(row)
+            by_product[incoming.product_id] = row
+        row.physical_quantity = max(row.physical_quantity, postgres_numeric(
+            incoming.quantity, precision=14, scale=4, field="billing_quantity",
+        ))
+        row.billing_quantity = Decimal(1) if row.billing_unit == "document" \
+            else row.physical_quantity
+        row.amount = None if row.rate is None else postgres_integer(
+            Decimal(row.rate) * row.billing_quantity, field="billing_amount",
+        )
+    existing.quantity = max(existing.quantity, postgres_numeric(
+        Decimal(1) if existing.unit == "document" else quantity,
+        precision=14, scale=4, field="billing_quantity",
+    ))
+    if existing.lines:
+        amounts = [row.amount for row in existing.lines]
+        rates = {row.rate for row in existing.lines}
+        existing.amount = sum(cast(int, amount) for amount in amounts) \
+            if all(amount is not None for amount in amounts) else None
+        existing.rate = next(iter(rates)) if len(rates) == 1 else None
+    else:
+        existing.amount = None if existing.rate is None else postgres_integer(
+            Decimal(existing.rate) * existing.quantity, field="billing_amount",
+        )
+    await session.flush()
+    return existing
+
+
 async def record_operational_charge(
     session: AsyncSession,
     *,
@@ -364,6 +434,7 @@ async def record_operational_charge(
     warehouse_id: uuid.UUID | None = None,
     lines: list[OperationalBillingLine] | None = None,
     respect_billing_start: bool = True,
+    cumulative_handover: bool = False,
 ) -> BillingLedgerEntry | None:
     """Record the first final operational fact, without blocking on a missing tariff."""
     fact_date = occurred_at.astimezone(MOSCOW).date()
@@ -381,6 +452,8 @@ async def record_operational_charge(
         service_code=service_code,
     )
     if existing is not None:
+        if cumulative_handover:
+            return await _extend_handover_charge(session, existing, quantity, list(lines or []))
         return existing
 
     previous_reversal = await _latest_reversal_for_source(
