@@ -55,7 +55,7 @@ jobs:
           ./scripts/ci/check-backlog-ref.sh "$BASE_SHA"
           python scripts/ci/check_task_documents.py "$BASE_SHA"
 
-  backend:
+  backend-checks:
     timeout-minutes: 45
     runs-on: ubuntu-latest
     services:
@@ -133,7 +133,7 @@ jobs:
         env:
           WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517
         run: |
-          pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py
+          pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py --junitxml="$RUNNER_TEMP/release-postgres/517-withdrawal.xml"
           pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe
           pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply
       - name: Required PostgreSQL handoff cancellation documents and catalog contracts
@@ -157,25 +157,116 @@ jobs:
           alembic upgrade head
           alembic downgrade 20260923_0517
           alembic upgrade head
-      - name: Pytest
-        # -n auto раскладывает прогон по ядрам раннера. Вместе со сборкой схемы
-        # один раз за прогон (tests/conftest.py) это увело полный набор
-        # с 20 минут 38 секунд до 4 минут 48 секунд при том же составе тестов:
-        # 1431 до, 1431 после, ни один не сменил исход.
-        # These two contracts require their own idle PostgreSQL clusters.
-        # Both run below unchanged, serially, without skip/xfail.
-        run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py --junitxml="$RUNNER_TEMP/backend-all.xml"
       - name: Printer receipt persistence and unknown-outcome recovery
         working-directory: .
         run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k 'not test_windows_cmd_synthetic_queue_receipt' --junitxml="$RUNNER_TEMP/native-print.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: backend-checks-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/release-postgres
-            ${{ runner.temp }}/backend-all.xml
             ${{ runner.temp }}/native-print.xml
+          retention-days: 14
+
+  backend-shards:
+    name: backend-shard-${{ matrix.index }}
+    timeout-minutes: 45
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        index: [0, 1]
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+      - name: Install full backend dependencies
+        run: pip install -e ".[dev]" asyncpg==0.31.0
+      - name: Ensure required Redis integration executable
+        run: |
+          if ! command -v redis-server; then
+            sudo apt-get update -qq
+            sudo apt-get install -y redis-server
+          fi
+          command -v redis-server
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend helpers for backend HTTP contract tests
+        run: npm ci --prefix ../frontend
+      - name: Full collection and deterministic backend half
+        # The two isolated WMS-662 files still run in backend-checks against PG.
+        # All remaining node IDs execute exactly once across these two jobs.
+        run: >-
+          python ../scripts/ci/backend_shards.py run
+          --index ${{ matrix.index }} --output "$RUNNER_TEMP/backend-shard"
+          -- -n auto
+          --ignore=tests/test_wms662_batch_handoff_lock_order.py
+          --ignore=tests/test_wms662_batch_handoff_steady_state.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-shard-${{ matrix.index }}-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backend-shard
+          if-no-files-found: error
+          retention-days: 14
+
+  backend:
+    # Keep the existing required name. Failed/skipped shards or PG/lint cannot pass.
+    needs: [backend-checks, backend-shards]
+    if: always()
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Require every backend producer to succeed
+        env:
+          CHECKS_RESULT: ${{ needs.backend-checks.result }}
+          SHARDS_RESULT: ${{ needs.backend-shards.result }}
+        run: |
+          test "$CHECKS_RESULT" = success
+          test "$SHARDS_RESULT" = success
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-checks-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backend-contracts
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-shard-0-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backend-shards/0
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-shard-1-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backend-shards/1
+      - name: Verify full coverage and merge original JUnit outcomes
+        run: >-
+          python scripts/ci/backend_shards.py merge
+          --shards "$RUNNER_TEMP/backend-shards/0" "$RUNNER_TEMP/backend-shards/1"
+          --output "$RUNNER_TEMP/backend-contracts/backend-all.xml"
+          --policy guards/PROCESS_CONTRACTS.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/backend-contracts
+          if-no-files-found: error
           retention-days: 14
 
   print-regressions:
@@ -211,8 +302,7 @@ jobs:
           retention-days: 14
 
   frontend-build:
-    # The existing required frontend check cannot succeed if browser/PDF coverage fails.
-    needs: print-regressions
+    # Frontend and print run in parallel; process-proof requires both.
     timeout-minutes: 20
     runs-on: ubuntu-latest
     defaults:
@@ -229,6 +319,14 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Install deps
         run: npm ci
+      - name: WMS-517 complete synthetic macOS helper contracts
+        working-directory: .
+        run: >-
+          node --test --test-reporter=tap
+          scripts/ops/tests/wms517-mac-dom.test.cjs
+          scripts/ops/tests/wms517-mac-launcher.test.cjs
+          scripts/ops/tests/wms517-sold-kiz-filter.test.cjs
+          > "$RUNNER_TEMP/wms517-mac.tap"
       - name: Typecheck
         run: npx tsc --noEmit -p tsconfig.app.json
       - name: Verify WMS-517 attached CAdES auth profile
@@ -260,7 +358,9 @@ jobs:
         if: always()
         with:
           name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/frontend-all.json
+          path: |
+            ${{ runner.temp }}/frontend-all.json
+            ${{ runner.temp }}/wms517-mac.tap
           retention-days: 14
 
   guards:
@@ -275,10 +375,35 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
+      - name: Install infrastructure test dependencies
+        run: python -m pip install pytest pytest-xdist
+      - name: Verify whole candidate against the accepted product reference
+        run: python scripts/ci/product_scope.py --root . --trusted-ref d61805978b3e7878d1056c99b4e6e0823edf49a5
       - name: Infrastructure tests (not business guards)
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
           python -m unittest discover -s scripts/ci -p 'test_check_task_documents.py' -v
+      - name: Execute all product-scope contracts and persist receipt
+        run: |
+          python -m pytest -q scripts/ci/tests/test_product_scope.py --junitxml="$RUNNER_TEMP/product-scope.xml"
+          python -c 'import json,os,pathlib; pathlib.Path(os.environ["RUNNER_TEMP"],"product-scope-receipt.json").write_text(json.dumps(dict(version=1,sha=os.environ["GITHUB_SHA"],run_id=int(os.environ["GITHUB_RUN_ID"]),run_attempt=int(os.environ["GITHUB_RUN_ATTEMPT"]),report="product-scope.xml"))+"\n")'
+      - name: Persist exact full-backend shard infrastructure cases
+        run: >-
+          python -m pytest -q scripts/ci/tests/test_backend_shards.py
+          scripts/ci/tests/test_backend_shard_failclosed.py
+          scripts/ci/tests/test_ci_release_additions.py
+          scripts/ci/tests/test_backend_shard_redis_setup.py
+          --junitxml="$RUNNER_TEMP/ci-shards.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ runner.temp }}/product-scope.xml
+            ${{ runner.temp }}/product-scope-receipt.json
+            ${{ runner.temp }}/ci-shards.xml
+          if-no-files-found: error
+          retention-days: 14
       - name: Verify against the checker and manifest from trusted BASE
         id: integrity
         env:
@@ -374,6 +499,10 @@ jobs:
         with:
           name: release-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof/print
+      - uses: actions/download-artifact@v4
+        with:
+          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/process-proof
       - name: Verify every required named case and bind evidence to this attempt
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}

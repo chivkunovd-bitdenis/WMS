@@ -1,6 +1,5 @@
 """WMS-652 additive pre-implementation contract: producer gate and setup errors."""
 import importlib
-import json
 import os
 import subprocess
 import tempfile
