@@ -169,8 +169,11 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
     group = known_687_groups.get(str(source))
     module_parts = source.with_suffix("").parts
     module = ".".join(module_parts[1:] if module_parts[0] == "backend" else module_parts)
+    if str(source) == "scripts/ci/wms663-proof/c10_mixed.py":
+        module = "tests.test_wms663_remote_c10"
     frontend = str(source).removeprefix("frontend/")
     script_reports = {
+        "scripts/ci/wms663-proof/c10_mixed.py": "release-postgres/663-669-670-683.xml",
         "scripts/ci/test_check_task_documents.py": "docgate-687.xml",
         "scripts/ci/tests/test_product_scope.py": "product-scope.xml",
         **{f"scripts/ci/tests/{name}.py": "ci-shards.xml" for name in (
