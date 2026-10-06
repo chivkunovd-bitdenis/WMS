@@ -11,6 +11,11 @@ SPEC = importlib.util.spec_from_file_location(
 checker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(checker)
 
+EXACT_REVIEWED_CHAINS = json.loads(
+    (Path(__file__).with_name("tests") / "fixtures" /
+     "wms652_exact_reviewed_correction_chains.json").read_text(encoding="utf-8")
+)["tasks"]
+
 DOCUMENT = """# Задача
 
 | Проверка | Требования | Вердикт |
@@ -155,6 +160,92 @@ class GitTests(unittest.TestCase):
         self.write(checker.SCRIPT_PATH, "# rollout marker\n")
         self.write("docs/requirements/WMS-437.md", DOCUMENT)
         return self.commit("WMS-437 introduce document check")
+
+    def immutable_blob(self, commit: str, path: str) -> str:
+        """Read a published object, never the moving checkout version of a test."""
+        project = Path(__file__).resolve().parents[2]
+        return subprocess.check_output(
+            ["git", "show", f"{commit}:{path}"], cwd=project, text=True,
+        )
+
+    @staticmethod
+    def exact_transform(task_id: str, step: int, path: str) -> str:
+        return f"{task_id.lower()}-reviewed-{step}-{path.rsplit('/', 1)[-1]}"
+
+    def reviewed_exact_chain(self, task_id: str, *, tamper: str | None = None):
+        """Build a small Git graph from immutable published blobs and metadata.
+
+        Commit ids are deliberately synthetic; every source/correction content
+        hash, exact path, report binding and graph edge comes from the published
+        independent-review mapping.  That makes this a stable checker fixture,
+        rather than a dependency on whatever HEAD happens to contain.
+        """
+        record = EXACT_REVIEWED_CHAINS[task_id]
+        rollout = self.rollout()
+        for path in record["frozen_files"]:
+            self.write(path, self.immutable_blob(record["original_contract"], path))
+        requirement = f"docs/requirements/{task_id}.md"
+        first = record["steps"][0]
+        if requirement in first.get("ancillary", {}):
+            self.write(requirement, self.immutable_blob(first["source"], requirement))
+        else:
+            self.write(requirement, DOCUMENT)
+        contract = self.commit(f"{task_id}: контракт тестов")
+
+        entries = []
+        source = contract
+        for number, step in enumerate(record["steps"], 1):
+            for path in step["files"]:
+                self.write(path, self.immutable_blob(step["correction"], path))
+            for path in step.get("ancillary", {}):
+                self.write(path, self.immutable_blob(step["correction"], path))
+            if tamper == "other-file" and number == 1:
+                self.write("backend/app/unrelated.py", "must never enter a fixture correction\n")
+            correction = self.commit(f"{task_id}: independently reviewed fixture correction {number}")
+            evidence = f"docs/reviews/{task_id}-fixture-review-{number}.md"
+            self.write(evidence, f"independent high PASS for {correction}\n")
+            evidence_commit = self.commit(f"{task_id}: publish fixture review {number}")
+            items = []
+            for path, (before, after) in step["files"].items():
+                items.append({
+                    "transform": self.exact_transform(task_id, number, path),
+                    "path": path, "before_blob": before, "after_blob": after,
+                })
+            review = {
+                "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": correction,
+                "evidence": evidence, "evidence_commit": evidence_commit,
+                "evidence_blob": checker.git_blob(self.root, evidence_commit, evidence),
+            }
+            entries.append({
+                "contract_commit": contract, "source_commit": source,
+                "correction_commit": correction, "files": items,
+                "companion_files": [
+                    {"path": path, "before_blob": before, "after_blob": after}
+                    for path, (before, after) in step.get("ancillary", {}).items()
+                ],
+                "review": review,
+            })
+            # The next independently reviewed source is a real descendant which
+            # did not alter the frozen bytes; rejecting it would erase the audit.
+            source = evidence_commit
+        ledger = {"task": task_id, "fixture_corrections": entries}
+        if tamper == "wrong-source":
+            ledger["fixture_corrections"][1]["source_commit"] = "f" * 40
+        elif tamper == "wrong-blob":
+            ledger["fixture_corrections"][0]["files"][0]["after_blob"] = "0" * 40
+        elif tamper == "missing-review":
+            ledger["fixture_corrections"][0]["review"].pop("model")
+        elif tamper == "wrong-report":
+            report = ledger["fixture_corrections"][0]["review"]["evidence"]
+            self.write(report, "rewritten report\n")
+            self.commit(f"{task_id}: mutate published review artifact")
+        self.write(
+            f"docs/reviews/contract-corrections/{task_id}.json",
+            json.dumps(ledger, ensure_ascii=False) + "\n",
+        )
+        self.commit(f"{task_id}: store exact independently reviewed chain")
+        return rollout
 
     def wms687_document(self, test_links: str) -> str:
         return f"""# WMS-687
@@ -934,6 +1025,80 @@ class GitTests(unittest.TestCase):
                     )
                     commit("WMS-687 correction ledger")
                     self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms658_published_exact_chain_with_own_test_links_is_accepted(self):
+        """658 has one reviewed requirements-Test-links companion, no broad companion rule."""
+        rollout = self.reviewed_exact_chain("WMS-658")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms681_published_two_by_two_exact_chain_is_accepted(self):
+        """Both frozen 681 files change in each of its two approved corrections."""
+        rollout = self.reviewed_exact_chain("WMS-681")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_reviewed_658_and_681_exact_chain_rejects_every_binding_canary(self):
+        # These are not a generic migration escape hatch: each kind of binding
+        # failure must stay fatal after the two positive chains are implemented.
+        for task_id, tamper in (
+            ("WMS-658", "wrong-source"),
+            ("WMS-658", "wrong-blob"),
+            ("WMS-658", "other-file"),
+            ("WMS-681", "missing-review"),
+            ("WMS-681", "wrong-report"),
+        ):
+            with self.subTest(task_id=task_id, tamper=tamper):
+                with tempfile.TemporaryDirectory() as directory:
+                    isolated = self.__class__()
+                    # Reuse the normal fixture setup on an independent Git repo;
+                    # no case shares chain state or a mutable evidence artifact.
+                    isolated.temp = tempfile.TemporaryDirectory(dir=directory)
+                    isolated.root = Path(isolated.temp.name)
+                    isolated.git("init", "-q")
+                    isolated.git("config", "user.name", "Fixture")
+                    isolated.git("config", "user.email", "fixture@example.invalid")
+                    isolated.write("AGENTS.md", "Rules\n")
+                    isolated.write("CLAUDE.md", "Rules\n")
+                    isolated.base = isolated.commit("WMS-001 legacy base")
+                    try:
+                        rollout = isolated.reviewed_exact_chain(task_id, tamper=tamper)
+                        self.assertTrue(checker.contract_change_errors(isolated.root, rollout))
+                    finally:
+                        isolated.temp.cleanup()
+
+    def test_exact_chain_records_pin_the_two_published_review_artifacts(self):
+        # The fixture is an immutable source of real source/final/report/blob
+        # values.  The WMS-680 record remains intentionally outside this change:
+        # its later numeric-subtable blob needs its own narrow review first.
+        for task_id, report_commit, report_blob in (
+            ("WMS-658", "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+             "0a48a0167af6e83b156ff003b66a842df09c42c6"),
+            ("WMS-681", "4c3c53bb1a4057da7e003e024680c842c05abdc1",
+             "fc539ecf01b0d652920d4f9a26b913e519eacaf9"),
+        ):
+            with self.subTest(task_id=task_id):
+                report = EXACT_REVIEWED_CHAINS[task_id]["report"]
+                self.assertEqual(report["commit"], report_commit)
+                self.assertEqual(report["blob"], report_blob)
+                self.assertEqual(len(EXACT_REVIEWED_CHAINS[task_id]["steps"]), 4 if task_id == "WMS-658" else 2)
+
+    def test_exact_chain_records_match_published_parent_blobs_and_report(self):
+        # This verifies the actual immutable objects separately from the small
+        # synthetic graphs above.  It is intentionally independent of HEAD.
+        project = Path(__file__).resolve().parents[2]
+        for task_id, record in EXACT_REVIEWED_CHAINS.items():
+            with self.subTest(task_id=task_id):
+                self.assertTrue(checker.ancestor(project, record["original_contract"], record["final_correction_commit"]))
+                report = record["report"]
+                self.assertEqual(checker.git_blob(project, report["commit"], report["path"]), report["blob"])
+                for step in record["steps"]:
+                    parent = checker.git(project, "rev-list", "--parents", "-n", "1", step["correction"]).split()[1]
+                    self.assertEqual(parent, step["source"])
+                    for path, (before, after) in step["files"].items():
+                        self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                        self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+                    for path, (before, after) in step.get("ancillary", {}).items():
+                        self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                        self.assertEqual(checker.git_blob(project, step["correction"], path), after)
 
     def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
         rollout = self.rollout()
