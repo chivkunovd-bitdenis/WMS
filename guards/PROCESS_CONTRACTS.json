@@ -197,7 +197,7 @@
     "scripts/ci/tests/test_backend_shard_redis_setup.py": "756bc9ea158afae5624813781b9191bbc71d9408b4265115cc60b01694768884",
     "scripts/ci/tests/test_backend_shards.py": "dded5d07d5cb4f7203d24eb93f4bd55a8b816c81797ab6c5b7ff968d47dbcb0c",
     "scripts/ci/tests/test_ci_baseline.py": "00a7a6654c8bdfdddaafe6baab11adbb69a6c4dd0c5bcf076a5f253f53fa97e3",
-    "scripts/ci/tests/test_ci_release_additions.py": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+    "scripts/ci/tests/test_ci_release_additions.py": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
     "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",

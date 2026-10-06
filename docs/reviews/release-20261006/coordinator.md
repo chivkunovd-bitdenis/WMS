@@ -331,3 +331,10 @@ Replacement Solаналитик4eb81c378babf081b3342f3bf36ac17bf136a8bf отде
 Обычный PRCI37548248403/attempt1 стартовал23:44:57UTC, HEAD eabfad3656ec7ac923c6014657d4bf8ba5e63400/testedmergeac845328b27b5be265962695e10766efddef339e/BASE4b298. Baseline/backlog/WindowsPASS; охрана130PASS1FAIL из131 infrastructure cases: test_ci_release_additions.py ещёimmutableexpectsOLDd618, хотя CLIref25eb отдельно принят и sourcepinreviewapproved. Причина — упущенная миграция literalвэтомtestcontract, не productscope51/schema weakening. Scope/shards отчёты не дошли до исполнения из-зараннегоотказа. Rawguard127098bytes сохранён.
 
 Не отменяемrun/не запускаемblindretry: backend/frontend/print outcomes сохраняются. SAMEотдельный Soltestwriter resumed01a11370 для ONLYliteralaccepted25eb, всеassertions/3IDs unchanged, targetoldrefnegativecontrol; затем sameindependentreviewer иdistinctanalystdelta. Это требует новогоapprovedSOURCE/hash/config, старый9dae не выдаётсязаегоодобрение. Mainproduct/staging/production не меняются.
+
+
+## Checkpoint 23:50 UTC: отдельный reference contract migration опубликован
+
+Testwriter88343975e13f8819d6b81cd03cddbba1d67db078 изменил ONLYодинliteralвassertIn test_ci_release_additions.py с OLDd618 на отдельноaccepted25eb; все3IDs/второйJUnitassert/остальныеassertions ибайты сохранены. BEFORE2PASS1targetFAIL→AFTER3PASS0skip; negativeoldreferencecopy1targetRED безtrackedCI/product edits. Интегратор обновил ONLYэтотprotectedfiledigest;229files/21suites1173IDs прежние. Frozen51scope/script/new12/business/browserhelpercases побайтнонеизменны.
+
+Это preparedmigration; новое независимоеreview/отдельныйаналитическийdelta/newSOURCEpin ещёвпереди. Actualrun37548248403 не отменяется; releasePRHEAD eab пока не меняется, пока собираютсявсеoutputs. Frontend/backendchecks ужеPASS; полныйbackend/print продолжаются. НетblindCIretry/новогопродукта/physicalclaims.
