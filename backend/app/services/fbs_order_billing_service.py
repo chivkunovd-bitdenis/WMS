@@ -210,6 +210,12 @@ async def record_fbs_order_confirmed(
         return
     if order.seller_id is None:
         return
+    if handed_over_quantities is not None:
+        # Same seller fence as public invoice creation, before any fact/charge
+        # row lock: either an invoice sees the extension or the extension sees it.
+        await session.scalar(select(Seller.id).where(
+            Seller.id == order.seller_id, Seller.tenant_id == order.tenant_id,
+        ).with_for_update(key_share=True))
     handover_at = confirmed_handover_at or (
         await confirmed_order_handover_dates(session, order.tenant_id, [order])
     ).get(order.id)
