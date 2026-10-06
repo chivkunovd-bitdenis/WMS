@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from wb_emulator.services.fault_injection import get_faults
-from wb_emulator.services.marking_meta import META_KINDS, get_meta, plural_key_for_kind
+from wb_emulator.services.marking_meta import get_meta
 
 router = APIRouter()
 
@@ -40,25 +40,13 @@ def get_orders_meta_batch(body: OrdersMetaBody, request: Request) -> dict[str, A
         )
     orders: list[dict[str, Any]] = []
     for order_id in body.orders:
-        meta = get_meta(seller_key, order_id)
-        details = []
-        for kind in sorted(META_KINDS):
-            entries = meta.get(plural_key_for_kind(kind), [])
-            if not entries:
-                continue
-            current = entries[-1]
-            # The WMS uses the current WB metaDetails contract for readback.
-            # Echo only a code actually stored by PUT, with its emulator verdict.
-            details.append({
-                "key": kind,
-                "value": current["value"],
-                "decision": "accepted" if current["checkStatus"] == "ok" else "rejected",
-            })
         orders.append(
             {
                 "id": order_id,
-                "meta": meta,
-                "metaDetails": details,
+                "meta": get_meta(seller_key, order_id),
+                # WB отдаёт metaDetails только когда есть вердикт проверки;
+                # эмулятор держит статусы в meta.checkStatus, поэтому здесь пусто.
+                "metaDetails": [],
             }
         )
     return {"orders": orders}

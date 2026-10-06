@@ -324,9 +324,7 @@ async def list_fbs_seller_ozon_warehouses(
     одной из площадок. Смешав их, мы бы уронили список Ozon вместе с
     вайлдберрисовским ключом, которого у продавца может не быть вовсе.
     """
-    await _assert_seller_read_scope(
-        session, user, seller_id, effective_seller_id, allow_ff_staff=True
-    )
+    await _assert_seller_read_scope(session, user, seller_id, effective_seller_id)
     try:
         rows = await wh_svc.list_ozon_seller_warehouses(session, user.tenant_id, seller_id)
     except wh_svc.FbsSellerWarehouseError as exc:
@@ -432,9 +430,7 @@ async def list_fbs_warehouse_bindings(
         uuid.UUID | None, Depends(get_effective_seller_id)
     ],
 ) -> list[FbsWarehouseBindingOut]:
-    await _assert_seller_read_scope(
-        session, user, seller_id, effective_seller_id, allow_ff_staff=True
-    )
+    await _assert_seller_read_scope(session, user, seller_id, effective_seller_id)
     try:
         rows = await binding_svc.list_bindings(session, user.tenant_id, seller_id)
     except binding_svc.FbsWarehouseBindingError as exc:

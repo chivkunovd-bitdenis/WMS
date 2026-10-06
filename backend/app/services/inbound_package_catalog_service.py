@@ -21,7 +21,6 @@ from app.models.product import Product
 from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
-from app.services.product_barcode_service import primary_product_barcode
 
 PackageKind = Literal["box", "cargo_place"]
 
@@ -95,7 +94,7 @@ def _box_catalog_line(line: InboundIntakeBoxLine, remaining_qty: int) -> Inbound
         name=product.name,
         sku_code=product.sku_code,
         wb_vendor_code=product.wb_vendor_code,
-        wb_barcode=primary_product_barcode(product),
+        wb_barcode=product.wb_barcode,
         wb_size=product.wb_size,
         seller_name=product.seller.name if product.seller is not None else None,
     )
@@ -150,7 +149,7 @@ def _cargo_place_item(
             name=line.product.name,
             sku_code=line.product.sku_code,
             wb_vendor_code=line.product.wb_vendor_code,
-            wb_barcode=primary_product_barcode(line.product),
+            wb_barcode=line.product.wb_barcode,
             wb_size=line.product.wb_size,
             seller_name=(
                 line.product.seller.name if line.product.seller is not None else None
@@ -282,7 +281,7 @@ async def _current_box_contents(
                     name=product.name,
                     sku_code=product.sku_code,
                     wb_vendor_code=product.wb_vendor_code,
-                    wb_barcode=primary_product_barcode(product),
+                    wb_barcode=product.wb_barcode,
                     wb_size=product.wb_size,
                     seller_name=seller.name if seller is not None else None,
                 )

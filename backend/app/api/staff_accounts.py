@@ -5,7 +5,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Request, status
-from pydantic import BaseModel, Field, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, public_base_url, require_fulfillment_admin
@@ -38,19 +38,6 @@ class StaffPermissionsBody(BaseModel):
     inventory: bool = False
     packaging: bool = False
     shift_lead: bool = False
-    billing: bool = False
-    storage: bool = False
-    fbs: bool = False
-    honest_sign: bool = False
-
-    @model_validator(mode="before")
-    @classmethod
-    def legacy_section_defaults(cls, data: object) -> object:
-        if isinstance(data, dict):
-            data = data.copy()
-            data.setdefault("storage", data.get("inventory", False))
-            data.setdefault("fbs", data.get("packaging", False))
-        return data
 
     def to_snapshot(self) -> StaffPermissionsSnapshot:
         return StaffPermissionsSnapshot(
@@ -61,10 +48,6 @@ class StaffPermissionsBody(BaseModel):
             inventory=self.inventory,
             packaging=self.packaging,
             shift_lead=self.shift_lead,
-            billing=self.billing,
-            storage=self.storage,
-            fbs=self.fbs,
-            honest_sign=self.honest_sign,
         )
 
 
@@ -92,10 +75,6 @@ class StaffPermissionsOut(BaseModel):
     inventory: bool
     packaging: bool
     shift_lead: bool
-    billing: bool
-    storage: bool
-    fbs: bool
-    honest_sign: bool
 
 
 class StaffPackagingBillingOut(BaseModel):
@@ -131,10 +110,6 @@ def _permissions_out(snapshot: StaffPermissionsSnapshot) -> StaffPermissionsOut:
         inventory=d["inventory"],
         packaging=d["packaging"],
         shift_lead=d["shift_lead"],
-        billing=d["billing"],
-        storage=d["storage"],
-        fbs=d["fbs"],
-        honest_sign=d["honest_sign"],
     )
 
 
@@ -413,9 +388,6 @@ async def patch_staff_profile(
             staff_user.job_title = body.job_title
             await session.commit()
             return await _staff_account_out_for_actor(
-                session,
-                actor=actor,
-                staff_user=staff_user,
-                perms=perms,
+                session, actor=actor, staff_user=staff_user, perms=perms,
             )
     raise HTTPException(status_code=404, detail="user_not_found")

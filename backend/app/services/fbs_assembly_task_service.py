@@ -18,7 +18,6 @@ from app.services.document_number_service import (
 )
 from app.services.fbs_supply_service import FBS_SUPPLY_ACTIVE_STATUSES
 from app.services.fbs_worklist_service import build_worklist_items
-from app.services.operation_fact_service import normalize_marketplace
 
 
 @dataclass
@@ -206,7 +205,7 @@ async def _map_tasks(
             supplies_payload.append(
                 {
                     "id": str(supply.id),
-                    "marketplace": normalize_marketplace(supply.marketplace),
+                    "marketplace": supply.marketplace,
                     "name": supply.display_number or supply.name,
                     "seller": {
                         "id": str(supply.seller_id),

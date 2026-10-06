@@ -26,7 +26,6 @@ from app.models.fbs_order import (
     RESERVE_STATUS_RESERVED,
     FbsOrder,
 )
-from app.models.fbs_supply import FbsSupply
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
@@ -794,86 +793,3 @@ async def test_fbs_worklist_query_count_bounded(async_client: AsyncClient) -> No
     )
     assert api_resp.status_code == 200, api_resp.text
     assert len(api_resp.json()["items"]) == 50
-
-
-@pytest.mark.asyncio
-@pytest.mark.parametrize(
-    ("status_group", "status"),
-    [("active", "packed"), ("delivery", "in_delivery"), ("done", "done")],
-)
-async def test_supply_worklist_normalizes_legacy_marketplace_without_writes_or_tenant_leakage(
-    async_client: AsyncClient, status_group: str, status: str,
-) -> None:
-    headers, seller_id, warehouse_id, product_id, _, _ = await _setup_ff_admin_with_stock(
-        async_client, order_count=0,
-    )
-    _, foreign_seller, foreign_warehouse, foreign_product, _, _ = (
-        await _setup_ff_admin_with_stock(async_client, order_count=0)
-    )
-    async with SessionLocal() as session:
-        product = await session.get(Product, product_id)
-        other = await session.get(Product, foreign_product)
-        assert product is not None and other is not None
-        supplies = [
-            FbsSupply(
-                tenant_id=product.tenant_id, seller_id=seller_id, warehouse_id=warehouse_id,
-                marketplace=marketplace, name=f"Legacy {marketplace}", status=status,
-                wb_supply_id=f"WB-GI-LEGACY-{index}", delivery_type="warehouse_sc",
-            )
-            for index, marketplace in enumerate(("wildberries", "wb", " WB ", "ozon"))
-        ]
-        foreign = FbsSupply(
-            tenant_id=other.tenant_id, seller_id=foreign_seller, warehouse_id=foreign_warehouse,
-            marketplace="wildberries", name="Foreign private supply", status=status,
-            wb_supply_id="WB-GI-FOREIGN", delivery_type="warehouse_sc",
-        )
-        session.add_all([*supplies, foreign])
-        await session.commit()
-        original = {str(supply.id): (supply.marketplace, supply.updated_at) for supply in supplies}
-        wb_ids = {str(supply.id) for supply in supplies[:3]}
-        ozon_id = str(supplies[3].id)
-        foreign_id = str(foreign.id)
-
-    # Fixture stock writes publish in the background; finish those before
-    # measuring the read endpoint's own SQL side effects.
-    from app.services.fbs_stock_publish_service import drain_background_stock_publish_tasks
-    from app.services.fbs_stock_sync_service import drain_zero_publish_background_tasks
-
-    await drain_background_stock_publish_tasks()
-    await drain_zero_publish_background_tasks()
-    statements: list[str] = []
-
-    def capture(_conn, _cursor, statement, _parameters, _context, _many):
-        statements.append(statement.lstrip().split(None, 1)[0].upper())
-
-    event.listen(engine.sync_engine, "before_cursor_execute", capture)
-    try:
-        for marketplace, expected in ((None, set(original)), ("wb", wb_ids), ("ozon", {ozon_id})):
-            params = {"status_group": status_group, "limit": "500"}
-            if marketplace:
-                params["marketplace"] = marketplace
-            response = await async_client.get(
-                "/operations/fbs-supplies/worklist", headers=headers, params=params,
-            )
-            assert response.status_code == 200, response.text
-            rows = response.json()["items"]
-            assert {row["id"] for row in rows} == expected
-            assert foreign_id not in {row["id"] for row in rows}
-            for row in rows:
-                assert row["marketplace"] == ("ozon" if row["id"] == ozon_id else "wb")
-                assert row["can_add_orders"] is (status_group == "active" and row["id"] in wb_ids)
-        foreign_filter = await async_client.get(
-            "/operations/fbs-supplies/worklist", headers=headers,
-            params={"status_group": status_group, "seller_id": str(foreign_seller)},
-        )
-        assert foreign_filter.status_code == 200
-        assert foreign_filter.json()["items"] == []
-    finally:
-        event.remove(engine.sync_engine, "before_cursor_execute", capture)
-    assert not {"INSERT", "UPDATE", "DELETE"}.intersection(statements)
-    async with SessionLocal() as session:
-        for supply_id, (marketplace, updated_at) in original.items():
-            stored = await session.get(FbsSupply, uuid.UUID(supply_id))
-            assert stored is not None
-            assert stored.marketplace == marketplace
-            assert stored.updated_at == updated_at

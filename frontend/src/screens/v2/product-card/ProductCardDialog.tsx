@@ -25,7 +25,6 @@ type Props = {
   authHeaders: (t: string) => Record<string, string>
   /** Администратор ФФ — видит «Задать остаток» и может редактировать каталог. */
   canManageCatalog: boolean
-  canManageFbsStock?: boolean
   /** Доступен отчёт «Остатки и движения» — то же право, что пункт меню «Отчёты» (R3). */
   canViewMovements: boolean
   /** У организации включено адресное хранение — то же условие, что пункт меню «Ячейки» (R3). */
@@ -44,7 +43,6 @@ export function ProductCardDialog({
   token,
   authHeaders,
   canManageCatalog,
-  canManageFbsStock = false,
   canViewMovements,
   addressStorageEnabled,
   warehouses,
@@ -59,8 +57,6 @@ export function ProductCardDialog({
   const [cardStatus, setCardStatus] = useState<'loading' | 'ready' | 'error'>('loading')
   const [cardData, setCardData] = useState<ProductCardData | null>(null)
   const [cardError, setCardError] = useState<string | null>(null)
-  const [primaryBarcodeBusy, setPrimaryBarcodeBusy] = useState(false)
-  const [primaryBarcodeError, setPrimaryBarcodeError] = useState<string | null>(null)
   const cardAbortRef = useRef<AbortController | null>(null)
 
   const [metricsStatus, setMetricsStatus] = useState<'loading' | 'ready' | 'error'>('loading')
@@ -82,26 +78,6 @@ export function ProductCardDialog({
   const bumpStockVersion = useCallback(() => {
     setStockVersion((v) => v + 1)
   }, [])
-
-  const selectPrimaryBarcode = useCallback(async (barcode: string) => {
-    if (primaryBarcodeBusy) return
-    setPrimaryBarcodeBusy(true)
-    setPrimaryBarcodeError(null)
-    try {
-      const res = await fetch(apiUrl(`/products/${row.id}/primary-barcode`), {
-        method: 'PATCH',
-        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ barcode }),
-      })
-      if (!res.ok) throw new Error(await readApiErrorMessage(res))
-      setCardData((await res.json()) as ProductCardData)
-      markChanged()
-    } catch (e) {
-      setPrimaryBarcodeError(e instanceof Error ? e.message : 'Не удалось сохранить основной ШК.')
-    } finally {
-      setPrimaryBarcodeBusy(false)
-    }
-  }, [authHeaders, markChanged, primaryBarcodeBusy, row.id, token])
 
   const loadCard = useCallback(
     async (productId: string) => {
@@ -244,7 +220,7 @@ export function ProductCardDialog({
   const tabs: { key: TabKey; label: string }[] = [{ key: 'main', label: 'Основное' }]
   if (canViewMovements) tabs.push({ key: 'movements', label: 'Движения' })
   if (addressStorageEnabled) tabs.push({ key: 'location', label: 'Расположение' })
-  if (canManageFbsStock && row.seller_id) tabs.push({ key: 'fbs_stock', label: 'Задать остаток' })
+  if (canManageCatalog && row.seller_id) tabs.push({ key: 'fbs_stock', label: 'Задать остаток' })
 
   const displayName = cardData?.name ?? row.name
   const displayPhoto = cardData?.wb_primary_image_url ?? row.wb_primary_image_url
@@ -350,13 +326,7 @@ export function ProductCardDialog({
                 </Button>
               </ErrorNotice>
             ) : (
-              <ProductCardMainTab
-                data={cardData}
-                canSelectPrimaryBarcode={canManageCatalog}
-                primaryBarcodeBusy={primaryBarcodeBusy}
-                primaryBarcodeError={primaryBarcodeError}
-                onSelectPrimaryBarcode={(barcode) => void selectPrimaryBarcode(barcode)}
-              />
+              <ProductCardMainTab data={cardData} />
             )}
           </Box>
 

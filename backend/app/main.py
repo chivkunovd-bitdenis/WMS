@@ -5,14 +5,13 @@ import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.docs import get_swagger_ui_html
 from fastapi.responses import HTMLResponse, JSONResponse
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
-from app.api.assistant import router as assistant_router
 from app.api.auth import router as auth_router
 from app.api.background_jobs import router as background_jobs_router
 from app.api.billing import router as billing_router
@@ -20,11 +19,6 @@ from app.api.billing_invoices_v2 import router as billing_invoices_v2_router
 from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
 from app.api.client_errors import router as client_errors_router
 from app.api.client_openapi import client_openapi
-from app.api.deps import (
-    require_fbs_section_if_staff,
-    require_marking_section_resource_if_staff,
-    require_storage_section_if_staff,
-)
 from app.api.developer_requests import router as developer_requests_router
 from app.api.discrepancy_acts import router as discrepancy_acts_router
 from app.api.document_events import router as document_events_router
@@ -115,12 +109,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
                 await ensure_disabled_tariff_matrix(session, tenant=tenant)
                 await session.commit()
 
-            user_res = await session.execute(
-                select(User).where(
-                    User.email == email,
-                    User.role == FULFILLMENT_ADMIN,
-                )
-            )
+            user_res = await session.execute(select(User).where(
+                User.email == email, User.role == FULFILLMENT_ADMIN,
+            ))
             user = user_res.scalar_one_or_none()
             if user is None:
                 user = User(
@@ -141,8 +132,7 @@ def create_app() -> FastAPI:
     install_document_event_tracking()
     production = settings.app_env == "production"
     app = FastAPI(
-        title="WMS API",
-        lifespan=lifespan,
+        title="WMS API", lifespan=lifespan,
         docs_url=None if production else "/docs",
         redoc_url=None if production else "/redoc",
         openapi_url=None if production else "/openapi.json",
@@ -152,17 +142,11 @@ def create_app() -> FastAPI:
     async def physical_warehouse_error(request: Request, exc: IntegrityError) -> JSONResponse:
         if "physical_warehouse_required" not in str(exc.orig):
             raise exc
-        return JSONResponse(
-            status_code=409,
-            content={
-                "detail": {
-                    "code": "physical_warehouse_required",
-                    "message": "Выберите физический склад фулфилмента. Склад маркетплейса "
-                    "не может хранить товар; старые документы требуют переноса на склад ФФ.",
-                }
-            },
-        )
-
+        return JSONResponse(status_code=409, content={"detail": {
+            "code": "physical_warehouse_required",
+            "message": "Выберите физический склад фулфилмента. Склад маркетплейса "
+                       "не может хранить товар; старые документы требуют переноса на склад ФФ.",
+        }})
     app.add_middleware(DocumentEventActorMiddleware)
     app.add_middleware(
         CORSMiddleware,
@@ -198,9 +182,7 @@ def create_app() -> FastAPI:
     app.include_router(scan_resolver_router)
     app.include_router(marketplace_unload_requests_router)
     app.include_router(packaging_tasks_router)
-    app.include_router(
-        marking_codes_router, dependencies=[Depends(require_marking_section_resource_if_staff)]
-    )
+    app.include_router(marking_codes_router)
     app.include_router(marking_withdrawals_router)
     app.include_router(marking_credentials_router)
     app.include_router(notifications_router)
@@ -208,24 +190,19 @@ def create_app() -> FastAPI:
     app.include_router(discrepancy_acts_router)
     app.include_router(document_events_router)
     app.include_router(background_jobs_router)
-    app.include_router(assistant_router)
     app.include_router(billing_router)
     app.include_router(billing_invoices_v2_router)
     app.include_router(billing_profile_marketplace_router)
     app.include_router(seller_billing_router)
-    app.include_router(storage_router, dependencies=[Depends(require_storage_section_if_staff)])
-    app.include_router(
-        fbs_assembly_tasks_router, dependencies=[Depends(require_fbs_section_if_staff)]
-    )
-    app.include_router(fbs_orders_router, dependencies=[Depends(require_fbs_section_if_staff)])
-    app.include_router(fbs_marking_router, dependencies=[Depends(require_fbs_section_if_staff)])
-    app.include_router(fbs_kiz_router, dependencies=[Depends(require_fbs_section_if_staff)])
-    app.include_router(fbs_sellers_router, dependencies=[Depends(require_fbs_section_if_staff)])
-    app.include_router(fbs_supplies_router, dependencies=[Depends(require_fbs_section_if_staff)])
-    app.include_router(
-        fbs_print_assets_router, dependencies=[Depends(require_fbs_section_if_staff)]
-    )
-    app.include_router(fbs_print_jobs_router, dependencies=[Depends(require_fbs_section_if_staff)])
+    app.include_router(storage_router)
+    app.include_router(fbs_assembly_tasks_router)
+    app.include_router(fbs_orders_router)
+    app.include_router(fbs_marking_router)
+    app.include_router(fbs_kiz_router)
+    app.include_router(fbs_sellers_router)
+    app.include_router(fbs_supplies_router)
+    app.include_router(fbs_print_assets_router)
+    app.include_router(fbs_print_jobs_router)
     app.include_router(warehouse_print_router)
     app.include_router(wildberries_integration_router)
     app.include_router(ozon_integration_router)

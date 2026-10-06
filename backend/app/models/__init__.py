@@ -1,6 +1,5 @@
 """ORM models — import side effects register metadata for Alembic."""
 
-from app.models.assistant_message import AssistantMessage
 from app.models.background_job import BackgroundJob
 from app.models.base import Base
 from app.models.billing import (
@@ -117,7 +116,6 @@ from app.models.warehouse_storage_rack import WarehouseStorageRack
 from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
 
 __all__ = [
-    "AssistantMessage",
     "BackgroundJob",
     "Base",
     "BillingInvoice",

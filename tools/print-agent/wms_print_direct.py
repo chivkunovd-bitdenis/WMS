@@ -44,7 +44,7 @@ class MacPrinter:
         value = self.lib.cupsGetDefault()
         return value.decode() if value else ""
 
-    def submit_default(self, data, queue, width_mm=None, height_mm=None):
+    def submit_default(self, data, queue):
         options = (CupsOption * 3)(CupsOption(b"fit-to-page", b"true"),
                                   CupsOption(b"copies", b"1"),
                                   CupsOption(b"number-up", b"1"))
@@ -58,96 +58,17 @@ class MacPrinter:
 
 
 class DefaultWindowsAdapter(WindowsAdapter):
-    """Print one label using a per-job custom paper size in Windows GDI."""
-
-    @staticmethod
-    def _label_size(width_mm, height_mm):
-        if (
-            isinstance(width_mm, bool)
-            or isinstance(height_mm, bool)
-            or not isinstance(width_mm, (int, float))
-            or not isinstance(height_mm, (int, float))
-            or not 10 <= width_mm <= 300
-            or not 10 <= height_mm <= 300
-        ):
-            raise ValueError("WMS не передала корректный размер этикетки")
-        return round(float(width_mm) * 10), round(float(height_mm) * 10)
-
-    def _create_sized_printer_dc(self, queue, width_mm, height_mm):
-        """Create a job DC without changing the user's saved printer defaults."""
-        width_tenths, height_tenths = self._label_size(width_mm, height_mm)
-        printer = self.modules["win32print"].OpenPrinter(queue)
-        try:
-            details = self.modules["win32print"].GetPrinter(printer, 2)
-            devmode = details.get("pDevMode")
-            if devmode is None:
-                raise ValueError("Windows не вернула параметры принтера по умолчанию")
-            try:
-                # DEVMODE paper dimensions use tenths of a millimetre.  PaperSize
-                # must be zero when PaperWidth and PaperLength define a custom form.
-                devmode.PaperSize = 0
-                devmode.PaperWidth = width_tenths
-                devmode.PaperLength = height_tenths
-                devmode.Copies = 1
-                devmode.Collate = 0
-                devmode.Fields &= ~0x00000002  # DM_PAPERSIZE
-                devmode.Fields |= (
-                    0x00000004  # DM_PAPERLENGTH
-                    | 0x00000008  # DM_PAPERWIDTH
-                    | 0x00000100  # DM_COPIES
-                    | 0x00008000  # DM_COLLATE
-                )
-                result = self.modules["win32print"].DocumentProperties(
-                    0, printer, queue, devmode, devmode, 0x00000002 | 0x00000008
-                )
-                if result != 1:
-                    raise ValueError("Драйвер не подтвердил размер задания печати")
-                if (
-                    devmode.Copies != 1
-                    or not devmode.Fields & 0x00000100
-                ):
-                    raise ValueError(
-                        "Драйвер не подтвердил одну копию задания печати"
-                    )
-                handle = self.modules["win32gui"].CreateDC(
-                    "WINSPOOL", queue, devmode
-                )
-            except (AttributeError, TypeError) as exc:
-                raise ValueError(
-                    "Windows не смогла задать размер этикетки для задания печати"
-                ) from exc
-        finally:
-            self.modules["win32print"].ClosePrinter(printer)
-        return self.modules["win32ui"].CreateDCFromHandle(handle)
-
+    """Fit one label proportionally to the installed driver's printable page."""
     @staticmethod
     def _validate_page_size(dc, width_mm, height_mm):
-        dpi_x, dpi_y = dc.GetDeviceCaps(88), dc.GetDeviceCaps(90)
-        physical_width_px = dc.GetDeviceCaps(110)
-        physical_height_px = dc.GetDeviceCaps(111)
-        printable_width_px = dc.GetDeviceCaps(8)
-        printable_height_px = dc.GetDeviceCaps(10)
-        if min(
-            dpi_x, dpi_y, physical_width_px, physical_height_px,
-            printable_width_px, printable_height_px,
-        ) <= 0:
-            raise ValueError("Драйвер принтера не вернул размер страницы")
-        physical_width = physical_width_px / dpi_x * 25.4
-        physical_height = physical_height_px / dpi_y * 25.4
-        if (
-            abs(physical_width - width_mm) > 1.5
-            or abs(physical_height - height_mm) > 1.5
-        ):
-            raise ValueError(
-                "Драйвер не применил размер этикетки "
-                f"{width_mm} x {height_mm} мм"
-            )
+        if min(dc.GetDeviceCaps(8), dc.GetDeviceCaps(10)) <= 0:
+            raise ValueError("Драйвер принтера не вернул печатаемую область")
 
-    def submit_default(self, data, queue, width_mm, height_mm):
+    def submit_default(self, data, queue):
         image = self.modules["Image"].open(io.BytesIO(data)).convert("RGB")
-        dc = self._create_sized_printer_dc(queue, width_mm, height_mm)
+        dc = self._create_printer_dc(queue)
         try:
-            self._validate_page_size(dc, width_mm, height_mm)
+            self._validate_page_size(dc, None, None)
             width, height = dc.GetDeviceCaps(8), dc.GetDeviceCaps(10)
             # Image aspect ratio is preserved; white margins cannot stretch QR.
             ratio = min(width / image.width, height / image.height)
@@ -195,8 +116,8 @@ class Printer:
         with closing(sqlite3.connect(self.db)) as db:
             db.execute("CREATE TABLE IF NOT EXISTS jobs (id TEXT PRIMARY KEY, hash TEXT, receipt TEXT)")
 
-    def _submit(self, data, queue, width_mm, height_mm):
-        return self.adapter.submit_default(data, queue, width_mm, height_mm)
+    def _submit(self, data, queue):
+        return self.adapter.submit_default(data, queue)
 
     def print(self, body):
         key = body.get("idempotencyKey")
@@ -208,11 +129,7 @@ class Printer:
         data = base64.b64decode(image.split(",", 1)[1], validate=True)
         if not data.startswith(b"\x89PNG\r\n\x1a\n") or len(data) > 4_000_000:
             raise ValueError("Некорректная PNG-этикетка")
-        width_mm, height_mm = DefaultWindowsAdapter._label_size(
-            body.get("widthMm"), body.get("heightMm")
-        )
-        identity = data + f"|{width_mm}x{height_mm}".encode()
-        digest = hashlib.sha256(identity).hexdigest()
+        digest = hashlib.sha256(data).hexdigest()
         with self.lock, closing(sqlite3.connect(self.db)) as db:
             old = db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
             if old:
@@ -227,11 +144,7 @@ class Printer:
                 raise ValueError("В системе не выбран принтер по умолчанию")
             db.execute("INSERT INTO jobs VALUES (?, ?, NULL)", (key, digest))
             db.commit()
-            receipt = (
-                self.submit(data)
-                if self.submit
-                else self._submit(data, queue, width_mm / 10, height_mm / 10)
-            )
+            receipt = self.submit(data) if self.submit else self._submit(data, queue)
             db.execute("UPDATE jobs SET receipt=? WHERE id=?", (receipt, key))
             db.commit()
             return receipt
@@ -323,11 +236,7 @@ def main():
     parser.add_argument("--self-test", action="store_true")
     args = parser.parse_args()
     if args.self_test:
-        if sys.platform == "win32":
-            DefaultWindowsAdapter._label_size(58, 40)
-            DefaultWindowsAdapter()
-        else:
-            MacPrinter()
+        DefaultWindowsAdapter() if sys.platform == "win32" else MacPrinter()
         print("WMS Print Direct: package OK")
         return
     try:
