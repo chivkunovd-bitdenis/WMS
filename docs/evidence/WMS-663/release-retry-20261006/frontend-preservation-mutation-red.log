@@ -1,0 +1,45 @@
+
+> frontend@0.0.0 test:unit
+> vitest run src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx -t never POST again
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms663-retry-contract-20261006/frontend
+
+ ❯ src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx (4 tests | 3 failed | 1 skipped) 197ms
+   ↓ definite rejection keeps checked intent and next explicit checkbox click submits current version once
+   × unknown intent reopening and reverse click never POST again 90ms
+     → expected false to be true // Object.is equality
+   × checking intent reopening and reverse click never POST again 53ms
+     → expected false to be true // Object.is equality
+   × accepted intent reopening and reverse click never POST again 52ms
+     → expected false to be true // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx > unknown intent reopening and reverse click never POST again
+ FAIL  src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx > checking intent reopening and reverse click never POST again
+ FAIL  src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx > accepted intent reopening and reverse click never POST again
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx:90:56
+     88|     await act(async () => { await new Promise(resolve => setTimeout(re…
+     89|     expect(checkbox.checked).toBe(true)
+     90|     expect(requests.every(method => method === 'GET')).toBe(true)
+       |                                                        ^
+     91|   } finally {
+     92|     await act(async () => root.unmount())
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 1 skipped (4)
+   Start at  21:23:23
+   Duration  1.43s (transform 65ms, setup 0ms, collect 715ms, tests 197ms, environment 223ms, prepare 79ms)
+

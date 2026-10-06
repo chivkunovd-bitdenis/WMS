@@ -106,7 +106,7 @@ export function OzonDocumentsAbsence({ orderIds, token, authHeaders, onError }: 
         if (!data) { data = await read.current!('GET', id); retain(id, data) }
         if (!active.current || scope !== generation.current) return
         if (knownWithoutRequiredDocuments(data)) continue
-        if (pending(data) || selected(data)) {
+        if (pending(data) || (selected(data) && data.state !== 'rejected')) {
           retain(id, await read.current!('GET', id))
           continue
         }
@@ -130,6 +130,10 @@ export function OzonDocumentsAbsence({ orderIds, token, authHeaders, onError }: 
   }
   return <FormControlLabel label="Без ГТД и РНПТ" control={<Checkbox
     checked={checked} indeterminate={partial} disabled={busy || orderIds.length === 0}
-    onChange={(_, enabled) => { if (enabled) void choose() }}
+    onChange={(_, enabled) => {
+      // Checked records the saved intent. A new click may retry a proven refusal
+      // without clearing that intent or replaying accepted/pending postings.
+      if (enabled || requiredOrderIds.some(id => documents[id]?.state === 'rejected')) void choose()
+    }}
   />} />
 }
