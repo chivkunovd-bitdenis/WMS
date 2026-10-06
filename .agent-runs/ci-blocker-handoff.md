@@ -225,3 +225,32 @@ the recorded transforms and review/report bindings (including true source and
 ancestor checks); it must not add a task-wide exemption, arbitrary blob pair,
 or generic requirements companion.  Existing legacy, WMS-654 and WMS-687 paths
 remain outside this requested scope.
+
+## Stage handoff: WMS-680 closed owner-to-fixture chain
+
+The exact-chain fixture now contains the published WMS-680 record, including
+the owner evidence commit `3be84bb091712caa2e32226f989e3008e47618a5`, semantic
+contract `5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e`, fixture corrections
+`7ad0aa781d175ef7f4e1d16074a12b47eed655f2`,
+`11806bd237c48a030a4e0ff49bb12dd90dfe6778`,
+`739bcadf1be4fe92e24af3d30b42f892f858e598`, and the independently reviewed
+Sol 6.1/high numeric-subtable append
+`f2de20008df3b21c1decead0e1051dbda4a4a08a`.  Its review artifact is bound to
+`d0de155adcc31a7d33dca43d857a22e49897b981` and exact blob
+`e4d18d7879c31d31b4841167173a48f8dc50c9eb`.
+
+The immutable-object test verifies every correction parent/source, each
+before/after blob, all three frozen contract frontiers (`240094`, `5739`, and
+`739`), the owner evidence artifacts, and ancestry to the published report;
+it does not rely on the current checkout HEAD.  The positive registry test is
+currently RED exactly because `OWNER_UI_SUPERSESSIONS` has no `WMS-680` entry
+and all four WMS-680 exact transform/blob pairs are absent.
+The other two focused tests PASS: the actual published matrix is internally
+consistent and wrong source/owner artifact, report, assertion blob or unrelated
+file cannot coincide with its closed pair set.
+
+Implementation must extend the existing owner-supersession and exact-fixture
+mechanisms only for this recorded matrix.  It must retain exact owner evidence,
+report/model/effort, parent/ancestor and every listed blob; it must not accept
+another owner request, arbitrary test assertion change, extra product path, or
+new transform.  No further WMS-680 frozen blob is approved by this contract.

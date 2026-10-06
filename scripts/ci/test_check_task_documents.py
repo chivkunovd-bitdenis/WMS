@@ -1067,8 +1067,7 @@ class GitTests(unittest.TestCase):
 
     def test_exact_chain_records_pin_the_two_published_review_artifacts(self):
         # The fixture is an immutable source of real source/final/report/blob
-        # values.  The WMS-680 record remains intentionally outside this change:
-        # its later numeric-subtable blob needs its own narrow review first.
+        # values for the two ordinary fixture-only chains.
         for task_id, report_commit, report_blob in (
             ("WMS-658", "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
              "0a48a0167af6e83b156ff003b66a842df09c42c6"),
@@ -1085,7 +1084,8 @@ class GitTests(unittest.TestCase):
         # This verifies the actual immutable objects separately from the small
         # synthetic graphs above.  It is intentionally independent of HEAD.
         project = Path(__file__).resolve().parents[2]
-        for task_id, record in EXACT_REVIEWED_CHAINS.items():
+        for task_id in ("WMS-658", "WMS-681"):
+            record = EXACT_REVIEWED_CHAINS[task_id]
             with self.subTest(task_id=task_id):
                 self.assertTrue(checker.ancestor(project, record["original_contract"], record["final_correction_commit"]))
                 report = record["report"]
@@ -1100,6 +1100,71 @@ class GitTests(unittest.TestCase):
                         self.assertEqual(checker.git_blob(project, step["source"], path), before)
                         self.assertEqual(checker.git_blob(project, step["correction"], path), after)
 
+    def test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly(self):
+        """680 is a closed owner supersession followed by four reviewed pairs."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        pairs = set(checker.FIXTURE_BLOB_PAIRS.values())
+        missing = []
+        for step in record["steps"]:
+            if "transform" not in step:
+                continue
+            for path, (before, after) in step["files"].items():
+                expected = ("WMS-680", path, before, after)
+                if expected not in pairs:
+                    missing.append((step["transform"], expected))
+        # The owner record is deliberately separate from a fixture pair: it
+        # binds only the published 3be84 evidence and 5739 semantic contract.
+        if "WMS-680" not in checker.OWNER_UI_SUPERSESSIONS:
+            missing.insert(0, ("owner-ui-supersession", "WMS-680"))
+        self.assertEqual(missing, [])
+
+    def test_wms680_manifest_matches_owner_evidence_all_frontiers_and_report(self):
+        """Every allowed 680 edge is proved against immutable published Git data."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        project = Path(__file__).resolve().parents[2]
+        owner = record["owner"]
+        self.assertEqual(
+            checker.git(project, "rev-list", "--parents", "-n", "1", owner["correction"]).split()[1],
+            owner["source"],
+        )
+        for path, (before, after) in owner["artifacts"].items():
+            self.assertEqual(checker.git_blob(project, owner["source"], path), before)
+            self.assertEqual(checker.git_blob(project, owner["correction"], path), after)
+        report = record["report"]
+        self.assertEqual(checker.git_blob(project, report["commit"], report["path"]), report["blob"])
+        self.assertTrue(checker.ancestor(project, owner["correction"], report["commit"]))
+        for contract, paths in record["contracts"].items():
+            self.assertEqual(checker.git(project, "show", "-s", "--format=%s", contract), "WMS-680: контракт тестов")
+            self.assertTrue(checker.ancestor(project, contract, report["commit"]))
+            for path, (before, after) in paths.items():
+                self.assertEqual(checker.git_blob(project, contract, path), before)
+                self.assertEqual(checker.git_blob(project, record["final_correction_commit"], path), after)
+        for step in record["steps"]:
+            parent = checker.git(project, "rev-list", "--parents", "-n", "1", step["correction"]).split()[1]
+            self.assertEqual(parent, step.get("parent", step["source"]))
+            for path, (before, after) in step["files"].items():
+                self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+
+    def test_wms680_closed_matrix_rejects_owner_report_assertion_and_scope_canaries(self):
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        pairs = set(checker.FIXTURE_BLOB_PAIRS.values())
+        owner = record["owner"]
+        contract_path = "frontend/src/utils/wms680PrintContract.test.ts"
+        fixture = record["steps"][1]
+        # A future registration may contain only the listed exact tuples.  Each
+        # mutation below must therefore remain absent even after the positive
+        # matrix becomes available.
+        forbidden = {
+            ("WMS-680", contract_path, "0" * 40, fixture["files"][contract_path][1]),
+            ("WMS-680", contract_path, fixture["files"][contract_path][0], "0" * 40),
+            ("WMS-680", "frontend/src/utils/unrelated.test.ts", "0" * 40, "1" * 40),
+        }
+        self.assertTrue(forbidden.isdisjoint(pairs))
+        self.assertNotEqual(owner["artifacts"]["docs/requirements/WMS-680.md"][1], "0" * 40)
+        self.assertNotEqual(record["report"]["blob"], "0" * 40)
+        self.assertEqual(record["steps"][-1]["model"], "gpt-6.1-sol")
+        self.assertEqual(record["steps"][-1]["effort"], "high")
     def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
         rollout = self.rollout()
         report = "docs/reviews/WMS-654-correction-review.md"
