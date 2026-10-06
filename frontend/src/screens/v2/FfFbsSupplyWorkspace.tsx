@@ -2228,6 +2228,21 @@ export function FfFbsSupplyWorkspace({
         } catch (cause) {
           if (!write.isCurrent()) return
           recoveryErrors.push(cause instanceof Error ? fbsErrorText(cause.message) : 'WB не вернул QR грузоместа.')
+          // The retry endpoint can persist an earlier real WB label and then
+          // fail while fetching the next one, so it has no success snapshot to
+          // return.  Read the ordinary workspace before considering the next
+          // missing box; this makes the durable ready part printable without
+          // converting the failed retry into a create or hiding its reason.
+          try {
+            const fresh = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)
+            if (!write.isCurrent() || !write.matchesShownSupply(fresh)) return
+            snapshot = fresh
+            if (write.isLatest()) setWorkspace(fresh)
+          } catch {
+            // The original WB error above is the operator-facing reason.  If
+            // its recovery read also fails, finish from the last safe snapshot.
+            if (!write.isCurrent()) return
+          }
         }
       }
       if (!write.isCurrent() || snapshot.supply.id !== supplyIdAtStart) return
