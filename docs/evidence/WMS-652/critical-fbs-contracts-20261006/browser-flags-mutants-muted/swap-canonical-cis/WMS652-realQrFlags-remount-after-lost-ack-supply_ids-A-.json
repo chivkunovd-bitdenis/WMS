@@ -1,0 +1,390 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A42%3A02.532Z&to=2026-10-06T18%3A42%3A02.532Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkWJJF",
+        "idempotency_key": "e7995c5a-1f29-4b36-8bec-5282f78dbf46",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=wb-a&sticker=*DUIkWJJF",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkWJJF",
+        "idempotency_key": "9a2d4c25-7ab4-47b0-b6b1-46583996cb25",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true,
+        "order_id": "wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-a-order.png",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/validate",
+      "body": {
+        "order_id": "wb-a-order",
+        "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/commit",
+      "body": {
+        "pairs": [
+          {
+            "order_id": "wb-a-order",
+            "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+            "confirmed": false,
+            "scan_auto_print_id": "scan-wb-a-order"
+          }
+        ],
+        "idempotency_key": "scan-wb-a-order:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+        "scan_no_wb_wait": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-claim",
+      "body": {
+        "target": "qr",
+        "attempt_key": "scan-wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A42%3A04.482Z&to=2026-10-06T18%3A42%3A04.482Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkWJJF",
+        "idempotency_key": "9a2d4c25-7ab4-47b0-b6b1-46583996cb25",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true,
+        "order_id": "wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-a-order.png",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-claim",
+      "body": {
+        "target": "qr",
+        "attempt_key": "scan-wb-a-order"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-started",
+      "body": {
+        "target": "qr",
+        "attempt_key": "scan-wb-a-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+      "body": {
+        "quantity": 1,
+        "order_id": "wb-a-order",
+        "idempotency_key": "scan-wb-a-order:packed"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkNEXT",
+        "idempotency_key": "3989eee5-95a0-4645-9658-5c8299bfcb08",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=wb-a&sticker=*DUIkNEXT",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+      "body": {
+        "barcode": "*DUIkNEXT",
+        "idempotency_key": "101c9991-7b39-447c-833e-40a8ac5c5622",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true,
+        "order_id": "wb-next-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/assets/qr-wb-next-order.png",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/validate",
+      "body": {
+        "order_id": "wb-next-order",
+        "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/commit",
+      "body": {
+        "pairs": [
+          {
+            "order_id": "wb-next-order",
+            "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B",
+            "confirmed": false,
+            "scan_auto_print_id": "scan-wb-next-order"
+          }
+        ],
+        "idempotency_key": "scan-wb-next-order:ad54f83481e684002ab81c345de15e2c1d913933368f727f5bcb2d188b521672:bind",
+        "scan_no_wb_wait": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-claim",
+      "body": {
+        "target": "qr",
+        "attempt_key": "scan-wb-next-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-started",
+      "body": {
+        "target": "qr",
+        "attempt_key": "scan-wb-next-order"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+      "body": {
+        "quantity": 1,
+        "order_id": "wb-next-order",
+        "idempotency_key": "scan-wb-next-order:packed"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    }
+  ],
+  "printLog": [
+    {
+      "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAADGklEQVR4nO2XQY7cMBAD/f9PJy8YGO0lxaZdBOYUhSqxnEOu67r+lfx+JdXv5rHvmQZAPOIRj3jEIx7xiEf8AfGpuHlS4lNB/MN+xKdBQ/2IT4OG+hGfBg31Iz4NGupH/E3R9DcGLedZx18DWs6zjr8GtJxnHX8NaDnPOv4a0HKedfw1oOU86/hrQENDT1OzZw1oaOhpavasAQ0NPU3NnjWgoaGnqdmzBjQ09DQ1e9aAhoaepmbPGtBh3vohIv4miL/hqQEdBvE3PDWgwyD+hqcGdBjE3/DUgA6D+Bse1dCqpD4UVWp4akBF592p4akBFZ13p4anBlR03p0anhpQ0Xl3anhqQEXn3anh+fUH237jhy07v+0XB0A84hGP+P0iEY94xCM+v9Nf96yJ6mGvHeitQfxHg/iPBvEfDeI/GsSL0/7fHnfcnO4e2V9APOIRj3j/cIhHPOIHPbK/gPiXi48BiZIS436vrB/xiEe8oAfxalDzu1Q9iFeDmt+l6kG8GtT8LlVPvXhVT2qgFKd7T9m9iEc84hGvA0U84hEv4JTdi3jErxam4p/2qO7d9mEh/qZHdS/ixUE84hHvHA7xz+5FvDiIF4t396QevE1A7B8Y4hGP+GIe2cXunvaht/HILnb3tA+9jUd2sbunfehtPK9NagjVB+Hmf+2HgngtZ00Qr+WsCeK1nDVBvJazJoh/yDkFSv3cg6oEpN4bA0W8dk83Z1wo4hGPeMQj3s0ZF4r4ZeJTcYvfJiC2P+IRj3jE54J4xCPeGcQj/ujQKp5U3Duo7h0XpR6MeO2946LUgxGvvXdclHow4rX3jotSD0a89t5xUerBiNfeOy5KPTj1oXzug0O8tscdxD887+5xB/EPz7t73EH8w/PuHncQ//C8u8cdxD8caFtPbE/EZ3sQf2jobT2IPzT0th7EHxp6Ww/iDw29radGvDupD0XFuW3Pn9kGivhD2QaK+EPZBor4Q9kGivhD2QaK+EOZPiD12/Zed+z/ANJCET/jVJ2PC0X8jFN1Pi4U8TNO1fm4UMTPOFXn40IRP+OUnP8P1C5DYzmKcWsAAAAASUVORK5CYII=",
+      "idempotencyKey": "scan-wb-a-order",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAADGklEQVR4nO2XQY7cMBAD/f9PJy8YGO0lxaZdBOYUhSqxnEOu67r+lfx+JdXv5rHvmQZAPOIRj3jEIx7xiEf8AfGpuHlS4lNB/MN+xKdBQ/2IT4OG+hGfBg31Iz4NGupH/E3R9DcGLedZx18DWs6zjr8GtJxnHX8NaDnPOv4a0HKedfw1oOU86/hrQENDT1OzZw1oaOhpavasAQ0NPU3NnjWgoaGnqdmzBjQ09DQ1e9aAhoaepmbPGtBh3vohIv4miL/hqQEdBvE3PDWgwyD+hqcGdBjE3/DUgA6D+Bse1dCqpD4UVWp4akBF592p4akBFZ13p4anBlR03p0anhpQ0Xl3anhqQEXn3anh+fUH237jhy07v+0XB0A84hGP+P0iEY94xCM+v9Nf96yJ6mGvHeitQfxHg/iPBvEfDeI/GsSL0/7fHnfcnO4e2V9APOIRj3j/cIhHPOIHPbK/gPiXi48BiZIS436vrB/xiEe8oAfxalDzu1Q9iFeDmt+l6kG8GtT8LlVPvXhVT2qgFKd7T9m9iEc84hGvA0U84hEv4JTdi3jErxam4p/2qO7d9mEh/qZHdS/ixUE84hHvHA7xz+5FvDiIF4t396QevE1A7B8Y4hGP+GIe2cXunvaht/HILnb3tA+9jUd2sbunfehtPK9NagjVB+Hmf+2HgngtZ00Qr+WsCeK1nDVBvJazJoh/yDkFSv3cg6oEpN4bA0W8dk83Z1wo4hGPeMQj3s0ZF4r4ZeJTcYvfJiC2P+IRj3jE54J4xCPeGcQj/ujQKp5U3Duo7h0XpR6MeO2946LUgxGvvXdclHow4rX3jotSD0a89t5xUerBiNfeOy5KPTj1oXzug0O8tscdxD887+5xB/EPz7t73EH8w/PuHncQ//C8u8cdxD8caFtPbE/EZ3sQf2jobT2IPzT0th7EHxp6Ww/iDw29radGvDupD0XFuW3Pn9kGivhD2QaK+EPZBor4Q9kGivhD2QaK+EOZPiD12/Zed+z/ANJCET/jVJ2PC0X8jFN1Pi4U8TNO1fm4UMTPOFXn40IRP+OUnP8P1C5DYzmKcWsAAAAASUVORK5CYII=",
+      "idempotencyKey": "scan-wb-a-order",
+      "widthMm": 60,
+      "heightMm": 80
+    },
+    {
+      "imageDataUrl": "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAAC3UlEQVR4nO3XwY3DQAxDUfff9G4FgSGFHEqZLyA3Q6L5fMnzPM/fkl913PtVd2N9pgMADzzwwAMPPPDAA38APjXVPCpg9weXGuCBB15x171HNcADD7zirnuPaoAH/jv4atFugNSHksoj62dN0FDR1VnT55qgoaKrs6bPNUFDRVdnTZ9rgoaKrs6aPtcEDRVdnTV9rglaHHdOVX7gm8WlcqryA98sLpVTlR/4ZnGpnKr8wDeLS+VU5Qe+WVwqpyo/8M3i3Hvcd4FvFufe474LfLM49x73XeCbxbn3uO8C3yzOvcd9F/hmce497rtr4N2Tgp/24aoGeOCBrzwPfDqoeQ/wU4Oa9wA/Nah5D/BDf+UXG/b8tF88APDAAw/8fEjggQce+HxP3/a5ftxgzNAB/tIB/tIB/tIB/tIBvjnuvw2pordD2nsDfuYA3xzgxQeAPzPANwd48QHgz4ysN1URKvhUzlQPqZzAAw888Af2AJ/NCTzwwAN/4MWq+1U/93ul8pTvAq99L+CbA3wvD/DAAw888MB/6zWt6FR+913gxQM88MA7X6C6xz3AAw+88wWqe9wD/Mt7qYKmPgj33Wkfiiwn8MADb8xZ3Q98s7jU86r8wDeLSz2vyg98s7jU86r803LGZtoH+rNFTxvgLx3gLx3gLx3gLx3gm+Muzg2geq9pe1T77YGABx54Y8/V/fZAwAMPvLHn6n57IOB/BD417hfe8iHacwIPPPDA5wZ44IEH3v888OHiUkWrJgapCup+MVUeVU7VAA888MADDzzwmjyqnKoB/hC8+0Nx73H3HzsMPPDAG58HHnjgKwM88MArDq8pwpxHdVe1H/hD/ajuAn+oIOCbgYAHHnjBXeAPFQT8oUkVncrpzv9xP/DZnMC/BRU9Py0n8G9BRc9Pywn8W1DR89NyAv8WVPT8tJzj4Kf9ps2WD668aNpv2gAPPPDAL7qbBgU+dDcNCnzg7j8JSIsbzEzHdAAAAABJRU5ErkJggg==",
+      "idempotencyKey": "scan-wb-next-order",
+      "widthMm": 60,
+      "heightMm": 80
+    }
+  ],
+  "trace": [
+    "product-miss:*DUIkWJJF",
+    "lookup:wb-a-order",
+    "select:wb-a-order",
+    "bind:wb-a-order",
+    "print:scan-wb-a-order",
+    "select:wb-a-order",
+    "print:scan-wb-a-order",
+    "pack:wb-a-order",
+    "product-miss:*DUIkNEXT",
+    "lookup:wb-next-order",
+    "select:wb-next-order",
+    "bind:wb-next-order",
+    "print:scan-wb-next-order",
+    "pack:wb-next-order"
+  ],
+  "blocked": [],
+  "errors": [],
+  "acceptedPrintKeys": [
+    "scan-wb-a-order",
+    "scan-wb-next-order"
+  ]
+}

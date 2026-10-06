@@ -1,0 +1,54 @@
+[
+  {
+    "mutation": "hide-create-button",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-create-submit\"]; {\"x\":0,\"y\":0,\"visible\":false,\"reachable\":false,\"disabled\":false}"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-create-submit\"]; {\"x\":0,\"y\":0,\"visible\":false,\"reachable\":false,\"disabled\":false}"
+  },
+  {
+    "mutation": "duplicate-groups-after-real-mouse-retry",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n6 !== 4\n"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n6 !== 4\n"
+  }
+]

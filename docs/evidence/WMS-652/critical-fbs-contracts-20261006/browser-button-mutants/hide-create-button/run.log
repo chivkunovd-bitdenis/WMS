@@ -1,0 +1,15 @@
+WMS652.realQr[supply_id=A]: PASS
+WMS652.realQr[supply_ids=A]: PASS
+WMS652.realQr[supply_ids=A,B]: PASS
+AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid="fbs-create-submit"]; {"x":0,"y":0,"visible":false,"reachable":false,"disabled":false}
+    at clickElement (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:267:3)
+    at async click (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:272:52)
+    at async selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:296:3)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:212:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

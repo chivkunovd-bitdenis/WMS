@@ -1,0 +1,65 @@
+
+DevTools listening on ws://127.0.0.1:16687/devtools/browser/aebaa1de-eb69-4e69-9766-be352ea79e58
+Trying to load the allocator multiple times. This is *not* supported.
+[41961:289226:1006/224057.898741:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224057.899172:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224057.899254:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224057.899332:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224057.899407:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224057.899469:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224059.746404:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224059.844250:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224059.895153:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224059.962086:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224100.003770:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41980:289499:1006/224100.036962:ERROR:sandbox/mac/system_services.cc:31] SetApplicationIsDaemon: Error Domain=NSOSStatusErrorDomain Code=-50 "paramErr: error in user parameter list" (-50)
+[41961:289226:1006/224100.076804:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41961:289226:1006/224100.134360:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[41954:289167:1006/224100.501785:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[41954:289167:1006/224100.502569:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+[41954:289167:1006/224100.503743:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: PHONE_REGISTRATION_ERROR
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[42020:290269:1006/224116.613437:VERBOSE1:chrome/updater/updater.cc:364] Version: 156.0.8067.0, opt, ARM_64, command line: /Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake-all --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[42020:290269:1006/224116.614190:VERBOSE1:chrome/updater/updater.cc:367] OS version: 26.3.0, arch: arm64, System uptime (seconds): 7869, parent pid: 41954
+[42020:290269:1006/224116.620804:VERBOSE1:chrome/updater/updater.cc:372] Available disk space in install directory (/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater): 5930856448B (5.524GiB) / 245107195904B (228.274GiB)
+[42020:290269:1006/224116.620989:VERBOSE1:chrome/updater/updater.cc:376] Available disk space in temporary directory (/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/): 5930852352B (5.524GiB) / 245107195904B (228.274GiB)
+[42020:290269:1006/224116.621119:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[42022:290273:1006/224116.665850:VERBOSE1:chrome/updater/updater.cc:364] Version: 156.0.8067.0, opt, ARM_64, command line: /Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=156.0.8067.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[42022:290273:1006/224116.667998:VERBOSE1:chrome/updater/updater.cc:367] OS version: 26.3.0, arch: arm64, System uptime (seconds): 7869, parent pid: 1
+[42022:290273:1006/224116.670809:VERBOSE1:chrome/updater/updater.cc:372] Available disk space in install directory (/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater): 5930471424B (5.523GiB) / 245107195904B (228.274GiB)
+[42022:290273:1006/224116.670847:VERBOSE1:chrome/updater/updater.cc:376] Available disk space in temporary directory (/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/): 5930471424B (5.523GiB) / 245107195904B (228.274GiB)
+[42022:290273:1006/224116.670929:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[42020:290269:1006/224116.671423:VERBOSE1:chrome/updater/crash_reporter.cc:123] Crash handler launched and ready.
+[42020:290269:1006/224116.672181:VERBOSE1:chrome/updater/crash_client.cc:108] Found 0 completed crash reports
+[42020:290269:1006/224116.672282:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[42020:290269:1006/224116.672380:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/deniscivkunov/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[42020:290269:1006/224116.672617:VERBOSE1:chrome/updater/updater.cc:105] Crash reporting initialized.
+[42020:290284:1006/224116.672904:VERBOSE1:chrome/updater/app/app_wakeall.cc:58] Launching `/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake`
+[42023:290288:1006/224116.684449:VERBOSE1:chrome/updater/updater.cc:364] Version: 156.0.8067.0, opt, ARM_64, command line: /Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[42023:290288:1006/224116.685263:VERBOSE1:chrome/updater/updater.cc:367] OS version: 26.3.0, arch: arm64, System uptime (seconds): 7869, parent pid: 42020
+[42023:290288:1006/224116.689531:VERBOSE1:chrome/updater/updater.cc:372] Available disk space in install directory (/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater): 5930471424B (5.523GiB) / 245107195904B (228.274GiB)
+[42023:290288:1006/224116.689583:VERBOSE1:chrome/updater/updater.cc:376] Available disk space in temporary directory (/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/): 5930471424B (5.523GiB) / 245107195904B (228.274GiB)
+[42023:290288:1006/224116.689829:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[42025:290295:1006/224116.703254:VERBOSE1:chrome/updater/updater.cc:364] Version: 156.0.8067.0, opt, ARM_64, command line: /Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --crash-handler --database=/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/Crashpad --url=https://clients2.google.com/cr/report --annotation=prod=Update4 --annotation=ver=156.0.8067.0 --handshake-fd=6 --enable-logging --vmodule=*/components/update_client/*=2,*/chrome/enterprise_companion/*=2,*/chrome/updater/*=2
+[42025:290295:1006/224116.704599:VERBOSE1:chrome/updater/updater.cc:367] OS version: 26.3.0, arch: arm64, System uptime (seconds): 7869, parent pid: 1
+[42025:290295:1006/224116.706734:VERBOSE1:chrome/updater/updater.cc:372] Available disk space in install directory (/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater): 5930467328B (5.523GiB) / 245107195904B (228.274GiB)
+[42025:290295:1006/224116.706768:VERBOSE1:chrome/updater/updater.cc:376] Available disk space in temporary directory (/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/): 5930467328B (5.523GiB) / 245107195904B (228.274GiB)
+[42025:290295:1006/224116.706846:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS START event to the history log
+[42023:290288:1006/224116.707282:VERBOSE1:chrome/updater/crash_reporter.cc:123] Crash handler launched and ready.
+[42023:290288:1006/224116.707946:VERBOSE1:chrome/updater/crash_client.cc:108] Found 0 completed crash reports
+[42023:290288:1006/224116.708021:VERBOSE1:chrome/updater/crash_client.cc:132] Found 0 pending crash reports
+[42023:290288:1006/224116.708095:ERROR:third_party/crashpad/crashpad/util/file/file_io_posix.cc:145] open /Users/deniscivkunov/Library/Application Support/Google/RLZ/Crashpad/settings.dat: No such file or directory (2)
+[42023:290288:1006/224116.708293:VERBOSE1:chrome/updater/updater.cc:105] Crash reporting initialized.
+[42023:290288:1006/224116.708441:VERBOSE1:chrome/updater/ipc/update_service_internal_proxy_mojo.cc:61] Run
+[41954:289167:1006/224123.772992:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[42023:290288:1006/224133.703508:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[42023:290288:1006/224133.703912:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[42023:290288:1006/224133.703927:VERBOSE1:chrome/updater/updater.cc:409] UpdaterMain (--wake) returned 0.
+[42020:290284:1006/224133.741493:VERBOSE1:chrome/updater/app/app_wakeall.cc:68] `/Users/deniscivkunov/Library/Application Support/Google/GoogleUpdater/156.0.8067.0/GoogleUpdater.app/Contents/MacOS/GoogleUpdater --wake` exited 0
+[42020:290269:1006/224133.741585:VERBOSE1:chrome/updater/app/app.cc:52] Shutdown: 0
+[42020:290269:1006/224133.741814:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[42020:290269:1006/224133.741830:VERBOSE1:chrome/updater/updater.cc:409] UpdaterMain (--wake-all) returned 0.
+[42025:290295:1006/224143.711621:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[42025:290295:1006/224143.711641:VERBOSE1:chrome/updater/updater.cc:409] UpdaterMain (--crash-handler) returned 0.
+[42022:290273:1006/224143.712308:VERBOSE2:chrome/updater/event_history.cc:266] Emitted a UPDATER_PROCESS END event to the history log
+[42022:290273:1006/224143.712336:VERBOSE1:chrome/updater/updater.cc:409] UpdaterMain (--crash-handler) returned 0.
