@@ -1,0 +1,18 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-dynamicmac-independent-review
+
+stdout | docs/evidence/WMS-517-mac-review.test.tsx > real React screen preparation with 0ms registry latency
+{"networkDelay":0,"outcome":{"mode":"execute","status":"certificate_dialog_open","targetCount":1,"noSend":true,"signed":false,"sent":false,"message":"Выбраны 1 пригодных КИЗ из свежего реестра WMS. Сертификат и отправку подтверждает Виталий."},"refreshDisabled":false,"certificateLists":1,"registryGets":6}
+
+stdout | docs/evidence/WMS-517-mac-review.test.tsx > real React screen preparation with 700ms registry latency
+{"networkDelay":700,"outcome":{"mode":"execute","status":"certificate_dialog_open","targetCount":1,"noSend":true,"signed":false,"sent":false,"message":"Выбраны 1 пригодных КИЗ из свежего реестра WMS. Сертификат и отправку подтверждает Виталий."},"refreshDisabled":false,"certificateLists":1,"registryGets":6}
+
+ ✓ docs/evidence/WMS-517-mac-review.test.tsx (2 tests) 5411ms
+   ✓ real React screen preparation with 0ms registry latency  1652ms
+   ✓ real React screen preparation with 700ms registry latency  3756ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  23:47:33
+   Duration  10.13s (transform 494ms, setup 0ms, collect 3.37s, tests 5.41s, environment 984ms, prepare 106ms)
+
