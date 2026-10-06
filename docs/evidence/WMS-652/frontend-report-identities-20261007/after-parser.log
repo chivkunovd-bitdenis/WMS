@@ -1,0 +1,3 @@
+Actual unchanged process_contracts.vitest_results(after-module.json):37 unique cases accepted;37 passed,0 skipped.
+CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline: {"pluginVersion":"2.0.14999"}
+CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline: {"cspVersion":"5.0.12999"}

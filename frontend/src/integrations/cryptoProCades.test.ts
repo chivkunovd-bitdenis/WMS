@@ -298,7 +298,7 @@ describe('CryptoPro CAdES readiness', () => {
   it.each([
     [{ pluginVersion: '2.0.14999' }, 'plugin_version_unsupported'],
     [{ cspVersion: '5.0.12999' }, 'csp_version_unsupported'],
-  ] as const)('rejects a CryptoPro runtime below the tested baseline', async (options, code) => {
+  ] as const)('rejects a CryptoPro runtime below the tested baseline: %j', async (options, code) => {
     const fake = makeFakeRuntime(options)
     installRuntime(fake.runtime)
 

@@ -1,0 +1,30 @@
+{
+  "base": "dbeabe2fd1cbb6a1cff996e379d281258bf5f0aa",
+  "branch": "codex/wms652-frontend-report-identities-20261007",
+  "rules_etalon": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "vitest_version": "3.2.6",
+  "module_count_before": 37,
+  "module_count_after": 37,
+  "fixture_rows": [
+    [
+      {
+        "pluginVersion": "2.0.14999"
+      },
+      "plugin_version_unsupported"
+    ],
+    [
+      {
+        "cspVersion": "5.0.12999"
+      },
+      "csp_version_unsupported"
+    ]
+  ],
+  "command_from_frontend": "./node_modules/.bin/vitest run src/integrations/cryptoProCades.test.ts --reporter=default --reporter=json --outputFile.json=../docs/evidence/WMS-652/frontend-report-identities-20261007/after-module.json",
+  "vitest_executions": 1,
+  "config": "frontend/vitest.config.ts",
+  "config_unchanged": true,
+  "product_scope_command": "python3 -B scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "product_scope_exit": 0,
+  "not_new_mandatory_business_suite": true,
+  "independent_review_acceptance_pin_activation_performed": false
+}
