@@ -207,6 +207,14 @@
       "reviewed_contract_sha": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
       "review_sha": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
       "preservation": "Original runtime/checker and negative boundaries unchanged; staged-counteredit P2 closed"
+    },
+    {
+      "task": "WMS-675 final ordinary recovery plan",
+      "source": "ced5a713e56d3bb4fe2c310d3813306f08446ce2",
+      "base": "acd0523e9986e89149959319c74fd355c659d22e",
+      "mode": "merge final four operational plan documents; no runtime suppression/override",
+      "conflicts": [],
+      "boundary": "Only existing WMS-662 after checked combined deployment, normal background stock publishing, fresh scope/ledger/missing delta reread before apply; no repair applied"
     }
   ],
   "local_product_fixes": [
@@ -222,6 +230,18 @@
       ],
       "delta": "Exactly two allowlist strings; no other product or frozen-test changes",
       "review": "Independent PASS17e50faa3d13981b123ef7b093b2f97aefee9016 for exact b4043c0df"
+    }
+  ],
+  "requirement_reference_updates": [
+    {
+      "task": "WMS-651",
+      "path": "docs/requirements/WMS-651.md",
+      "change": "C5/R5 reference Select all\u2192Print QR; preserved scan assertions confirmed by separate tester on acd0523e9"
+    },
+    {
+      "task": "WMS-657",
+      "path": "docs/requirements/WMS-657.md",
+      "change": "C2 test reference ten\u2192eleven columns after authorized WMS-673 color migration; existing assertions/ledger untouched"
     }
   ]
 }

@@ -223,3 +223,28 @@ Actualcontract30aea1fbf/review2c24d7bb,обеcanonicalrefs записаныAstra
 для отдельнойсверкиexistingsemanticcoverage иcanonicaltestref/ledger.
 PR/fullCI запускаются послеисправленияреальныхgateошибок,не ждуткосметики.
 675ещёсохраняетdoc-onlyplan с обычнойstockpublication.
+
+## Финальная граница общего CI
+
+База `acd0523e9986e89149959319c74fd355c659d22e`; окончательный675source `ced5a713e56d3bb4fe2c310d3813306f08446ce2` включёнбезконфликтов.
+Толькоexisting662послеобщегопроверенногодеплоя с normalstockpublication;
+customsuppression/override удалены изплана, новыйruntimeнесоздавался.
+Missing26/reserve16→1 с reuse11facts/22charges остаютсяпланом, не mutation.
+
+Отдельныйтестировщик663 прочиталexisting651C5/R5 и657C2 наacd0523e9:
+все прежние scan/data/immutabilityassertions сохранены. По прямойкомандеparent
+исправлены ТОЛЬКО2точныеtestref ссылки вrequirements651/657. Тесты, ожидания,
+correctionledger и checker не менялись. 65711-колоночныйtest ужеявляется
+разрешённой673semanticmigration с дополнительнымЦветом. Дополнительноедокревью
+не назначается. Послеgate/diff проверок этотcommit публикуется БЕЗ skip-ci,
+создаётся общийPR и запускаетсяfullCIточногоSHA. Merge/deploy/repairне выполняются.
+
+## Реальныйbackloggate восстановлен без новогоproductscope
+
+ПослеdocgatePASS backloggate нашёл11 отсутствующих headings из ужеизвестных
+stagingancestry (433/593–597/599/617/618) иscoped672/673. Восстановленыихточные
+номера/названия по исходнымGitдокументам, с provenanceJSON ирабочимиссылками
+наисторическиеснимки. Старые задачи явно помеченыhistoricalancestry-only:
+новыйruntime/seed/DDLизнихнепереносится.672/673 связанысактуальнымиrequirements;
+672полнаяприёмкачестнонеобъявлена,673сохраняетпринятие. Никакихновыхзадач,
+тестов,checkerпослаблений илиизмененийproductизэтойвосстановительнойправкинет.
