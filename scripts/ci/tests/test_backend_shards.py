@@ -155,7 +155,7 @@ class BackendShardContracts(unittest.TestCase):
                 output = root/str(index)
                 run = subprocess.run([sys.executable, str(ROOT/'scripts/ci/backend_shards.py'),
                     'run', '--index', str(index), '--output', str(output), '--', '-n', '2', '-q', 'test_synthetic.py'],
-                    cwd=root, env=environment, capture_output=True, text=True)
+                    cwd=root, env=environment, capture_output=True, text=True, check=False)
                 self.assertEqual(run.returncode, 0, run.stdout+run.stderr)
                 paths.append(output)
             result = self.m.merge(paths, root/'merged.xml', IDENTITY)

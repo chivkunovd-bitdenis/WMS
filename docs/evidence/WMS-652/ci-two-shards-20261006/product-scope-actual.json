@@ -1,0 +1,9 @@
+{
+  "source_commit": "a5979fc31",
+  "source_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+  "exit_code": 0,
+  "result": {
+    "unapproved_product_paths": []
+  },
+  "module_integrated_by_owner_not_this_commit": true
+}
