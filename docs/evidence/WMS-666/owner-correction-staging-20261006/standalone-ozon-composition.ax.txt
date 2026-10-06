@@ -1,0 +1,85 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57".
+1 AXWebArea WMS · Фулфилмент, URL: web-production-9e7c1.up.railway.app/app/ff/fbs?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57
+	2 container
+		3 heading WMS617 ozon, Value: 6
+			4 text WMS617 ozon
+		5 text WMS617 · Видео селлер 1 Склад WMS Тестовый Метод доставки Ozon Метод доставки 617001
+		6 text Дата отгрузки
+		7 date field (settable) Дата отгрузки, Value: 2026-10-01
+			8 container
+				9 stepper
+				10 stepper
+				11 stepper
+			12 pop up button Показать окно выбора даты Показать окно выбора даты
+		13 button (disabled) Сохранить
+		14 button Очистить
+		15 progress indicator 0
+		16 text 0  из  5  подготовлено к отгрузке Сдать в  Ozon  до  02.10.2026, 09:43:10
+		17 button Закрыть
+		18 button История поставки
+		19 tab group
+			20 tab (selected, settable, boolean) Состав ✓, Value: 1
+			21 tab (selectable, settable, boolean) Подбор, Value: 0
+			22 tab (selectable, settable, boolean) Упаковка и маркировка, Value: 0
+			23 tab (selectable, settable, boolean) Короба, Value: 0
+		24 heading Состав поставки, Value: 6
+			25 text Состав поставки
+		26 text 3 заказа  в поставке
+		27 button Добавить заказы
+		28 button Печать листа подбора
+		29 table
+			30 row
+				31 cell
+					32 text Фото
+				33 cell
+					34 text Отправление Ozon
+				35 cell
+					36 text Товар и идентификаторы
+				37 cell
+					38 text Количество
+				39 cell
+					40 text Маркировка
+				41 cell
+					42 text Подбор
+			43 row
+				44 cell
+				45 cell
+					46 button WMS617-000010
+				47 cell
+					48 text WMS617 · Ozon плед с двумя ШК
+					49 text Артикул:  WMS617-05  · SKU: 617105
+				50 cell
+					51 text 0 из 3 шт.
+				52 cell
+					53 text Не требуется
+				54 cell
+					55 text Ожидает
+			56 row
+				57 cell
+				58 cell
+					59 button WMS617-000011
+				60 cell
+					61 text WMS617 · WB/Ozon сумка
+					62 text Артикул:  WMS617-06  · SKU: 617106
+				63 cell
+					64 text 0 из 1 шт.
+				65 cell
+					66 text Не требуется
+				67 cell
+					68 text Ожидает
+			69 row
+				70 cell
+				71 cell
+					72 button WMS617-000012
+				73 cell
+					74 text WMS617 · Ozon кружка
+					75 text Артикул:  WMS617-04  · SKU: 617104
+				76 cell
+					77 text 0 из 1 шт.
+				78 cell
+					79 text Не требуется
+				80 cell
+					81 text Ожидает
+		82 button Далее: Подбор →
+
+The focused UI element is 20 tab (selected, settable, boolean) Состав ✓, Value: 1
