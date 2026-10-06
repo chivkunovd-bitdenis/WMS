@@ -33,7 +33,9 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install exact existing backend dependencies
-        run: pip install -r requirements.txt -r requirements-dev.txt
+        run: |
+          python -m pip install -U pip
+          pip install -e ".[dev]"
       - name: WMS-675 real incident recovery on isolated PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@postgres:5432/wms_test_675_incident
