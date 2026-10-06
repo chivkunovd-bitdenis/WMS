@@ -186,3 +186,18 @@ parent назначает отдельнуюсессию на точный оп�
 Послеcommitкандидат станетdescendantstaging, возможенобычныйfastforwardбезforce.
 Следующийшаг —локальнаяread-onlyпроверкаграфа/offlineплана, затемдожать675docs,
 scope666ledger иузкий662reviewпередобщимteststage/CI.
+
+## Проверка графа и side effects675 сохранены
+
+Дляe45822aed локальнаяAlembicScriptDirectoryпроверка дала199revisions,
+единственныйhead20261003_0001 и0upgrade шагов от действующейstagingrevision.
+Staging727575a0являетсяancestor. Backendapp/tests,frontendsrc,currentchecker
+иAGENTS/CLAUDE совпали побайтно с7f9d720ee. Это offline/read-only, безDB/DDL.
+Proof: `priority-five-staging-graph-check-20261006.json`.
+
+По поручениюparent прочитан штатный662recovery: расход/снятиеreserve планируют
+обычнуюsellerstockpublication; suppress/monkeypatch не добавлен. Точный
+sideeffects разбор6products и существующего billedquantityreuse сохранён
+в `wms675-existing-recovery-side-effects-20261006.md`. Нового live repair нет.
+Кодpublishercallback не гарантирует толькоoutercommit из-за savepoints;
+эта граница записана без создания нового пользовательского запрета.
