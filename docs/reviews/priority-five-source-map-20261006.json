@@ -104,6 +104,14 @@
       ],
       "scope": "Only WMS-663 product/tests/proofs and needed accepted WMS-652 fixture governance; no historical 662/675 runtime added",
       "remaining": "C17 public page UNKNOWN403; C19 operator readback remains open; no fabricated live acceptance"
+    },
+    {
+      "task": "WMS-517 live reader/proofs/runbook",
+      "source": "e09eb757c1879bd87c43c276a514e65b4da07e9b",
+      "base": "9252ad203592d338ff6aba5ff1f129397d350f85",
+      "mode": "merge final scoped HEAD retaining exact accepted product and reader proof ancestry",
+      "conflicts": [],
+      "remaining": "New read-only helper independently reviewed as short delta; Vitalik local signature/send remains operator action"
     }
   ]
 }
