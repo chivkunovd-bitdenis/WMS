@@ -4,6 +4,7 @@ import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
@@ -219,6 +220,139 @@ class GitTests(unittest.TestCase):
         return subprocess.check_output(
             ["git", "show", f"{commit}:{path}"], cwd=project, text=True,
         )
+
+    def wms680_published_ledger(self):
+        """Use existing ledger fields with actual published SHA/blob/report facts."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        original = record["original_contract"]
+        semantic = record["steps"][0]
+        report = record["report"]
+        path = "frontend/src/utils/wms680PrintContract.test.ts"
+        before, after = semantic["files"][path]
+        evidence_path = "docs/evidence/WMS-680/acceptance-20261007/baseline-source.json"
+
+        def review(source, correction):
+            return {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                    "source_commit": source, "correction_commit": correction,
+                    "evidence": report["path"], "evidence_commit": report["commit"],
+                    "evidence_blob": report["blob"]}
+
+        owner = {
+            "contract_commit": original, "prior_commit": original,
+            "source_commit": semantic["source"], "path": path, "before_blob": before,
+            "changes": [[semantic["correction"], after]],
+            "companion_files": [
+                {"path": name, "before_blob": pair[0], "after_blob": pair[1]}
+                for name, pair in semantic["files"].items() if name != path
+            ],
+            "owner_request": {"commit": record["owner"]["correction"],
+                              "path": evidence_path,
+                              "blob": record["owner"]["artifacts"][evidence_path][1]},
+            "review": review(semantic["source"], semantic["correction"]),
+        }
+        fixtures = []
+        for step in record["steps"][1:]:
+            # 5739 froze all five frontend test files. 739 froze Geometry again;
+            # its subsequent f2de append must be approved for BOTH originals.
+            originals = [semantic["correction"]]
+            if step["correction"] == record["final_correction_commit"]:
+                originals.append(step["source"])
+            for contract in originals:
+                fixtures.append({
+                    "contract_commit": contract, "source_commit": step["source"],
+                    "correction_commit": step["correction"],
+                    "files": [{"transform": step["transform"], "path": name,
+                               "before_blob": pair[0], "after_blob": pair[1]}
+                              for name, pair in step["files"].items()],
+                    "companion_files": [], "review": review(step["source"], step["correction"]),
+                })
+        return {"task": "WMS-680", "owner_supersessions": [owner],
+                "fixture_corrections": fixtures}
+
+    @contextmanager
+    def wms680_real_git_graph(self, tamper=None):
+        """Preserve published trees, commits and parents; never rewrite history.
+
+        Borrow only immutable Git objects. A private HEAD/index starts at the
+        real review SHA, and only a ledger/canary is committed after that SHA.
+        No checkout of product files and no changes to another agent's Git refs.
+        """
+        project = Path(__file__).resolve().parents[2]
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        run_dir = project / ".agent-runs"
+        run_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="wms680-gate-", dir=run_dir) as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+            def save(path, text):
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+                git("add", "--", path)
+            def commit():
+                git("commit", "-q", "-m", "WMS-652: isolated gate fixture")
+                return git("rev-parse", "HEAD")
+
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            objects = checker.git(project, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+            (root / ".git/objects/info/alternates").write_text(objects + "\n")
+            git("update-ref", "HEAD", record["report"]["commit"])
+            git("read-tree", record["report"]["commit"])
+            ledger = self.wms680_published_ledger()
+            owner = ledger["owner_supersessions"][0]
+            if tamper == "wrong-owner":
+                owner["owner_request"]["blob"] = "0" * 40
+            elif tamper == "missing-report":
+                for entry in [owner, *ledger["fixture_corrections"]]:
+                    entry["review"].pop("evidence_commit")
+            elif tamper == "wrong-report":
+                owner["review"]["evidence_blob"] = "0" * 40
+            elif tamper == "report-artifact-mutation":
+                path = record["report"]["path"]
+                save(path, checker.git(root, "show", f"HEAD:{path}") + "\nUnreviewed append\n")
+                commit()
+            elif tamper == "declared-wrong-blob":
+                ledger["fixture_corrections"][0]["files"][0]["after_blob"] = "0" * 40
+            elif tamper == "wrong-transform":
+                ledger["fixture_corrections"][0]["files"][0]["transform"] = "unreviewed-transform"
+            elif tamper == "wrong-model":
+                owner["review"]["model"] = "unreviewed-model"
+            elif tamper == "wrong-source":
+                owner["source_commit"] = record["report"]["commit"]
+            elif tamper == "missing-transform":
+                ledger["fixture_corrections"] = [
+                    item for item in ledger["fixture_corrections"]
+                    if item["correction_commit"] != "739bcadf1be4fe92e24af3d30b42f892f858e598"
+                ]
+            elif tamper == "extra-scope":
+                save("backend/app/wms680_unreviewed.py", "unreviewed = True\n")
+                unreviewed = commit()
+                owner["changes"][0][0] = unreviewed
+                owner["review"]["correction_commit"] = unreviewed
+            elif tamper in ("assertion-mutation", "later-geometry-mutation", "owner-artifact-mutation"):
+                path = {"assertion-mutation": "frontend/src/utils/wms680PrintContract.test.ts",
+                        "later-geometry-mutation": "frontend/src/utils/wms680PrintGeometry.test.ts",
+                        "owner-artifact-mutation": owner["owner_request"]["path"]}[tamper]
+                raw = checker.git(root, "show", f"HEAD:{path}")
+                if tamper == "owner-artifact-mutation":
+                    raw = "{}"
+                else:
+                    self.assertIn("expect(", raw)
+                    raw = raw.replace("expect(", "unreviewedExpect(", 1)
+                save(path, raw + "\n")
+                commit()
+            elif tamper is not None:
+                raise AssertionError(f"Unknown canary: {tamper}")
+            save("docs/reviews/contract-corrections/WMS-680.json", json.dumps(ledger) + "\n")
+            commit()
+            self.assertTrue(checker.ancestor(root, record["report"]["commit"], "HEAD"))
+            for sha in (record["original_contract"], *record["contracts"],
+                        *[step["correction"] for step in record["steps"]]):
+                self.assertTrue(checker.ancestor(root, sha, "HEAD"), sha)
+            yield root
 
     @staticmethod
     def exact_transform(task_id: str, step: int, path: str) -> str:
@@ -1214,22 +1348,21 @@ class GitTests(unittest.TestCase):
                         self.assertEqual(checker.git_blob(project, step["correction"], path), after)
 
     def test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly(self):
-        """680 is a closed owner supersession followed by four reviewed pairs."""
+        """Run the real gate over every published 680 contract, including f2de."""
         record = EXACT_REVIEWED_CHAINS["WMS-680"]
-        pairs = set(checker.FIXTURE_BLOB_PAIRS.values())
-        missing = []
-        for step in record["steps"]:
-            if "transform" not in step:
-                continue
-            for path, (before, after) in step["files"].items():
-                expected = ("WMS-680", path, before, after)
-                if expected not in pairs:
-                    missing.append((step["transform"], expected))
-        # The owner record is deliberately separate from a fixture pair: it
-        # binds only the published 3be84 evidence and 5739 semantic contract.
-        if "WMS-680" not in checker.OWNER_UI_SUPERSESSIONS:
-            missing.insert(0, ("owner-ui-supersession", "WMS-680"))
-        self.assertEqual(missing, [])
+        with self.wms680_real_git_graph() as root:
+            errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+            self.assertEqual([error for error in errors if "WMS-680" in error], [])
+
+    def test_wms680_real_gate_accepts_later_5739_and_739_frozen_bases(self):
+        # Starting CI after the initial contract must still validate corrections
+        # to the earlier contract and protect the newly frozen Geometry file.
+        with self.wms680_real_git_graph() as root:
+            for base in ("5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e^",
+                         "739bcadf1be4fe92e24af3d30b42f892f858e598^"):
+                with self.subTest(base=base):
+                    errors = checker.contract_change_errors(root, base)
+                    self.assertEqual([error for error in errors if "WMS-680" in error], [])
 
     def test_wms680_manifest_matches_owner_evidence_all_frontiers_and_report(self):
         """Every allowed 680 edge is proved against immutable published Git data."""
@@ -1261,23 +1394,15 @@ class GitTests(unittest.TestCase):
 
     def test_wms680_closed_matrix_rejects_owner_report_assertion_and_scope_canaries(self):
         record = EXACT_REVIEWED_CHAINS["WMS-680"]
-        pairs = set(checker.FIXTURE_BLOB_PAIRS.values())
-        owner = record["owner"]
-        contract_path = "frontend/src/utils/wms680PrintContract.test.ts"
-        fixture = record["steps"][1]
-        # A future registration may contain only the listed exact tuples.  Each
-        # mutation below must therefore remain absent even after the positive
-        # matrix becomes available.
-        forbidden = {
-            ("WMS-680", contract_path, "0" * 40, fixture["files"][contract_path][1]),
-            ("WMS-680", contract_path, fixture["files"][contract_path][0], "0" * 40),
-            ("WMS-680", "frontend/src/utils/unrelated.test.ts", "0" * 40, "1" * 40),
-        }
-        self.assertTrue(forbidden.isdisjoint(pairs))
-        self.assertNotEqual(owner["artifacts"]["docs/requirements/WMS-680.md"][1], "0" * 40)
-        self.assertNotEqual(record["report"]["blob"], "0" * 40)
-        self.assertEqual(record["steps"][-1]["model"], "gpt-6.1-sol")
-        self.assertEqual(record["steps"][-1]["effort"], "high")
+        for tamper in ("wrong-owner", "owner-artifact-mutation", "missing-report",
+                       "wrong-report", "report-artifact-mutation", "wrong-model",
+                       "wrong-source", "extra-scope", "declared-wrong-blob", "wrong-transform",
+                       "assertion-mutation", "later-geometry-mutation", "missing-transform"):
+            with self.subTest(tamper=tamper):
+                with self.wms680_real_git_graph(tamper) as root:
+                    errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+                    self.assertTrue([error for error in errors if "WMS-680" in error], errors)
+
     def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
         rollout = self.rollout()
         report = "docs/reviews/WMS-654-correction-review.md"

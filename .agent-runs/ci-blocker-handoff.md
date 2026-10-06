@@ -277,3 +277,61 @@ HEAD, dirty source, missing exact case, wrong report, and unregistered source.
 They must all fail closed.  A separately tested unprotected legacy source with
 a literal test name still passes, so this is not a relaxation of ordinary test
 reference validation.
+
+## Stage handoff: supersedes 5fd9e2 WMS-680 dictionary-only checks
+
+The earlier WMS-680 registry/disjoint assertions were insufficient: they did
+not exercise Git gate decisions. They are now replaced under the same test
+names with calls to the actual `contract_change_errors`. No checker constants,
+functions, Git responses or acceptance decisions are patched by the tests.
+
+`wms680_real_git_graph` initializes a disposable LOCAL Git repository borrowing
+the project's immutable object database. Its HEAD and index start at actual
+review `d0de155adcc31a7d33dca43d857a22e49897b981`; all original commit/tree IDs,
+parents and source contents are retained. Only a fixture ledger or a negative
+canary is committed afterwards. It neither checks out product code nor writes
+another agent's refs. The ledger uses existing `owner_supersessions` /
+`fixture_corrections` fields and the actual Sol 6.1/high review artifact. The
+5739 scope is now fully recorded: requirements Test links, FBS657, inbound,
+packaging, original PrintContract and new Geometry (six paths). The report,
+owner artifacts, all before/after blobs and ancestry are verified independently.
+
+Permanent named tests:
+
+- `GitTests.test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly`
+  calls the actual gate over `240094^..HEAD`: all six real contract commits
+  (`240094`, `5739`, `7ad`, `11806`, `739`, `f2de`) must have no WMS-680 error.
+- `GitTests.test_wms680_real_gate_accepts_later_5739_and_739_frozen_bases`
+  repeats the gate with `5739^` and `739^` as CI base, retaining earlier ledger
+  validation and explicit f2de approval for BOTH 5739 and 739 Geometry baselines.
+- `GitTests.test_wms680_closed_matrix_rejects_owner_report_assertion_and_scope_canaries`
+  calls the actual gate for each of 13 isolated failures: wrong owner blob,
+  changed owner artifact, missing report commit, wrong report blob, changed
+  report artifact, unapproved model, wrong source/ancestry, unreviewed correction
+  scope/product file, declared wrong frozen blob, unknown transform, changed
+  PrintContract assertion, changed later Geometry assertion, missing 739 edge.
+- `GitTests.test_wms680_manifest_matches_owner_evidence_all_frontiers_and_report`
+  remains the separate proof of immutable published data, not gate acceptance.
+
+Validation imported an in-memory snapshot of CURRENT integration checker at
+integration HEAD `230cad6f370825480a86cbdbd8e16287977b8560`, checker SHA-256
+`e0de3ae32bc2fc2d7316e3036f2572d17e9f8ce8e4b0e0e302825f66464a9ac1`.
+The positives reach `contract_change_errors` -> `reviewed_contract_correction`
+-> `owner_ui_supersessions`, with actual RED:
+`WMS-680: owner-supersession: нужна одна точно разрешённая запись`.
+There are six errors in the initial range, five at `5739^`, two at `739^`.
+The matrix is unsupported by the existing single-path owner mechanism.
+Negative rejection before implementation may share that initial blocker;
+all canaries must be rerun AFTER positives PASS to demonstrate each binding.
+Final focused run: 4 named tests in 25.317 seconds, 3 expected assertion
+failures (initial positive plus the two later-base subtests); 13 negative
+subcases and immutable-object proof PASS. No whole suite was run.
+
+Reproduce against local checked-in checker after integration:
+`python3 -m unittest scripts.ci.test_check_task_documents.GitTests.test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly scripts.ci.test_check_task_documents.GitTests.test_wms680_real_gate_accepts_later_5739_and_739_frozen_bases scripts.ci.test_check_task_documents.GitTests.test_wms680_closed_matrix_rejects_owner_report_assertion_and_scope_canaries scripts.ci.test_check_task_documents.GitTests.test_wms680_manifest_matches_owner_evidence_all_frontiers_and_report`
+
+For pre-fix validation against the integration worktree, import this test module,
+load/compile `../night1007-integration/scripts/ci/check_task_documents.py` once
+into a fresh module, assign only `tests.checker` to that actual module, and run
+the four named tests with `unittest`. No product implementation is changed.
+658/681 contracts, 50bb docgate and 8eae promoter tests remain intact.
