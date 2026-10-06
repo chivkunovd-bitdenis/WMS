@@ -362,3 +362,41 @@ item billed delta 1 по сохранённой ставке 300, новая с�
 и не доказательство конкуренции. Frozen tests/guards diff от 91c89c553 пуст.
 Первый push кратковременно отклонён GitHub; повтор успешен, remote проверен.
 Независимое ревью, приёмка, CI и production всё ещё не заявляются.
+
+## F6: trace до нового независимого RED
+
+Полностью прочитан независимый отчёт `astra-review-c36b8ab.md`, опубликованный
+в review-ветке `7019ac73199892a4c9ae61e0964c46c739542def`. F4/F5 подтверждены
+ревьюером, но общий итог FAIL: cancellation берёт seller до товара, а normal
+и observed handoff — товар до seller. Product после c36b8abee пока не менялся;
+новый PostgreSQL контракт готовит отдельный tester.
+
+Кандидат минимального исправления — заменить добавленный cancellation seller
+fence на явный FOR UPDATE конкретного tenant/order перед снимком активных
+начислений. Исходные charges и issued invoices сторно не меняет: оно создаёт
+новые immutable reversal rows, как прежний generic writer без seller fence.
+Снимок всего набора и общий savepoint F5 остаются. Seller fence для in-place
+continuation и invoice creation сохраняется, не отменяется и не берётся раньше
+HTTP. Такая замена не добавляет новый seller→product/supply edge.
+
+Проверенные реальные callers: кнопка cancellation вызывает `_lock_order`
+(supply/packaging→order) до `_finish_local_cancellation`; WB и Ozon status
+sync после commit внешних observations вызывают `lock_order_batch_packaging_rows`
+(все supply/packaging→все order), затем cancellation/status и conduct.
+Normal Ozon callback после HTTP заново берёт supply→order; observed conduct
+также удерживает order до stock и billing. Конкурентная передача этого же
+заказа потому должна закончиться до нового снимка сторно. Явный order fence
+в самом финансовом helper нужен и для прямого retry уже cancelled, когда
+caller не делает нового status UPDATE; защита не опирается на этот UPDATE.
+
+Публичные invoice creators в прочитанном коде берут seller, но читают FbsOrder
+без FOR UPDATE; source recovery использует обычное первоначальное charge
+начисление, не cumulative extension. Proposed order fence не создаёт обратного
+seller→order ожидания invoice. Параллельный snapshot invoice/reversal сохраняет
+прежнюю модель immutable charge+новое сторно; поведение отдельного такого
+race пока не доказано тестом. Batch и сторонние уже удержанные locks требуют
+независимой перепроверки; локальная перестановка billing в конец одного заказа
+не выбрана, потому что не устраняет повторный stock этап следующего заказа.
+
+Этот раздел — trace и направление для tester, не исправление, не PG PASS
+и не новый вердикт ревью. Tests/expectations разработчиком не изменяются.
