@@ -1,0 +1,54 @@
+name: WMS-673 isolated actual browser acceptance
+on:
+  push:
+    branches: [codex/wms672-673-analyst-20261006]
+    paths: [.github/workflows/wms673-acceptance.yml, scripts/wms673-acceptance/**]
+permissions:
+  contents: read
+jobs:
+  actual-buttons:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    env:
+      WMS_SOURCE_SHA: 76f71776f403d0bdda07d521738281392e2b12ce
+      WMS673_PROOF_DIR: /tmp/wms673-acceptance-proof
+    steps:
+      - uses: actions/checkout@v4
+      - name: Preserve harness and pin exact accepted product
+        run: |
+          mkdir -p "$WMS673_PROOF_DIR" "$RUNNER_TEMP/harness"
+          cp scripts/wms673-acceptance/* "$RUNNER_TEMP/harness/"
+          printf 'source=%s\nrunner=%s\n' "$WMS_SOURCE_SHA" "$GITHUB_SHA" > "$WMS673_PROOF_DIR/source-pin.txt"
+          git fetch --no-tags origin "$WMS_SOURCE_SHA"
+          git checkout --detach "$WMS_SOURCE_SHA"
+          git diff --exit-code "$WMS_SOURCE_SHA"
+          sha256sum frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx frontend/src/screens/v2/FfFbsSupplyAssembly.tsx frontend/src/screens/v2/fbsUx.ts > "$WMS673_PROOF_DIR/product-before.sha256"
+          mkdir frontend/acceptance
+          cp "$RUNNER_TEMP/harness/app.tsx" "$RUNNER_TEMP/harness/index.html" frontend/acceptance/
+          sed -i "s|../../frontend/src/|../src/|g" frontend/acceptance/app.tsx
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Remote dependencies only
+        run: |
+          npm ci --prefix frontend > "$WMS673_PROOF_DIR/npm.log" 2>&1
+          npm install --prefix frontend --no-save --package-lock=false puppeteer-core > "$WMS673_PROOF_DIR/puppeteer.log" 2>&1
+          sudo apt-get update -qq
+          sudo apt-get install -y xvfb imagemagick poppler-utils > "$WMS673_PROOF_DIR/renderer.log" 2>&1
+          cp "$RUNNER_TEMP/harness/browser.mjs" frontend/acceptance/
+      - name: Actual components, popups, PDF and native print preview
+        run: |
+          cd frontend
+          node node_modules/vite/bin/vite.js --host 127.0.0.1 > "$WMS673_PROOF_DIR/vite.log" 2>&1 &
+          for attempt in $(seq 1 30); do curl -sf http://127.0.0.1:5173/acceptance/index.html >/dev/null && break; sleep 1; done
+          xvfb-run -a -s '-screen 0 1600x1000x24' node acceptance/browser.mjs 2>&1 | tee "$WMS673_PROOF_DIR/browser.log"
+          cd ..
+          sha256sum frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx frontend/src/screens/v2/FfFbsSupplyAssembly.tsx frontend/src/screens/v2/fbsUx.ts > "$WMS673_PROOF_DIR/product-after.sha256"
+          cmp "$WMS673_PROOF_DIR/product-before.sha256" "$WMS673_PROOF_DIR/product-after.sha256"
+          git diff --exit-code "$WMS_SOURCE_SHA"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms673-actual-acceptance-${{ github.sha }}
+          path: /tmp/wms673-acceptance-proof
+          retention-days: 14
