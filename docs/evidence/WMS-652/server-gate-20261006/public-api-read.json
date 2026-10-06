@@ -1,0 +1,10 @@
+{
+  "authorization_sent": false,
+  "workflow": {
+    "id": 258998393,
+    "path": ".github/workflows/ci.yml",
+    "state": "active"
+  },
+  "run_list_public": true,
+  "stdlib_local_probe": "unverified: default Python TLS local issuer certificate missing; no TLS bypass used"
+}
