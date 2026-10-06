@@ -437,9 +437,12 @@ jobs:
           scripts/ci/tests/test_ci_release_additions.py
           scripts/ci/tests/test_backend_shard_redis_setup.py
           scripts/ci/tests/test_promote_guards.py
+          scripts/ci/tests/test_process_contracts.py
+          scripts/ci/tests/test_process_deploy_gate.py
+          scripts/ci/tests/test_server_process_gate.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - name: WMS-687 strict reviewed correction compatibility
-        run: python -m pytest -q scripts/ci/test_check_task_documents.py -k "wms687 or accepted_report_without_report_commit or exact_chain or two_by_two or binding_canary or protected_wms687_expanded or unprotected_legacy_test_reference or wms680" --junitxml="$RUNNER_TEMP/docgate-687.xml"
+        run: python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:

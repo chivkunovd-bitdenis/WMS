@@ -167,7 +167,8 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
         "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts": "WMS-687 catalog permission wiring",
     }
     group = known_687_groups.get(str(source))
-    module = ".".join(source.with_suffix("").parts[1:])
+    module_parts = source.with_suffix("").parts
+    module = ".".join(module_parts[1:] if module_parts[0] == "backend" else module_parts)
     frontend = str(source).removeprefix("frontend/")
     for suite in policy["suites"].values():
         # These two accepted test.each templates represent fixed four-mode
