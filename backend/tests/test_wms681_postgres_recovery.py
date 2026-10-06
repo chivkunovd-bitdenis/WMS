@@ -3,6 +3,7 @@
 Run only on an isolated WMS_TEST_DATABASE_URL (the conftest safety gate applies).
 The subprocess entrypoint does not run pytest or rebuild the shared schema.
 """
+# ruff: noqa: E402  # stdout must be redirected before application imports in worker mode.
 
 from __future__ import annotations
 
@@ -20,6 +21,19 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+# Keep the parent's stdout as a strict JSON-lines protocol before importing the
+# application: import-time libraries may print diagnostics to stdout. Worker
+# diagnostics belong on stderr; only _emit_worker_receipt may use this handle.
+_C6_WORKER_MODE = "--c6-worker" in sys.argv
+_C6_PROTOCOL_STDOUT = sys.stdout
+if _C6_WORKER_MODE:
+    sys.stdout = sys.stderr
+if (
+    _C6_WORKER_MODE
+    and os.environ.get("WMS681_C6_TEST_STARTUP_DIAGNOSTIC") == "1"
+):
+    print("warning: C6 controlled worker startup diagnostic", flush=True)
 
 from app.core.settings import settings
 from app.db.session import SessionLocal, engine, get_db
@@ -104,6 +118,11 @@ class _SharedWB:
         return Handler
 
 
+def _emit_worker_receipt(receipt: dict[str, Any]) -> None:
+    """Emit the sole structured stdout line; diagnostics use redirected stderr."""
+    print(json.dumps(receipt), file=_C6_PROTOCOL_STDOUT, flush=True)
+
+
 async def _worker() -> None:
     """Real endpoint in its own process and pinned physical PG connection."""
     from httpx import ASGITransport
@@ -118,7 +137,7 @@ async def _worker() -> None:
         AsyncSession(bind=connection, expire_on_commit=False) as session,
     ):
         pid = await session.scalar(text("SELECT pg_backend_pid()"))
-        print(json.dumps({"ready": True, "os_pid": os.getpid(), "pg_pid": pid}), flush=True)
+        _emit_worker_receipt({"ready": True, "os_pid": os.getpid(), "pg_pid": pid})
         await asyncio.to_thread(sys.stdin.readline)
 
         async def database() -> AsyncIterator[AsyncSession]:
@@ -144,15 +163,31 @@ async def _worker() -> None:
             )
             await session.rollback()
         result["final_pg_pid"] = await session.scalar(text("SELECT pg_backend_pid()"))
-        print(json.dumps(result), flush=True)
+        _emit_worker_receipt(result)
     await engine.dispose()
 
 
-async def _line(process: asyncio.subprocess.Process) -> dict[str, Any]:
+async def _line(process: asyncio.subprocess.Process, receipt: str) -> dict[str, Any]:
+    """Read exactly one worker protocol line, rejecting any protocol corruption."""
     assert process.stdout is not None
-    raw = await asyncio.wait_for(process.stdout.readline(), timeout=30)
-    assert raw, "worker exited before producing its receipt"
-    return json.loads(raw)
+    try:
+        raw = await asyncio.wait_for(process.stdout.readline(), timeout=30)
+    except TimeoutError as exc:
+        raise AssertionError(f"{receipt}: timed out waiting for worker receipt") from exc
+    if not raw:
+        raise AssertionError(
+            f"{receipt}: worker exited before producing its structured receipt "
+            f"(returncode={process.returncode})",
+        )
+    try:
+        parsed = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise AssertionError(
+            f"{receipt}: malformed worker stdout protocol line: {raw!r}",
+        ) from exc
+    if not isinstance(parsed, dict):
+        raise AssertionError(f"{receipt}: worker receipt is not an object: {parsed!r}")
+    return parsed
 
 
 @pytest.mark.asyncio
@@ -194,7 +229,7 @@ async def test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoin
         assert process.stdin is not None
         process.stdin.write((json.dumps(config) + "\n").encode())
         await process.stdin.drain()
-        ready = await _line(process)
+        ready = await _line(process, "ready")
         assert ready["ready"]
         process.stdin.write(b"start\n")
         await process.stdin.drain()
@@ -238,7 +273,10 @@ async def test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoin
                     await asyncio.sleep(0.01)
         record_property("qr_boundary", "overlap" if shared.two_stickers.is_set() else "PG lock")
         shared.release_stickers.set()
-        results = await asyncio.gather(_line(first), _line(second))
+        results = await asyncio.gather(
+            _line(first, "first final"),
+            _line(second, "second final"),
+        )
         record_property("worker_results", json.dumps(results))
         record_property("wb_create_amounts", json.dumps(shared.create_amounts))
         record_property("sticker_requests", json.dumps(shared.sticker_requests))
