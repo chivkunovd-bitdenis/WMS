@@ -25,6 +25,7 @@ from app.services.catalog_service import (
     marketplace_scope_condition,
     ozon_link_primary_image_url,
 )
+from app.services.fbs_stock_availability_service import organization_on_hand_totals_statement
 from app.services.product_barcode_service import load_barcodes_by_product
 from app.services.wb_card_enrichment import (
     brand_from_card,
@@ -554,6 +555,7 @@ async def list_linked_wb_catalog_page_rows(
     category: str | None = None,
     marketplace: str | None = None,
     stock_publication: str | None = None,
+    has_stock: bool = False,
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[FfCatalogRow], int, int, list[str]]:
@@ -575,6 +577,15 @@ async def list_linked_wb_catalog_page_rows(
     if marketplace_condition is not None:
         scope_filters.append(marketplace_condition)
     filters = list(scope_filters)
+    if has_stock:
+        # The same organization-wide sum as the displayed inventory summary,
+        # before counting or pagination; reservations and publication are independent.
+        stock_totals = organization_on_hand_totals_statement(tenant_id).subquery()
+        filters.append(
+            Product.id.in_(
+                select(stock_totals.c.product_id).where(stock_totals.c.on_hand > 0)
+            )
+        )
     # Match the existing publication switches, including the legacy Ozon fallback.
     # A zero balance does not mean publication was disabled by the operator.
     wb_enabled = Product.fbs_stock_sync_enabled.is_(True)
