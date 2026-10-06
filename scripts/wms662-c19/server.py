@@ -8,6 +8,7 @@ assert os.environ['DATABASE_URL'].endswith('/wms_test_662_c19')
 sys.path[:0] = [str(Path.cwd() / 'backend'), str(Path.cwd() / 'backend/tests')]
 import httpx
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from app.db.session import engine, SessionLocal
 from app.models import Base
 from app.models.user import User
@@ -17,6 +18,13 @@ from test_wms662_observed_handoff import seed, external, sync, saved, shipped
 
 app = FastAPI()
 app.include_router(router)
+
+@app.middleware('http')
+async def read_only_ui(request, call_next):
+    if request.url.path.startswith('/operations/') and request.method not in {'GET', 'HEAD'}:
+        return JSONResponse({'detail': 'C19 fixture forbids UI mutation/print'}, status_code=403)
+    return await call_next(request)
+
 case = api = user = None
 
 async def fixture_user():
@@ -63,7 +71,7 @@ async def phase(phase: str):
             'stock': {str(k): v for k,v in state.stock.items()},
             'reserves': {str(k): v for k,v in state.reserves.items()},
             'orders': [{'id': str(o.id), 'wb_order_id': o.wb_order_id, 'status': o.status,
-                        'movement_id': str(o.shipment_movement_id) if o.shipment_movement_id else None}
+                        'movement_id': str(state.ledgers[o.id].shipment_movement_id) if o.id in state.ledgers else None}
                        for o in state.orders.values()],
             'external_reads': api.calls,
             'synthetic_external_response': api.rows}

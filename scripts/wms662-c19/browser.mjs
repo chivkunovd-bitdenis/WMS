@@ -19,7 +19,8 @@ try {
  const url=`http://127.0.0.1:5173/c19.html?supply=${fixture.supply_id}`
  for(const phase of ['partial','full']) {
   const response=await page.request.post(`http://127.0.0.1:8000/fixture/${phase}`)
-  const body=await response.json()
+  const raw=await response.text()
+  let body; try {body=JSON.parse(raw)} catch {body={raw}}
   facts[phase]=body
   if(response.status()!==200) throw Error(JSON.stringify(body))
   await page.goto(url)

@@ -49,7 +49,7 @@ jobs:
           mkdir -p evidence
           git -C product rev-parse HEAD > evidence/product-sha.txt
           git -C proof rev-parse HEAD > evidence/proof-sha.txt
-          git -C product ls-tree -r HEAD backend/app frontend/src > evidence/product-manifest.txt
+          git -C product ls-tree -r HEAD > evidence/product-manifest.txt
           pip freeze > evidence/python-dependencies.txt
           cp product/frontend/package-lock.json evidence/frontend-package-lock.json
           cp proof/scripts/wms662-c19/entry.tsx product/frontend/c19-entry.tsx
