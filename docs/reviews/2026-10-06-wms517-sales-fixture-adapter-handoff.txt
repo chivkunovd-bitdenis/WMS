@@ -1,0 +1,46 @@
+Replacement independent tester Sol6.1 high; existing assertions unchanged.
+Consumer discovery: rg 'from (tests\.)?test_withdrawal_ledger import' backend/tests.
+Exact legacy seed/document consumers adapted:
+test_withdrawal_review_fixes.py, test_withdrawal_orchestration.py,
+test_withdrawal_row_status.py, test_withdrawal_readiness.py,
+test_withdrawal_access.py, test_withdrawal_wms563.py.
+Each imports the SAME module-local autouse legacy_sales_http fixture. Importing
+only seed/document previously did not activate synthetic rid/credential/sales.
+Sales contract/regression files deliberately keep their own SalesHTTP boundary;
+they opt out of ledger synthetic seed with sales_evidence=False.
+
+One shared fixture correction: celery_broker_url=None, instead of injected fake
+broker URL. Fake URL triggered unrelated CRPT runtime construction in the old
+production gate test and hit its unchanged forbidden HTTP/Redis assert.
+Legacy HTTP/credential/Redis are still synthetic at I/O only; minute waits only
+are bypassed, scheduling waits preserved. Shared Redis/rate/cache evidence stays
+in its separate explicit sales regression fixture. No product helper patched.
+
+AST structural equivalence: remove only module imports from old/new AST then
+compare ast.dump(include_attributes=False): identical for all six consumers.
+Their full assertions/function bodies/names/decorators/parameters unchanged.
+The shared ledger change in THIS adapter commit is fixture-only; three approved
+ledger pricing migrations belong to a separate legitimate contract commit.
+
+From backend:
+PYTHONDONTWRITEBYTECODE=1 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest -q tests/test_withdrawal_review_fixes.py tests/test_withdrawal_orchestration.py tests/test_withdrawal_row_status.py tests/test_withdrawal_readiness.py tests/test_withdrawal_access.py tests/test_withdrawal_wms563.py --tb=line -p no:cacheprovider
+Final: 91 passed, 2 skipped, 6 warnings in31.58s, no deselection.
+Two skips are PostgreSQL-only readiness checks; developer cluster56517 untouched.
+Initial fixture adaptation run: 90 passed/1 gate failure/2 skipped in12.44s;
+fixed fixture broker isolation only, not forbidden assert or product code.
+Earlier disk-full interrupted run (exit120) is not counted as test evidence.
+Ruff/diff-check PASS. No production/signature/marketplace/physical proof claimed.
+Independent Astra high review of fixture adaptation remains the parent's step.
+
+Follow-up boundary correction: seed activates the fake broker URL only when
+synthetic sales are actually seeded. The shared fixture initially sets None;
+gate-only tests create no sale and keep it None. Fixture monkeypatch restores
+the previous value after each test. This preserves the production-mode sales
+limiter condition as well as the unchanged no-DB/no-HTTP integration gate.
+Reason: ledger production-mode API test needs synthetic shared sales Redis;
+with unconditional None it correctly refused wb_sales_shared_limiter_not_configured.
+No assertions changed to hide that failure; only the test boundary was corrected.
+Combined rerun, ledger + two authorized positive-source cases + six consumers:
+135 passed, 4 skipped, 6 warnings in11.52s. Four PostgreSQL-only checks skipped.
+This is an execution result on dirty developer product code, not an independent
+review verdict for the legitimate three-test migration.

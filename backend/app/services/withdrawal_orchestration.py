@@ -20,6 +20,7 @@ from app.db.withdrawal_repository import (
     eligible_rows,
     get_operation,
     lock_seller,
+    sales_for_scope,
 )
 from app.models.billing import BillingProfile
 from app.models.fbs_order import FbsOrderMarking
@@ -37,7 +38,8 @@ from app.services.true_api_withdrawal import (
     TrueApiError,
     safe_provider_error,
 )
-from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
+from app.services.wb_order_price_service import WbPriceDataError
+from app.services.wb_sales_report import SalesReport, sale_cost
 from app.services.withdrawal_document_builder import WithdrawalProduct, build_withdrawal_documents
 from app.services.withdrawal_mod_service import (
     DISTANCE_MOD_GROUPS,
@@ -130,7 +132,10 @@ async def scoped_documents(
 
 
 async def _rows(
-    session: AsyncSession, scope: WithdrawalScope, operation: WithdrawalOperation
+    session: AsyncSession,
+    scope: WithdrawalScope,
+    operation: WithdrawalOperation,
+    sales: SalesReport | None = None,
 ) -> None:
     items = [
         item
@@ -146,17 +151,51 @@ async def _rows(
             )
             .order_by(FbsOrderMarking.id)
             .with_for_update(of=FbsOrderMarking)
+            .execution_options(populate_existing=True)
         )
     ).all()
     if len(rows) != len(ids):
         raise WithdrawalError("withdrawal_rows_not_found", 404)
-    if any(
-        marking.value != item.cis
-        for item in items
-        for marking, _, _ in rows
-        if item.marking_id == marking.id
-    ):
-        raise WithdrawalError("withdrawal_cis_changed")
+    by_id = {marking.id: (marking, order, supply) for marking, order, supply in rows}
+    for item in items:
+        marking, order, supply = by_id[item.marking_id]
+        if marking.value != item.cis:
+            raise WithdrawalError("withdrawal_cis_changed")
+        evidence = (item.preflight_evidence or {}).get("wb_sale", {})
+        if (
+            item.order_id != order.id
+            or item.supply_id != supply.id
+            or evidence.get("srid") != order.wb_rid
+            or evidence.get("order_id") != str(order.id)
+        ):
+            raise WithdrawalError("withdrawal_sale_binding_changed")
+        if sales is not None:
+            if order.wb_rid not in sales.by_rid:
+                rejected = sales.exclusion_evidence(order)
+                item.preflight_evidence = {
+                    **(item.preflight_evidence or {}),
+                    "wb_sale_recheck": rejected,
+                }
+                item.state = "failed"
+                item.error = {
+                    "source": "wb",
+                    "code": rejected["code"],
+                    "message": (
+                        "WB: подтверждён возврат продажи"
+                        if rejected["code"] == "wb_sales_returned"
+                        else "WB: продажа отсутствует или неоднозначна в полном отчёте"
+                    ),
+                }
+                continue
+            item.preflight_evidence = {"wb_sale": sales.evidence(order)}
+            item.price_snapshot_id = None
+            try:
+                assert order.wb_rid is not None
+                item.product_cost = sale_cost(sales.by_rid[order.wb_rid])
+            except WbPriceDataError as exc:
+                item.product_cost = None
+                item.state = "failed"
+                item.error = {"source": "local", "code": exc.code, "message": str(exc)}
 
 
 def _has_lease(operation: WithdrawalOperation) -> bool:
@@ -307,7 +346,17 @@ async def _replace_unsigned(
             }
         }
         item.holds_claim = False
-        replacements.append(WithdrawalItem(**values, attempt=operation.attempt))
+        replacements.append(
+            WithdrawalItem(
+                **values,
+                attempt=operation.attempt,
+                preflight_evidence={
+                    key: value
+                    for key, value in (item.preflight_evidence or {}).items()
+                    if key in {"wb_sale", "wb_sale_recheck"}
+                },
+            )
+        )
     await session.flush()
     for document in documents:
         document.state = "failed"
@@ -556,12 +605,40 @@ async def authenticate_and_build(
             lease,
             WithdrawalError("withdrawal_auth_or_provider_data_invalid"),
         )
+    # Refresh sales after external preflight and before builder, without holding
+    # seller/operation/marking locks during Statistics rate-limit waits.
+    await session.commit()
+
+    async def sales_progress() -> None:
+        current_operation = await get_operation(session, scope, operation_id, lock=True)
+        if current_operation.workflow_lease_id != lease:
+            await session.commit()
+            raise WithdrawalError("withdrawal_workflow_lease_changed")
+        current_operation.workflow_lease_until = datetime.now(UTC) + timedelta(minutes=5)
+        await session.commit()
+
+    try:
+        sales = await sales_for_scope(
+            session,
+            scope,
+            progress=sales_progress,
+            row_ids=[item.marking_id for item in items],
+        )
+    except WithdrawalError as exc:
+        return await _auth_error(session, scope, operation_id, lease, exc)
     await lock_seller(session, scope)
     operation = await get_operation(session, scope, operation_id, lock=True)
     if operation.workflow_lease_id != lease:
         await session.commit()
         return operation
-    await _rows(session, scope, operation)
+    try:
+        await _rows(session, scope, operation, sales)
+    except WithdrawalError as exc:
+        return await _auth_error(session, scope, operation_id, lease, exc)
+    if auth.expires_at <= datetime.now(UTC):
+        return await _auth_error(
+            session, scope, operation_id, lease, WithdrawalError("withdrawal_auth_required")
+        )
     if await participant_inn(session, scope) != inn:
         return await _auth_error(
             session,
@@ -580,17 +657,20 @@ async def authenticate_and_build(
         if item.state != "pending":
             continue
         info = by_cis.get(item.provider_cis or "")
-        item.preflight_evidence = (
-            {
-                "cis": info.raw,
-                "provider_cis": item.provider_cis,
-                "traceability_metadata_version": runtime.traceability_metadata_version,
-                "traceability_mode": runtime.traceability_mode(info.product_group),
-                "external_mods": discoveries.get(info.product_group or "", []),
-            }
-            if info
-            else None
-        )
+        item.preflight_evidence = {
+            **(item.preflight_evidence or {}),
+            **(
+                {
+                    "cis": info.raw,
+                    "provider_cis": item.provider_cis,
+                    "traceability_metadata_version": runtime.traceability_metadata_version,
+                    "traceability_mode": runtime.traceability_mode(info.product_group),
+                    "external_mods": discoveries.get(info.product_group or "", []),
+                }
+                if info
+                else {}
+            ),
+        }
         error = cis_error(
             info,
             inn=inn,
@@ -607,13 +687,7 @@ async def authenticate_and_build(
             item.state, item.error = "failed", discovery_errors[info.product_group]
             continue
         try:
-            price = await resolve_wb_product_cost(
-                session,
-                tenant_id=scope.tenant_id,
-                seller_id=scope.seller_id,
-                order_id=item.order_id,
-            )
-            item.price_snapshot_id, item.product_cost = price.snapshot_id, price.product_cost
+            assert item.product_cost is not None
             fias, kpp = required_external_mod(
                 inn=inn,
                 pg=info.product_group,
@@ -625,7 +699,7 @@ async def authenticate_and_build(
             continue
         prepared.append(
             WithdrawalProduct(
-                item.id, item.provider_cis or "", price.product_cost, info.product_group, fias, kpp
+                item.id, item.provider_cis or "", item.product_cost, info.product_group, fias, kpp
             )
         )
     built = build_withdrawal_documents(

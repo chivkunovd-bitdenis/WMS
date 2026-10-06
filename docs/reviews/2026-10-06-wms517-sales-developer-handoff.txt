@@ -1,0 +1,234 @@
+WMS-517 developer -> independent test writer handoff, 06.10.2026
+
+Permanent checkout: /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-sales-report-contract
+Branch: codex/wms517-sales-report-contract. Tests-before-code HEAD: f5ca85534198feae8ad720ae2875730ae351229c.
+Developer changes are not yet committed or accepted. Test writer owns only tests and this handoff.
+Do not change assertions, cases, guard coverage or requirements merely to obtain GREEN.
+
+Owned implementation paths:
+backend/app/services/wb_sales_report.py: complete HTTP sales scan, Decimal finishedPrice,
+  exact fractional cursor comparison, S/R/identity conflict selection, seller token resolver.
+backend/app/db/withdrawal_repository.py: sales_for_scope / sold_rows / registry.
+backend/app/api/marking_withdrawals.py: products uses same sales predicate.
+backend/app/services/withdrawal_service.py: create/retry fresh report; existing request/exact
+  active claims can resume without fresh sales; new items store wb_sale in preflight_evidence.
+backend/app/services/withdrawal_orchestration.py: original binding recheck; fresh complete sales
+  after CRPT preflight and before bytes. Lease heartbeat while waiting, fail clears workflow
+  lease through existing _auth_error. Saved submitted/unknown recovery bypasses all sales.
+Rows use populate_existing=True to detect changes committed in a different DB session.
+
+SC10 fixture problem observed after its product assertions became GREEN:
+test_sc10_exact_cost_and_immutable_source_survive_later_wb_change calls rollback then
+operation.id, which is expired ORM state. Save scalar operation_id before rollback and use
+that scalar afterwards. Preserve exact payload, evidence and price assertions unchanged.
+Developer did not edit test files. Two parametrized cases only were deselected temporarily.
+Own original full RED: 41 failed, 10 passed (51) before code, 93 sec with -n2.
+Latest SQLite subset: 49 passed, 2 deselected, including 305 and 10000 distinct orders/codes,
+40.29 sec. This is not full PASS or acceptance; full suite must run after independent repair.
+
+Additional meaningful coverage needed; do not mirror internal implementation:
+1. Redis shared limiter across two callers, exact seller/tenant scope and Retry-After.
+2. Only completed report is cached for registry/products (300 seconds); force-fresh
+   create/retry/build cannot use cached S after R or incomplete refresh; failed refresh
+   cannot overwrite useful saved operation/document/evidence.
+3. Submicrosecond cursor advancement: .1234567 -> .1234568, exact request bytes, then [];
+   repeated boundary that does not advance must fail incomplete.
+4. Pending/new request resume after persisted unknown intent must not perform sales/POST;
+   new prep after return must not build; a concurrent session rebinding wb_rid/CIS must
+   not pass because of ORM identity-map caches.
+5. Long rate waits preserve only the owned workflow lease and cannot build after its
+   ownership changed; no seller/order/operation lock held during WB HTTP or limiter waits.
+6. PostgreSQL full report predicate uses one ARRAY parameter instead of thousands of
+   separate binds; same-sale local-order ambiguity cannot fan out one sale to many units.
+7. Mixed older-than-90-day missing history and current exact S sale: registry/products
+   must not claim a complete historical sold set; the selected current proof-backed
+   subset may create/retry/build, while selecting the old unsupported order raises
+   coverage/incomplete. sales_for_scope(row_ids=...) checks only selected-order coverage
+   after reading the complete seller HTTP report, not only the selected sale rows.
+   The parent confirmed this is within agreed scope on 06.10; original analyst will
+   assess it at acceptance. No full production set is claimed from partial history.
+8. REQUIRED RED BEFORE NEW BRANCH IMPLEMENTATION: create an operation with two distinct
+   exact S orders, then return R for one between challenge and builder. Healthy S may
+   build/sign while the returned item is preserved as failed with its actual sales
+   reason and no document membership; selection/tenant/requested row IDs are not
+   silently changed. Single existing SC7 keeps its original expectation (no signable
+   document for the only returned item). Current _rows raises for the whole operation,
+   so this mixed test should be meaningful RED. Parent approved only this R22 partial
+   interpretation, contingent on independent test-before-code. Developer has NOT
+   implemented this branch and is awaiting the independent frozen test contract.
+9. REQUIRED concurrent R19 regression: caller B already reserves/sleeps for its
+   seller slot at +61s; caller A receives 429 Retry-After:120 while B is sleeping.
+   B must not issue its already scheduled GET before the shared Retry-After floor.
+   Current _DEFER updates next-slot key but _wait_slot has already computed B's
+   delay and does not recheck a deferred floor. Sequential boundary tests and the
+   actual Redis Lua smoke below do NOT prove this waiting-caller case. This is a
+   known technical limiter risk for independent RED/review, not accepted behavior.
+   New implementation must also retain >=61s gaps between concurrently rescheduled
+   callers, lease heartbeats, no locks during vendor waits, and no hidden HTTP retry.
+10. Independent frontend copy guard requested for R21. Current public caption at
+    frontend/src/screens/v2/SellerKizWithdrawalScreen.tsx:709 states only handed-over
+    FBS WB orders, not sales evidence. Guard must require honest sold-by-WB wording
+    while preserving the period as handover date. After independent RED, parent
+    explicitly grants developer ownership of this one caption line only, under the
+    owner's Sol6.1 override; no layout/components/other UI changes. Separate Astra
+    review remains required. Captions/columns 'Передано WB' must not become sale date.
+11. Independent extreme finishedPrice precision/range/nonfinite RED requested.
+    Decimal*100 currently uses default precision 28 and may round a very long
+    fractional tail into successful integer kopecks (e.g.
+    '1.0000000000000000000000000000000001'). Giant exponent must yield item error,
+    not an uncaught Decimal exception. Strings 'NaN' already have frozen coverage;
+    numeric nonstandard JSON NaN/Infinity can currently become invalid PostgreSQL
+    JSON evidence unless normalized or rejected before persistence. No fixes made
+    for these branches before independent test contracts. Preserve good neighbors
+    and do not let legacy price fallback mask any invalid sales amount.
+
+Redis boundaries for injection:
+wb_sales_report imports Redis from redis.asyncio and calls Redis.from_url(existing
+settings.celery_broker_url, decode_responses=True). eval reserves one per-seller slot
+in milliseconds from Redis server TIME; a separate eval defers the shared seller slot
+after 429 according to Retry-After (seconds or HTTP date), with no immediate retry.
+get/set stores only completed relevant by_rid,
+received_at/date_from/pages/row_count under tenant/seller/order-identity hash; aclose ends
+the owned client. HTTP-only SalesHTTP monkeypatch remains authoritative for WB rows.
+No real Redis, credential server, live WB/CRPT, signing or printing is needed for tests.
+In local sandbox without broker only development rate scheduling is used; production
+without shared broker fails closed. No secrets are created or changed.
+
+Legacy fixtures:
+seed in test_withdrawal_ledger has no wb_rid/synthetic sales. Add exact synthetic rid,
+synthetic seller credential and HTTP sale evidence through independent fixture ownership.
+Keep existing recovery/claims/lease/signature assertions. Existing snapshot-price tests
+that assert old R15 behavior need analyst classification against new R22, not a developer
+expectation rewrite. A sale price of "999999999999999.99" RUB preserves max-cost tests
+without fallback to the old order-price source.
+
+Own isolated PostgreSQL 16.14 cluster (test-only trust auth, no user secret):
+/private/tmp/wms517-sales-pg.yNycjp, 127.0.0.1:56517, user wms_test.
+Sales pytest DB: postgresql+asyncpg://wms_test@127.0.0.1:56517/wms_test517
+Separate migration DB: postgresql+psycopg://wms_test@127.0.0.1:56517/wms_test517_migrations
+Do not run migrations and pytest concurrently on the same database.
+Fresh full Alembic upgrade head PASS using psycopg on the separate migration DB.
+asyncpg Alembic fails on existing WMS-516 multi-command prepared DDL; it was not altered.
+Pytest asyncpg pool requires shared loop configuration in this harness:
+  -o asyncio_default_fixture_loop_scope=session -o asyncio_default_test_loop_scope=session
+Default function loops caused attached-to-a-different-loop infrastructure errors.
+Actual PG exposed JSON SELECT DISTINCT equality failure; developer removed SQL DISTINCT
+and deduplicates ORM identities. PG subset: 47 passed, 4 deselected (two bulk and two
+latent SC10 fixture cases), 4.75 sec. PG bulk re-run is in progress; no full PASS claimed.
+
+Verification commands from backend:
+PYTHONDONTWRITEBYTECODE=1 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest -q -n 2 tests/test_wms517_sales_contract.py --tb=line -p no:cacheprovider
+WMS_TEST_DATABASE_URL=postgresql+asyncpg://wms_test@127.0.0.1:56517/wms_test517 PYTHONDONTWRITEBYTECODE=1 /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -m pytest -q tests/test_wms517_sales_contract.py --tb=line -p no:cacheprovider -o asyncio_default_fixture_loop_scope=session -o asyncio_default_test_loop_scope=session
+
+Developer verification update, 06.10.2026 01:33 Tbilisi:
+- Replacement tester independently saved SC10 fixture repair 042d9dbac, additional
+  contract a5db96c3c, legacy fixture 432516e88 and honest evidence 26e6ff10a.
+  Developer changed no test assertions, parametrization or guard files.
+- Own SQLite complete 51+6 before timestamp correction: 56 passed, 1 failed,
+  84.71s. The new seventh-fraction-digit source test independently reproduced
+  1 failed / 3.83s. Fixed latest-source comparison with the same exact Decimal
+  cursor comparator, not a microsecond-truncating datetime comparison.
+- Latest complete PostgreSQL 16.14 contract 51+6: 57 passed, 118.00s, no deselection;
+  includes 305 and 10000 selected rows. Test loop scopes session/session as above.
+- Full PostgreSQL legacy ledger: 41 passed, 3 failed, 30.02s. Failures are the
+  unchanged old snapshot-id / missing-legacy-price / legacy-price-retry assertions;
+  synthetic sale price is valid independently of legacy price. Classification
+  delegated by parent to a separate replacement analyst; not silently waived here.
+  Both real PostgreSQL concurrency cases executed and passed in this full run.
+- Separate critical PostgreSQL selections: real migration/audit guards/downgrade,
+  exact document split/bytes/Moscow date, semantic matching, API signature/scoping,
+  seller-role signing permission: 5 passed, 8.48s. This is not full-module evidence.
+- TrueAPI + review fixes + price-backfill modules: 109 passed, 3 failed, 7.02s.
+  Three terminal-reject tests stop before assertions because imported legacy
+  document/operation seed lacks the module-local synthetic sales HTTP/credential
+  fixture. Tester must adapt those I/O fixtures; developer did not edit tests.
+- Full backend ruff --no-cache PASS and mypy --cache-dir=/dev/null --no-incremental
+  PASS (552 source files). No-cache avoids prior disk-full cache corruption.
+- Actual isolated Redis 8.10.1 at loopback 56518: existing Lua _RESERVE and _DEFER
+  executed by two Redis clients, first/second/after-120s-defer slots 0/60998/121998ms.
+  Assertions passed; server stopped with shutdown nosave. Not WB production proof.
+- Mixed R+healthy and extreme Decimal precision RED contracts still pending.
+  Do not claim full product readiness before those tests, separate review/acceptance,
+  full remote CI and real SC13/SC16 evidence. No production query/sign/submit/deploy.
+Full backend ruff --no-cache . PASS; mypy --cache-dir=/dev/null --no-incremental . PASS
+(552 files), before latest small populate_existing adjustment; repeat after final changes.
+Disk exhaustion affected initial attempts; parent recovered >800MiB old synthetic DBs.
+Fresh production seller scope, sold counts, operator CryptoPro and deployment are not
+proved here. SC13/SC16 references must be real evidence, never fabricated links.
+
+Resume / preservation update, 06.10.2026 06:08 UTC:
+Parent revoked the previous hold and explicitly required an honest partial code
+commit, not a readiness claim. Base saved/pushed as
+5ed26cc4f9466d82fc62ec0ff66982b48a5bfef9. Foreign untracked analyst-result file
+was not staged. Tester full handoff HEAD4ba3e324 read; own frozen18 rerun observed
+4 failed/14 passed in4.35s: mixed return, fractional kopek rounding, giant exponent
+service and giant exponent API500. Fixed exact Decimal scaling via tuple exponent
+(no arithmetic-context rounding); reject nonfinite/range before scaling. Preserved
+original S evidence plus fresh excluded report raw rows/reason for returned item;
+only healthy item proceeds through exact bytes, signature and terminal recovery.
+After fix, all18 passed in15.85s; targeted ruff and diff-check PASS. Full final-code
+regressions are still pending. Reserved-waiter/429 and one caption guards were NOT
+present in published tester contract: no fabricated RED or closed-review claim.
+
+Final bounded verification / R19 delta, 06.10.2026 06:23 UTC:
+- Mixed/Decimal fix published096475cffeb0325573d37d420fb488ca0cb7c5a4.
+- One PostgreSQL run on own56517, 12 withdrawal modules (all75 sales contracts,
+  ledger, orchestration, row status, readiness, review fixes, access, WMS563,
+  TrueAPI and price backfill): 311 passed, no skip/deselection,292.79s.
+  This full run predates the following narrow R19 limiter delta; not repeated.
+- Independent R19 contract3243caa26 plus independent fake adapter9b90320b:
+  own pre-fix RED1failed0.15s, precisely caller B HTTP at61s after A429/120s.
+  _DEFER atomically saves cooldown generation together with seller next-slot in
+  Redis Lua; sleepers compare generations and reserve a fresh shared slot before
+  HTTP. No external/non-atomic marker write, no new HTTP retry, no collapsed gaps.
+  After delta: waiting-rate1 + sales regressions6 + partial/Decimal18 =>25 passed
+  in9.53s. Their expectations unchanged by developer.
+- Real ownRedis8.10.1 at56518 smoke checks atomic generation across two clients
+  and re-reservation after120s; outcome recorded separately in final handoff.
+- Parent explicitly waived a mirror-test for the single R21 caption correction.
+  Only one caption changed, no layout/components/signing UI changes. Used existing
+  main checkout node_modules via ignored worktree symlink; no dependency install.
+  TypeScript --noEmit PASS; existing state/API tests18 passed (2files),869ms.
+- Astra reported raw numeric JSON exponent1e9999999999999999999 parser
+  Decimal InvalidOperation, before per-item handling. Independent public-boundary
+  contract is requested by parent; NOT closed or accepted by this developer.
+  No invented full-PASS/review/acceptance/CI/deploy/live-sale-count/signing claim.
+
+Final F2 fix after independent contract2feb9040d4f937f2ccfd0a250f8594d181bb3437:
+- Own public raw numeric counterexample:4 failed in3.30s, two propagated Decimal
+  InvalidOperation and two actualHTTP500, not a private-helper-only probe.
+- JSON parse_float now preserves the exact numeric lexeme as str, without float
+  or premature Decimal construction. sale_cost performs the existing independent
+  per-item Decimal validation; unsupported exponent stays in evidence and becomes
+  invalid_sale_price while a healthy neighbor retains its exact1234kopeks.
+- Own isolated PostgreSQL latest delta (raw numeric4, waiting-rate1, sales
+  regressions6, partial/Decimal18):29 passed, no deselection,9.71s.
+- Full backend ruff --no-cache PASS and mypy no-cache PASS552sourcefiles.
+  Prior311 PostgreSQL proof is explicitly prior to R19/F2 narrow deltas and was
+  not repeated; latest29 covers the changed mechanisms. Full CI remains separate.
+- Actual Redis8.10.1 extra native-Lua smoke:4clients,3 stale waiting reservations
+  re-reserved after atomic cooldown marker at+244000/+305000/+366000ms, exact61s
+  gaps. This is native slot/marker proof, NOT a full3-caller HTTP/emulator test.
+  Own Redis server56518 was stopped with shutdown nosave; no production Redis.
+- Parent must obtain independent Astra high delta review of final published SHA,
+  then analyst acceptance/CI. No user-facing WMS-517 completion or live signing /
+  deployment / sold-count proof is claimed by the developer.
+
+F3 raw integer follow-up, after independent contracteeaafc9f8bbb753e84fbd02a76ecf89eb0f93a72
+and failed acceptancee33e1cf0c:
+- Read raw integer testwriter handoff and current independent acceptance. Own
+  four public counterexamples observed4failed in2.06s, precisely409instead200
+  (not500). Python's integer digit-limit ValueError had discarded the whole page.
+- Added a bounded parse_int callback: ordinary lexemes become int exactly as
+  before; only conversion ValueError retains the original lexeme for per-item
+  sale_cost validation. No global security limit was disabled or changed.
+- Newinteger4 + existingrawexponent4 + waiting-rate1 + salesregressions6:
+  15 passed, no skip/deselection,4.70s on isolated PID-scoped SQLite. Shared
+  PostgreSQL56517 was not touched by this follow-up. Prior PG proof not repeated.
+- Direct in-memory parser check: nmId123/quantity-2 retain int type;5000digits
+  remain an exact string; sys.get_int_max_str_digits remains4300. This is a
+  developer smoke check, not a new independent/frozen test contract.
+- Full ruff --no-cache PASS and mypy no-cache PASS552sourcefiles. Frozen tests,
+  requirements, acceptance, review and guard files were not edited by developer.
+- Publish final product SHA for independent Astra high delta review and renewed
+  analyst acceptance. The previous FAIL acceptance is not overwritten or waived.
