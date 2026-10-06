@@ -4,7 +4,8 @@ import {mkdir,writeFile} from 'node:fs/promises';
 import assert from 'node:assert/strict';
 if(process.env.GITHUB_ACTIONS!=='true'||process.platform!=='linux')throw Error('Only GitHub Linux runner is authorized');
 const dir=process.env.WMS663_EVIDENCE;await mkdir(dir,{recursive:true});
-const report={product:'1fd2d92dc30eb376c1d8a8e27238e52d963a196e',fixture:'d9e022697e098a2f9c0feee6a5bf03f99cac5945',probe:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),scope:'Real unchanged workspace/theme, synthetic fetch only; no deployed backend, live API, printer or external cycle',cases:[]};
+const report={product:'aa57886772d746d0a08341867d8828bf3ed84d5a',fixture:'d9e022697e098a2f9c0feee6a5bf03f99cac5945',probe:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),proofScope:process.env.WMS663_PROOF_SCOPE,scope:'Real pinned workspace/theme, synthetic fetch only; no deployed backend, live API, printer or external cycle',cases:[]};
+assert.equal(process.env.WMS663_PRODUCT_SOURCE,report.product,'immutable product source mismatch');
 const errors=[];const geometryFailures=[];let cdp,chromeLog='';
 class CDP{
  constructor(url){this.ws=new WebSocket(url);this.next=0;this.pending=new Map();this.listeners=new Map();this.ready=new Promise((r,j)=>{this.ws.onopen=r;this.ws.onerror=j});this.ws.onmessage=e=>{const m=JSON.parse(e.data);if(m.id){const p=this.pending.get(m.id);this.pending.delete(m.id);if(p){clearTimeout(p.timer);m.error?p.reject(Error(JSON.stringify(m.error))):p.resolve(m.result)}}else for(const f of this.listeners.get(m.method)??[])Promise.resolve(f(m.params)).catch(e=>errors.push(String(e)))}}
@@ -49,6 +50,7 @@ try{
   report.cases.push({case:'C18',width,status:'PASS',fixture:geometry.fixture,windowOverflow:geometry.windowOverflow});
   } catch(e) {geometryFailures.push(String(e));report.cases.push({case:'C18',width,status:'FAIL',failure:String(e)});}
  }
+ if(process.env.WMS663_PROOF_SCOPE!=='c18'){
  await cdp.send('Emulation.setDeviceMetricsOverride',{width:1280,height:1100,deviceScaleFactor:1,mobile:false});
  await cdp.send('Page.navigate',{url:'http://127.0.0.1:16663/'});await openDocuments();
  // C16 supplemental original scenario: rejected -> correction -> refresh -> tab -> remount.
@@ -74,6 +76,7 @@ try{
  assert.equal(await evaluate(`(${field}).value`),'001/ABC-10');assert(await evaluate(`document.body.textContent.includes('gtd_invalid')`));
  await capture('c16-refresh-tab-remount');
  report.cases.push({case:'C16 supplemental',status:'PASS',scope:'rejected/correct/save/GET refresh/keyboard tab/remount synthetic readback; order B remains untested'});
+ }
  assert.equal(errors.length,0,'browser exceptions or forbidden network');report.geometryFailures=geometryFailures;report.status=geometryFailures.length?'FAIL':'PASS';if(geometryFailures.length)process.exitCode=1;
 }catch(e){report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;if(cdp)try{await capture('failure')}catch{}}
 finally{if(cdp)try{await writeFile(`${dir}/requests.json`,JSON.stringify(await evaluate('window.proof?.requests'),null,2))}catch{}await writeFile(`${dir}/result.json`,JSON.stringify({...report,errors},null,2));await writeFile(`${dir}/chrome.log`,chromeLog);cdp?.ws.close();chrome.kill()}

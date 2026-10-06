@@ -57,7 +57,8 @@ jobs:
           retention-days: 14
   c16-c18-ui:
     env:
-      WMS663_PROOF_SCOPE: ${{ contains(github.event.head_commit.message, '[C16]') && 'c16' || 'all' }}
+      WMS663_PRODUCT_SOURCE: aa57886772d746d0a08341867d8828bf3ed84d5a
+      WMS663_PROOF_SCOPE: ${{ contains(github.event.head_commit.message, '[C18]') && 'c18' || contains(github.event.head_commit.message, '[C16]') && 'c16' || 'all' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
@@ -71,8 +72,11 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/wms663-ui"
           git rev-parse HEAD > "$RUNNER_TEMP/wms663-ui/probe-sha.txt"
-          git diff --exit-code 1fd2d92dc30eb376c1d8a8e27238e52d963a196e HEAD -- frontend/src ':!frontend/src/**/*.test.tsx' ':!frontend/src/**/*.test.ts'
-          git ls-tree -r HEAD backend/app frontend/src > "$RUNNER_TEMP/wms663-ui/product-manifest.txt"
+          git cat-file -e "$WMS663_PRODUCT_SOURCE^{commit}"
+          printf '%s\n' "$WMS663_PRODUCT_SOURCE" > "$RUNNER_TEMP/wms663-ui/product-source-sha.txt"
+          git ls-tree -r "$WMS663_PRODUCT_SOURCE" backend/app frontend > "$RUNNER_TEMP/wms663-ui/product-manifest.txt"
+          # Compile the immutable product tree, not concurrent branch changes.
+          git restore --source="$WMS663_PRODUCT_SOURCE" --worktree -- frontend
           npm ci --prefix frontend > "$RUNNER_TEMP/wms663-ui/npm-ci.log" 2>&1
           google-chrome --version > "$RUNNER_TEMP/wms663-ui/chrome-version.txt"
       - name: Build unchanged real workspace with synthetic fixture
