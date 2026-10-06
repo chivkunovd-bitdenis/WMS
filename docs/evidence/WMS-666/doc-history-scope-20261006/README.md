@@ -25,6 +25,9 @@ Missing immutable objects fail closed. Expected fatal Git output относит�
 
 Два cumulative ledger refs original0e078/071a05 обновлены на exacttestSHA;
 предыдущие Sol/Astra provenance сохранены целиком в previous_review.
-Новая независимая оценка пока **PENDING**, передана отдельной сессии662 сразу
-после push. Никакого фальшивого PASS, productreview, deploy или общего CI здесь нет.
+Новая независимая оценка **Sol6.1 high PASS** опубликована в
+`70caca16010c8d892ff67c3533ef9ff701c0e489`: [отчёт](independent-review.md).
+Reviewer самостоятельно выполнил4 адресных контроля/actual history —4PASS,4.46s;
+семь остальных не запускал. Обе ledger ссылки закрыты этим реальным evidence.
+Productreview, deploy или общий CI этим process-вердиктом не объявляются.
 Общий CI source продолжает ведущий; историю не переписывали.

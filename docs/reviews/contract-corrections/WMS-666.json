@@ -27,10 +27,13 @@
       "review": {
         "model": "gpt-6.1-sol",
         "effort": "high",
-        "verdict": "PENDING",
+        "verdict": "PASS",
         "source_commit": "cc8e6a019559343ac404e168a92ad36137255672",
         "correction_commit": "b1742141c4625d7ed9e238132d94ffea402f49ee",
-        "previous_correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e"
+        "previous_correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+        "evidence": "docs/evidence/WMS-666/doc-history-scope-20261006/independent-review.md",
+        "evidence_commit": "70caca16010c8d892ff67c3533ef9ff701c0e489",
+        "evidence_blob": "93f904185cae4f66c96a81e4051c7b33245dfe79"
       },
       "previous_review": {
         "model": "gpt-6.1-sol",
@@ -56,10 +59,13 @@
       "review": {
         "model": "gpt-6.1-sol",
         "effort": "high",
-        "verdict": "PENDING",
+        "verdict": "PASS",
         "source_commit": "cc8e6a019559343ac404e168a92ad36137255672",
         "correction_commit": "b1742141c4625d7ed9e238132d94ffea402f49ee",
-        "previous_correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e"
+        "previous_correction_commit": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+        "evidence": "docs/evidence/WMS-666/doc-history-scope-20261006/independent-review.md",
+        "evidence_commit": "70caca16010c8d892ff67c3533ef9ff701c0e489",
+        "evidence_blob": "93f904185cae4f66c96a81e4051c7b33245dfe79"
       },
       "previous_review": {
         "model": "gpt-6.1-sol",
