@@ -13,7 +13,7 @@ it('one required posting selects the supply checkbox; a known no-documents posti
       product_id: 663001, exemplars: [{ exemplar_id: 81,
         gtd_required: true, rnpt_required: false, is_gtd_absent: false, is_rnpt_absent: false }],
     }] },
-    B: { version: 7, state: 'editable', absence_selected: false, products: [{
+    B: { version: 7, state: 'editable', absence_selected: false, requirements_complete: true, products: [{
       product_id: 663002, exemplars: [{ exemplar_id: 91,
         gtd_required: false, rnpt_required: false, is_gtd_absent: false, is_rnpt_absent: false }],
     }] },
