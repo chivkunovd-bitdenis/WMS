@@ -1,6 +1,6 @@
 // Synthetic visual evidence only. Linux GitHub runner, exact unmodified product.
 import assert from 'node:assert/strict';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -11,6 +11,8 @@ if (process.env.GITHUB_ACTIONS !== 'true' || process.platform !== 'linux') {
 const source = resolve('source');
 const baseline = resolve('baseline');
 const dir = process.env.WMS667_EVIDENCE_DIR;
+const extraDesktop = process.env.WMS667_EXTRA_DESKTOP === 'true';
+const widths = extraDesktop ? [1024] : [1440, 390];
 await mkdir(dir, { recursive: true });
 const sha = path => execFileSync('git', ['rev-parse', 'HEAD'], { cwd: path, encoding: 'utf8' }).trim();
 assert.equal(sha(source), 'c4142888f32830c0138cf221987affcbd3f2ac7e');
@@ -25,7 +27,7 @@ const fixtures = {
     'b-positive': { quantity: 7, reserved: 9, available: -2 } },
 };
 const report = { sourceSha: sha(source), productSha: '2d139aee43464ff799fe64d1cbf05b043ff88007',
-  baselineSha: sha(baseline), probeSha: sha('.'), fixtures, cases: [], requests: [], externalBlocked: [] };
+  baselineSha: sha(baseline), probeSha: sha('.'), extraDesktop, fixtures, cases: [], requests: [], externalBlocked: [] };
 const html = `<!doctype html><html lang="ru"><head><meta charset="utf-8"><title>WMS-667 synthetic visual</title></head>
 <body><div id="root"></div><script type="module">
 import React from 'react'; import { createRoot } from 'react-dom/client';
@@ -142,11 +144,11 @@ async function serverFor(root,port) {
 }
 try {
   const old=await serverFor(baseline,16670);
-  try {for(const width of [1440,390]) await runCase(old,`baseline-${width}`,width,async()=>{},true);}
+  try {for(const width of widths) await runCase(old,`baseline-${width}`,width,async()=>{},true);}
   finally {await old.close();}
   const current=await serverFor(source,16671);
   try {
-    for(const width of [1440,390]) await runCase(current,`candidate-${width}`,width,async(page,result)=>{
+    for(const width of widths) await runCase(current,`candidate-${width}`,width,async(page,result)=>{
       assert.equal(await page.getByTestId('ff-product-row').count(),1);
       assert.match(await page.getByTestId('ff-catalog-stock-on-hand-a-positive').innerText(),/Остаток 5/);
       assert.match(await page.getByTestId('ff-catalog-stock-reserved-a-positive').innerText(),/Резерв 5/);
@@ -156,7 +158,7 @@ try {
       await stock.scrollIntoViewIfNeeded();
       await page.screenshot({path:resolve(dir,`candidate-${width}-stock.png`)});
     });
-    for(const stage of ['catalog','summary']) await runCase(current,`late-${stage}`,1440,async(page,result)=>{
+    for(const stage of extraDesktop ? [] : ['catalog','summary']) await runCase(current,`late-${stage}`,1440,async(page,result)=>{
       await page.evaluate(stage=>{window.__hold=stage;window.__release=null;},stage);
       await page.getByTestId('ff-catalog-has-stock-filter').getByRole('checkbox').uncheck();
       await page.waitForFunction(()=>typeof window.__release==='function');
@@ -176,5 +178,5 @@ try {
   await writeFile(resolve(dir,'report.json'),JSON.stringify(report,null,2));
   console.log(JSON.stringify(report,null,2));
 }
-assert.equal(report.cases.length,6);
+assert.equal(report.cases.length,extraDesktop ? 2 : 6);
 assert.equal(report.cases.filter(test=>!test.pass).length,0,'One or more visual cases failed; inspect artifacts');

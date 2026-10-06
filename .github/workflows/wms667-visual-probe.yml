@@ -40,6 +40,9 @@ jobs:
         env:
           PLAYWRIGHT_MODULE: ${{ runner.temp }}/wms667-tools/node_modules/playwright/index.mjs
           WMS667_EVIDENCE_DIR: ${{ runner.temp }}/wms667-evidence
+          # Initial 1440/390 + late-answer cases are preserved in run 37434785697.
+          # One bounded additional narrow desktop comparison; do not repeat them.
+          WMS667_EXTRA_DESKTOP: 'true'
         run: timeout 300s node scripts/ci/wms667-visual-probe.mjs
       - uses: actions/upload-artifact@v4
         if: always()
