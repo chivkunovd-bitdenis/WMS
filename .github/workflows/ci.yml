@@ -131,7 +131,7 @@ jobs:
         env:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55466/wms_test_662_batch
         run: |
-          pip install asyncpg
+          pip install asyncpg==0.31.0
           pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py
       - name: WMS-662 isolated steady-state lock order on real PostgreSQL
         env:

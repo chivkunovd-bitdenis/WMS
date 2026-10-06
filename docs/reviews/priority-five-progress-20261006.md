@@ -309,3 +309,9 @@ Workflow/API correction `c884171aca6cbf72bc9ae6cc46d37cfa6afd7381`: two frozen66
 Actual narrow652 model review `74890bb821d3a881c16b2806c964ca8676d0b832` included report-only as `6f0dab804`, exactf263 PASS81/81. Historical676 C8 reference changed to current equivalent allowedmodel testcase and latest rule documented explicitly; original history retained. Fresh `git fetch origin etalon` still confirms base `4b298efc95be7b4b6b7fe5665be9f3671f1fe747`. No new base changes to merge.
 
 Document integration gate discovered that historical514/636 tables use ID rather than required current header Проверка. Current supplement now links only independently accepted test harness maintenance, with truthful12/7existingtestsPASS and actual58/58review report; original product requirements/old acceptance not fabricated or replaced.676 renamedSol model testcase reference was aligned with newly authorized652 R40. Next gate rerun includes actual662/666correction ledgers.
+
+## Narrow fixture fixes integrated before CI3 · 06.10.2026
+
+Current `2b5d631376a30b0c83bb8109a39b0176a0fbea4f` includes exact separate475/537 test-only correction `c38e2cfbcc142b50e9dd1d606adddb2a42b19acf`: mock marketplace membership reflects its state before and after accepted PATCH, not an already accepted add before the first mutation. Frozen business expectations remain unchanged; independent review and final targeted proof are being saved by original tester/reviewer. Runtime untouched.
+
+Current document gate PASS on prior d5da integration; all own changes saved in Git, no intermediate push to cancel CI. WMS-662 isolated PostgreSQL steps pin asyncpg0.31.0 matching tested local driver. The final grouped push waits only for actual475/537review/proof and653scope correction/proof, with current origin/etalon reconfirmed before dispatch. No broad product review rerun or new document-review stage.
