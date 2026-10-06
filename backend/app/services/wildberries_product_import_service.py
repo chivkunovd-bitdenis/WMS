@@ -28,6 +28,10 @@ from app.services.wb_card_enrichment import (
     sku_code_for_wb_variant,
     subject_name_from_card,
 )
+from app.services.wb_honest_sign_service import (
+    WbCategoryCatalog,
+    derive_marking_requirement,
+)
 
 OLD_SKU_PREFIX = "OLD/"
 OLD_NAME_PREFIX = "[OLD] "
@@ -299,6 +303,8 @@ async def upsert_products_from_wb_cards(
     cards: list[object],
     *,
     before_commit: Callable[[AsyncSession], Awaitable[None]] | None = None,
+    marking_catalog: WbCategoryCatalog | None = None,
+    marking_catalog_error: str | None = None,
 ) -> dict[str, Any]:
     """Create or update one Product per WB ``chrtID`` and retain every size SKU."""
     created = 0
@@ -312,6 +318,21 @@ async def upsert_products_from_wb_cards(
     barcode_conflict_details: list[dict[str, object]] = []
     barcodes_added = 0
     barcodes_existing = 0
+    marking_diagnostics: list[dict[str, object]] = []
+    if marking_catalog_error is not None:
+        marking_diagnostics.append(
+            {
+                "code": marking_catalog_error,
+                "nm_ids": sorted(
+                    {
+                        nm_id
+                        for item in cards
+                        if isinstance(item, dict)
+                        and (nm_id := _parse_nm_id(item)) is not None
+                    }
+                ),
+            }
+        )
 
     for item in cards:
         if not isinstance(item, dict):
@@ -323,6 +344,7 @@ async def upsert_products_from_wb_cards(
         card_country = country_of_origin_from_card(item)
         card_shelf_life = shelf_life_from_card(item)
         category = subject_name_from_card(item)
+        marking_decision = derive_marking_requirement(item, marking_catalog)
         variants = iter_size_variants_from_card(item)
         if not variants:
             skipped += 1
@@ -402,6 +424,7 @@ async def upsert_products_from_wb_cards(
                         height_mm=card_height_mm,
                         wb_country_of_origin=card_country,
                         wb_shelf_life=card_shelf_life,
+                        requires_honest_sign=marking_decision.required,
                     )
                     session.add(p)
                 else:
@@ -414,6 +437,8 @@ async def upsert_products_from_wb_cards(
                         variant=variant,
                         category=category,
                     )
+                    if marking_decision.required:
+                        p.requires_honest_sign = True
                 try:
                     await session.flush()
                     barcode_result = await add_barcodes_to_product(session, p, retained_codes)
@@ -563,4 +588,5 @@ async def upsert_products_from_wb_cards(
         "barcode_conflict_details": barcode_conflict_details,
         "barcodes_added": barcodes_added,
         "barcodes_existing": barcodes_existing,
+        "marking_diagnostics": marking_diagnostics,
     }

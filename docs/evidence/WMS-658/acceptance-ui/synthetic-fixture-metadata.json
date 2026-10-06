@@ -1,0 +1,19 @@
+{
+  "kind": "synthetic-only fixture, not incident/source/print proof",
+  "pdf_sha256": "a98fed25a4c531a9ee60c22c1b7acc0067535f675327308c5a53f506a43e70c7",
+  "pdf_bytes": 22772,
+  "payload_lengths": [
+    83,
+    83
+  ],
+  "expected_payload_sha256": [
+    "ffc299f1ba73137796e884ffb0fa40d9316504e0f35220102dc9bfe2541b5dce",
+    "808ab39e9c6cf1ebd9e14bcb711ee0d42e5ca95d6789df4270a62466aa795b19"
+  ],
+  "decoded_payload_sha256": [
+    "ffc299f1ba73137796e884ffb0fa40d9316504e0f35220102dc9bfe2541b5dce",
+    "808ab39e9c6cf1ebd9e14bcb711ee0d42e5ca95d6789df4270a62466aa795b19"
+  ],
+  "decoder": "native zxingcpp over actual rendered PDF",
+  "all_full_payloads_equal": true
+}

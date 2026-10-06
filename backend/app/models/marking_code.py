@@ -5,6 +5,7 @@ from datetime import datetime
 from typing import TYPE_CHECKING
 
 from sqlalchemy import (
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
@@ -162,6 +163,9 @@ class MarkingCodeImport(Base):
     accepted_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(nullable=False, default=0)
     skip_reasons_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    label_artifact_provenance_complete: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
     uploaded_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -260,6 +264,9 @@ class MarkingCode(Base):
     )
     gtin: Mapped[str | None] = mapped_column(String(32), nullable=True)
     label_artifact_pdf: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True)
+    label_artifact_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
     serial: Mapped[str | None] = mapped_column(String(128), nullable=True)
     crypto_tail: Mapped[str | None] = mapped_column(String(256), nullable=True)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default=STATUS_AVAILABLE)
