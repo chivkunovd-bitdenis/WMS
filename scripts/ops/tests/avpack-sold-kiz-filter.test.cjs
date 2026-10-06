@@ -8,7 +8,7 @@ const { createHelper, TARGET_ROW_IDS } = require('../avpack-sold-kiz-filter.js')
 const TENANT = 'd6e1ad21-8afa-4acf-8d0b-907b9f2adcfe';
 const SELLER = '0b8da5d8-f43a-42f5-a2ec-43173ea844bd';
 const TOKEN = 'synthetic-token-never-return';
-const ORIGIN = 'https://sellerfocus.pro';
+const ORIGIN = 'https://wms.sellerfocus.pro';
 const REGISTRY = '/api/operations/marking-codes/self/withdrawals';
 const EXPECTED_IDS = [
   '076e540e-a663-4b4e-acac-c76f1bc32b47', '0d2b2f9f-799c-476c-b4f8-8090efff5ddb',
@@ -85,7 +85,7 @@ function harness(options = {}) {
     ...EXPECTED_IDS.map(targetRow),
   ];
   const root = {
-    location: { origin: ORIGIN, pathname: '/seller/honest-sign/withdrawals' },
+    location: { origin: ORIGIN, pathname: '/seller/honest-sign/withdrawals', ...options.location },
     localStorage: { getItem: () => token },
     Response,
   };
@@ -151,6 +151,9 @@ test('execute exposes only the exact 80 rows to the existing UI and opens its ce
   assert.equal(result.targetCount, 80);
   assert.equal(result.signed, false);
   assert.equal(result.sent, false);
+  assert.equal(result.noSend, true);
+  assert.ok(h.calls.every(call => call.method === 'GET'), 'preparation cannot sign or submit an operation');
+  assert.ok(h.calls.every(call => ['/api/auth/me', REGISTRY].includes(call.url.pathname)));
   assert.notEqual(h.root.fetch, h.originalFetch);
   assert.deepEqual(h.events, ['inspect', 'open']);
 });
@@ -187,12 +190,18 @@ test('preexisting selection aborts before installing the filter', async () => {
   assert.equal(h.root.fetch, h.originalFetch);
 });
 
-test('seller identity mismatch aborts before reading the registry', async () => {
-  const h = harness({ identity: { seller_id: 'wrong' } });
-  await assert.rejects(() => h.helper.run({ mode: 'execute' }), /AVpack|seller|селлер/i);
-  assert.equal(h.root.fetch, h.originalFetch);
-  assert.deepEqual(h.calls.map(call => call.url.pathname), ['/api/auth/me']);
-});
+for (const [field, value] of [
+  ['tenant_id', 'wrong'], ['seller_id', 'wrong'], ['active_seller_id', 'wrong'],
+  ['role', 'fulfillment_admin'], ['withdrawal_enabled', false],
+]) {
+  test(`identity mismatch in ${field} aborts before reading the sold registry`, async () => {
+    const h = harness({ identity: { [field]: value } });
+    await assert.rejects(() => h.helper.run({ mode: 'execute' }), /AVpack|seller|селлер/i);
+    assert.equal(h.root.fetch, h.originalFetch);
+    assert.deepEqual(h.calls.map(call => call.url.pathname), ['/api/auth/me']);
+    assert.deepEqual(h.events, []);
+  });
+}
 
 test('session change while the UI is being prepared restores original fetch', async () => {
   const h = harness({ changeTokenInUi: true });
@@ -223,9 +232,18 @@ test('a second helper cannot accept the already installed snapshot as backend tr
   assert.throws(() => createHelper({ root: h.root, ui: { inspectSelection() {} } }), /уже установлен|перезагруз/i);
 });
 
-test('wrong origin or route aborts without a request', async () => {
-  const h = harness();
-  h.root.location.pathname = '/seller/orders';
-  await assert.rejects(() => h.helper.run({ mode: 'execute' }));
-  assert.equal(h.calls.length, 0);
-});
+for (const location of [
+  { origin: 'https://sellerfocus.pro' },
+  { origin: 'https://wrong.example' },
+  { origin: 'https://wms.sellerfocus.pro.evil.test' },
+  { origin: 'http://wms.sellerfocus.pro' },
+  { pathname: '/seller/orders' },
+]) {
+  test(`wrong sold registry origin or route aborts before network or UI: ${JSON.stringify(location)}`, async () => {
+    const h = harness({ location });
+    await assert.rejects(() => h.helper.run({ mode: 'execute' }));
+    assert.equal(h.calls.length, 0);
+    assert.deepEqual(h.events, []);
+    assert.equal(h.root.fetch, h.originalFetch);
+  });
+}

@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { launch } = require('../avpack-macos-launcher.js');
 
-const URL_EXACT = 'https://sellerfocus.pro/seller/honest-sign/withdrawals';
+const URL_EXACT = 'https://wms.sellerfocus.pro/seller/honest-sign/withdrawals';
 const SECRET = 'synthetic-secret-do-not-print-665';
 const READY = Object.freeze({
   status: 'certificate_dialog_open', targetCount: 80,
@@ -118,20 +118,29 @@ test('launches the helper once in execute mode and returns only unsigned unsent 
   ), 'status polling must not read credentials, inspect certificates or act on the page');
 });
 
-test('allows query and hash on the exact registry URL and ignores unrelated tabs', async () => {
-  const f = fixture({ tabs: [
-    { id: 1, url: 'https://example.org' },
-    { id: 42, url: `${URL_EXACT}?date_from=2026-09-18#registry` },
-  ] });
-  assert.equal((await f.run()).targetCount, 80);
-});
+for (const suffix of ['', '/', '?date_from=2026-09-18#registry', '#registry', '/?date_from=2026-09-18', '/#registry']) {
+  const name = suffix === '?date_from=2026-09-18#registry'
+    ? 'allows query and hash on the exact registry URL and ignores unrelated tabs'
+    : `accepts the correct production registry URL variant ${suffix || '(exact)'} and ignores unrelated tabs`;
+  test(name, async () => {
+    const f = fixture({ pageUrl: `${URL_EXACT}${suffix}`, tabs: [
+      { id: 1, url: 'https://example.org' },
+      { id: 2, url: 'https://sellerfocus.pro/seller/honest-sign/withdrawals' },
+      { id: 42, url: `${URL_EXACT}${suffix}` },
+    ] });
+    assert.equal((await f.run()).targetCount, 80);
+    assert.equal(f.sandbox.__executions.length, 1);
+    assert.ok(f.calls.filter(call => call.kind === 'evaluate').every(call => call.id === 42));
+  });
+}
 
 for (const url of [
-  'http://sellerfocus.pro/seller/honest-sign/withdrawals',
-  'https://sellerfocus.pro.evil.test/seller/honest-sign/withdrawals',
+  'https://sellerfocus.pro/seller/honest-sign/withdrawals',
+  'http://wms.sellerfocus.pro/seller/honest-sign/withdrawals',
+  'https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals',
   'https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals',
   `${URL_EXACT}/operations`,
-  'https://sellerfocus.pro/seller/honest-sign/withdrawals-other',
+  'https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other',
   'not a URL',
 ]) {
   test(`rejects non-target tab ${url} before injection`, async () => {
@@ -239,6 +248,49 @@ test('one executable macOS command embeds exact reviewed sources and needs only 
   // install runtimes or modify the user's permissions or keychain.
   assert.doesNotMatch(command, /\b(?:curl|wget|node|nodejs|npm|npx|python\d*|pip\d*|brew)\b/i);
   assert.doesNotMatch(command, /\b(?:tccutil|sudo|security)\b|defaults\s+write|doShellScript|fetch\s*\(|XMLHttpRequest|NSURLSession|NSURLConnection/i);
+});
+
+test('all launch artifacts and the runbook use the correct production URL without the old working link', () => {
+  for (const filename of [
+    '../avpack-kiz-helper.js', '../avpack-sold-kiz-filter.js', '../avpack-macos-launcher.js',
+    '../build-avpack-macos-command.cjs', '../avpack-sold-kiz.command',
+    '../../../docs/reviews/WMS-665-AVPACK-RUNBOOK.md',
+  ]) {
+    const source = fs.readFileSync(path.join(__dirname, filename), 'utf8');
+    assert.ok(source.includes('https://wms.sellerfocus.pro'), `${filename} must point Vitaliy to production`);
+    assert.ok(!source.includes('https://sellerfocus.pro'), `${filename} must not direct him to the 404 host`);
+  }
+});
+
+test('the command generator reproduces the saved executable exactly without writing any real file', () => {
+  const directory = path.join(__dirname, '..');
+  const writes = [];
+  const modes = [];
+  const generatorFs = {
+    readFileSync(filename) {
+      assert.ok(['avpack-sold-kiz-filter.js', 'avpack-macos-launcher.js'].some(
+        name => filename === path.join(directory, name)));
+      return fs.readFileSync(filename);
+    },
+    writeFileSync(filename, content, options) { writes.push({ filename, content, options }); },
+    chmodSync(filename, mode) { modes.push({ filename, mode }); },
+  };
+  const generator = fs.readFileSync(path.join(directory, 'build-avpack-macos-command.cjs'), 'utf8');
+  vm.runInNewContext(generator, {
+    __dirname: directory,
+    require(name) {
+      if (name === 'node:fs') return generatorFs;
+      if (name === 'node:path') return path;
+      throw new Error(`Unexpected generator dependency: ${name}`);
+    },
+  }, { timeout: 1000 });
+  const commandPath = path.join(directory, 'avpack-sold-kiz.command');
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].filename, commandPath);
+  assert.equal(writes[0].content, fs.readFileSync(commandPath, 'utf8'));
+  assert.equal(writes[0].options.encoding, 'utf8');
+  assert.equal(writes[0].options.mode, 0o755);
+  assert.deepEqual(modes, [{ filename: commandPath, mode: 0o755 }]);
 });
 
 test('redirect after permission probe blocks browser helper loading before any target data is exposed', async () => {

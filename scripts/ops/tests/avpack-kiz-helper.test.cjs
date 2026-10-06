@@ -10,7 +10,7 @@ const { createHelper, TARGETS } = require('../avpack-kiz-helper.js');
 const TENANT = 'd6e1ad21-8afa-4acf-8d0b-907b9f2adcfe';
 const SELLER = '0b8da5d8-f43a-42f5-a2ec-43173ea844bd';
 const TOKEN = 'synthetic-test-token-do-not-return';
-const ORIGIN = 'https://sellerfocus.pro';
+const ORIGIN = 'https://wms.sellerfocus.pro';
 const REGISTRY = '/api/operations/marking-codes/self/withdrawals';
 const EXPECTED = [
   { row_id: 'c9391ebe-21f5-4b1a-89c4-1607563e341a', wb_order_id: '5803306927', cis: '0104630726321651215a0cGXmjtLjxb\u001d91EE12\u001d92lFBvJUaWv6uayEvcOEBE6q/Rlg8WDCxojleoRlHA+uE=' },
@@ -374,8 +374,10 @@ for (const path of ['/api/auth/me', REGISTRY]) {
 }
 
 for (const location of [
+  { origin: 'https://sellerfocus.pro' },
   { origin: 'https://wrong.example' },
-  { origin: 'http://sellerfocus.pro' },
+  { origin: 'https://wms.sellerfocus.pro.evil.test' },
+  { origin: 'http://wms.sellerfocus.pro' },
   { pathname: '/seller/orders' },
 ]) {
   test(`wrong host or route fails before network: ${JSON.stringify(location)}`, async () => {
