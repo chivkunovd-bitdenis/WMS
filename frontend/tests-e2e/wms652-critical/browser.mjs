@@ -90,6 +90,14 @@ async function intercept({requestId,request}) {
   const ws=path.match(/^\/operations\/fbs-supplies\/([^/]+)\/workspace$/);
   if(ws)return fulfill(requestId,state[ws[1]]);
   if(mode==='geometry-list'&&path==='/operations/fbs-orders/worklist')return fulfill(requestId,{items:selectionState.orders,total:selectionState.orders.length,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
+  const documentRead=path.match(/^\/operations\/fbs-orders\/([^/]+)\/ozon-exemplar-documents$/);
+  if(mode==='geometry-packing'&&documentRead&&request.method==='GET'){
+    const one=Object.values(state).flatMap(w=>w.orders).find(o=>o.id===documentRead[1]);
+    assert(one?.marketplace==='ozon','documents reader belongs to the actual Ozon order');
+    return fulfill(requestId,{version:1,state:'editable',absence_selected:false,requirements_complete:true,errors:[],
+      products:(one.positions.length?one.positions:[one.product]).map((_,i)=>({product_id:663001+i,
+        exemplars:[{exemplar_id:91+i,gtd_required:false,rnpt_required:false,is_gtd_absent:false,is_rnpt_absent:false}]}))});
+  }
   if(path.endsWith('/pick-options')||path==='/products/linked-wb-catalog')return fulfill(requestId,[]);
   if(path.endsWith('/print-assets'))return fulfill(requestId,{items:[],ready:0,total:0,errors:[]});
   if(mode==='selection'&&path.startsWith('/operations/'))return selectionBoundary(requestId,request.method,path,u,body);
