@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Literal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import Select, and_, exists, func, or_, select
+from sqlalchemy import Select, String, and_, any_, bindparam, exists, func, or_, select
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
@@ -18,11 +20,13 @@ from app.models.marking_code import MarkingCode
 from app.models.marking_withdrawal import WithdrawalDocument, WithdrawalItem, WithdrawalOperation
 from app.models.product import Product
 from app.models.seller import Seller
-from app.models.wb_order_price_snapshot import WbOrderPriceSnapshot
-from app.services.wb_order_price_service import (
-    WbPriceDataError,
-    has_price,
-    product_cost_from_snapshot,
+from app.services.wb_order_price_service import WbPriceDataError
+from app.services.wb_sales_report import (
+    SalesOrder,
+    SalesReport,
+    WbSalesError,
+    read_sales_report,
+    sale_cost,
 )
 
 MOSCOW = ZoneInfo("Europe/Moscow")
@@ -104,6 +108,8 @@ def eligible_rows(scope: WithdrawalScope) -> Select[tuple[FbsOrderMarking, FbsOr
             FbsOrder.tenant_id == scope.tenant_id,
             FbsOrder.seller_id == scope.seller_id,
             FbsOrder.marketplace == "wb",
+            FbsOrder.wb_rid.is_not(None),
+            FbsOrder.wb_rid != "",
             # WB defect — отмена по браку: товар до покупателя не дойдёт.
             FbsOrder.status.not_in(["cancelled", "defect"]),
             FbsOrder.pick_status != "returned",
@@ -115,6 +121,74 @@ def eligible_rows(scope: WithdrawalScope) -> Select[tuple[FbsOrderMarking, FbsOr
             FbsSupply.status.in_(["in_delivery", "done"]),
         )
     )
+
+
+async def sales_for_scope(
+    session: AsyncSession,
+    scope: WithdrawalScope,
+    *,
+    fresh: bool = True,
+    progress: Callable[[], Awaitable[None]] | None = None,
+    row_ids: list[uuid.UUID] | None = None,
+) -> SalesReport:
+    # Read only identity/history fields, never hydrate order JSON or sticker PDFs
+    # for every page of the registry. DISTINCT compares only these scalar columns.
+    orders = [
+        SalesOrder(identifier, rid, created_at)
+        for identifier, rid, created_at in (
+            await session.execute(
+                eligible_rows(scope)
+                .with_only_columns(
+                    FbsOrder.id,
+                    FbsOrder.wb_rid,
+                    FbsOrder.created_at_wb,
+                )
+                .distinct()
+            )
+        ).all()
+    ]
+    if not orders:
+        return SalesReport({}, datetime.now(UTC), "", 0, 0)
+    try:
+        report = await read_sales_report(
+            session,
+            tenant_id=scope.tenant_id,
+            seller_id=scope.seller_id,
+            orders=orders,
+            fresh=fresh,
+            progress=progress,
+        )
+    except WbSalesError as exc:
+        raise WithdrawalError(str(exc)) from None
+    if report.coverage_missing:
+        selected_orders = (
+            set(
+                await session.scalars(
+                    select(FbsOrderMarking.order_id).where(
+                        FbsOrderMarking.tenant_id == scope.tenant_id,
+                        FbsOrderMarking.id.in_(row_ids),
+                    )
+                )
+            )
+            if row_ids is not None
+            else report.coverage_missing
+        )
+        if report.coverage_missing.intersection(selected_orders):
+            raise WithdrawalError("wb_sales_history_coverage_90_days_incomplete")
+    return report
+
+
+def sold_rows(
+    session: AsyncSession, scope: WithdrawalScope, sales: SalesReport
+) -> Select[tuple[FbsOrderMarking, FbsOrder, FbsSupply]]:
+    if session.get_bind().dialect.name == "postgresql":
+        # A full report may exceed asyncpg's 32767 bind parameters. Send the
+        # proven srids as one array rather than truncating the sold set.
+        return eligible_rows(scope).where(
+            FbsOrder.wb_rid
+            == any_(bindparam("withdrawal_sale_rids", list(sales.by_rid), type_=ARRAY(String())))
+        )
+    return eligible_rows(scope).where(FbsOrder.wb_rid.in_(sales.by_rid))
 
 
 async def lock_seller(session: AsyncSession, scope: WithdrawalScope) -> None:
@@ -187,8 +261,9 @@ async def registry(
         raise WithdrawalError("invalid_pagination", 422)
     if date_from and date_to and date_from > date_to:
         raise WithdrawalError("invalid_date_range", 422)
+    sales = await sales_for_scope(session, scope, fresh=False)
     query = (
-        eligible_rows(scope)
+        sold_rows(session, scope, sales)
         .outerjoin(
             Product,
             and_(
@@ -239,18 +314,6 @@ async def registry(
     if only_not_withdrawn:
         query = query.where(or_(WithdrawalItem.id.is_(None), WithdrawalItem.state != "succeeded"))
     total = int(await session.scalar(select(func.count()).select_from(query.subquery())) or 0)
-    latest_price_id = (
-        select(WbOrderPriceSnapshot.id)
-        .where(
-            WbOrderPriceSnapshot.order_id == FbsOrder.id,
-            has_price(),
-        )
-        .order_by(WbOrderPriceSnapshot.revision.desc())
-        .limit(1)
-        .correlate(FbsOrder)
-        .scalar_subquery()
-    )
-    query = query.outerjoin(WbOrderPriceSnapshot, WbOrderPriceSnapshot.id == latest_price_id)
     # WithdrawalDocument is joined via WithdrawalItem.document_id only; scope columns
     # (tenant/seller) are already enforced upstream on the item.
     # Do not hydrate the ORM document — its exact_payload and signature can be up to
@@ -273,7 +336,6 @@ async def registry(
         query.add_columns(
             Product,
             WithdrawalItem,
-            WbOrderPriceSnapshot,
             doc_state,
             doc_signed,
             op_token_expires_at,
@@ -292,7 +354,6 @@ async def registry(
         supply,
         product,
         item,
-        price,
         doc_state_value,
         doc_signed_value,
         token_expires_at,
@@ -300,11 +361,8 @@ async def registry(
         error = item.error if item and item.state == "failed" else None
         if item is None:
             try:
-                if price is None:
-                    raise WbPriceDataError(
-                        "missing_price_snapshot", "WB: снимок финальной цены отсутствует"
-                    )
-                product_cost_from_snapshot(price)
+                assert order.wb_rid is not None
+                sale_cost(sales.by_rid[order.wb_rid])
             except WbPriceDataError as exc:
                 error = {"source": "local", "code": exc.code, "message": str(exc)}
         status = (
@@ -319,12 +377,12 @@ async def registry(
         # An in-flight row invites a duplicate create by default. Only surface it as
         # resumable when the same operation is stuck on token expiry — the existing
         # same-op reauth path is safe (BR14: no new POST, GET-only reconciliation).
-        expiry_utc = token_expires_at.replace(tzinfo=UTC) if (
-            token_expires_at is not None and token_expires_at.tzinfo is None
-        ) else token_expires_at
-        token_expired = token_expires_at is None or (
-            expiry_utc is not None and expiry_utc <= now
+        expiry_utc = (
+            token_expires_at.replace(tzinfo=UTC)
+            if (token_expires_at is not None and token_expires_at.tzinfo is None)
+            else token_expires_at
         )
+        token_expired = token_expires_at is None or (expiry_utc is not None and expiry_utc <= now)
         resume_required = bool(
             status in {"transferring", "awaiting_crpt"}
             and doc_state_value in {"submitting", "submitted", "reconciling"}
