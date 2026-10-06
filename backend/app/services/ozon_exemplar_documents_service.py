@@ -82,7 +82,6 @@ async def claim_exemplar_write(
         and data.get("state") == "checking"
         and not data.get("in_flight")
         and data.get("set_acknowledged") is True
-        and not data.get("choices")
     )
     if data.get("state") in PENDING_STATES and not acknowledged_marking:
         raise OzonFbsProcessError(
@@ -110,8 +109,10 @@ async def claim_exemplar_write(
         document_errors={},
     )
     if kind == "documents":
-        data.setdefault("choices", {})[f"{choice['product_id']}:{choice['exemplar_id']}"] = {
-            key: choice[key] for key in ("gtd", "rnpt", "is_gtd_absent", "is_rnpt_absent")
+        data["choices"] = {
+            f"{choice['product_id']}:{choice['exemplar_id']}": {
+                key: choice[key] for key in ("gtd", "rnpt", "is_gtd_absent", "is_rnpt_absent")
+            }
         }
     store_document_data(order, data)
     await session.commit()
@@ -207,11 +208,15 @@ async def fetch_exemplar_snapshot(
 
 
 def apply_saved_documents(products: list[dict[str, Any]], data: dict[str, Any]) -> None:
+    # Only the current document intent may override a fresh cabinet snapshot.
+    if data.get("kind") != "documents" or data.get("state") == "accepted":
+        return
+    choice = data.get("choice", {})
+    target = f"{choice.get('product_id')}:{choice.get('exemplar_id')}"
     for product in products:
         for exemplar in product["exemplars"]:
-            saved = data.get("choices", {}).get(
-                f"{product['product_id']}:{exemplar['exemplar_id']}"
-            )
+            key = f"{product['product_id']}:{exemplar['exemplar_id']}"
+            saved = data.get("choices", {}).get(key) if key == target else None
             if isinstance(saved, dict):
                 exemplar.update(saved)
 
@@ -266,7 +271,7 @@ async def get_exemplar_documents(
 ) -> dict[str, Any]:
     order = await document_order(session, tenant_id, order_id)
     data = document_data(order)
-    if data.get("state") in PENDING_STATES:
+    if data.get("state") in PENDING_STATES or data.get("snapshot"):
         return await resume_exemplar_document_check(
             session,
             tenant_id=tenant_id,
@@ -329,7 +334,7 @@ async def get_exemplar_documents(
 def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
     status = raw.get("status")
     data.update(status=status, state="unknown", errors=[], document_errors={}, last_status=raw)
-    targets = data.get("choices", {})
+    targets = data.get("choices", {}) if data.get("kind") == "documents" else {}
     remote = {
         f"{product['product_id']}:{exemplar['exemplar_id']}": exemplar
         for product in raw.get("products", []) or []
@@ -363,7 +368,9 @@ def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
         data["state"] = "editable"
     elif status == "ship_available" and matches and known and not data["errors"]:
         data["state"] = "accepted"
-    if not targets and data.get("kind") != "marking" and status == "ship_available":
+    if not targets and data.get("kind") != "marking" and status in {
+        "ship_available", "update_available", "update_not_available"
+    }:
         data["state"] = "editable"
     # The legacy marking result is independent; documents always use strict matching.
     if data.get("kind") == "marking" and not targets:
@@ -444,6 +451,27 @@ async def resume_exemplar_document_check(
             data.update(state="unknown", errors=["ozon_posting_mismatch"])
         else:
             classify_document_status(data, raw)
+            # Refresh remote values while retaining requirement flags and fields
+            # omitted by /status. Local input remains in the current choices.
+            snapshot = copy.deepcopy(data.get("snapshot", {}))
+            previous_products = {
+                product["product_id"]: product
+                for product in snapshot.get("products", []) or []
+            }
+            for product in raw.get("products", []) or []:
+                previous = previous_products.setdefault(product["product_id"], {})
+                previous_exemplars = {
+                    exemplar["exemplar_id"]: exemplar
+                    for exemplar in previous.get("exemplars", []) or []
+                }
+                for exemplar in product.get("exemplars", []) or []:
+                    previous_exemplars.setdefault(exemplar["exemplar_id"], {}).update(exemplar)
+                previous.update(
+                    {key: value for key, value in product.items() if key != "exemplars"}
+                )
+                previous["exemplars"] = list(previous_exemplars.values())
+            snapshot["products"] = list(previous_products.values())
+            data["snapshot"] = snapshot
     except (MarketplaceProviderError, OzonFbsProcessError) as exc:
         data.update(state="unknown", errors=[exc.code])
     await checkpoint(session, tenant_id, order_id, data)
