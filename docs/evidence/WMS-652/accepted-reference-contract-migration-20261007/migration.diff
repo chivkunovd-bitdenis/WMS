@@ -1,0 +1,13 @@
+diff --git a/scripts/ci/tests/test_ci_release_additions.py b/scripts/ci/tests/test_ci_release_additions.py
+index c687aafc5..b24461f1a 100644
+--- a/scripts/ci/tests/test_ci_release_additions.py
++++ b/scripts/ci/tests/test_ci_release_additions.py
+@@ -9,7 +9,7 @@ class ReleaseCommandContracts(unittest.TestCase):
+     def test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference(self):
+         raw = (ROOT/'.github/workflows/ci.yml').read_text()
+         guard = raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:', 1)[0]
+-        self.assertIn('python scripts/ci/product_scope.py --root . --trusted-ref d61805978b3e7878d1056c99b4e6e0823edf49a5', guard)
++        self.assertIn('python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d', guard)
+         self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
+ 
+     def test_existing_517_pg_run_produces_report_without_duplicate_run(self):

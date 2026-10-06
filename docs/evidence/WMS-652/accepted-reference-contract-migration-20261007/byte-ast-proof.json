@@ -1,0 +1,57 @@
+{
+  "base": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "test_path": "scripts/ci/tests/test_ci_release_additions.py",
+  "before_sha256": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+  "after_sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+  "exact_single_literal_byte_replacement": true,
+  "single_changed_ast_constant": [
+    {
+      "line": 12,
+      "old": "python scripts/ci/product_scope.py --root . --trusted-ref d61805978b3e7878d1056c99b4e6e0823edf49a5",
+      "new": "python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d"
+    }
+  ],
+  "normalized_module_ast_identical": true,
+  "case_ids_preserved": true,
+  "all_assertion_methods_preserved": true,
+  "all_other_bytes_identical": true,
+  "functions": [
+    {
+      "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+      "assertion_methods": [
+        "assertIn",
+        "assertIn"
+      ],
+      "before_sha256": "b91af00e38b48a1f8bed39f5cbe5195e07c663bb915892f42f087f3d8a970292",
+      "after_sha256": "c7bd66e01e4b448c1b5f7f01e8e923d49864a7d9ecd228d8ea855f3e02435cab",
+      "byte_identical_except_approved_constant": true,
+      "byte_identical": false
+    },
+    {
+      "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_existing_517_pg_run_produces_report_without_duplicate_run",
+      "assertion_methods": [
+        "assertEqual",
+        "assertIn"
+      ],
+      "before_sha256": "7bfbd8507d876d543ab7264958ee6edd8d96a34a74d45edfd7bcbf281f122d6e",
+      "after_sha256": "7bfbd8507d876d543ab7264958ee6edd8d96a34a74d45edfd7bcbf281f122d6e",
+      "byte_identical_except_approved_constant": true,
+      "byte_identical": true
+    },
+    {
+      "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
+      "assertion_methods": [
+        "assertLess",
+        "assertIn",
+        "assertIn",
+        "assertIn",
+        "assertIn",
+        "assertIn"
+      ],
+      "before_sha256": "0649df3cdcc7f4c938ae60c6d388a84a243fd941f4b9d632b4588b3ca4c7e2cb",
+      "after_sha256": "0649df3cdcc7f4c938ae60c6d388a84a243fd941f4b9d632b4588b3ca4c7e2cb",
+      "byte_identical_except_approved_constant": true,
+      "byte_identical": true
+    }
+  ]
+}

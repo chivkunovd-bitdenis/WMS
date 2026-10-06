@@ -1,0 +1,78 @@
+{
+  "task": "WMS-652",
+  "role": "same separate independent testwriter; no self-review or acceptance",
+  "base": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "branch": "codex/wms652-accepted-reference-contract-20261007",
+  "rules_etalon_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "accepted_reference": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "previous_reference": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "analyst_approval_commit": "4eb81c378babf081b3342f3bf36ac17bf136a8bf",
+  "reviewer_approval_commit": "f4d095aa4280c89075bfafcef2883f88e17c25d4",
+  "approved_source_before_this_new_delta": "9dae4b19f6d4dca554200e08282579414a110848",
+  "approval_inputs": [
+    {
+      "commit": "4eb81c378babf081b3342f3bf36ac17bf136a8bf",
+      "path": "docs/evidence/WMS-672/raster-resource-analyst-acceptance-20261007/README.md",
+      "sha256": "ab5b0a61dcca29e30ab6b457e78ddbe12c8b03804b7ea96b673f847c8092b3fa"
+    },
+    {
+      "commit": "f4d095aa4280c89075bfafcef2883f88e17c25d4",
+      "path": "docs/evidence/WMS-652/final-source-pin-review-20261007/review.md",
+      "sha256": "94ab6f89724cef4230b89e8556b0ea128124c32d73cf43aa11fbda746db85a11"
+    }
+  ],
+  "actual_full_ci": {
+    "run_id": 37548248403,
+    "attempt": 1,
+    "merge_sha": "ac845328b27b5be265962695e10766efddef339e",
+    "readonly_job_log": "/Users/deniscivkunov/Projects/WMS/.agent-runs/wms652-final-ci-37548248403/guards-job.log",
+    "job_log_sha256": "fa3166238817d2cfce5951af9cba00229452cf20f3a118de380cb24022536c2d",
+    "selected_raw_lines": [
+      {
+        "line": 897,
+        "raw": "2026-10-06T23:45:44.5788820Z FAIL: test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference (test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference)"
+      },
+      {
+        "line": 905,
+        "raw": "2026-10-06T23:45:44.5897635Z Ran 131 tests in 2.198s"
+      },
+      {
+        "line": 907,
+        "raw": "2026-10-06T23:45:44.5897863Z FAILED (failures=1)"
+      }
+    ],
+    "tests": 131,
+    "pass": 130,
+    "fail": 1
+  },
+  "command": "python3 -B -m unittest scripts.ci.tests.test_ci_release_additions -v",
+  "before": {
+    "tests": 3,
+    "pass": 2,
+    "fail": 1,
+    "skipped": 0,
+    "exit_code": 1,
+    "raw": "before.log"
+  },
+  "after": {
+    "tests": 3,
+    "pass": 3,
+    "fail": 0,
+    "skipped": 0,
+    "exit_code": 0,
+    "raw": "after.log"
+  },
+  "negative_control": {
+    "tests": 1,
+    "pass": 0,
+    "fail": 1,
+    "errors": 0,
+    "skipped": 0,
+    "raw": "old-reference-counterexample.log"
+  },
+  "product_workflow_policy_requirements_backlog_unchanged": true,
+  "limits": [
+    "No131/71/fullCI or frozen product-scope51 rerun; no browser/build/dependencies.",
+    "No policy/hash update, pin activation, SOURCE approval, review, acceptance, main merge or deployment."
+  ]
+}
