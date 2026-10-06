@@ -1,0 +1,62 @@
+[
+  {
+    "container": "wms_prod-api-1",
+    "comparison": [
+      {
+        "sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
+        "matched": 344,
+        "different": [],
+        "extra_python_files": []
+      },
+      {
+        "sha": "f7b1ae2c6db1036f36d382ff727b535e162246a4",
+        "matched": 343,
+        "different": [
+          "app/services/fbs_supply_service.py"
+        ],
+        "extra_python_files": []
+      }
+    ],
+    "python_files": 344
+  },
+  {
+    "container": "wms_prod-celery_worker-1",
+    "comparison": [
+      {
+        "sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
+        "matched": 343,
+        "different": [
+          "app/services/fbs_supply_service.py"
+        ],
+        "extra_python_files": []
+      },
+      {
+        "sha": "f7b1ae2c6db1036f36d382ff727b535e162246a4",
+        "matched": 344,
+        "different": [],
+        "extra_python_files": []
+      }
+    ],
+    "python_files": 344
+  },
+  {
+    "container": "wms_prod-celery_beat-1",
+    "comparison": [
+      {
+        "sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
+        "matched": 343,
+        "different": [
+          "app/services/fbs_supply_service.py"
+        ],
+        "extra_python_files": []
+      },
+      {
+        "sha": "f7b1ae2c6db1036f36d382ff727b535e162246a4",
+        "matched": 344,
+        "different": [],
+        "extra_python_files": []
+      }
+    ],
+    "python_files": 344
+  }
+]

@@ -1,0 +1,5 @@
+deploy	UNKNOWN STEP	2026-09-25T06:44:35.4338026Z     target: etalon @ 39efd0034834
+deploy	UNKNOWN STEP	2026-09-25T06:44:35.4338974Z     trunk:  origin/etalon @ 39efd0034834
+deploy	UNKNOWN STEP	2026-09-25T06:44:36.2407526Z ==> docker compose prod build (sequential)
+deploy	UNKNOWN STEP	2026-09-25T06:48:01.5207813Z /api/health -> 502 (attempt 1/10)
+deploy	UNKNOWN STEP	2026-09-25T06:48:04.9808126Z /api/health -> 200

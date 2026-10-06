@@ -1,0 +1,49 @@
+89680ae383cc2767a82cf88499cff503d266811a HEAD@{2026-09-25 08:35:21 +0000} checkout: moving from etalon to etalon
+89680ae383cc2767a82cf88499cff503d266811a HEAD@{2026-09-25 08:35:21 +0000} branch: Reset to origin/etalon
+39efd0034834cdf9f51fd2214669300ccf9a028b HEAD@{2026-09-25 06:44:35 +0000} checkout: moving from etalon to etalon
+39efd0034834cdf9f51fd2214669300ccf9a028b HEAD@{2026-09-25 06:44:35 +0000} branch: Reset to origin/etalon
+29e7b663f8528ae7d623a59dda56993edc0a5ed9 HEAD@{2026-09-24 21:56:26 +0000} checkout: moving from codex/wms525-registration-moderation to etalon
+3c90970b132144f9b375b5967b40f857c9af38a3 HEAD@{2026-09-24 17:07:00 +0000} checkout: moving from codex/wms524-confirm-order to codex/wms525-registration-moderation
+4ec22e9d98e61f49fa73a65bba27e174fc1ccac1 HEAD@{2026-09-24 16:33:49 +0000} checkout: moving from codex/wms524-production to codex/wms524-confirm-order
+2464532984906990da85c6ed22a660856868adbe HEAD@{2026-09-24 16:18:16 +0000} checkout: moving from etalon to codex/wms524-production
+37b738bfc70b863bdd89f745e84812c2e5f08879 HEAD@{2026-09-24 15:20:06 +0000} checkout: moving from etalon to etalon
+37b738bfc70b863bdd89f745e84812c2e5f08879 HEAD@{2026-09-24 15:20:06 +0000} branch: Reset to origin/etalon
+2f7c710d6b464b4d3a4e6e52f5f6fee50a2443af HEAD@{2026-09-24 12:50:54 +0000} checkout: moving from etalon to etalon
+2f7c710d6b464b4d3a4e6e52f5f6fee50a2443af HEAD@{2026-09-24 12:50:54 +0000} branch: Reset to origin/etalon
+ba75fe0bca7fee9716bed833fc13edece02740c5 HEAD@{2026-09-24 10:12:56 +0000} checkout: moving from codex/wms519-prod-hotfix to etalon
+270215a5c065e4f45293efba45b0a018311840ad HEAD@{2026-09-24 08:06:04 +0000} checkout: moving from codex/wms519-prod-hotfix to codex/wms519-prod-hotfix
+270215a5c065e4f45293efba45b0a018311840ad HEAD@{2026-09-24 08:06:04 +0000} branch: Reset to origin/codex/wms519-prod-hotfix
+270215a5c065e4f45293efba45b0a018311840ad HEAD@{2026-09-24 08:05:52 +0000} checkout: moving from etalon to codex/wms519-prod-hotfix
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:20:53 +0000} checkout: moving from etalon to etalon
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:20:53 +0000} branch: Reset to origin/etalon
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:15:55 +0000} checkout: moving from etalon to etalon
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:15:55 +0000} branch: Reset to origin/etalon
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:08:58 +0000} checkout: moving from etalon to etalon
+6ddbea5036d50a264248d7d9802bf9fb55f7d035 HEAD@{2026-09-23 19:08:58 +0000} branch: Reset to origin/etalon
+4fcafeced98f557e26d801c8e9510a20cfa2c410 HEAD@{2026-09-23 13:46:30 +0000} checkout: moving from etalon to etalon
+4fcafeced98f557e26d801c8e9510a20cfa2c410 HEAD@{2026-09-23 13:46:30 +0000} branch: Reset to origin/etalon
+e0f0c0b98076ae11f43628239a9bf5259e0c92f0 HEAD@{2026-09-23 12:04:02 +0000} checkout: moving from etalon to etalon
+e0f0c0b98076ae11f43628239a9bf5259e0c92f0 HEAD@{2026-09-23 12:04:02 +0000} branch: Reset to origin/etalon
+6e74ccdaa57560075eb0c4a7b285471c95823a21 HEAD@{2026-09-22 15:36:52 +0000} checkout: moving from etalon to etalon
+6e74ccdaa57560075eb0c4a7b285471c95823a21 HEAD@{2026-09-22 15:36:52 +0000} branch: Reset to origin/etalon
+8f15bdfb8f07023afd4449e73a31b62445e7eb36 HEAD@{2026-09-22 15:07:21 +0000} checkout: moving from etalon to etalon
+8f15bdfb8f07023afd4449e73a31b62445e7eb36 HEAD@{2026-09-22 15:07:21 +0000} branch: Reset to origin/etalon
+/wms_prod-api-1 2026-10-06T09:31:18.783128605Z sha256:bd2c89d64937dd9463a8fc63a70efca064e99d1132b19d62213e08c2881e4b0a {"com.docker.compose.config-hash":"127329e1ac4025a4ce5f8b57193ef67b31b24b5d8ae0dd63e29944961f2e3416","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"","com.docker.compose.image":"sha256:bd2c89d64937dd9463a8fc63a70efca064e99d1132b19d62213e08c2881e4b0a","com.docker.compose.oneoff":"False","com.docker.compose.project":"wms_prod","com.docker.compose.project.config_files":"/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml","com.docker.compose.project.working_dir":"/opt/wms","com.docker.compose.replace":"api-1","com.docker.compose.service":"api","com.docker.compose.version":"5.1.3"} [{"Type":"volume","Name":"wms_prod_wms_appdata","Source":"/var/lib/docker/volumes/wms_prod_wms_appdata/_data","Destination":"/app/var","Driver":"local","Mode":"rw","RW":true,"Propagation":""}]
+/wms_prod-web-1 2026-10-06T09:31:19.584476405Z sha256:014b7e98d679a6e3f808917808cf43afde3d0ea94fe2d5feb465c2c45efc0952 {"com.docker.compose.config-hash":"fcc39ff6bd9e1ac772400555ab8596393033daae7d750154cc3ec9baf4759c97","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"api:service_started:false","com.docker.compose.image":"sha256:014b7e98d679a6e3f808917808cf43afde3d0ea94fe2d5feb465c2c45efc0952","com.docker.compose.oneoff":"False","com.docker.compose.project":"wms_prod","com.docker.compose.project.config_files":"/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml","com.docker.compose.project.working_dir":"/opt/wms","com.docker.compose.replace":"web-1","com.docker.compose.service":"web","com.docker.compose.version":"5.1.3","org.opencontainers.image.description":"a powerful, enterprise-ready, open source web server with automatic HTTPS written in Go","org.opencontainers.image.documentation":"https://caddyserver.com/docs","org.opencontainers.image.licenses":"Apache-2.0","org.opencontainers.image.source":"https://github.com/caddyserver/caddy-docker","org.opencontainers.image.title":"Caddy","org.opencontainers.image.url":"https://caddyserver.com","org.opencontainers.image.vendor":"Light Code Labs","org.opencontainers.image.version":"v2.11.2"} [{"Type":"bind","Source":"/opt/wms/deploy/Caddyfile.http","Destination":"/etc/caddy/Caddyfile","Mode":"ro","RW":false,"Propagation":"rprivate"}]
+/wms_prod-celery_worker-1 2026-10-06T09:23:15.727751627Z sha256:630a80a16a9d9c20b03585711f760bb6dd586f664843088cc4d44a8caa9a1fa7 {"com.docker.compose.config-hash":"adbb14d88bc08253a2f7ae8af82710eb624699fe9a854e7c98ff4ebd6814d21f","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"","com.docker.compose.image":"sha256:630a80a16a9d9c20b03585711f760bb6dd586f664843088cc4d44a8caa9a1fa7","com.docker.compose.oneoff":"False","com.docker.compose.project":"wms_prod","com.docker.compose.project.config_files":"/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml","com.docker.compose.project.working_dir":"/opt/wms","com.docker.compose.replace":"celery_worker-1","com.docker.compose.service":"celery_worker","com.docker.compose.version":"5.1.3"} [{"Type":"volume","Name":"wms_prod_wms_appdata","Source":"/var/lib/docker/volumes/wms_prod_wms_appdata/_data","Destination":"/app/var","Driver":"local","Mode":"rw","RW":true,"Propagation":""}]
+/wms_prod-celery_beat-1 2026-10-06T09:23:15.953062436Z sha256:eee61997b946a714c950013772d36b3fa1f4c94cb7c111670fb01c99d259f932 {"com.docker.compose.config-hash":"b919e6a142b7c32871c429738ea87d58315835290b87215a2e477c1ceb269dc7","com.docker.compose.container-number":"1","com.docker.compose.depends_on":"celery_worker:service_started:false","com.docker.compose.image":"sha256:eee61997b946a714c950013772d36b3fa1f4c94cb7c111670fb01c99d259f932","com.docker.compose.oneoff":"False","com.docker.compose.project":"wms_prod","com.docker.compose.project.config_files":"/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml","com.docker.compose.project.working_dir":"/opt/wms","com.docker.compose.replace":"celery_beat-1","com.docker.compose.service":"celery_beat","com.docker.compose.version":"5.1.3"} []
+/opt/wms/.deploy-backups
+/opt/wms/.deploy-backups/wms043-9729c52c/deploy.sh
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/deploy-status-fix.log
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/deploy-status-fix-final.log
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/deploy-wms373.log
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/deploy.log
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/previous-sha.txt
+/opt/wms/.deploy-backups/ozon-20260905-4306fa7e/deploy-beat-fix.log
+/opt/wms/.deploy-backups/before-release-b09b7d9f-20260909/previous-git-sha.txt
+/opt/wms/.deploy-backups/before-wms406-407-20260909/previous-git-sha.txt
+/opt/wms/.deploy-backups/wms043-1d07e4f4/deploy.sh
+/opt/wms/.deploy-backups/before-release-7259d630-20260909/previous-git-sha.txt
+/opt/wms/.deploy-backups/before-release-7259d630-20260909/deploy.log
+/opt/wms/.deploy-backups/before-release-ee12f2fa-20260909/previous-git-sha.txt
+/opt/wms/.deploy-backups/before-release-ee12f2fa-20260909/deploy.log
