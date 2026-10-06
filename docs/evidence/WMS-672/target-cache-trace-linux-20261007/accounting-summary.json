@@ -1,0 +1,85 @@
+{
+  "dataLossOccurred": false,
+  "maxBufferUsage": 0.3030763566493988,
+  "clock_markers": 4,
+  "clock_bands_with_1ms_Date_precision": [
+    {
+      "syncId": "C5-clock-fixture-2-trace-start-0",
+      "epochBeforeMs": 1791325314845,
+      "epochAfterMs": 1791325314847,
+      "ts": 125841812,
+      "low": 1791325189002.188,
+      "high": 1791325189006.188
+    },
+    {
+      "syncId": "C5-clock-fixture-2-opened-1",
+      "epochBeforeMs": 1791325314878,
+      "epochAfterMs": 1791325314878,
+      "ts": 125874618,
+      "low": 1791325189002.382,
+      "high": 1791325189004.382
+    },
+    {
+      "syncId": "C5-clock-native-failure-notice-2",
+      "epochBeforeMs": 1791325328184,
+      "epochAfterMs": 1791325328185,
+      "ts": 139181183,
+      "low": 1791325189001.817,
+      "high": 1791325189004.817
+    },
+    {
+      "syncId": "C5-clock-fixture-2-trace-end-3",
+      "epochBeforeMs": 1791325329184,
+      "epochAfterMs": 1791325329185,
+      "ts": 140181116,
+      "low": 1791325189001.884,
+      "high": 1791325189004.884
+    }
+  ],
+  "clock_offset_intersection_ms": [
+    1791325189002.382,
+    1791325189004.382
+  ],
+  "native_calls": 555,
+  "engine_queues": 555,
+  "allocations": 540,
+  "worker_entries": 540,
+  "actual_low_level_decodes": 299,
+  "peak_live_entries": 225,
+  "peak_live_bytes": 267854400,
+  "entry_bytes": 1190464,
+  "default_256Mi_remaining_bytes": 581056,
+  "denied_requests": 15,
+  "denied_labels": [
+    242,
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    255,
+    256
+  ],
+  "ending_live_entries": 0,
+  "first_retry_release_after_first_decode_finished_ms": 251.953,
+  "first_reject_after_retry_queue_ms": 487.9568710937456,
+  "next_release_after_first_reject_ms": 15.41512890625745,
+  "retry_release_groups_10ms_buckets": {
+    "250.0": 16,
+    "500.0": 101,
+    "510.0": 11,
+    "760.0": 113
+  },
+  "initial_global_dump": {
+    "dumpGuid": "0x4",
+    "success": false
+  },
+  "bound": "Runtime private result enum/max limit are not directly emitted; admission reason inferred from complete matched keys, failed-reservation paths and exact141 source. Initial explicit global dump returnedfalse; periodic snapshots/all allocations are preserved."
+}
