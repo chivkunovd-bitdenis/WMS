@@ -526,13 +526,19 @@ async def resume_exemplar_document_check(
                 for product in snapshot.get("products", []) or []
             }
             for product in raw.get("products", []) or []:
-                previous = previous_products.setdefault(product["product_id"], {})
+                previous = previous_products.get(product["product_id"])
+                if previous is None:
+                    continue
                 previous_exemplars = {
                     exemplar["exemplar_id"]: exemplar
                     for exemplar in previous.get("exemplars", []) or []
                 }
                 for exemplar in product.get("exemplars", []) or []:
-                    previous_exemplars.setdefault(exemplar["exemplar_id"], {}).update(exemplar)
+                    # STATUS refreshes known IDs; a foreign ID must not become
+                    # a retained exemplar required by every subsequent read.
+                    previous_exemplar = previous_exemplars.get(exemplar["exemplar_id"])
+                    if previous_exemplar is not None:
+                        previous_exemplar.update(exemplar)
                 previous.update(
                     {key: value for key, value in product.items() if key != "exemplars"}
                 )
