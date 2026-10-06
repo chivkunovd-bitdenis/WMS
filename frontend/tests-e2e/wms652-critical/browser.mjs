@@ -1,13 +1,23 @@
 // WMS652 critical real-screen contracts. No mocked product controllers.
 import { spawn, execFileSync } from 'node:child_process';
 import { mkdir, writeFile } from 'node:fs/promises';
-import { mkdtempSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import { workspace, selectionFixtures } from './fixtures.mjs';
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const bwip = require('bwip-js'), { PNG } = require('pngjs');
+const { RGBLuminanceSource, BinaryBitmap, HybridBinarizer, DataMatrixReader } = require('@zxing/library');
+// Decode pixels handed to native print independently of the product renderer/claim.
+// The canonical 60x80 fixture's matrix occupies the top 44%; text below must not
+// confuse the detector. A swapped, truncated or different full CIS is a failure.
+function decodedCis(job){
+  const png=PNG.sync.read(Buffer.from(job.imageDataUrl.split(',')[1],'base64'));
+  const height=Math.floor(png.height*.44), pixels=new Uint8ClampedArray(png.width*height);
+  for(let i=0;i<pixels.length;i++)pixels[i]=(png.data[4*i]+2*png.data[4*i+1]+png.data[4*i+2])/4;
+  return new DataMatrixReader().decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(pixels,png.width,height)))).getText();
+}
 const ORIGIN = 'http://127.0.0.1:16686';
 const dir = process.env.WMS652_EVIDENCE;
 if (!dir) throw Error('Set WMS652_EVIDENCE to a persistent evidence directory');
@@ -16,6 +26,7 @@ const qrCodes = ['*DUIkWJJF', '*DUIkNEXT'];
 const cises = ['010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A','010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B'];
 const qrImages = await Promise.all(qrCodes.map(text => bwip.toBuffer({bcid:'qrcode',text,scale:3})));
 let requestLog=[],printLog=[],trace=[],blocked=[],errors=[],state,heldLookup,holdFirst;
+let receiptMode='', heldPrint, acceptedPrints=new Map(), lostAck=false, boundOrders=new Map(), restored=false;
 let cdp, mode='qr', selectionState, failedGroup, groupAttempts, addAttempts, createdRefs, heldAdd;
 const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).trim(),cases:[],physicalPaper:'NOT_TESTED',externalApi:'SYNTHETIC'};
 class CDP {
@@ -66,7 +77,11 @@ async function intercept({requestId,request}) {
   if(u.origin==='http://127.0.0.1:17843'&&path==='/print'){
     if(request.method==='OPTIONS')return fulfill(requestId,{});
     const job=JSON.parse(request.postData);printLog.push(job);trace.push(`print:${job.idempotencyKey}`);
-    return fulfill(requestId,{receipt:`synthetic-${printLog.length}`});
+    const key=job.idempotencyKey;
+    if(!acceptedPrints.has(key))acceptedPrints.set(key,{job,receipt:`synthetic-${acceptedPrints.size+1}`});
+    if(receiptMode==='held'&&printLog.length===1){heldPrint=()=>fulfill(requestId,{receipt:acceptedPrints.get(key).receipt});return;}
+    if(receiptMode==='lost'&&!lostAck){lostAck=true;return cdp.send('Fetch.failRequest',{requestId,errorReason:'ConnectionClosed'});}
+    return fulfill(requestId,{receipt:acceptedPrints.get(key).receipt});
   }
   if(u.origin!==ORIGIN){blocked.push(request.url);return cdp.send('Fetch.failRequest',{requestId,errorReason:'BlockedByClient'});}
   const body=request.postData?JSON.parse(request.postData):null;
@@ -93,7 +108,7 @@ async function intercept({requestId,request}) {
     assert(one&&one.sticker.code===body.barcode,'wrong sticker selection object');
     trace.push(`select:${one.id}`);
     return fulfill(requestId,{scan_id:`scan-${one.id}`,order_id:one.id,wb_order_id:one.wb_order_id,
-      replayed:false,binding_target:bindingTarget(one),reprint_recovery:null,requires_honest_sign:true,
+      replayed:restored,binding_target:bindingTarget(one),reprint_recovery:restored&&boundOrders.has(one.id)?{status:'available',kiz:boundOrders.get(one.id),code_id:null,has_label_artifact:false}:null,requires_honest_sign:true,
       qr_asset:{id:`qr-${one.id}`,kind:'order_sticker',status:'ready',content_type:'image/png',width_mm:58,height_mm:40,
         preview_url:`/assets/qr-${one.id}.png`,download_url:null,checksum:null,applied_at:null,error:null},
       codes:[],printed_codes:[],shortage:0,order_errors:[]});
@@ -101,7 +116,7 @@ async function intercept({requestId,request}) {
   if(path.startsWith('/assets/qr-'))return fulfill(requestId,qrImages[path.includes('wb-a-order')?0:1],200,'image/png');
   if(path==='/operations/fbs-orders/kiz/validate')return fulfill(requestId,{valid:true});
   if(path==='/operations/fbs-orders/kiz/commit'){
-    trace.push(`bind:${body.pairs[0].order_id}`);
+    trace.push(`bind:${body.pairs[0].order_id}`);boundOrders.set(body.pairs[0].order_id,body.pairs[0].value);
     return fulfill(requestId,body.pairs.map(p=>({order_id:p.order_id,status:'ok',code:'ok',bound_kiz:p.value})));
   }
   const copy=path.match(/\/scan-auto-print\/scan-(.+)\/reprint-claim$/);
@@ -134,8 +149,10 @@ try {
   await cdp.send('Page.enable');await cdp.send('Runtime.enable');
   await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
   await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`
-    localStorage.clear();sessionStorage.clear();
-    localStorage.setItem('wms:fbs:scan-auto-print:unknown-tenant:unknown-user',JSON.stringify({printQr:true,printChz:false,reprintChz:true,reprintChzCopies:2}));
+    const q=new URLSearchParams(location.search);
+    if(!q.has('preserve')){localStorage.clear();sessionStorage.clear();}
+    const flags={alloff:{printQr:false,printChz:false,reprintChz:false},qr:{printQr:true,printChz:false,reprintChz:false},reprint:{printQr:false,printChz:false,reprintChz:true},'qr+reprint':{printQr:true,printChz:false,reprintChz:true},pool:{printQr:false,printChz:true,reprintChz:false},'qr+pool':{printQr:true,printChz:true,reprintChz:false}};
+    localStorage.setItem('wms:fbs:scan-auto-print:unknown-tenant:unknown-user',JSON.stringify({...flags[q.get('flag')||'qr+reprint'],reprintChzCopies:2,printChzCopies:2}));
     localStorage.setItem('wms.print.labelSizeId','60x80');
     const p=new URLSearchParams(location.search),ids=(p.get('supply_ids')||p.get('supply_id')||'').split(',');
     sessionStorage.setItem('wms:fbs:assembly:'+ids.join(',')+':stage','packing');
@@ -170,6 +187,7 @@ try {
     assert.deepEqual(printLog.map(p=>[p.widthMm,p.heightMm]),Array(6).fill([60,80]));
     assert.equal(printLog[0].imageDataUrl,`data:image/png;base64,${qrImages[0].toString('base64')}`);
     assert.equal(printLog[3].imageDataUrl,`data:image/png;base64,${qrImages[1].toString('base64')}`);
+    for(const [index,cis] of [[1,cises[0]],[2,cises[0]],[4,cises[1]],[5,cises[1]]])assert.equal(decodedCis(printLog[index]),cis,'native copy must encode full canonical CIS of this order');
     assert.equal(printLog[1].imageDataUrl,printLog[2].imageDataUrl);assert.equal(printLog[4].imageDataUrl,printLog[5].imageDataUrl);
     assert.notEqual(printLog[1].imageDataUrl,printLog[4].imageDataUrl,'different canonical CIS must yield different exact copies');
     for(const index of [1,4]){const image=PNG.sync.read(Buffer.from(printLog[index].imageDataUrl.split(',')[1],'base64'));assert.equal(image.width,720);assert.equal(image.height,960);}
@@ -192,9 +210,11 @@ try {
     }
   }
   await selectionContracts();
+  await flagContracts();
   assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
+  assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
   report.status='PASS';
-}catch(e){report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
+}catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{
   await writeFile(`${dir}/result.json`,JSON.stringify(report,null,2));
   await writeFile(`${dir}/last-requests.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
@@ -304,4 +324,81 @@ async function selectionContracts(){
   assert.deepEqual(requestLog.filter(r=>r.path==='/operations/fbs-supplies/compatible/orders/batch').map(r=>r.body.order_ids),[['order-a2','order-a'],['order-a2','order-a']]);
   assert.equal(addAttempts,2,'one refused and one successful explicit add, with no silent repeat');
   await saveCase(add);
+}
+
+// Six agreed WB checkbox combinations and three uncertain receipt recoveries.
+async function flagContracts(){
+  const entries=[['supply_id=A','supply_id=wb-a',false],['supply_ids=A','supply_ids=wb-a',false],['supply_ids=A,B','supply_ids=wb-a,wb-b',true]];
+  const variants=['alloff','qr','reprint','qr+reprint','pool','qr+pool','held-receipt','lost-accepted-ack','remount-after-lost-ack'];
+  for(const variant of variants)for(const [entry,query,many] of entries){
+    mode='qr';prepareState(many);requestLog=[];printLog=[];trace=[];blocked=[];errors=[];
+    heldLookup=undefined;holdFirst=false;heldPrint=undefined;acceptedPrints=new Map();boundOrders=new Map();restored=false;lostAck=false;
+    const recovery=['held-receipt','lost-accepted-ack','remount-after-lost-ack'].includes(variant);
+    const flag=recovery?'qr':variant, qr=flag.includes('qr'), copy=flag.includes('reprint'), server=qr||copy;
+    receiptMode=variant==='held-receipt'?'held':recovery?'lost':'';
+    report.currentCase=`WMS652.realQrFlags[${variant};${entry}]`;
+    const url=`${ORIGIN}/app/ff/fbs?${query}&flag=${encodeURIComponent(flag)}`;
+    try{
+      await cdp.send('Page.navigate',{url});
+      await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
+      await scan(qrCodes[0]);
+      for(let i=0;i<70&&!trace.includes('lookup:wb-a-order');i++)await sleep(100);
+      assert(trace.includes('lookup:wb-a-order'),'real input must reach correct sticker lookup');
+      await scan(cises[0]);
+      if(variant==='held-receipt'){
+        for(let i=0;i<70&&!heldPrint;i++)await sleep(100);
+        assert(heldPrint,'native print must reach held accepted receipt');
+        await scan(qrCodes[1]);await scan(cises[1]);await sleep(350);
+        assert.equal(trace.includes('pack:wb-a-order'),false,'must not pack before native receipt');
+        assert.equal(trace.includes('lookup:wb-next-order'),false,'next scanner input must wait for held receipt');
+        await heldPrint();
+      }else if(receiptMode==='lost'){
+        for(let i=0;i<70&&!lostAck;i++)await sleep(100);
+        assert(lostAck,'fixture must lose native response after accepting job');await sleep(300);
+        assert.equal(trace.includes('pack:wb-a-order'),false,'lost accepted response cannot silently pack');
+        assert.equal(acceptedPrints.size,1,'one accepted print intent before explicit recovery');
+        if(variant==='remount-after-lost-ack'){
+          restored=true;
+          const saved=await evaluate('JSON.stringify(localStorage)');assert(saved.includes('wb-a-order'),'unfinished order intent must persist before remount');
+          await cdp.send('Page.navigate',{url:url+'&preserve=1'});
+          await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
+        }
+        await scan(qrCodes[0]);
+        for(let i=0;i<70&&!trace.includes('pack:wb-a-order');i++)await sleep(100);
+        assert(trace.includes('pack:wb-a-order'),'same QR must recover original order after uncertain receipt');
+        assert.deepEqual(printLog.map(j=>j.idempotencyKey),['scan-wb-a-order','scan-wb-a-order'],'retry must reconcile same accepted print key');
+        await scan(qrCodes[1]);await scan(cises[1]);
+      }else{await scan(qrCodes[1]);await scan(cises[1]);}
+      for(let i=0;i<100&&!trace.includes('pack:wb-next-order');i++)await sleep(100);
+      assert(trace.includes('pack:wb-next-order'),`next order did not finish: ${trace.join(' -> ')}`);
+      const selections=requestLog.filter(r=>r.path.endsWith('/scan-auto-print')&&r.body?.order_id);
+      assert.deepEqual(selections.map(r=>r.body.order_id),server?
+        (variant==='remount-after-lost-ack'?['wb-a-order','wb-a-order','wb-next-order']:['wb-a-order','wb-next-order']):[]);
+      assert(selections.every(r=>r.body.print_chz===false),'explicit sticker may never allocate pool CIS');
+      assert(selections.every(r=>r.body.await_honest_sign===true));
+      const commits=requestLog.filter(r=>r.path==='/operations/fbs-orders/kiz/commit');
+      assert.deepEqual(commits.map(r=>r.body.pairs),['wb-a-order','wb-next-order'].map((id,i)=>[
+        {order_id:id,value:cises[i],confirmed:false,...server?{scan_auto_print_id:`scan-${id}`}:{}}]));
+      assert(commits.every(r=>r.body.scan_no_wb_wait===true));
+      const expectedKeys=['wb-a-order','wb-next-order'].flatMap(id=>[
+        ...qr?[`scan-${id}`]:[],...copy?[`scan-${id}:copy`,`scan-${id}:copy:c2`]:[]]);
+      assert.deepEqual([...acceptedPrints.keys()],expectedKeys,'exact flags print intents/count; pool is never issued for explicit QR');
+      const jobs=[...acceptedPrints.values()].map(x=>x.job);
+      assert.deepEqual(jobs.map(p=>[p.widthMm,p.heightMm]),Array(jobs.length).fill([60,80]));
+      for(let i=0;i<2;i++){
+        if(qr)assert.equal(acceptedPrints.get(`scan-${['wb-a-order','wb-next-order'][i]}`).job.imageDataUrl,`data:image/png;base64,${qrImages[i].toString('base64')}`);
+        if(copy){const id=['wb-a-order','wb-next-order'][i];for(const key of [`scan-${id}:copy`,`scan-${id}:copy:c2`])assert.equal(decodedCis(acceptedPrints.get(key).job),cises[i],'native copies encode full canonical CIS per order');assert.equal(acceptedPrints.get(`scan-${id}:copy`).job.imageDataUrl,acceptedPrints.get(`scan-${id}:copy:c2`).job.imageDataUrl);}
+      }
+      const packs=requestLog.filter(r=>r.path.endsWith('/pack'));
+      assert.deepEqual(packs.map(r=>[r.path,r.body.quantity,r.body.order_id]),[
+        ['/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',1,'wb-a-order'],
+        [`/operations/packaging-tasks/task-${many?'wb-b':'wb-a'}/lines/line-wb-next-order/pack`,1,'wb-next-order']]);
+      for(const pack of packs)assert(server?pack.body.idempotency_key===`scan-${pack.body.order_id}:packed`:/^local:.+:packed$/.test(pack.body.idempotency_key));
+      if(qr)assert(trace.indexOf('print:scan-wb-a-order')<trace.indexOf('pack:wb-a-order'));
+      assert(trace.indexOf('pack:wb-a-order')<trace.indexOf('lookup:wb-next-order'),'next correct order after first pack');
+      assert.equal(blocked.length,0);assert.equal(errors.length,0);
+      report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
+    }catch(e){report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});console.error(`${report.currentCase}: ${e}`);}
+    await writeFile(`${dir}/${report.currentCase.replaceAll(/[^a-zA-Z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors,acceptedPrintKeys:[...acceptedPrints.keys()]},null,2));
+  }
 }
