@@ -1,0 +1,10 @@
+{
+  "scope": "Read-only Python urllib HTTPS request to public GitHub workflow metadata; git rev-parse only",
+  "public_github_tls": "PASS",
+  "workflow_path": ".github/workflows/ci.yml",
+  "workflow_state": "active",
+  "installed_sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
+  "server_checker_executed": false,
+  "deployment_performed": false,
+  "checked_date_utc": "2026-10-06"
+}

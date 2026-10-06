@@ -1,0 +1,15 @@
+{
+  "baseline": {
+    "exit": 0,
+    "output": "{\"unapproved_product_paths\": []}"
+  },
+  "source_sha256": "9b6d0871a5e11804d3ef9a6a359a98621ad194470e61116c07ec49a9482e0b50",
+  "hide_buttons_in_shared_style": {
+    "exit": 1,
+    "output": "{\"unapproved_product_paths\": [\"frontend/src/index.css\"]}"
+  },
+  "restored": {
+    "exit": 0,
+    "output": "{\"unapproved_product_paths\": []}"
+  }
+}
