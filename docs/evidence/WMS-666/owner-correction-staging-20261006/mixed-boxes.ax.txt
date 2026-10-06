@@ -1,0 +1,47 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=4bb20e78-a638-5723-8c84-09530ae4f489%2C9b3993c3-dffd-5f14-b7b0-2ccf0f495b57".
+1 AXWebArea WMS · Фулфилмент, URL: web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=4bb20e78-a638-5723-8c84-09530ae4f489%2C9b3993c3-dffd-5f14-b7b0-2ccf0f495b57
+	2 container
+		3 heading Сборка · 2 поставки, Value: 6
+			4 text Сборка ·  2 поставки
+		5 text WMS617 · Видео селлер 1
+		6 progress indicator 29
+		7 text 2  из  7  подготовлено к отгрузке
+		8 button Печать листа подбора
+		9 button Закрыть
+		10 tab group
+			11 tab (selectable, settable, boolean) Состав, Value: 0
+			12 tab (selectable, settable, boolean) Подбор, Value: 0
+			13 tab (selectable, settable, boolean) Упаковка и маркировка, Value: 0
+			14 tab (selected, settable, boolean) Короба, Value: 1
+		15 heading Value: 6, Поставка WMS617 assembly-a · WB № WB-GI-WMS617-ASSEMBLY-A · WMS617 · Видео селлер 1 · Склад WB WMS617 тестовый маршрут
+			16 text Поставка WMS617 assembly-a · WB № WB-GI-WMS617-ASSEMBLY-A · WMS617 · Видео селлер 1 · Склад WB WMS617 тестовый маршрут
+		17 heading Короба · Склад / СЦ, Value: 6
+			18 text Короба ·  Склад / СЦ
+		19 text Распределено 0 из 2 шт · осталось 2
+		20 button (disabled) Печать всех QR (0)
+		21 checkbox (settable, integer) Description: Без распределения, Value: 0
+		22 text Без распределения
+		23 text Коробов
+		24 stepper (settable, integer) Коробов, Value: 1
+		25 button Добавить короба
+		26 button Передать в WB
+			27 text Передать в 
+			28 text WB
+		29 heading Поставка WMS617 ozon · Ozon · WMS617 · Видео селлер 1 · Склад WMS Тестовый, Value: 6
+			30 text Поставка WMS617 ozon · Ozon · WMS617 · Видео селлер 1 · Склад WMS Тестовый
+		44 text У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.
+		31 heading Короба · Ozon, Value: 6
+			32 text Короба ·  Ozon
+		33 text Распределено 0 из 5 шт · осталось 5
+		34 button (disabled) Печать всех этикеток Ozon (0)
+		35 button Создать автоматически
+		36 checkbox (settable, integer) Description: Без ГТД и РНПТ, Value: 0
+		37 text Без ГТД и РНПТ
+		38 text Коробов
+		39 stepper (settable, integer) Коробов, Value: 1
+		40 button Добавить короба
+		41 button Передать в Ozon
+			42 text Передать в 
+			43 text Ozon
+
+The focused UI element is 14 tab (selected, settable, boolean) Короба, Value: 1

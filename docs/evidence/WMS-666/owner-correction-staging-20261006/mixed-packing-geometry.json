@@ -1,0 +1,50 @@
+{
+  "deltas": {
+    "marking": 0,
+    "size": 0,
+    "sticker": 0
+  },
+  "measurements": [
+    {
+      "marketplace": "ozon",
+      "marking": 1268,
+      "order": "52fb8c88-1d7a-53fc-bf41-a9c164e3f103",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "ozon",
+      "marking": 1268,
+      "order": "fc3e3285-9d3c-5164-b875-e124b24ccaa3",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "ozon",
+      "marking": 1268,
+      "order": "476b9650-36f0-596f-a60d-b20f3b5916a7",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "wb",
+      "marking": 1268,
+      "order": "4fa2016e-6c65-51a2-92b1-b3559f14e58d",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "wb",
+      "marking": 1268,
+      "order": "24ae7e5d-5d0a-5d13-81f1-f03865ffe9dc",
+      "size": 814,
+      "sticker": 1106
+    }
+  ],
+  "passed": true,
+  "tolerancePx": 1,
+  "viewport": {
+    "height": 1000,
+    "width": 1600
+  }
+}
