@@ -162,3 +162,21 @@ Negative cases не позволяют расширить исключение: 
 requirements, undeclared changed frozen test и deletion frozen test обязаны
 отказать. Нельзя превращать это в generic companion allowlist или ослаблять
 review/SHA/evidence checks.
+
+## Stage handoff: saved policy must not downgrade to legacy promotion
+
+Independent review `c737647b5ec5c737b96508b8669b9b1eca70066e` found that
+`cafaaef` returns `None` when `guards/PROCESS_CONTRACTS.json` is absent from
+the working tree, even if the exact file is present in `HEAD`. Two new
+regressions cover a deleted file and a dangling symlink at that path. Both
+require a `ValueError` before any `git mv`, with the protected original and
+requirement reference untouched; the pre-existing no-policy fixture remains
+the separate proof that truly legacy promotion still moves a new test.
+
+The same isolated test module was run with
+`../night1007-integration/scripts/ci/promote_guards.py`, not the older local
+promoter. It reproduces both bypasses (`ValueError not raised`). Its WMS-654
+positive reaches `verify_registered_case` and fails specifically on template
+`C6 independent coordinates sides=%s tiers=%s` lacking an expanded case/report
+binding, proving the prior template contract is exercising the new matcher
+rather than the old unsplit-reference path.

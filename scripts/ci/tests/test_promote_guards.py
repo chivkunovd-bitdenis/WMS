@@ -324,6 +324,53 @@ class PromoteGuardsTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
             promoter.promote(self.root, "WMS-654")
 
+    def protected_original_fixture(self, task: str) -> str:
+        source = "backend/tests/test_immutable_contract.py"
+        test_name = "test_frozen_case_id"
+        self.write(source, f"def {test_name}(): pass\n")
+        self.write_saved_process_protection(source, f"tests.test_immutable_contract::{test_name}")
+        self.write_manifest("active")
+        self.write(
+            f"docs/requirements/{task}.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C1 | навсегда | {source}::{test_name} | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "protected fixture")
+        return source
+
+    def assert_protected_original_was_not_moved(self, source: str, before: str) -> None:
+        self.assertTrue((self.root / source).is_file())
+        self.assertFalse((self.root / "backend/tests/guards/test_immutable_contract.py").exists())
+        self.assertEqual(self.git("status", "--porcelain"), before)
+
+    def test_missing_saved_protected_policy_refuses_legacy_move(self):
+        source = self.protected_original_fixture("WMS-905")
+        policy = self.root / "guards/PROCESS_CONTRACTS.json"
+        policy.unlink()
+        before = self.git("status", "--porcelain")
+
+        with self.assertRaisesRegex(ValueError, "Process protection"):
+            promoter.promote(self.root, "WMS-905")
+
+        self.assert_protected_original_was_not_moved(source, before)
+
+    def test_dangling_saved_protected_policy_refuses_legacy_move(self):
+        source = self.protected_original_fixture("WMS-906")
+        policy = self.root / "guards/PROCESS_CONTRACTS.json"
+        policy.unlink()
+        policy.symlink_to("missing-PROCESS_CONTRACTS.json")
+        self.assertTrue(policy.is_symlink())
+        self.assertFalse(policy.exists())
+        before = self.git("status", "--porcelain")
+
+        with self.assertRaisesRegex(ValueError, "Process protection"):
+            promoter.promote(self.root, "WMS-906")
+
+        self.assert_protected_original_was_not_moved(source, before)
+
 
 if __name__ == "__main__":
     unittest.main()
