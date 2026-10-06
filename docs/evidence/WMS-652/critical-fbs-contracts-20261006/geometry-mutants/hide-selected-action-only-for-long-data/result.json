@@ -1,0 +1,184 @@
+{
+  "sha": "695a429cd08b4a0b3675cb2d4af0d3f33eeaf9f5",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[mixed-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-expired;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-cancelled;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[selection;1600x1000-long]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-selected-open\"]; {\"x\":703.5546875,\"y\":945.4375,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.geometry[selection;1600x1000-long]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:223:3"
+}

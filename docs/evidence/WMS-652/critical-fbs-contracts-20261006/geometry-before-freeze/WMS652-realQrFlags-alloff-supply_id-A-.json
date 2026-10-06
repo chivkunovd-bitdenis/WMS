@@ -1,0 +1,200 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T19%3A20%3A22.729Z&to=2026-10-06T19%3A20%3A22.729Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=wb-a&sticker=*DUIkWJJF",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/validate",
+      "body": {
+        "order_id": "wb-a-order",
+        "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/commit",
+      "body": {
+        "pairs": [
+          {
+            "order_id": "wb-a-order",
+            "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+            "confirmed": false
+          }
+        ],
+        "idempotency_key": "local:93be132b-5cb0-4d39-9b65-cff335535a37:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+        "scan_no_wb_wait": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+      "body": {
+        "quantity": 1,
+        "order_id": "wb-a-order",
+        "idempotency_key": "local:93be132b-5cb0-4d39-9b65-cff335535a37:packed"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/kiz/lookup?supply_id=wb-a&sticker=*DUIkNEXT",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/validate",
+      "body": {
+        "order_id": "wb-next-order",
+        "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-orders/kiz/commit",
+      "body": {
+        "pairs": [
+          {
+            "order_id": "wb-next-order",
+            "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B",
+            "confirmed": false
+          }
+        ],
+        "idempotency_key": "local:ef786d2b-2926-4eae-b216-19fcb1460adf:ad54f83481e684002ab81c345de15e2c1d913933368f727f5bcb2d188b521672:bind",
+        "scan_no_wb_wait": true
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+      "body": {
+        "quantity": 1,
+        "order_id": "wb-next-order",
+        "idempotency_key": "local:ef786d2b-2926-4eae-b216-19fcb1460adf:packed"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [
+    "lookup:wb-a-order",
+    "bind:wb-a-order",
+    "pack:wb-a-order",
+    "lookup:wb-next-order",
+    "bind:wb-next-order",
+    "pack:wb-next-order"
+  ],
+  "blocked": [],
+  "errors": [],
+  "acceptedPrintKeys": []
+}
