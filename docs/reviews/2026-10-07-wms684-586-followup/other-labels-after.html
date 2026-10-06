@@ -1,0 +1,40 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Print barcode</title>
+    <style>
+      body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; padding: 0; margin: 0; }
+      .wrap { display: grid; gap: 8px; justify-items: center; align-content: center; }
+      .title { font-size: 14px; font-weight: 700; text-align: center; }
+      .code { font-size: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; text-align: center; word-break: break-all; }
+      @page { size: 58mm 40mm; margin: 0; }
+      html, body { width: 58mm; height: 40mm; }
+      .label { width: 58mm; height: 40mm; box-sizing: border-box; }
+      .label--next { break-after: page; page-break-after: always; }
+      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto 1fr auto; gap: 1mm; justify-items: stretch; align-items: center; }
+      .title { font-size: 13pt; font-weight: 800; text-align: center; }
+      .code { font-size: 9pt; text-align: center; }
+      .barcode { width: 100%; max-width: none; height: auto; max-height: none; display: block; image-rendering: pixelated; }
+    </style>
+  </head>
+  <body>
+    <section class="label label--next" data-barcode="CODE-0">
+      <div class="wrap">
+        <div class="title">Грузоместо № 1</div>
+
+        <img class="barcode" src="data:image/png;base64,AA==" alt="barcode" />
+        <div class="code">CODE-0</div>
+      </div>
+    </section>
+<section class="label" data-barcode="CODE-1">
+      <div class="wrap">
+        <div class="title">Короб отгрузки</div>
+
+        <img class="barcode" src="data:image/png;base64,AA==" alt="barcode" />
+        <div class="code">CODE-1</div>
+      </div>
+    </section>
+  </body>
+</html>
