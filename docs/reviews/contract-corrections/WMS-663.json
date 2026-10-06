@@ -79,5 +79,36 @@
         "scope": "Exact one-line accessible Close selector correction only; 16 expectations unchanged"
       }
     }
+  ],
+  "owner_supersessions": [
+    {
+      "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "prior_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+      "before_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+      "changes": [
+        [
+          "35ac50caa77f1ca5eb1905a23a730e1dee1e2f45",
+          "87d14b74cbfa4f7f119bb0c6374929259fed5dc5"
+        ],
+        [
+          "23b222dede4869ae6035c55175f5d14f6a6af5f4",
+          "e177548bb5a728cad63b32528071c1c5ac9995e1"
+        ]
+      ],
+      "owner_request": {
+        "commit": "4c9e1238c85a50a9238bc109651c79cac5f10e03",
+        "path": "docs/reviews/wms663-666-frontend-rollback-scope-20261006.md",
+        "blob": "664aa8ea5e279c04f9b6219a8440142fd7bc142a"
+      },
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PENDING",
+        "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+        "correction_commit": "23b222dede4869ae6035c55175f5d14f6a6af5f4"
+      }
+    }
   ]
 }
