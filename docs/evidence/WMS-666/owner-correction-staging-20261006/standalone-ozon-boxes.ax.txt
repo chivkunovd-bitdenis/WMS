@@ -34,7 +34,7 @@ Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-producti
 		33 stepper (settable, integer) Коробов, Value: 1
 		34 button Добавить короба
 		35 button Передать в Ozon
-			36 text Передать в 
+			36 text Передать в
 			37 text Ozon
 
 The focused UI element is 23 tab (selected, settable, boolean) Короба, Value: 1

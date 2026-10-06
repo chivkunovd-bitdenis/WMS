@@ -25,7 +25,7 @@ Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-producti
 		24 stepper (settable, integer) Коробов, Value: 1
 		25 button Добавить короба
 		26 button Передать в WB
-			27 text Передать в 
+			27 text Передать в
 			28 text WB
 		29 heading Поставка WMS617 ozon · Ozon · WMS617 · Видео селлер 1 · Склад WMS Тестовый, Value: 6
 			30 text Поставка WMS617 ozon · Ozon · WMS617 · Видео селлер 1 · Склад WMS Тестовый
@@ -41,7 +41,7 @@ Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-producti
 		39 stepper (settable, integer) Коробов, Value: 1
 		40 button Добавить короба
 		41 button Передать в Ozon
-			42 text Передать в 
+			42 text Передать в
 			43 text Ozon
 
 The focused UI element is 14 tab (selected, settable, boolean) Короба, Value: 1
