@@ -1,0 +1,31 @@
+{
+  "transferMode": "ReturnAsStream",
+  "streamFormat": "json",
+  "streamCompression": "gzip",
+  "bufferUsageReportingInterval": 1000,
+  "traceConfig": {
+    "recordMode": "recordUntilFull",
+    "traceBufferSizeInKb": 32768,
+    "enableSampling": false,
+    "enableSystrace": false,
+    "includedCategories": [
+      "disabled-by-default-cc.debug",
+      "disabled-by-default-memory-infra",
+      "__metadata"
+    ],
+    "excludedCategories": [
+      "*"
+    ],
+    "memoryDumpConfig": {
+      "allowed_dump_modes": [
+        "light"
+      ],
+      "triggers": [
+        {
+          "periodic_interval_ms": 250,
+          "mode": "light"
+        }
+      ]
+    }
+  }
+}

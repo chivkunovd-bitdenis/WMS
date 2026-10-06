@@ -1,0 +1,110 @@
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	﻿2026-10-06T22:05:04.7084495Z ##[group]Run bash scripts/ci/wms672-c5-diagnostic/run.sh
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7084980Z [36;1mbash scripts/ci/wms672-c5-diagnostic/run.sh[0m
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7151496Z shell: /usr/bin/bash -e {0}
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7151781Z env:
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7152217Z   PLAYWRIGHT_MODULE: /home/runner/work/_temp/print-contract-tools/node_modules/playwright/index.mjs
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7152935Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7153365Z ##[endgroup]
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:04.7927780Z TAP version 13
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8243034Z # Subtest: C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8244486Z ok 1 - C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8245073Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8245314Z   duration_ms: 324.677087
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8245551Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8245997Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8247584Z # {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":14,"cleanup":[{"pending":0,"ready":14}],"finished":true}}
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8386547Z # Subtest: C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8390181Z ok 2 - C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8391890Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8392695Z   duration_ms: 122.124446
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8393533Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8394392Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8396142Z # {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":15,"cleanup":[{"pending":0,"ready":15}],"finished":true}}
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8745951Z 1..2
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8747209Z # tests 2
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8747887Z # suites 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8748513Z # pass 2
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8749086Z # fail 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8749675Z # cancelled 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8750341Z # skipped 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8751008Z # todo 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.8751725Z # duration_ms 1094.70656
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:05.9338456Z TAP version 13
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2202489Z # Subtest: C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2206541Z ok 1 - C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2210835Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2211212Z   duration_ms: 584.504144
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2211624Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.2211974Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9175410Z # Subtest: C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9177265Z ok 2 - C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9178697Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9179051Z   duration_ms: 700.454326
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9184930Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:07.9185275Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5859529Z # Subtest: C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5864829Z ok 3 - C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5866164Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5866664Z   duration_ms: 402.279123
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5867101Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5867436Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5895268Z # Subtest: C5 blank message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5904969Z ok 4 - C5 blank message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5905806Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5906141Z   duration_ms: 94.494887
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5906603Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5906940Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5907833Z # Subtest: C5 nonstring message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5909586Z ok 5 - C5 nonstring message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5910395Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5910719Z   duration_ms: 107.90866
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5911145Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5911463Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5912217Z # Subtest: C5 no message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5913478Z ok 6 - C5 no message retains existing generic preparation error and zero external actions
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5914380Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5914775Z   duration_ms: 97.369562
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5915212Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:08.5915536Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3345242Z # Subtest: C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3347824Z ok 7 - C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3348680Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3348905Z   duration_ms: 814.477612
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3349150Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3349420Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3745143Z 1..7
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3745557Z # tests 7
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3745885Z # suites 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3746199Z # pass 7
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3755732Z # fail 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3756129Z # cancelled 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3756477Z # skipped 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3756795Z # todo 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:09.3757066Z # duration_ms 3455.579989
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:11.4865715Z TAP version 13
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:05:12.4540459Z # C5 environment {"node":"v24.21.0","platform":"linux","arch":"x64","browser":"141.0.7390.37"}
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1068355Z # Subtest: C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1085040Z not ok 1 - C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1101768Z   ---
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1102416Z   duration_ms: 92997.128287
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1102966Z   type: 'test'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1106066Z   location: '/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:303:1'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1107467Z   failureType: 'testCodeFailure'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1115025Z   error: 'page.waitForFunction: Timeout 30000ms exceeded.'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1115903Z   code: 'ERR_TEST_FAILURE'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1116764Z   name: 'TimeoutError'
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1117212Z   stack: |-
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1117872Z     transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:121:16)
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1118774Z     TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:317:26)
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:45.1119469Z   ...
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.1594906Z # C5 engine trace {"bytes":3492889,"dataLossOccurred":true,"maxBufferUsage":0.996608555316925}
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2519373Z 1..1
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2520037Z # tests 1
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2520474Z # suites 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2520850Z # pass 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2522699Z # fail 1
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2522970Z # cancelled 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2523665Z # skipped 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2524458Z # todo 0
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:50.2525372Z # duration_ms 98780.509936
+c5-cache-debug-trace	Unchanged C5 only with bounded engine trace	2026-10-06T22:06:51.1192990Z ##[error]Process completed with exit code 1.

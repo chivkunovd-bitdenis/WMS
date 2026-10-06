@@ -1,0 +1,32 @@
+[
+  {
+    "syncId": "C5-clock-trace-start-0",
+    "epochBeforeMs": 1791324312474,
+    "epochAfterMs": 1791324312474
+  },
+  {
+    "syncId": "C5-clock-fixture-1-opened-1",
+    "epochBeforeMs": 1791324312489,
+    "epochAfterMs": 1791324312490
+  },
+  {
+    "syncId": "C5-clock-fixture-1-closed-2",
+    "epochBeforeMs": 1791324359496,
+    "epochAfterMs": 1791324359497
+  },
+  {
+    "syncId": "C5-clock-fixture-2-opened-3",
+    "epochBeforeMs": 1791324360311,
+    "epochAfterMs": 1791324360313
+  },
+  {
+    "syncId": "C5-clock-fixture-2-closed-4",
+    "epochBeforeMs": 1791324404642,
+    "epochAfterMs": 1791324404643
+  },
+  {
+    "syncId": "C5-clock-trace-end-5",
+    "epochBeforeMs": 1791324405102,
+    "epochAfterMs": 1791324405107
+  }
+]

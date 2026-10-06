@@ -1,0 +1,491 @@
+{
+  "events": 26592,
+  "cacheEvents": 7165,
+  "markers": 2,
+  "imageMemorySnapshots": 23,
+  "completion": {
+    "dataLossOccurred": true,
+    "stream": "1",
+    "traceFormat": "json",
+    "streamCompression": "gzip",
+    "usage": [
+      {
+        "percentFull": 0.1977955400943756,
+        "eventCount": 0,
+        "value": 0.1977955400943756
+      },
+      {
+        "percentFull": 0.22371608018875122,
+        "eventCount": 0,
+        "value": 0.22371608018875122
+      },
+      {
+        "percentFull": 0.2630814015865326,
+        "eventCount": 0,
+        "value": 0.2630814015865326
+      },
+      {
+        "percentFull": 0.3265503942966461,
+        "eventCount": 0,
+        "value": 0.3265503942966461
+      },
+      {
+        "percentFull": 0.35186532139778137,
+        "eventCount": 0,
+        "value": 0.35186532139778137
+      },
+      {
+        "percentFull": 0.396075576543808,
+        "eventCount": 0,
+        "value": 0.396075576543808
+      },
+      {
+        "percentFull": 0.4165455400943756,
+        "eventCount": 0,
+        "value": 0.4165455400943756
+      },
+      {
+        "percentFull": 0.4170300364494324,
+        "eventCount": 0,
+        "value": 0.4170300364494324
+      },
+      {
+        "percentFull": 0.47311046719551086,
+        "eventCount": 0,
+        "value": 0.47311046719551086
+      },
+      {
+        "percentFull": 0.5145348906517029,
+        "eventCount": 0,
+        "value": 0.5145348906517029
+      },
+      {
+        "percentFull": 0.5480862259864807,
+        "eventCount": 0,
+        "value": 0.5480862259864807
+      },
+      {
+        "percentFull": 0.5793362259864807,
+        "eventCount": 0,
+        "value": 0.5793362259864807
+      },
+      {
+        "percentFull": 0.5977470874786377,
+        "eventCount": 0,
+        "value": 0.5977470874786377
+      },
+      {
+        "percentFull": 0.5981104373931885,
+        "eventCount": 0,
+        "value": 0.5981104373931885
+      },
+      {
+        "percentFull": 0.6142199635505676,
+        "eventCount": 0,
+        "value": 0.6142199635505676
+      },
+      {
+        "percentFull": 0.7120881676673889,
+        "eventCount": 0,
+        "value": 0.7120881676673889
+      },
+      {
+        "percentFull": 0.8726986646652222,
+        "eventCount": 0,
+        "value": 0.8726986646652222
+      },
+      {
+        "percentFull": 0.9444040656089783,
+        "eventCount": 0,
+        "value": 0.9444040656089783
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      }
+    ]
+  },
+  "relevantEventCounts": {
+    "SoftwareImageDecodeCache::GetTaskForImageAndRefInternal": 742,
+    "CheckerImageTracker::ScheduleImageDecodeQueue": 323,
+    "CheckerImageTracker::ScheduleNextImageDecode": 670,
+    "LayerTreeHostImpl::QueueImageDecode": 650,
+    "DecodedImageTracker::QueueImageDecode": 650,
+    "SoftwareImageDecodeCache::AddBudgetForImage": 656,
+    "SoftwareImageDecodeCache::DecodeImageIfNecessary": 636,
+    "SoftwareImageDecodeCacheUtils::DoDecodeImage - decode": 461,
+    "DecodedImageTracker::ImageDecodeFinished": 619,
+    "LayerTreeHostImpl::ImageDecodeFinished": 619,
+    "SoftwareImageDecodeCache::UnrefImage": 566,
+    "SoftwareImageDecodeCache::RemoveBudgetForImage": 556,
+    "SoftwareImageDecodeCache::GetDecodedImageForDrawInternal": 9,
+    "SoftwareImageDecodeCache::DrawWithImageFinished": 8,
+    "clock_sync": 2
+  }
+}

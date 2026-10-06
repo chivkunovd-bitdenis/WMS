@@ -1,0 +1,17 @@
+{
+  "events": 26592,
+  "category_counts": {
+    "__metadata": 79,
+    "disabled-by-default-cc.debug": 21552,
+    "disabled-by-default-memory-infra": 4732,
+    "disabled-by-default-cc.debug,disabled-by-default-viz.quads,disabled-by-default-devtools.timeline.layers": 229
+  },
+  "dataLossOccurred": true,
+  "maxBufferUsage": 0.996608555316925,
+  "clock_samples_expected": 6,
+  "clock_markers_retained": 2,
+  "image_memory_snapshots": 23,
+  "serialized_memory_dump_event_bytes": 43837004,
+  "serialized_all_event_bytes": 63093205,
+  "result": "INCONCLUSIVE for later native refusal; first fixture and renderTape occupy retained prefix"
+}
