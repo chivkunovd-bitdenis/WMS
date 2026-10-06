@@ -1,0 +1,325 @@
+{
+  "reviewed_sha": "65049df62d2bac87932fc5349f6326caec43dea5",
+  "implementation_sha": "aadd1716abc34f316648639e3baa10c1ac8c5e54",
+  "old_source": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "frozen_contract_bytes_preserved": true,
+  "targeted_red": {
+    "promotion": {
+      "tests": 3,
+      "failures": 2,
+      "errors": 1
+    },
+    "docgate687": {
+      "tests": 4,
+      "failures": 2
+    }
+  },
+  "promotion_probes": [
+    {
+      "scenario": "deleted",
+      "rejected_before_mutation": true,
+      "reason": "Process protection сохранена в HEAD, но недоступна: Missing required file: guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "dangling",
+      "rejected_before_mutation": true,
+      "reason": "Process protection сохранена в HEAD, но недоступна: Symlink is not execution evidence: guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "actual two-template fixture twice",
+      "all_12_registered": true,
+      "no_diff": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=true",
+      "rejected_before_mutation": true
+    }
+  ],
+  "ledger_probes": [
+    {
+      "scenario": "allowed",
+      "rejected": false,
+      "errors": [],
+      "no_mutation": true
+    },
+    {
+      "scenario": "arbitrary-same-task-test",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "business-file",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "foreign-task-test",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "foreign-doc",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "own-business-requirement",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "existing-permission",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "deleted-original",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "deleted-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "symlink-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "executable-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "declared-mismatch",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "review-report-changed",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    }
+  ],
+  "policy": {
+    "paths": 233,
+    "suites": 22,
+    "ids": 1218
+  },
+  "original_1146_ids_and_all_18_bindings_preserved": true,
+  "old_222_paths_and_modes_preserved": true,
+  "old_protected_hash_delta": [
+    ".github/workflows/ci.yml",
+    "frontend/tests-e2e/wms672-dom.test.tsx",
+    "scripts/ci/tests/test_ci_release_additions.py",
+    "scripts/ci/tests/test_promote_guards.py"
+  ],
+  "additions": {
+    "backend-fbs": [
+      "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[False-False-\\u0410 4]",
+      "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[True-False-\\u0410 2.4]",
+      "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[False-True-\\u0410 3.4]",
+      "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[True-True-\\u0410 2.3.4]",
+      "tests.test_wms654_cells::test_c2_suggestions_use_coordinate_context_and_skip_code_collisions",
+      "tests.test_wms654_cells::test_c3_legacy_api_and_existing_rows_are_unchanged",
+      "tests.test_wms654_cells::test_c4_repeat_conflict_does_not_duplicate_new_address",
+      "tests.test_wms654_cells::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[False]",
+      "tests.test_wms654_cells::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[True]",
+      "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad0]",
+      "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad1]",
+      "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad2]",
+      "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad3]",
+      "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[False]",
+      "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[True]",
+      "tests.test_wms654_cells::test_c3_new_creation_preserves_legacy_coordinates_and_barcode"
+    ],
+    "frontend-fbs": [
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=true",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=true",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C7 failure keeps inputs, retry allows correction and refresh keeps neighboring cells",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C4/C7 manual position survives suggestion response and context change does not reuse it",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C2/C7 late response from a previous row cannot overwrite the current suggestion",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C10 refreshed saved cell prints its original barcode through existing dialog",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C7 map creation failure keeps the form and selected coordinates for retry",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=true",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=true",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=false",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=true",
+      "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=true",
+      "src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx::WMS-654 legacy CreateCellDialog contract C11 keeps the side-only address and next automatic position for string callers",
+      "src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx::WMS-654 real warehouse-map suggestion contract C2 uses the server suggestion scoped to active side/tier instead of ambiguous map code text",
+      "src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx::WMS-654 real warehouse-map suggestion contract C7 ignores a late previous-rack response and keeps the manual position in the current row"
+    ],
+    "ci-shards": [
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze",
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_controlled_accepted_final_freeze_accepts_only_its_exact_reference",
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job",
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_promotes_only_permanent_tests_and_updates_references",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_rejects_test_outside_supported_trees",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_unbound_expanded_case",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_expanded_case_or_source",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_case_file",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_wrong_vitest_report",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms654_templates_reject_changed_source_hash",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_missing_saved_protected_policy_refuses_legacy_move",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_dangling_saved_protected_policy_refuses_legacy_move"
+    ],
+    "wms686-model": [
+      "C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав",
+      "C3: частичный подбор переносит только выбранные конкретные КИЗ и сохраняет историю остальных",
+      "C3: количество без конкретных КИЗ либо КИЗ другого товара не подтверждает уходящие единицы",
+      "C4: вся ячейка переносит оба короба и смешанный состав без списания остатка",
+      "C5/C6: добровольный перескан той же единицы в перенесённом коробе не требует переупаковки и не добавляет товар",
+      "C6: КИЗ другого товара или другого короба не становится проверкой выбранной единицы",
+      "C7: новый короб получает код, добавленная единица сохраняет КИЗ/приёмку, закрытие выбирает следующий короб",
+      "C6/C7: один КИЗ нельзя назначить второй единице, повтор той же единицы не дублирует короб",
+      "C8: сброс демо полностью восстанавливает исходные короба, КИЗ и прогресс",
+      "C8: сохранение и повторная загрузка восстанавливают точный прогресс и связи КИЗ",
+      "C9: неизвестный API-маршрут явно отказывает без любого сетевого fallback"
+    ],
+    "pg-654": [
+      "tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates",
+      "tests.test_wms654_cells::test_c4_postgresql_concurrent_requests_have_one_winner[False]",
+      "tests.test_wms654_cells::test_c4_postgresql_concurrent_requests_have_one_winner[True]"
+    ],
+    "print-672-c5a": [
+      "tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry"
+    ],
+    "docgate-687": [
+      "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change",
+      "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_product_or_other_task_test_companion",
+      "scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_undeclared_or_deleted_frozen_test",
+      "scripts.ci.test_check_task_documents.GitTests::test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links"
+    ]
+  },
+  "required_needs": [
+    "baseline",
+    "backend",
+    "frontend-build",
+    "guards",
+    "print-regressions",
+    "printer-windows",
+    "wms686-mockup"
+  ],
+  "backend_needs": [
+    "backend-checks",
+    "backend-shards"
+  ],
+  "raw_reports_verified": {
+    "ci-shards": 37,
+    "docgate-687": 4,
+    "pg-654": 3,
+    "print-672-c5a": 1,
+    "frontend654-added-cases": 20,
+    "fresh-docgate-687": 4,
+    "fresh-promotion": 13
+  },
+  "new_backend_16_cases_collection_bound_not_claimed_executed": true,
+  "P": "d618 explicit pending placeholder, final not frozen",
+  "S": "pending",
+  "full_ci_release_approval": false
+}
