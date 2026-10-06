@@ -1,0 +1,77 @@
+name: WMS-672 remaining C7 C10 C11 proof
+on:
+  push:
+    branches: [test/wms672-c7-c10-c11-20261006]
+    paths:
+      - .github/workflows/wms672-remaining-proof.yml
+      - frontend/tests-e2e/wms672-remaining.test.mjs
+permissions:
+  contents: read
+jobs:
+  remaining:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PRODUCT: 0e6a7fbc3eb11f951febf972b35c6e117c42678a
+      CONTRACT: 6b6a47e748769d0b88c26178aafe88f4803c5ee8
+      CANDIDATE659: 23c65f86dee1a71f0703b2c6c29990707f502445
+      MIGRATION659: 7f8b419cffdc39223bd55463a326dfe357da618f
+      WMS672_TEST_URL: http://127.0.0.1:16724
+    steps:
+      - uses: actions/checkout@v4
+      - name: Pin product and frozen contracts, add only separate probe
+        run: |
+          set -eu
+          mkdir -p "$RUNNER_TEMP/proof"
+          cp frontend/tests-e2e/wms672-remaining.test.mjs "$RUNNER_TEMP/proof/probe.mjs"
+          printf 'product=%s\nrunner=%s\ncontract672=%s\ncandidate659=%s\naccepted659migration=%s\n' "$PRODUCT" "$GITHUB_SHA" "$CONTRACT" "$CANDIDATE659" "$MIGRATION659" > "$RUNNER_TEMP/proof/pins.txt"
+          git fetch --no-tags origin "$PRODUCT" "$CONTRACT" "$CANDIDATE659" "$MIGRATION659"
+          git show "$CANDIDATE659:docs/reviews/contract-corrections/WMS-659.json" > "$RUNNER_TEMP/proof/formal-migration659.json"
+          git show "$CANDIDATE659:frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx" > "$RUNNER_TEMP/proof/frozen659.test.tsx"
+          git show "$MIGRATION659:backend/tests/test_wms659_bulk_inbound_boxes.py" > "$RUNNER_TEMP/proof/frozen659-backend.py"
+          git diff "$MIGRATION659" "$CANDIDATE659" -- backend/tests/test_wms659_bulk_inbound_boxes.py > "$RUNNER_TEMP/proof/migration-candidate-diff.txt"
+          test ! -s "$RUNNER_TEMP/proof/migration-candidate-diff.txt"
+          git checkout --detach "$PRODUCT"
+          git diff --exit-code "$PRODUCT"
+          git ls-tree -r HEAD -- frontend/src backend > "$RUNNER_TEMP/proof/product.manifest"
+          git show "$CONTRACT:frontend/tests-e2e/wms672-box-labels.test.mjs" > "$RUNNER_TEMP/proof/frozen672.mjs"
+          cp "$RUNNER_TEMP/proof/probe.mjs" frontend/tests-e2e/wms672-remaining.test.mjs
+          cp "$RUNNER_TEMP/proof/frozen659.test.tsx" frontend/tests-e2e/wms659-frozen.dom.test.tsx
+          # Only import location adapts to test-only location. Expectations are byte-identical.
+          sed -i "s|from './FfInboundRequestView'|from '../src/screens/ff/FfInboundRequestView'|" frontend/tests-e2e/wms659-frozen.dom.test.tsx
+          sed "s|from '../src/screens/ff/FfInboundRequestView'|from './FfInboundRequestView'|" frontend/tests-e2e/wms659-frozen.dom.test.tsx > "$RUNNER_TEMP/proof/659-roundtrip.tsx"
+          cmp "$RUNNER_TEMP/proof/frozen659.test.tsx" "$RUNNER_TEMP/proof/659-roundtrip.tsx"
+          git diff --exit-code "$PRODUCT" -- frontend/src backend frontend/tests-e2e/wms672-harness.tsx
+          sha256sum frontend/tests-e2e/wms672-remaining.test.mjs "$RUNNER_TEMP/proof/frozen659.test.tsx" "$RUNNER_TEMP/proof/frozen659-backend.py" frontend/tests-e2e/wms672-harness.tsx > "$RUNNER_TEMP/proof/hashes.txt"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare ephemeral remote test runner
+        run: |
+          npm ci --prefix frontend > "$RUNNER_TEMP/proof/npm-ci.log" 2>&1
+          npm install --prefix "$RUNNER_TEMP/runner-tools" --no-package-lock --no-save playwright@1.56.1 > "$RUNNER_TEMP/proof/runner-tools.log" 2>&1
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/runner-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          echo "WMS672_CHROMIUM=$(command -v google-chrome)" >> "$GITHUB_ENV"
+      - name: Execute only remaining targeted probes and frozen WMS-659 integration
+        shell: bash
+        run: |
+          set +e
+          set -uo pipefail
+          export WMS672_EVIDENCE_DIR="$RUNNER_TEMP/proof/browser"
+          cd frontend
+          node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/proof/vite.log" 2>&1 &
+          trap 'kill $! 2>/dev/null || true' EXIT
+          for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
+          timeout 150s node --test --test-concurrency=1 tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining.log"
+          browser=${PIPESTATUS[0]}
+          timeout 150s node node_modules/vitest/vitest.mjs run tests-e2e/wms659-frozen.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/integration659.log"
+          integration=${PIPESTATUS[0]}
+          printf 'browser=%s\nintegration659=%s\n' "$browser" "$integration" > "$RUNNER_TEMP/proof/exits.txt"
+          git diff --exit-code "$PRODUCT" -- src ../backend tests-e2e/wms672-harness.tsx || exit 2
+          test "$browser" = 0 && test "$integration" = 0
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms672-remaining-${{ github.sha }}
+          path: ${{ runner.temp }}/proof
+          retention-days: 14
