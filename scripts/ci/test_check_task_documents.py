@@ -156,6 +156,50 @@ class GitTests(unittest.TestCase):
         self.write("docs/requirements/WMS-437.md", DOCUMENT)
         return self.commit("WMS-437 introduce document check")
 
+    def wms687_document(self, test_links: str) -> str:
+        return f"""# WMS-687
+
+| Проверка | Требование | Класс | Тест | Ожидаемый результат | Вердикт |
+| --- | --- | --- | --- | --- | --- |
+| C1 | R1 | навсегда | {test_links} | Общий диалог сохраняет только выбранные строки документа. | принято |
+
+## Заключение
+Принято.
+"""
+
+    def wms687_contract(self, *, second_frozen: bool = False):
+        rollout = self.rollout()
+        frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        frozen_paths = [frozen]
+        if second_frozen:
+            second = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+            self.write(second, "export const frozenPermission = 'original'\n")
+            frozen_paths.append(second)
+        document = "docs/requirements/WMS-687.md"
+        self.write(document, self.wms687_document(f"{frozen}::WMS-687 old DOM contract"))
+        contract = self.commit("WMS-687: контракт тестов")
+        return rollout, contract, frozen_paths, document
+
+    def wms687_ledger(self, contract: str, correction: str, files: list[str]) -> None:
+        self.write(
+            "docs/reviews/contract-corrections/WMS-687.json",
+            json.dumps(
+                {
+                    "task": "WMS-687",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": files,
+                    "review": {
+                        "model": "gpt-6.1-sol",
+                        "effort": "high",
+                        "verdict": "PASS",
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-687 correction ledger")
+
     def test_pre_rollout_history_ignored_but_introduction_checked(self):
         self.commit("WMS-002 legacy without contract")
         self.rollout()
@@ -738,6 +782,158 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-702 rename contract")
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("WMS-702" in error for error in errors))
+
+    def test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links(self):
+        rollout, contract, [frozen], document = self.wms687_contract()
+        regression = "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+        permission = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        self.write(regression, "export const regression = 'WMS-687'\n")
+        self.write(permission, "export const permission = 'WMS-687'\n")
+        self.write(
+            document,
+            self.wms687_document(
+                f"{frozen}::WMS-687 old DOM contract<br>"
+                f"{regression}::WMS-687 shared dialog regression<br>"
+                f"{permission}::WMS-687 catalog permission wiring"
+            ),
+        )
+        correction = self.commit("WMS-687: correction after independent review")
+        self.wms687_ledger(contract, correction, [frozen])
+
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms687_correction_rejects_product_or_other_task_test_companion(self):
+        for path in (
+            "frontend/src/screens/ff/FfInboundRequestView.tsx",
+            "frontend/src/screens/ff/FfInboundRequestView.wms688.regression.dom.test.tsx",
+        ):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    (root / "AGENTS.md").write_text("Rules\n")
+                    (root / "CLAUDE.md").write_text("Rules\n")
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+                    contract = commit("WMS-687: контракт тестов")
+                    write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                    write(path, "export const unrelated = true\n")
+                    correction = commit("WMS-687 correction with forbidden companion")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms687_correction_rejects_foreign_or_semantic_requirement_change(self):
+        for changed_document, before, replacement in (
+            ("docs/requirements/WMS-688.md", "", "foreign requirement\n"),
+            ("docs/requirements/WMS-687.md", "R1", "R99"),
+            ("docs/requirements/WMS-687.md", "Общий диалог сохраняет только выбранные строки документа.",
+             "Общий диалог меняет бизнес-результат."),
+        ):
+            with self.subTest(document=changed_document):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write("AGENTS.md", "Rules\n")
+                    write("CLAUDE.md", "Rules\n")
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    original_doc = self.wms687_document(f"{frozen}::old")
+                    write("docs/requirements/WMS-687.md", original_doc)
+                    write("docs/requirements/WMS-688.md", "# WMS-688\n")
+                    contract = commit("WMS-687: контракт тестов")
+                    write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                    if changed_document.endswith("WMS-687.md"):
+                        write(changed_document, original_doc.replace(before, replacement))
+                    else:
+                        write(changed_document, replacement)
+                    correction = commit("WMS-687 correction with forbidden requirement edit")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms687_correction_rejects_undeclared_or_deleted_frozen_test(self):
+        for mode in ("undeclared", "deleted"):
+            with self.subTest(mode=mode):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write("AGENTS.md", "Rules\n")
+                    write("CLAUDE.md", "Rules\n")
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    second = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    write(second, "export const frozenPermission = 'original'\n")
+                    write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+                    contract = commit("WMS-687: контракт тестов")
+                    if mode == "deleted":
+                        subprocess.check_call(["git", "rm", "-q", frozen], cwd=root)
+                    else:
+                        write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                        write(second, "export const frozenPermission = 'changed outside ledger'\n")
+                    correction = commit("WMS-687 correction with invalid frozen scope")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
 
 
 if __name__ == "__main__":

@@ -147,3 +147,18 @@ Negative contracts отдельно требуют отказ при missing exp
 expanded name, case из другого source file, другом report и неверном source
 hash. Нельзя реализовывать это prefix/substring match или пропуском одного
 case: exact full set и source/report binding обязательны.
+
+## Stage handoff: WMS-687 reviewed correction ledger
+
+`test_check_task_documents.py` добавляет positive WMS-687 correction: один
+reviewed frozen DOM test меняется, а commit дополнительно только создаёт два
+новых `*.wms687.*` tests и меняет лишь Test links в собственном requirements
+document. Ledger по-прежнему называет ровно changed frozen subset, сохраняет
+existing exact contract/correction SHA ancestry и approved high PASS review.
+Current checker RED, потому что требует equality всей дельты и ledger files.
+
+Negative cases не позволяют расширить исключение: product path, новый test
+другой WMS, чужой requirements, изменение R либо expected result собственной
+requirements, undeclared changed frozen test и deletion frozen test обязаны
+отказать. Нельзя превращать это в generic companion allowlist или ослаблять
+review/SHA/evidence checks.
