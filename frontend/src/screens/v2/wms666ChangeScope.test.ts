@@ -1,7 +1,52 @@
 import { execFileSync } from 'node:child_process'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
-const WMS_666_BASE = '0f1460b02'
+const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
+const WMS_666_PROOF_FILES = new Set([
+  '.github/workflows/wms666-browser-proof.yml',
+  'scripts/ci/wms666-browser-proof.mjs',
+  'frontend/tests-e2e/wms666-proof/index.html',
+  'frontend/tests-e2e/wms666-proof/main.tsx',
+  'frontend/tests-e2e/wms666-proof/vite.config.ts',
+  'docs/reviews/wms666-priority-progress-20261006.md',
+  'docs/reviews/wms666-replacement-acceptance-20261006.md',
+  'docs/reviews/wms666-task-scope-correction-20261006.md',
+  // These two exact shared proofs were written by the WMS-666 integration merge.
+  'docs/reviews/priority-five-progress-20261006.md',
+  'docs/reviews/priority-five-source-map-20261006.json',
+])
+
+export function wms666TaskChangedPaths(
+  cwd: string | URL,
+  contract = WMS_666_CONTRACT,
+): string[] {
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' })
+  // Missing history must fail, rather than quietly produce an empty task diff.
+  git('merge-base', '--is-ancestor', contract, 'HEAD')
+  const head = git('rev-parse', 'HEAD').trim()
+  const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${contract}..${head}`)
+  const root = git('show', '-s', '--format=%H%x09%P%x09%s', contract)
+  const paths = new Set<string>()
+  for (const line of (root + history).trim().split('\n')) {
+    const [commit, parents, subject] = line.split('\t')
+    // Attribution is by task lineage and primary task number, never allowed paths.
+    if (!/^WMS-666(?:\s+WMS-\d+)*:/.test(subject ?? '')) continue
+    const merge = parents.trim().split(/\s+/).length > 1
+    const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', '-z',
+      ...(merge ? ['--cc'] : ['--root']), commit)
+    // A merge's combined diff catches its own resolutions, not imported task trees.
+    for (const path of changed.split('\0')) if (path) paths.add(path)
+  }
+  // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
+  for (const changed of [git('diff', '--name-only', '-z', head, '--'), git('ls-files', '--others', '--exclude-standard', '-z')]) {
+    for (const path of changed.split('\0')) if (path) paths.add(path)
+  }
+  expect(git('rev-parse', 'HEAD').trim()).toBe(head)
+  return [...paths].sort()
+}
 
 export function wms666ScopeViolations(paths: string[]): string[] {
   return paths.filter((path) => {
@@ -9,6 +54,7 @@ export function wms666ScopeViolations(paths: string[]): string[] {
     if (path === 'docs/KANONICHESKIY_BACKLOG.md' || path === 'docs/requirements/WMS-666.md') return false
     // Only this task's machine-readable correction record belongs to its scope.
     if (path === 'docs/reviews/contract-corrections/WMS-666.json') return false
+    if (WMS_666_PROOF_FILES.has(path) || path.startsWith('docs/evidence/WMS-666/')) return false
     if (path.startsWith('frontend/src/screens/v2/')) return false
     if (path === 'frontend/src/components/LabelSizeSelect.tsx' || path === 'frontend/src/utils/labelSize.ts') return false
     if (path.startsWith('frontend/src/') && /\.test\.[cm]?[jt]sx?$/.test(path)) return false
@@ -46,9 +92,93 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
   })
 
   it('keeps the actual task diff inside the approved packing UI/test/document boundary', () => {
-    const changed = execFileSync('git', ['diff', '--name-only', WMS_666_BASE, '--'], {
-      cwd: new URL('../../../..', import.meta.url), encoding: 'utf8',
-    }).trim().split('\n')
+    const changed = wms666TaskChangedPaths(new URL('../../../..', import.meta.url))
     expect(wms666ScopeViolations(changed)).toEqual([])
   })
+
+  it('accepts exact task proofs and rejects adjacent proof and correction namespaces', () => {
+    expect(wms666ScopeViolations([...WMS_666_PROOF_FILES, 'docs/evidence/WMS-666/result.json'])).toEqual([])
+    const adjacent = [
+      '.github/workflows/wms663-remote-proof.yml',
+      'scripts/ci/wms667-proof.mjs',
+      'frontend/tests-e2e/wms667-proof/main.tsx',
+      'docs/evidence/WMS-667/result.json',
+      'docs/reviews/contract-corrections/WMS-667.json',
+    ]
+    expect(wms666ScopeViolations(adjacent)).toEqual(adjacent)
+  })
+
+  it('reads advancing task history: foreign backend passes, new task backend or guards fail', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.write('backend/app/services/ozon_documents.py', 'foreign task\n')
+      repo.commit('WMS-663: independent document action')
+      repo.write('frontend/src/screens/v2/packing.ts', 'approved task UI\n')
+      const accepted = repo.commit('WMS-666: approved packing UI')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([])
+      const forbidden = [
+        'backend/app/services/ozon_documents.py',
+        'backend/alembic/versions/2026_new_mode.py',
+        'backend/app/models/fbs_packing_group.py',
+        'backend/app/services/inventory_service.py',
+        'guards/MANIFEST.json',
+        'docs/reviews/contract-corrections/WMS-667.json',
+      ]
+      for (const path of forbidden) {
+        repo.git('reset', '--hard', accepted)
+        repo.write(path, 'new forbidden task change\n')
+        repo.commit('WMS-666: new task delta')
+        expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      }
+      repo.git('reset', '--hard', accepted)
+      const path = 'backend/app/services/inventory_service.py'
+      repo.write(path, 'uncommitted forbidden change\n')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.git('add', path)
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('checks task merge resolutions while ignoring an imported foreign backend tree', () => {
+    const repo = fixtureRepository()
+    try {
+      repo.git('checkout', '-b', 'foreign')
+      repo.write('backend/app/services/foreign.py', 'independent backend\n')
+      repo.commit('WMS-663: foreign backend')
+      repo.git('checkout', '-b', 'task', repo.contract)
+      repo.write('frontend/src/screens/v2/packing.ts', 'own UI\n')
+      repo.commit('WMS-666: own UI')
+      repo.git('merge', '--no-ff', '--no-commit', 'foreign')
+      repo.write('backend/app/services/inventory_service.py', 'forbidden merge resolution\n')
+      repo.commit('WMS-666: resolve integration')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([
+        'backend/app/services/inventory_service.py',
+      ])
+    } finally {
+      repo.close()
+    }
+  })
 })
+
+function fixtureRepository() {
+  const cwd = mkdtempSync(join(tmpdir(), 'wms666-scope-'))
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }).trim()
+  const write = (path: string, value: string) => {
+    mkdirSync(dirname(join(cwd, path)), { recursive: true })
+    writeFileSync(join(cwd, path), value)
+  }
+  const commit = (subject: string) => {
+    git('add', '.')
+    git('commit', '-m', subject)
+    return git('rev-parse', 'HEAD')
+  }
+  git('init', '--quiet')
+  git('config', 'user.email', 'scope-test@example.invalid')
+  git('config', 'user.name', 'WMS-666 isolated scope test')
+  git('config', 'commit.gpgsign', 'false')
+  write('frontend/src/screens/v2/packing.ts', 'original task contract\n')
+  const contract = commit('WMS-666: контракт тестов')
+  return { cwd, git, write, commit, contract, close: () => rmSync(cwd, { recursive: true, force: true }) }
+}
