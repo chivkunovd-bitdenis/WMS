@@ -1,0 +1,86 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=4bb20e78-a638-5723-8c84-09530ae4f489%2Cd5ee9b03-7913-54dd-a14c-48457c3fc37b".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
+~			302 text WMS617 · Видео селлер 1, WMS617 · Видео селлер 2
+~			303 progress indicator 100
+~			304 text 4  из  4  подготовлено к отгрузке
+~			305 button Печать листа подбора
+~			306 button Закрыть
+~			312 heading Состав сборки, Value: 6
++				313 text Состав сборки
++			314 container
++				315 text 4 заказа  в  2  поставках
++			316 table
++				317 row
++					318 cell
++						319 text Фото
++					320 cell
++						321 text Заказ WB
++					322 cell
++						323 text Товар и идентификаторы
++					324 cell
++						325 text Количество
++					326 cell
++						327 text Маркировка
++					328 cell
++						329 text Подбор
++				330 row
++					331 cell
++						332 heading Value: 6, Поставка WMS617 assembly-a · WB № WB-GI-WMS617-ASSEMBLY-A · WMS617 · Видео селлер 1 · Склад WB WMS617 тестовый маршрут
++							333 text Поставка WMS617 assembly-a · WB № WB-GI-WMS617-ASSEMBLY-A · WMS617 · Видео селлер 1 · Склад WB WMS617 тестовый маршрут
++				334 row
++					335 cell
++					336 cell
++						337 button №617000005
++					338 cell
++						339 text WMS617 · Куртка с ЧЗ
++						340 text Артикул:  WMS617-02  · SKU: WMS617-02
++					341 cell
++						342 text 1 шт.
++					343 cell
++						344 text sgtin
++					345 cell
++						346 text Ожидает
++				347 row
++					348 cell
++					349 cell
++						350 button №617000006
++					351 cell
++						352 text WMS617 · WB/Ozon сумка
++						353 text Артикул:  WMS617-06  · SKU: WMS617-06
++					354 cell
++						355 text 1 шт.
++					356 cell
++						357 text Не требуется
++					358 cell
++						359 text Ожидает
++				360 row
++					361 cell
++						362 heading Value: 6, Поставка WMS617 assembly-b · WB № WB-GI-WMS617-ASSEMBLY-B · WMS617 · Видео селлер 2 · Склад WB WMS617 тестовый маршрут
++							363 text Поставка WMS617 assembly-b · WB № WB-GI-WMS617-ASSEMBLY-B · WMS617 · Видео селлер 2 · Склад WB WMS617 тестовый маршрут
++				364 row
++					365 cell
++					366 cell
++						367 button №617000007
++					368 cell
++						369 text WMS617 · Пиджак второго селлера
++						370 text Артикул:  WMS617-03  · SKU: WMS617-03
++					371 cell
++						372 text 1 шт.
++					373 cell
++						374 text Не требуется
++					375 cell
++						376 text Ожидает
++				377 row
++					378 cell
++					379 cell
++						380 button №617000008
++					381 cell
++						382 text WMS617 · Пиджак второго селлера
++						383 text Артикул:  WMS617-03  · SKU: WMS617-03
++					384 cell
++						385 text 1 шт.
++					386 cell
++						387 text Не требуется
++					388 cell
++						389 text Ожидает
+The focused UI element is 390 container

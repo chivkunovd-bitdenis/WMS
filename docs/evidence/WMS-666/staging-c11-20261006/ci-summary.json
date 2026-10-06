@@ -1,0 +1,24 @@
+{
+  "head": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+  "run": 37473872680,
+  "attempt": 2,
+  "conclusion": "success",
+  "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37473872680",
+  "backend_full": {
+    "passed": 4413,
+    "skipped": 196,
+    "xfailed": 1,
+    "seconds": 1339.45
+  },
+  "frontend": {
+    "files_passed": 175,
+    "tests_passed": 1547,
+    "skipped": 3
+  },
+  "mandatory_postgresql_steps": "all SUCCESS: two662, locks/517/659/537, real675 incident, fresh migration/rollback chain",
+  "files": {
+    "run.json": "ee1f7b04986d2a86e6f5d4522be72273600c5e1eea07d6868a3f78d6887e4d7b",
+    "backend.log": "4548a83f7943dc739777790475d14cc8e23b4d64e45b15f373acb4208eaaf092",
+    "frontend.log": "a76c3e50523f5846cdce2cddc4a1ae45ff5708c561df8313fd0f6dec1ae4460f"
+  }
+}
