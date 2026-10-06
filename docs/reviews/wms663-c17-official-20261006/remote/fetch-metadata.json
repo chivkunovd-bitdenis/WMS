@@ -1,0 +1,64 @@
+{
+  "fetched_at_utc": "2026-10-06T09:14:04.448373+00:00",
+  "source_url": "https://docs.ozon.ru/api/seller/swagger.json",
+  "runner": "GitHub ubuntu-24.04",
+  "probe_sha": "61ef9b511112eab0981f0d3c5a45b1fbdb705dcc",
+  "chain": [
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=1",
+      "date": "Tue, 06 Oct 2026 09:14:05 GMT",
+      "etag": null,
+      "last_modified": null
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json?__rr=1",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=2",
+      "date": "Tue, 06 Oct 2026 09:14:05 GMT",
+      "etag": null,
+      "last_modified": null
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json?__rr=2",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=3",
+      "date": "Tue, 06 Oct 2026 09:14:06 GMT",
+      "etag": null,
+      "last_modified": null
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json?__rr=3",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=4",
+      "date": "Tue, 06 Oct 2026 09:14:07 GMT",
+      "etag": null,
+      "last_modified": null
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json?__rr=4",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=5",
+      "date": "Tue, 06 Oct 2026 09:14:07 GMT",
+      "etag": null,
+      "last_modified": null
+    },
+    {
+      "url": "https://docs.ozon.ru/api/seller/swagger.json?__rr=5",
+      "http_status": 307,
+      "content_type": "text/html",
+      "location": "https://docs.ozon.ru/api/seller/swagger.json?__rr=6",
+      "date": "Tue, 06 Oct 2026 09:14:08 GMT",
+      "etag": null,
+      "last_modified": null
+    }
+  ],
+  "result": "UNKNOWN",
+  "failure": "redirect limit reached"
+}
