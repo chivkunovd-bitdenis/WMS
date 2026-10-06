@@ -3346,7 +3346,9 @@ export function FfFbsSupplyWorkspace({
                           key={order.id}
                           direction="row"
                           spacing={1.5}
+                          useFlexGap={isOzonSupply}
                           sx={{
+                            flexWrap: isOzonSupply ? { xs: 'wrap', md: 'nowrap' } : undefined,
                             ...(rejectedFilterOn ? {
                               display: rejectedHidden ? 'none' : undefined,
                               borderBottom: '1px solid',
@@ -3383,7 +3385,7 @@ export function FfFbsSupplyWorkspace({
                             data-testid="fbs-packing-select-order"
                           />
                           <ProductPhotoThumb src={order.product.image_url} alt={order.product.name} size={40} previewSize={280} />
-                          <Box sx={{ flex: 1, minWidth: 0 }}>
+                          <Box sx={{ flex: isOzonSupply ? { xs: '1 1 100%', md: '1 1 0%' } : 1, minWidth: 0 }}>
                             {isOzonSupply ? (
                               <Stack spacing={0.5}>
                                 {ozonPositions.map((position, index) => (
