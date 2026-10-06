@@ -1,4 +1,5 @@
 import importlib.util
+import hashlib
 import json
 import subprocess
 import tempfile
@@ -160,6 +161,57 @@ class GitTests(unittest.TestCase):
         self.write(checker.SCRIPT_PATH, "# rollout marker\n")
         self.write("docs/requirements/WMS-437.md", DOCUMENT)
         return self.commit("WMS-437 introduce document check")
+
+    @staticmethod
+    def current_integration_checker():
+        integration = Path(__file__).resolve().parents[2].parent / "night1007-integration"
+        path = integration / "scripts/ci/check_task_documents.py"
+        # During this test-writer stage exercise the live integration candidate;
+        # after the contract is merged, run the same tests against their local
+        # checked-in checker rather than a worktree-specific absolute path.
+        if not path.is_file():
+            path = Path(__file__).with_name("check_task_documents.py")
+        spec = importlib.util.spec_from_file_location(
+            "current_integration_check_task_documents",
+            path,
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def protected_wms687_document_gate_fixture(self):
+        source = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        inbound = "inbound selects only document products and opens the catalog FbsStockDialogContainer"
+        returned = "return selects only document products and opens the catalog FbsStockDialogContainer"
+        full_prefix = "WMS-687 shared FBS stock dialog from an inbound document"
+        # These are actual test.each values, not literal source names.  A broad
+        # describe/prefix match would incorrectly approve unrelated cases.
+        self.write(source, """import { describe, it } from 'vitest'\n\ndescribe('WMS-687 shared FBS stock dialog from an inbound document', () => {\n  it.each(['inbound', 'return'])('%s selects only document products and opens the catalog FbsStockDialogContainer', () => {})\n})\n""")
+        report = "frontend-all.json"
+        cases = [f"src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx::{full_prefix} {name}"
+                 for name in (inbound, returned)]
+        self.write(report, json.dumps({
+            "success": True,
+            "testResults": [{
+                "name": f"/workspace/frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx",
+                "status": "passed",
+                "assertionResults": [{"fullName": f"{full_prefix} {name}", "status": "passed"}
+                                     for name in (inbound, returned)],
+            }],
+        }) + "\n")
+        digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        policy = {
+            "version": 1,
+            "files": {source: digest},
+            "suites": {"frontend-fbs": {
+                "report": report, "format": "vitest", "exact": False, "cases": cases,
+            }},
+        }
+        self.write("guards/PROCESS_CONTRACTS.json", json.dumps(policy) + "\n")
+        self.commit("WMS-687: save protected expanded DOM contract")
+        def document(name):
+            return f"""# WMS-687\n\n| Проверка | Класс | Тест | Вердикт |\n| --- | --- | --- | --- |\n| C1 | навсегда | {source}::{name} | Подтверждено |\n\n## Заключение\nПринято.\n"""
+        return source, inbound, returned, report, policy, document
 
     def immutable_blob(self, commit: str, path: str) -> str:
         """Read a published object, never the moving checkout version of a test."""
@@ -873,6 +925,67 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-702 rename contract")
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("WMS-702" in error for error in errors))
+
+    def test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case(self):
+        _, inbound, _, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(inbound), self.root)
+        self.assertEqual(errors, [])
+
+    def test_protected_wms687_expanded_return_reference_uses_exact_receipt_case(self):
+        _, _, returned, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(returned), self.root)
+        self.assertEqual(errors, [])
+
+    def test_protected_wms687_expanded_reference_rejects_unbound_or_changed_proof(self):
+        for tamper in ("changed-head", "dirty", "missing-case", "wrong-report", "unregistered"):
+            with self.subTest(tamper=tamper):
+                with tempfile.TemporaryDirectory() as directory:
+                    isolated = self.__class__()
+                    isolated.temp = tempfile.TemporaryDirectory(dir=directory)
+                    isolated.root = Path(isolated.temp.name)
+                    isolated.git("init", "-q")
+                    isolated.git("config", "user.name", "Fixture")
+                    isolated.git("config", "user.email", "fixture@example.invalid")
+                    isolated.write("AGENTS.md", "Rules\n")
+                    isolated.write("CLAUDE.md", "Rules\n")
+                    isolated.base = isolated.commit("WMS-001 legacy base")
+                    try:
+                        source, _, returned, _, policy, document = isolated.protected_wms687_document_gate_fixture()
+                        if tamper == "changed-head":
+                            isolated.write(source, "it('changed protected original', () => {})\n")
+                            isolated.commit("WMS-687: changed protected original")
+                        elif tamper == "dirty":
+                            isolated.write(source, (isolated.root / source).read_text() + "// dirty\n")
+                        else:
+                            if tamper == "missing-case":
+                                policy["suites"]["frontend-fbs"]["cases"] = [
+                                    policy["suites"]["frontend-fbs"]["cases"][0]
+                                ]
+                            elif tamper == "wrong-report":
+                                policy["suites"]["frontend-fbs"]["report"] = "other-frontend.json"
+                                isolated.write("other-frontend.json", "{}\n")
+                            elif tamper == "unregistered":
+                                policy["files"] = {}
+                            isolated.write("guards/PROCESS_CONTRACTS.json", json.dumps(policy) + "\n")
+                            isolated.commit(f"WMS-687: {tamper} protected proof")
+                        errors = isolated.current_integration_checker().document_errors(document(returned), isolated.root)
+                        self.assertTrue(errors, errors)
+                    finally:
+                        isolated.temp.cleanup()
+
+    def test_unprotected_legacy_test_reference_stays_literal(self):
+        source = "frontend/src/screens/ff/Legacy.test.tsx"
+        self.write(source, "it('legacy literal case', () => {})\n")
+        document = f"""# Legacy
+
+| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C1 | навсегда | {source}::legacy literal case | Подтверждено |
+
+## Заключение
+Принято.
+"""
+        self.assertEqual(self.current_integration_checker().document_errors(document, self.root), [])
 
     def test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links(self):
         rollout, contract, [frozen], document = self.wms687_contract()

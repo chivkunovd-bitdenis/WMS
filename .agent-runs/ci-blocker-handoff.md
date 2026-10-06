@@ -254,3 +254,26 @@ mechanisms only for this recorded matrix.  It must retain exact owner evidence,
 report/model/effort, parent/ancestor and every listed blob; it must not accept
 another owner request, arbitrary test assertion change, extra product path, or
 new transform.  No further WMS-680 frozen blob is approved by this contract.
+
+## Stage handoff: WMS-687 protected expanded test references in document gate
+
+`test_check_task_documents.py` now contains an isolated saved-Git
+`PROCESS_CONTRACTS.json` fixture for the real WMS-687 `test.each` source.  Its
+two document references are the actual expanded inbound and return names while
+the source contains only the `%s` template.  The typed Vitest receipt has the
+two exact full names under `frontend-all.json`; the source is both a normal Git
+blob in HEAD and SHA-256 pinned by the policy.
+
+Both positive tests are meaningful RED against the current integration
+`check_task_documents.py`: it returns `не найдено имя теста ...` because it
+does only literal source substring matching.  The desired narrow path is: only
+when a saved, non-symlinked protected source matches both HEAD bytes and policy
+digest may document validation accept an exact registered expanded case bound
+to its typed receipt/report.  Reusing the existing registered-case verifier is
+appropriate; wildcard, describe/group prefix, or a document-only bypass is not.
+
+Five negative cases remain required: protected source changed in committed
+HEAD, dirty source, missing exact case, wrong report, and unregistered source.
+They must all fail closed.  A separately tested unprotected legacy source with
+a literal test name still passes, so this is not a relaxation of ordinary test
+reference validation.
