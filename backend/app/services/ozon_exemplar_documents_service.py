@@ -108,7 +108,7 @@ async def claim_exemplar_write(
         status=None,
         document_errors={},
     )
-    if kind == "documents":
+    if kind == "documents" and not choice.get("all_required_absent"):
         data["choices"] = {
             f"{choice['product_id']}:{choice['exemplar_id']}": {
                 key: choice[key] for key in ("gtd", "rnpt", "is_gtd_absent", "is_rnpt_absent")
@@ -216,7 +216,11 @@ def apply_saved_documents(products: list[dict[str, Any]], data: dict[str, Any]) 
     for product in products:
         for exemplar in product["exemplars"]:
             key = f"{product['product_id']}:{exemplar['exemplar_id']}"
-            saved = data.get("choices", {}).get(key) if key == target else None
+            saved = (
+                data.get("choices", {}).get(key)
+                if key == target or choice.get("all_required_absent")
+                else None
+            )
             if isinstance(saved, dict):
                 exemplar.update(saved)
 
@@ -312,6 +316,7 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
         "version": data.get("version", 0),
         "state": state,
         "status": data.get("status"),
+        "absence_selected": bool(data.get("choice", {}).get("all_required_absent")),
         "editable": data.get("state") not in PENDING_STATES
         and data.get("status") != "update_not_available",
         "products": products,
@@ -689,4 +694,88 @@ async def save_exemplar_documents(
         raise
     return await send_exemplar_payload(
         session, order, data, payload, provider=provider, client_id=client_id, api_key=api_key
+    )
+
+
+async def save_absent_exemplar_documents(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    order_id: uuid.UUID,
+    expected_version: int | None,
+    provider: OzonMarketplaceProvider,
+    client_id: str,
+    api_key: str,
+) -> dict[str, Any]:
+    """One explicit posting choice; every required document shares the same SET."""
+    order = await document_order(session, tenant_id, order_id)
+    previous = document_data(order)
+    if previous.get("state") in PENDING_STATES or previous.get("choice", {}).get(
+        "all_required_absent"
+    ):
+        return await resume_exemplar_document_check(
+            session,
+            tenant_id=tenant_id,
+            order_id=order_id,
+            provider=provider,
+            client_id=client_id,
+            api_key=api_key,
+        )
+    data = await claim_exemplar_write(
+        session,
+        order,
+        expected_version,
+        kind="documents",
+        choice={"all_required_absent": True},
+    )
+    try:
+        snapshot = await fetch_exemplar_snapshot(
+            provider,
+            posting_number=order.external_order_id or "",
+            client_id=client_id,
+            api_key=api_key,
+        )
+        await validate_exemplar_snapshot(session, order, snapshot)
+        products = snapshot_products(snapshot)
+        requirements = {product["product_id"]: product for product in snapshot.get("products", [])}
+        choices = {}
+        for product in products:
+            required = requirements[product["product_id"]]
+            for exemplar in product["exemplars"]:
+                changes = {
+                    key: exemplar[key]
+                    for key in ("gtd", "rnpt", "is_gtd_absent", "is_rnpt_absent")
+                    if key in exemplar
+                }
+                has_required = False
+                for doc in ("gtd", "rnpt"):
+                    if required.get(f"is_{doc}_needed"):
+                        changes.update({doc: "", f"is_{doc}_absent": True})
+                        has_required = True
+                if has_required:
+                    choices[f"{product['product_id']}:{exemplar['exemplar_id']}"] = changes
+        data.update(snapshot=snapshot, choices=choices)
+        if not choices:
+            data.update(state="editable", in_flight=False, choice={})
+            await checkpoint(session, tenant_id, order_id, data)
+            return await document_view(session, order)
+        apply_saved_documents(products, data)
+        from app.services.ozon_fbs_process_service import merge_local_exemplar_marks
+
+        await merge_local_exemplar_marks(session, order, products)
+        payload = {"posting_number": order.external_order_id, "products": products}
+        if snapshot.get("multi_box_qty") is not None:
+            payload["multi_box_qty"] = snapshot["multi_box_qty"]
+    except (MarketplaceProviderError, OzonFbsProcessError) as exc:
+        data.update(state="editable", in_flight=False, choice={}, errors=[exc.code])
+        await checkpoint(session, tenant_id, order_id, data)
+        raise
+    return await send_exemplar_payload(
+        session,
+        order,
+        data,
+        payload,
+        provider=provider,
+        client_id=client_id,
+        api_key=api_key,
     )

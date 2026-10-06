@@ -1,4 +1,4 @@
-import { OzonExemplarDocuments } from './OzonExemplarDocuments'
+import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
@@ -3797,7 +3797,6 @@ export function FfFbsSupplyWorkspace({
                                 {markingView.label}{markingView.reason ? `: ${markingView.reason}` : ''}
                               </Typography>
                             ) : null}
-                            {isOzonSupply ? <OzonExemplarDocuments key={`${workspace.supply.id}:${order.id}`} orderId={order.id} token={token} authHeaders={authHeaders} /> : null}
                           </Box>
                           {packingShowsMarkingAvailable ? (
                             <Box
@@ -4928,6 +4927,9 @@ export function FfFbsSupplyWorkspace({
                           {ozonAutoBoxesProgress ?? 'Создать автоматически'}
                         </Button>
                       ) : null}
+                      {isOzonSupply ? <OzonDocumentsAbsence key={workspace.supply.id}
+                        orderIds={workspace.orders.map(order => order.id)} token={token}
+                        authHeaders={authHeaders} onError={setError} /> : null}
                       {!isOzonSupply ? <FormControlLabel
                         control={(
                           <Checkbox
