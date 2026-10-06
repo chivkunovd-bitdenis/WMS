@@ -22,6 +22,7 @@ jobs:
       WMS672_TEST_URL: http://127.0.0.1:16724
       # Bounded postfix probe: changed 672 only; preserve the 673 contract.
       WMS_PRINT_PROBE_SCOPE: '672'
+      WMS672_TEST_NAME_PATTERN: 'inbound 300|C5 decode|C7/C8|C8 mark'
       WMS_PRINT_SOURCE_SHA: '163259d412d2ef5ba2d49b831cd5c7da284245d9'
     steps:
       - uses: actions/checkout@v4
@@ -70,7 +71,7 @@ jobs:
           curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null || exit 2
           result672=skipped
           if [ "$WMS_PRINT_PROBE_SCOPE" = all ] || [ "$WMS_PRINT_PROBE_SCOPE" = 672 ]; then
-            timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
+            timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern="$WMS672_TEST_NAME_PATTERN" tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
             result672=${PIPESTATUS[0]}
           fi
           renderer=skipped

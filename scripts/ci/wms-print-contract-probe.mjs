@@ -19,6 +19,22 @@ if (!process.argv.includes('--render673')) {
     browser.newContext = async (...contextArgs) => {
       const context = await newContext(...contextArgs);
       const id = ++fixture;
+      // Observe native decode failures before product cleanup destroys the frame.
+      // No substitution of native results, frozen faults, expectations or timeouts.
+      await context.addInitScript(() => {
+        const decode = HTMLImageElement.prototype.decode;
+        HTMLImageElement.prototype.decode = function (...args) {
+          return decode.apply(this, args).catch(error => {
+            console.error('WMS672 native decode failure', JSON.stringify({
+              name: error.name, message: error.message, code: error.code,
+              srcLength: this.src.length, complete: this.complete,
+              width: this.naturalWidth, height: this.naturalHeight,
+              barcode: this.closest('.label')?.getAttribute('data-barcode'),
+            }));
+            throw error;
+          });
+        };
+      });
       const requests = [];
       const events = [];
       context.on('page', page => {
@@ -39,7 +55,7 @@ if (!process.argv.includes('--render673')) {
             await writeFile(resolve(dir, `page-${index}.state.json`), JSON.stringify(await page.evaluate(() => ({
               decoded: window.__wms672Decoded, decodeStarted: window.__wms672DecodeStarted,
               transfers: window.__wms672Transfers?.map(t => ({ decoded: t.decoded, htmlLength: t.html.length })),
-              fault: window.__wms672Fault, local: Object.entries(localStorage), session: Object.entries(sessionStorage),
+              fault: window.__wms672Fault, local: location.origin === new URL(window.__probeOrigin || 'http://127.0.0.1:16724').origin ? Object.entries(localStorage) : [], session: location.origin === 'http://127.0.0.1:16724' ? Object.entries(sessionStorage) : [],
               frames: [...document.querySelectorAll('iframe')].map(f => ({ images: f.contentDocument?.images.length, complete: [...(f.contentDocument?.images || [])].filter(i => i.complete).length })),
               alerts: [...document.querySelectorAll('[role=alert]')].map(a => a.textContent),
             })), null, 2));
