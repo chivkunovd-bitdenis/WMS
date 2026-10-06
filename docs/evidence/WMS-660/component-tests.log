@@ -1,0 +1,10 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms660-barcodes/frontend
+
+ ✓ src/components/ProductBarcodeCell.wms660.test.tsx (4 tests) 13ms
+
+ Test Files  1 passed (1)
+      Tests  4 passed (4)
+   Start at  10:11:58
+   Duration  519ms (transform 54ms, setup 0ms, collect 260ms, tests 13ms, environment 0ms, prepare 83ms)
+
