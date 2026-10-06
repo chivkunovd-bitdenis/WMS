@@ -9,7 +9,13 @@ import json
 import posixpath
 import re
 import subprocess
+import sys
 from pathlib import Path, PurePosixPath
+
+if __package__ in (None, ""):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci.process_contracts import POLICY_PATH, local_file, validate_policy
 
 MANIFEST = "guards/MANIFEST.json"
 BACKEND_ROOT = PurePosixPath("backend/tests/guards")
@@ -123,9 +129,48 @@ def permanent_references(lines: list[str]) -> list[tuple[int, int, PurePosixPath
             values = cells(lines[row_index])
             if len(values) != len(headers) or plain(values[class_col]).casefold() != "навсегда":
                 continue
-            source, test_name = parse_reference(values[test_col])
-            references.append((row_index, test_col, source, test_name))
+            for reference in re.split(r"<br\s*/?>|;", values[test_col], flags=re.IGNORECASE):
+                source, test_name = parse_reference(reference)
+                references.append((row_index, test_col, source, test_name))
     return references
+
+
+def saved_process_policy(root: Path) -> dict | None:
+    if not (root / POLICY_PATH).exists():
+        return None
+    raw = local_file(root, POLICY_PATH).read_bytes()
+    policy = json.loads(raw)
+    validate_policy(policy)
+    saved = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{POLICY_PATH}"])
+    if saved != raw:
+        raise ValueError("Process protection должна быть сохранена в Git до promotion")
+    return policy
+
+
+def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test_name: str) -> bool:
+    digest = policy["files"].get(str(source))
+    if digest is None:
+        return False
+    path = local_file(root, str(source))
+    saved = subprocess.check_output(["git", "-C", str(root), "show", f"HEAD:{source}"])
+    if hashlib.sha256(path.read_bytes()).hexdigest() != digest or saved != path.read_bytes():
+        raise ValueError(f"Изменён защищённый original тест: {source}")
+    module = ".".join(source.with_suffix("").parts[1:])
+    frontend = str(source).removeprefix("frontend/")
+    for suite in policy["suites"].values():
+        for case in suite["cases"]:
+            owner, separator, name = case.partition("::")
+            if suite["format"] == "junit":
+                matches = (owner == module or owner.startswith(module + ".")) and (
+                    name == test_name or name.startswith(test_name + "[")
+                )
+            elif suite["format"] == "vitest":
+                matches = owner == frontend and (name == test_name or name.endswith(" " + test_name))
+            else:
+                matches = not separator and case == test_name
+            if matches:
+                return True
+    raise ValueError(f"Защищённый original не имеет обязательного case/report: {source}::{test_name}")
 
 
 def update_manifest(root: Path) -> None:
@@ -151,6 +196,7 @@ def promote(root: Path, task: str) -> list[str]:
     if not references:
         return []
 
+    policy = saved_process_policy(root)
     moves: dict[PurePosixPath, PurePosixPath] = {}
     for _, _, source, test_name in references:
         path = root / source
@@ -158,7 +204,8 @@ def promote(root: Path, task: str) -> list[str]:
             raise ValueError(f"Нет файла теста {source}")
         if test_name not in path.read_text(encoding="utf-8"):
             raise ValueError(f"В {source} не найдено имя теста {test_name}")
-        target = guard_target(source)
+        registered = policy is not None and verify_registered_case(root, policy, source, test_name)
+        target = source if registered else guard_target(source)
         if target in moves.values() and moves.get(source) != target:
             raise ValueError(f"Несколько тестов претендуют на {target}")
         if target != source and (root / target).exists():
@@ -175,12 +222,18 @@ def promote(root: Path, task: str) -> list[str]:
         source_path.write_text(rewritten, encoding="utf-8")
         subprocess.check_call(["git", "-C", str(root), "mv", str(source), str(target)])
 
-    for row_index, test_col, source, test_name in references:
-        values = cells(lines[row_index])
-        values[test_col] = f"{moves[source]}::{test_name}"
-        lines[row_index] = "| " + " | ".join(values) + " |"
-    document.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    update_manifest(root)
+    # A fully registered contract is already permanent. Preserve its bytes and
+    # document verbatim; in particular a second invocation must have no diff.
+    if any(source != target for source, target in moves.items()):
+        rows: dict[tuple[int, int], list[str]] = {}
+        for row_index, test_col, source, test_name in references:
+            rows.setdefault((row_index, test_col), []).append(f"{moves[source]}::{test_name}")
+        for (row_index, test_col), row_references in rows.items():
+            values = cells(lines[row_index])
+            values[test_col] = "<br>".join(row_references)
+            lines[row_index] = "| " + " | ".join(values) + " |"
+        document.write_text("\n".join(lines) + "\n", encoding="utf-8")
+        update_manifest(root)
     return [str(target) for target in moves.values()]
 
 

@@ -195,7 +195,7 @@
     "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
-    "scripts/ci/tests/test_promote_guards.py": "676c725280217b6d840880fd8991f9bd13755c8a71d7ce6fcabc51dd7df12596",
+    "scripts/ci/tests/test_promote_guards.py": "63ce26153e5cc7e66a69b09fc0553ee667ae33a3cdcb159c85cb4cec9e81f906",
     "scripts/ci/tests/test_regression_guards.py": "b2f7beeb093a4b3b9bf3581c8bb623d198b2382fc98e94869058d055e808666c",
     "scripts/ci/tests/test_server_process_gate.py": "81e41fb6f4f6c6db886caa80cefaf8bb6802c68bd1869deac727b11502142cb9",
     "scripts/ci/tests/test_trusted_process_artifact.py": "68d18105645c2aa140fd3b7a53faa63dfcf1700b30be3418a198bfadc0da129b",
@@ -225,7 +225,8 @@
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
     "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "1806c766bd141b9ce2d7c760cd2606a64c4b67648f0b57922c538c77ddf2213b",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
-    "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1"
+    "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
+    "scripts/ci/promote_guards.py": "33c760cf1a41c7e5af163bc2ab775372e9441d15cd03700cb522171c92786d3b"
   },
   "suites": {
     "backend-fbs": {
@@ -1326,7 +1327,10 @@
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_source_binding_keeps_one_active_exact_reference_during_or_after_freeze",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_controlled_accepted_final_freeze_accepts_only_its_exact_reference",
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_wms686_raw_receipt_contract_rejects_missing_tap_upload_download_or_required_job",
-        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact"
+        "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion"
       ]
     },
     "product-scope": {
