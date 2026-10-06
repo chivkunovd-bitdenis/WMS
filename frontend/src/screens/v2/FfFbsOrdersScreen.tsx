@@ -1987,6 +1987,7 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
         <DialogTitle>Добавить в существующую поставку</DialogTitle>
         <DialogContent dividers>
           <Stack spacing={2}>
+            {error ? <Alert severity="error" data-testid="fbs-add-existing-error">{error}</Alert> : null}
             <Typography variant="body2" color="text.secondary">
               Выбрано {selectedOrders.length} {ordersWord(selectedOrders.length)}. WMS покажет только поставки того же селлера, маркетплейса, склада и допустимого статуса.
             </Typography>

@@ -1,0 +1,30 @@
+WMS652.realQr[supply_id=A]: PASS
+WMS652.realQr[supply_ids=A]: PASS
+WMS652.realQr[supply_ids=A,B]: PASS
+WMS652.selection[single-create]: PASS
+WMS652.selection[seller-warehouse-group-retry]: PASS
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
+  [
++   [],
++   []
+-   [
+-     'order-a2',
+-     'order-a'
+-   ],
+-   [
+-     'order-a2',
+-     'order-a'
+-   ]
+  ]
+
+    at selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:304:10)
+    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:194:3 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: [Array],
+  expected: [Array],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}

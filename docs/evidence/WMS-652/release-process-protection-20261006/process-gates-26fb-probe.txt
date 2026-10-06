@@ -1,0 +1,37 @@
+FROZEN_SHA 26fb8462b9e319cbc38b9ce2f7d8a6815416b4a2
+test_browser_report_is_exact_named_actual_sha_not_old_green (test_process_contracts.ProcessContractTests.test_browser_report_is_exact_named_actual_sha_not_old_green) ... ok
+test_duplicate_cannot_replace_missing_case (test_process_contracts.ProcessContractTests.test_duplicate_cannot_replace_missing_case) ... ok
+test_every_nonpass_and_collection_error_refuse (test_process_contracts.ProcessContractTests.test_every_nonpass_and_collection_error_refuse) ... ok
+test_freeze_rejects_source_helper_runner_and_self_updated_hash (test_process_contracts.ProcessContractTests.test_freeze_rejects_source_helper_runner_and_self_updated_hash) ... ok
+test_no_external_paths_or_empty_policy (test_process_contracts.ProcessContractTests.test_no_external_paths_or_empty_policy) ... ok
+test_real_named_cases_green (test_process_contracts.ProcessContractTests.test_real_named_cases_green) ... ok
+test_same_count_other_case_cannot_replace_required_case (test_process_contracts.ProcessContractTests.test_same_count_other_case_cannot_replace_required_case) ... ok
+test_subset_allows_unrelated_skip_but_never_protected_skip (test_process_contracts.ProcessContractTests.test_subset_allows_unrelated_skip_but_never_protected_skip) ... ok
+test_unavailable_empty_malformed_or_symlink_report_refuses (test_process_contracts.ProcessContractTests.test_unavailable_empty_malformed_or_symlink_report_refuses) ... ok
+test_vitest_requires_file_and_full_parameterized_name_not_summary (test_process_contracts.ProcessContractTests.test_vitest_requires_file_and_full_parameterized_name_not_summary) ... ok
+test_archive_duplicate_members_and_traversal_refuse (test_process_deploy_gate.ProcessDeployGateTests.test_archive_duplicate_members_and_traversal_refuse) ... /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'packing.xml'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+ok
+test_artifact_api_identity_not_self_declared_metadata (test_process_deploy_gate.ProcessDeployGateTests.test_artifact_api_identity_not_self_declared_metadata) ... ok
+test_exact_named_evidence_then_one_action (test_process_deploy_gate.ProcessDeployGateTests.test_exact_named_evidence_then_one_action) ... ok
+test_green_jobs_without_evidence_never_deploy (test_process_deploy_gate.ProcessDeployGateTests.test_green_jobs_without_evidence_never_deploy) ... ok
+test_inaccessible_archive_never_deploy (test_process_deploy_gate.ProcessDeployGateTests.test_inaccessible_archive_never_deploy) ... ok
+test_invalid_or_self_base_does_not_pass_as_trusted_baseline (test_process_deploy_gate.ProcessDeployGateTests.test_invalid_or_self_base_does_not_pass_as_trusted_baseline) ... ok
+test_missing_failed_skipped_or_pending_proof_job_never_deploy (test_process_deploy_gate.ProcessDeployGateTests.test_missing_failed_skipped_or_pending_proof_job_never_deploy) ... ok
+test_new_attempt_after_download_invalidates_old_receipt (test_process_deploy_gate.ProcessDeployGateTests.test_new_attempt_after_download_invalidates_old_receipt) ... ok
+test_skipped_required_case_or_same_count_replacement_never_deploy (test_process_deploy_gate.ProcessDeployGateTests.test_skipped_required_case_or_same_count_replacement_never_deploy) ... ok
+test_wrong_sha_attempt_policy_or_run_never_deploy (test_process_deploy_gate.ProcessDeployGateTests.test_wrong_sha_attempt_policy_or_run_never_deploy) ... ok
+
+----------------------------------------------------------------------
+Ran 20 tests in 1.073s
+
+OK
+
+EXACT_COLLECTED native-linux 30
+EXACT_COLLECTED native-windows 29
+UNION 31 These are local collection results, not Windows execution.
+PRODUCER_AND_CONSUMER backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+PRODUCER_AND_CONSUMER frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+PRODUCER_AND_CONSUMER printer-windows-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+PRODUCER_AND_CONSUMER release-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+PASS: fixed platform selection, exact artifact attempt names, 20 gate contracts

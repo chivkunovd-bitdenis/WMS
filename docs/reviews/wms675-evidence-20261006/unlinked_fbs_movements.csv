@@ -1,0 +1,1 @@
+db_at,id,product_id,seller_id,storage_location_id,warehouse_id,quantity_delta,movement_type,created_at,outbound_shipment_line_id,transfer_group_id

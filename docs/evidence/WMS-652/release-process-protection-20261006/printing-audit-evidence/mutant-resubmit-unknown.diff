@@ -1,0 +1,14 @@
+diff --git a/tools/print-agent/wms_print_direct.py b/tools/print-agent/wms_print_direct.py
+index 81ebff2bb..3fa925a28 100644
+--- a/tools/print-agent/wms_print_direct.py
++++ b/tools/print-agent/wms_print_direct.py
+@@ -132,6 +132,9 @@ class Printer:
+         digest = hashlib.sha256(data).hexdigest()
+         with self.lock, closing(sqlite3.connect(self.db)) as db:
+             old = db.execute("SELECT hash, receipt FROM jobs WHERE id=?", (key,)).fetchone()
++            if old and old[1] is None:
++                db.execute("DELETE FROM jobs WHERE id=?", (key,))
++                old = None  # mutant: blindly resubmit unknown outcome
+             if old:
+                 if old[0] != digest:
+                     raise ValueError("Содержимое этого задания изменилось")

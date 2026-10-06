@@ -1,0 +1,590 @@
+{
+  "measurements": {
+    "viewport": {
+      "width": 1600,
+      "height": 1000
+    },
+    "rows": [
+      {
+        "id": "ozon-a-order",
+        "text": "Футболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\n44/46/48/50/52/54\n\nБрюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ",
+        "bounds": {
+          "x": 71,
+          "y": 349.359375,
+          "width": 1458,
+          "height": 248.71875,
+          "right": 1529,
+          "bottom": 598.078125
+        },
+        "columns": {
+          "size": {
+            "x": 738,
+            "y": 359.359375,
+            "width": 76,
+            "height": 58.53125,
+            "right": 814,
+            "bottom": 417.890625
+          },
+          "marking": {
+            "x": 826,
+            "y": 451.25,
+            "width": 118,
+            "height": 44.921875,
+            "right": 944,
+            "bottom": 496.171875
+          },
+          "sticker": {
+            "x": 956,
+            "y": 444.765625,
+            "width": 150,
+            "height": 57.890625,
+            "right": 1106,
+            "bottom": 502.65625
+          },
+          "cis": {
+            "x": 1118,
+            "y": 455.71875,
+            "width": 150,
+            "height": 36,
+            "right": 1268,
+            "bottom": 491.71875
+          },
+          "actions": {
+            "x": 1308,
+            "y": 456.921875,
+            "width": 205,
+            "height": 33.59375,
+            "right": 1513,
+            "bottom": 490.515625
+          }
+        },
+        "sizeCells": [
+          {
+            "text": "Размер44/46/48/50/52/54",
+            "bounds": {
+              "x": 738,
+              "y": 359.359375,
+              "width": 76,
+              "height": 58.53125,
+              "right": 814,
+              "bottom": 417.890625
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          },
+          {
+            "text": "44/46/48/50/52/54",
+            "bounds": {
+              "x": 738,
+              "y": 475.71875,
+              "width": 76,
+              "height": 45.03125,
+              "right": 814,
+              "bottom": 520.75
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          }
+        ],
+        "names": [
+          {
+            "text": "Футболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666",
+            "bounds": {
+              "x": 200,
+              "y": 359.359375,
+              "width": 530,
+              "height": 112.359375,
+              "right": 730,
+              "bottom": 471.71875
+            },
+            "scrollWidth": 530,
+            "clientWidth": 530
+          },
+          {
+            "text": "Брюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666",
+            "bounds": {
+              "x": 200,
+              "y": 475.71875,
+              "width": 530,
+              "height": 112.359375,
+              "right": 730,
+              "bottom": 588.078125
+            },
+            "scrollWidth": 530,
+            "clientWidth": 530
+          }
+        ],
+        "buttons": [
+          {
+            "text": "ТЗ",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1308,
+              "y": 456.921875,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1372,
+              "bottom": 490.515625
+            }
+          },
+          {
+            "text": "",
+            "aria": "Печать ЧЗ и ШК",
+            "disabled": false,
+            "bounds": {
+              "x": 1444,
+              "y": 457.46875,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1476.5,
+              "bottom": 489.96875
+            }
+          },
+          {
+            "text": "",
+            "aria": "Перепечатать",
+            "disabled": false,
+            "bounds": {
+              "x": 1480.5,
+              "y": 457.46875,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1513,
+              "bottom": 489.96875
+            }
+          }
+        ]
+      },
+      {
+        "id": "ozon-b-order",
+        "text": "Футболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\n44/46/48/50/52/54\n\nБрюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ",
+        "bounds": {
+          "x": 71,
+          "y": 653.640625,
+          "width": 1458,
+          "height": 248.71875,
+          "right": 1529,
+          "bottom": 902.359375
+        },
+        "columns": {
+          "size": {
+            "x": 738,
+            "y": 663.640625,
+            "width": 76,
+            "height": 58.53125,
+            "right": 814,
+            "bottom": 722.171875
+          },
+          "marking": {
+            "x": 826,
+            "y": 755.53125,
+            "width": 118,
+            "height": 44.921875,
+            "right": 944,
+            "bottom": 800.453125
+          },
+          "sticker": {
+            "x": 956,
+            "y": 749.046875,
+            "width": 150,
+            "height": 57.890625,
+            "right": 1106,
+            "bottom": 806.9375
+          },
+          "cis": {
+            "x": 1118,
+            "y": 760,
+            "width": 150,
+            "height": 36,
+            "right": 1268,
+            "bottom": 796
+          },
+          "actions": {
+            "x": 1308,
+            "y": 761.203125,
+            "width": 205,
+            "height": 33.59375,
+            "right": 1513,
+            "bottom": 794.796875
+          }
+        },
+        "sizeCells": [
+          {
+            "text": "Размер44/46/48/50/52/54",
+            "bounds": {
+              "x": 738,
+              "y": 663.640625,
+              "width": 76,
+              "height": 58.53125,
+              "right": 814,
+              "bottom": 722.171875
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          },
+          {
+            "text": "44/46/48/50/52/54",
+            "bounds": {
+              "x": 738,
+              "y": 780,
+              "width": 76,
+              "height": 45.03125,
+              "right": 814,
+              "bottom": 825.03125
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          }
+        ],
+        "names": [
+          {
+            "text": "Футболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666",
+            "bounds": {
+              "x": 200,
+              "y": 663.640625,
+              "width": 530,
+              "height": 112.359375,
+              "right": 730,
+              "bottom": 776
+            },
+            "scrollWidth": 530,
+            "clientWidth": 530
+          },
+          {
+            "text": "Брюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666",
+            "bounds": {
+              "x": 200,
+              "y": 780,
+              "width": 530,
+              "height": 112.359375,
+              "right": 730,
+              "bottom": 892.359375
+            },
+            "scrollWidth": 530,
+            "clientWidth": 530
+          }
+        ],
+        "buttons": [
+          {
+            "text": "ТЗ",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1308,
+              "y": 761.203125,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1372,
+              "bottom": 794.796875
+            }
+          },
+          {
+            "text": "",
+            "aria": "Печать ЧЗ и ШК",
+            "disabled": false,
+            "bounds": {
+              "x": 1444,
+              "y": 761.75,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1476.5,
+              "bottom": 794.25
+            }
+          },
+          {
+            "text": "",
+            "aria": "Перепечатать",
+            "disabled": false,
+            "bounds": {
+              "x": 1480.5,
+              "y": 761.75,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1513,
+              "bottom": 794.25
+            }
+          }
+        ]
+      }
+    ],
+    "bar": {
+      "x": 71,
+      "y": 225.921875,
+      "width": 1458,
+      "height": 67.875,
+      "right": 1529,
+      "bottom": 293.796875
+    },
+    "controls": [
+      {
+        "text": "​",
+        "bounds": {
+          "x": 87,
+          "y": 237.921875,
+          "width": 646.21875,
+          "height": 42.875,
+          "right": 733.21875,
+          "bottom": 280.796875
+        },
+        "scrollWidth": 646,
+        "clientWidth": 646
+      },
+      {
+        "text": "Печатать QR",
+        "bounds": {
+          "x": 745.21875,
+          "y": 239.109375,
+          "width": 149.15625,
+          "height": 40.5,
+          "right": 894.375,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 149,
+        "clientWidth": 149
+      },
+      {
+        "text": "Печатать ЧЗ",
+        "bounds": {
+          "x": 906.375,
+          "y": 239.109375,
+          "width": 147.0625,
+          "height": 40.5,
+          "right": 1053.4375,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 147,
+        "clientWidth": 147
+      },
+      {
+        "text": "Перепечатывать ЧЗ",
+        "bounds": {
+          "x": 1065.4375,
+          "y": 239.109375,
+          "width": 211.0625,
+          "height": 40.5,
+          "right": 1276.5,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 211,
+        "clientWidth": 211
+      },
+      {
+        "text": "Размер этикетки60 × 80 ммРазмер этикетки",
+        "bounds": {
+          "x": 1333,
+          "y": 237.921875,
+          "width": 180,
+          "height": 42.875,
+          "right": 1513,
+          "bottom": 280.796875
+        },
+        "scrollWidth": 180,
+        "clientWidth": 180
+      },
+      {
+        "text": "",
+        "bounds": {
+          "x": 1288.5,
+          "y": 243.109375,
+          "width": 32.5,
+          "height": 32.5,
+          "right": 1321,
+          "bottom": 275.609375
+        },
+        "scrollWidth": 33,
+        "clientWidth": 33
+      }
+    ],
+    "controlOverlap": false,
+    "rowOverlap": false,
+    "bars": 1,
+    "lists": 1,
+    "qr": {
+      "checked": false,
+      "disabled": true
+    },
+    "text": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\nПоставок в работе нет\n\nСоздайте поставку на вкладке «Новые» или обновите список.\n\nСборка · 2 поставки\n\nСинтетический селлер с очень длинным названием для проверки читаемости и принадлежности\n\n0 из 2 подготовлено к отгрузке\nПечать листа подбора\nСостав\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nПечать всего (1)\n\nФутболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\n44/46/48/50/52/54\n\nБрюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ\nПечать всего (1)\n\nФутболка Ozon, позиция A — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\n44/46/48/50/52/54\n\nБрюки Ozon, позиция B — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ"
+  },
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T19%3A36%3A16.639Z&to=2026-10-06T19%3A36%3A16.639Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-ozon-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-ozon-b",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=ozon-a-product-a&seller_id=ozon-a-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/ozon-a/order-print-tape",
+      "body": {
+        "order_ids": [
+          "ozon-a-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=ozon-b-product-a&seller_id=ozon-b-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/ozon-b/order-print-tape",
+      "body": {
+        "order_ids": [
+          "ozon-b-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-a/pick-options",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/ozon-b/pick-options",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/products/linked-wb-catalog?seller_id=ozon-a-seller",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/products/linked-wb-catalog?seller_id=ozon-b-seller",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/ozon-a-order/ozon-exemplar-documents",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/ozon-b-order/ozon-exemplar-documents",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-ozon-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-ozon-b",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

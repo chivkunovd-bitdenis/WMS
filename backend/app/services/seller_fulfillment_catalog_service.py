@@ -37,11 +37,14 @@ from time import monotonic
 from typing import Any, Literal, TypeVar
 
 from sqlalchemy import (
+    JSON,
     ColumnElement,
+    Connection,
     Select,
     String,
     Text,
     and_,
+    case,
     cast,
     exists,
     false,
@@ -50,12 +53,15 @@ from sqlalchemy import (
     or_,
     select,
     text,
+    type_coerce,
     union_all,
 )
 from sqlalchemy.ext.asyncio import AsyncConnection, AsyncSession
 
+from app.models.inventory_balance import InventoryBalance
 from app.models.marketplace_account import MarketplaceAccount
 from app.models.product import Product
+from app.models.product_barcode import ProductBarcode
 from app.models.product_marketplace_link import ProductMarketplaceLink
 from app.models.seller_ozon_imported_card import SellerOzonImportedCard
 from app.models.seller_wildberries_credentials import SellerWildberriesCredentials
@@ -87,6 +93,14 @@ logger = logging.getLogger(__name__)
 
 OnFulfillmentFilter = Literal["all", "yes", "no"]
 MarketplaceFilter = Literal["wildberries", "ozon"]
+
+# Python str.strip() whitespace, shared by SQLite/PostgreSQL trim so SQL
+# category/size labels match the existing displayed labels (including NBSP).
+_DISPLAY_WHITESPACE = (
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
 
 # Тот же порядок величины, что и у пачек nmID/product_id в других местах
 # каталога (см. catalog_service.ID_IN_BATCH_SIZE) — но контракт /seller-catalog
@@ -421,6 +435,189 @@ async def _connection_flags(
     return wb_connected, ozon_connected
 
 
+async def _catalog_fields(session: AsyncSession) -> tuple[Any, Any, Any, Any, Any]:
+    """SQL equivalents of the displayed category and WB size labels.
+
+    Keep JSON expansion correlated: variants never multiply catalog rows.
+    SQLite's built-in lower is ASCII-only; a connection-local function gives
+    the same Cyrillic comparison as PostgreSQL without writing to the database.
+    """
+    sqlite = session.get_bind().dialect.name == "sqlite"
+    if sqlite:
+        connection = await session.connection()
+
+        def register_lower(conn: Connection) -> None:
+            dbapi = conn.connection.dbapi_connection
+            assert dbapi is not None
+            dbapi.create_function(
+                "catalog_lower",
+                1,
+                lambda value: value.lower() if value is not None else None,
+                deterministic=True,
+            )
+
+        await connection.run_sync(register_lower)
+    raw = SellerWildberriesImportedCard.raw_json
+    sizes_json = raw["sizes"]
+    array_type = func.json_type(sizes_json) if sqlite else func.json_typeof(sizes_json)
+    sizes_json = case(
+        (array_type == "array", sizes_json),
+        else_=(literal("[]") if sqlite else cast(literal("[]"), JSON)),
+    )
+    entries = (
+        func.json_each(sizes_json).table_valued("key", "value", "type")
+        if sqlite
+        else func.json_array_elements(sizes_json).table_valued(
+            "value", with_ordinality="ordinality"
+        )
+    )
+    ordinal = entries.c.key if sqlite else entries.c.ordinality
+    entry_type = entries.c.type if sqlite else func.json_typeof(entries.c.value)
+    entry = type_coerce(
+        case(
+            (entry_type == "object", entries.c.value),
+            else_=(literal("{}") if sqlite else cast(literal("{}"), JSON)),
+        ),
+        JSON,
+    )
+    label = func.coalesce(
+        *(
+            case(
+                (
+                    (func.json_type(entry[key]) if sqlite else func.json_typeof(entry[key]))
+                    == ("text" if sqlite else "string"),
+                    func.nullif(func.trim(entry[key].as_string(), _DISPLAY_WHITESPACE), ""),
+                ),
+                else_=None,
+            )
+            for key in ("techSize", "wbSize")
+        ),
+    )
+    labels = (
+        select(label.label("label"))
+        .select_from(entries)
+        .where(label.is_not(None))
+        .group_by(label)
+        .order_by(func.min(ordinal))
+        .correlate(SellerWildberriesImportedCard)
+        .subquery()
+    )
+    aggregate = (
+        func.group_concat(labels.c.label, ", ") if sqlite else func.string_agg(labels.c.label, ", ")
+    )
+    card_size = select(aggregate).select_from(labels).scalar_subquery()
+    skus_json = entry["skus"]
+    skus_type = func.json_type(skus_json) if sqlite else func.json_typeof(skus_json)
+    skus_json = case(
+        (skus_type == "array", skus_json),
+        else_=(literal("[]") if sqlite else cast(literal("[]"), JSON)),
+    )
+    skus = (
+        func.json_each(skus_json) if sqlite else func.json_array_elements_text(skus_json)
+    ).table_valued("value")
+    stored_barcode = (
+        select(ProductBarcode.barcode)
+        .where(
+            ProductBarcode.tenant_id == Product.tenant_id,
+            ProductBarcode.seller_id == Product.seller_id,
+            ProductBarcode.product_id == Product.id,
+            ProductBarcode.source == "wb",
+        )
+        .order_by(ProductBarcode.barcode, ProductBarcode.id)
+        .limit(1)
+        .correlate(Product)
+        .scalar_subquery()
+    )
+    primary_barcode = func.coalesce(func.nullif(func.trim(Product.wb_barcode), ""), stored_barcode)
+    barcode_matches = exists(
+        select(1)
+        .select_from(skus)
+        .where(func.trim(cast(skus.c.value, String)) == primary_barcode)
+        .correlate(entries, Product)
+    )
+    count = (
+        select(func.count())
+        .select_from(entries)
+        .correlate(SellerWildberriesImportedCard)
+        .scalar_subquery()
+    )
+    fallback_size = (
+        select(label)
+        .select_from(entries)
+        .where(label.is_not(None), or_(barcode_matches, count == 1))
+        .order_by(ordinal)
+        .limit(1)
+        .correlate(Product, SellerWildberriesImportedCard)
+        .scalar_subquery()
+    )
+    product_size = func.coalesce(
+        func.nullif(func.trim(Product.wb_size, _DISPLAY_WHITESPACE), ""), fallback_size
+    )
+    category = func.coalesce(
+        *(
+            case(
+                (
+                    (func.json_type(raw[key]) if sqlite else func.json_typeof(raw[key]))
+                    == ("text" if sqlite else "string"),
+                    func.nullif(func.trim(raw[key].as_string(), _DISPLAY_WHITESPACE), ""),
+                ),
+                else_=None,
+            )
+            for key in ("subjectName", "subject_name")
+        ),
+    )
+    return category, product_size, card_size, entries, label
+
+
+def _exact_catalog_filters(value: Any, requested: str | None, sqlite: bool) -> list[Any]:
+    normalized = (requested or "").strip().lower()
+    if not normalized:
+        return []
+    lower = func.catalog_lower if sqlite else func.lower
+    return [lower(func.trim(value)) == normalized]
+
+
+def _catalog_extra_filters(
+    tenant_id: uuid.UUID,
+    article: str | None,
+    size: str | None,
+    stock_only: bool,
+    sqlite: bool,
+    product_size: Any,
+    entries: Any,
+    label: Any,
+) -> tuple[list[Any], list[Any], list[Any]]:
+    products = _exact_catalog_filters(Product.wb_vendor_code, article, sqlite)
+    products.extend(_exact_catalog_filters(product_size, size, sqlite))
+    wb = _exact_catalog_filters(SellerWildberriesImportedCard.vendor_code, article, sqlite)
+    if (size or "").strip():
+        wb.append(
+            exists(
+                select(1)
+                .select_from(entries)
+                .where(*_exact_catalog_filters(label, size, sqlite))
+                .correlate(SellerWildberriesImportedCard)
+            )
+        )
+    ozon = _exact_catalog_filters(SellerOzonImportedCard.offer_id, article, sqlite)
+    if (size or "").strip():
+        ozon.append(false())
+    if stock_only:
+        quantity = (
+            select(func.sum(InventoryBalance.quantity))
+            .where(
+                InventoryBalance.tenant_id == tenant_id,
+                InventoryBalance.product_id == Product.id,
+            )
+            .correlate(Product)
+            .scalar_subquery()
+        )
+        products.append(quantity > 0)
+        wb.append(false())
+        ozon.append(false())
+    return products, wb, ozon
+
+
 async def list_seller_catalog_page(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -428,6 +625,10 @@ async def list_seller_catalog_page(
     *,
     search: str | None = None,
     category: str | None = None,
+    article: str | None = None,
+    size: str | None = None,
+    stock_only: bool = False,
+    group_by: Literal["category_article_size"] | None = None,
     on_fulfillment: OnFulfillmentFilter = "all",
     marketplace: MarketplaceFilter | None = None,
     limit: int = 100,
@@ -468,9 +669,21 @@ async def list_seller_catalog_page(
     ozon_card_filters.extend(_ozon_card_search_filters(search))
     ozon_card_filters.extend(_ozon_card_category_filters(category))
 
+    subject, product_size, card_size, entries, label = await _catalog_fields(session)
+    product_extra, wb_extra, ozon_extra = _catalog_extra_filters(
+        tenant_id, article, size, stock_only,
+        session.get_bind().dialect.name == "sqlite", product_size, entries, label,
+    )
+    product_filters.extend(product_extra)
+    wb_card_filters.extend(wb_extra)
+    ozon_card_filters.extend(ozon_extra)
+
     product_branch = (
         select(
             literal("product").label("kind"),
+            subject.label("group_category"),
+            Product.wb_vendor_code.label("group_article"),
+            product_size.label("group_size"),
             Product.sku_code.label("sort_key"),
             cast(Product.id, String).label("raw_key"),
         )
@@ -480,6 +693,9 @@ async def list_seller_catalog_page(
     )
     wb_card_branch = select(
         literal("wb_card").label("kind"),
+        subject.label("group_category"),
+        SellerWildberriesImportedCard.vendor_code.label("group_article"),
+        card_size.label("group_size"),
         func.coalesce(
             SellerWildberriesImportedCard.vendor_code,
             cast(SellerWildberriesImportedCard.nm_id, String),
@@ -488,6 +704,9 @@ async def list_seller_catalog_page(
     ).where(*wb_card_filters)
     ozon_card_branch = select(
         literal("ozon_card").label("kind"),
+        literal(None, String).label("group_category"),
+        SellerOzonImportedCard.offer_id.label("group_article"),
+        literal(None, String).label("group_size"),
         func.coalesce(
             SellerOzonImportedCard.offer_id,
             SellerOzonImportedCard.ozon_product_id,
@@ -557,9 +776,17 @@ async def list_seller_catalog_page(
             or 0
         )
 
+    order = [universe_subq.c.sort_key, universe_subq.c.kind, universe_subq.c.raw_key]
+    if group_by == "category_article_size":
+        order = [
+            func.coalesce(universe_subq.c.group_category, ""),
+            func.coalesce(universe_subq.c.group_article, ""),
+            func.coalesce(universe_subq.c.group_size, ""),
+            universe_subq.c.kind, universe_subq.c.raw_key,
+        ]
     page_stmt = (
         select(universe_subq.c.kind, universe_subq.c.raw_key)
-        .order_by(universe_subq.c.sort_key, universe_subq.c.kind, universe_subq.c.raw_key)
+        .order_by(*order)
         .limit(limit)
         .offset(offset)
     )
@@ -710,6 +937,10 @@ async def list_seller_catalog_keys(
     *,
     search: str | None = None,
     category: str | None = None,
+    article: str | None = None,
+    size: str | None = None,
+    stock_only: bool = False,
+    group_by: Literal["category_article_size"] | None = None,
     on_fulfillment: OnFulfillmentFilter = "all",
     marketplace: MarketplaceFilter | None = None,
 ) -> list[str]:
@@ -740,6 +971,15 @@ async def list_seller_catalog_keys(
     ]
     ozon_card_filters.extend(_ozon_card_search_filters(search))
     ozon_card_filters.extend(_ozon_card_category_filters(category))
+
+    _subject, product_size, _card_size, entries, label = await _catalog_fields(session)
+    product_extra, wb_extra, ozon_extra = _catalog_extra_filters(
+        tenant_id, article, size, stock_only,
+        session.get_bind().dialect.name == "sqlite", product_size, entries, label,
+    )
+    product_filters.extend(product_extra)
+    wb_card_filters.extend(wb_extra)
+    ozon_card_filters.extend(ozon_extra)
 
     keys: list[str] = []
     if on_fulfillment in ("all", "yes"):

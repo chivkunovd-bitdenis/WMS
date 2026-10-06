@@ -1,0 +1,65 @@
+{
+  "base_sha": "7f9d720ee47db130eaa9ef63df8325566c70dcd1",
+  "compat_source": "7f7e922b16d8f2fa08816f8446e7a53a1d24ac74",
+  "review_source": "c775941f373b89a9eaca70d0056673ff27a0dafa",
+  "staging_ancestor": "727575a0fd47dec56f34b38b987925686626c2b9",
+  "mode": "Ancestry-only ours merge of known staging and reviewed compat history, then exact nine compat files restored",
+  "checks": [
+    {
+      "path": "backend/alembic/versions/20260912_0305_assistant_messages.py",
+      "compat_blob": "d90586dca85a8492a72d046cc59b1f9d4f47e1e3",
+      "staging_blob": "d90586dca85a8492a72d046cc59b1f9d4f47e1e3",
+      "candidate_blob": "d90586dca85a8492a72d046cc59b1f9d4f47e1e3"
+    },
+    {
+      "path": "backend/alembic/versions/20260913_2200_assistant_executor_attempts.py",
+      "compat_blob": "0d21fb6ab4cec97e250173580ed21b6d4e17724d",
+      "staging_blob": "0d21fb6ab4cec97e250173580ed21b6d4e17724d",
+      "candidate_blob": "0d21fb6ab4cec97e250173580ed21b6d4e17724d"
+    },
+    {
+      "path": "backend/alembic/versions/20260925_0433_merge_assistant_staging.py",
+      "compat_blob": "a262d80f5e2dee05ad61c19cc1678f85cc6dac73",
+      "staging_blob": "a262d80f5e2dee05ad61c19cc1678f85cc6dac73",
+      "candidate_blob": "a262d80f5e2dee05ad61c19cc1678f85cc6dac73"
+    },
+    {
+      "path": "backend/alembic/versions/20260929_0589_merge_staging_etalon.py",
+      "compat_blob": "67c4ebc8cbab4b9a0fefd9c7afa2cf8a7d5d43c0",
+      "staging_blob": "67c4ebc8cbab4b9a0fefd9c7afa2cf8a7d5d43c0",
+      "candidate_blob": "67c4ebc8cbab4b9a0fefd9c7afa2cf8a7d5d43c0"
+    },
+    {
+      "path": "backend/alembic/versions/20260929_0590_merge_wms_588_and_staging_heads.py",
+      "compat_blob": "df0d28794b6fc88a6963b9e47bd16ee965b3680c",
+      "staging_blob": "df0d28794b6fc88a6963b9e47bd16ee965b3680c",
+      "candidate_blob": "df0d28794b6fc88a6963b9e47bd16ee965b3680c"
+    },
+    {
+      "path": "backend/alembic/versions/20260930_0566_ff_section_permissions.py",
+      "compat_blob": "04c4dc2062036bfcfa5b888784abe464397630b5",
+      "staging_blob": "04c4dc2062036bfcfa5b888784abe464397630b5",
+      "candidate_blob": "04c4dc2062036bfcfa5b888784abe464397630b5"
+    },
+    {
+      "path": "backend/alembic/versions/20260930_0567_product_primary_print_barcode.py",
+      "compat_blob": "c914e2df20ac91a25ecac454e38582d3ea02de76",
+      "staging_blob": "c914e2df20ac91a25ecac454e38582d3ea02de76",
+      "candidate_blob": "c914e2df20ac91a25ecac454e38582d3ea02de76"
+    },
+    {
+      "path": "backend/alembic/versions/20261001_0612_merge_staging_urgent.py",
+      "compat_blob": "6e265c29e57c693aa117879232328064efe9f99b",
+      "staging_blob": "6e265c29e57c693aa117879232328064efe9f99b",
+      "candidate_blob": "6e265c29e57c693aa117879232328064efe9f99b"
+    },
+    {
+      "path": "backend/alembic/versions/20261003_0001_merge_staging_etalon.py",
+      "compat_blob": "2070ea70d8b1519dfc716a5e094e72f19c652274",
+      "staging_blob": "2070ea70d8b1519dfc716a5e094e72f19c652274",
+      "candidate_blob": "2070ea70d8b1519dfc716a5e094e72f19c652274"
+    }
+  ],
+  "application_and_checker_unchanged": true,
+  "new_database_mutation": false
+}

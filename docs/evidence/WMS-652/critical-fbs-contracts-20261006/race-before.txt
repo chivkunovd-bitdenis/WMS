@@ -1,0 +1,57 @@
+async def test_parallel_from_orders_one_order_one_supply(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+) -> None:
+    if "sqlite" in os.environ.get("DATABASE_URL", "").lower():
+        pytest.skip("row-level FOR UPDATE locking requires PostgreSQL")
+
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(async_client, headers, seller_id, sku=f"race-{suffix[-6:]}")
+    order_id = await _create_ready_order(
+        tenant_id,
+        uuid.UUID(seller_id),
+        uuid.UUID(warehouse_id),
+        uuid.UUID(location_id),
+        product,
+        order_id=857001,
+    )
+
+    resp_a, resp_b = await asyncio.gather(
+        async_client.post(
+            "/operations/fbs-supplies/from-orders",
+            headers=headers,
+            json={
+                "name": "Race A",
+                "order_ids": [str(order_id)],
+                "planned_delivery_type": "warehouse_sc",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        ),
+        async_client.post(
+            "/operations/fbs-supplies/from-orders",
+            headers=headers,
+            json={
+                "name": "Race B",
+                "order_ids": [str(order_id)],
+                "planned_delivery_type": "warehouse_sc",
+                "idempotency_key": str(uuid.uuid4()),
+            },
+        ),
+    )
+    statuses = sorted([resp_a.status_code, resp_b.status_code])
+    assert statuses == [201, 409], (resp_a.text, resp_b.text)
+    rejected = resp_a if resp_a.status_code == 409 else resp_b
+    assert rejected.json()["detail"]["code"] == "order_incompatible"
+
+    async with SessionLocal() as session:
+        order = await session.get(FbsOrder, order_id)
+        assert order is not None
+        assert order.supply_id is not None
+        assert order.status == FBS_ORDER_STATUS_IN_SUPPLY
+        supply_count = await session.scalar(select(func.count()).select_from(FbsSupply))
+        assert supply_count == 1

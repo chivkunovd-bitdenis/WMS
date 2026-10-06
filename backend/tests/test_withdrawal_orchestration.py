@@ -13,7 +13,11 @@ from typing import Any
 import httpx
 import pytest
 from sqlalchemy.ext.asyncio import AsyncSession
-from test_withdrawal_ledger import INN, seed  # type: ignore[import-not-found]
+from test_withdrawal_ledger import (  # type: ignore[import-not-found]
+    INN,
+    legacy_sales_http,  # noqa: F401 -- same synthetic I/O fixture
+    seed,
+)
 
 from app.api.marking_withdrawals import _output, router, withdrawal_products
 from app.celery_app import celery_app

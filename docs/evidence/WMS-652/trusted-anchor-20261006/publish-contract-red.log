@@ -1,0 +1,78 @@
+.FF.FF
+======================================================================
+FAIL: test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events (scripts.ci.tests.test_trusted_process_publish.PublishFailureTests.test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events) (kind='pull_request_target')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_publish.py", line 69, in test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events
+    self.assertEqual(history, [(H, 'success'), (H, 'failure')])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('aa[46 chars]ess')] != [('aa[46 chars]ess'), ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')]
+
+Second list contains 1 additional elements.
+First extra element 1:
+('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')
+
+- [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success')]
+?                                                         ^
+
++ [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success'),
+?                                                         ^
+
++  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')]
+
+======================================================================
+FAIL: test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events (scripts.ci.tests.test_trusted_process_publish.PublishFailureTests.test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events) (kind='workflow_run')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_publish.py", line 69, in test_initial_pr_api_outage_withdraws_prior_success_for_both_trusted_events
+    self.assertEqual(history, [(H, 'success'), (H, 'failure')])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('aa[46 chars]ess')] != [('aa[46 chars]ess'), ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')]
+
+Second list contains 1 additional elements.
+First extra element 1:
+('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')
+
+- [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success')]
+?                                                         ^
+
++ [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success'),
+?                                                         ^
+
++  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')]
+
+======================================================================
+FAIL: test_declared_queue_prevents_delayed_old_success_post_after_new_failure (scripts.ci.tests.test_trusted_process_publish.SerializedPublisherTests.test_declared_queue_prevents_delayed_old_success_post_after_new_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_publish.py", line 159, in test_declared_queue_prevents_delayed_old_success_post_after_new_failure
+    self.assertEqual(history, [(H, 'success'), (H, 'failure')])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [('aa[37 chars]a', 'failure'), ('aaaaaaaaaaaaaaaaaaaaaaaaaaaa[21 chars]ss')] != [('aa[37 chars]a', 'success'), ('aaaaaaaaaaaaaaaaaaaaaaaaaaaa[21 chars]re')]
+
+First differing element 0:
+('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')
+('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success')
+
+- [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure'),
+-  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success')]
+? ^                                                       ^
+
++ [('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'success'),
+? ^                                                       ^
+
++  ('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', 'failure')]
+
+======================================================================
+FAIL: test_every_event_kind_and_run_or_pr_uses_one_global_non_cancelling_queue (scripts.ci.tests.test_trusted_process_publish.SerializedPublisherTests.test_every_event_kind_and_run_or_pr_uses_one_global_non_cancelling_queue)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_publish.py", line 106, in test_every_event_kind_and_run_or_pr_uses_one_global_non_cancelling_queue
+    self.assertEqual(len({group(body) for body in bodies}), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 4 != 1
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.017s
+
+FAILED (failures=4)

@@ -13,14 +13,16 @@ from app.db.withdrawal_repository import (
     WithdrawalError,
     WithdrawalScope,
     current_items,
-    eligible_rows,
     get_operation,
     lock_seller,
+    sales_for_scope,
+    sold_rows,
 )
 from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_withdrawal import WithdrawalItem, WithdrawalOperation
-from app.services.wb_order_price_service import WbPriceDataError, resolve_wb_product_cost
+from app.services.wb_order_price_service import WbPriceDataError
+from app.services.wb_sales_report import SalesReport, sale_cost
 from app.services.withdrawal_provider_ki import provider_ki
 
 INTEGRATION_GATE = "WITHDRAWAL_PRODUCTION_SUBMIT_DISABLED"
@@ -34,6 +36,7 @@ async def _new_items(
     scope: WithdrawalScope,
     operation: WithdrawalOperation,
     rows: list[tuple[FbsOrderMarking, FbsOrder, FbsSupply]],
+    sales: SalesReport,
 ) -> None:
     for marking, order, supply in rows:
         assert supply.delivered_at is not None
@@ -53,16 +56,11 @@ async def _new_items(
             state="pending",
             holds_claim=True,
         )
+        item.preflight_evidence = {"wb_sale": sales.evidence(order)}
         try:
             item.provider_cis = provider_ki(marking.value)
-            price = await resolve_wb_product_cost(
-                session,
-                tenant_id=scope.tenant_id,
-                seller_id=scope.seller_id,
-                order_id=order.id,
-            )
-            item.price_snapshot_id = price.snapshot_id
-            item.product_cost = price.product_cost
+            assert order.wb_rid is not None
+            item.product_cost = sale_cost(sales.by_rid[order.wb_rid])
         except WbPriceDataError as exc:
             item.price_snapshot_id = exc.snapshot_id
             item.state = "failed"
@@ -97,7 +95,34 @@ async def create_operation(
         raise WithdrawalError("invalid_selection", 422)
     row_ids = sorted(row_ids)
     selection_hash = hashlib.sha256("\n".join(map(str, row_ids)).encode()).hexdigest()
+    existing: WithdrawalOperation | None = await session.scalar(
+        select(WithdrawalOperation).where(
+            WithdrawalOperation.tenant_id == scope.tenant_id,
+            WithdrawalOperation.seller_id == scope.seller_id,
+            WithdrawalOperation.client_request_id == client_request_id,
+        )
+    )
+    if existing:
+        if existing.selection_hash != selection_hash:
+            raise WithdrawalError("idempotency_selection_mismatch")
+        return existing
+    # Exact persisted claims resume even when current sales are unavailable or a
+    # later return occurred. They cannot authorize a new provider document.
+    held = list(
+        await session.scalars(
+            select(WithdrawalItem).where(
+                WithdrawalItem.tenant_id == scope.tenant_id,
+                WithdrawalItem.seller_id == scope.seller_id,
+                WithdrawalItem.marking_id.in_(row_ids),
+                WithdrawalItem.holds_claim.is_(True),
+            )
+        )
+    )
+    if len(held) == len(row_ids) and len({item.operation_id for item in held}) == 1:
+        return await get_operation(session, scope, held[0].operation_id)
+    sales = await sales_for_scope(session, scope, row_ids=row_ids)
     await lock_seller(session, scope)
+    # Another request may have won during the vendor wait.
     existing = await session.scalar(
         select(WithdrawalOperation).where(
             WithdrawalOperation.tenant_id == scope.tenant_id,
@@ -113,12 +138,13 @@ async def create_operation(
         tuple(row)
         for row in (
             await session.execute(
-                eligible_rows(scope)
+                sold_rows(session, scope, sales)
                 .where(
                     FbsOrderMarking.id.in_(row_ids),
                 )
                 .order_by(FbsOrderMarking.id)
                 .with_for_update(of=FbsOrderMarking)
+                .execution_options(populate_existing=True)
             )
         ).all()
     ]
@@ -169,7 +195,7 @@ async def create_operation(
     )
     session.add(operation)
     await session.flush()
-    await _new_items(session, scope, operation, rows)
+    await _new_items(session, scope, operation, rows, sales)
     return operation
 
 
@@ -180,8 +206,7 @@ async def retry_operation(
     *,
     expected_attempt: int,
 ) -> WithdrawalOperation:
-    await lock_seller(session, scope)
-    operation = await get_operation(session, scope, operation_id, lock=True)
+    operation = await get_operation(session, scope, operation_id)
     # expected_attempt makes a repeated retry request idempotent even if a
     # local data failure is immediate. No elapsed-time reset of unknown work.
     if expected_attempt < operation.attempt:
@@ -195,17 +220,30 @@ async def retry_operation(
     ]
     if not old_items:
         return operation
+    sales = await sales_for_scope(session, scope, row_ids=[item.marking_id for item in old_items])
+    await lock_seller(session, scope)
+    operation = await get_operation(session, scope, operation_id, lock=True)
+    if expected_attempt < operation.attempt:
+        return operation
+    if expected_attempt != operation.attempt:
+        raise WithdrawalError("attempt_mismatch")
+    if operation.state not in {"failed", "partial_failed"}:
+        return operation
+    old_items = [
+        item for item in await current_items(session, scope, operation.id) if item.state == "failed"
+    ]
     ids = [item.marking_id for item in old_items]
     rows = [
         tuple(row)
         for row in (
             await session.execute(
-                eligible_rows(scope)
+                sold_rows(session, scope, sales)
                 .where(
                     FbsOrderMarking.id.in_(ids),
                 )
                 .order_by(FbsOrderMarking.id)
                 .with_for_update(of=FbsOrderMarking)
+                .execution_options(populate_existing=True)
             )
         ).all()
     ]
@@ -227,6 +265,6 @@ async def retry_operation(
     operation.workflow_lease_id = None
     operation.workflow_lease_until = None
     operation.attempt_started_at = datetime.now(UTC)
-    await _new_items(session, scope, operation, rows)
+    await _new_items(session, scope, operation, rows, sales)
     # New pending items need fresh cises/MOD, bytes and signatures.
     return operation

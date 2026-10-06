@@ -1,0 +1,14 @@
+WINDOWS_GUARD test_safe_synthetic_queue_runs_real_child_process_once if os.name == 'nt':
+    self.skipTest('Windows uses the .cmd synthetic queue in packaged --self-test')
+WINDOWS_GUARD test_actual_process_exit_after_spool_acceptance_recovers_without_second_submit if os.name == 'nt':
+    self.skipTest('Windows recovery boundary is covered by process_once mocks')
+REPRODUCED_REQUIRED_WINDOWS_REPORT_REFUSAL native-windows: required cases did not pass: {'tools.print-agent.test_wms_print_runtime.RuntimeTest::test_actual_process_exit_after_spool_acceptance_recovers_without_second_submit': 'skipped', 'tools.print-agent.test_wms_print_runtime.RuntimeTest::test_safe_synthetic_queue_runs_real_child_process_once': 'skipped'}
+ARTIFACT_NAME_WIRING name: backend-executed-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: release-print-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: frontend-executed-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: printer-windows-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: backend-executed-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: frontend-executed-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: printer-windows-contracts-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: release-print-${{ github.sha }}
+ARTIFACT_NAME_WIRING name: process-proof-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}

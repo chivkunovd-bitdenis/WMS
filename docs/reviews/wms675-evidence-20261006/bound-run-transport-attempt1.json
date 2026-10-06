@@ -1,0 +1,10 @@
+{
+  "exit_code": 0,
+  "summary": {
+    "execution_status": "READ_COMPLETE_REQUIRES_ACCOUNTING_PLAN",
+    "cards": 31,
+    "output": "/audit/wms675/proofs-20261006-attempt1-767f19fd2f4ba479f2034f915c0f16a1a4d962d4"
+  },
+  "stderr_omitted": false,
+  "collector_commit": "767f19fd2f4ba479f2034f915c0f16a1a4d962d4"
+}

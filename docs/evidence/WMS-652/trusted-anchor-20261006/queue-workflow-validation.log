@@ -1,0 +1,1 @@
+PASS BaseLoader YAML; constant group, max queue, false cancel; trusted main checkout; persist credentials false; prepared-only workflow. No Actions activation.

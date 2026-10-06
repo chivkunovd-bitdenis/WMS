@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="6" time="6.926" timestamp="2026-10-06T17:44:21.965866+00:00" hostname="runnervm8df0l"><testcase classname="tests.test_wms663_customs_documents_contract" name="test_wms663_two_sessions_commit_one_posting_version_once" time="1.721" /><testcase classname="tests.test_wms663_remote_c10" name="test_c10_document_claim_blocks_concurrent_marking_without_losing_either" time="0.168" /><testcase classname="tests.test_wms669_seller_catalog_once" name="test_c10_postgresql_json_sizes_and_stock" time="0.701" /><testcase classname="tests.test_wms469_stock_dialog_backend" name="test_c24_parallel_complete_saves_never_mix_rules" time="0.413" /><testcase classname="tests.test_wms469_stock_dialog_backend" name="test_c23_parallel_same_binding_create_keeps_one_row" time="0.127" /><testcase classname="tests.test_fbs_supply_from_orders" name="test_parallel_from_orders_one_order_one_supply" time="3.468"><failure message="AssertionError: ('{&quot;supply&quot;:{&quot;delivery_route&quot;:null,&quot;id&quot;:&quot;25d37ae7-ba2b-4ee3-a69e-c404152935e8&quot;,&quot;marketplace&quot;:&quot;wb&quot;,&quot;wb_supply_id&quot;:&quot;WB-G...ng_confirmation&quot;,&quot;supply_id&quot;:&quot;25d37ae7-ba2b-4ee3-a69e-c404152935e8&quot;,&quot;wb_supply_id&quot;:&quot;WB-GI-MOCK-1&quot;},&quot;retryable&quot;:true}}')&#10;assert [201, 503] == [201, 409]&#10;  &#10;  At index 1 diff: 503 != 409&#10;  &#10;  Full diff:&#10;    [&#10;        201,&#10;  -     409,&#10;  ?     ^ ^&#10;  +     503,&#10;  ?     ^ ^&#10;    ]">async_client = &lt;httpx.AsyncClient object at 0x7f9b45ea4c10&gt;
+enable_wb_marketplace_supplies_mock = None
+
+    @pytest.mark.asyncio
+    @pytest.mark.postgresql_concurrency
+    async def test_parallel_from_orders_one_order_one_supply(
+        async_client: AsyncClient,
+        enable_wb_marketplace_supplies_mock: None,
+    ) -&gt; None:
+        if "sqlite" in os.environ.get("DATABASE_URL", "").lower():
+            pytest.skip("row-level FOR UPDATE locking requires PostgreSQL")
+    
+        headers, suffix = await _register_ff_admin(async_client)
+        me = await async_client.get("/auth/me", headers=headers)
+        tenant_id = uuid.UUID(me.json()["tenant_id"])
+        seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+            async_client, headers, suffix
+        )
+        product = await _create_product(async_client, headers, seller_id, sku=f"race-{suffix[-6:]}")
+        order_id = await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=857001,
+        )
+    
+        resp_a, resp_b = await asyncio.gather(
+            async_client.post(
+                "/operations/fbs-supplies/from-orders",
+                headers=headers,
+                json={
+                    "name": "Race A",
+                    "order_ids": [str(order_id)],
+                    "planned_delivery_type": "warehouse_sc",
+                    "idempotency_key": str(uuid.uuid4()),
+                },
+            ),
+            async_client.post(
+                "/operations/fbs-supplies/from-orders",
+                headers=headers,
+                json={
+                    "name": "Race B",
+                    "order_ids": [str(order_id)],
+                    "planned_delivery_type": "warehouse_sc",
+                    "idempotency_key": str(uuid.uuid4()),
+                },
+            ),
+        )
+        statuses = sorted([resp_a.status_code, resp_b.status_code])
+&gt;       assert statuses == [201, 409], (resp_a.text, resp_b.text)
+E       AssertionError: ('{"supply":{"delivery_route":null,"id":"25d37ae7-ba2b-4ee3-a69e-c404152935e8","marketplace":"wb","wb_supply_id":"WB-G...ng_confirmation","supply_id":"25d37ae7-ba2b-4ee3-a69e-c404152935e8","wb_supply_id":"WB-GI-MOCK-1"},"retryable":true}}')
+E       assert [201, 503] == [201, 409]
+E         
+E         At index 1 diff: 503 != 409
+E         
+E         Full diff:
+E           [
+E               201,
+E         -     409,
+E         ?     ^ ^
+E         +     503,
+E         ?     ^ ^
+E           ]
+
+tests/test_fbs_supply_from_orders.py:785: AssertionError</failure></testcase></testsuite></testsuites>

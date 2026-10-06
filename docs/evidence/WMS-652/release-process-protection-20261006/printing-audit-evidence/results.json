@@ -1,0 +1,73 @@
+[
+  {
+    "name": "baseline-guards",
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--no-cache",
+      "src/guards/scan-print"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "mutant-no-qr",
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--no-cache",
+      "src/guards/scan-print/fbsSequentialPacking.test.ts",
+      "-t",
+      "preloads after barcode, waits for KIZ"
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "mutant-disconnected-input-guards",
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--no-cache",
+      "src/guards/scan-print"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "baseline-integrity",
+    "command": [
+      "python3",
+      "scripts/ci/check_regression_guards.py",
+      "--base",
+      "d61805978b3e7878d1056c99b4e6e0823edf49a5"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "mutant-weaken-guard",
+    "command": [
+      "python3",
+      "scripts/ci/check_regression_guards.py",
+      "--base",
+      "d61805978b3e7878d1056c99b4e6e0823edf49a5"
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "mutant-disable-guard-run",
+    "command": [
+      "python3",
+      "scripts/ci/check_regression_guards.py",
+      "--base",
+      "d61805978b3e7878d1056c99b4e6e0823edf49a5"
+    ],
+    "exit_code": 0
+  }
+]

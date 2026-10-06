@@ -1,0 +1,15 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90m/home/runner/work/WMS/WMS/frontend[39m
+
+ [32m✓[39m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC1: Универсальный остаётся в ячейке размера шириной 78 px и перенос разрешён[32m 2[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC2: одиннадцать колонок, контрольные данные и вход не меняются при повторной генерации[32m 1[2mms[22m[39m
+ [32m✓[39m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC3: короткий размер остаётся одной строкой, отсутствие размера — прочерком[32m 1[2mms[22m[39m
+ [2m[90m↓[39m[22m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC4: Chromium держит длинный размер и соседние данные в границах колонок
+ [2m[90m↓[39m[22m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC5: PDF A4 landscape сохраняет таблицу и полный текст всех колонок
+ [2m[90m↓[39m[22m src/screens/v2/fbsPickingListPrint.wms657.test.ts[2m > [22mWMS-657 · перенос размера в листе подбора FBS[2m > [22mC6: многострочный HTML/PDF не смешивает строки и варианты размера
+
+[2m Test Files [22m [1m[32m1 passed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[32m3 passed[39m[22m[2m | [22m[33m3 skipped[39m[90m (6)[39m
+[2m   Start at [22m 10:03:57
+[2m   Duration [22m 285ms[2m (transform 80ms, setup 0ms, collect 141ms, tests 5ms, environment 0ms, prepare 44ms)[22m
+

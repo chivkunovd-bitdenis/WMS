@@ -1,0 +1,51 @@
+{
+  "runtimeSha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+  "deltas": {
+    "marking": 68,
+    "size": 230,
+    "sticker": 100
+  },
+  "measurements": [
+    {
+      "marketplace": "wb",
+      "marking": 1268,
+      "order": "4fa2016e-6c65-51a2-92b1-b3559f14e58d",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "wb",
+      "marking": 1268,
+      "order": "24ae7e5d-5d0a-5d13-81f1-f03865ffe9dc",
+      "size": 814,
+      "sticker": 1106
+    },
+    {
+      "marketplace": "ozon",
+      "marking": 1336,
+      "order": "52fb8c88-1d7a-53fc-bf41-a9c164e3f103",
+      "size": 1044,
+      "sticker": 1206
+    },
+    {
+      "marketplace": "ozon",
+      "marking": 1336,
+      "order": "fc3e3285-9d3c-5164-b875-e124b24ccaa3",
+      "size": 1044,
+      "sticker": 1206
+    },
+    {
+      "marketplace": "ozon",
+      "marking": 1336,
+      "order": "476b9650-36f0-596f-a60d-b20f3b5916a7",
+      "size": 1044,
+      "sticker": 1206
+    }
+  ],
+  "passed": false,
+  "tolerancePx": 1,
+  "viewport": {
+    "height": 1000,
+    "width": 1600
+  }
+}

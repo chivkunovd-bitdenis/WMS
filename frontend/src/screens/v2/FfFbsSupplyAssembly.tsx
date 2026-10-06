@@ -82,15 +82,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [historySupplyId, setHistorySupplyId] = useState<string | null>(null)
-  // Активная поставка и развёрнутые рамки — состояние экрана (Д4): после
-  // перезагрузки оператор снова жмёт «Начать работу с поставкой».
-  const [activeSupplyId, setActiveSupplyId] = useState<string | null>(null)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set())
   // Рамки поставок — карточки поставок в режиме рамки. Они монтируются при
   // первом открытии «Упаковки» и живут до закрытия окна, чтобы активная
   // поставка и открытый короб не терялись при переходе между вкладками.
   const [framesMounted, setFramesMounted] = useState(false)
   const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
+  const [packingColumnsBySupply, setPackingColumnsBySupply] = useState<Record<string, { size: boolean; markingAvailable: boolean }>>({})
+  const reportPackingColumns = useCallback((id: string, columns: { size: boolean; markingAvailable: boolean }) => {
+    setPackingColumnsBySupply(current => current[id]?.size === columns.size && current[id]?.markingAvailable === columns.markingAvailable
+      ? current : { ...current, [id]: columns })
+  }, [])
   const scanners = useRef(new Map<string, PackingScanController>())
   const [, setScannerVersion] = useState(0)
   const [promotedSupplyId, setPromotedSupplyId] = useState<string | null>(null)
@@ -163,8 +164,6 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     setWorkspaces({})
     setError(null)
     setBusy(false)
-    setActiveSupplyId(null)
-    setExpandedIds(new Set())
     setHistorySupplyId(null)
     setRejectedFilter(false)
     const restoredStage = readFbsAssemblyStage(ids) ?? 'composition'
@@ -189,11 +188,12 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     () => supplyIds.map((id) => workspaces[id]).filter((one): one is FbsWorkspace => Boolean(one)),
     [supplyIds, workspaces],
   )
+  const packingColumns = {
+    size: supplyIds.some(id => packingColumnsBySupply[id]?.size),
+    markingAvailable: supplyIds.some(id => packingColumnsBySupply[id]?.markingAvailable),
+  }
   const allLoaded = ordered.length === supplyIds.length && supplyIds.length > 0
-  // Ozon keeps its existing active-frame scanner. Both hooks listen at the
-  // document capture phase, so WB must yield while that frame owns scanning.
-  const ozonOwnsPackingScan = activeSupplyId !== null
-    && workspaces[activeSupplyId]?.supply.marketplace === 'ozon'
+  const ozonOnly = ordered.every((one) => one.supply.marketplace === 'ozon')
   const { ready, total } = fbsAssemblyReadiness(ordered)
   const percent = total ? Math.round((ready / total) * 100) : 0
   const sellerNames = [...new Set(ordered.map((one) => one.supply.seller.name))].join(', ')
@@ -212,37 +212,6 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
 
   const requestClose = () => {
     onClose()
-  }
-
-  // R13, R15: активной бывает одна рамка. Начать работу — рамка сама шлёт
-  // start-work и открывает короб (карточка в режиме рамки); здесь только
-  // «кто активен» и «кто развёрнут». Прежняя рамка завершается без запросов.
-  const activateSupply = (supplyId: string) => {
-    setExpandedIds((current) => {
-      const next = new Set(current)
-      if (activeSupplyId && activeSupplyId !== supplyId) next.delete(activeSupplyId)
-      next.add(supplyId)
-      return next
-    })
-    setActiveSupplyId(supplyId)
-  }
-
-  const finishWork = (supplyId: string) => {
-    setActiveSupplyId((current) => (current === supplyId ? null : current))
-    setExpandedIds((current) => {
-      const next = new Set(current)
-      next.delete(supplyId)
-      return next
-    })
-  }
-
-  const toggleExpanded = (supplyId: string) => {
-    setExpandedIds((current) => {
-      const next = new Set(current)
-      if (next.has(supplyId)) next.delete(supplyId)
-      else next.add(supplyId)
-      return next
-    })
   }
 
   // Снимок поставки из рамки — для шапки окна и «Состава».
@@ -429,9 +398,9 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
               data-testid="fbs-assembly-packing"
             >
               <Paper variant="outlined" sx={{ overflow: 'hidden', display: stage === 'packing' ? undefined : 'none' }}>
-                <FbsPackingScanBar token={token} rejected={{
+                <FbsPackingScanBar token={token} contextKey={supplyIds.join(',')} qrDisabled={ozonOnly} rejected={{
                   count: rejectedCount, active: rejectedFilterOn, onToggle: () => setRejectedFilter((current) => !current),
-                }} enabled={open && stage === 'packing' && !ozonOwnsPackingScan && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
+                }} enabled={open && stage === 'packing' && scanners.current.size > 0} controllers={supplyIds.flatMap((id) => {
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
@@ -449,14 +418,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     onClose={() => undefined}
                     assemblyFrame={{
                       packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
+                      packingColumns,
+                      onPackingColumnsChange: columns => reportPackingColumns(supplyId, columns),
                       rejectedFilter: { active: rejectedFilterOn, count: rejectedCount, headerSupplyId: rejectedHeaderSupplyId },
-                      active: activeSupplyId === supplyId,
-                      expanded: expandedIds.has(supplyId),
+                      active: true,
+                      expanded: true,
                       stage: stage === 'boxes' ? 'boxes' : 'packing',
                       visible: stage === 'packing' || stage === 'boxes',
-                      onToggleExpanded: () => toggleExpanded(supplyId),
-                      onActivate: () => activateSupply(supplyId),
-                      onDeactivate: () => finishWork(supplyId),
+                      onToggleExpanded: () => undefined,
+                      onActivate: () => undefined,
+                      onDeactivate: () => undefined,
                       onWorkspaceChange: onFrameWorkspace,
                       registerEscape,
                     }}

@@ -1,0 +1,28 @@
+{
+  "sha": "a41637173c48ec6e2732572aa5ebc8615e8f1272",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-order-order-a2\"] input[type=checkbox]; {\"x\":30.5,\"y\":614.234375,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.selection[single-create]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-order-order-a2\"] input[type=checkbox]; {\"x\":30.5,\"y\":614.234375,\"visible\":false,\"reachable\":true,\"disabled\":false}",
+  "stack": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-order-order-a2\"] input[type=checkbox]; {\"x\":30.5,\"y\":614.234375,\"visible\":false,\"reachable\":true,\"disabled\":false}\n    at clickElement (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:267:3)\n    at async click (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:272:52)\n    at async select (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:279:48)\n    at async selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:287:73)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:212:3"
+}

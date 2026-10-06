@@ -11,7 +11,11 @@ import httpx
 import pytest
 from redis.asyncio import Redis
 from sqlalchemy.ext.asyncio import AsyncSession
-from test_withdrawal_ledger import document, info  # type: ignore[import-not-found]
+from test_withdrawal_ledger import (  # type: ignore[import-not-found]
+    document,
+    info,
+    legacy_sales_http,  # noqa: F401 -- same synthetic I/O fixture
+)
 
 from app.api.marking_withdrawals import router
 from app.core.settings import settings

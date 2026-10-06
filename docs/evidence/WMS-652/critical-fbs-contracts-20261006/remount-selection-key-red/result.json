@@ -1,0 +1,146 @@
+{
+  "sha": "8e501fcb969ad0ceb482e479f69fd37f726862ca",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ '35006ca7-de83-4a6c-bbca-510c51865b3f'\n- 'd45e8361-0c9d-40b8-b8e3-64d254a4207c'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ 'f4819e04-672c-4ea8-a6bd-4c05bd016a16'\n- '95165647-01d9-43fa-b52a-c840afc6ba6e'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: restored explicit selection must reuse initial idempotency key\n+ actual - expected\n\n+ '9094857e-9aa0-4008-b988-111de331db1f'\n- 'ae1911a4-e00f-449c-a4d8-976b7d7e2b93'\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:214:3"
+}

@@ -1,0 +1,51 @@
+{
+  "base": "ba168befdc9698789fb46687565290c0bf2f6122",
+  "order_before": [
+    "actions/checkout@v4",
+    "actions/setup-python@v5",
+    "Install deps",
+    "Ruff",
+    "Mypy",
+    "actions/setup-node@v4",
+    "Install frontend helpers for backend HTTP contract tests",
+    "Pytest",
+    "WMS-662 isolated batch lock order on real PostgreSQL",
+    "WMS-662 isolated steady-state lock order on real PostgreSQL",
+    "PostgreSQL locks and immutable migration guards",
+    "WMS-675 real incident recovery on isolated PostgreSQL",
+    "Fresh PostgreSQL migration chain and withdrawal rollback"
+  ],
+  "order_after": [
+    "actions/checkout@v4",
+    "actions/setup-python@v5",
+    "Install deps",
+    "Ruff",
+    "Mypy",
+    "actions/setup-node@v4",
+    "Install frontend helpers for backend HTTP contract tests",
+    "WMS-662 isolated batch lock order on real PostgreSQL",
+    "WMS-662 isolated steady-state lock order on real PostgreSQL",
+    "PostgreSQL locks and immutable migration guards",
+    "WMS-675 real incident recovery on isolated PostgreSQL",
+    "Fresh PostgreSQL migration chain and withdrawal rollback",
+    "Pytest"
+  ],
+  "all_step_objects_identical": true,
+  "all_commands_env_conditions_timeouts_services_other_jobs_identical": true,
+  "step_sha256": {
+    "actions/checkout@v4": "19a6bf0668d5596ebf1abfe2059cac9d073f2c13eb8a46031082417054f593a1",
+    "actions/setup-python@v5": "62b378da88f5ec96948f0fc1a996956a5417cb47df9115ac9c83a3796377afe4",
+    "Install deps": "3b93f997eff6b14dcb1a5b77fe3a5c324a7ca499fe6d8c9d93f7e0b2f7f70a29",
+    "Ruff": "82b2a46cd898bf6f56877dcb46d5066edb70ac0f22339635e475308f51f929c6",
+    "Mypy": "cd348db2d2a5f0b938cb8c54a1a993d787426ddbf42e610fddef05d16d3ceaf7",
+    "actions/setup-node@v4": "1df95923af73dfe50f71164b331c8ba0131dafef5ea6fb13df1a3174c4e9ba4e",
+    "Install frontend helpers for backend HTTP contract tests": "d8e04e8c6dff867b5025b5227fe17778d810c5c258a417c8c5b6afde1532f13b",
+    "Pytest": "d63a766014ce63b23fe676b2a22261286985dcd36d676296e3f7a43209c6e3d2",
+    "WMS-662 isolated batch lock order on real PostgreSQL": "3159487c17e85ec8dd4023d0cb1d88da14de5a6ebe104c92d9cefbf68b5dc26f",
+    "WMS-662 isolated steady-state lock order on real PostgreSQL": "2844ef6f1d66395848fcfa3b8d2121bc49b1a07ae4387be25e2d1978051cc9bd",
+    "PostgreSQL locks and immutable migration guards": "aae0856828d6a02d74abe0d4419502abc37e52adf605aa3bf9c6baa4f184e816",
+    "WMS-675 real incident recovery on isolated PostgreSQL": "9c40d95693857e41571be8d1e963ad8637ac66cf0c2b980d35d5d163853184d3",
+    "Fresh PostgreSQL migration chain and withdrawal rollback": "bf92c6489b94b4479025f5a329307ed48fb4b076f525c0ad85b86d486ad4dcfa"
+  },
+  "isolation": "Every step starts a separate process. WMS_TEST_DATABASE_URL and DATABASE_URL are step-local env, never exported via GITHUB_ENV. PostgreSQL662batch/steady use separate idle services; general517/659/537 and675 use dedicated databases; migrations use a separate fresh database. Later SQLite pytest has no PostgreSQL override and retains all original commands."
+}

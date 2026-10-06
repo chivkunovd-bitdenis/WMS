@@ -12,6 +12,7 @@ import httpx
 from sqlalchemy import Select, and_, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
@@ -508,6 +509,16 @@ async def _release_reservation(session: AsyncSession, order: FbsOrder) -> None:
     await update_fbs_order_reservation(session, order, reserve=False)
 
 
+async def _is_wms_supply_order(session: AsyncSession, order: FbsOrder) -> bool:
+    if order.supply_id is None:
+        return False
+    return await session.scalar(select(FbsSupply.id).where(
+        FbsSupply.id == order.supply_id, FbsSupply.source == "wms",
+        FbsSupply.tenant_id == order.tenant_id, FbsSupply.seller_id == order.seller_id,
+        FbsSupply.marketplace == order.marketplace,
+    )) is not None
+
+
 async def _move_new_order_to_external_processing(
     session: AsyncSession,
     order: FbsOrder,
@@ -733,6 +744,8 @@ async def _apply_wb_status_to_order(
     supplier_status: str | None = None,
     actor_user_id: uuid.UUID | None,
 ) -> None:
+    if order.status == FBS_ORDER_STATUS_CANCELLED:
+        return
     normalized_wb = (
         wb_status.strip().lower() if isinstance(wb_status, str) and wb_status.strip() else None
     )
@@ -749,8 +762,8 @@ async def _apply_wb_status_to_order(
     effective_statuses = tuple(
         status for status in (normalized_wb, normalized_supplier) if status is not None
     )
-
-    if any(_is_cancel_like_wb_status(status) for status in effective_statuses):
+    if any(_is_cancel_like_wb_status(status) or status == "cancel_carrier"
+           for status in effective_statuses):
         from app.services.fbs_cancellation_service import (
             reverse_fbs_order_billing,
             reverse_fbs_shipment_if_needed,
@@ -787,7 +800,8 @@ async def _apply_wb_status_to_order(
         # Склад здесь не трогаем ничем. Остаток снимает только наша передача
         # поставки маркетплейсу — правило владельца OWN-20.
         # Выкуплен: резерв больше не нужен (иначе available навсегда занижен).
-        await _release_reservation(session, order)
+        if not await _is_wms_supply_order(session, order):
+            await _release_reservation(session, order)
         await _charge_confirmed_order(session, order)
         return
     if normalized_wb == SORTED_WB_STATUS:
@@ -922,13 +936,17 @@ async def sync_order_statuses(
 ) -> int:
     updated = 0
     snapshots: dict[uuid.UUID, dict[str, Any]] = {}
+    polled_orders: list[FbsOrder] = []
+    from app.services import fbs_observed_handoff_service as observed
     last_created_at: datetime | None = None
     last_id: uuid.UUID | None = None
     for _batch in range(MAX_SYNC_STATUS_BATCHES):
         filters = [
             FbsOrder.tenant_id == tenant_id,
             FbsOrder.seller_id == seller_id,
-            FbsOrder.status.not_in(tuple(STATUSES_EXCLUDED_FROM_WB_SYNC)),
+            FbsOrder.marketplace == "wb",
+            or_(FbsOrder.status.not_in(tuple(STATUSES_EXCLUDED_FROM_WB_SYNC)),
+                observed.terminal_repair_condition(session)),
         ]
         if last_created_at is not None and last_id is not None:
             filters.append(
@@ -942,6 +960,7 @@ async def sync_order_statuses(
             )
         stmt = (
             select(FbsOrder)
+            .options(selectinload(FbsOrder.product_positions))
             .where(*filters)
             .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
             .limit(SYNC_STATUS_BATCH_SIZE)
@@ -950,6 +969,7 @@ async def sync_order_statuses(
         orders = list(res.scalars().all())
         if not orders:
             break
+        polled_orders.extend(orders)
 
         orders_by_wb_id: dict[int, list[FbsOrder]] = {}
         for order in orders:
@@ -993,19 +1013,45 @@ async def sync_order_statuses(
         last_id = last_row.id
         if len(orders) < SYNC_STATUS_BATCH_SIZE:
             break
+    from app.services.wildberries_fbs_client import fetch_marketplace_supply_order_ids
+    memberships: dict[uuid.UUID, set[int]] = {}
+    for supply in await session.scalars(select(FbsSupply).where(
+        FbsSupply.id.in_({o.supply_id for o in polled_orders if o.supply_id}),
+        FbsSupply.tenant_id == tenant_id, FbsSupply.seller_id == seller_id,
+        FbsSupply.marketplace == "wb", FbsSupply.source == "wms",
+    )):
+        if supply.wb_supply_id:
+            try:
+                memberships[supply.id] = set(await fetch_marketplace_supply_order_ids(
+                    http_client, api_token=api_token, supply_id=supply.wb_supply_id,
+                ))
+            except (WildberriesClientError, httpx.HTTPError):
+                memberships[supply.id] = set()
+    observations = {}
+    for order in polled_orders:
+        row = snapshots.get(order.id) or {}
+        targets = observed.expected_quantities(order) if (
+            order.supply_id is not None
+            and order.wb_order_id in memberships.get(order.supply_id, set())
+            and observed.wb_proves_handoff(row)
+        ) else {}
+        observations[order.id] = observed.make_observation(order, targets, row)
+    await observed.save_observations(session, tenant_id, seller_id, observations)
     # Fetch every page before taking write locks. The caller owns the commit;
     # all parents must therefore be locked before the first order, across pages.
     from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
 
-    order_ids = list(snapshots)
+    order_ids = [o.id for o in polled_orders]
     await lock_order_batch_packaging_rows(session, tenant_id, order_ids)
+    await observed.lock_handoff_batch_products(session, tenant_id, seller_id, order_ids)
     orders = list((await session.scalars(select(FbsOrder).where(
         FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
         FbsOrder.id.in_(order_ids),
-        FbsOrder.status.not_in(tuple(STATUSES_EXCLUDED_FROM_WB_SYNC)),
-    ).order_by(FbsOrder.id).execution_options(populate_existing=True))).all())
+        FbsOrder.marketplace == "wb",
+    ).options(selectinload(FbsOrder.product_positions))
+        .order_by(FbsOrder.id).execution_options(populate_existing=True))).all())
     for order in orders:
-        status_row = snapshots[order.id]
+        status_row = snapshots.get(order.id) or {}
         wb_status = _wb_status_from_row(status_row)
         supplier_status = _supplier_status_from_row(status_row)
         if wb_status is None and supplier_status is None:
@@ -1015,6 +1061,11 @@ async def sync_order_statuses(
             actor_user_id=actor_user_id,
         )
         updated += 1
+    for supply_id in sorted({o.supply_id for o in orders if o.supply_id}, key=str):
+        observed_supply = await session.scalar(select(FbsSupply).where(FbsSupply.id == supply_id)
+                                               .execution_options(populate_existing=True))
+        if observed_supply is not None:
+            await observed.conduct_supply(session, observed_supply)
     return updated
 
 

@@ -1,0 +1,32 @@
+{
+  "product": "1fd2d92dc30eb376c1d8a8e27238e52d963a196e",
+  "fixture": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+  "probe": "d940e4722304366d6d8ccac313dec0500848758b",
+  "scope": "Real unchanged workspace/theme, synthetic fetch only; no deployed backend, live API, printer or external cycle",
+  "cases": [
+    {
+      "case": "C10 double UI click",
+      "status": "PASS",
+      "putCount": 1
+    },
+    {
+      "case": "C16 rejected/correction/save/GET refresh",
+      "status": "PASS"
+    },
+    {
+      "case": "C16 supplemental",
+      "status": "PASS",
+      "scope": "rejected/correct/save/GET refresh/keyboard tab/remount synthetic readback; order B remains untested"
+    }
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.57",
+    "revision": "@73c14f6228d7cd537c855007e8f88678969cc0eb",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.11"
+  },
+  "geometryFailures": [],
+  "status": "PASS",
+  "errors": []
+}

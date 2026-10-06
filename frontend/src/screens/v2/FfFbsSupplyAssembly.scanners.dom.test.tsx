@@ -3,13 +3,12 @@ import { act, useEffect } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
-import { useScanIntake } from '../../hooks/useScanIntake'
 import type { FbsWorkspace } from './fbsApi'
 import type { FbsAssemblyFrameControl } from './FbsAssemblySupplyFrame'
 import { saveFbsAssemblyStage } from './fbsSupplyAssembly'
 
-const { fetchWorkspace, wbScan, ozonScan } = vi.hoisted(() => ({
-  fetchWorkspace: vi.fn(), wbScan: vi.fn(), ozonScan: vi.fn(),
+const { fetchWorkspace, wbScan, wbQrPrint, ozonScan } = vi.hoisted(() => ({
+  fetchWorkspace: vi.fn(), wbScan: vi.fn(), wbQrPrint: vi.fn(), ozonScan: vi.fn(),
 }))
 vi.mock('./fbsApi', async (importOriginal) => ({
   ...await importOriginal<typeof import('./fbsApi')>(), fetchFbsWorkspace: fetchWorkspace,
@@ -23,20 +22,16 @@ vi.mock('./FfFbsSupplyWorkspace', () => ({
     const ozon = supplyId === 'ozon'
     const register = assemblyFrame.registerScanner
     useEffect(() => {
-      if (ozon) return
-      register?.(supplyId, { scan: wbScan, hasPending: () => false, hasSavedAttempt: () => false, view: () => null })
+      const scan = ozon
+        ? async (raw: string) => { await ozonScan(raw) }
+        : async (raw: string) => { await wbScan(raw); await wbQrPrint(raw) }
+      register?.(supplyId, {
+        matches: (raw) => ozon ? raw.startsWith('OZON-') : !raw.startsWith('OZON-'),
+        scan, hasPending: () => false, hasSavedAttempt: () => false, view: () => null,
+      })
       return () => register?.(supplyId, null)
     }, [ozon, register, supplyId])
-    // The production Ozon workspace retains this active-frame condition.
-    // Use the real scanner hook so a physical burst exposes double listeners.
-    const intake = useScanIntake({
-      enabled: open && ozon && assemblyFrame.active && assemblyFrame.visible && assemblyFrame.stage !== 'boxes',
-      emitRaw: true, onScan: ozonScan,
-    })
-    return <div ref={intake.bindRoot} data-stage={assemblyFrame.stage}>
-      <button data-testid={`activate-${supplyId}`} onClick={assemblyFrame.onActivate}>Начать</button>
-      <button data-testid={`finish-${supplyId}`} onClick={assemblyFrame.onDeactivate}>Завершить</button>
-    </div>
+    return open ? <div data-stage={assemblyFrame.stage} data-testid={`registered-${supplyId}`} /> : null
   },
 }))
 
@@ -54,6 +49,7 @@ beforeAll(() => { (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REAC
 beforeEach(() => {
   window.sessionStorage.clear()
   wbScan.mockReset().mockResolvedValue(undefined)
+  wbQrPrint.mockReset().mockResolvedValue(undefined)
   ozonScan.mockReset().mockResolvedValue(undefined)
   fetchWorkspace.mockReset().mockImplementation(async (_token, _headers, id: string) => workspace(id))
   host = document.createElement('div')
@@ -65,9 +61,6 @@ async function render(ids: string[]) {
   saveFbsAssemblyStage(ids, 'packing', window.sessionStorage)
   await act(async () => root.render(<FfFbsSupplyAssembly token="test" authHeaders={authHeaders} supplyIds={ids} open onClose={() => undefined} />))
 }
-async function click(id: string) {
-  await act(async () => document.querySelector<HTMLButtonElement>(`[data-testid="${id}"]`)!.click())
-}
 async function scan(raw: string) {
   await act(async () => {
     (document.activeElement as HTMLElement | null)?.blur()
@@ -76,7 +69,7 @@ async function scan(raw: string) {
   })
 }
 
-describe('WMS-604 mixed marketplace scan ownership', () => {
+describe('WMS-604/WMS-666 unified marketplace scan ownership', () => {
   it('opens boxes after packing and suspends scan intake until returning to packing', async () => {
     await render(['wb', 'ozon'])
     const tabs = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
@@ -89,40 +82,47 @@ describe('WMS-604 mixed marketplace scan ownership', () => {
     await act(async () => tabs.find((tab) => tab.textContent === 'Упаковка и маркировка')!.click())
     await scan('4600000000017')
     expect(wbScan).toHaveBeenCalledTimes(1)
+    expect(wbQrPrint).toHaveBeenCalledTimes(1)
+    expect(ozonScan).not.toHaveBeenCalled()
   })
 
-  it('routes each physical scan once across WB → active Ozon → WB', async () => {
+  it('routes each physical scan once across WB → Ozon → WB without an active frame', async () => {
     await render(['wb', 'ozon'])
+    expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
+    expect(document.querySelector('[data-testid^="activate-"]')).toBeNull()
+    expect(document.querySelector('[data-testid^="finish-"]')).toBeNull()
     await scan('4600000000017')
     expect(wbScan).toHaveBeenCalledTimes(1)
+    expect(wbQrPrint).toHaveBeenCalledTimes(1)
     expect(ozonScan).not.toHaveBeenCalled()
 
-    await click('activate-ozon')
-    expect(document.querySelector<HTMLInputElement>('[data-testid="fbs-unified-scan"] input')!.disabled).toBe(true)
     await scan('OZON-LABEL-1')
     expect(ozonScan).toHaveBeenCalledExactlyOnceWith('OZON-LABEL-1')
     expect(wbScan).toHaveBeenCalledTimes(1)
+    expect(wbQrPrint).toHaveBeenCalledTimes(1)
 
-    await click('finish-ozon')
     await scan('4600000000017')
     expect(wbScan).toHaveBeenCalledTimes(2)
-    expect(ozonScan).toHaveBeenCalledTimes(1)
-
-    await click('activate-ozon')
-    await click('activate-wb')
-    await scan('4600000000017')
-    expect(wbScan).toHaveBeenCalledTimes(3)
+    expect(wbQrPrint).toHaveBeenCalledTimes(2)
     expect(ozonScan).toHaveBeenCalledTimes(1)
   })
-  it('leaves Ozon-only assemblies to their original scanner without an empty WB consumer', async () => {
+
+  it('routes Ozon-only scans through the one common router with WB QR disabled', async () => {
     await render(['ozon'])
+    expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
+    expect(document.querySelector<HTMLInputElement>('[data-testid="fbs-unified-scan"] input')!.disabled).toBe(false)
+    const qr = document.querySelector<HTMLInputElement>('[data-testid="fbs-scan-print-qr-toggle"] input')!
+    expect(qr.disabled).toBe(true)
+    expect(qr.checked).toBe(false)
     await scan('OZON-BEFORE-ACTIVATE')
     expect(wbScan).not.toHaveBeenCalled()
-    expect(ozonScan).not.toHaveBeenCalled()
+    expect(wbQrPrint).not.toHaveBeenCalled()
+    expect(ozonScan).toHaveBeenCalledExactlyOnceWith('OZON-BEFORE-ACTIVATE')
     expect(document.querySelector('[role="alert"]')).toBeNull()
-    await click('activate-ozon')
     await scan('OZON-LABEL-2')
-    expect(ozonScan).toHaveBeenCalledExactlyOnceWith('OZON-LABEL-2')
+    expect(ozonScan).toHaveBeenCalledTimes(2)
+    expect(ozonScan).toHaveBeenLastCalledWith('OZON-LABEL-2')
+    expect(wbQrPrint).not.toHaveBeenCalled()
     expect(document.querySelector('[role="alert"]')).toBeNull()
   })
 })

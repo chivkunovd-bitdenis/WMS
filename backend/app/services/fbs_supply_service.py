@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import uuid
 from collections import defaultdict
@@ -2003,13 +2004,23 @@ async def add_orders_to_existing_supply(
                 retryable=True,
                 http_status=503,
             )
+        # WB's accepted mutation may appear in the supply list later. Recover
+        # already visible orders before sending anything again on a UI retry.
+        state, confirmed = await reconcile_supply_orders(
+            http_client,
+            api_token=token,
+            wb_supply_id=supply.wb_supply_id,
+            expected_wb_order_ids=existing_wb_order_ids.union(requested_wb_order_ids),
+        )
+        missing_ids = [oid for oid in requested_wb_order_ids if oid not in confirmed]
         try:
-            await _execute_wb_batch_add(
-                http_client,
-                api_token=token,
-                wb_supply_id=supply.wb_supply_id,
-                wb_order_ids=requested_wb_order_ids,
-            )
+            if missing_ids:
+                await _execute_wb_batch_add(
+                    http_client,
+                    api_token=token,
+                    wb_supply_id=supply.wb_supply_id,
+                    wb_order_ids=missing_ids,
+                )
         except WildberriesClientError as exc:
             if exc.code != "transport_error":
                 error = _fbs_supply_error_from_wb(
@@ -2024,17 +2035,34 @@ async def add_orders_to_existing_supply(
                     extra_context={"wb_order_ids": requested_wb_order_ids},
                 )
                 raise error from exc
-        state, confirmed = await reconcile_supply_orders(
-            http_client,
-            api_token=token,
-            wb_supply_id=supply.wb_supply_id,
-            expected_wb_order_ids=existing_wb_order_ids.union(requested_wb_order_ids),
-        )
+        # Only reads are repeated. Keep this operator wait bounded, including
+        # slow HTTP calls, and never turn an unconfirmed order into success.
+        if missing_ids:
+            try:
+                async with asyncio.timeout(5):
+                    for delay in (0, 0.25, 0.75, 1.5):
+                        if delay:
+                            await asyncio.sleep(delay)
+                        state, confirmed = await reconcile_supply_orders(
+                            http_client,
+                            api_token=token,
+                            wb_supply_id=supply.wb_supply_id,
+                            expected_wb_order_ids=existing_wb_order_ids.union(
+                                requested_wb_order_ids
+                            ),
+                        )
+                        if set(requested_wb_order_ids) <= confirmed:
+                            break
+            except TimeoutError:
+                pass
     accepted_orders = [order for order in orders if int(order.wb_order_id) in confirmed]
     if not accepted_orders and state != WB_OPERATION_STATE_CONFIRMED:
         raise FbsSupplyError(
             "wb_pending_confirmation",
-            message="WB не подтвердил добавление заказов — повторите операцию.",
+            message=(
+                "WB пока не подтвердил добавление заказов. "
+                "Подождите, проверьте состав поставки и повторите попытку позже."
+            ),
             context={"wb_supply_id": supply.wb_supply_id, "supply_id": str(supply.id)},
             retryable=True,
             http_status=504,

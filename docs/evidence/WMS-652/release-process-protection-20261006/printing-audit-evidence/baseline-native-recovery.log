@@ -1,0 +1,8 @@
+test_receipt_survives_restart_without_duplicate (test_wms_print_direct.DirectPrintTest.test_receipt_survives_restart_without_duplicate) ... ok
+test_uncertain_submission_not_repeated (test_wms_print_direct.DirectPrintTest.test_uncertain_submission_not_repeated) ... ok
+test_changed_content_rejected (test_wms_print_direct.DirectPrintTest.test_changed_content_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.006s
+
+OK

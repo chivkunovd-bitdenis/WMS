@@ -1,0 +1,364 @@
+diff --git a/frontend/src/screens/ff/FfInboundRequestView.tsx b/frontend/src/screens/ff/FfInboundRequestView.tsx
+index 5a872932f..dcc92a7a1 100644
+--- a/frontend/src/screens/ff/FfInboundRequestView.tsx
++++ b/frontend/src/screens/ff/FfInboundRequestView.tsx
+@@ -1,4 +1,4 @@
+-import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations } from "./inboundDraftPersistence"
++import { beginIntakePickerAttempt, finishIntakePickerAttempt, intakeMutation, readIntake, saveIntakeTotals, sendIntakeMutations, saveInboundLabelAttempt, type InboundLabelAttempt } from "./inboundDraftPersistence"
+ import { inboundMarketplaceLabel } from "./inboundDraftMarketplace"
+ import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
+ import {
+@@ -1606,6 +1606,7 @@ export function FfInboundRequestView({
+     | { kind: 'cargo-all' }
+ 
+   const [boxPrintTarget, setBoxPrintTarget] = useState<InboundBoxPrintTarget | null>(null)
++  const inboundLabelPrinting = useRef(false)
+ 
+   type InboundInternalLabelTarget =
+     | { kind: 'box'; id: string; number: number; barcode: string }
+@@ -1616,33 +1617,73 @@ export function FfInboundRequestView({
+     labelSize: LabelSize,
+   ) => {
+     if (targets.length === 0) return
++    if (inboundLabelPrinting.current) return
++    inboundLabelPrinting.current = true
+     setBusy(true)
+     setError(null)
+     try {
+-      // Один iframe = одно задание принтеру. Иначе «Печать коробов» открывает
+-      // диалог принтера для каждого короба и рвёт непрерывную ленту.
+-      printBarcodeLabels(targets.map((target) => ({
+-        title: target.kind === 'box'
+-          ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
+-          : `Грузоместо № ${target.number}`,
+-        barcode: target.barcode,
+-        barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
+-        labelSize,
+-        layout: 'internalBox' as const,
+-      })))
+-      for (const target of targets) {
+-        const path = target.kind === 'box'
++      let attempt = readIntake(token, requestId).labelAttempt
++      if (attempt && attempt.state !== 'complete') {
++        // Read the original document before repairing technical marks. Neither
++        // a missing mark response nor afterprint authorizes another transfer.
++        const res = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}`), { headers: authHeaders })
++        if (!res.ok) throw new Error(await readApiErrorMessage(res))
++        const current = await res.json() as InboundDetail
++        if (attempt.state === 'unknown') {
++          if (window.confirm('Исход предыдущей передачи этикеток неизвестен. Проверьте очередь принтера и бумагу. Результат проверен? Следующее отдельное подтверждение разрешит перепечатку.')) {
++            saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
++          }
++          throw new Error('Предыдущая лента не отправлена повторно. Проверьте результат перед отдельным подтверждением перепечатки.')
++        }
++        const printedBefore = attempt.printedBefore
++        attempt = { ...attempt, paths: attempt.paths.filter((path) => {
++          const id = path.split('/').at(-2)
++          const items = path.includes('/cargo-places/') ? current.cargo_places : current.boxes
++          const printedAt = items?.find((item) => item.id === id)?.label_printed_at
++          return !printedAt || printedAt === printedBefore[path]
++        }) }
++        saveInboundLabelAttempt(token, requestId, attempt)
++      } else {
++        const paths = targets.map((target) => target.kind === 'box'
+           ? `/operations/inbound-intake-requests/${requestId}/boxes/${target.id}/mark-label-printed`
+-          : `/operations/inbound-intake-requests/${requestId}/cargo-places/${target.id}/mark-label-printed`
++          : `/operations/inbound-intake-requests/${requestId}/cargo-places/${target.id}/mark-label-printed`)
++        const printedBefore = Object.fromEntries(targets.map((target, index) => {
++          const items = target.kind === 'box' ? detail?.boxes : detail?.cargo_places
++          return [paths[index], items?.find((item) => item.id === target.id)?.label_printed_at ?? null]
++        }))
++        const prepared: InboundLabelAttempt = { id: randomId(), printedBefore, html: '', paths, state: 'unknown' }
++        // One complete iframe, with concurrent decode, before technical marks.
++        await printBarcodeLabels(targets.map((target) => ({
++          title: target.kind === 'box'
++            ? `Короб ${inboundBoxDisplayLabel(target.number, target.barcode, numberedInboundBoxLabels)}`
++            : `Грузоместо № ${target.number}`,
++          barcode: target.barcode,
++          barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
++          labelSize,
++          layout: 'internalBox' as const,
++        })), { beforeTransfer: (html) => {
++          prepared.html = html
++          // Synchronous durable write must succeed before external print.
++          saveInboundLabelAttempt(token, requestId, prepared)
++        } })
++        attempt = { ...prepared, state: 'transferred' }
++        saveInboundLabelAttempt(token, requestId, attempt)
++      }
++      while (attempt.paths.length) {
++        const path = attempt.paths[0]
+         const res = await fetch(apiUrl(path), { method: 'POST', headers: authHeaders })
+         if (!res.ok) {
+           throw new Error(await readApiErrorMessage(res))
+         }
++        attempt = { ...attempt, paths: attempt.paths.slice(1) }
++        saveInboundLabelAttempt(token, requestId, attempt)
+       }
+       await loadDetail()
++      saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
+     } catch (e) {
+       setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
+     } finally {
++      inboundLabelPrinting.current = false
+       setBusy(false)
+     }
+   }
+diff --git a/frontend/src/screens/ff/inboundDraftPersistence.ts b/frontend/src/screens/ff/inboundDraftPersistence.ts
+index 8d7271280..2760d2e2d 100644
+--- a/frontend/src/screens/ff/inboundDraftPersistence.ts
++++ b/frontend/src/screens/ff/inboundDraftPersistence.ts
+@@ -3,7 +3,15 @@ import { randomId } from '../../utils/randomId'
+ import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
+ 
+ export type IntakeMutation = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; body?: Record<string, unknown> }
++export type InboundLabelAttempt = {
++  id: string
++  printedBefore: Record<string, string | null>
++  html: string
++  paths: string[]
++  state: 'unknown' | 'transferred' | 'complete'
++}
+ type SavedIntake = {
++  labelAttempt?: InboundLabelAttempt
+   pending?: IntakeMutation[]
+   totals?: Record<string, string>
+   pickerAttempt?: true
+@@ -32,6 +40,10 @@ export function readIntake(token: string, document: string): SavedIntake {
+ function writeIntake(token: string, document: string, value: SavedIntake) {
+   localStorage.setItem(intakeStorageKey(token, document), JSON.stringify(value))
+ }
++/** Retain the exact print source in the existing tenant/user/document recovery record. */
++export function saveInboundLabelAttempt(token: string, document: string, labelAttempt: InboundLabelAttempt) {
++  writeIntake(token, document, { ...readIntake(token, document), labelAttempt })
++}
+ export function saveIntakeTotals(token: string, document: string, totals: Record<string, string>) {
+   writeIntake(token, document, { ...readIntake(token, document), totals })
+ }
+diff --git a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+index c2cdf2f92..be2cf7377 100644
+--- a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
++++ b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+@@ -2787,6 +2787,7 @@ export function FfFbsSupplyWorkspace({
+     printWindow.document.write(buildFbsPickingListPrintHtml({
+       supplyName: workspace.supply.name,
+       wbSupplyId: workspace.supply.wb_supply_id,
++      marketplace: workspace.supply.marketplace,
+       sellerName: workspace.supply.seller.name,
+       wmsWarehouseName: workspace.supply.wms_warehouse.name,
+       routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
+diff --git a/frontend/src/screens/v2/fbsSupplyAssembly.ts b/frontend/src/screens/v2/fbsSupplyAssembly.ts
+index ca8b892ec..cb71ea184 100644
+--- a/frontend/src/screens/v2/fbsSupplyAssembly.ts
++++ b/frontend/src/screens/v2/fbsSupplyAssembly.ts
+@@ -332,6 +332,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
+             key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
+             name: position.name,
+             size: position.size ?? null,
++            color: position.color?.trim() || null,
+             imageUrl: position.image_url ?? null,
+             identifiers: [
+               position.seller_article,
+@@ -345,6 +346,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
+             key: order.product.id ?? `unmapped-${order.id}`,
+             name: order.product.name,
+             size: order.product.size,
++            color: order.product.color?.trim() || null,
+             imageUrl: order.product.image_url,
+             identifiers: [
+               order.product.seller_article,
+@@ -366,6 +368,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
+         }
+         current.required += row.required
+         current.picked += row.picked
++        if (!current.color) current.color = row.color
+         // Field name is historical; for Ozon it contains the posting number.
+         current.wbOrders.push(order.marketplace === 'ozon'
+           ? (order.external_order_id ?? String(order.wb_order_id))
+diff --git a/frontend/src/screens/v2/fbsUx.ts b/frontend/src/screens/v2/fbsUx.ts
+index 9abb902c8..85ca6fcde 100644
+--- a/frontend/src/screens/v2/fbsUx.ts
++++ b/frontend/src/screens/v2/fbsUx.ts
+@@ -294,6 +294,7 @@ export function metadataKindLabel(kind: string) {
+ export type FbsPickingListPrintRow = {
+   name: string
+   size: string | null
++  color?: string | null
+   imageUrl: string | null
+   identifiers: string[]
+   locations: string[]
+@@ -365,6 +366,7 @@ export function fbsBuildPickingRows(
+         key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
+         name: position.name,
+         size: null,
++        color: position.color?.trim() || null,
+         imageUrl: position.image_url ?? null,
+         identifiers: [
+           position.seller_article,
+@@ -378,6 +380,7 @@ export function fbsBuildPickingRows(
+         key: order.product.id ?? `unmapped-${order.id}`,
+         name: order.product.name,
+         size: order.product.size,
++        color: order.product.color?.trim() || null,
+         imageUrl: order.product.image_url,
+         identifiers: [
+           order.product.seller_article,
+@@ -400,7 +403,10 @@ export function fbsBuildPickingRows(
+       }
+       current.required += row.required
+       current.picked += row.picked
+-      current.wbOrders.push(order.wb_order_id)
++      if (!current.color) current.color = row.color
++      current.wbOrders.push(isOzonSupply
++        ? (order.external_order_id ?? order.wb_order_id)
++        : order.wb_order_id)
+       current.stickerCodes.push(order.sticker.code)
+       const locations = order.inventory.locations
+         .filter((location) => location.available_unpacked > 0)
+@@ -504,6 +510,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
+           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
+         </td>
+         <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
++        <td class="color">${escapePrintHtml(row.color?.trim() || '—')}</td>
+         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
+         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
+         <td class="sticker">${stickerCodes}</td>
+@@ -537,6 +544,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
+       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
+       .size { width: 78px; text-align: center; }
+       td.size { font-size: 20px; font-weight: 700; }
++      .color { width: 78px; }
+       .quantity { width: 62px; text-align: center; font-weight: 700; }
+       .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
+@@ -553,8 +561,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
+       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
+     </div>
+     <table>
+-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+-      <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
++      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th class="color">Цвет</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
++      <tbody>${rows || `<tr><td colspan="11">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+     </table>
+     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
+     <script>
+diff --git a/frontend/src/utils/printBarcodeLabel.ts b/frontend/src/utils/printBarcodeLabel.ts
+index 8059040d6..c168a086f 100644
+--- a/frontend/src/utils/printBarcodeLabel.ts
++++ b/frontend/src/utils/printBarcodeLabel.ts
+@@ -49,8 +49,10 @@ function labelPageHtml(options: BarcodeLabelPrintOptions, index: number, total:
+  * Массовая печать намеренно собирает все страницы в один iframe: термопринтер
+  * получает непрерывную ленту, а не набор отдельных браузерных заданий.
+  */
+-export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void {
+-  if (optionsList.length === 0) return
++export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void
++export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff: { beforeTransfer: (html: string) => void }): Promise<void>
++export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff?: { beforeTransfer: (html: string) => void }): void | Promise<void> {
++  if (optionsList.length === 0) return handoff ? Promise.resolve() : undefined
+   const first = optionsList[0]!
+   const { labelSize, layout = 'default' } = first
+   if (optionsList.some((options) => options.labelSize?.id !== labelSize?.id || (options.layout ?? 'default') !== layout)) {
+@@ -101,6 +103,15 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
+     window.__WMS_LAST_PRINT_HTML__ = html
+   }
+ 
++  // Awaitable only for inbound batches. Existing scan-to-print callers retain
++  // their fire-and-forget contract and do not acquire a new rejected promise.
++  let resolveTransfer: (() => void) | undefined
++  let rejectTransfer: ((error: unknown) => void) | undefined
++  const transferred = handoff ? new Promise<void>((resolve, reject) => {
++    resolveTransfer = resolve
++    rejectTransfer = reject
++  }) : undefined
++
+   const iframe = document.createElement('iframe')
+   iframe.setAttribute('aria-hidden', 'true')
+   iframe.style.position = 'fixed'
+@@ -129,6 +140,7 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
+     const w = iframe.contentWindow
+     if (!w) {
+       cleanup('image-error')
++      rejectTransfer?.(new Error('Не удалось открыть источник этикеток.'))
+       return
+     }
+     try {
+@@ -138,32 +150,72 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
+     }
+     setTimeout(() => {
+       // Нельзя удалять iframe сразу после print(): системное окно предпросмотра
+-      // ещё читает data URL из этого документа. afterprint — единственный
+-      // успешный конец печати; до него источник этикетки обязан оставаться жив.
++      // ещё читает data URL из этого документа. До afterprint источник обязан
++      // оставаться жив; само событие не подтверждает выход этикеток на бумаге.
+       w.addEventListener('afterprint', () => cleanup('afterprint'), { once: true })
+       try {
++        handoff?.beforeTransfer(html)
+         if (window.__WMS_CAPTURE_PRINT_HTML__) {
+           window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
+         }
+         w.print()
+-      } catch {
++        resolveTransfer?.()
++      } catch (error) {
+         cleanup('image-error')
++        rejectTransfer?.(error)
+       }
+     }, 100)
+   }
+ 
+-  iframe.srcdoc = html
+   iframe.onload = () => {
+     const doc = iframe.contentDocument
+     const images = Array.from(doc?.querySelectorAll<HTMLImageElement>('img.barcode') ?? [])
+     if (images.length === 0) {
+       cleanup('image-error')
++      rejectTransfer?.(new Error('Не удалось загрузить этикетки.'))
+       return
+     }
+-    Promise.all(images.map((image) => image.decode()))
++    const decodeImages = async () => {
++      if (!handoff) {
++        // Preserve the existing scan-to-print path, including its timing.
++        await Promise.all(images.map((image) => image.decode()))
++        return
++      }
++      // decode() temporarily retains decoded image resources through rendering.
++      // Starting the entire inbound tape in one turn can exhaust that budget
++      // even when the PNGs themselves are valid. Keep parallel work small and let a
++      // rendering turn finish before requesting the next group. The parent
++      // window supplies frames: the zero-sized print iframe may be throttled.
++      const groupSize = 32
++      for (let start = 0; start < images.length; start += groupSize) {
++        await Promise.all(images.slice(start, start + groupSize).map((image) => image.decode()))
++        if (start + groupSize < images.length) {
++          await new Promise<void>((resolve) => {
++            // A background tab can suspend animation frames. Still yield a
++            // task there, without leaving preparation waiting indefinitely.
++            let frame = 0
++            const done = () => {
++              window.cancelAnimationFrame(frame)
++              clearTimeout(timer)
++              resolve()
++            }
++            const timer = setTimeout(done, 100)
++            frame = window.requestAnimationFrame(() => {
++              frame = window.requestAnimationFrame(done)
++            })
++          })
++        }
++      }
++    }
++    decodeImages()
+       .then(printNow)
+-      .catch(() => cleanup('image-error'))
++      .catch((error) => {
++        cleanup('image-error')
++        rejectTransfer?.(error)
++      })
+   }
++  iframe.srcdoc = html
++  return transferred
+ }
+ 
+ /** Обратная совместимость для одиночной печати. */

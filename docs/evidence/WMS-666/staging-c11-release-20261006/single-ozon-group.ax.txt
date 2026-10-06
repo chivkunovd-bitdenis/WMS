@@ -1,0 +1,69 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57".
+1 AXWebArea WMS · Фулфилмент, URL: web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57
+	2 container
+		3 heading Сборка · 1 поставка, Value: 6
+			4 text Сборка ·  1 поставка
+		5 text WMS617 · Видео селлер 1
+		6 progress indicator 0
+		7 text 0  из  5  подготовлено к отгрузке
+		8 button Печать листа подбора
+		9 button Закрыть
+		10 tab group
+			11 tab (selectable, settable, boolean) Состав, Value: 0
+			12 tab (selectable, settable, boolean) Подбор, Value: 0
+			13 tab (selected, settable, boolean) Упаковка и маркировка, Value: 1
+			14 tab (selectable, settable, boolean) Короба, Value: 0
+		18 text field (settable)
+		19 checkbox (disabled, settable, integer) Description: Печатать QR, Value: 0
+		20 text Печатать QR
+		21 checkbox (settable, integer) Description: Печатать ЧЗ, Value: 0
+		22 text Печатать ЧЗ
+		23 checkbox (settable, integer) Description: Перепечатывать ЧЗ, Value: 0
+		24 text Перепечатывать ЧЗ
+		25 container Отменить последний скан
+			26 button (disabled) Отменить последний скан
+		15 text Размер этикетки
+		16 combo box (collapsed) Размер этикетки 58 × 40 мм, Value: 58 × 40 мм, Secondary Actions: Expand
+			17 text 58 × 40 мм
+		27 button Печать всего (3)
+			28 text Печать всего (
+			29 text 3
+			30 text )
+		31 checkbox (settable, integer) Description: Выбрать заказ WMS617-000012, Value: 0
+		32 text WMS617 · Ozon кружка
+		33 text WMS617-04 · SKU 617104 · 2061700004000 · отправление Ozon WMS617-000012 Размер
+		34 text M
+		35 text Стикер
+		36 container
+			37 text WMS617  0012
+		38 text ЧЗ
+		39 text —
+		40 button (disabled) ТЗ
+		41 button Печать ЧЗ и ШК
+		42 button Перепечатать
+		43 checkbox (settable, integer) Description: Выбрать заказ WMS617-000010, Value: 0
+		44 text WMS617 · Ozon плед с двумя ШК
+		45 text WMS617-05 · SKU 617105 · 2061700005007 · отправление Ozon WMS617-000010 Размер
+		46 text M
+		47 text Стикер
+		48 container
+			49 text WMS617  0010
+		50 text ЧЗ
+		51 text —
+		52 button (disabled) ТЗ
+		53 button Печать ЧЗ и ШК
+		54 button Перепечатать
+		55 checkbox (settable, integer) Description: Выбрать заказ WMS617-000011, Value: 0
+		56 text WMS617 · WB/Ozon сумка
+		57 text WMS617-06 · SKU 617106 · 2061700006004 · отправление Ozon WMS617-000011 Размер
+		58 text M
+		59 text Стикер
+		60 container
+			61 text WMS617  0011
+		62 text ЧЗ
+		63 text —
+		64 button (disabled) ТЗ
+		65 button Печать ЧЗ и ШК
+		66 button Перепечатать
+
+The focused UI element is 13 tab (selected, settable, boolean) Упаковка и маркировка, Value: 1

@@ -1,0 +1,141 @@
+{
+  "task": "WMS-663",
+  "fixture_corrections": [
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+      "files": [
+        {
+          "path": "backend/tests/test_wms663_customs_documents_contract.py",
+          "transform": "wms663-uuid-before-expire",
+          "before_blob": "5fb61d0c51a6b4f2d84f3b5bf17397f622059283",
+          "after_blob": "4e1aff5a80445fa61b5697d60a26985427dfd28e"
+        },
+        {
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+          "transform": "wms663-exemplar-save-selector",
+          "before_blob": "21baad5243f664aca69ff817407ea17e66f59155",
+          "after_blob": "8548a75eb6963edcd5e3b3755e0a618d918f9f94"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+        "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+        "evidence_commit": "4306d91b3a1963999780329127c19144e4902cf1",
+        "evidence": "docs/reviews/wms663-astra-7d9e9.md",
+        "evidence_blob": "4d0860e779ff6325584a14ae39065aecf12fd7b3"
+      }
+    },
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "1fd2d92dc30eb376c1d8a8e27238e52d963a196e",
+      "correction_commit": "17ce363a8360620bc6b843e003278cd4ea106678",
+      "files": [
+        {
+          "path": "backend/tests/test_wms663_customs_documents_contract.py",
+          "transform": "wms663-complete-positive-status-fixtures",
+          "before_blob": "4e1aff5a80445fa61b5697d60a26985427dfd28e",
+          "after_blob": "c92c075ba9f375c578538b776207cdc6b8b56ab3"
+        }
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "1fd2d92dc30eb376c1d8a8e27238e52d963a196e",
+        "correction_commit": "17ce363a8360620bc6b843e003278cd4ea106678",
+        "evidence": "docs/reviews/wms663-astra-1fd2d92.md",
+        "evidence_commit": "e27c0eab577fd7cc183aeec14c2451e1c7d8b7c2",
+        "evidence_blob": "ea2aab84f2b8d48966c74f11abd463ced0837228"
+      }
+    },
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+      "correction_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+      "files": [
+        {
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+          "transform": "wms663-close-accessible-selector",
+          "before_blob": "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
+          "after_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+        "correction_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+        "evidence": "docs/reviews/wms663-astra-d9e022697.md",
+        "evidence_commit": "146fe6e3ad92844601c525521d20343c31340456",
+        "evidence_blob": "725f1510d8e7406bfc1077aebb0a0d17356773b7",
+        "scope": "Exact one-line accessible Close selector correction only; 16 expectations unchanged"
+      }
+    },
+    {
+      "contract_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+      "source_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+      "correction_commit": "a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62",
+      "files": [
+        {
+          "path": "frontend/src/screens/v2/OzonDocumentsAbsence.required-orders.dom.test.tsx",
+          "transform": "wms663-known-no-documents-complete-requirements",
+          "before_blob": "5a508673b78388e44c903fe503fd76f3e48a7cde",
+          "after_blob": "d96fd44965a7f0b8806d87fe3d4f88243cad1f5e"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "68c3bd3052e201c16b8f9a1d0fe1282cc91615c3",
+        "correction_commit": "a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62",
+        "evidence": "docs/reviews/wms663-666-owner-correction-independent-review-20261006.md",
+        "evidence_commit": "764701a36738170b255cb2faf8fdab3a77609e4d",
+        "evidence_blob": "b92b8a9e0b041f4e1253d4b89037c9271aad6f7f"
+      }
+    }
+  ],
+  "owner_supersessions": [
+    {
+      "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "prior_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+      "before_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+      "changes": [
+        [
+          "35ac50caa77f1ca5eb1905a23a730e1dee1e2f45",
+          "87d14b74cbfa4f7f119bb0c6374929259fed5dc5"
+        ],
+        [
+          "23b222dede4869ae6035c55175f5d14f6a6af5f4",
+          "e177548bb5a728cad63b32528071c1c5ac9995e1"
+        ]
+      ],
+      "owner_request": {
+        "commit": "4c9e1238c85a50a9238bc109651c79cac5f10e03",
+        "path": "docs/reviews/wms663-666-frontend-rollback-scope-20261006.md",
+        "blob": "664aa8ea5e279c04f9b6219a8440142fd7bc142a"
+      },
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+        "correction_commit": "23b222dede4869ae6035c55175f5d14f6a6af5f4",
+        "evidence": "docs/reviews/wms663-666-owner-correction-independent-review-20261006.md",
+        "evidence_commit": "764701a36738170b255cb2faf8fdab3a77609e4d",
+        "evidence_blob": "b92b8a9e0b041f4e1253d4b89037c9271aad6f7f"
+      }
+    }
+  ]
+}

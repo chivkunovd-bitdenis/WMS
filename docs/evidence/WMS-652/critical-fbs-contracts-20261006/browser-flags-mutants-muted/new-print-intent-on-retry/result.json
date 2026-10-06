@@ -1,0 +1,167 @@
+{
+  "sha": "a41637173c48ec6e2732572aa5ebc8615e8f1272",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:cfbfe40a-43e9-46cb-b5b8-758c4de9d11e',\n+   'scan-wb-a-order:copy:9f81e543-c93b-43b0-91eb-18282cdc6314',\n+   'scan-wb-a-order:copy:c2:1c07dd56-a8c2-467f-a532-395fda927bf6',\n+   'scan-wb-next-order:be90b2a5-c081-493b-a2bc-b8da894e4803',\n+   'scan-wb-next-order:copy:f9d8d851-3b09-47d4-b135-237720d4b53c',\n+   'scan-wb-next-order:copy:c2:db25eb1f-de4a-4cf4-9df6-38222c7a7c87'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:a07f10a9-7192-44c8-bf18-a7e32740adf7',\n+   'scan-wb-a-order:copy:cea8a143-7a77-47a1-86c5-114e2621a9d1',\n+   'scan-wb-a-order:copy:c2:9cba9268-1137-481a-8006-99aa4c0a85fc',\n+   'scan-wb-next-order:b4a16667-03ae-4886-afa2-1c1b88e3c893',\n+   'scan-wb-next-order:copy:9391a413-4eb8-4e32-b8a8-a75983681559',\n+   'scan-wb-next-order:copy:c2:4b036315-e66d-465f-bd55-cda5979fc2c1'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:5b978d76-c7d8-4586-a16f-24dd5eacdfbf',\n+   'scan-wb-a-order:copy:6eb581a6-2b03-4a52-a1b4-1a8e93b86f72',\n+   'scan-wb-a-order:copy:c2:ee4ad03e-aae3-40cc-a944-3757b241cf73',\n+   'scan-wb-next-order:4e53284c-8816-4fbc-9be7-02b7cb8fc284',\n+   'scan-wb-next-order:copy:a66217fe-0b6b-49e1-ab34-d8325cc626fd',\n+   'scan-wb-next-order:copy:c2:94ee7c76-fdf9-48a3-8cab-6a72c224a4c3'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:59424c6d-440a-46b7-a4ba-150ed1f31f01',\n+   'scan-wb-next-order:4151a4b0-0f0d-407f-b3c1-d01cfe91d437'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:2905ec26-39e5-4f91-9332-7f30240e7a17',\n+   'scan-wb-next-order:79f1d60f-0651-4e62-bf74-ac1a3990dccc'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:2c336844-e9a4-43dd-8660-54cc8c457837',\n+   'scan-wb-next-order:f355b78f-b682-4a33-af93-2438419e02a5'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:copy:c1ebbd7f-0ea9-4c75-a2c7-661330c11263',\n+   'scan-wb-a-order:copy:c2:de11d4e8-5174-42bb-997f-2e6be5d086f6',\n+   'scan-wb-next-order:copy:45409a1a-f665-4052-9576-e49e68c5874a',\n+   'scan-wb-next-order:copy:c2:77d3cea2-b275-42ae-8772-68bbe762bcc6'\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:copy:3e3e224e-93ce-493e-9552-394a28f81828',\n+   'scan-wb-a-order:copy:c2:ad639c62-4f69-477c-be32-ec3cc4a121aa',\n+   'scan-wb-next-order:copy:2d4e234a-5be4-4d00-8476-92abd8048edc',\n+   'scan-wb-next-order:copy:c2:0a0ce6bf-9fb6-4955-bebf-4f9c691ab581'\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:copy:e4322d30-b11e-441b-9acc-7b9727472f36',\n+   'scan-wb-a-order:copy:c2:8e0d22ea-cefa-44b5-a889-79d70b4d5c2c',\n+   'scan-wb-next-order:copy:8e56e795-c1fa-4395-8192-7b478f267701',\n+   'scan-wb-next-order:copy:c2:3651834b-fb73-48a4-952e-72ae0b82a85a'\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:16868c4d-807d-494c-a4ba-c3d0f4b8b8d3',\n+   'scan-wb-a-order:copy:42805dbe-aea0-433e-a87a-e96f80ec1b7e',\n+   'scan-wb-a-order:copy:c2:e50512ec-7873-4ea6-aa0e-1f2df6491de5',\n+   'scan-wb-next-order:13fae70e-f4eb-433b-8efa-25fb5b47af62',\n+   'scan-wb-next-order:copy:438a6001-704b-49d0-b6d4-3d57ebce306e',\n+   'scan-wb-next-order:copy:c2:bee16815-de51-41f7-9c4e-6483089dee17'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:39d4603e-5e70-436f-882e-109865079d96',\n+   'scan-wb-a-order:copy:fc5f6d08-61ec-49b6-bfc6-c294c3a33a52',\n+   'scan-wb-a-order:copy:c2:e952a1c5-e2c4-4ef1-982a-bf43724dd05b',\n+   'scan-wb-next-order:6aa0e135-ed83-450d-9a54-404cb702984a',\n+   'scan-wb-next-order:copy:553ca74b-2ef0-4327-a391-686ac6765019',\n+   'scan-wb-next-order:copy:c2:7b8392ce-ccae-4db6-8c28-715218ba188b'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:40661790-1d38-479c-8bd2-c4b8f3a22588',\n+   'scan-wb-a-order:copy:a31b51a0-ced0-4fa4-a494-f9584108e744',\n+   'scan-wb-a-order:copy:c2:dbdf8a53-e890-4c61-b4cc-27c62812cabd',\n+   'scan-wb-next-order:a7e69a9a-763a-4804-89df-91c466b44e95',\n+   'scan-wb-next-order:copy:b51acdc8-cc25-4375-9811-231cc0a6b27f',\n+   'scan-wb-next-order:copy:c2:362876c3-bae5-436a-a232-f90fb9598da8'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order:copy',\n-   'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n-   'scan-wb-next-order:copy',\n-   'scan-wb-next-order:copy:c2'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:0a0ddae8-897b-43cc-8ef5-ce7eea166b99',\n+   'scan-wb-next-order:fc929ad7-14de-4305-a953-138c0dc6934b'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:f41c1df4-5d61-45f5-9278-f4778bc78b83',\n+   'scan-wb-next-order:69cd65e5-e821-4809-bd9c-92bac08ed3fb'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:df7a988f-1e94-4df4-af05-66bc96cc1d70',\n+   'scan-wb-next-order:ce228078-a0ef-4ebe-b7a6-caae428f2462'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:12a35bfb-d143-4c14-b7d4-96490d860bb9',\n+   'scan-wb-next-order:68d8280b-bce5-4ae6-a5ac-4839c0ef42bd'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:6ddae30c-67c9-4234-bef3-6667c181ccf8',\n+   'scan-wb-next-order:47753336-047c-4d74-95fd-8008eba085b5'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: exact flags print intents/count; pool is never issued for explicit QR\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:3c1df4b7-0f88-43bb-b991-e2d7a1539196',\n+   'scan-wb-next-order:436f05d8-5b3d-4dca-80c9-658c8d9a51c0'\n-   'scan-wb-a-order',\n-   'scan-wb-next-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:e1c024f7-3245-4075-a88e-60382358a699',\n+   'scan-wb-a-order:413daf3e-c061-4b1c-b70c-01696287fef6'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:8f691c37-7cd3-4bb9-b24a-711fef5d39f6',\n+   'scan-wb-a-order:3b053933-5b54-4da7-b1a9-0aa134c73e43'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:5cb402b2-446d-4bb3-9100-8e9f30e729dc',\n+   'scan-wb-a-order:5e3cbf81-29a2-49b8-9acf-4e8076e3d048'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:b0df2e63-7b2f-4f72-bdb1-2d1741683aac',\n+   'scan-wb-a-order:88e05a1d-c158-4109-a551-18db5420c6db'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:6ebd7ae6-30c7-41cc-a8fc-cf919d985ab9',\n+   'scan-wb-a-order:821499f3-cc60-4b63-afe7-db286c5ba764'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: retry must reconcile same accepted print key\n+ actual - expected\n\n  [\n+   'scan-wb-a-order:eb6a9e89-3db5-4066-97b4-71c7bb234b9e',\n+   'scan-wb-a-order:1c3cdc6a-b185-4845-9556-355d781dd6f0'\n-   'scan-wb-a-order',\n-   'scan-wb-a-order'\n  ]\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:214:3"
+}

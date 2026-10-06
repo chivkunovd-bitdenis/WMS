@@ -5,10 +5,7 @@ const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.ur
 
 describe('WMS-514 · scan classification and silent print wiring', () => {
   it('renders exactly the three requested WB controls with mutually exclusive CHZ modes', () => {
-    const scanBar = source.slice(
-      source.indexOf('data-testid="fbs-kiz-scan-bar"'),
-      source.indexOf('data-testid="fbs-kiz-scan-active"'),
-    )
+    const scanBar = readFileSync(new URL('./FbsPackingScanBar.tsx', import.meta.url), 'utf8')
     // WMS-631 R1: the same component renders the checkboxes in the supply and the assembly.
     const toggles = readFileSync(new URL('./FbsScanPrintToggles.tsx', import.meta.url), 'utf8')
     expect(toggles.match(/<FormControlLabel/g)).toHaveLength(3)
@@ -17,8 +14,11 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(toggles).toContain('label="Перепечатывать ЧЗ"')
     expect(toggles).toContain('disabled={value.reprintChz}')
     expect(toggles).toContain('disabled={value.printChz}')
-    expect(scanBar.indexOf('data-testid="fbs-kiz-scan-input"'))
-      .toBeLessThan(scanBar.indexOf('<FbsScanPrintToggles'))
+    const inputIndex = scanBar.indexOf('<TextField')
+    const togglesIndex = scanBar.indexOf('<FbsScanPrintToggles')
+    expect(inputIndex).toBeGreaterThan(-1)
+    expect(togglesIndex).toBeGreaterThan(-1)
+    expect(inputIndex).toBeLessThan(togglesIndex)
   })
 
   it('keeps lookup before direct KIZ reprint and product barcode selection', () => {
@@ -173,10 +173,15 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(kizScan).not.toContain('outcome.newly_bound !== false')
   })
 
-  it('keeps the original scan-bar visibility guard and no separate reprint error node', () => {
-    const scanBar = source.indexOf('data-testid="fbs-kiz-scan-bar"')
-    // Д18: the WB supply always shows its scan bar; Ozon keeps the original guard.
-    expect(source.slice(scanBar - 700, scanBar)).toContain('{!assemblyWbPacking && (ordinaryWbPacking || anyOrderNeedsHonestSign) ? (')
+  it('keeps one editable standalone scan bar and no separate reprint error node', () => {
+    // WMS-666 moved the same scan controls into the shared standalone/assembly bar.
+    const panel = source.slice(source.indexOf('const packingPanel = workspace ? ('), source.indexOf('data-testid="fbs-kiz-scan-bar"'))
+    expect(panel).toContain('{!assemblyFrame ? (')
+    expect(panel).toContain('<FbsPackingScanBar')
+    expect(panel).toContain("enabled={open && stage === 'packing' && packagingEditable && Boolean(sequentialScanner || ozonPackingScanner)}")
+    const legacyIntake = source.slice(source.indexOf('const packingScanIntake = useScanIntake({'), source.indexOf('packingScanListeningRef.current = packingScanIntake.listening'))
+    expect(legacyIntake).toContain('enabled: false,')
+    expect(source).toContain('{packingScanIntake.listening ? (')
     expect(source).not.toContain('fbs-kiz-auto-reprint-error')
   })
 })

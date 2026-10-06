@@ -32,10 +32,11 @@ from app.db.withdrawal_repository import (
     WithdrawalError,
     WithdrawalScope,
     current_items,
-    eligible_rows,
     get_operation,
     project_item_status,
     registry,
+    sales_for_scope,
+    sold_rows,
 )
 from app.models.fbs_order import FbsOrder
 from app.models.marking_withdrawal import WithdrawalOperation
@@ -341,7 +342,11 @@ async def withdrawal_products(
     search: Annotated[str | None, Query(max_length=256)] = None,
     limit: Annotated[int, Query(ge=1, le=250)] = 100,
 ) -> list[dict[str, object]]:
-    eligible = eligible_rows(scope).with_only_columns(FbsOrder.product_id)
+    try:
+        sales = await sales_for_scope(session, scope, fresh=False)
+    except WithdrawalError as exc:
+        raise HTTPException(exc.status_code, exc.code) from None
+    eligible = sold_rows(session, scope, sales).with_only_columns(FbsOrder.product_id)
     statement = select(Product).where(
         Product.id.in_(eligible),
         Product.tenant_id == scope.tenant_id,

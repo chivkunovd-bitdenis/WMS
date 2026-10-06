@@ -1,0 +1,55 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms662-663-priority/frontend
+
+stderr | src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx > WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется
+An update to ForwardRef(FormControl) inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ForwardRef(ButtonBase) inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ForwardRef(ButtonBase) inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to ForwardRef(FormControl) inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx (1 test) 853ms
+   ✓ WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется  852ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed (1)
+   Start at  12:49:46
+   Duration  107.32s (transform 508ms, setup 0ms, collect 105.87s, tests 853ms, environment 396ms, prepare 53ms)
+
+
+BOUNDED_RESULT exit=0 elapsed=107.86s limit=150s one-worker

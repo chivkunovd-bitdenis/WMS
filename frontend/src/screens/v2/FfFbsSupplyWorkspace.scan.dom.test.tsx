@@ -169,6 +169,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
 }
 
 let host: HTMLDivElement
+let packingHost: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
@@ -186,12 +187,15 @@ beforeEach(() => {
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
   document.body.appendChild(host)
+  packingHost = document.createElement('div')
+  document.body.appendChild(packingHost)
   root = createRoot(host)
 })
 
 afterEach(() => {
   act(() => root.unmount())
   host.remove()
+  packingHost.remove()
   document.body.innerHTML = ''
   globalThis.fetch = originalFetch
 })
@@ -245,21 +249,53 @@ function scan(code: string) {
   return enter! as KeyboardEvent
 }
 
+const noop = () => undefined
+const headers = () => ({ Authorization: 'Bearer t-575' })
+
+function UnifiedWorkspace({ initial }: { initial: FbsWorkspace }) {
+  const [controller, setController] = useState<PackingScanController | null>(null)
+  const [, setScanVersion] = useState(0)
+  const registerScanner = useCallback((_id: string, scanner: PackingScanController | null) => setController(scanner), [])
+  const onScanChange = useCallback(() => setScanVersion((value) => value + 1), [])
+  return <>
+    <FbsPackingScanBar
+      token="t-575"
+      enabled={Boolean(controller)}
+      controllers={controller ? [controller] : []}
+      qrDisabled={initial.supply.marketplace === 'ozon'}
+    />
+    <FfFbsSupplyWorkspace
+      token="t-575"
+      authHeaders={headers}
+      supplyId={SUPPLY_ID}
+      initialWorkspace={initial}
+      open
+      onClose={noop}
+      assemblyFrame={{
+        stage: 'packing', packingHost, registerScanner, onScanChange,
+        active: false, expanded: false, visible: true,
+        onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
+        onWorkspaceChange: noop, registerEscape: noop,
+      }}
+    />
+  </>
+}
+
+const commonScanInput = () => document.querySelector<HTMLInputElement>(
+  '[data-testid="fbs-unified-scan"] input[data-packing-scan="true"]',
+)
+const commonScanError = () => document.querySelector('[data-testid="fbs-unified-scan"] [role="alert"]')
+
 async function openPackingTab(initial: FbsWorkspace = workspace()) {
   await act(async () => {
-    root.render(
-      <FfFbsSupplyWorkspace
-        token="t-575"
-        authHeaders={() => ({ Authorization: 'Bearer t-575' })}
-        supplyId={SUPPLY_ID}
-        initialWorkspace={initial}
-        open
-        onClose={() => undefined}
-      />,
-    )
+    root.render(<UnifiedWorkspace initial={initial} />)
   })
   await settle(50)
-  expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).not.toBeNull()
+  expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
+  expect(commonScanInput()?.disabled).toBe(false)
+  expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).toBeNull()
+  expect(document.body.textContent).not.toContain('Начать работу с поставкой')
+  expect(document.body.textContent).not.toContain('Завершить работу с поставкой')
 }
 
 const activeRow = () => document.querySelector<HTMLElement>('[data-testid="fbs-kiz-row-active"]')?.dataset.orderId ?? null
@@ -267,11 +303,12 @@ const rowTail = (orderId: string) => document.querySelector<HTMLElement>(`[data-
 const kizCalls = () => calls.filter((call) => call.path.startsWith('/operations/fbs-orders/kiz/'))
 
 describe('WMS-575 · «Упаковка и маркировка» принимает скан в любой точке', () => {
-  it('C5/R5: фокус на «Выбрать всё» — стикер A, ЧЗ A, стикер B без единого клика', async () => {
+  it('C5/R5: фокус на «Печатать QR» — стикер A, ЧЗ A, стикер B без единого клика', async () => {
     await openPackingTab()
-    const selectAll = document.querySelector<HTMLButtonElement>('[data-testid="fbs-packing-select-all"]')!
-    act(() => selectAll.focus())
-    expect(document.activeElement).toBe(selectAll)
+    const printQr = document.querySelector<HTMLInputElement>('[data-testid="fbs-scan-print-qr-toggle"] input')!
+    act(() => printQr.focus())
+    expect(document.activeElement).toBe(printQr)
+    expect(printQr.checked).toBe(false)
 
     const first = scan(STICKER_A)
     await settle(40)
@@ -294,7 +331,8 @@ describe('WMS-575 · «Упаковка и маркировка» принима
       order_id: 'order-a', value: KIZ_A,
     })
     expect(activeRow()).toBe('order-b')
-    // «Выбрать всё» от Enter сканера не нажималась: ни один заказ не выбран.
+    // Enter сканера не переключил настройку печати и не выбрал строки.
+    expect(printQr.checked).toBe(false)
     expect(document.querySelectorAll('[data-testid="fbs-packing-select-order"] input:checked')).toHaveLength(0)
   })
 
@@ -341,8 +379,7 @@ describe('WMS-575 · «Упаковка и маркировка» принима
 
   it('C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле', async () => {
     await openPackingTab()
-    const input = document.querySelector<HTMLInputElement>('[data-testid="fbs-kiz-scan-input"] input, input[data-testid="fbs-kiz-scan-input"]')
-      ?? document.querySelector<HTMLElement>('[data-testid="fbs-kiz-scan-input"]')!.querySelector('input')!
+    const input = commonScanInput()!
     act(() => input.focus())
     scan(STICKER_A)
     await settle(60)
@@ -407,7 +444,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
 
   it('P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана', async () => {
     await openPackingTab()
-    const input = document.querySelector<HTMLElement>('[data-testid="fbs-kiz-scan-input"]')!.querySelector('input')!
+    const input = commonScanInput()!
     act(() => input.focus())
     scan(STICKER_A)
     await settle(60)
@@ -441,7 +478,7 @@ describe('WMS-575 · исправления по ревью ночного ка�
 
     expect(kizCalls().map((call) => call.path.split('?')[0])).toEqual(['/operations/fbs-orders/kiz/lookup'])
     expect(activeRow()).toBe('order-a')
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent).toContain('Сканируйте его Честный знак')
+    expect(commonScanError()?.textContent).toContain('Сканируйте его Честный знак')
   })
 
   it('P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу', async () => {
@@ -476,9 +513,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     expect(rowTail('order-a')).toBe('OLD0000A')
     expect(rowTail('order-b')).toBe(KIZ_A.slice(-8))
     expect(activeRow()).toBeNull()
-    const scanBarInput = () =>
-      document.querySelector<HTMLInputElement>('[data-testid="fbs-kiz-scan-input"] input')
-    await settleUntil(() => scanBarInput()?.disabled === false)
+    await settleUntil(() => commonScanInput()?.disabled === false)
     const secondEnter = scan(STICKER_A)
     expect(secondEnter.defaultPrevented, 'document capture must absorb the STICKER_A Enter').toBe(true)
     await settleUntil(() => activeRow() === 'order-a')
@@ -516,7 +551,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     await settle(60)
     expect(rowTail('order-b')).toBe('OLD0000B')
     expect(kizCalls().filter((call) => call.path.endsWith('/commit'))).toHaveLength(0)
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')).not.toBeNull()
+    expect(commonScanError()).not.toBeNull()
     focus('order-b')
     act(() => input('order-b').dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })))
     await settle(20)
@@ -565,25 +600,7 @@ describe('WMS-630 · КИЗ в строке точного заказа', () => 
     committedTails = { 'order-a': 'OLD0000A', 'order-b': 'OLD0000B' }
     const initial = workspace(committedTails)
     initial.supply.packaging_task_id = null
-    const packingHost = document.createElement('div')
-    document.body.appendChild(packingHost)
-    const noop = () => undefined
-    const headers = () => ({ Authorization: 'Bearer t-575' })
-    function Unified() {
-      const [controller, setController] = useState<PackingScanController | null>(null)
-      const [, changed] = useState(0)
-      const registerScanner = useCallback((_id: string, scanner: PackingScanController | null) => setController(scanner), [])
-      const onScanChange = useCallback(() => changed((value) => value + 1), [])
-      return <>
-        <FbsPackingScanBar token="t-575" enabled={Boolean(controller)} controllers={controller ? [controller] : []} />
-        <FfFbsSupplyWorkspace token="t-575" authHeaders={headers} supplyId={SUPPLY_ID}
-          initialWorkspace={initial} open onClose={noop}
-          assemblyFrame={{ packingHost, registerScanner, onScanChange, active: false, expanded: false,
-            visible: true, onToggleExpanded: noop, onActivate: noop, onDeactivate: noop,
-            onWorkspaceChange: noop, registerEscape: noop }} />
-      </>
-    }
-    await act(async () => root.render(<Unified />))
+    await act(async () => root.render(<UnifiedWorkspace initial={initial} />))
     await settle(50)
     expect(input('order-b')).not.toBeNull()
     focus('order-b')

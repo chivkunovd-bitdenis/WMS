@@ -1,0 +1,229 @@
+{
+  "url": "http://127.0.0.1:16666/app/ff/fbs?supply_ids=wb-a,9b3993c3-dffd-5f14-b7b0-2ccf0f495b57",
+  "bars": 1,
+  "lists": 1,
+  "oldButtons": false,
+  "activeFrames": 0,
+  "qr": {
+    "checked": true,
+    "disabled": false,
+    "color": "rgb(15, 23, 42)",
+    "checkboxColor": "rgb(91, 33, 182)"
+  },
+  "settings": "​\nПечатать QR\nПечатать ЧЗ\n\n2\n\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки",
+  "bar": {
+    "x": 71,
+    "y": 248.4375,
+    "width": 1443,
+    "height": 67.875,
+    "right": 1514,
+    "bottom": 316.3125
+  },
+  "controls": [
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 87,
+        "y": 260.4375,
+        "width": 498.546875,
+        "height": 42.875,
+        "right": 585.546875,
+        "bottom": 303.3125
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 597.546875,
+        "y": 261.625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 638.046875,
+        "bottom": 302.125
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 773.3125,
+        "y": 261.625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 813.8125,
+        "bottom": 302.125
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Экземпляров ЧЗ: меньше",
+      "bounds": {
+        "x": 946.28125,
+        "y": 268.625,
+        "width": 26.5,
+        "height": 26.5,
+        "right": 972.78125,
+        "bottom": 295.125
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Экземпляров ЧЗ: больше",
+      "bounds": {
+        "x": 990.78125,
+        "y": 268.625,
+        "width": 26.5,
+        "height": 26.5,
+        "right": 1017.28125,
+        "bottom": 295.125
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 1029.28125,
+        "y": 261.625,
+        "width": 40.5,
+        "height": 40.5,
+        "right": 1069.78125,
+        "bottom": 302.125
+      }
+    },
+    {
+      "tag": "BUTTON",
+      "label": "Отменить последний скан",
+      "bounds": {
+        "x": 1273.5,
+        "y": 265.625,
+        "width": 32.5,
+        "height": 32.5,
+        "right": 1306,
+        "bottom": 298.125
+      }
+    },
+    {
+      "tag": "INPUT",
+      "label": null,
+      "bounds": {
+        "x": 1318,
+        "y": 282.3125,
+        "width": 180,
+        "height": 21,
+        "right": 1498,
+        "bottom": 303.3125
+      }
+    }
+  ],
+  "controlOverlap": false,
+  "rows": [
+    {
+      "id": "wb-a-order",
+      "text": "Футболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nWB-A · 4606660000001 · заказ 666001\nРазмер\n\nM\n\nСтикер\n\n666001 0001\n\nЧЗ\n\nТЗ\nQR",
+      "bounds": {
+        "x": 71,
+        "y": 316.3125,
+        "width": 1443,
+        "height": 87.4375,
+        "right": 1514,
+        "bottom": 403.75
+      },
+      "actions": [
+        {
+          "label": "ТЗ",
+          "bounds": {
+            "x": 1293,
+            "y": 343.234375,
+            "width": 64,
+            "height": 33.59375,
+            "right": 1357,
+            "bottom": 376.828125
+          }
+        },
+        {
+          "label": "QR",
+          "bounds": {
+            "x": 1361,
+            "y": 343.234375,
+            "width": 64,
+            "height": 33.59375,
+            "right": 1425,
+            "bottom": 376.828125
+          }
+        },
+        {
+          "label": "Печать ЧЗ и ШК",
+          "bounds": {
+            "x": 1429,
+            "y": 343.78125,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1461.5,
+            "bottom": 376.28125
+          }
+        },
+        {
+          "label": "Перепечатать",
+          "bounds": {
+            "x": 1465.5,
+            "y": 343.78125,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1498,
+            "bottom": 376.28125
+          }
+        }
+      ]
+    },
+    {
+      "id": "9b3993c3-dffd-5f14-b7b0-2ccf0f495b57-order",
+      "text": "Футболка Ozon, позиция A — длинное название позиции, коллекция осень, размер и цвет\n\nOZ-A · SKU OZ-SKU-A · OZON-POS-666-A · отправление Ozon OZON-POSTING-666\nРазмер\n\nM\n\nБрюки Ozon, позиция B — длинное название позиции, коллекция осень, размер и цвет\n\nOZ-B · SKU OZ-SKU-B · OZON-POS-666-B · отправление Ozon OZON-POSTING-666\n\nL\n\nСтикер\n\nOZON-POSTING -666\n\nЧЗ\n\n—\n\nТЗ",
+      "bounds": {
+        "x": 71,
+        "y": 459.3125,
+        "width": 1443,
+        "height": 158.875,
+        "right": 1514,
+        "bottom": 618.1875
+      },
+      "actions": [
+        {
+          "label": "ТЗ",
+          "bounds": {
+            "x": 1361,
+            "y": 521.953125,
+            "width": 64,
+            "height": 33.59375,
+            "right": 1425,
+            "bottom": 555.546875
+          }
+        },
+        {
+          "label": "Печать ЧЗ и ШК",
+          "bounds": {
+            "x": 1429,
+            "y": 522.5,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1461.5,
+            "bottom": 555
+          }
+        },
+        {
+          "label": "Перепечатать",
+          "bounds": {
+            "x": 1465.5,
+            "y": 522.5,
+            "width": 32.5,
+            "height": 32.5,
+            "right": 1498,
+            "bottom": 555
+          }
+        }
+      ]
+    }
+  ],
+  "rowOverlap": false
+}

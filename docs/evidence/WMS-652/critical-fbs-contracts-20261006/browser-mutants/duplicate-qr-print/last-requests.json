@@ -1,0 +1,45 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A28%3A26.121Z&to=2026-10-06T18%3A28%3A26.121Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&seller_id=seller-a&status_group=active",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/compatible/orders/batch",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "idempotency_key": "5a4878e8-a6e0-407e-8da4-d29c2910b507"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/compatible/orders/batch",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "idempotency_key": "1c43fbd8-6c79-470d-83e3-d6c6aa3a8bdf"
+      }
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

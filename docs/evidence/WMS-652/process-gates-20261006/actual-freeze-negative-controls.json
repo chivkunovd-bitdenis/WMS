@@ -1,0 +1,45 @@
+{
+  "base_sha": "cee68a42dd43aee1a7f6cf86277e6fb697133171",
+  "baseline": "PASS",
+  "mutations": [
+    {
+      "mutation": "fixture_changed",
+      "path": "backend/tests/fbs_seed_helpers.py",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: backend/tests/fbs_seed_helpers.py"
+    },
+    {
+      "mutation": "guard_launch_removed",
+      "path": ".github/workflows/ci.yml",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: .github/workflows/ci.yml"
+    },
+    {
+      "mutation": "discovery_excludes_guard",
+      "path": "frontend/vitest.config.ts",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: frontend/vitest.config.ts"
+    },
+    {
+      "mutation": "delete_print_receipt_test",
+      "path": "frontend/src/utils/printPreparedQr.test.ts",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: frontend/src/utils/printPreparedQr.test.ts"
+    },
+    {
+      "mutation": "phase_context_assertion_removed",
+      "path": "backend/tests/test_fbs_supply_from_orders.py",
+      "removed_assertion": "assert detail[\"context\"] == expected_context",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: backend/tests/test_fbs_supply_from_orders.py"
+    },
+    {
+      "mutation": "phase_one_operation_assertion_removed",
+      "path": "backend/tests/test_fbs_supply_from_orders.py",
+      "removed_assertion": "assert len(operations) == len(supplies) == 1",
+      "result": "REJECTED",
+      "reason": "Changed protected contract hash: backend/tests/test_fbs_supply_from_orders.py"
+    }
+  ],
+  "restored": "PASS"
+}

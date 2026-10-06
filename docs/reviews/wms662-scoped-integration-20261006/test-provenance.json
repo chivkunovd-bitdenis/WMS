@@ -1,0 +1,131 @@
+{
+  "task": "WMS-662",
+  "source_accepted_sha": "d640d6da1e5ddb16a5628b480ac893b541e3644b",
+  "historical_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+  "integration_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "policy": "Exact accepted test blobs; provenance records original history, not a new RED run. No test expectations or guards changed.",
+  "files": [
+    {
+      "path": "backend/tests/test_wms662_approve_scope_race.py",
+      "source_blob": "f599d34fb3b33c66368630e73faf34931c882a2c",
+      "original_commits": [
+        {
+          "sha": "8cd304a4d01ba7b0b17b5f1159c4aaedde44aadb",
+          "subject": "WMS662: контракт тестов — состав approve после HTTP"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_astra_regressions.py",
+      "source_blob": "f9aca4b41325a0a9cf8dc39491d06eab771c13b2",
+      "original_commits": [
+        {
+          "sha": "304230586be3c21773cd03ff47ea15ab5c48aa75",
+          "subject": "WMS-662: контракт тестов — замечания Astra"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "source_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "original_commits": [
+        {
+          "sha": "043fe705622c08f297e4b589b00737bdeecede32",
+          "subject": "WMS-662: контракт тестов batch handoff; record bounded harness failure"
+        },
+        {
+          "sha": "7f62e184c1f91a46647aca85e3256b2fcbfbb38b",
+          "subject": "WMS-662: verify real batch handoff scheduling and GREEN"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_steady_state.py",
+      "source_blob": "6f60ecd6c0cd8550857d671a2368f4119b28db4c",
+      "original_commits": [
+        {
+          "sha": "3abc3987694c4a27710d598039bb2e26d84eaf9c",
+          "subject": "WMS-662: контракт тестов steady-state batch; record actual PostgreSQL RED"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+      "source_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+      "original_commits": [
+        {
+          "sha": "1637ca042e5c8e70e4c58fc6720362f5767f2121",
+          "subject": "WMS-662: контракт тестов F6 cancellation lock order"
+        },
+        {
+          "sha": "e9ae2e904c285e9efb7061fa115cad1e70f0824e",
+          "subject": "WMS-662: correct F6 cancellation lock expectation"
+        },
+        {
+          "sha": "3e5c0ec74747970ceb57640de330b2ec3da14566",
+          "subject": "WMS-662: observe actual PostgreSQL contention in F6 schedule"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing.py",
+      "source_blob": "31b3d9c3652ba7db33990f781c881c502171c0b8",
+      "original_commits": [
+        {
+          "sha": "e85b767ddbba2b41f3a2553395d6a383cdc3844d",
+          "subject": "WMS-662: контракт тестов F3 допроведения биллинга"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing_cancellation.py",
+      "source_blob": "04fc690830267d5ee926ac1a73fe42b7ea4bcfa8",
+      "original_commits": [
+        {
+          "sha": "91c89c55370b81389ae2b9968869a674a6dbb723",
+          "subject": "WMS-662: контракт тестов F4 F5 continued billing cancellation"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_invoiced_continuation.py",
+      "source_blob": "6a5cba444d47e107f0e100f8bd94b2eebd58ec7a",
+      "original_commits": [
+        {
+          "sha": "6662bb6209c79a0c1d709c4ec1dc8d22dd211fa3",
+          "subject": "WMS-662: контракт тестов продолжения после выставленного счёта"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "source_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73",
+      "original_commits": [
+        {
+          "sha": "43f4bdbae7fff1fcbaf7a47d7293a7faaf5428a1",
+          "subject": "WMS-662: контракт тестов — перенос без изменения ожиданий"
+        }
+      ]
+    },
+    {
+      "path": "backend/tests/test_wms662_postgres.py",
+      "source_blob": "d99830af1e103017e8bbb235c1c2220971816f83",
+      "original_commits": [
+        {
+          "sha": "43f4bdbae7fff1fcbaf7a47d7293a7faaf5428a1",
+          "subject": "WMS-662: контракт тестов — перенос без изменения ожиданий"
+        }
+      ]
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "source_blob": "04379c221c29e9a70ae195ff3d834e1855b375de",
+      "original_commits": [
+        {
+          "sha": "a2d584c537cb5fe57020b7ef74427c612aa5ca62",
+          "subject": "WMS-662: контракт тестов C19 видимого состояния передачи"
+        }
+      ]
+    }
+  ]
+}

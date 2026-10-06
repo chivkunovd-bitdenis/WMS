@@ -1,0 +1,398 @@
+{
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "stages": [
+    {
+      "task": "WMS-683",
+      "source": "8f11d912351e8de7633b4abcf74d195badaeb254",
+      "parent": "f7b1ae2c6",
+      "base": "4b325876eb607bea5cba5b9547e9fe02becfce89",
+      "mode": "merge retaining original ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve current backlog and insert only original WMS-683 section"
+        }
+      ]
+    },
+    {
+      "task": "WMS-662",
+      "source": "23190047674c1ea3c0ecf1bcaeebc76dea625110",
+      "base": "56dd434676ac9a06e6deb9dcfee5492bfeeb11ab",
+      "mode": "merge retaining contract/code/proof ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Keep all existing sections; insert original accepted WMS-662 section"
+        }
+      ]
+    },
+    {
+      "task": "WMS-666",
+      "source": "1a1ec824661c8501d79a1c026e74267e24a01d96",
+      "base": "685366ac9e97e44afbb900e698be1b94abdbdad1",
+      "mode": "merge retaining original contracts/correction ledger/evidence ancestry",
+      "conflicts": [],
+      "known_remaining": "Separate test writer must correct fixed historical-base scope test; C11 staging and C12 paper remain open"
+    },
+    {
+      "task": "WMS-651",
+      "source": "70bddc65ab39473a4560d791bd96d6b78acb648e",
+      "base": "022b242fd52c4470e217c76fa0d067a005b6b617",
+      "mode": "merge preserving accepted source ancestry",
+      "conflicts": []
+    },
+    {
+      "task": "WMS-667",
+      "source": "9cc133d6a4883e0c76a7147794f4a8e557c29d20",
+      "base": "bd825cf58172abfc4f5ba64046f631afeeb01ed2",
+      "mode": "merge preserving original test/code ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve all current sections and original accepted WMS-667 section"
+        }
+      ]
+    },
+    {
+      "task": "WMS-669",
+      "source": "79b842ef692ab794d55be25049f3e181e3515539",
+      "base": "f60a4c0af3cafd04a4d70135ffc9ea0f21eda213",
+      "mode": "merge retaining contract/correction ledger/accepted ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Retain all current sections and insert only accepted WMS-669 section"
+        }
+      ]
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "source": "a13b59f0e326da56af0a0ee55cdbcfdbc590043c",
+      "base": "fa311770fcc41516cbfd168faee7c982be6d8920",
+      "mode": "merge scoped reviewed integration with original contracts/corrections/proof ancestry",
+      "conflicts": []
+    },
+    {
+      "task": "WMS-662 integration acceptance",
+      "source": "0fa4ea9542e41e8bcf498e1cd8a4967752c63246",
+      "base": "6c01a6dece601e9297929a41d4b1bb216db65908",
+      "mode": "merge separate analyst conclusion; 4 documents only, no product changes",
+      "conflicts": []
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "source": "e93f9efba99032028444d7149268f1860dddd379",
+      "base": "1c1a1185261579d5f0e7cd516244b4fd52857440",
+      "mode": "merge frozen scoped test contract before accepted product; no historical checker652 copied",
+      "conflicts": [],
+      "pending": "Final live-read helper/proof SHA is expected separately"
+    },
+    {
+      "task": "WMS-663",
+      "source": "15d33af129a5608d7c7bf133ac5cfb29cce3a88f",
+      "base": "69299ff9f755f5e00bf94e091544851549da8cd1",
+      "mode": "merge scoped tree with historical ours-merge ancestry preserving original tests/correction/review refs",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Keep all current sections including newer WMS-662 acceptance; insert only exact WMS-663 section"
+        },
+        {
+          "path": "docs/reviews/wms662-663-priority/analysis.md",
+          "resolution": "Incoming file is exact existing file plus one historical access-probe section; retain superset, current operational state belongs to new WMS-675 proof"
+        }
+      ],
+      "scope": "Only WMS-663 product/tests/proofs and needed accepted WMS-652 fixture governance; no historical 662/675 runtime added",
+      "remaining": "C17 public page UNKNOWN403; C19 operator readback remains open; no fabricated live acceptance"
+    },
+    {
+      "task": "WMS-517 live reader/proofs/runbook",
+      "source": "e09eb757c1879bd87c43c276a514e65b4da07e9b",
+      "base": "9252ad203592d338ff6aba5ff1f129397d350f85",
+      "mode": "merge final scoped HEAD retaining exact accepted product and reader proof ancestry",
+      "conflicts": [],
+      "remaining": "New read-only helper independently reviewed as short delta; Vitalik local signature/send remains operator action"
+    },
+    {
+      "task": "WMS-675 initial scoped operational evidence/read-only collector",
+      "source": "749b80cb85e3a15344c23fe83012d38af1ae99d4",
+      "base": "8fa213151859c82d8db27439a31da9b707f2729e",
+      "mode": "merge operational evidence only; no application runtime added",
+      "conflicts": [],
+      "pending": "New 31 real Ozon card proofs and resulting honest requirements/acceptance from independent analyst are expected next"
+    },
+    {
+      "task": "WMS-675 real Ozon read proof",
+      "source": "5b5da992a6cd766eb250ab83f4575fc8b11cdf22",
+      "base": "b0f9c3e07cbe97102604531281549ef986631579",
+      "mode": "merge separately saved read-only HTTP proof; no application mutation",
+      "conflicts": [],
+      "facts": "31 HTTP200 cards:26 positive,4 cancelled,1 awaiting",
+      "pending": "Final fresh ledger delta plan and current requirements/backlog still being saved by original executor"
+    },
+    {
+      "task": "Independent combined product delta review",
+      "source": "8e301ddaf542d4823bcc14363e318f409fdc0935",
+      "base": "5f1ec9a26e1f453e1e894184f6442330e9a3d9bd",
+      "mode": "merge independent reviewer report only",
+      "conflicts": [],
+      "reviewed_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+      "verdict": "PASS for reviewed delta; newly discovered WMS-662 live substatus gap requires separate RED/fix/review"
+    },
+    {
+      "task": "WMS-662 real Ozon substatus test contract before fix",
+      "source": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "base": "8e64e14e8ea39adbe122191e209a329b7513b920",
+      "mode": "merge separate test-only contract ancestry before product fix",
+      "conflicts": [],
+      "red": "2 true live positive cases FAILED;10 negative/received cases PASS by separate test writer",
+      "frozen": "backend/tests/test_wms662_live_delivery_substatuses.py"
+    },
+    {
+      "task": "WMS-517 independent helper review and fresh SC13 acceptance",
+      "source": "85c2f5e0e24af84548e7ff74e193b3ac423d3f82",
+      "base": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+      "mode": "merge four acceptance documents only; runtime untouched",
+      "conflicts": []
+    },
+    {
+      "task": "Accepted WMS-660 staging compatibility prerequisite",
+      "source": "7f7e922b16d8f2fa08816f8446e7a53a1d24ac74",
+      "review": "c775941f373b89a9eaca70d0056673ff27a0dafa",
+      "staging_source": "727575a0fd47dec56f34b38b987925686626c2b9",
+      "base": "7f9d720ee47db130eaa9ef63df8325566c70dcd1",
+      "mode": "ours ancestry merge staging+review then exact nine migration blobs; current runtime/tests/checker preserved",
+      "conflicts": [],
+      "paths": [
+        "backend/alembic/versions/20260912_0305_assistant_messages.py",
+        "backend/alembic/versions/20260913_2200_assistant_executor_attempts.py",
+        "backend/alembic/versions/20260925_0433_merge_assistant_staging.py",
+        "backend/alembic/versions/20260929_0589_merge_staging_etalon.py",
+        "backend/alembic/versions/20260929_0590_merge_wms_588_and_staging_heads.py",
+        "backend/alembic/versions/20260930_0566_ff_section_permissions.py",
+        "backend/alembic/versions/20260930_0567_product_primary_print_barcode.py",
+        "backend/alembic/versions/20261001_0612_merge_staging_urgent.py",
+        "backend/alembic/versions/20261003_0001_merge_staging_etalon.py"
+      ]
+    },
+    {
+      "task": "WMS-662 narrow independent review of real Ozon substatus fix",
+      "source": "17e50faa3d13981b123ef7b093b2f97aefee9016",
+      "base": "082922a8ecb857d656f2cf6ee9a9521e35cb06b3",
+      "mode": "merge separate independent reviewer report only",
+      "conflicts": [],
+      "reviewed_product_sha": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+      "verdict": "PASS"
+    },
+    {
+      "task": "WMS-675 exact fresh accounting plan and current requirements",
+      "source": "53299b0b7567a6f1b4c67b46fe4da8d0a039f36b",
+      "base": "d10b8ca786b912794c23912b1bdca13b42a3173c",
+      "mode": "merge current operational plan and task documents; no application changes",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve current accepted sections and insert exact new WMS-675 section"
+        }
+      ],
+      "facts": "Missing26;reserve16 to1;reuse11facts/22charges;new15facts/30charges expected; no mutation applied",
+      "pending": "One short plan correction removes proposed custom suppression and states ordinary publication after checked combined deployment"
+    },
+    {
+      "task": "WMS-666 reviewed task scope contract correction",
+      "source": "ef8aae5c469e94bcc44fd4acbdcbbf1ba80e817f",
+      "base": "47afb0768b853d619d1790548d521a45c3d46b81",
+      "mode": "merge dedicated tester history and actual independent Astra high PASS ledger",
+      "conflicts": [],
+      "reviewed_contract_sha": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+      "review_sha": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
+      "preservation": "Original runtime/checker and negative boundaries unchanged; staged-counteredit P2 closed"
+    },
+    {
+      "task": "WMS-675 final ordinary recovery plan",
+      "source": "ced5a713e56d3bb4fe2c310d3813306f08446ce2",
+      "base": "acd0523e9986e89149959319c74fd355c659d22e",
+      "mode": "merge final four operational plan documents; no runtime suppression/override",
+      "conflicts": [],
+      "boundary": "Only existing WMS-662 after checked combined deployment, normal background stock publishing, fresh scope/ledger/missing delta reread before apply; no repair applied"
+    },
+    {
+      "task": "WMS-663 live read-only status proof",
+      "source": "5fb403a702f31edb5ba8508f3229fda803e6b904",
+      "integration": "37e651058",
+      "mode": "merge proof/reader/requirements only; runtime/tests unchanged",
+      "conflicts": [],
+      "facts": "2 HTTP200 on real posting; existing exemplar and blank fields confirmed; nonempty enum/true absence/operator set remain unverified"
+    },
+    {
+      "task": "WMS-675 actual functional incident regression",
+      "source": "f98960a1e3d8adcc52264aafdad715f63e2397c5",
+      "integration": "4982e8fd6",
+      "mode": "merge original test/proof ancestry and actual acceptance",
+      "conflicts": [
+        {
+          "path": "docs/requirements/WMS-675.md",
+          "resolution": "Preserve ordinary recovery plan ced5a713 and add actual isolated functional PASS; no production recovery claimed"
+        }
+      ],
+      "facts": "real accounting/reserve/billing;26 positive/5 excluded;reserve16->1;facts11->26;charges22->52;old IDs preserved;replay0"
+    },
+    {
+      "task": "WMS-675 independent functional review",
+      "source": "c3c6ee210fc92958e84ee58d86c4a606f54cba6c",
+      "integration": "804a7dc99",
+      "mode": "exact report-only cherry-pick; no historical product source merged",
+      "conflicts": [],
+      "verdict": "PASS;2 SQLite +2 PostgreSQL runs,0 skip"
+    },
+    {
+      "task": "WMS-652 actual Sol6.1 review model RED contract",
+      "source": "2e94cf5f04a7863cf8abbe028126a6e48f8aee95",
+      "integration": "c3ac68cc0",
+      "mode": "test-only source before checker fix",
+      "conflicts": [],
+      "red": "67 PASS /3 RED reported by separate test writer; strict model/effort/scope/SHA/blob controls retained"
+    },
+    {
+      "task": "WMS-672 remaining functional acceptance C7/C10/C11",
+      "source": "59a2a0efa0a6be055c8bc70193e4c6b0be4f23a3",
+      "integration": [
+        "2ebf49c82",
+        "e31373fb5"
+      ],
+      "mode": "exact report and51evidence files copied; one-time runner workflow and ancestry omitted",
+      "conflicts": [],
+      "facts": "6 browser PASS,10 server+4 component659PASS;10 screenshots personally inspected by executor;SQLite concurrency1skip honest, correspondingPGtest in commonCI",
+      "remaining": "C12 physical series after release and explicit operator instruction"
+    },
+    {
+      "task": "WMS-662/666 clean independent correction evidence",
+      "source": "ec1ffacb77140c87b0daba341da58313a157750d",
+      "mode": "merge clean report ancestry including4ebab12; excluded unrelated cfc report",
+      "facts": "662format5feca actualPASS;666QRdc9b1578 actualPASS17/17Node20, correction ledgers follow separately"
+    },
+    {
+      "task": "WMS-652 actual independent Sol model compatibility",
+      "source": "f263064f4c5735a477b91bd92bea982c9eeceaf5",
+      "tests_before_code": "2e94cf5f04a7863cf8abbe028126a6e48f8aee95",
+      "review": "74890bb821d3a881c16b2806c964ca8676d0b832",
+      "review_integration": "6f0dab804",
+      "mode": "narrow model guard only; exact evidence/scope controls retained",
+      "facts": "3RED before fix;70 localPASS;81 independentPASS,0skip"
+    },
+    {
+      "task": "WMS-666/514/636 accepted legacy harness maintenance",
+      "source": "89b3d190d8fe7b153a7a64351d3b05d9fc6d9023",
+      "integration": "0d25e858c",
+      "reviewed_legacy_correction": "2c9b9ebf2b4af14f55f7c0d165a88c046aabaaee",
+      "review": "4c506312fc4f03dcc2d34a332158962fafb6a688",
+      "mode": "merge test-only corrections and actual review ledgers; independent report only cherry-pick",
+      "facts": "legacy4files58PASS;QR17PASSNode20;assertions/events/timeouts unchanged"
+    },
+    {
+      "task": "WMS-662 frozen PostgreSQL CI routing and WMS-663 generated schema",
+      "source": "c884171aca6cbf72bc9ae6cc46d37cfa6afd7381",
+      "mode": "mandatory separate idlePG16steps matching frozen guards;generatedOpenAPIfromcurrentAPI",
+      "facts": "2PG662contracts rerouted unchanged;OpenAPI2pathsadded92existingpathsunchanged;asyncpg0.31.0 pinned"
+    },
+    {
+      "task": "WMS-475/537 marketplace membership fixture correction",
+      "source": "c38e2cfbcc142b50e9dd1d606adddb2a42b19acf",
+      "proof": "a841e067e4883bbb39eec4f6953b06fb92f510c4",
+      "integration": "14215d543e2e2ca33be31e6cc70108e302585fc4",
+      "mode": "merge test-only correction;hotfix683runtime unchanged",
+      "facts": "23PASS1priorPGskip;all124assertionsunchanged",
+      "review": "6cd6ee0ab996e6af28c8a96eb0d913675d35f73d",
+      "verdict": "actual independentSol6.1PASS23tests,priorPGskip remains pending mandatoryPGcase"
+    },
+    {
+      "task": "WMS-653 cumulative reviewed task scope correction",
+      "source": "65872a95d97e649ad67b85cc2afa7824ba4cdd44",
+      "integration": "563d2a2a0",
+      "correction": "2b5a86e4935fdf7dff74fa2b277bd7d18b4d0e0f",
+      "review": "30bbd17d899dfcc5407bce4a60dc923782179bc8",
+      "mode": "merge original separatetestwriter+independentreview+cumulativeledger;9migrationblobs unchanged",
+      "facts": "29localPASS,29independentPASS,actual3-parentoctopusnegative;no runtime changes"
+    },
+    {
+      "task": "WMS-537 mandatory PostgreSQL concurrent draft-add functional correction",
+      "source": "11301a6e1004abb212052e26f2b005e6e958633b",
+      "proof": "584ca48321ef8da05ef36e6627cc5b4fad0c7faa",
+      "review": "a094164c5b260dca4b265e7fd28758758a59f86c",
+      "mode": "ancestry test/proof merge, exactreport-onlycherry-pick;existingPGCIstep executesexactcase",
+      "facts": "original1FAIL zeroPATCH;corrected1PASS on isolatedPG16.14;200/409,onePATCH,oneasset;95assertionsunchanged;actualindependentSolPASS"
+    },
+    {
+      "task": "WMS-636 erased TypeScript scanner annotation",
+      "source": "83393272775a5a87d6301e95c2716948022b9a6d",
+      "integration": "66d4965346dfde8b2aa44f4fee17dc5a30cb74be",
+      "proof": "d4a8d0fa3b1fdb94c0acba6c5f273e40768b4966",
+      "mode": "originaltest-onlyancestrymerge;exactdoc-onlyvalidationcherry-pick",
+      "facts": "full992225+generic tscPASS14.11s/buildPASS16.35s;transpiledJSbyte-identical;assertions/runtime unchanged"
+    },
+    {
+      "task": "WMS-653 exact shared integration metadata scope correction",
+      "source": "04e0d9b954a43210061597f9631ce6c26291dbc4",
+      "correction": "d177e57c1f38705da747b807cec16904717b349f",
+      "review": "6b1aaf66b1fab7322b20782eead4dc7bb3f43ad9",
+      "mode": "mergeoriginaltestcorrection+actualindependentreview+cumulativeledger",
+      "facts": "actualCI3REDreproduced;only2exactsharedproofpathsallowed;34authorPASS/5newindependentPASS;oldfunctionsASTidentical;adjacentforeignmanifest/guards/ledgerreject"
+    },
+    {
+      "task": "WMS-666 immutable historical CI ancestry attribution",
+      "source": "e56de089b4564ea3b379c8c0fa31ab297d0441a4",
+      "correction": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+      "review": "d814f65891b6f7f5d9ca81197689fa3085232611",
+      "mode": "merge original test-only correction, actual independent Sol high review and cumulative ledger",
+      "facts": "Only exact commit720307d280439e815057ee4fdd78b72134149a39/workflow/before+after blob tuple accepted; 8 author cases PASS, 3 independent new cases PASS and actual shared history PASS; original5 bodies/raw validator unchanged"
+    },
+    {
+      "task": "WMS-675 CI isolated Docker service topology",
+      "base": "323f21f635dbc24363640751a93d2c72876fb3f8",
+      "failed_run": 37473144569,
+      "cause": "Frozen fixture observes server172.18.0.2 behind published runner127.0.0.1; URLhost must be allowed Docker alias postgres",
+      "delta": "CI-only postgres alias bound to127.0.0.1 in runner hosts; exact DNS answer asserted; existing service port5432/private database/testcommand/guard unchanged",
+      "preservation": "Parsed YAML: all other steps, services, commands, environment and conditions identical; frozen675 test and runtime unchanged"
+    }
+  ],
+  "local_product_fixes": [
+    {
+      "task": "WMS-662 live Ozon substatus gap",
+      "base": "127884ce9",
+      "test_contract": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "path": "backend/app/services/fbs_observed_handoff_service.py",
+      "method": "ozon_proves_handoff",
+      "added_values": [
+        "posting_in_pickup_point",
+        "posting_on_way_to_city"
+      ],
+      "delta": "Exactly two allowlist strings; no other product or frozen-test changes",
+      "review": "Independent PASS17e50faa3d13981b123ef7b093b2f97aefee9016 for exact b4043c0df"
+    }
+  ],
+  "requirement_reference_updates": [
+    {
+      "task": "WMS-651",
+      "path": "docs/requirements/WMS-651.md",
+      "change": "C5/R5 reference Select all→Print QR; preserved scan assertions confirmed by separate tester on acd0523e9"
+    },
+    {
+      "task": "WMS-657",
+      "path": "docs/requirements/WMS-657.md",
+      "change": "C2 test reference ten→eleven columns after authorized WMS-673 color migration; existing assertions/ledger untouched"
+    }
+  ],
+  "formatting_only_corrections": {
+    "base_sha": "066a5e95c08b9e91c7957e205b35b58ad16e2ab0",
+    "failed_ci_run": 37460067342,
+    "paths": [
+      "backend/tests/test_wms662_live_delivery_substatuses.py",
+      "backend/tests/test_wms672_box_label_scope.py"
+    ],
+    "protection": "Both Python ASTs identical before/after; frozen expectations/composition unchanged",
+    "proof": "docs/reviews/priority-five-ruff-format-only-proof-20261006.json"
+  },
+  "final_ci_input": "ec5f9b08eac5b55a688524e0ff2152e538a55b9d",
+  "staging_base_confirmed": "727575a0fd47dec56f34b38b987925686626c2b9",
+  "final_ci_input_note": "Integration source before final tracking commit. Actual tested and published HEAD is retained in scope logs and CI run metadata."
+}

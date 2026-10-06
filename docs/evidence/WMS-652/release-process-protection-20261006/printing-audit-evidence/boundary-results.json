@@ -1,0 +1,54 @@
+[
+  {
+    "name": "baseline-print-receipt",
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--no-cache",
+      "src/utils/printPreparedQr.test.ts"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "mutant-accept-no-receipt",
+    "command": [
+      "node",
+      "node_modules/vitest/vitest.mjs",
+      "run",
+      "--maxWorkers=1",
+      "--no-file-parallelism",
+      "--no-cache",
+      "src/utils/printPreparedQr.test.ts"
+    ],
+    "exit_code": 1
+  },
+  {
+    "name": "baseline-native-recovery",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "test_wms_print_direct.DirectPrintTest.test_receipt_survives_restart_without_duplicate",
+      "test_wms_print_direct.DirectPrintTest.test_uncertain_submission_not_repeated",
+      "test_wms_print_direct.DirectPrintTest.test_changed_content_rejected",
+      "-v"
+    ],
+    "exit_code": 0
+  },
+  {
+    "name": "mutant-resubmit-unknown",
+    "command": [
+      "python3",
+      "-m",
+      "unittest",
+      "test_wms_print_direct.DirectPrintTest.test_receipt_survives_restart_without_duplicate",
+      "test_wms_print_direct.DirectPrintTest.test_uncertain_submission_not_repeated",
+      "test_wms_print_direct.DirectPrintTest.test_changed_content_rejected",
+      "-v"
+    ],
+    "exit_code": 1
+  }
+]

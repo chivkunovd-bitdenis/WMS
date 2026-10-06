@@ -1,0 +1,47 @@
+
+> frontend@0.0.0 test:unit
+> vitest run src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms663-retry-contract-20261006/frontend
+
+ ❯ src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx (4 tests | 1 failed) 330ms
+   × definite rejection keeps checked intent and next explicit checkbox click submits current version once 183ms
+     → expected [ { expected_version: +0 } ] to deeply equal [ { expected_version: +0 }, …(1) ]
+   ✓ unknown intent reopening and reverse click never POST again 47ms
+   ✓ checking intent reopening and reverse click never POST again 48ms
+   ✓ accepted intent reopening and reverse click never POST again 51ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx > definite rejection keeps checked intent and next explicit checkbox click submits current version once
+AssertionError: expected [ { expected_version: +0 } ] to deeply equal [ { expected_version: +0 }, …(1) ]
+
+- Expected
++ Received
+
+  [
+    {
+      "expected_version": 0,
+    },
+-   {
+-     "expected_version": 1,
+-   },
+  ]
+
+ ❯ src/screens/v2/OzonDocumentsAbsence.release-retry.dom.test.tsx:59:19
+     57|     await act(async () => checkbox.click())
+     58|     await act(async () => { await new Promise(resolve => setTimeout(re…
+     59|     expect(posts).toEqual([{ expected_version: 0 }, { expected_version…
+       |                   ^
+     60|     expect(checkbox.checked).toBe(true)
+     61|     expect(host.textContent).toContain('Без ГТД и РНПТ')
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 3 passed (4)
+   Start at  21:23:20
+   Duration  2.34s (transform 108ms, setup 0ms, collect 1.24s, tests 330ms, environment 453ms, prepare 93ms)
+

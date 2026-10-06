@@ -1,0 +1,9 @@
+{
+  "started_at_utc": "2026-10-06T12:02:57.387752+00:00",
+  "reader_sha256": "01c1264278a388516946e74584ec7a0ea669a3dc6e54f6253222d709e4c18ce5",
+  "reader_commit": "915002fbac6bc419c55dd635b44513597af2661e",
+  "runtime": "existing root@194.87.96.144 /opt/wms container wms_prod-api-1 /app Python process",
+  "exit_code": 0,
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

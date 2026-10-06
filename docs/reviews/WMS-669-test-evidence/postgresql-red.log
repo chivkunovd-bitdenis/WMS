@@ -1,0 +1,235 @@
+F.FFFF.FFF.FFFFFF....FFFF..FF.F                                          [100%]
+=================================== FAILURES ===================================
+_________________ test_c1_intersection_and_exact_article_size __________________
+tests/test_wms669_seller_catalog_contract.py:30: in test_c1_intersection_and_exact_article_size
+    await _assert_set(
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+_________________ test_c2_quantity_not_free_limit_or_published _________________
+tests/test_wms669_seller_catalog_contract.py:80: in test_c2_quantity_not_free_limit_or_published
+    await _assert_set(async_client, catalog, expected, stock_only="true")
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+____________________ test_c3_aggregate_before_limit_offset _____________________
+tests/test_wms669_seller_catalog_contract.py:94: in test_c3_aggregate_before_limit_offset
+    assert [r["key"] for r in filtered["items"]] == [_key(c, "split")]
+E   AssertionError: assert ['ozon:669-ozon'] == ['product:041...fb302efa5451']
+E
+E     At index 0 diff: 'ozon:669-ozon' != 'product:04101350-42dd-4460-b85c-fb302efa5451'
+E     Use -v to get more diff
+______________ test_c4_server_order_and_unique_rows_across_pages _______________
+tests/test_wms669_seller_catalog_contract.py:113: in test_c4_server_order_and_unique_rows_across_pages
+    assert tuples == sorted(tuples)
+E   AssertionError: assert [('Пуховики',...0aba24'), ...] == [('Пуховики',...1ea014'), ...]
+E
+E     At index 0 diff: ('Пуховики', '2329блэк', '48', 'product:2b869b62-dd30-4fe4-a855-8300e5aefec7') != ('Пуховики', '23290', '48', 'product:667dfbd3-837b-4c99-8e90-dcb8e68f0f7d')
+E     Use -v to get more diff
+___________ test_c5_imported_size_membership_fallback_and_ozon_offer ___________
+tests/test_wms669_seller_catalog_contract.py:129: in test_c5_imported_size_membership_fallback_and_ozon_offer
+    await _assert_set(
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+____________________ test_c9_scope_parity_and_summary[None] ____________________
+tests/test_wms669_seller_catalog_contract.py:184: in test_c9_scope_parity_and_summary
+    await _assert_set(async_client, c, expected, **params)
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+________________ test_c9_scope_parity_and_summary[wildberries] _________________
+tests/test_wms669_seller_catalog_contract.py:184: in test_c9_scope_parity_and_summary
+    await _assert_set(async_client, c, expected, **params)
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+____________________ test_c9_scope_parity_and_summary[ozon] ____________________
+tests/test_wms669_seller_catalog_contract.py:184: in test_c9_scope_parity_and_summary
+    await _assert_set(async_client, c, expected, **params)
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+______ test_c1_each_endpoint_filters_exact_values[filters0-labels0-page] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:0db...a870e45', ...} == {'product:7ea...a98087dd836e'}
+E
+E     Extra items in the left set:
+E     'product:bdbcce81-2955-4f27-84d2-f8560c8bcd95'
+E     'product:820ccd04-aac6-4c4f-bc64-a6c07a870e45'
+E     'product:e231fdd7-78e0-4ddd-a202-70ab93aa9acf'
+E     'product:59bf5268-0ca2-47b8-8e2e-117776199460'
+E     'product:0dbf6d2a-dcb8-42d1-8608-d236771a154f'...
+E
+E     ...Full output truncated (4 lines hidden), use '-vv' to show
+______ test_c1_each_endpoint_filters_exact_values[filters0-labels0-keys] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:3b1...f71ff22', ...} == {'product:3b1...a9bdb1970e62'}
+E
+E     Extra items in the left set:
+E     'product:506a440d-bc90-4dd4-883d-58e7e9ca9e48'
+E     'product:94c1f059-832d-472d-ace1-a1a4bd2fc90e'
+E     'product:cb4f1294-9ea5-4b5d-84ce-556e02d25c32'
+E     'product:51e674ed-7ebe-4184-bd5e-08944d6cfc27'
+E     'product:6ff7b6a9-24e4-4ca9-a1e4-b4ff9f5adb11'...
+E
+E     ...Full output truncated (4 lines hidden), use '-vv' to show
+______ test_c1_each_endpoint_filters_exact_values[filters1-labels1-page] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:341...c22c20d', ...} == set()
+E
+E     Extra items in the left set:
+E     'product:7751fefe-c4de-4f77-8010-8f50d279b401'
+E     'product:876c75dc-0466-465d-b6f2-50a78c22c20d'
+E     'product:74e301f4-4207-4537-b9ff-55ddc0b597fa'
+E     'product:39877e5f-eccc-4baa-ae15-e226b2351f11'
+E     'product:b0132e4c-2138-45ea-8ffc-9116084f9120'...
+E
+E     ...Full output truncated (7 lines hidden), use '-vv' to show
+______ test_c1_each_endpoint_filters_exact_values[filters1-labels1-keys] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:41a...b9aa5f8', ...} == set()
+E
+E     Extra items in the left set:
+E     'product:8de58225-0ec8-4d43-aee3-875e65aa57fe'
+E     'product:ef76eb80-7daf-4282-9d31-e3bc181e6737'
+E     'product:e8be7476-37ad-48e5-8b58-63c77e3d6ccd'
+E     'product:f923a379-ea65-467d-9840-0d3193643593'
+E     'product:55421a61-9b35-4226-985f-1e77770a5ff6'...
+E
+E     ...Full output truncated (7 lines hidden), use '-vv' to show
+______ test_c1_each_endpoint_filters_exact_values[filters2-labels2-page] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:0c6...cd07d8d', ...} == {'product:151...8ef47439bff2'}
+E
+E     Extra items in the left set:
+E     'product:d207b259-ffda-4a25-9d76-52036072fe7e'
+E     'product:cd0f052c-c1d7-48c4-a103-63e52efef57c'
+E     'product:c52d069a-3291-4517-a72d-95f119b84363'
+E     'product:0c67b3f2-e9f8-4068-bd53-8bf6606a4ca1'
+E     'product:4eba8c3f-1cfb-4dee-951b-fb2056b07075'...
+E
+E     ...Full output truncated (6 lines hidden), use '-vv' to show
+______ test_c1_each_endpoint_filters_exact_values[filters2-labels2-keys] _______
+tests/test_wms669_seller_catalog_contract.py:249: in test_c1_each_endpoint_filters_exact_values
+    assert actual == {_key(catalog, label) for label in labels}
+E   AssertionError: assert {'product:019...c62f118', ...} == {'product:6c8...6d25f0c3b32f'}
+E
+E     Extra items in the left set:
+E     'product:01987ea6-9023-46ba-bc6e-8b4a255cd6d2'
+E     'product:f5943f76-224e-42b2-8f80-00a28e34e266'
+E     'product:8d0f80bf-99b1-4ee5-a3f0-f2d12c62f118'
+E     'product:c2317c6e-561b-4303-8db6-933aa6bd7ccd'
+E     'product:906d31ff-601c-47e5-89de-87eeef9b95b4'...
+E
+E     ...Full output truncated (6 lines hidden), use '-vv' to show
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters0-expected0-page] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'wb:669101',..., 'wb:669103'} == {'wb:669101'}
+E
+E     Extra items in the left set:
+E     'wb:669103'
+E     'wb:669102'
+E     Use -v to get more diff
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters0-expected0-keys] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'wb:669101',..., 'wb:669103'} == {'wb:669101'}
+E
+E     Extra items in the left set:
+E     'wb:669103'
+E     'wb:669102'
+E     Use -v to get more diff
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters1-expected1-page] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'wb:669101',..., 'wb:669103'} == {'wb:669102'}
+E
+E     Extra items in the left set:
+E     'wb:669103'
+E     'wb:669101'
+E     Use -v to get more diff
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters1-expected1-keys] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'wb:669101',..., 'wb:669103'} == {'wb:669102'}
+E
+E     Extra items in the left set:
+E     'wb:669103'
+E     'wb:669101'
+E     Use -v to get more diff
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters3-expected3-page] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'ozon:669-ozon'} == set()
+E
+E     Extra items in the left set:
+E     'ozon:669-ozon'
+E     Use -v to get more diff
+__ test_c5_each_endpoint_imported_sizes_and_offer_id[filters3-expected3-keys] __
+tests/test_wms669_seller_catalog_contract.py:326: in test_c5_each_endpoint_imported_sizes_and_offer_id
+    assert actual == expected
+E   AssertionError: assert {'ozon:669-ozon'} == set()
+E
+E     Extra items in the left set:
+E     'ozon:669-ozon'
+E     Use -v to get more diff
+___________________ test_c10_postgresql_json_sizes_and_stock ___________________
+tests/test_wms669_seller_catalog_once.py:45: in test_c10_postgresql_json_sizes_and_stock
+    await _assert_set(
+tests/wms669_catalog_fixtures.py:353: in _assert_set
+    assert {r["key"] for r in page["items"]} == expected
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms669-urgent-confirmed-contract-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_intersection_and_exact_article_size
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c2_quantity_not_free_limit_or_published
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c3_aggregate_before_limit_offset
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c4_server_order_and_unique_rows_across_pages
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_imported_size_membership_fallback_and_ozon_offer
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c9_scope_parity_and_summary[None]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c9_scope_parity_and_summary[wildberries]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c9_scope_parity_and_summary[ozon]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters0-labels0-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters0-labels0-keys]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters1-labels1-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters1-labels1-keys]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters2-labels2-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c1_each_endpoint_filters_exact_values[filters2-labels2-keys]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters0-expected0-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters0-expected0-keys]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters1-expected1-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters1-expected1-keys]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters3-expected3-page]
+FAILED tests/test_wms669_seller_catalog_contract.py::test_c5_each_endpoint_imported_sizes_and_offer_id[filters3-expected3-keys]
+FAILED tests/test_wms669_seller_catalog_once.py::test_c10_postgresql_json_sizes_and_stock
+21 failed, 10 passed, 6 warnings in 76.20s (0:01:16)

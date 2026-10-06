@@ -1,0 +1,171 @@
+{
+  "wb": [
+    {
+      "id": "9cd5e8fe-bd10-4671-855d-df4d8af738b1",
+      "name": "Товар red",
+      "image_url": null,
+      "seller_article": "ART-red",
+      "wb_article": 1673,
+      "barcode": "WB-CODE-red",
+      "sku": null,
+      "chrt_id": null,
+      "category": null,
+      "color": "Красный",
+      "brand": null,
+      "composition": null,
+      "size": "46",
+      "marketplace_bindings": []
+    },
+    {
+      "id": "253ba983-20f1-46b7-a469-4f2b3ff27160",
+      "name": "Товар blue",
+      "image_url": null,
+      "seller_article": "ART-blue",
+      "wb_article": 1674,
+      "barcode": "WB-CODE-blue",
+      "sku": null,
+      "chrt_id": null,
+      "category": null,
+      "color": "Синий",
+      "brand": null,
+      "composition": null,
+      "size": "46",
+      "marketplace_bindings": []
+    }
+  ],
+  "ozon": {
+    "id": "a5c4e720-b4ab-428a-b3db-63fb37a11258",
+    "marketplace": "ozon",
+    "external_order_id": "OZ-673-POSTING",
+    "wb_order_id": 673000,
+    "status": "new",
+    "wb_status": null,
+    "supplier_status": "new",
+    "seller": {
+      "id": "aa07829f-ca69-4268-a3f0-14e54ca534e9",
+      "name": "Селлер не найден"
+    },
+    "wb_warehouse": {
+      "id": 0,
+      "name": "Склад WB неизвестен"
+    },
+    "wms_warehouse": {
+      "id": "",
+      "name": "Склад не привязан"
+    },
+    "product": {
+      "id": "9cd5e8fe-bd10-4671-855d-df4d8af738b1",
+      "name": "Первая позиция Ozon",
+      "image_url": null,
+      "seller_article": "OZ-ART-RED",
+      "wb_article": null,
+      "barcode": "OZ-RED",
+      "sku": "673101",
+      "chrt_id": null,
+      "category": null,
+      "color": "Красный",
+      "brand": null,
+      "composition": null,
+      "size": "46",
+      "marketplace_bindings": [
+        {
+          "marketplace": "ozon",
+          "external_barcodes": [
+            "OZ-RED"
+          ]
+        }
+      ]
+    },
+    "positions": [
+      {
+        "id": "d553ef0c-e824-4e2e-b50c-2a260a5e2da6",
+        "barcode": "OZ-RED",
+        "image_url": null,
+        "product_id": "9cd5e8fe-bd10-4671-855d-df4d8af738b1",
+        "marketplace_bindings": [
+          {
+            "marketplace": "ozon",
+            "external_barcodes": [
+              "OZ-RED"
+            ]
+          }
+        ],
+        "name": "Первая позиция Ozon",
+        "seller_article": "OZ-ART-RED",
+        "sku": "673101",
+        "size": "46",
+        "color": "Красный",
+        "brand": null,
+        "composition": null,
+        "quantity": 3,
+        "reserved_quantity": 3,
+        "picked_quantity": 1,
+        "packed_quantity": 0
+      },
+      {
+        "id": "9dede1e3-2dfa-4cf7-bbe0-7dd8c120a784",
+        "barcode": "OZ-BLUE",
+        "image_url": null,
+        "product_id": "253ba983-20f1-46b7-a469-4f2b3ff27160",
+        "marketplace_bindings": [
+          {
+            "marketplace": "ozon",
+            "external_barcodes": [
+              "OZ-BLUE"
+            ]
+          }
+        ],
+        "name": "Вторая позиция Ozon",
+        "seller_article": "OZ-ART-BLUE",
+        "sku": "673102",
+        "size": "46",
+        "color": "Синий",
+        "brand": null,
+        "composition": null,
+        "quantity": 2,
+        "reserved_quantity": 2,
+        "picked_quantity": 2,
+        "packed_quantity": 0
+      }
+    ],
+    "inventory": {
+      "available_unpacked": 0,
+      "locations": []
+    },
+    "buyer_type": "individual",
+    "cargo_type": "unknown",
+    "can_pvz": false,
+    "delivery_route": null,
+    "metadata": {
+      "required": [],
+      "optional": [],
+      "states": [],
+      "delivery_allowed": false,
+      "last_checked_at": null
+    },
+    "sticker": {
+      "code": null,
+      "status": "not_requested",
+      "asset_url": null,
+      "applied_at": null
+    },
+    "pick": {
+      "status": "pending",
+      "location_code": null,
+      "picked_at": null
+    },
+    "pack": {
+      "status": "pending",
+      "packed_at": null
+    },
+    "created_at_wb": "2026-10-06T12:00:00+00:00",
+    "deadline_at": "2026-10-07T12:00:00+00:00",
+    "supply_id": null,
+    "selection_blockers": [
+      {
+        "code": "warehouse_unmapped",
+        "message": "Склад Ozon не привязан к WMS — настройте привязку в каталоге."
+      }
+    ]
+  }
+}
