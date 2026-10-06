@@ -324,3 +324,10 @@ Replacement Solаналитик4eb81c378babf081b3342f3bf36ac17bf136a8bf отде
 Обычный mainPR394 merged8df23716626451e026d74137494e835e3cb081b7 в23:43:12UTC меняет ONLYscripts/ci/process_bootstrap.json; Gitreadback exactBASE/SOURCE соответствуетapproval. Checker/workflowbytes совпали installed04527, loader exacttwofieldsPASS, mainproduct прежний. Freshmetadata readback ruleset24431521 active9checks/stricttrue/no bypass иenvironmentproduction толькоexactetalon branch подтверждены. Negative390/37531081039 evidence сохранены; произвольныйmanualSSH не объявленпроверенным.
 
 ЭтотfinalcommonHEAD послеevidencecommit передаётся существующемуPR387 для ONEfullCI. До егоactualexactreports/pass иpostmergeetalonCI stagingcc8e/production8f11d912 остаютсяпрежними. Нет дополнительногоC5, обхода, новыхусловий илиphysicalproof.
+
+
+## Checkpoint 23:48 UTC: actual fullCI37548248403, один infrastructure reference mismatch
+
+Обычный PRCI37548248403/attempt1 стартовал23:44:57UTC, HEAD eabfad3656ec7ac923c6014657d4bf8ba5e63400/testedmergeac845328b27b5be265962695e10766efddef339e/BASE4b298. Baseline/backlog/WindowsPASS; охрана130PASS1FAIL из131 infrastructure cases: test_ci_release_additions.py ещёimmutableexpectsOLDd618, хотя CLIref25eb отдельно принят и sourcepinreviewapproved. Причина — упущенная миграция literalвэтомtestcontract, не productscope51/schema weakening. Scope/shards отчёты не дошли до исполнения из-зараннегоотказа. Rawguard127098bytes сохранён.
+
+Не отменяемrun/не запускаемblindretry: backend/frontend/print outcomes сохраняются. SAMEотдельный Soltestwriter resumed01a11370 для ONLYliteralaccepted25eb, всеassertions/3IDs unchanged, targetoldrefnegativecontrol; затем sameindependentreviewer иdistinctanalystdelta. Это требует новогоapprovedSOURCE/hash/config, старый9dae не выдаётсязаегоодобрение. Mainproduct/staging/production не меняются.
