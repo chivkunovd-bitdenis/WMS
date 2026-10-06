@@ -1339,7 +1339,7 @@ async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
         order_ids: list[int],
         marketplace_api_base: str | None = None,
     ) -> None:
-        assert order_ids == [859402, 859403]
+        assert order_ids == [859403]
 
     async def fake_reconcile_supply_orders(
         client: object,
@@ -1382,6 +1382,79 @@ async def test_existing_supply_add_orders_partial_readback_binds_only_confirmed(
         assert str(accepted.supply_id) == supply_id
         assert rejected.supply_id is None
         assert rejected.status == FBS_ORDER_STATUS_NEW
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("delayed", [True, False])
+async def test_wms683_existing_add_waits_for_wb_without_resending(
+    async_client: AsyncClient,
+    enable_wb_marketplace_supplies_mock: None,
+    monkeypatch: pytest.MonkeyPatch,
+    delayed: bool,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant_id = uuid.UUID(me.json()["tenant_id"])
+    seller_id, warehouse_id, location_id = await _setup_seller_with_token(
+        async_client, headers, suffix
+    )
+    product = await _create_product(async_client, headers, seller_id, sku=f"delay-{suffix}")
+    ids = [
+        await _create_ready_order(
+            tenant_id,
+            uuid.UUID(seller_id),
+            uuid.UUID(warehouse_id),
+            uuid.UUID(location_id),
+            product,
+            order_id=859501 + index,
+        )
+        for index in range(2)
+    ]
+    created = await async_client.post(
+        "/operations/fbs-supplies/from-orders",
+        headers=headers,
+        json={
+            "name": "WMS-683",
+            "order_ids": [str(ids[0])],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        },
+    )
+    assert created.status_code == 201, created.text
+    supply_id = created.json()["supply"]["id"]
+    calls = {"patch": 0, "read": 0, "confirmed": False}
+
+    async def patch(*args: Any, **kwargs: Any) -> None:
+        calls["patch"] += 1
+
+    async def read(*args: Any, **kwargs: Any) -> tuple[str, set[int]]:
+        calls["read"] += 1
+        if calls["confirmed"] or (delayed and calls["read"] >= 3):
+            return WB_OPERATION_STATE_CONFIRMED, {859501, 859502}
+        return WB_OPERATION_STATE_PENDING_CONFIRMATION, {859501}
+
+    monkeypatch.setattr("app.services.fbs_supply_service.add_orders_to_marketplace_supply", patch)
+    monkeypatch.setattr("app.services.fbs_supply_service.reconcile_supply_orders", read)
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/orders/batch",
+        headers=headers,
+        json={"order_ids": [str(ids[1])], "idempotency_key": str(uuid.uuid4())},
+    )
+    if delayed:
+        assert response.status_code == 200, response.text
+    else:
+        assert response.status_code == 504, response.text
+        # Once WB exposes the previous result, a new browser key must recover
+        # it without issuing the mutation again.
+        calls["confirmed"] = True
+        response = await async_client.post(
+            f"/operations/fbs-supplies/{supply_id}/orders/batch",
+            headers=headers,
+            json={"order_ids": [str(ids[1])], "idempotency_key": str(uuid.uuid4())},
+        )
+        assert response.status_code == 200, response.text
+    assert calls["patch"] == 1
+    assert sorted(row["wb_order_id"] for row in response.json()["orders"]) == [859501, 859502]
 
 
 @pytest.mark.asyncio

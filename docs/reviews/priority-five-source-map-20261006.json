@@ -1,0 +1,18 @@
+{
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "stages": [
+    {
+      "task": "WMS-683",
+      "source": "8f11d912351e8de7633b4abcf74d195badaeb254",
+      "parent": "f7b1ae2c6",
+      "base": "4b325876eb607bea5cba5b9547e9fe02becfce89",
+      "mode": "merge retaining original ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve current backlog and insert only original WMS-683 section"
+        }
+      ]
+    }
+  ]
+}
