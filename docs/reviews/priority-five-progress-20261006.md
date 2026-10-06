@@ -299,3 +299,11 @@ Exact checker-only correction `f263064f4c5735a477b91bd92bea982c9eeceaf5` follows
 Isolated formatting provenance662 `5feca959614667eb95e56a85e7b94efa497feeff` is retained by tree-identical ours merge `09dfb3c7ec4a591929e9db8c974c12c92b0772aa`; final662 blob identical to current formatted candidate. Original tester records the single-file ledger only after actual review artifact.
 
 Shared675 incident test on integrated tree:1 SQLite PASS in3.12s; full backend Ruff PASS. Dedicated PostgreSQL step is retained for common CI; independent reviewer separately confirmed2 SQLite+2 PostgreSQL PASS without skips. Progress waits only for concrete fixture corrections/ledgers and exact narrow review reports before one grouped push.
+
+## CI2 backend failure facts and integrated corrections · 06.10.2026
+
+CI2 `37460722630` completed FAILURE on `5ddd09aac4df17e7ecdefaf1625462c05f8039ce`:4366 PASS,13 FAIL,2 ERROR,196 SKIP/1 XFAIL. New groups: generated OpenAPI missing2endpoint663paths;11 old475/537 cases assert one WB add but e2e mock pre-read claims orders already present;653scope evaluates whole package and rejects9 accepted stagingcompat migrations;2 realPG662 contracts incorrectly collected underSQLite. Separate executors own475/537 and653scope correction, expectations preserved.
+
+Workflow/API correction `c884171aca6cbf72bc9ae6cc46d37cfa6afd7381`: two frozen662 contracts run unchanged in separate idlePG16services on exact55466/batch and55468/steady/userwms_test, serially with required asyncpg driver. OrdinarySQLite routing excludes only these two files, both mandatory below without skip/xfail. GeneratedAPI adds exactly2accepted663paths (`ozon-exemplar-documents` and `/prepare`),92existing path definitions unchanged; exporter also retains current accepted schema definitions. ExistingOpenAPI contract passed in local targeted run.
+
+Actual narrow652 model review `74890bb821d3a881c16b2806c964ca8676d0b832` included report-only as `6f0dab804`, exactf263 PASS81/81. Historical676 C8 reference changed to current equivalent allowedmodel testcase and latest rule documented explicitly; original history retained. Fresh `git fetch origin etalon` still confirms base `4b298efc95be7b4b6b7fe5665be9f3671f1fe747`. No new base changes to merge.
