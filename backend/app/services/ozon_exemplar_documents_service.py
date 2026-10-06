@@ -258,6 +258,22 @@ def current_document_state(
     return "unknown"
 
 
+def absent_documents_selected(data: dict[str, Any]) -> bool:
+    # The durable choice map survives a later marking claim, unlike its current
+    # operation marker. A claim still preparing expresses an explicit new intent.
+    if data.get("choice", {}).get("all_required_absent"):
+        return True
+    targets = []
+    for product in data.get("snapshot", {}).get("products", []):
+        required = [doc for doc in ("gtd", "rnpt") if product.get(f"is_{doc}_needed")]
+        for exemplar in product.get("exemplars", []):
+            key = f"{product['product_id']}:{exemplar['exemplar_id']}"
+            saved = data.get("choices", {}).get(key)
+            for doc in required:
+                targets.append(isinstance(saved, dict) and saved.get(f"is_{doc}_absent") is True)
+    return bool(targets) and all(targets)
+
+
 async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any]:
     data = document_data(order)
     positions = list(
@@ -316,7 +332,7 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
         "version": data.get("version", 0),
         "state": state,
         "status": data.get("status"),
-        "absence_selected": bool(data.get("choice", {}).get("all_required_absent")),
+        "absence_selected": absent_documents_selected(data),
         "editable": data.get("state") not in PENDING_STATES
         and data.get("status") != "update_not_available",
         "products": products,
@@ -485,6 +501,9 @@ async def resume_exemplar_document_check(
         if data.get("state") == "preparing":
             # /set was never checkpointed. Fence the interrupted preparer.
             data.update(state="editable", in_flight=False, version=int(data["version"]) + 1)
+            if data.get("choice", {}).get("all_required_absent"):
+                # No SET was checkpointed: release only this unsent batch intent.
+                data.update(choice={}, choices={})
             order = await document_order(session, tenant_id, order_id, lock=True)
             current = document_data(order)
             if (
@@ -710,9 +729,7 @@ async def save_absent_exemplar_documents(
     """One explicit posting choice; every required document shares the same SET."""
     order = await document_order(session, tenant_id, order_id)
     previous = document_data(order)
-    if previous.get("state") in PENDING_STATES or previous.get("choice", {}).get(
-        "all_required_absent"
-    ):
+    if previous.get("state") in PENDING_STATES or absent_documents_selected(previous):
         return await resume_exemplar_document_check(
             session,
             tenant_id=tenant_id,
