@@ -95,13 +95,15 @@
       },
       async refreshSelectAllAndOpen(expectedCount, assertCurrentSession) {
         const container = page();
-        const refresh = [...container.querySelectorAll('button')].filter(
-          (button) => normalizedText(button) === 'Обновить',
-        );
-        if (refresh.length !== 1 || refresh[0].disabled) {
-          throw new SoldKizFilterError('Штатная кнопка обновления реестра недоступна.');
-        }
-        refresh[0].click();
+        const refresh = await waitFor(() => {
+          assertCurrentSession();
+          const buttons = [...container.querySelectorAll('button')].filter(
+            (button) => normalizedText(button) === 'Обновить',
+          );
+          return buttons.length === 1 && !buttons[0].disabled ? buttons[0] : null;
+        }, 'Штатная кнопка обновления реестра недоступна.');
+        assertCurrentSession();
+        refresh.click();
         await waitFor(
           () => [...container.querySelectorAll('*')].some(
             (node) => normalizedText(node) === `Найдено: ${expectedCount}`,
