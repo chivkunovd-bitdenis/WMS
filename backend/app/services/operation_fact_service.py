@@ -340,6 +340,7 @@ async def write_operation_fact(
     reversal_of_id: uuid.UUID | None = None,
     integrity_status: str = "complete",
     lines: list[OperationFactLineInput] | None = None,
+    cumulative_handover: bool = False,
 ) -> OperationFact:
     if not operation_code:
         raise OperationFactError("operation_code_required")
@@ -374,6 +375,28 @@ async def write_operation_fact(
         )
     )
     if existing is not None:
+        if cumulative_handover:
+            if source_kind != "fbs_order" or operation_code != "fbs_order":
+                raise OperationFactError("invalid_cumulative_handover")
+            await session.refresh(existing, with_for_update=True)
+            await session.refresh(existing, attribute_names=["lines"])
+            by_product = {line.product_id: line for line in existing.lines}
+            for incoming in materialized_lines:
+                previous = by_product.get(incoming.product_id)
+                if previous is not None:
+                    previous.item_quantity = max(previous.item_quantity, incoming.item_quantity)
+                else:
+                    existing.lines.append(OperationFactLine(
+                        tenant_id=tenant_id, product_id=incoming.product_id,
+                        sku_snapshot=incoming.sku_snapshot,
+                        product_name_snapshot=incoming.product_name_snapshot,
+                        item_quantity=incoming.item_quantity,
+                    ))
+            existing.item_quantity = max(
+                existing.item_quantity, item_quantity,
+                sum(line.item_quantity for line in existing.lines),
+            )
+            await session.flush()
         return existing
     if idempotency_key is not None:
         replay = await session.scalar(
