@@ -973,6 +973,17 @@ def _framed_label_page(label_pdf: bytes) -> bytes:
         label.close()
 
 
+def _merge_pdf_pages(pages: list[bytes]) -> bytes:
+    document = fitz.open()
+    try:
+        for page_pdf in pages:
+            with fitz.open(stream=page_pdf, filetype="pdf") as source:
+                document.insert_pdf(source)
+        return bytes(document.tobytes())
+    finally:
+        document.close()
+
+
 @pytest.mark.asyncio
 async def test_c22_audit_reports_source_to_saved_label_substitution(
     db_session: AsyncSession,
@@ -1096,3 +1107,45 @@ async def test_c22_audit_accepts_unchanged_label_cropped_from_supplier_page(
     assert report["final_print_payloads"] == [cis]
     assert report["first_divergence"] is None
     assert report["evidence_gaps"] == []
+
+
+@pytest.mark.asyncio
+async def test_c22_audit_reports_ambiguous_layouts_for_same_cis_in_one_source_pdf(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deduplication of imported codes must not discard source-layout evidence."""
+    cis = _full_cis("C22-ONE-PDF-AMBIGUOUS")
+    source_pdf = _merge_pdf_pages([
+        _framed_label_page(_label_pdf(cis, article="SOURCE-ORIGINAL")),
+        _framed_label_page(_label_pdf(cis, article="SOURCE-DIFFERENT")),
+    ])
+    with fitz.open(stream=source_pdf, filetype="pdf") as source:
+        assert len(source) == 2
+        assert [
+            decoded.value
+            for page in source
+            for decoded in decode_datamatrix_codes_on_pdf_page(page)
+        ] == [cis, cis]
+        assert "SOURCE-ORIGINAL" in source[0].get_text()
+        assert "SOURCE-DIFFERENT" in source[1].get_text()
+    parsed = marking.parse_import_file("two-layouts.pdf", source_pdf)
+    assert len(parsed) == 1
+    assert parsed[0]["cis"] == cis
+    saved_label = bytes(parsed[0]["label_pdf"])
+    assert _decoded_values(saved_label) == [cis]
+
+    tenant, batch = await _seed_c22_audit_import(
+        db_session, cis=cis, label_artifact_pdf=saved_label
+    )
+    audit = importlib.import_module("app.services.marking_import_audit_service")
+    monkeypatch.setattr(audit, "read_source_pdf", lambda *_args, **_kwargs: source_pdf)
+
+    report = await audit.audit_marking_import(
+        db_session, tenant.id, batch.id, final_print_pdf=saved_label
+    )
+
+    assert report["source_payloads"] == [cis, cis]
+    assert report["artifact_payloads"] == [cis]
+    assert report["first_divergence"] is None
+    assert "source_to_artifact_layout" in report["evidence_gaps"]
