@@ -77,6 +77,11 @@ if [[ "${WMS_DEPLOY_GUARD_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Server independently verifies exact etalon CI and current process-proof metadata.
+# Failure (including unavailable public API) stops before any Docker action.
+echo "==> verify exact server process CI"
+python3 scripts/ci/verify_server_process_ci.py --sha "$DEPLOY_SHA"
+
 COMPOSE=(docker compose -f docker-compose.prod.yml)
 if [[ -f docker-compose.wms-host-8088.yml ]]; then
   COMPOSE+=(-f docker-compose.wms-host-8088.yml)
