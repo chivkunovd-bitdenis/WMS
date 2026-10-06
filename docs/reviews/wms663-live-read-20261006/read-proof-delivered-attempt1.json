@@ -1,0 +1,69 @@
+{
+  "started_at_utc": "2026-10-06T12:42:20.338398+00:00",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+  "posting_number": "66144885-0156-18",
+  "execution_status": "BOUNDED_READ_FINISHED_NOT_C19",
+  "requests": [
+    {
+      "posting_number": "66144885-0156-18",
+      "endpoint": "/v3/posting/fbs/get",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "started_at_utc": "2026-10-06T12:42:23.219714+00:00",
+      "response": {
+        "posting_number": "66144885-0156-18",
+        "status": "delivered",
+        "substatus": "posting_received",
+        "requirements_present": true,
+        "requirements": {
+          "products_requiring_gtd": [],
+          "products_requiring_rnpt": []
+        },
+        "products": [
+          {
+            "sku": 1695128938,
+            "quantity": 1
+          }
+        ]
+      },
+      "result": "READ_RESPONSE_NOT_ACCEPTANCE",
+      "http_status": 200,
+      "server_date": "Tue, 06 Oct 2026 12:42:23 GMT",
+      "finished_at_utc": "2026-10-06T12:42:23.452594+00:00"
+    },
+    {
+      "posting_number": "66144885-0156-18",
+      "endpoint": "/v5/fbs/posting/product/exemplar/status",
+      "http_method": "POST",
+      "semantic_operation": "read",
+      "started_at_utc": "2026-10-06T12:42:23.452608+00:00",
+      "result": "UNKNOWN",
+      "error_type": "MarketplaceProviderError",
+      "provider_error_code": 3,
+      "http_status": 400,
+      "server_date": "Tue, 06 Oct 2026 12:42:23 GMT",
+      "finished_at_utc": "2026-10-06T12:42:23.527576+00:00"
+    }
+  ],
+  "mutation_endpoints_called": [],
+  "local_commit_called": false,
+  "retries": 0,
+  "scope_snapshot": {
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "source": "wms",
+    "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+    "external_order_id": "66144885-0156-18",
+    "local_order_status": "done",
+    "position_id": "f89ee8d2-ff80-49f3-b7d5-154210aa2f0b",
+    "ozon_sku": 1695128938,
+    "quantity": 1,
+    "read_only": "on"
+  },
+  "finished_at_utc": "2026-10-06T12:42:23.528786+00:00"
+}

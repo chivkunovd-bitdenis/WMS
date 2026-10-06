@@ -1,0 +1,11 @@
+{
+  "started_at_utc": "2026-10-06T12:42:17.910711+00:00",
+  "reader_sha256": "7a3ea4f035a23d2552eb97dbf7ac5f7a671625134cbf8cfaf414b3c81473425f",
+  "reader_commit": "8dfcfdf1c9b63b06e502b73e8f433ba02692abb2",
+  "runtime": "existing root@194.87.96.144 /opt/wms container wms_prod-api-1 /app Python process",
+  "target_source": "confirmed WMS-675 delivered/received posting66144885-0156-18",
+  "scope_selection": "one posting only; no scan/retries",
+  "exit_code": 0,
+  "stderr_bytes": 0,
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

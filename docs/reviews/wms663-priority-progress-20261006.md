@@ -96,3 +96,5 @@ ship_not_available. Текущаяструктураполей документ�
 и принятие галки ещё не проверены. Старый«нет клиента чтения» снят; C19 остаётся операторским.
 Другие API-вызовы/create-or-get/set/sync/ship не проводились и не планируются
 в этом ограниченном чтении. Продукт/тесты не изменялись.
+
+06.10.2026 12:42:23 UTC: один выбранный delivered/received заказ из подтверждённых31 Bambook675 прочитан тем же seller-bound provider. INFO200 подтверждает delivered/posting_received и пустые GTD/RNPT requirements; exemplar/status400 (provider code3) не вернул экземпляры/документные поля. Непустой check_status/absent=true не подтверждены. Остальные заказы не перебирались; ровно2readHTTP без retries/мутаций. [Очищенный дополнительный proof](wms663-live-read-20261006/result-delivered.md). C17 остаётся частичным, C19 — операторским.

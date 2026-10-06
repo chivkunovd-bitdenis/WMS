@@ -1,5 +1,9 @@
 {
   "read-proof-attempt1.json": "be18d587279dffd477ec6f4a86f0a94c03c8033023e66c3c46087c1c268fb3c9",
   "read_documents.py": "01c1264278a388516946e74584ec7a0ea669a3dc6e54f6253222d709e4c18ce5",
-  "transport-receipt-attempt1.json": "0ba92f069fbfd982646c5331ef0b8a65c9dea1181db2b53669b9aa0f784e12c2"
+  "transport-receipt-attempt1.json": "0ba92f069fbfd982646c5331ef0b8a65c9dea1181db2b53669b9aa0f784e12c2",
+  "read_delivered_documents.py": "7a3ea4f035a23d2552eb97dbf7ac5f7a671625134cbf8cfaf414b3c81473425f",
+  "read-proof-delivered-attempt1.json": "06eb19d76cf0022cb93f9405314d8ea675a57c6a53c07552f3e02a2f180f191b",
+  "transport-receipt-delivered-attempt1.json": "9be96b6826c27de58758a908913f6dd7a35380e6040fa50be57af2352e239845",
+  "result-delivered.md": "a50532df504d3b3dddf6cb0d697c4bca4e847cbd72b1b46acef3fae4b9c6540a"
 }
