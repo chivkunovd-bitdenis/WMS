@@ -206,7 +206,7 @@ function CreateCellDialogBody(props: CreateCellDialogProps) {
   const onSuggest = 'onSuggest' in props ? props.onSuggest : undefined
   const [rack, setRack] = useState('')
   const [useSides, setUseSides] = useState(true)
-  const [useTiers, setUseTiers] = useState(true)
+  const [useTiers, setUseTiers] = useState(!legacyCreateCell)
   const [side, setSide] = useState('1')
   const [tier, setTier] = useState<number | null>(1)
   // Ручной номер относится только к его контексту: смена ряда, стороны или
