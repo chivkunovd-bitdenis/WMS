@@ -115,8 +115,19 @@ function rowCells(row: string) {
   return [...row.matchAll(/<td\b[^>]*>([\s\S]*?)<\/td>/g)].map((match) => printableText(match[1]!))
 }
 
+function productCellText(items: Array<{ product_name: string; vendor_code: string; sku_code: string; wb_nm_id: number | null }>) {
+  return items.map((item) => {
+    const article = item.vendor_code.trim() || item.sku_code.trim() || '—'
+    const meta = [
+      item.sku_code.trim() && item.sku_code.trim() !== article ? `SKU: ${item.sku_code.trim()}` : '',
+      item.wb_nm_id != null ? `Артикул WB: ${item.wb_nm_id}` : '',
+    ].filter(Boolean).join(' · ')
+    return `${item.product_name}${meta ? ` ${meta}` : ''}`
+  })
+}
+
 /** R8 replaces only the old inline placement, not the values or their sources. */
-function expectSeparateVariantColumns(html: string, expected: VariantColumns[]) {
+function expectSeparateVariantColumns(html: string, expected: VariantColumns[], expectedProductCells: string[]) {
   const headers = tableHeaders(html)
   for (const header of ['Артикул', 'Цвет', 'Размер']) {
     expect(headers.filter((value) => value === header), `ровно один столбец «${header}»`).toHaveLength(1)
@@ -128,15 +139,17 @@ function expectSeparateVariantColumns(html: string, expected: VariantColumns[]) 
   expect(product, 'название товара остаётся отдельным текстовым столбцом').toBeGreaterThanOrEqual(0)
   const rows = tableRows(html)
   expect(rows).toHaveLength(expected.length)
+  expect(expectedProductCells).toHaveLength(expected.length)
   for (const [index, values] of expected.entries()) {
     const cells = rowCells(rows[index]!)
-    expect(cells[article]).toContain(values.article)
-    expect(cells[color]).toContain(values.color)
-    expect(cells[size]).toContain(values.size)
-    // Sentinel values prove that a variant did not remain hidden in the name/shared cell.
-    expect(cells[product]).not.toContain(values.article)
-    expect(cells[product]).not.toContain(values.color)
-    expect(cells[product]).not.toContain(values.size)
+    expect(cells).toHaveLength(headers.length)
+    expect(cells[article]).toBe(values.article)
+    expect(cells[color]).toBe(values.color)
+    expect(cells[size]).toBe(values.size)
+    // The exact product cell preserves a lawful name/SKU/WB article even if its text
+    // happens to contain a color word, an article word, or a digit equal to a size.
+    // A historical inline variant would make this structural cell assertion fail.
+    expect(cells[product]).toBe(expectedProductCells[index])
   }
 }
 
@@ -318,25 +331,29 @@ describe('WMS-680 · контракт печатных накладных до �
   })
 
   it('C680-15: все реальные шаблоны печатают четыре варианта в отдельных столбцах Артикул, Цвет и Размер', () => {
-    const inboundHtml = buildInboundReceivingSheetHtml({ ...inbound, items: fourInboundRows() } as InboundReceivingSheetData)
-    const packagingHtml = buildShipmentPackagingSheetHtml({ ...packaging, items: fourPackagingRows() } as ShipmentPackagingSheetData)
-    expectSeparateVariantColumns(inboundHtml, fourVariants)
-    expectSeparateVariantColumns(packagingHtml, fourVariants)
+    const inboundRows = fourInboundRows()
+    const packagingRows = fourPackagingRows()
+    const inboundHtml = buildInboundReceivingSheetHtml({ ...inbound, items: inboundRows } as InboundReceivingSheetData)
+    const packagingHtml = buildShipmentPackagingSheetHtml({ ...packaging, items: packagingRows } as ShipmentPackagingSheetData)
+    expectSeparateVariantColumns(inboundHtml, fourVariants, productCellText(inboundRows))
+    expectSeparateVariantColumns(packagingHtml, fourVariants, productCellText(packagingRows))
 
     for (const kind of ['marketplace_unload', 'operational_outbound', 'inbound_intake'] as const) {
-      expectSeparateVariantColumns(capturedWaybillData(fourWaybill(kind)), fourVariants)
+      const data = fourWaybill(kind)
+      expectSeparateVariantColumns(capturedWaybillData(data), fourVariants, data.lines.map((line) => line.product_name))
     }
 
+    const fbsRows = fourVariants.map((variant, index) => ({
+      name: `FBS-NAME-${index + 1}-680`, size: variant.size, color: variant.color, imageUrl: null,
+      identifiers: [variant.article, `BARCODE-${index + 1}-680`], locations: [`FBS-CELL-${index + 1}-680`],
+      required: index + 10, picked: index, wbOrders: [6800 + index], stickerCodes: [null], marking: `MARK-${index + 1}-680`,
+    }))
     const fbsHtml = buildFbsPickingListPrintHtml({
       supplyName: 'FBS-680-columns', wbSupplyId: 'WB-680', marketplace: 'mixed', sellerName: 'Seller A', wmsWarehouseName: 'WMS',
       routeLabel: 'Route', deadlineLabel: '2026-10-07', printedAtLabel: '2026-10-06',
-      rows: fourVariants.map((variant, index) => ({
-        name: `FBS-NAME-${index + 1}-680`, size: variant.size, color: variant.color, imageUrl: null,
-        identifiers: [variant.article, `BARCODE-${index + 1}-680`], locations: [`FBS-CELL-${index + 1}-680`],
-        required: index + 10, picked: index, wbOrders: [6800 + index], stickerCodes: [null], marking: `MARK-${index + 1}-680`,
-      })),
+      rows: fbsRows,
     })
-    expectSeparateVariantColumns(fbsHtml, fourVariants)
+    expectSeparateVariantColumns(fbsHtml, fourVariants, fbsRows.map((row) => `${row.name} ${row.identifiers[1]!}`))
   })
 
   it('C680-16: известные, fallback, whitespace и строковый 0 остаются в собственных колонках без каталога', () => {
@@ -344,22 +361,24 @@ describe('WMS-680 · контракт печатных накладных до �
       { article: 'KNOWN-ARTICLE-680', color: 'KNOWN-COLOR-680', size: '0' },
       { article: 'SKU-FALLBACK-680', color: '—', size: '—' },
     ]
+    const inboundItems = [
+      { ...fourInboundRows()[0]!, product_name: 'NAME-0 KNOWN-ARTICLE-680 KNOWN-COLOR-680', vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
+      { ...fourInboundRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
+    ]
+    const packagingItems = [
+      { ...fourPackagingRows()[0]!, product_name: 'NAME-0 KNOWN-ARTICLE-680 KNOWN-COLOR-680', vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
+      { ...fourPackagingRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
+    ]
     const inboundHtml = buildInboundReceivingSheetHtml({
       ...inbound,
-      items: [
-        { ...fourInboundRows()[0]!, vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
-        { ...fourInboundRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
-      ],
+      items: inboundItems,
     } as InboundReceivingSheetData)
     const packagingHtml = buildShipmentPackagingSheetHtml({
       ...packaging,
-      items: [
-        { ...fourPackagingRows()[0]!, vendor_code: expected[0]!.article, sku_code: 'SKU-KNOWN-680', color: expected[0]!.color, size: expected[0]!.size },
-        { ...fourPackagingRows()[1]!, vendor_code: '   ', sku_code: expected[1]!.article, color: '  ', size: '   ' },
-      ],
+      items: packagingItems,
     } as ShipmentPackagingSheetData)
-    expectSeparateVariantColumns(inboundHtml, expected)
-    expectSeparateVariantColumns(packagingHtml, expected)
+    expectSeparateVariantColumns(inboundHtml, expected, productCellText(inboundItems))
+    expectSeparateVariantColumns(packagingHtml, expected, productCellText(packagingItems))
 
     for (const kind of ['marketplace_unload', 'operational_outbound', 'inbound_intake'] as const) {
       const data = fourWaybill(kind)
@@ -367,19 +386,26 @@ describe('WMS-680 · контракт печатных накладных до �
         { ...data.lines[0]!, sku_code: expected[0]!.article, color: expected[0]!.color, size: expected[0]!.size },
         { ...data.lines[1]!, sku_code: expected[1]!.article, color: '  ', size: '   ' },
       ]
-      expectSeparateVariantColumns(capturedWaybillData(data), expected)
+      expectSeparateVariantColumns(capturedWaybillData(data), expected, data.lines.map((line) => line.product_name))
     }
 
+    const fbsRows = expected.map((variant, index) => ({
+      name: `FBS-FALLBACK-${index + 1}-680`, size: variant.size === '—' ? '  ' : variant.size,
+      color: variant.color === '—' ? '  ' : variant.color, imageUrl: null, identifiers: [variant.article], locations: [],
+      required: index + 100, picked: 0, wbOrders: [6900 + index], stickerCodes: [null], marking: '—',
+    }))
     const fbsHtml = buildFbsPickingListPrintHtml({
       supplyName: 'FBS-680-fallback', wbSupplyId: 'WB-680', marketplace: 'ozon', sellerName: 'Seller A', wmsWarehouseName: 'WMS',
       routeLabel: 'Route', deadlineLabel: '2026-10-07', printedAtLabel: '2026-10-06',
-      rows: expected.map((variant, index) => ({
-        name: `FBS-FALLBACK-${index + 1}-680`, size: variant.size === '—' ? '  ' : variant.size,
-        color: variant.color === '—' ? '  ' : variant.color, imageUrl: null, identifiers: [variant.article], locations: [],
-        required: index + 100, picked: 0, wbOrders: [6900 + index], stickerCodes: [null], marking: '—',
-      })),
+      rows: fbsRows,
     })
-    expectSeparateVariantColumns(fbsHtml, expected)
+    expectSeparateVariantColumns(fbsHtml, expected, fbsRows.map((row) => row.name))
+
+    const lawfulName = 'NAME-0 KNOWN-ARTICLE-680 KNOWN-COLOR-680'
+    const structurallySeparate = `<table><thead><tr><th>Товар</th><th>Артикул</th><th>Цвет</th><th>Размер</th></tr></thead><tbody><tr><td>${lawfulName}</td><td>KNOWN-ARTICLE-680</td><td>KNOWN-COLOR-680</td><td>0</td></tr></tbody></table>`
+    expectSeparateVariantColumns(structurallySeparate, [expected[0]!], [lawfulName])
+    const historicalInline = `<table><thead><tr><th>Товар</th></tr></thead><tbody><tr><td>${lawfulName}<span data-legacy-inline="article">KNOWN-ARTICLE-680</span><span data-legacy-inline="color">KNOWN-COLOR-680</span><span data-legacy-inline="size">0</span></td></tr></tbody></table>`
+    expect(() => expectSeparateVariantColumns(historicalInline, [expected[0]!], [lawfulName])).toThrow(/столбец «Артикул»/)
   })
 
   it('C680-17: реальные caller-map сохраняют варианты, реквизиты и границы прежних форм', () => {
