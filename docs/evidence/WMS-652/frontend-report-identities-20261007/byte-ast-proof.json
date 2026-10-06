@@ -1,0 +1,97 @@
+{
+  "base": "dbeabe2fd1cbb6a1cff996e379d281258bf5f0aa",
+  "path": "frontend/src/integrations/cryptoProCades.test.ts",
+  "before_sha256": "3402be5ab5109e91b20f99957502072a6e7864af155be8e88f88fc741a912b09",
+  "after_sha256": "ad14215c564e233d961a080866d99eefeaa87673a3894acefac2c0b145ece90f",
+  "exact_single_title_byte_replacement": true,
+  "changed_literal": {
+    "old": "rejects a CryptoPro runtime below the tested baseline",
+    "new": "rejects a CryptoPro runtime below the tested baseline: %j"
+  },
+  "normalized_full_ast_identical": true,
+  "input_arrays_bodies_assertions_and_other_titles_byte_identical": true,
+  "expect_calls_before": 81,
+  "expect_calls_after": 81,
+  "string_literal_count_before": 165,
+  "string_literal_count_after": 165,
+  "frozen": [
+    {
+      "path": "frontend/src/integrations/cryptoProCades.ts",
+      "base_sha256": "ff8e57920861538e32761f59688940b7d8d9bad54199a4d5c7a9d4083591dacf",
+      "current_sha256": "ff8e57920861538e32761f59688940b7d8d9bad54199a4d5c7a9d4083591dacf",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/integrations/fixtures/wms517WithdrawalDocumentCryptoFixture.json",
+      "base_sha256": "8f4cb3878d7c6606ca32be519d7eaabdf69ed1b6b54aaf38e17bcdb5e98e60ee",
+      "current_sha256": "8f4cb3878d7c6606ca32be519d7eaabdf69ed1b6b54aaf38e17bcdb5e98e60ee",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package.json",
+      "base_sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "current_sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "base_sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "current_sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/vitest.config.ts",
+      "base_sha256": "c5a189e0a84e5bd969515013fb33ecf6c5923f9e551fb9f4c4c5971247b30cda",
+      "current_sha256": "c5a189e0a84e5bd969515013fb33ecf6c5923f9e551fb9f4c4c5971247b30cda",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/process_contracts.py",
+      "base_sha256": "a2143f35d99719b55d9a7e82ba4c3dcbba977d1996810e9905707b3d5df764f3",
+      "current_sha256": "a2143f35d99719b55d9a7e82ba4c3dcbba977d1996810e9905707b3d5df764f3",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/product_scope.py",
+      "base_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+      "current_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/tests/test_ci_release_additions.py",
+      "base_sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+      "current_sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/tests/test_product_scope.py",
+      "base_sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+      "current_sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+      "base_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "current_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "base_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "current_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "base_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "current_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-box-labels.test.mjs",
+      "base_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+      "current_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+      "byte_identical": true
+    }
+  ]
+}
