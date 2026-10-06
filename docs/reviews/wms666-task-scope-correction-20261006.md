@@ -145,3 +145,17 @@ DOM correction а29 сохранена. Замена обеих scope-baselines 
 не выдаёт наличие PENDING/локальный5/5 за пройденный полный etalon gate.
 Новые продуктовые тесты/CI, docs-review, merge/deploy и внешние действия не
 выполнялись. Report опубликован отдельным документальным commit.
+
+## Исправление настоящего замечания Astra high
+
+FINDINGS опубликован `96b330767a74212ee14832eef4aa149f0f3a201e`. Проверяющий
+воспроизвёл скрытие staged inventory через возврат working bytes к HEAD.
+Отдельный test-only fix `30aea1fbf9cdc8fc3863acfb7541c57d64f98952` добавляет явный
+`git diff --cached` в union и реальный negative control: index отличается,
+working tree совпадает с HEAD, обычный diff пуст, cached diff содержит inventory,
+collector отклоняет inventory. Старые untracked/staged controls сохранены.
+После этой новой правки разрешённый целевой Vitest: 5/5 PASS, 4.36s
+(06.10.2026 15:46:48 Asia/Tbilisi). Полный CI не повторялся.
+Две cumulative refs перенесены на этот test-only SHA; review остаётся PENDING
+до фактической узкой перепроверки Astra high. Исходные legacy provenance выше
+и FINDINGS artifact сохранены, checker/runtime не изменены.
