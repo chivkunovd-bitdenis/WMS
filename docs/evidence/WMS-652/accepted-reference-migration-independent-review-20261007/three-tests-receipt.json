@@ -1,0 +1,14 @@
+{
+  "source_sha": "ce212ec254a87a4f5570b549d6aa721db971b5ef",
+  "command": [
+    "python3",
+    "-B",
+    "-m",
+    "unittest",
+    "scripts.ci.tests.test_ci_release_additions",
+    "-v"
+  ],
+  "exit_code": 0,
+  "raw_sha256": "bd3a336276f30a8e0666ff743f2a7d69ffbadbecbbadaa2cd2a6ccd7ab233011",
+  "executions_by_this_reviewer": 1
+}
