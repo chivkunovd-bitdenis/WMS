@@ -1,0 +1,43 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A28%3A20.037Z&to=2026-10-06T18%3A28%3A20.037Z",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/preflight",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "planned_delivery_type": "warehouse_sc"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/from-orders",
+      "body": {
+        "name": "FBS 06.10.2026",
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "planned_destination": null,
+        "idempotency_key": "dc51636d-c98c-4d45-bfe7-048b66f35217"
+      }
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

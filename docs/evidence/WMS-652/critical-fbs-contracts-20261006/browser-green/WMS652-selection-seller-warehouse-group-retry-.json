@@ -1,0 +1,131 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-29T18%3A26%3A09.250Z&to=2026-10-06T18%3A26%3A09.250Z",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/preflight",
+      "body": {
+        "order_ids": [
+          "order-a"
+        ],
+        "planned_delivery_type": "warehouse_sc"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/preflight",
+      "body": {
+        "order_ids": [
+          "order-c"
+        ],
+        "planned_delivery_type": "warehouse_sc"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/preflight",
+      "body": {
+        "order_ids": [
+          "order-b"
+        ],
+        "planned_delivery_type": "warehouse_sc"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/from-orders",
+      "body": {
+        "name": "FBS 06.10.2026",
+        "order_ids": [
+          "order-a"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "planned_destination": null,
+        "idempotency_key": "3541783d-571e-4ab5-9a56-f3fe74f26cb8"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/from-orders",
+      "body": {
+        "name": "FBS 06.10.2026",
+        "order_ids": [
+          "order-b"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "planned_destination": null,
+        "idempotency_key": "216b53a3-de1d-45d3-86b5-f4607a1a241d"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/from-orders",
+      "body": {
+        "name": "FBS 06.10.2026",
+        "order_ids": [
+          "order-c"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "planned_destination": null,
+        "idempotency_key": "0767f54a-8656-46ce-8705-47a9e575f368"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": {
+        "supply_ids": [
+          "created-order-a",
+          "created-order-c"
+        ],
+        "idempotency_key": "335f2bbb-2eb6-4ce5-87cd-30d72c0836ca"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/from-orders",
+      "body": {
+        "name": "FBS 06.10.2026",
+        "order_ids": [
+          "order-b"
+        ],
+        "planned_delivery_type": "warehouse_sc",
+        "planned_destination": null,
+        "idempotency_key": "fa9c1323-2a1b-4a01-b693-edaabf21c091"
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": {
+        "supply_ids": [
+          "created-order-b"
+        ],
+        "idempotency_key": "9cc2226d-cd8f-4b35-a1f0-d4059093f5df"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

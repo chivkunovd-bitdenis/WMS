@@ -1,0 +1,207 @@
+[
+  {
+    "mutation": "disconnect-input",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: input must reach product-miss then sticker lookup"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: input must reach product-miss then sticker lookup"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: input must reach product-miss then sticker lookup"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[add-existing-refusal-retry]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed"
+  },
+  {
+    "mutation": "skip-qr-print",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n-   'scan-wb-a-order',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n-   'scan-wb-a-order',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n-   'scan-wb-a-order',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n-   'scan-wb-next-order',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[add-existing-refusal-retry]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed"
+  },
+  {
+    "mutation": "duplicate-qr-print",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    'scan-wb-a-order',\n+   'scan-wb-a-order:UNWANTED_DUPLICATE',\n    'scan-wb-a-order:copy',\n    'scan-wb-a-order:copy:c2',\n    'scan-wb-next-order',\n+   'scan-wb-next-order:UNWANTED_DUPLICATE',\n    'scan-wb-next-order:copy',\n    'scan-wb-next-order:copy:c2'\n  ]\n"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[add-existing-refusal-retry]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed"
+  },
+  {
+    "mutation": "wrong-next-order",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: next QR/KIZ did not complete: product-miss:*DUIkWJJF -> lookup:wb-a-order -> select:wb-a-order -> bind:wb-a-order -> print:scan-wb-a-order -> print:scan-wb-a-order:copy -> print:scan-wb-a-order:copy:c2 -> pack:wb-a-order -> product-miss:*DUIkNEXT -> lookup:wb-next-order -> select:wb-next-order -> bind:wb-a-order -> print:scan-wb-next-order:copy -> print:scan-wb-next-order:copy:c2 -> pack:wb-a-order"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: next QR/KIZ did not complete: product-miss:*DUIkWJJF -> lookup:wb-a-order -> select:wb-a-order -> bind:wb-a-order -> print:scan-wb-a-order -> print:scan-wb-a-order:copy -> print:scan-wb-a-order:copy:c2 -> pack:wb-a-order -> product-miss:*DUIkNEXT -> lookup:wb-next-order -> select:wb-next-order -> bind:wb-a-order -> print:scan-wb-next-order:copy -> print:scan-wb-next-order:copy:c2 -> pack:wb-a-order"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: next QR/KIZ did not complete: product-miss:*DUIkWJJF -> lookup:wb-a-order -> select:wb-a-order -> bind:wb-a-order -> print:scan-wb-a-order -> print:scan-wb-a-order:copy -> print:scan-wb-a-order:copy:c2 -> pack:wb-a-order -> product-miss:*DUIkNEXT -> lookup:wb-next-order -> select:wb-next-order -> bind:wb-a-order -> print:scan-wb-next-order -> print:scan-wb-next-order:copy -> print:scan-wb-next-order:copy:c2"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[add-existing-refusal-retry]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed"
+  },
+  {
+    "mutation": "wrong-selected-create-ids",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   []\n-   [\n-     'order-a2',\n-     'order-a'\n-   ]\n  ]\n"
+  },
+  {
+    "mutation": "repeat-successful-group",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "Error: UI timeout: document.querySelector('[data-testid=\"fbs-group-create-submit\"]')?.innerText.includes('Повторить (1)')"
+  },
+  {
+    "mutation": "wrong-selected-add-ids",
+    "exit": 1,
+    "cases": [
+      {
+        "id": "WMS652.realQr[supply_id=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.realQr[supply_ids=A,B]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[single-create]",
+        "status": "PASS"
+      },
+      {
+        "id": "WMS652.selection[seller-warehouse-group-retry]",
+        "status": "PASS"
+      }
+    ],
+    "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n+   [],\n+   []\n-   [\n-     'order-a2',\n-     'order-a'\n-   ],\n-   [\n-     'order-a2',\n-     'order-a'\n-   ]\n  ]\n"
+  }
+]

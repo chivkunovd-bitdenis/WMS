@@ -56,3 +56,63 @@ helper), `backend/tests/conftest.py`, `backend/tests/fbs_seed_helpers.py`,
 Checkpoint1 не завершает C54/регрессионную карту. Настоящий QR-input path и
 selection→create/add остаются отдельными следующими тестовыми шагами.
 Независимое ревью/аналитическая приёмка/fullCI/production здесь не заявлены.
+
+## Checkpoint2: настоящие экраны Chromium
+
+`frontend/tests-e2e/wms652-critical/browser.mjs` запускает настоящий Chrome, монтирует
+FfFbsOrdersScreen, FfFbsWorkspace/FfFbsAssemblyScreen и FbsPackingScanBar без подмены
+React-компонентов или контроллера. Скан отправляется в настоящий input событиями
+клавиатуры CDP. Подменены только HTTP API и локальный транспорт WMS Print; live
+marketplace/printer не вызываются, физическая бумага не проверена.
+
+Шесть постоянных IDs:
+
+- `WMS652.realQr[supply_id=A]`
+- `WMS652.realQr[supply_ids=A]`
+- `WMS652.realQr[supply_ids=A,B]`
+- `WMS652.selection[single-create]`
+- `WMS652.selection[seller-warehouse-group-retry]`
+- `WMS652.selection[add-existing-refusal-retry]`
+
+Первые три сканируют именно WB QR `*DUIkWJJF`: товарный поиск обязан промахнуться,
+lookup находит нужный заказ, полный GS1 КИЗ сохраняется без обрезки, настоящий PNG
+QR и две точные копии ЧЗ уходят под стабильными keys, затем pack правильной строки
+и следующий QR. Lookup удержан, следующие три ввода отправлены заранее; проверены
+FIFO, объект, supply/task/line, шесть print jobs и два pack requests.
+
+Selection проверяет настоящую floating bar, selected popup, create dialog,
+группировку seller/warehouse, retry только отказавшей группы и actual add-existing
+кнопку. Последняя показывает только совместимую WB-поставку, держит запрос до
+ответа, блокирует повторный click, сохраняет checkbox selection при отказе и
+делает один явный retry с теми же выбранными IDs. Это HTTP-контракт экрана;
+DB/external exactly-once отдельно проверяется backend-защитой.
+
+`browser-green/result.json`: 6 PASS, 0 SKIP. `browser-mutants/mutations.json`:
+семь purposeful mutations RED (disconnect input, skip QR, duplicate QR, wrong
+next order — каждый во всех трёх entry forms; wrong selected create IDs,
+repeat successful group, wrong selected add IDs). `mutations.py` восстанавливает
+точные исходные bytes в finally, permanent productdiff отсутствует.
+
+Команды из root worktree (Node24+, Chrome, существующие frontend dependencies):
+
+```sh
+cd frontend && npx vite --config tests-e2e/wms652-critical/vite.config.ts
+```
+
+В отдельном терминале из root:
+
+```sh
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/browser-green node frontend/tests-e2e/wms652-critical/browser.mjs
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/browser-mutants python3 frontend/tests-e2e/wms652-critical/mutations.py
+```
+
+`WMS652_CHROME` задаёт путь Chrome в CI. Loopback16686/16687 обязаны быть свободны.
+Отчёт перечисляет каждый fullName ID, статус и source HEAD; отсутствие Chrome/Vite
+или неверный ответ synthetic endpoint приводит к FAIL, не skip/green.
+Dependency closure: все шесть файлов `frontend/tests-e2e/wms652-critical/`
+(main.tsx,index.html,vite.config.ts,fixtures.mjs,browser.mjs,mutations.py),
+frontend/package.json/package-lock.json и настоящий product import graph entry
+FfFbsOrdersScreen. Evidence-only mutation script не collected baseline case.
+
+Расширение шести комбинаций флагов и uncertain native receipt/remount — следующий
+checkpoint. Полная C54 карта этим ограниченным набором ещё не закрыта.
