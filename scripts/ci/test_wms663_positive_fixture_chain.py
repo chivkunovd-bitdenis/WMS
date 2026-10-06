@@ -65,7 +65,7 @@ class PositiveFixtureChainTests(unittest.TestCase):
             first["correction_commit"]: {first["files"][1]["path"]},
             second["correction_commit"]: {second["files"][0]["path"]},
         })
-        self.assertEqual(len(checker.FIXTURE_BLOB_PAIRS), 5)
+        self.assertEqual(len(checker.FIXTURE_BLOB_PAIRS), 6)
 
     def test_reject_gap_reordering_missing_review_and_false_source(self):
         ledger = self.chain()
