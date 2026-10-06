@@ -132,6 +132,66 @@ class PromoteGuardsTests(unittest.TestCase):
         self.git("commit", "-qm", "WMS-654 protected template fixture")
         return source, owner
 
+    def wms687_actual_cases(self, owner: str) -> list[str]:
+        title = "selects only document products and opens the catalog FbsStockDialogContainer"
+        describe = "WMS-687 shared FBS stock dialog from an inbound document"
+        return [f"{owner}::{describe} {operation} {title}" for operation in ("inbound", "return")]
+
+    def wms687_protected_each_fixture(
+        self,
+        *,
+        digest: str | None = None,
+        cases: list[str] | None = None,
+        report: str = "frontend-all.json",
+    ) -> tuple[str, str]:
+        source = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        owner = "src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        template = "'%s selects only document products and opens the catalog FbsStockDialogContainer'"
+        self.write(
+            source,
+            "\n".join(
+                (
+                    "describe('WMS-687 shared FBS stock dialog from an inbound document', () => {",
+                    "  it.each(['inbound', 'return'] as const)(",
+                    f"    {template},",
+                    "    async (operationType) => { void operationType },",
+                    "  )",
+                    "})",
+                    "",
+                )
+            ),
+        )
+        expected_digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        self.write(
+            "guards/PROCESS_CONTRACTS.json",
+            json.dumps(
+                {
+                    "version": 1,
+                    "files": {source: expected_digest if digest is None else digest},
+                    "suites": {
+                        "frontend-fbs": {
+                            "report": report,
+                            "format": "vitest",
+                            "exact": False,
+                            "cases": self.wms687_actual_cases(owner) if cases is None else cases,
+                        }
+                    },
+                },
+                indent=2,
+            ) + "\n",
+        )
+        self.write_manifest("active")
+        self.write(
+            "docs/requirements/WMS-687.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C2 | навсегда | {source}::inbound selects only document products and opens the catalog FbsStockDialogContainer<br>{source}::return selects only document products and opens the catalog FbsStockDialogContainer | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "WMS-687 protected it.each fixture")
+        return source, owner
+
     def fixture(self) -> None:
         self.write(
             "backend/tests/unit/test_stock.py",
@@ -323,6 +383,66 @@ class PromoteGuardsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
             promoter.promote(self.root, "WMS-654")
+
+    def test_protected_wms687_each_uses_the_two_exact_executed_case_ids(self):
+        source, _ = self.wms687_protected_each_fixture()
+        original_document = (self.root / "docs/requirements/WMS-687.md").read_text()
+
+        promoter.promote(self.root, "WMS-687")
+
+        self.assertTrue((self.root / source).is_file())
+        self.assertFalse(
+            (self.root / "frontend/src/guards/screens/ff/FfInboundRequestView.wms687.dom.test.tsx").exists()
+        )
+        self.assertEqual((self.root / "docs/requirements/WMS-687.md").read_text(), original_document)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_wms687_each_rejects_missing_exact_case(self):
+        owner = "src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        self.wms687_protected_each_fixture(cases=self.wms687_actual_cases(owner)[:-1])
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-687")
+
+    def test_protected_wms687_each_rejects_wrong_report(self):
+        self.wms687_protected_each_fixture(report="other-vitest-report.json")
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-687")
+
+    def test_protected_wms687_each_rejects_changed_source_hash(self):
+        self.wms687_protected_each_fixture(digest="0" * 64)
+
+        with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
+            promoter.promote(self.root, "WMS-687")
+
+    def test_protected_wms687_each_rejects_arbitrary_describe_group_prefix(self):
+        owner = "src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        cases = self.wms687_actual_cases(owner)
+        cases[0] = cases[0].replace(
+            "WMS-687 shared FBS stock dialog from an inbound document",
+            "arbitrary describe group",
+        )
+        self.wms687_protected_each_fixture(cases=cases)
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-687")
+
+    def test_unprotected_legacy_each_reference_still_requires_a_literal_source_name(self):
+        source = "frontend/src/sections/legacy.each.test.tsx"
+        self.write(source, "it.each(['inbound'] as const)('%s keeps a legacy contract', () => {})\n")
+        self.write(
+            "docs/requirements/WMS-688.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C1 | навсегда | {source}::inbound keeps a legacy contract | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "unprotected legacy fixture")
+
+        with self.assertRaisesRegex(ValueError, "не найдено имя теста inbound keeps a legacy contract"):
+            promoter.promote(self.root, "WMS-688")
 
     def protected_original_fixture(self, task: str) -> str:
         source = "backend/tests/test_immutable_contract.py"
