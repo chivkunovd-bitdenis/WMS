@@ -1,0 +1,134 @@
+{
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "started_at": "2026-10-06T20:36:10.045081+00:00",
+  "role": "wms_agent_t_b80a893bab8742b68fd76d41502c900f",
+  "queries": [
+    {
+      "name": "identity",
+      "started_at": "2026-10-06T20:36:10.045628+00:00",
+      "sql_file": "identity.sql",
+      "status": "ok",
+      "csv_file": "identity.csv",
+      "rows": 1,
+      "truncated": false,
+      "sha256": "26ecbbb6b3ef0c5c59ae99315ce18f3d3617be781185801ba345b442255941f6",
+      "finished_at": "2026-10-06T20:36:12.208415+00:00"
+    },
+    {
+      "name": "orders_positions_reserves",
+      "started_at": "2026-10-06T20:36:12.208862+00:00",
+      "sql_file": "orders_positions_reserves.sql",
+      "status": "ok",
+      "csv_file": "orders_positions_reserves.csv",
+      "rows": 31,
+      "truncated": false,
+      "sha256": "4590453de12c83a12255ed11bdcacadfeef9f3b08665f447464ca5244970a968",
+      "finished_at": "2026-10-06T20:36:13.865775+00:00"
+    },
+    {
+      "name": "ledger",
+      "started_at": "2026-10-06T20:36:13.866633+00:00",
+      "sql_file": "ledger.sql",
+      "status": "ok",
+      "csv_file": "ledger.csv",
+      "rows": 31,
+      "truncated": false,
+      "sha256": "37c02703512e4252da6b58d5772079374e07318d5b05d4b1b3ea77d34f077636",
+      "finished_at": "2026-10-06T20:36:15.622491+00:00"
+    },
+    {
+      "name": "unlinked_fbs_movements",
+      "started_at": "2026-10-06T20:36:15.623395+00:00",
+      "sql_file": "unlinked_fbs_movements.sql",
+      "status": "ok",
+      "csv_file": "unlinked_fbs_movements.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "5dd344d4192b2b16662607b2315dcc8b9d56f3ee0826aa1f73739f0e3964d4dd",
+      "finished_at": "2026-10-06T20:36:17.282788+00:00"
+    },
+    {
+      "name": "balances_vs_all_movements",
+      "started_at": "2026-10-06T20:36:17.283195+00:00",
+      "sql_file": "balances_vs_all_movements.sql",
+      "status": "ok",
+      "csv_file": "balances_vs_all_movements.csv",
+      "rows": 6,
+      "truncated": false,
+      "sha256": "850ea279737e3cb5d762cb587635efab9962f237052d941ecacd7072bae31587",
+      "finished_at": "2026-10-06T20:36:18.919586+00:00"
+    },
+    {
+      "name": "balances_locations",
+      "started_at": "2026-10-06T20:36:18.921773+00:00",
+      "sql_file": "balances_locations.sql",
+      "status": "ok",
+      "csv_file": "balances_locations.csv",
+      "rows": 6,
+      "truncated": false,
+      "sha256": "d0fb2f3ab38a5ae04b02458129bfa427518ee178ef429519ddd7d5118ca9e31a",
+      "finished_at": "2026-10-06T20:36:20.515021+00:00"
+    },
+    {
+      "name": "new_history_attribution",
+      "started_at": "2026-10-06T20:36:20.515682+00:00",
+      "sql_file": "new_history_attribution.sql",
+      "status": "ok",
+      "csv_file": "new_history_attribution.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "baf8281dd2669ca4ea4a4eea76e3bd0f981428c2f38e49d98cf16db67442f1bf",
+      "finished_at": "2026-10-06T20:36:22.009440+00:00"
+    },
+    {
+      "name": "other_negative_since_audit",
+      "started_at": "2026-10-06T20:36:22.009894+00:00",
+      "sql_file": "other_negative_since_audit.sql",
+      "status": "ok",
+      "csv_file": "other_negative_since_audit.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "499a55f8e23b2ce4c32bab656e701ffb686e6491a3d8335842e1841ad341c592",
+      "finished_at": "2026-10-06T20:36:23.673482+00:00"
+    },
+    {
+      "name": "billing_entries",
+      "started_at": "2026-10-06T20:36:23.674092+00:00",
+      "sql_file": "billing_entries.sql",
+      "status": "ok",
+      "csv_file": "billing_entries.csv",
+      "rows": 26,
+      "truncated": false,
+      "sha256": "d19066f79dc8bc45fa355e426a9f0dcc291e546e1618f44a7683fc2ca92a4e45",
+      "finished_at": "2026-10-06T20:36:25.499852+00:00"
+    },
+    {
+      "name": "operation_facts",
+      "started_at": "2026-10-06T20:36:25.500685+00:00",
+      "sql_file": "operation_facts.sql",
+      "status": "ok",
+      "csv_file": "operation_facts.csv",
+      "rows": 13,
+      "truncated": false,
+      "sha256": "99b2c6e16523d8f30aa6d57b0d0b45b460581f1b70b5eedac479f6b7b1216fd6",
+      "finished_at": "2026-10-06T20:36:27.264027+00:00"
+    },
+    {
+      "name": "supply_operations",
+      "started_at": "2026-10-06T20:36:27.265538+00:00",
+      "sql_file": "supply_operations.sql",
+      "status": "ok",
+      "csv_file": "supply_operations.csv",
+      "rows": 2,
+      "truncated": false,
+      "sha256": "2628b0a8e29dd1646918d7ee2e522847c21f66dc28094f6883b1a00b122949a7",
+      "finished_at": "2026-10-06T20:36:29.330626+00:00"
+    }
+  ],
+  "writes": 0,
+  "external_calls": 0,
+  "snapshot_consistency": "Separate gateway SELECTs; freshness must be rechecked under WMS-662 locks before mutation.",
+  "finished_at": "2026-10-06T20:36:29.331116+00:00"
+}

@@ -1,0 +1,13 @@
+{
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "started_at_utc": "2026-10-06T20:36:29.509482+00:00",
+  "execution_status": "NOT_COMPLETED_NO_MUTATION",
+  "requests": [],
+  "collector_sha256": "77f56f1100d27db0f369ff7edb436332c9fd91f295d4065c90bcb51e68e80011",
+  "seed_plan_sha256": "cccfb2d7c024f02309f23424a67473723cfcb6d7d85312f138f1b152e04bc00b",
+  "error_type": "RuntimeError",
+  "failure_code": "live_transport_disabled",
+  "finished_at_utc": "2026-10-06T20:36:31.175099+00:00"
+}
