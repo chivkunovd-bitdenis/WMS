@@ -1,0 +1,62 @@
+test_default_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_default_timeout_is_distinct_and_retryable) ... ok
+test_installed_size_aware_receipt_replays_after_upgrade_and_restart (test_macos_artmaks_contract.ArtMaksMacContract.test_installed_size_aware_receipt_replays_after_upgrade_and_restart) ... FAIL
+test_new_label_passes_58x40_to_actual_lp (test_macos_artmaks_contract.ArtMaksMacContract.test_new_label_passes_58x40_to_actual_lp) ... FAIL
+test_printer_list_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_printer_list_timeout_is_distinct_and_retryable) ... FAIL
+test_queue_validation_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_queue_validation_timeout_is_distinct_and_retryable) ... FAIL
+test_same_png_with_changed_size_is_rejected (test_macos_artmaks_contract.ArtMaksMacContract.test_same_png_with_changed_size_is_rejected) ... FAIL
+
+======================================================================
+FAIL: test_installed_size_aware_receipt_replays_after_upgrade_and_restart (test_macos_artmaks_contract.ArtMaksMacContract.test_installed_size_aware_receipt_replays_after_upgrade_and_restart)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 181, in test_installed_size_aware_receipt_replays_after_upgrade_and_restart
+    self.assertIn("RECEIPT:Label_Printer-41", self.run_probe())
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'RECEIPT:Label_Printer-41' not found in 'ERROR:Содержимое этого задания изменилось\n'
+
+======================================================================
+FAIL: test_new_label_passes_58x40_to_actual_lp (test_macos_artmaks_contract.ArtMaksMacContract.test_new_label_passes_58x40_to_actual_lp)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 170, in test_new_label_passes_58x40_to_actual_lp
+    self.assertIn("media=Custom.58x40mm", submits[0])
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'media=Custom.58x40mm' not found in ['lp', '-d', 'Label_Printer', '-o', 'fit-to-page', '-o', 'copies=1', '--', '/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms-qr-C53B1AF3-69AA-43FF-AED7-5738D60AECF0/label.png']
+
+======================================================================
+FAIL: test_printer_list_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_printer_list_timeout_is_distinct_and_retryable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 161, in test_printer_list_timeout_is_distinct_and_retryable
+    self.assert_timeout_retry("list_timeout", ["lpstat", "-p"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 145, in assert_timeout_retry
+    self.assertRegex(output.lower(), r"(не ответила вовремя|таймаут|время ожидания)")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Regex didn't match: '(не ответила вовремя|таймаут|время ожидания)' not found in 'error:недоступна служба печати macos или список её принтеров. этикетка не отправлена; проверьте печать в macos и повторите скан.\n'
+
+======================================================================
+FAIL: test_queue_validation_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_queue_validation_timeout_is_distinct_and_retryable)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 158, in test_queue_validation_timeout_is_distinct_and_retryable
+    self.assert_timeout_retry("queue_timeout", ["lpstat", "-p", "Label_Printer"])
+    ~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 145, in assert_timeout_retry
+    self.assertRegex(output.lower(), r"(не ответила вовремя|таймаут|время ожидания)")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Regex didn't match: '(не ответила вовремя|таймаут|время ожидания)' not found in 'error:macos не определила принтер по умолчанию. в настройках «принтеры и сканеры» выберите конкретный принтер этикеток, затем повторите скан. этикетка не отправлена.\n'
+
+======================================================================
+FAIL: test_same_png_with_changed_size_is_rejected (test_macos_artmaks_contract.ArtMaksMacContract.test_same_png_with_changed_size_is_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_contract.py", line 188, in test_same_png_with_changed_size_is_rejected
+    self.assertIn("ERROR:", output)
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^
+AssertionError: 'ERROR:' not found in 'RECEIPT:Label_Printer-41\n'
+
+----------------------------------------------------------------------
+Ran 6 tests in 18.999s
+
+FAILED (failures=5)

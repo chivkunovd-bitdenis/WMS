@@ -1,0 +1,13 @@
+test_new_label_passes_58x40_to_actual_lp (test_macos_artmaks_contract.ArtMaksMacContract.test_new_label_passes_58x40_to_actual_lp) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 2.740s
+
+OK
+test_installed_size_aware_receipt_replays_after_upgrade_and_restart (test_macos_artmaks_contract.ArtMaksMacContract.test_installed_size_aware_receipt_replays_after_upgrade_and_restart) ... ok
+test_same_png_with_changed_size_is_rejected (test_macos_artmaks_contract.ArtMaksMacContract.test_same_png_with_changed_size_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 3.250s
+
+OK
