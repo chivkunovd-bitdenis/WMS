@@ -2,7 +2,7 @@
 set -euo pipefail
 [[ "${GITHUB_ACTIONS:-}" == true && "$(uname -s)" == Linux ]]
 root="$(pwd)"
-evidence="${RUNNER_TEMP:?}/c5-cache-trace"
+evidence="${RUNNER_TEMP:?}/c5-cache-clock-trace"
 mkdir -p "$evidence"
 export WMS672_EVIDENCE_DIR="$evidence/672"
 export WMS672_TEST_URL=http://127.0.0.1:16724

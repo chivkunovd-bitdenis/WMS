@@ -1,0 +1,8 @@
+{
+  "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/content/browser/devtools/protocol/tracing_handler.cc",
+  "decoded_sha256": "378c72533e8953aebc5f5f6c64a412cd3b0e6d806e0011c3d4187da2b420e9b0",
+  "lines": [
+    1066,
+    1070
+  ]
+}

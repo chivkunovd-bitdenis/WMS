@@ -11,7 +11,7 @@ const events = trace.traceEvents;
 const names = {};
 for (const event of events) names[event.name] = (names[event.name] || 0) + 1;
 const cache = events.filter(event => /ImageDecode|DecodedImageTracker|BudgetForImage|UnrefImage/.test(event.name || ''));
-const markers = events.filter(event => (event.name || '').startsWith('C5-fixture-'));
+const markers = events.filter(event => event.name === 'clock_sync' || (event.args?.sync_id || '').startsWith('C5-clock-'));
 const memory = [];
 for (const event of events) {
   const allocators = event.args?.dumps?.allocators;
@@ -22,4 +22,4 @@ for (const event of events) {
 await writeFile(resolve(dir, 'cache-events.json.gz'), (await import('node:zlib')).gzipSync(JSON.stringify(cache)));
 await writeFile(resolve(dir, 'memory-and-markers.json'), JSON.stringify({ memory, markers }, null, 2));
 const completion = JSON.parse(await readFile(resolve(dir, 'trace-completion.json'), 'utf8'));
-console.log(JSON.stringify({ events: events.length, cacheEvents: cache.length, markers: markers.length, imageMemorySnapshots: memory.length, completion, relevantEventCounts: Object.fromEntries(Object.entries(names).filter(([name]) => /ImageDecode|DecodedImageTracker|BudgetForImage|UnrefImage|memory|C5-fixture-/.test(name))) }, null, 2));
+console.log(JSON.stringify({ events: events.length, cacheEvents: cache.length, markers: markers.length, imageMemorySnapshots: memory.length, completion, relevantEventCounts: Object.fromEntries(Object.entries(names).filter(([name]) => /ImageDecode|DecodedImageTracker|BudgetForImage|UnrefImage|memory|clock_sync/.test(name))) }, null, 2));

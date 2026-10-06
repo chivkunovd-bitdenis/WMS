@@ -1,0 +1,28 @@
+COMMAND node --check scripts/ci/wms672-c5-diagnostic/adapter.mjs
+EXIT 0
+
+COMMAND node --check scripts/ci/wms672-c5-diagnostic/trace-summary.mjs
+EXIT 0
+
+COMMAND bash -n scripts/ci/wms672-c5-diagnostic/run.sh
+EXIT 0
+
+COMMAND git diff --check
+EXIT 0
+
+COMMAND clock-sync/cache/memory synthetic extraction control
+EXIT 0
+{
+  "events": 3,
+  "cacheEvents": 1,
+  "markers": 1,
+  "imageMemorySnapshots": 1,
+  "completion": {
+    "dataLossOccurred": false,
+    "usage": []
+  },
+  "relevantEventCounts": {
+    "SoftwareImageDecodeCache::AddBudgetForImage": 1,
+    "clock_sync": 1
+  }
+}

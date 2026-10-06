@@ -14,7 +14,7 @@ chromium.launch = async (options = {}) => {
   const traceDir = resolve(process.env.WMS672_EVIDENCE_DIR, 'engine');
   await mkdir(traceDir, { recursive: true });
   const cdp = await browser.newBrowserCDPSession();
-  const includedCategories = ['cc', 'disabled-by-default-cc.debug', 'disabled-by-default-memory-infra', 'blink.user_timing'];
+  const includedCategories = ['cc', 'disabled-by-default-cc.debug', 'disabled-by-default-memory-infra', '__metadata'];
   const categories = await cdp.send('Tracing.getCategories');
   const absent = includedCategories.filter(category => !categories.categories.includes(category));
   await writeFile(resolve(traceDir, 'categories.json'), JSON.stringify({ includedCategories, absent, available: categories.categories }, null, 2));
@@ -35,9 +35,19 @@ chromium.launch = async (options = {}) => {
   cdp.on('Tracing.bufferUsage', event => usage.push(event));
   const completed = new Promise(resolveTrace => cdp.once('Tracing.tracingComplete', resolveTrace));
   await cdp.send('Tracing.start', config);
+  const clockSamples = [];
+  const syncClock = async label => {
+    const syncId = `C5-clock-${label}-${clockSamples.length}`;
+    const epochBeforeMs = Date.now();
+    await cdp.send('Tracing.recordClockSyncMarker', { syncId });
+    clockSamples.push({ syncId, epochBeforeMs, epochAfterMs: Date.now() });
+  };
+  await syncClock('trace-start');
   const closeBrowser = browser.close.bind(browser);
   browser.close = async (...args) => {
     try {
+      await syncClock('trace-end');
+      await writeFile(resolve(traceDir, 'clock-sync.json'), JSON.stringify(clockSamples, null, 2));
       await writeFile(resolve(traceDir, 'categories-after.json'), JSON.stringify(await cdp.send('Tracing.getCategories'), null, 2));
       await cdp.send('Tracing.end');
       let traceDeadline;
@@ -80,9 +90,6 @@ chromium.launch = async (options = {}) => {
       window.__c5NativeFramePending = 0;
       const record = (kind, error, extra = {}) => {
         try {
-          if (kind === 'native-start' || kind === 'native-reject' || kind === 'iframe-remove') {
-            performance.mark(`C5-fixture-${fixtureId}-frame-${window.__c5NativeFrameId}-${kind}-${extra.index ?? extra.removedFrameId ?? 0}`);
-          }
           let identity = null;
           if (error && (typeof error === 'object' || typeof error === 'function')) {
             if (!root.__c5DiagnosticErrors.has(error)) root.__c5DiagnosticErrors.set(error, ++root.__c5DiagnosticErrorCounter);
@@ -139,6 +146,7 @@ chromium.launch = async (options = {}) => {
     }, id);
     const close = context.close.bind(context);
     context.close = async (...args) => {
+      await syncClock(`fixture-${id}-closed`);
       const dir = resolve(process.env.WMS672_EVIDENCE_DIR, `fixture-${id}`);
       await mkdir(dir, { recursive: true });
       await writeFile(resolve(dir, 'requests.json'), JSON.stringify(requests, null, 2));
@@ -151,6 +159,7 @@ chromium.launch = async (options = {}) => {
       }
       return close(...args);
     };
+    await syncClock(`fixture-${id}-opened`);
     return context;
   };
   return browser;
