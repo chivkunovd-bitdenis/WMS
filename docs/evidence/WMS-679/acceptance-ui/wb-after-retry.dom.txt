@@ -1,0 +1,147 @@
+- complementary:
+  - text: "Синтетическая QA-сцена WMS679: реальные компоненты, только GET, WB не вызывается."
+  - link:
+    - /url: "?mp=ozon"
+    - text: Ozon fixture
+  - generic: "[ { \"path\": \"/products/linked-wb-catalog\", \"method\": \"GET\" }, { \"path\": \"/operations/marketplace-unload-requests/fixture679\", \"method\": \"GET\" }, { \"path\": \"/operations/wb-mp-warehouses\", \"method\": \"GET\" }, { \"path\": \"/operations/marketplace-unload-requests/available-products\", \"method\": \"GET\" }, { \"path\": \"/products/linked-wb-catalog\", \"method\": \"GET\" }, { \"path\": \"/operations/packaging-tasks/by-unload/fixture679\", \"method\": \"GET\" }, { \"path\": \"/products/linked-wb-catalog\", \"method\": \"GET\" }, { \"path\": \"/operations/marketplace-unload-requests/fixture679/wb-fbw-packaging.xlsx\", \"method\": \"GET\" }, { \"path\": \"/operations/marketplace-unload-requests/fixture679/wb-fbw-packaging.xlsx\", \"method\": \"GET\" }, { \"exportBytes\": 5929, \"warning\": \"wb-shelf-life-date-required\" } ]"
+- heading [level=5]: Отгрузки на МП
+- paragraph: "Документы отгрузки на маркетплейс: план товаров, упаковка, короба и отгрузка."
+- heading [level=6]: Новые документы
+- text: Селлер (ИП)
+- generic: "*"
+- combobox: Искусственный селлер 679
+- textbox: seller679
+- generic: Селлер (ИП) *
+- text: Маркетплейс
+- generic: "*"
+- combobox: Wildberries
+- textbox: wb
+- generic: Маркетплейс *
+- button: Создать отгрузку на МП
+- generic: Селлер
+- combobox: Все
+- textbox: all
+- generic: Селлер
+- generic: Сортировка
+- combobox: Дата создания ↓
+- textbox: created_desc
+- generic: Сортировка
+- table:
+  - rowgroup:
+    - row:
+      - columnheader: Номер
+      - columnheader: Плановая дата
+      - columnheader: Создано
+      - columnheader: Статус
+      - columnheader: Селлер
+      - columnheader: Доп.
+      - columnheader: Строк
+  - rowgroup:
+    - row:
+      - cell: №000679
+      - cell: 2026-10-09
+      - cell: 07.10.2026 04:00:00
+      - cell: Утверждено
+      - cell: Искусственный селлер 679
+      - cell:
+        - paragraph: Склад демо
+        - generic: Wildberries
+      - cell: "1"
+- dialog "Отгрузка на маркетплейс":
+  - heading "Отгрузка на маркетплейс" [level=2]
+  - heading "Отгрузка №000679" [level=5]
+  - paragraph:
+    - text: "Склад ФФ:"
+    - strong: Склад демо
+    - text: · Утверждено
+  - text: Дата отгрузки на МП
+  - generic: "*"
+  - group "Дата отгрузки на МП":
+    - spinbutton "Month": "10"
+    - text: /
+    - spinbutton "Day": "09"
+    - text: /
+    - spinbutton "Year": "2026"
+    - button "Choose date, selected date is Oct 9, 2026":
+    - generic: Дата отгрузки на МП *
+    - textbox: 10/09/2026
+  - paragraph: "Склад маркетплейса: WB демо склад"
+  - text: План
+  - paragraph: "3"
+  - text: Подобрано
+  - paragraph: "0"
+  - text: Осталось подобрать
+  - paragraph: "3"
+  - text: Упаковано (из подобранного)
+  - paragraph: 0/3
+  - tablist:
+    - tab "Товары ✓"
+    - tab "Подбор …"
+    - tab "Упаковка …" [selected]: Упаковка …
+  - button "Печать накладной":
+    - text: Печать накладной
+  - table:
+    - rowgroup:
+      - row "Товар Артикул продавца Артикул WB Размер ШК ТЗ ЧЗ Действия":
+        - columnheader "Товар"
+        - columnheader "Артикул продавца"
+        - columnheader "Артикул WB"
+        - columnheader "Размер"
+        - columnheader "ШК"
+        - columnheader "ТЗ"
+        - columnheader "ЧЗ"
+        - columnheader "Действия"
+    - rowgroup
+  - button "Завершить упаковку"
+  - 'heading "Короба Коробов: 1 Единиц: 3" [level=3]':
+    - 'button "Короба Коробов: 1 Единиц: 3" [expanded]':
+      - heading "Короба" [level=6]
+      - generic: "Коробов: 1"
+      - generic: "Единиц: 3"
+  - region:
+    - button "Скачать XLSX для WB": Скачать XLSX для WB
+    - alert:
+      - generic: "Перед загрузкой в WB укажите фактическую дату партии для товаров со сроком годности: WMS не хранит дату окончания партии."
+    - generic: Штрихкод готового короба (WHB-…)
+    - textbox "Штрихкод готового короба (WHB-…)"
+    - generic: Штрихкод готового короба (WHB-…)
+    - button "Привязать"
+    - heading "Короб 1" [level=6]
+    - paragraph: 60×40×40 см
+    - generic: INB-DEMO-679
+    - button "Наполнить"
+    - button "Печать ШК короба":
+      - generic: ШК
+    - table:
+      - rowgroup:
+        - row "Фото Артикул ШК / Размер Артикул продавца Артикул WB Наименование В коробе":
+          - columnheader "Фото"
+          - columnheader "Артикул"
+          - columnheader "ШК / Размер"
+          - columnheader "Артикул продавца"
+          - columnheader "Артикул WB"
+          - columnheader "Наименование"
+          - columnheader "В коробе"
+      - rowgroup:
+        - row "SKU679 — — — Хлопковая футболка с длинным названием модели и оттенком красно-синий / белый для проверки читаемости 3":
+          - cell:
+          - cell "SKU679"
+          - cell "—":
+            - generic: —
+          - cell "—"
+          - cell "—"
+          - cell "Хлопковая футболка с длинным названием модели и оттенком красно-синий / белый для проверки читаемости":
+            - paragraph: Хлопковая футболка с длинным названием модели и оттенком красно-синий / белый для проверки читаемости
+          - cell "3"
+    - generic: Кол-во коробов
+    - spinbutton "Кол-во коробов": "1"
+    - generic: Кол-во коробов
+    - generic: Пресет
+    - combobox "Пресет": 60×40×40
+    - textbox: 60_40_40
+    - generic: Пресет
+    - button "Загрузить по накладной"
+    - button "Создать короб"
+  - button "Завершить" [disabled]
+  - button "Отменить отгрузку"
+  - button "Закрыть"
