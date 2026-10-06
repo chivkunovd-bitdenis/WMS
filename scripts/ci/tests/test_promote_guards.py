@@ -71,6 +71,67 @@ class PromoteGuardsTests(unittest.TestCase):
             ) + "\n",
         )
 
+    def wms654_expanded_cases(self, owner: str) -> list[str]:
+        catalog = [
+            f"{owner}::WMS-654 actual CatalogSection contract "
+            f"C6 independent coordinates sides={sides} tiers={tiers}"
+            for sides, tiers in (("false", "false"), ("true", "false"),
+                                 ("false", "true"), ("true", "true"))
+        ]
+        map_cases = [
+            f"{owner}::WMS-654 real map form openings C6 {entry} "
+            f"sides={sides} tiers={tiers}"
+            for entry in ("warehouse-map-create-cell", "warehouse-map-create-first-cell")
+            for sides, tiers in (("false", "false"), ("true", "false"),
+                                 ("false", "true"), ("true", "true"))
+        ]
+        return [*catalog, *map_cases]
+
+    def wms654_protected_template_fixture(
+        self,
+        *,
+        digest: str | None = None,
+        cases: list[str] | None = None,
+        report: str = "frontend-all.json",
+    ) -> tuple[str, str]:
+        source = "frontend/src/sections/CatalogSection.wms654.test.tsx"
+        owner = "src/sections/CatalogSection.wms654.test.tsx"
+        templates = (
+            "C6 independent coordinates sides=%s tiers=%s",
+            "C6 ${entry} sides=%s tiers=%s",
+        )
+        self.write(source, "\n".join([f"// {template}" for template in templates]) + "\n")
+        expected_digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        self.write(
+            "guards/PROCESS_CONTRACTS.json",
+            json.dumps(
+                {
+                    "version": 1,
+                    "files": {source: expected_digest if digest is None else digest},
+                    "suites": {
+                        "frontend-fbs": {
+                            "report": report,
+                            "format": "vitest",
+                            "exact": False,
+                            "cases": self.wms654_expanded_cases(owner) if cases is None else cases,
+                        }
+                    },
+                },
+                indent=2,
+            ) + "\n",
+        )
+        self.write_manifest("active")
+        self.write(
+            "docs/requirements/WMS-654.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C6 | навсегда | {source}::{templates[0]}<br>{source}::{templates[1]} | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "WMS-654 protected template fixture")
+        return source, owner
+
     def fixture(self) -> None:
         self.write(
             "backend/tests/unit/test_stock.py",
@@ -215,6 +276,53 @@ class PromoteGuardsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "Некорректная ссылка на тест"):
             promoter.promote(self.root, "WMS-904")
+
+    def test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report(self):
+        source, _ = self.wms654_protected_template_fixture()
+        original_document = (self.root / "docs/requirements/WMS-654.md").read_text()
+
+        promoter.promote(self.root, "WMS-654")
+
+        self.assertTrue((self.root / source).is_file())
+        self.assertFalse((self.root / "frontend/src/guards/sections/CatalogSection.wms654.test.tsx").exists())
+        self.assertEqual((self.root / "docs/requirements/WMS-654.md").read_text(), original_document)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_wms654_templates_reject_unbound_expanded_case(self):
+        owner = "src/sections/CatalogSection.wms654.test.tsx"
+        cases = self.wms654_expanded_cases(owner)[:-1]
+        self.wms654_protected_template_fixture(cases=cases)
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-654")
+
+    def test_protected_wms654_templates_reject_wrong_expanded_case_or_source(self):
+        owner = "src/sections/CatalogSection.wms654.test.tsx"
+        cases = self.wms654_expanded_cases(owner)
+        cases[-1] = cases[-1].replace("tiers=true", "tiers=wrong")
+        self.wms654_protected_template_fixture(cases=cases)
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-654")
+
+    def test_protected_wms654_templates_reject_wrong_case_file(self):
+        wrong_owner = "src/sections/OtherCatalogSection.wms654.test.tsx"
+        self.wms654_protected_template_fixture(cases=self.wms654_expanded_cases(wrong_owner))
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-654")
+
+    def test_protected_wms654_templates_reject_wrong_vitest_report(self):
+        self.wms654_protected_template_fixture(report="other-vitest-report.json")
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-654")
+
+    def test_protected_wms654_templates_reject_changed_source_hash(self):
+        self.wms654_protected_template_fixture(digest="0" * 64)
+
+        with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
+            promoter.promote(self.root, "WMS-654")
 
 
 if __name__ == "__main__":
