@@ -42,7 +42,11 @@ function expectColumnsBeforePdf(html: string) {
   expect(headers.some((header) => /товар|наименование/i.test(header))).toBe(true)
 }
 
-function capturedWaybill(kind: ShipmentWaybillData['docKind'], count: number) {
+function capturedWaybill(
+  kind: ShipmentWaybillData['docKind'],
+  count: number,
+  pickAllocations: NonNullable<ShipmentWaybillData['pickAllocations']> = [{ location_code: 'CELL-1-680', sku_code: variants[0]!.article, quantity: 12340 }],
+) {
   const data: ShipmentWaybillData = {
     docKind: kind, documentId: 'DOC-680', documentNumber: 'DOC-680', waybillNumber: 'WB-680', documentTypeLabel: 'Поставка',
     statusLabel: 'draft', warehouseName: 'WMS', sellerName: 'Seller', wbWarehouseLabel: 'WB WH', plannedDate: '2026-10-07', createdAt: '2026-10-07',
@@ -54,7 +58,7 @@ function capturedWaybill(kind: ShipmentWaybillData['docKind'], count: number) {
         size: variant.size, color: variant.color,
       }
     }),
-    pickAllocations: [{ location_code: 'CELL-1-680', sku_code: variants[0]!.article, quantity: 12340 }],
+    pickAllocations,
   }
   const state = globalThis as { window?: unknown; document?: unknown }
   const previousWindow = state.window
@@ -157,6 +161,61 @@ async function renderPdf(html: string, label: string) {
   }
 }
 
+type PickTableDomReport = {
+  headers: string[]
+  rows: string[][]
+  columns: Array<{ left: number; right: number; width: number }>
+  table: { left: number; right: number; width: number }
+}
+
+function withPickTableDomProbe(html: string) {
+  return `${withoutAutomaticPrint(html).replace('</body>', '')}
+    <script>
+      (() => {
+        const heading = [...document.querySelectorAll('h2')].find((node) => node.textContent.trim() === 'Подбор по ячейкам')
+        const table = heading && heading.nextElementSibling
+        if (!table || table.tagName !== 'TABLE') throw new Error('Не найдена таблица подбора по ячейкам')
+        const rect = (node) => node.getBoundingClientRect()
+        const report = {
+          headers: [...table.querySelectorAll('thead th')].map((cell) => cell.textContent.trim()),
+          rows: [...table.querySelectorAll('tbody tr')].map((row) => [...row.children].map((cell) => cell.textContent.trim())),
+          columns: [...table.querySelectorAll('thead th')].map((cell) => {
+            const bounds = rect(cell)
+            return { left: bounds.left, right: bounds.right, width: bounds.width }
+          }),
+          table: (() => {
+            const bounds = rect(table)
+            return { left: bounds.left, right: bounds.right, width: bounds.width }
+          })(),
+        }
+        const marker = document.createElement('pre')
+        marker.id = 'wms680-pick-table-dom-report'
+        marker.textContent = JSON.stringify(report)
+        document.body.append(marker)
+      })()
+    </script>
+  </body>`
+}
+
+function renderPickTableDom(html: string, label: string): PickTableDomReport {
+  expect(chrome, 'C680-18 требует уже установленный Chrome/Chromium; зависимости не устанавливаются').toBeTruthy()
+  const dir = mkdtempSync(join(tmpdir(), 'wms680-pick-dom-'))
+  try {
+    const input = join(dir, `${fixtureFileName(label)}.html`)
+    writeFileSync(input, withPickTableDomProbe(html))
+    const dom = execFileSync(chrome!, [
+      '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--no-first-run',
+      '--disable-background-networking', '--disable-component-update', '--disable-sync', '--disable-default-apps',
+      `--user-data-dir=${join(dir, 'profile')}`, '--dump-dom', `file://${input}`,
+    ], { encoding: 'utf8', timeout: 30_000 })
+    const serialized = dom.match(/<pre id="wms680-pick-table-dom-report">([\s\S]*?)<\/pre>/)?.[1]
+    expect(serialized, 'Chrome должен вернуть измерения именно второй таблицы подбора').toBeTruthy()
+    return JSON.parse(serialized!) as PickTableDomReport
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+}
+
 function compact(text: string) {
   return text.replace(/\s+/g, '').toUpperCase()
 }
@@ -187,6 +246,26 @@ function assertRealPdfGeometry(xml: string, expectedName: string) {
   }
 }
 
+function assertPickTablePdf(xml: string, allocations: ShipmentWaybillData['pickAllocations']) {
+  const words = [...xml.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)]
+    .map((word) => ({ left: Number(word[1]), top: Number(word[2]), text: word[5]! }))
+  const quantityHeaders = words.filter((word) => compact(word.text) === 'КОЛ-ВО')
+  const quantity = quantityHeaders.sort((left, right) => right.top - left.top)[0]
+  expect(quantity, 'в PDF должна быть числовая колонка именно таблицы подбора').toBeTruthy()
+  const sameRow = (name: string) => words.find((word) => compact(word.text) === name && Math.abs(word.top - quantity!.top) < 1)
+  const location = sameRow('ЯЧЕЙКА')
+  const sku = sameRow('SKU')
+  expect(location, 'PDF сохраняет колонку Ячейка подбора').toBeTruthy()
+  expect(sku, 'PDF сохраняет колонку SKU подбора').toBeTruthy()
+  expect(location!.left).toBeLessThan(sku!.left)
+  expect(sku!.left).toBeLessThan(quantity!.left)
+  for (const allocation of allocations ?? []) {
+    expect(compact(xml)).toContain(compact(allocation.location_code))
+    expect(compact(xml)).toContain(compact(allocation.sku_code))
+    expect(compact(xml)).toContain(String(allocation.quantity))
+  }
+}
+
 const forms = [
   ['приёмка/возврат', inbound],
   ['FBO WB/Ozon/самостоятельная упаковка', packaging],
@@ -208,5 +287,23 @@ describe('WMS-680 · C680-18 реальная PDF-геометрия', () => {
     expect(longPdf.pdf.getPageCount()).toBeGreaterThanOrEqual(1)
     assertRealPdfGeometry(normalPdf.text, label.includes('FBS') ? 'FBS-LONG-NAME-01-680' : label.includes('FBO') ? 'PACKAGING-LONG-NAME-01-680' : label.includes('приёмка') ? 'INBOUND-LONG-NAME-01-680' : 'WAYBILL-LONG-NAME-01-680')
     assertRealPdfGeometry(longPdf.text, label.includes('FBS') ? 'FBS-LONG-NAME-28-680' : label.includes('FBO') ? 'PACKAGING-LONG-NAME-28-680' : label.includes('приёмка') ? 'INBOUND-LONG-NAME-28-680' : 'WAYBILL-LONG-NAME-28-680')
+  }, 120_000)
+
+  it.each(['marketplace_unload', 'operational_outbound', 'inbound_intake'] as const)('C680-18: %s сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора', async (kind) => {
+    const pickAllocations = [
+      { location_code: 'PICK-CELL-A-680', sku_code: 'PICK-SKU-A-680', quantity: 12340 },
+      { location_code: 'PICK-CELL-B-680', sku_code: 'PICK-SKU-B-680', quantity: 7 },
+    ]
+    const html = capturedWaybill(kind, 4, pickAllocations)
+    const dom = renderPickTableDom(html, `${kind}-pick-dom`)
+    const pdf = await renderPdf(html, `${kind}-pick-pdf`)
+    assertPickTablePdf(pdf.text, pickAllocations)
+    expect(dom.headers).toEqual(['Ячейка', 'SKU', 'Кол-во'])
+    expect(dom.rows).toEqual(pickAllocations.map((allocation) => [allocation.location_code, allocation.sku_code, String(allocation.quantity)]))
+    expect(dom.columns).toHaveLength(3)
+    expect(dom.columns[2]!.width, 'R9: Кол-во уже текстовой Ячейки').toBeLessThan(dom.columns[0]!.width)
+    expect(dom.columns[2]!.width, 'R9: Кол-во уже текстового SKU').toBeLessThan(dom.columns[1]!.width)
+    expect(dom.table.left).toBeGreaterThanOrEqual(0)
+    expect(dom.table.right).toBeGreaterThan(dom.table.left)
   }, 120_000)
 })
