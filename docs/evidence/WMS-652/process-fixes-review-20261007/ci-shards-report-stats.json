@@ -1,0 +1,11 @@
+{
+  "reviewed_sha": "65049df62d2bac87932fc5349f6326caec43dea5",
+  "report": "docs/evidence/WMS-652/process-fixes-20261007/ci-shards-process-final.xml",
+  "sha256": "dcf06591ab67d222e9910cc5a4dfcfd86ef0d20ae65d41014881f03492c285eb",
+  "named_case_rows": 37,
+  "total_with_subtests": 91,
+  "successful_subtests": 54,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0
+}

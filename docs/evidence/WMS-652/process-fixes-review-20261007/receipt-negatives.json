@@ -1,0 +1,126 @@
+{
+  "reviewed_sha": "65049df62d2bac87932fc5349f6326caec43dea5",
+  "negative_fixtures_not_release_proof": true,
+  "probes": [
+    {
+      "suite": "ci-shards",
+      "mutation": "missing receipt",
+      "rejected": true,
+      "reason": "Missing required file: ci-shards-process-final.xml"
+    },
+    {
+      "suite": "ci-shards",
+      "mutation": "missing-required-case",
+      "rejected": true,
+      "reason": "ci-shards: missing required cases: ['scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent']"
+    },
+    {
+      "suite": "ci-shards",
+      "mutation": "same-count-wrong-name",
+      "rejected": true,
+      "reason": "ci-shards: missing required cases: ['scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent']"
+    },
+    {
+      "suite": "ci-shards",
+      "mutation": "required-skip",
+      "rejected": true,
+      "reason": "ci-shards: required cases did not pass: {'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent': 'skipped'}"
+    },
+    {
+      "suite": "ci-shards",
+      "mutation": "required-failure",
+      "rejected": true,
+      "reason": "ci-shards: required cases did not pass: {'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent': 'failure'}"
+    },
+    {
+      "suite": "docgate-687",
+      "mutation": "missing receipt",
+      "rejected": true,
+      "reason": "Missing required file: docgate-687.xml"
+    },
+    {
+      "suite": "docgate-687",
+      "mutation": "missing-required-case",
+      "rejected": true,
+      "reason": "docgate-687: missing required cases: ['scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change']"
+    },
+    {
+      "suite": "docgate-687",
+      "mutation": "same-count-wrong-name",
+      "rejected": true,
+      "reason": "docgate-687: missing required cases: ['scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change']"
+    },
+    {
+      "suite": "docgate-687",
+      "mutation": "required-skip",
+      "rejected": true,
+      "reason": "docgate-687: required cases did not pass: {'scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change': 'skipped'}"
+    },
+    {
+      "suite": "docgate-687",
+      "mutation": "required-failure",
+      "rejected": true,
+      "reason": "docgate-687: required cases did not pass: {'scripts.ci.test_check_task_documents.GitTests::test_wms687_correction_rejects_foreign_or_semantic_requirement_change': 'failure'}"
+    },
+    {
+      "suite": "pg-654",
+      "mutation": "missing receipt",
+      "rejected": true,
+      "reason": "Missing required file: combined-postgres-20261007.xml"
+    },
+    {
+      "suite": "pg-654",
+      "mutation": "missing-required-case",
+      "rejected": true,
+      "reason": "pg-654: missing required cases: ['tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates']"
+    },
+    {
+      "suite": "pg-654",
+      "mutation": "same-count-wrong-name",
+      "rejected": true,
+      "reason": "pg-654: missing required cases: ['tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates']"
+    },
+    {
+      "suite": "pg-654",
+      "mutation": "required-skip",
+      "rejected": true,
+      "reason": "pg-654: required cases did not pass: {'tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates': 'skipped'}"
+    },
+    {
+      "suite": "pg-654",
+      "mutation": "required-failure",
+      "rejected": true,
+      "reason": "pg-654: required cases did not pass: {'tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates': 'failure'}"
+    },
+    {
+      "suite": "print-672-c5a",
+      "mutation": "missing receipt",
+      "rejected": true,
+      "reason": "Missing required file: wms672-c5a.json"
+    },
+    {
+      "suite": "print-672-c5a",
+      "mutation": "missing-required-case",
+      "rejected": true,
+      "reason": "print-672-c5a: missing required cases: ['tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry']"
+    },
+    {
+      "suite": "print-672-c5a",
+      "mutation": "same-count-wrong-name",
+      "rejected": true,
+      "reason": "print-672-c5a: missing required cases: ['tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry']"
+    },
+    {
+      "suite": "print-672-c5a",
+      "mutation": "required-skip",
+      "rejected": true,
+      "reason": "print-672-c5a: required cases did not pass: {'tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry': 'pending'}"
+    },
+    {
+      "suite": "print-672-c5a",
+      "mutation": "required-failure",
+      "rejected": true,
+      "reason": "print-672-c5a: required cases did not pass: {'tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry': 'failed'}"
+    }
+  ]
+}

@@ -1,0 +1,237 @@
+{
+  "reviewed_sha": "65049df62d2bac87932fc5349f6326caec43dea5",
+  "implementation_sha": "aadd1716abc34f316648639e3baa10c1ac8c5e54",
+  "old_source": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "frozen_contract_bytes_preserved": true,
+  "targeted_red": {
+    "promotion": {
+      "tests": 3,
+      "failures": 2,
+      "errors": 1
+    },
+    "docgate687": {
+      "tests": 4,
+      "failures": 2
+    }
+  },
+  "promotion_probes": [
+    {
+      "scenario": "deleted",
+      "rejected_before_mutation": true,
+      "reason": "Process protection сохранена в HEAD, но недоступна: Missing required file: guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "dangling",
+      "rejected_before_mutation": true,
+      "reason": "Process protection сохранена в HEAD, но недоступна: Symlink is not execution evidence: guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "actual two-template fixture twice",
+      "all_12_registered": true,
+      "no_diff": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=false",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=true",
+      "rejected_before_mutation": true
+    },
+    {
+      "scenario": "one missing matrix ID",
+      "removed": "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=true",
+      "rejected_before_mutation": true
+    }
+  ],
+  "ledger_probes": [
+    {
+      "scenario": "allowed",
+      "rejected": false,
+      "errors": [],
+      "no_mutation": true
+    },
+    {
+      "scenario": "arbitrary-same-task-test",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "business-file",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "foreign-task-test",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "foreign-doc",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "own-business-requirement",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "existing-permission",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "deleted-original",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "deleted-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "symlink-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "executable-companion",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "declared-mismatch",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    },
+    {
+      "scenario": "review-report-changed",
+      "rejected": true,
+      "errors": [
+        "WMS-687: коммит коррекции должен менять ровно перечисленные файлы"
+      ],
+      "no_mutation": true
+    }
+  ],
+  "policy": {
+    "paths": 233,
+    "suites": 22,
+    "ids": 1218
+  },
+  "original_1146_ids_and_all_18_bindings_preserved": true,
+  "old_222_paths_and_modes_preserved": true,
+  "old_protected_hash_delta": [
+    ".github/workflows/ci.yml",
+    "frontend/tests-e2e/wms672-dom.test.tsx",
+    "scripts/ci/tests/test_ci_release_additions.py",
+    "scripts/ci/tests/test_promote_guards.py"
+  ],
+  "required_needs": [
+    "baseline",
+    "backend",
+    "frontend-build",
+    "guards",
+    "print-regressions",
+    "printer-windows",
+    "wms686-mockup"
+  ],
+  "backend_needs": [
+    "backend-checks",
+    "backend-shards"
+  ],
+  "raw_reports_verified": {
+    "ci-shards": 37,
+    "docgate-687": 4,
+    "pg-654": 3,
+    "print-672-c5a": 1,
+    "frontend654-added-cases": 20,
+    "fresh-docgate-687": 4,
+    "fresh-promotion": 13
+  },
+  "new_backend_16_cases_collection_bound_not_claimed_executed": true,
+  "P": "d618 explicit pending placeholder, final not frozen",
+  "S": "pending",
+  "full_ci_release_approval": false
+}
