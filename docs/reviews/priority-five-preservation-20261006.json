@@ -1,0 +1,1956 @@
+{
+  "candidate_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
+  "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "source_ancestry": [
+    {
+      "task": "WMS-683",
+      "source": "8f11d912351e8de7633b4abcf74d195badaeb254",
+      "merge_base": "f7b1ae2c6db1036f36d382ff727b535e162246a4",
+      "is_ancestor": true,
+      "paths": [
+        "backend/app/services/fbs_supply_service.py",
+        "backend/tests/test_fbs_supply_from_orders.py",
+        "frontend/src/screens/v2/FfFbsOrdersScreen.tsx"
+      ]
+    },
+    {
+      "task": "WMS-662",
+      "source": "23190047674c1ea3c0ecf1bcaeebc76dea625110",
+      "merge_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+      "is_ancestor": true,
+      "paths": [
+        ".github/workflows/wms662-c19.yml",
+        "backend/app/services/billing_ledger_service.py",
+        "backend/app/services/fbs_cancellation_service.py",
+        "backend/app/services/fbs_observed_handoff_service.py",
+        "backend/app/services/fbs_order_billing_service.py",
+        "backend/app/services/fbs_ozon_packaging_service.py",
+        "backend/app/services/fbs_shipment_service.py",
+        "backend/app/services/operation_fact_service.py",
+        "backend/app/services/ozon_fbs_sync_service.py",
+        "backend/app/services/wb_marketplace_orders_service.py",
+        "backend/tests/test_wms662_approve_scope_race.py",
+        "backend/tests/test_wms662_astra_regressions.py",
+        "backend/tests/test_wms662_batch_handoff_lock_order.py",
+        "backend/tests/test_wms662_batch_handoff_steady_state.py",
+        "backend/tests/test_wms662_cancellation_lock_order.py",
+        "backend/tests/test_wms662_continued_billing.py",
+        "backend/tests/test_wms662_continued_billing_cancellation.py",
+        "backend/tests/test_wms662_invoiced_continuation.py",
+        "backend/tests/test_wms662_observed_handoff.py",
+        "backend/tests/test_wms662_postgres.py",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+        "scripts/wms662-c19/browser.mjs",
+        "scripts/wms662-c19/entry.tsx",
+        "scripts/wms662-c19/server.py"
+      ]
+    },
+    {
+      "task": "WMS-666",
+      "source": "1a1ec824661c8501d79a1c026e74267e24a01d96",
+      "merge_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+      "is_ancestor": true,
+      "paths": [
+        ".github/workflows/wms666-browser-proof.yml",
+        "frontend/src/screens/v2/FbsPackingScanBar.tsx",
+        "frontend/src/screens/v2/FbsScanPrintToggles.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyAssembly.scanners.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx",
+        "frontend/src/screens/v2/fbsSequentialPacking.ts",
+        "frontend/src/screens/v2/wms666ChangeScope.test.ts",
+        "frontend/tests-e2e/wms666-proof/index.html",
+        "frontend/tests-e2e/wms666-proof/main.tsx",
+        "frontend/tests-e2e/wms666-proof/vite.config.ts",
+        "scripts/ci/wms666-browser-proof.mjs"
+      ]
+    },
+    {
+      "task": "WMS-651",
+      "source": "70bddc65ab39473a4560d791bd96d6b78acb648e",
+      "merge_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+      "is_ancestor": true,
+      "paths": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+      ]
+    },
+    {
+      "task": "WMS-667",
+      "source": "9cc133d6a4883e0c76a7147794f4a8e557c29d20",
+      "merge_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+      "is_ancestor": true,
+      "paths": [
+        "backend/app/api/products.py",
+        "backend/app/services/fbs_stock_availability_service.py",
+        "backend/app/services/seller_wb_catalog_service.py",
+        "backend/tests/test_wms667_catalog_has_stock_contract.py",
+        "frontend/src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx",
+        "frontend/src/screens/v2/FfProductsCatalogScreen.tsx"
+      ]
+    },
+    {
+      "task": "WMS-669",
+      "source": "79b842ef692ab794d55be25049f3e181e3515539",
+      "merge_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+      "is_ancestor": true,
+      "paths": [
+        ".github/workflows/wms669-visual-probe.yml",
+        "backend/app/api/seller_catalog.py",
+        "backend/app/services/seller_fulfillment_catalog_service.py",
+        "backend/tests/test_wms669_seller_catalog_contract.py",
+        "backend/tests/test_wms669_seller_catalog_once.py",
+        "backend/tests/test_wms669_sql_whitespace_regression.py",
+        "backend/tests/test_wms669_visible_metadata_regression.py",
+        "backend/tests/wms669_catalog_fixtures.py",
+        "frontend/src/screens/v2/SellerProductsStockScreen.tsx",
+        "frontend/src/screens/v2/Wms669SellerCatalog.dom.test.tsx",
+        "scripts/ci/wms669-visual-probe.mjs"
+      ]
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "source": "a13b59f0e326da56af0a0ee55cdbcfdbc590043c",
+      "merge_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+      "is_ancestor": true,
+      "paths": [
+        ".github/workflows/wms672-673-integration-proof.yml",
+        "backend/tests/test_wms672_box_label_scope.py",
+        "backend/tests/test_wms673_print_read_contract.py",
+        "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "frontend/src/screens/ff/inboundDraftPersistence.ts",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx",
+        "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts",
+        "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts",
+        "frontend/src/screens/v2/fbsSupplyAssembly.ts",
+        "frontend/src/screens/v2/fbsUx.ts",
+        "frontend/src/screens/v2/wms673MarketplaceProjection.json",
+        "frontend/src/screens/v2/wms673PrintFixtures.ts",
+        "frontend/src/screens/v2/wms673PrintRenderer.ts",
+        "frontend/src/utils/printBarcodeLabel.ts",
+        "frontend/tests-e2e/wms672-box-labels.test.mjs",
+        "frontend/tests-e2e/wms672-dom.config.ts",
+        "frontend/tests-e2e/wms672-dom.test.tsx",
+        "frontend/tests-e2e/wms672-harness.html",
+        "frontend/tests-e2e/wms672-harness.tsx",
+        "frontend/tests-e2e/wms672-remaining.test.mjs",
+        "frontend/tests-e2e/wms672-vite.config.ts"
+      ]
+    },
+    {
+      "task": "WMS-662 integration acceptance",
+      "source": "0fa4ea9542e41e8bcf498e1cd8a4967752c63246",
+      "merge_base": "23190047674c1ea3c0ecf1bcaeebc76dea625110",
+      "is_ancestor": true,
+      "paths": []
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "source": "e93f9efba99032028444d7149268f1860dddd379",
+      "merge_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+      "is_ancestor": true,
+      "paths": [
+        "backend/app/api/marking_withdrawals.py",
+        "backend/app/db/withdrawal_repository.py",
+        "backend/app/services/wb_sales_report.py",
+        "backend/app/services/withdrawal_orchestration.py",
+        "backend/app/services/withdrawal_service.py",
+        "backend/tests/test_withdrawal_access.py",
+        "backend/tests/test_withdrawal_ledger.py",
+        "backend/tests/test_withdrawal_orchestration.py",
+        "backend/tests/test_withdrawal_readiness.py",
+        "backend/tests/test_withdrawal_review_fixes.py",
+        "backend/tests/test_withdrawal_row_status.py",
+        "backend/tests/test_withdrawal_wms563.py",
+        "backend/tests/test_wms517_legacy_price_source_contract.py",
+        "backend/tests/test_wms517_raw_integer_price.py",
+        "backend/tests/test_wms517_raw_numeric_price.py",
+        "backend/tests/test_wms517_sales_contract.py",
+        "backend/tests/test_wms517_sales_partial_decimal_regressions.py",
+        "backend/tests/test_wms517_sales_regressions.py",
+        "backend/tests/test_wms517_sales_waiting_rate.py",
+        "backend/tests/wms517_price_source_negative_control.py",
+        "frontend/src/screens/v2/SellerKizWithdrawalScreen.tsx"
+      ]
+    },
+    {
+      "task": "WMS-663",
+      "source": "15d33af129a5608d7c7bf133ac5cfb29cce3a88f",
+      "merge_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+      "is_ancestor": true,
+      "paths": [
+        ".github/workflows/wms663-c17-official-docs.yml",
+        ".github/workflows/wms663-remote-proof.yml",
+        "backend/app/api/fbs_orders.py",
+        "backend/app/services/fbs_autopoll_service.py",
+        "backend/app/services/ozon_exemplar_documents_service.py",
+        "backend/app/services/ozon_fbs_process_service.py",
+        "backend/tests/test_wms663_accepted_current_status.py",
+        "backend/tests/test_wms663_accepted_read_regressions.py",
+        "backend/tests/test_wms663_astra_regressions.py",
+        "backend/tests/test_wms663_customs_documents_contract.py",
+        "backend/tests/test_wms663_partial_accepted_status.py",
+        "backend/tests/test_wms663_residual_behavior_contract.py",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+        "frontend/src/screens/v2/OzonExemplarDocuments.tsx",
+        "frontend/src/screens/v2/OzonExemplarDocuments.wms663.developer.dom.test.tsx",
+        "frontend/src/screens/v2/OzonExemplarDocuments.wms663.residual.dom.test.tsx",
+        "scripts/ci/check_task_documents.py",
+        "scripts/ci/test_fixture_contract_correction_edges.py",
+        "scripts/ci/test_fixture_contract_corrections.py",
+        "scripts/ci/test_wms663_fixture_chain_history.py",
+        "scripts/ci/test_wms663_positive_fixture_chain.py",
+        "scripts/ci/tests/fixtures/wms652_fixture_corrections.json",
+        "scripts/ci/tests/fixtures/wms663_positive_status.json",
+        "scripts/ci/wms663-proof/browser.mjs",
+        "scripts/ci/wms663-proof/c10_mixed.py",
+        "scripts/ci/wms663-proof/prepare-ui.mjs"
+      ]
+    }
+  ],
+  "path_checks": [
+    {
+      "task": "WMS-683",
+      "path": "backend/app/services/fbs_supply_service.py",
+      "source_blob": "44884d3cc07d0ff8071688ae9a9844e4cc6225a9",
+      "candidate_blob": "44884d3cc07d0ff8071688ae9a9844e4cc6225a9",
+      "byte_identical": true,
+      "owners": [
+        "WMS-683"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-683",
+      "path": "backend/tests/test_fbs_supply_from_orders.py",
+      "source_blob": "c0e4600a488f67352589b72cc097d1f27bfba8dd",
+      "candidate_blob": "c0e4600a488f67352589b72cc097d1f27bfba8dd",
+      "byte_identical": true,
+      "owners": [
+        "WMS-683"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-683",
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "source_blob": "27be873d28c0c06cee0d6faa495723970d5159d4",
+      "candidate_blob": "27be873d28c0c06cee0d6faa495723970d5159d4",
+      "byte_identical": true,
+      "owners": [
+        "WMS-683"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": ".github/workflows/wms662-c19.yml",
+      "source_blob": "d6110a6f1bcb554b29b606496014f40add34e4fa",
+      "candidate_blob": "d6110a6f1bcb554b29b606496014f40add34e4fa",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/billing_ledger_service.py",
+      "source_blob": "197f2eb4a16eb8bd22eb42177a7e33b614fbc33c",
+      "candidate_blob": "197f2eb4a16eb8bd22eb42177a7e33b614fbc33c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/fbs_cancellation_service.py",
+      "source_blob": "57d6921e2dffbab84cd80375eea446d8d3823cb2",
+      "candidate_blob": "57d6921e2dffbab84cd80375eea446d8d3823cb2",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/fbs_observed_handoff_service.py",
+      "source_blob": "bd22d651d6911de0de6d217ee14450f493a3f3ff",
+      "candidate_blob": "bd22d651d6911de0de6d217ee14450f493a3f3ff",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/fbs_order_billing_service.py",
+      "source_blob": "bf1a904cdfad2a4ebcf82e0645e9a0a3b04a2a54",
+      "candidate_blob": "bf1a904cdfad2a4ebcf82e0645e9a0a3b04a2a54",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/fbs_ozon_packaging_service.py",
+      "source_blob": "62aa99accd773600a5c0b6fc9f6937c16f795bfe",
+      "candidate_blob": "62aa99accd773600a5c0b6fc9f6937c16f795bfe",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/fbs_shipment_service.py",
+      "source_blob": "56282fa556d5dce0c5194d08c0ee92fdb02edae2",
+      "candidate_blob": "56282fa556d5dce0c5194d08c0ee92fdb02edae2",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/operation_fact_service.py",
+      "source_blob": "2a215ed1833eb905518933ae09797c544f527000",
+      "candidate_blob": "2a215ed1833eb905518933ae09797c544f527000",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/ozon_fbs_sync_service.py",
+      "source_blob": "0a744b4a4889c1eb00f8321b81c614b15b29ddff",
+      "candidate_blob": "0a744b4a4889c1eb00f8321b81c614b15b29ddff",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/app/services/wb_marketplace_orders_service.py",
+      "source_blob": "fc5e9b12ae179b7a953d6052566e0fe818fc4c5d",
+      "candidate_blob": "fc5e9b12ae179b7a953d6052566e0fe818fc4c5d",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_approve_scope_race.py",
+      "source_blob": "f599d34fb3b33c66368630e73faf34931c882a2c",
+      "candidate_blob": "f599d34fb3b33c66368630e73faf34931c882a2c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_astra_regressions.py",
+      "source_blob": "f9aca4b41325a0a9cf8dc39491d06eab771c13b2",
+      "candidate_blob": "f9aca4b41325a0a9cf8dc39491d06eab771c13b2",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "source_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "candidate_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_batch_handoff_steady_state.py",
+      "source_blob": "6f60ecd6c0cd8550857d671a2368f4119b28db4c",
+      "candidate_blob": "6f60ecd6c0cd8550857d671a2368f4119b28db4c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+      "source_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+      "candidate_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_continued_billing.py",
+      "source_blob": "31b3d9c3652ba7db33990f781c881c502171c0b8",
+      "candidate_blob": "31b3d9c3652ba7db33990f781c881c502171c0b8",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_continued_billing_cancellation.py",
+      "source_blob": "04fc690830267d5ee926ac1a73fe42b7ea4bcfa8",
+      "candidate_blob": "04fc690830267d5ee926ac1a73fe42b7ea4bcfa8",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_invoiced_continuation.py",
+      "source_blob": "6a5cba444d47e107f0e100f8bd94b2eebd58ec7a",
+      "candidate_blob": "6a5cba444d47e107f0e100f8bd94b2eebd58ec7a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "source_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73",
+      "candidate_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "backend/tests/test_wms662_postgres.py",
+      "source_blob": "d99830af1e103017e8bbb235c1c2220971816f83",
+      "candidate_blob": "d99830af1e103017e8bbb235c1c2220971816f83",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "source_blob": "d07bd33973db42c3e7c44b6b7f35d2d908adb919",
+      "candidate_blob": "8c52c4c5b5d68bb47da25d77d52f253e875e5f6a",
+      "byte_identical": false,
+      "owners": [
+        "WMS-662",
+        "WMS-666",
+        "WMS-651",
+        "WMS-672/WMS-673",
+        "WMS-663"
+      ],
+      "status": "shared path needs independent package review"
+    },
+    {
+      "task": "WMS-662",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "source_blob": "04379c221c29e9a70ae195ff3d834e1855b375de",
+      "candidate_blob": "04379c221c29e9a70ae195ff3d834e1855b375de",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "scripts/wms662-c19/browser.mjs",
+      "source_blob": "d9d6154f111d6c4c181c8dd476f8b456e40a4736",
+      "candidate_blob": "d9d6154f111d6c4c181c8dd476f8b456e40a4736",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "scripts/wms662-c19/entry.tsx",
+      "source_blob": "bed79a91f459a6444b44123398fb9eb122e958fd",
+      "candidate_blob": "bed79a91f459a6444b44123398fb9eb122e958fd",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-662",
+      "path": "scripts/wms662-c19/server.py",
+      "source_blob": "913de2190bd281e7fe4d4312691eaf4fe4cbb273",
+      "candidate_blob": "913de2190bd281e7fe4d4312691eaf4fe4cbb273",
+      "byte_identical": true,
+      "owners": [
+        "WMS-662"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": ".github/workflows/wms666-browser-proof.yml",
+      "source_blob": "0b91244429faa63c4158b7dd1d155df25bf3b7af",
+      "candidate_blob": "0b91244429faa63c4158b7dd1d155df25bf3b7af",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FbsPackingScanBar.tsx",
+      "source_blob": "aefb7bc9c071192c3723fac08cbd0331a22a8efd",
+      "candidate_blob": "aefb7bc9c071192c3723fac08cbd0331a22a8efd",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FbsScanPrintToggles.tsx",
+      "source_blob": "375d6ac58fd247364d61374dc0482f1057033387",
+      "candidate_blob": "375d6ac58fd247364d61374dc0482f1057033387",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsSupplyAssembly.scanners.dom.test.tsx",
+      "source_blob": "437a68f85b84daf7dcd1403759982037309daeae",
+      "candidate_blob": "437a68f85b84daf7dcd1403759982037309daeae",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx",
+      "source_blob": "2479ccec58ef0e1a04520b73ae77ffe2ad4a73ff",
+      "candidate_blob": "2479ccec58ef0e1a04520b73ae77ffe2ad4a73ff",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+      "source_blob": "224690a1df8e220dd9dcf509efc9870620f13579",
+      "candidate_blob": "224690a1df8e220dd9dcf509efc9870620f13579",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx",
+      "source_blob": "d5993c6384a8d13c201871eb49e0771c14b550d3",
+      "candidate_blob": "d5993c6384a8d13c201871eb49e0771c14b550d3",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "source_blob": "8f4f8582760be27fd45e531ef827f2c74f5b8b8d",
+      "candidate_blob": "8c52c4c5b5d68bb47da25d77d52f253e875e5f6a",
+      "byte_identical": false,
+      "owners": [
+        "WMS-662",
+        "WMS-666",
+        "WMS-651",
+        "WMS-672/WMS-673",
+        "WMS-663"
+      ],
+      "status": "shared path needs independent package review"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx",
+      "source_blob": "e04e69ad8985edb00c666b62014261525537287e",
+      "candidate_blob": "e04e69ad8985edb00c666b62014261525537287e",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/fbsSequentialPacking.ts",
+      "source_blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d",
+      "candidate_blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/src/screens/v2/wms666ChangeScope.test.ts",
+      "source_blob": "3d4d1916a1a916e4ea20ff44ddd08d610f0ec161",
+      "candidate_blob": "3d4d1916a1a916e4ea20ff44ddd08d610f0ec161",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/tests-e2e/wms666-proof/index.html",
+      "source_blob": "a4d98807d9feb2d8e8d3f945deefc68a7ccc2d08",
+      "candidate_blob": "a4d98807d9feb2d8e8d3f945deefc68a7ccc2d08",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/tests-e2e/wms666-proof/main.tsx",
+      "source_blob": "bed0f1f7c1dc0bf5e0a451d3cbb0f73f9b6af6b4",
+      "candidate_blob": "bed0f1f7c1dc0bf5e0a451d3cbb0f73f9b6af6b4",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "frontend/tests-e2e/wms666-proof/vite.config.ts",
+      "source_blob": "e6e954132db98d0dca55103d6b21fefcdb537693",
+      "candidate_blob": "e6e954132db98d0dca55103d6b21fefcdb537693",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-666",
+      "path": "scripts/ci/wms666-browser-proof.mjs",
+      "source_blob": "bab6984365223f9a62bfd5aaa47b38a0de18af0a",
+      "candidate_blob": "bab6984365223f9a62bfd5aaa47b38a0de18af0a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-666"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-651",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "source_blob": "e3397ba074e3a05f02c0af616bcf61281d1425bc",
+      "candidate_blob": "8c52c4c5b5d68bb47da25d77d52f253e875e5f6a",
+      "byte_identical": false,
+      "owners": [
+        "WMS-662",
+        "WMS-666",
+        "WMS-651",
+        "WMS-672/WMS-673",
+        "WMS-663"
+      ],
+      "status": "shared path needs independent package review"
+    },
+    {
+      "task": "WMS-667",
+      "path": "backend/app/api/products.py",
+      "source_blob": "8359446e3c1b926fb0b1703f15f0d87c1d88b8b0",
+      "candidate_blob": "8359446e3c1b926fb0b1703f15f0d87c1d88b8b0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-667",
+      "path": "backend/app/services/fbs_stock_availability_service.py",
+      "source_blob": "c5d96fd850f9db0b172a2d84430a89a3d7172dda",
+      "candidate_blob": "c5d96fd850f9db0b172a2d84430a89a3d7172dda",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-667",
+      "path": "backend/app/services/seller_wb_catalog_service.py",
+      "source_blob": "04f2da20dbab6c7a8acdaec83d8a8fd820ca44cf",
+      "candidate_blob": "04f2da20dbab6c7a8acdaec83d8a8fd820ca44cf",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-667",
+      "path": "backend/tests/test_wms667_catalog_has_stock_contract.py",
+      "source_blob": "05fd4124fdc91c9c814ad32672ef4642d0cdec41",
+      "candidate_blob": "05fd4124fdc91c9c814ad32672ef4642d0cdec41",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-667",
+      "path": "frontend/src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx",
+      "source_blob": "21b864c6aead9fad5a1771011778312e2fde461e",
+      "candidate_blob": "21b864c6aead9fad5a1771011778312e2fde461e",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-667",
+      "path": "frontend/src/screens/v2/FfProductsCatalogScreen.tsx",
+      "source_blob": "86968166efd95f8462d62610b43bfbe3d40f7128",
+      "candidate_blob": "86968166efd95f8462d62610b43bfbe3d40f7128",
+      "byte_identical": true,
+      "owners": [
+        "WMS-667"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": ".github/workflows/wms669-visual-probe.yml",
+      "source_blob": "13aaf38de5ad9402a0a938e703117b1d07ba42ef",
+      "candidate_blob": "13aaf38de5ad9402a0a938e703117b1d07ba42ef",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/app/api/seller_catalog.py",
+      "source_blob": "f72f619e86779c208c4738a423b91b33a57b0ed7",
+      "candidate_blob": "f72f619e86779c208c4738a423b91b33a57b0ed7",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/app/services/seller_fulfillment_catalog_service.py",
+      "source_blob": "c44a9f02ba33cdc79d8f235a6e157695dcb43d9d",
+      "candidate_blob": "c44a9f02ba33cdc79d8f235a6e157695dcb43d9d",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/tests/test_wms669_seller_catalog_contract.py",
+      "source_blob": "bfa6a8b9a6c6dd2a9ab1c6db79ee07c2c76dcca0",
+      "candidate_blob": "bfa6a8b9a6c6dd2a9ab1c6db79ee07c2c76dcca0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/tests/test_wms669_seller_catalog_once.py",
+      "source_blob": "0b8d9fb9c0f142dba80dde3b487f4df3886c7b7a",
+      "candidate_blob": "0b8d9fb9c0f142dba80dde3b487f4df3886c7b7a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/tests/test_wms669_sql_whitespace_regression.py",
+      "source_blob": "69412b5c36bab67e18a8dff1b166a93b26758732",
+      "candidate_blob": "69412b5c36bab67e18a8dff1b166a93b26758732",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/tests/test_wms669_visible_metadata_regression.py",
+      "source_blob": "a8bddfa9fed8f6aafc6ccd886954cc81e2248484",
+      "candidate_blob": "a8bddfa9fed8f6aafc6ccd886954cc81e2248484",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "backend/tests/wms669_catalog_fixtures.py",
+      "source_blob": "fa8813a0db40ab10456e65fa14f2c32c56ec9a77",
+      "candidate_blob": "fa8813a0db40ab10456e65fa14f2c32c56ec9a77",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "frontend/src/screens/v2/SellerProductsStockScreen.tsx",
+      "source_blob": "2cb2a632010ab7d692fbd8bcab9f0362d82c5e11",
+      "candidate_blob": "2cb2a632010ab7d692fbd8bcab9f0362d82c5e11",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "frontend/src/screens/v2/Wms669SellerCatalog.dom.test.tsx",
+      "source_blob": "8a9ac759ba270f2a57b3a37669456c8b61b4b2b5",
+      "candidate_blob": "8a9ac759ba270f2a57b3a37669456c8b61b4b2b5",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-669",
+      "path": "scripts/ci/wms669-visual-probe.mjs",
+      "source_blob": "e2014136cda4b638e4a5b93d713e0704a4176303",
+      "candidate_blob": "e2014136cda4b638e4a5b93d713e0704a4176303",
+      "byte_identical": true,
+      "owners": [
+        "WMS-669"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": ".github/workflows/wms672-673-integration-proof.yml",
+      "source_blob": "b99279766ea9da3cf6a53821377f730c83cbf507",
+      "candidate_blob": "b99279766ea9da3cf6a53821377f730c83cbf507",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "backend/tests/test_wms672_box_label_scope.py",
+      "source_blob": "1dd02ddc3959229a41165ea8547d51fb0d74098c",
+      "candidate_blob": "1dd02ddc3959229a41165ea8547d51fb0d74098c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "backend/tests/test_wms673_print_read_contract.py",
+      "source_blob": "89278672000f964712d27d1e18d7ab56daf60372",
+      "candidate_blob": "89278672000f964712d27d1e18d7ab56daf60372",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+      "source_blob": "dcc92a7a151d6bf5c208650fda9a633dab7829d1",
+      "candidate_blob": "dcc92a7a151d6bf5c208650fda9a633dab7829d1",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/ff/inboundDraftPersistence.ts",
+      "source_blob": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45",
+      "candidate_blob": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "source_blob": "be2cf7377ec6ae7ee81c80cb294efb8537443ee2",
+      "candidate_blob": "8c52c4c5b5d68bb47da25d77d52f253e875e5f6a",
+      "byte_identical": false,
+      "owners": [
+        "WMS-662",
+        "WMS-666",
+        "WMS-651",
+        "WMS-672/WMS-673",
+        "WMS-663"
+      ],
+      "status": "shared path needs independent package review"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx",
+      "source_blob": "b1e7496d0e3bba29fff7d5aa473b651d424524f8",
+      "candidate_blob": "b1e7496d0e3bba29fff7d5aa473b651d424524f8",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts",
+      "source_blob": "16149d68b47d2b41d595044872c21aa1235ec0f4",
+      "candidate_blob": "16149d68b47d2b41d595044872c21aa1235ec0f4",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts",
+      "source_blob": "ce1b72602761496606b00b68d514afaeeefad3cb",
+      "candidate_blob": "ce1b72602761496606b00b68d514afaeeefad3cb",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/fbsSupplyAssembly.ts",
+      "source_blob": "cb71ea184d0f220125a8dfb48e7c460047f0f66a",
+      "candidate_blob": "cb71ea184d0f220125a8dfb48e7c460047f0f66a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/fbsUx.ts",
+      "source_blob": "85ca6fcde4a6478bca00fb6ed5ee5aa75ccd3e13",
+      "candidate_blob": "85ca6fcde4a6478bca00fb6ed5ee5aa75ccd3e13",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/wms673MarketplaceProjection.json",
+      "source_blob": "01906407f3f6aa03f525e6c222dd3b201844a78c",
+      "candidate_blob": "01906407f3f6aa03f525e6c222dd3b201844a78c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/wms673PrintFixtures.ts",
+      "source_blob": "63deeed70a8546ff78d7e9497d3dbec919a0d616",
+      "candidate_blob": "63deeed70a8546ff78d7e9497d3dbec919a0d616",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/screens/v2/wms673PrintRenderer.ts",
+      "source_blob": "694b455fcb0647186b36a556a6141439a65c2b32",
+      "candidate_blob": "694b455fcb0647186b36a556a6141439a65c2b32",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/src/utils/printBarcodeLabel.ts",
+      "source_blob": "c168a086fa78fa655781a8eb882e75357fa4e39b",
+      "candidate_blob": "c168a086fa78fa655781a8eb882e75357fa4e39b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-box-labels.test.mjs",
+      "source_blob": "3f29649e56f986e8e549da592937474197197418",
+      "candidate_blob": "3f29649e56f986e8e549da592937474197197418",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-dom.config.ts",
+      "source_blob": "5ae7e788f2582040c84bc6fe22880270de8a9c78",
+      "candidate_blob": "5ae7e788f2582040c84bc6fe22880270de8a9c78",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-dom.test.tsx",
+      "source_blob": "d29e1134cf728bb114c3c35a868df2fba2b7ce8e",
+      "candidate_blob": "d29e1134cf728bb114c3c35a868df2fba2b7ce8e",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-harness.html",
+      "source_blob": "9b91e2391b542895980ac521a93615ad30c2b697",
+      "candidate_blob": "9b91e2391b542895980ac521a93615ad30c2b697",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-harness.tsx",
+      "source_blob": "0c5722d499ba35098c771b06a19705cb575c84f7",
+      "candidate_blob": "0c5722d499ba35098c771b06a19705cb575c84f7",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-remaining.test.mjs",
+      "source_blob": "707e60e1dc731ccf7a25308f60a583b576b0608c",
+      "candidate_blob": "707e60e1dc731ccf7a25308f60a583b576b0608c",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-672/WMS-673",
+      "path": "frontend/tests-e2e/wms672-vite.config.ts",
+      "source_blob": "f39d0b6422b70489c62d1ca246617240a40079e1",
+      "candidate_blob": "f39d0b6422b70489c62d1ca246617240a40079e1",
+      "byte_identical": true,
+      "owners": [
+        "WMS-672/WMS-673"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/app/api/marking_withdrawals.py",
+      "source_blob": "9d952622a8236b999c8670ce02ffdc368626d6c6",
+      "candidate_blob": "9d952622a8236b999c8670ce02ffdc368626d6c6",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/app/db/withdrawal_repository.py",
+      "source_blob": "30c57d8f1dd4aa74b456cc4a7e4a06c17050acdc",
+      "candidate_blob": "30c57d8f1dd4aa74b456cc4a7e4a06c17050acdc",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/app/services/wb_sales_report.py",
+      "source_blob": "035d20ebff8ae338eaea122119a1f03b79391b83",
+      "candidate_blob": "035d20ebff8ae338eaea122119a1f03b79391b83",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/app/services/withdrawal_orchestration.py",
+      "source_blob": "e389f75b46d4858b0f4bcf6d3560b0c637277b72",
+      "candidate_blob": "e389f75b46d4858b0f4bcf6d3560b0c637277b72",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/app/services/withdrawal_service.py",
+      "source_blob": "a58dd1e104fcfef2aa7a4e8dcf275c76ee97dcdb",
+      "candidate_blob": "a58dd1e104fcfef2aa7a4e8dcf275c76ee97dcdb",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_access.py",
+      "source_blob": "0db11f98b9d483ff0a053b3249d32a464b14b9f2",
+      "candidate_blob": "0db11f98b9d483ff0a053b3249d32a464b14b9f2",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_ledger.py",
+      "source_blob": "90fd7726dd7e6542963379b674be9ac33479cd49",
+      "candidate_blob": "90fd7726dd7e6542963379b674be9ac33479cd49",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_orchestration.py",
+      "source_blob": "1a562e65e17abbd4fe2aed37856c710d4b4d7de0",
+      "candidate_blob": "1a562e65e17abbd4fe2aed37856c710d4b4d7de0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_readiness.py",
+      "source_blob": "985a800a81324b4e2a256d21322e710fdaf54a5b",
+      "candidate_blob": "985a800a81324b4e2a256d21322e710fdaf54a5b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_review_fixes.py",
+      "source_blob": "b613e794d6d553233db25b113d4ed99733e27148",
+      "candidate_blob": "b613e794d6d553233db25b113d4ed99733e27148",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_row_status.py",
+      "source_blob": "f254e9020f02838ad2d11622b8e5a1ad4e4a0736",
+      "candidate_blob": "f254e9020f02838ad2d11622b8e5a1ad4e4a0736",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_withdrawal_wms563.py",
+      "source_blob": "ed0409b8f3324b51d50fb939820138db12673719",
+      "candidate_blob": "ed0409b8f3324b51d50fb939820138db12673719",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_legacy_price_source_contract.py",
+      "source_blob": "40cea1d6ab71da8421bc39ef575567cd981c510b",
+      "candidate_blob": "40cea1d6ab71da8421bc39ef575567cd981c510b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_raw_integer_price.py",
+      "source_blob": "87b0d1f17ec79daa48b234479bdbce76dd06aedb",
+      "candidate_blob": "87b0d1f17ec79daa48b234479bdbce76dd06aedb",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_raw_numeric_price.py",
+      "source_blob": "39f10b4df7ee3ce6e0937892cacbb43d7c458625",
+      "candidate_blob": "39f10b4df7ee3ce6e0937892cacbb43d7c458625",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_sales_contract.py",
+      "source_blob": "b5ddcb3b42810902b05da09726222b7e500684cf",
+      "candidate_blob": "b5ddcb3b42810902b05da09726222b7e500684cf",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_sales_partial_decimal_regressions.py",
+      "source_blob": "95eddd563a75cc415437f5068688f7d163e0ef70",
+      "candidate_blob": "95eddd563a75cc415437f5068688f7d163e0ef70",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_sales_regressions.py",
+      "source_blob": "2270c89e0e38c7db7cfac73db1cd5087af5b7b38",
+      "candidate_blob": "2270c89e0e38c7db7cfac73db1cd5087af5b7b38",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/test_wms517_sales_waiting_rate.py",
+      "source_blob": "462f6ee2be39a0e5cb4e36ded05bfe7743ece72a",
+      "candidate_blob": "462f6ee2be39a0e5cb4e36ded05bfe7743ece72a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "backend/tests/wms517_price_source_negative_control.py",
+      "source_blob": "7eaac134c7083ec7af8ae4b2280cc56bc553b65b",
+      "candidate_blob": "7eaac134c7083ec7af8ae4b2280cc56bc553b65b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "path": "frontend/src/screens/v2/SellerKizWithdrawalScreen.tsx",
+      "source_blob": "3c30395bdfac439bf6561761fa76c361db1a9aa7",
+      "candidate_blob": "3c30395bdfac439bf6561761fa76c361db1a9aa7",
+      "byte_identical": true,
+      "owners": [
+        "WMS-517 accepted scoped product"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": ".github/workflows/wms663-c17-official-docs.yml",
+      "source_blob": "d0a8a2fe427f83fdd61d22b18852aeb9186a67a3",
+      "candidate_blob": "d0a8a2fe427f83fdd61d22b18852aeb9186a67a3",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": ".github/workflows/wms663-remote-proof.yml",
+      "source_blob": "5cadbcfd543b12beb5955607d83fd12e7773be5b",
+      "candidate_blob": "5cadbcfd543b12beb5955607d83fd12e7773be5b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/app/api/fbs_orders.py",
+      "source_blob": "70d46ab2705745f5038b7e44225058f57f81c1df",
+      "candidate_blob": "70d46ab2705745f5038b7e44225058f57f81c1df",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/app/services/fbs_autopoll_service.py",
+      "source_blob": "99f6b349c0e05e1979f26199cc6eb448494f12a4",
+      "candidate_blob": "99f6b349c0e05e1979f26199cc6eb448494f12a4",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/app/services/ozon_exemplar_documents_service.py",
+      "source_blob": "f8dff6a7bbb5bec8c8785c99f6762e09c9b0e394",
+      "candidate_blob": "f8dff6a7bbb5bec8c8785c99f6762e09c9b0e394",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/app/services/ozon_fbs_process_service.py",
+      "source_blob": "00457c573ec95acab42e152c4f5e69e9eefdaba5",
+      "candidate_blob": "00457c573ec95acab42e152c4f5e69e9eefdaba5",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_accepted_current_status.py",
+      "source_blob": "43ab1562861fc36033edd6eb5a1f65a323088b68",
+      "candidate_blob": "43ab1562861fc36033edd6eb5a1f65a323088b68",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_accepted_read_regressions.py",
+      "source_blob": "51ca7e7b7dba2621a8158ffe9f4118d178d45d37",
+      "candidate_blob": "51ca7e7b7dba2621a8158ffe9f4118d178d45d37",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_astra_regressions.py",
+      "source_blob": "925e51c7a5666831a2946c7dccc9c18767b0b830",
+      "candidate_blob": "925e51c7a5666831a2946c7dccc9c18767b0b830",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_customs_documents_contract.py",
+      "source_blob": "c92c075ba9f375c578538b776207cdc6b8b56ab3",
+      "candidate_blob": "c92c075ba9f375c578538b776207cdc6b8b56ab3",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_partial_accepted_status.py",
+      "source_blob": "ffe1e5df71c51b1f1fad009cb148742a47696ce7",
+      "candidate_blob": "ffe1e5df71c51b1f1fad009cb148742a47696ce7",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "backend/tests/test_wms663_residual_behavior_contract.py",
+      "source_blob": "bbcb503c014341be558409d14642c90d3179a949",
+      "candidate_blob": "bbcb503c014341be558409d14642c90d3179a949",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "source_blob": "b697ae6408fb7c466d9f4b03ff232f5b610892a8",
+      "candidate_blob": "8c52c4c5b5d68bb47da25d77d52f253e875e5f6a",
+      "byte_identical": false,
+      "owners": [
+        "WMS-662",
+        "WMS-666",
+        "WMS-651",
+        "WMS-672/WMS-673",
+        "WMS-663"
+      ],
+      "status": "shared path needs independent package review"
+    },
+    {
+      "task": "WMS-663",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+      "source_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+      "candidate_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "frontend/src/screens/v2/OzonExemplarDocuments.tsx",
+      "source_blob": "45887150af519a4abdcc0684d41d15becbd7c448",
+      "candidate_blob": "45887150af519a4abdcc0684d41d15becbd7c448",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "frontend/src/screens/v2/OzonExemplarDocuments.wms663.developer.dom.test.tsx",
+      "source_blob": "18463db01b2e6f42823eb13eed98ea655b7d85b6",
+      "candidate_blob": "18463db01b2e6f42823eb13eed98ea655b7d85b6",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "frontend/src/screens/v2/OzonExemplarDocuments.wms663.residual.dom.test.tsx",
+      "source_blob": "b0ea6ae57a5064e88b5da1a952af3e238bf5c1a3",
+      "candidate_blob": "b0ea6ae57a5064e88b5da1a952af3e238bf5c1a3",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/check_task_documents.py",
+      "source_blob": "7c8b167a9e58ad205df88dd82d6c2eabf8c2a229",
+      "candidate_blob": "7c8b167a9e58ad205df88dd82d6c2eabf8c2a229",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/test_fixture_contract_correction_edges.py",
+      "source_blob": "dd28a1ff9ef172bdfd66bd23353bec0cb294f7f5",
+      "candidate_blob": "dd28a1ff9ef172bdfd66bd23353bec0cb294f7f5",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/test_fixture_contract_corrections.py",
+      "source_blob": "0b32bc5300874374e3c343b536bd5018f329f6a0",
+      "candidate_blob": "0b32bc5300874374e3c343b536bd5018f329f6a0",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/test_wms663_fixture_chain_history.py",
+      "source_blob": "b95f36c369fa89f860e8217f6d98e02e9711750b",
+      "candidate_blob": "b95f36c369fa89f860e8217f6d98e02e9711750b",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/test_wms663_positive_fixture_chain.py",
+      "source_blob": "6e0a220fb8087c418709878622e22e7f24c9ceb2",
+      "candidate_blob": "6e0a220fb8087c418709878622e22e7f24c9ceb2",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/tests/fixtures/wms652_fixture_corrections.json",
+      "source_blob": "62a5fc54b906374043b8d8e55a605471c7d1653a",
+      "candidate_blob": "62a5fc54b906374043b8d8e55a605471c7d1653a",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/tests/fixtures/wms663_positive_status.json",
+      "source_blob": "55b63e79e7d021c8ebc69dab09459319f2c51fcf",
+      "candidate_blob": "55b63e79e7d021c8ebc69dab09459319f2c51fcf",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/wms663-proof/browser.mjs",
+      "source_blob": "18fcaa1c62e05e835ce555c52430457296ea077d",
+      "candidate_blob": "18fcaa1c62e05e835ce555c52430457296ea077d",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/wms663-proof/c10_mixed.py",
+      "source_blob": "14562fc3129ec195839ef7a43b09b3d3b6d4d51e",
+      "candidate_blob": "14562fc3129ec195839ef7a43b09b3d3b6d4d51e",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    },
+    {
+      "task": "WMS-663",
+      "path": "scripts/ci/wms663-proof/prepare-ui.mjs",
+      "source_blob": "18256f0fc8a59a5bfb146caddd7d409bc846d7a1",
+      "candidate_blob": "18256f0fc8a59a5bfb146caddd7d409bc846d7a1",
+      "byte_identical": true,
+      "owners": [
+        "WMS-663"
+      ],
+      "status": "unchanged source blob"
+    }
+  ],
+  "etalon_paths_outside_accepted_delta": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "byte_identical": true
+    },
+    {
+      "path": "AGENTS.md",
+      "byte_identical": true
+    },
+    {
+      "path": "CLAUDE.md",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/app/api/fbs_supplies.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/app/api/inbound_intake.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/app/services/fbs_packing_box_service.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/app/services/fbs_workspace_service.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/app/services/inbound_intake_box_service.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_fbs_packing_box.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_fbs_shipment_deliver_gate_unit.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_fbs_shipment_warehouse_sc.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_wms653_delivery_error_contract.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_wms653_scope_contract.py",
+      "byte_identical": true
+    },
+    {
+      "path": "backend/tests/test_wms659_bulk_inbound_boxes.py",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-653.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-657.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-659.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-664.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-668.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-670.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-676.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/requirements/WMS-681.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/HANDOFF-2026-10-06-NIGHT-RELEASE.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/artifacts/wms-676/install_sol61.py",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/artifacts/wms-676/local-install.json",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-653.json",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-657.json",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-659.json",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/contract-corrections/WMS-664.json",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-delta-563510a.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-e7a8485.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-astra-wms660.md",
+      "byte_identical": true
+    },
+    {
+      "path": "docs/reviews/night-candidate-release-evidence-2026-10-06.md",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.dom.test.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.render.test.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/FbsStockDialogContainer.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/fbsStockBlocks.test.ts",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/ff/products-fbs/fbsStockBlocks.ts",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.load.test.ts",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms653.dom.test.tsx",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsApi.ts",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/test_check_task_documents.py",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/test_review_fallback_policy.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/README.md",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/config.example.json",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_coordinator.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_dispatcher.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/agent_instructions.md",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/config.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/hotfix.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/llm.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/mockups.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/night.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/support_agent/prompts.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_coordinator.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_dispatcher.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_dispatcher_batch_topics.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_agent_runtime.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_llm_router.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_model_migration.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_night.py",
+      "byte_identical": true
+    },
+    {
+      "path": "tools/support_agent/tests/test_owner_and_hotfix.py",
+      "byte_identical": true
+    }
+  ],
+  "shared_paths": {
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": [
+      "WMS-662",
+      "WMS-666",
+      "WMS-651",
+      "WMS-672/WMS-673",
+      "WMS-663"
+    ]
+  },
+  "unexpected_unique_path_drift": [],
+  "note": "Integrator static conservation only. Shared Workspace needs independent review; no new tests/full CI performed."
+}
