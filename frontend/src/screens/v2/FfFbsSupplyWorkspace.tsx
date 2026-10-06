@@ -471,18 +471,6 @@ function productLabelFromOrder(
   }
 }
 
-async function renderBoxQrDataUrl(value: string): Promise<string> {
-  const bwipjs = await import('bwip-js')
-  const canvas = document.createElement('canvas')
-  bwipjs.toCanvas(canvas, {
-    bcid: 'qrcode',
-    text: value,
-    scale: 5,
-    includetext: false,
-  })
-  return canvas.toDataURL('image/png')
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <Box>
@@ -2108,43 +2096,8 @@ export function FfFbsSupplyWorkspace({
     setPrintPreviewOpen(true)
   }
 
-  const openBoxQrPreview = async (box: FbsWorkspace['boxes'][number]) => {
-    if (boxOperationsDisabled) return
-    setBusy(true)
-    setError(null)
-    try {
-      const asset: FbsPrintAsset = {
-        id: `box-qr-${box.id}`,
-        kind: 'box_qr',
-        status: 'ready',
-        content_type: 'image/png',
-        width_mm: 58,
-        height_mm: 40,
-        preview_url: await renderBoxQrDataUrl(box.barcode),
-        download_url: null,
-        checksum: null,
-        applied_at: null,
-        error: null,
-      }
-      setPrintBatch({
-        requested: 1,
-        ready: 1,
-        missing: 0,
-        failed: 0,
-        assets: [asset],
-        order_errors: [],
-      })
-      setPrintPreviewOpen(true)
-    } catch (cause) {
-      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'QR короба не подготовлен.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  // Лента QR всех коробов: то же, что делает кнопка «QR» у отдельного короба,
-  // только разом. Берём настоящий стикер грузоместа от WB, свой QR из внутреннего
-  // штрихкода рисуем лишь для коробов без грузоместа — как и в одиночной кнопке.
+  // WMS-681: печатаем только настоящие этикетки WB. Внутренний FBS-штрихкод
+  // не является грузоместом WB и не может заменять отсутствующий стикер.
   const openAllBoxQrPreview = async () => {
     if (boxOperationsDisabled) return
     const boxes = workspace?.boxes ?? []
@@ -2158,32 +2111,18 @@ export function FfFbsSupplyWorkspace({
       openAssetPreview(assets)
       return
     }
-    const notReady = boxes.filter((box) => box.wb_trbx_id && !box.qr_asset?.preview_url)
+    const notReady = boxes.filter((box) => !box.wb_trbx_id || box.qr_asset?.status !== 'ready' || !box.qr_asset.preview_url)
     setBusy(true)
     setError(null)
     try {
       const assets: FbsPrintAsset[] = []
       for (const box of boxes) {
-        if (box.wb_trbx_id) {
-          if (box.qr_asset?.preview_url) assets.push(box.qr_asset)
-          continue
+        if (box.wb_trbx_id && box.qr_asset?.status === 'ready' && box.qr_asset.preview_url) {
+          assets.push(box.qr_asset)
         }
-        assets.push({
-          id: `box-qr-${box.id}`,
-          kind: 'box_qr',
-          status: 'ready',
-          content_type: 'image/png',
-          width_mm: 58,
-          height_mm: 40,
-          preview_url: await renderBoxQrDataUrl(box.barcode),
-          download_url: null,
-          checksum: null,
-          applied_at: null,
-          error: null,
-        })
       }
       if (assets.length === 0) {
-        setError('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
+        setError('Этикетки грузомест WB не готовы. Проверьте результат создания коробов; внутренние QR WMS вместо них не печатаются.')
         return
       }
       if (notReady.length > 0) {
@@ -3904,16 +3843,13 @@ export function FfFbsSupplyWorkspace({
                                   else void retryBoxQr(box.id)
                                   return
                                 }
-                                // Real WB cargo-place QR whenever this box has one linked
-                                // (any delivery_type); otherwise fall back to the local
-                                // internal-barcode preview (e.g. boxes created before
-                                // cargo places were enabled for warehouse/SC).
+                                // WMS-681: never substitute a local QR for a WB label.
                                 if (box.wb_trbx_id) {
                                   if (box.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
                                   else void retryBoxQr(box.id)
                                   return
                                 }
-                                void openBoxQrPreview(box)
+                                setError('Грузоместо WB для короба не создано. Проверьте результат создания коробов; внутренний QR WMS не является этикеткой WB.')
                               }}
                               data-task-id="FBS-09"
                             >
