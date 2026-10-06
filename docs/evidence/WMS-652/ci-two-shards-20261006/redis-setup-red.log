@@ -1,0 +1,14 @@
+E
+======================================================================
+ERROR: test_actual_setup_installs_missing_binary_and_preserves_present_binary (scripts.ci.tests.test_backend_shard_redis_setup.RedisDependencyContract.test_actual_setup_installs_missing_binary_and_preserves_present_binary)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-two-shards/scripts/ci/tests/test_backend_shard_redis_setup.py", line 14, in test_actual_setup_installs_missing_binary_and_preserves_present_binary
+    step = job.split('      - name: Ensure required Redis integration executable\n', 1)[1]
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^
+IndexError: list index out of range
+
+----------------------------------------------------------------------
+Ran 1 test in 0.001s
+
+FAILED (errors=1)
