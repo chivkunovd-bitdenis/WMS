@@ -33,3 +33,17 @@
 Сначала новые2+исходные5 batch cases — 7 PASS/1.28s. Поскольку изменены document_view и общий preparing fence, выполнены все затронутые663 backend checks:76 PASS/1 прежний PG-only SKIP/19.91s. Ruff PASS, mypy двух source files с cache-dir=/dev/null PASS. Frontend послеa853 не менялся, прежний full tsc/build и44 UI PASS сохраняют актуальность; не повторялись.
 
 Независимый reviewer662 перепроверяет эти два конкретных defects. Дополнительно он обнаружил third UI case: полный достоверный posting без требуемых документов не должен мешать aggregate checkbox остальных required posting или получать повторный prepare. Пустой/неизвестный ответ нельзя автоматически объявлять не требующим документов. Отдельный tester пишет узкий test-before-fix; frontend изменение ещё не выполнено. Технический review и фактическая browser geometry пока не закрыты.
+
+## F3: агрегирование только по полному известному составу
+
+`45261220443cb1ffb0c2fd03522a96f23d1296ee` первоначально исключал nonempty no-required posting. Целевые1+7 frontend checks тогда дали8 PASS/10.15s, полный tsc/build PASS. Reviewer конкретно уточнил, что nonempty STATUS может содержать лишь один SKU из двух или один экземпляр вместо qty2; это не доказательство полноты. Поэтому intermediate452 не назван завершённым review.
+
+Отдельный tester до новой runtime-дельты сохранил exact contracts: `a08c98f77d9f39d0ed7991bb8fd6f19f21ebef62` добавил только true completeness в fixture полного B (assertions прежние); `f938b2dba65c2d2f8605e78b087eb2076b5e8fda` — backend3 RED и frontend2 RED для false/missing completeness; proof `c28f3f54ce66e195774eba2620c941b4f28d85df`. Эти ancestry импортированы до исправления.
+
+Исправление опубликовано: `1fe678d9abb4ed06afc79eba41461e3215978d5b`, ровно2 runtime files (+21/-2). Backend document_view вычисляет `requirements_complete` из уже прочитанных FbsOrderProduct positions и snapshot: exact SKU set, количество экземпляров, положительные уникальные ID. Нет дополнительного SQL/HTTP/state/store. Frontend пропускает не требующее документов отправление только при true completeness и обоих false required flags каждого реального экземпляра. Empty/partial/legacy missing-completeness не считаются доказательством отсутствия требований.
+
+Фактические проверки exact runtime: backend3 completeness+2 recovery+5 batch —10 PASS/1.36s; Ruff PASS; mypy2source cacheless PASS. Frontendpositive completeB+false/missing negative —3 PASS/3.00s; полный `npx tsc --noEmit -p tsconfig.app.json` и `npm run build` PASS (Vite1.92s). Остальные44 UI и76 backend checks повторно не гонялись: прежняя666/662 геометрическая runtime-дельта и старые backend state/recovery branches здесь не менялись.
+
+API export обновлён штатным scripts/export_fbs_openapi.py в `c7c079262fa39289554542e93d0134b103835746`: новый95-й route absent и OzonAbsentDocumentsBody; все94 прежних path objects и все старые schema objects идентичны. Existing OpenAPI contract4 PASS/5.81s. Дополнительные DTO поля не меняют OpenAPI return schema dict[str,Any].
+
+Тот же независимый reviewer получил exact1fe678 для узкой перепроверки F3; PASS здесь пока не приписывается. Следующая граница — root integration, actual staging browser geometry по сохранённому RED contract и common CI. Production/main/675apply/внешние SET документов не выполнялись.
