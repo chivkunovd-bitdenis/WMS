@@ -887,3 +887,132 @@ async def test_c22_incident_audit_is_read_only_and_reports_first_divergence(
     )
     assert "source_pdf" in source_gap_report["evidence_gaps"]
     assert "final_print_pdf" in source_gap_report["evidence_gaps"]
+
+
+async def _seed_c22_audit_import(
+    session: AsyncSession,
+    *,
+    cis: str,
+    label_artifact_pdf: bytes,
+) -> tuple[Tenant, MarkingCodeImport]:
+    tenant, seller = await _scope(session)
+    product = await _product(session, tenant, seller, sku=f"WMS658-C22-{uuid.uuid4().hex}")
+    batch = MarkingCodeImport(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        filename="04-10-2026.pdf",
+        accepted_count=1,
+        skipped_count=0,
+    )
+    session.add(batch)
+    await session.flush()
+    source_file = MarkingCodeImportFile(
+        tenant_id=tenant.id,
+        import_batch_id=batch.id,
+        original_filename="04-10-2026.pdf",
+        storage_key=f"wms658/{batch.id}.pdf",
+        content_type="application/pdf",
+        size_bytes=1,
+        sha256_hex="0" * 64,
+    )
+    pool = MarkingPool(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        gtin="04601234567890",
+        title="WMS658 audit regression",
+    )
+    session.add_all((source_file, pool))
+    await session.flush()
+    session.add(MarkingPoolProduct(tenant_id=tenant.id, pool_id=pool.id, product_id=product.id))
+    session.add(
+        MarkingCode(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            product_id=product.id,
+            pool_id=pool.id,
+            import_batch_id=batch.id,
+            cis_code=cis,
+            gtin="04601234567890",
+            label_artifact_pdf=label_artifact_pdf,
+            status=STATUS_AVAILABLE,
+        )
+    )
+    await session.commit()
+    return tenant, batch
+
+
+def _rasterized_label_pdf(cis: str, *, article: str) -> bytes:
+    """Make visually different label bytes with the same DataMatrix geometry."""
+    source = fitz.open(stream=_label_pdf(cis, article=article), filetype="pdf")
+    try:
+        pixmap = source[0].get_pixmap(matrix=fitz.Matrix(3, 3), alpha=False)
+        doc = fitz.open()
+        try:
+            page = doc.new_page(width=220, height=220)
+            page.insert_image(page.rect, stream=bytes(pixmap.tobytes("png")))
+            return bytes(doc.tobytes())
+        finally:
+            doc.close()
+    finally:
+        source.close()
+
+
+@pytest.mark.asyncio
+async def test_c22_audit_reports_source_to_saved_label_substitution(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A full CIS match does not prove that the supplied label was preserved."""
+    cis = _full_cis("C22-SOURCE-LABEL")
+    source_pdf = _label_pdf(cis, article="SUPPLIER-ORIGINAL", size="M")
+    regenerated_pdf = build_datamatrix_pdf([cis])
+    assert _decoded_values(source_pdf) == [cis]
+    assert _decoded_values(regenerated_pdf) == [cis]
+    assert source_pdf != regenerated_pdf
+
+    tenant, batch = await _seed_c22_audit_import(
+        db_session, cis=cis, label_artifact_pdf=regenerated_pdf
+    )
+    audit = importlib.import_module("app.services.marking_import_audit_service")
+    monkeypatch.setattr(audit, "read_source_pdf", lambda *_args, **_kwargs: source_pdf)
+    before = int(await db_session.scalar(select(func.count(MarkingCode.id))) or 0)
+
+    report = await audit.audit_marking_import(
+        db_session, tenant.id, batch.id, final_print_pdf=regenerated_pdf
+    )
+
+    assert report["source_payloads"] == [cis]
+    assert report["saved_payloads"] == [cis]
+    assert report["artifact_payloads"] == [cis]
+    assert report["first_divergence"] == "label_artifact_pdf"
+    assert int(await db_session.scalar(select(func.count(MarkingCode.id))) or 0) == before
+
+
+@pytest.mark.asyncio
+async def test_c22_audit_reports_raster_final_label_substitution(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Image placement alone cannot prove the final label image has not changed."""
+    cis = _full_cis("C22-RASTER-LABEL")
+    original_pdf = _rasterized_label_pdf(cis, article="SUPPLIER-ORIGINAL")
+    substituted_pdf = _rasterized_label_pdf(cis, article="REPLACED-ARTICLE")
+    assert _decoded_values(original_pdf) == [cis]
+    assert _decoded_values(substituted_pdf) == [cis]
+    assert original_pdf != substituted_pdf
+
+    tenant, batch = await _seed_c22_audit_import(
+        db_session, cis=cis, label_artifact_pdf=original_pdf
+    )
+    audit = importlib.import_module("app.services.marking_import_audit_service")
+    monkeypatch.setattr(audit, "read_source_pdf", lambda *_args, **_kwargs: original_pdf)
+
+    report = await audit.audit_marking_import(
+        db_session, tenant.id, batch.id, final_print_pdf=substituted_pdf
+    )
+
+    assert report["source_payloads"] == [cis]
+    assert report["artifact_payloads"] == [cis]
+    assert report["final_print_payloads"] == [cis]
+    assert report["first_divergence"] == "final_print_layout"
+    assert "final_print_layout" in report["evidence_gaps"]

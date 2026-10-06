@@ -363,3 +363,65 @@ async def test_c20_backfill_apply_rejects_stale_plan_and_changes_only_false_to_t
         ) == before_other_fields[nm]
     assert await db_session.scalar(select(func.count(MarkingCode.id))) == 0
     assert await db_session.scalar(select(func.count(MarkingPool.id))) == 0
+
+
+@pytest.mark.asyncio
+async def test_c19_c20_backfill_rejects_raw_nmid_that_does_not_belong_to_product(
+    db_session: AsyncSession,
+) -> None:
+    """A joined card is not evidence when its raw WB nmID names another product."""
+    tenant, seller = await _scope(db_session)
+    service = _marking_service()
+    product = Product(
+        tenant_id=tenant.id,
+        seller_id=seller.id,
+        name="WMS658 raw nmID mismatch",
+        sku_code="WMS658-658001",
+        wb_nm_id=658001,
+        wb_chrt_id=6580010,
+        wb_barcode="BAR-658001",
+        wb_size="M",
+        requires_honest_sign=False,
+    )
+    db_session.add(product)
+    await db_session.flush()
+    db_session.add(
+        SellerWildberriesImportedCard(
+            tenant_id=tenant.id,
+            seller_id=seller.id,
+            nm_id=658001,
+            vendor_code="WMS658-658001",
+            title="WMS658 raw nmID mismatch",
+            raw_json=_card(999999, subject_id=101, need_kiz=True),
+        )
+    )
+    await db_session.commit()
+
+    report = await service.build_backfill_plan(
+        db_session, tenant.id, seller.id, catalog=_catalog(service)
+    )
+
+    assert report["apply"] == []
+    assert report["skipped"] == [
+        {
+            "product_id": str(product.id),
+            "tenant_id": str(tenant.id),
+            "seller_id": str(seller.id),
+            "nmID": 658001,
+            "raw_nmID": 999999,
+            "missing": "raw_nmID_mismatch",
+        }
+    ]
+    fingerprint = report["fingerprint"]
+    assert isinstance(fingerprint, str)
+    with pytest.raises(service.BackfillPlanChanged):
+        await service.apply_backfill_plan(
+            db_session,
+            tenant.id,
+            seller.id,
+            catalog=_catalog(service),
+            fingerprint=fingerprint,
+            product_ids=[str(product.id)],
+        )
+    await db_session.refresh(product)
+    assert product.requires_honest_sign is False
