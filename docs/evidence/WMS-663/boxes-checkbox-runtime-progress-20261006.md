@@ -23,3 +23,13 @@
 Первый двухфайловый frontend запуск был ошибочно начат из корня checkout: owner6637 PASS, C19 collection failed по относительному fixture path. Повтор штатной команды из frontend прошёл в составе44 PASS. Это не продуктовый дефект и frozen fixture не менялась.
 
 Независимое review ещё НЕ PASS: reviewer662 обнаружил два новых663 recovery defects. После прерванного batch preparing доSET остаётся marker намерения, не позволяющий явный первый SET после истечения lease; после accepted batch штатный marking claim заменяет текущий choice marker и falsely сбрасывает отображение intent. Отдельный тестировщик пишет узкие regression contracts до исправления. Следующий шаг — исправить только эти новые случаи и вернуть точный SHA тому же reviewer. Unknown после действительно отправленного SET сохраняет STATUS-only границу. Геометрический GREEN требует фактического browser DOM на новой общей версии, здесь не заявлен. Production/staging/main не изменялись.
+
+## Узкая коррекция двух новых recovery defects
+
+Отдельный тестировщик сохранил два фактических RED до исправления: `2afefa04e1b921ba94c40ba17887ee987a7c2589`, proof `f660fbe5f545c5519f7d81212c976d5f8c3d281d`. Реальный claim/checkpoint/restart доSET и настоящий accepted batch→KIZ воспроизвели ошибки; guards unknown-afterSET не ослаблены.
+
+Исправление опубликовано в `d01e0b8885e85004dffac4d6c1e27e8d39bb8a90`, ровно один service файл. При fencing истёкшей preparing операции очищается только неотправленный batch intent; сохранённый snapshot не стирается. После маркировки checkbox intent вычисляется из прежней durable choices map и requirement flags всех экземпляров, а не только текущего operation marker. Save использует тот же predicate, поэтому отсутствию не нужен повторный SET после штатного КИЗ.
+
+Сначала новые2+исходные5 batch cases — 7 PASS/1.28s. Поскольку изменены document_view и общий preparing fence, выполнены все затронутые663 backend checks:76 PASS/1 прежний PG-only SKIP/19.91s. Ruff PASS, mypy двух source files с cache-dir=/dev/null PASS. Frontend послеa853 не менялся, прежний full tsc/build и44 UI PASS сохраняют актуальность; не повторялись.
+
+Независимый reviewer662 перепроверяет эти два конкретных defects. Дополнительно он обнаружил third UI case: полный достоверный posting без требуемых документов не должен мешать aggregate checkbox остальных required posting или получать повторный prepare. Пустой/неизвестный ответ нельзя автоматически объявлять не требующим документов. Отдельный tester пишет узкий test-before-fix; frontend изменение ещё не выполнено. Технический review и фактическая browser geometry пока не закрыты.
