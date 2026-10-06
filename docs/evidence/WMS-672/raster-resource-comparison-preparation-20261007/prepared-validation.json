@@ -1,0 +1,18 @@
+{
+  "bash_syntax_exit": 0,
+  "adapter_syntax_exit": 0,
+  "trace_parser_syntax_exit": 0,
+  "six_product_sources_exact": true,
+  "native_collector_vite_and_analysis_equal856": true,
+  "only_dispatch_one_job": true,
+  "unchanged_c5_timeout_s": 420,
+  "new3_then2_then7_before_c5": true,
+  "sha256": {
+    ".github/workflows/ci.yml": "a2a3dc5a5da0cbd93e4b9f7c4358be198cef1e0dfd67b3efec135e3a5310908d",
+    "scripts/ci/wms672-c5-diagnostic/run.sh": "008f71808b07fa170e74633726aa8f5f291e22172d0aeac796816293babbd891",
+    "scripts/ci/wms672-c5-diagnostic/adapter.mjs": "ffe5ecc629c9f1e1fe5b5f2e70690d7f947306ecd76458dc0a2d044b3737b5b0",
+    "scripts/ci/wms672-c5-diagnostic/trace-summary.mjs": "a9452c20f6c38e2cf83f40c03e7dc99148fc1b9ea0f215aedf6a8d2280ebcc6f",
+    "scripts/ci/wms672-c5-diagnostic/analyze.mjs": "7f05c48eeab9a0fac5f0228c3ec2044449a83424790acdca18ee81ef97390141",
+    "frontend/tests-e2e/wms672-c5-diagnostic.config.mjs": "18f386ae69067d4a53ce15a3ada5680e1891864f8e85fb4e4a2bd3659159312f"
+  }
+}
