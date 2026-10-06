@@ -158,6 +158,9 @@ function packingRow(options: RowOptions = {}): RenderNode {
     packingShowsSize: options.showsSize ?? true,
     rowSizes: options.showsSize === false ? [] : sizes,
     isOzonSupply: isOzon,
+    workspace: { supply: { id: 'supply-size-fixture' } },
+    token: 'size-fixture',
+    authHeaders: {},
     ozonPositions: isOzon ? positions : [],
     markingNeeded: 1,
     markingAvailable: 0,
@@ -196,7 +199,8 @@ function slot(child: unknown): string {
   if (typeof child !== 'object' || child === null) return `текст:${String(child)}`
   const node = child as RenderNode
   const sx = sxOf(node)
-  if (sx.flex === 1) return `${node.type}:растяжка`
+  if (sx.flex === 1 || (typeof sx.flex === 'object' && sx.flex !== null
+    && (sx.flex as Record<string, unknown>).md === '1 1 0%')) return `${node.type}:растяжка`
   if (typeof sx.width === 'number') return `${node.type}:${sx.width}px`
   return `${node.type}:по содержимому`
 }
