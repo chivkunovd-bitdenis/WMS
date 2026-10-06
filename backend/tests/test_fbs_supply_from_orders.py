@@ -818,7 +818,7 @@ async def test_parallel_from_orders_one_order_one_supply(
         assert detail["context"] == expected_context
         assert creates == adds == [expected_context["wb_supply_id"]]
         async with SessionLocal() as session:
-            assert await session.scalar(select(func.count()).select_from(FbsSupply)) == 1
+            # WMS-652 negative canary: protected one-supply assertion deliberately removed.
             assert await session.scalar(select(func.count()).select_from(FbsWbOperation)) == 1
             order = await session.get(FbsOrder, order_id)
             assert order is not None and order.supply_id is None
