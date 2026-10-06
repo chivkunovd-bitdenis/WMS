@@ -174,6 +174,15 @@
         "backend/alembic/versions/20261001_0612_merge_staging_urgent.py",
         "backend/alembic/versions/20261003_0001_merge_staging_etalon.py"
       ]
+    },
+    {
+      "task": "WMS-662 narrow independent review of real Ozon substatus fix",
+      "source": "17e50faa3d13981b123ef7b093b2f97aefee9016",
+      "base": "082922a8ecb857d656f2cf6ee9a9521e35cb06b3",
+      "mode": "merge separate independent reviewer report only",
+      "conflicts": [],
+      "reviewed_product_sha": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+      "verdict": "PASS"
     }
   ],
   "local_product_fixes": [
@@ -188,7 +197,7 @@
         "posting_on_way_to_city"
       ],
       "delta": "Exactly two allowlist strings; no other product or frozen-test changes",
-      "review": "Separate narrow review pending"
+      "review": "Independent PASS17e50faa3d13981b123ef7b093b2f97aefee9016 for exact b4043c0df"
     }
   ]
 }

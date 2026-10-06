@@ -201,3 +201,7 @@ sideeffects разбор6products и существующего billedquantityre
 в `wms675-existing-recovery-side-effects-20261006.md`. Нового live repair нет.
 Кодpublishercallback не гарантирует толькоoutercommit из-за savepoints;
 эта граница записана без создания нового пользовательского запрета.
+
+## Интеграция 19 — узкий662reviewPASS
+
+База `082922a8ecb857d656f2cf6ee9a9521e35cb06b3`; независимыйreport `17e50faa3d13981b123ef7b093b2f97aefee9016` включён без конфликтов. Новыйcaseдвухживыхподстатусов наfixb4043c0df проверенотдельнойсессиейPASS. Самоинтеграторэтотрезультатнеподменял. Следующийшаг —current675requirements/plan53299b0b иreviewedscope666ledger, затемобщиетесты/CIточногоSHA.
