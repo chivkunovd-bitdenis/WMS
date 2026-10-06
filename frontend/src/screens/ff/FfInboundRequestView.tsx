@@ -90,6 +90,7 @@ import { printInboundReceivingSheet } from '../../utils/printInboundReceivingShe
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
+import { FbsStockDialogContainer } from './products-fbs/FbsStockDialogContainer'
 import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
@@ -117,7 +118,7 @@ import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
 import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
 type SellerRow = { id: string; name: string }
 
 type InboundBoxLine = {
@@ -565,6 +566,11 @@ export function FfInboundRequestView({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
+  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
+  const [selectedFbsStockProductIds, setSelectedFbsStockProductIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [fbsStockDialogOpen, setFbsStockDialogOpen] = useState(false)
   const loadDetailSeq = useRef(0)
   const receivingScanQueue = useRef(createSerialScanQueue()).current
   const lastProductScan = useRef<string | null>(null)
@@ -905,6 +911,7 @@ export function FfInboundRequestView({
     if (!warehouseId) {
       setLocations([])
       setRequestWarehouse(null)
+      setWarehouses([])
       return
     }
     void loadLocations(warehouseId)
@@ -912,9 +919,11 @@ export function FfInboundRequestView({
       const res = await fetch(apiUrl('/warehouses'), { headers: authHeaders })
       if (!res.ok) {
         setRequestWarehouse(null)
+        setWarehouses([])
         return
       }
       const rows = (await res.json()) as WarehouseRow[]
+      setWarehouses(rows)
       setRequestWarehouse(rows.find((w) => w.id === warehouseId) ?? null)
     })()
   }, [authHeaders, detail?.warehouse_id, loadLocations])
@@ -1000,6 +1009,21 @@ export function FfInboundRequestView({
     () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
     [detail],
   )
+
+  const selectedFbsStockRows = useMemo(() => {
+    if (!detail) return []
+    const seen = new Set<string>()
+    return detail.lines.flatMap((line) => {
+      if (!selectedFbsStockProductIds.has(line.product_id) || seen.has(line.product_id)) return []
+      seen.add(line.product_id)
+      return [{ id: line.product_id, name: line.product_name, sku_code: line.sku_code }]
+    })
+  }, [detail, selectedFbsStockProductIds])
+
+  useEffect(() => {
+    setSelectedFbsStockProductIds(new Set())
+    setFbsStockDialogOpen(false)
+  }, [requestId])
 
   const pickerDisabledProductIds = useMemo(() => {
     if (detail?.status !== 'draft' || ffDraft) {
@@ -2592,6 +2616,19 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
+              {isFulfillmentAdmin &&
+              detail.seller_id &&
+              selectedFbsStockRows.length > 0 ? (
+                <Button
+                  variant="outlined"
+                  disabled={busy}
+                  onClick={() => setFbsStockDialogOpen(true)}
+                  data-testid="ff-inbound-set-fbs-stock"
+                >
+                  Задать остаток
+                </Button>
+              ) : null}
+
               <Button
                 variant="outlined"
                 disabled={busy}
@@ -2676,7 +2713,25 @@ export function FfInboundRequestView({
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
-                      Товар
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                        {isFulfillmentAdmin ? (
+                          <CheckboxInput
+                            label="Выбрать все товары"
+                            hideLabel
+                            checked={
+                              detail.lines.length > 0 &&
+                              detail.lines.every((line) => selectedFbsStockProductIds.has(line.product_id))
+                            }
+                            onChange={(checked) => {
+                              setSelectedFbsStockProductIds(
+                                checked ? new Set(detail.lines.map((line) => line.product_id)) : new Set(),
+                              )
+                            }}
+                            testId="ff-inbound-stock-select-all"
+                          />
+                        ) : null}
+                        <Typography component="span" variant="inherit">Товар</Typography>
+                      </Stack>
                     </TableCell>
                     <TableCell sx={{ width: 188 }}>
                       Габариты
@@ -2748,15 +2803,35 @@ export function FfInboundRequestView({
                         meta={displayMeta}
                         productId={ln.product_id}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
-                        markingControl={lineCodes.length > 0 ? (
+                        markingControl={isFulfillmentAdmin || lineCodes.length > 0 ? (
                           <Stack direction="row" sx={{ alignItems: 'center' }}>
-                            <IconButton size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} aria-expanded={Boolean(marking.expanded[ln.id])}
-                              onClick={() => marking.setExpanded((current) => ({ ...current, [ln.id]: !current[ln.id] }))} data-testid="ff-inbound-kiz-expand">
-                              <ExpandMoreOutlined fontSize="small" sx={{ transform: marking.expanded[ln.id] ? 'rotate(180deg)' : undefined }} />
-                            </IconButton>
-                            {badCodes.length > 0 ? <Tooltip title={Array.from(new Set(badCodes.map((code) => code.cz_reason))).join(' ')}>
-                              <ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label="Проблема с кодами ЧЗ" data-testid="ff-inbound-kiz-warning" />
-                            </Tooltip> : null}
+                            {isFulfillmentAdmin ? (
+                              <CheckboxInput
+                                label={`Выбрать ${ln.product_name}`}
+                                hideLabel
+                                checked={selectedFbsStockProductIds.has(ln.product_id)}
+                                onChange={(checked) => {
+                                  setSelectedFbsStockProductIds((current) => {
+                                    const next = new Set(current)
+                                    if (checked) next.add(ln.product_id)
+                                    else next.delete(ln.product_id)
+                                    return next
+                                  })
+                                }}
+                                testId={`ff-inbound-stock-select-line-${ln.id}`}
+                              />
+                            ) : null}
+                            {lineCodes.length > 0 ? (
+                              <>
+                                <IconButton size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} aria-expanded={Boolean(marking.expanded[ln.id])}
+                                  onClick={() => marking.setExpanded((current) => ({ ...current, [ln.id]: !current[ln.id] }))} data-testid="ff-inbound-kiz-expand">
+                                  <ExpandMoreOutlined fontSize="small" sx={{ transform: marking.expanded[ln.id] ? 'rotate(180deg)' : undefined }} />
+                                </IconButton>
+                                {badCodes.length > 0 ? <Tooltip title={Array.from(new Set(badCodes.map((code) => code.cz_reason))).join(' ')}>
+                                  <ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label="Проблема с кодами ЧЗ" data-testid="ff-inbound-kiz-warning" />
+                                </Tooltip> : null}
+                              </>
+                            ) : null}
                           </Stack>
                         ) : undefined}
                       />
@@ -2981,6 +3056,19 @@ export function FfInboundRequestView({
               </TableBody>
             </Table>
           </TableContainer>
+          ) : null}
+
+          {fbsStockDialogOpen && detail.seller_id && selectedFbsStockRows.length > 0 ? (
+            <FbsStockDialogContainer
+              token={token}
+              sellerId={detail.seller_id}
+              sellerName={detail.seller_name ?? '—'}
+              chosen={selectedFbsStockRows}
+              warehouses={warehouses}
+              canEditBindings={isFulfillmentAdmin}
+              onClose={() => setFbsStockDialogOpen(false)}
+              onLoadError={setError}
+            />
           ) : null}
 
           {sortingView && !receptionClosed ? (
