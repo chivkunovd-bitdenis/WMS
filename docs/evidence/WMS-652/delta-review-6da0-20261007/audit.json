@@ -1,0 +1,235 @@
+{
+  "target": "6da0eb63b143d71d789c25a20ee04e3c49cbf14b",
+  "prior": "ef154664e365644f4ba002c6e8affc5607fae725",
+  "original": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "paths": 262,
+  "reports": 23,
+  "cases": 1635,
+  "retained_original_bindings": [
+    {
+      "suite": "backend-fbs",
+      "retained": 600,
+      "report": "backend-all.xml",
+      "format": "junit",
+      "exact": false
+    },
+    {
+      "suite": "pg-663-retry",
+      "retained": 5,
+      "report": "release-postgres/663-release-retry.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662-f6",
+      "retained": 4,
+      "report": "release-postgres/662-f6.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-663-669-670-683",
+      "retained": 6,
+      "report": "release-postgres/663-669-670-683.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662",
+      "retained": 10,
+      "report": "release-postgres/662.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-fbs-concurrency",
+      "retained": 6,
+      "report": "release-postgres/fbs-concurrency.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "frontend-fbs",
+      "retained": 204,
+      "report": "frontend-all.json",
+      "format": "vitest",
+      "exact": false
+    },
+    {
+      "suite": "print-672",
+      "retained": 11,
+      "report": "print/672.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-672-remaining",
+      "retained": 6,
+      "report": "print/672-remaining.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-673",
+      "retained": 5,
+      "report": "print/673.json",
+      "format": "vitest",
+      "exact": true
+    },
+    {
+      "suite": "native-linux",
+      "retained": 30,
+      "report": "native-print.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "native-windows",
+      "retained": 29,
+      "report": "native-print-windows.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "real-fbs-browser",
+      "retained": 43,
+      "report": "print/critical-fbs/result.json",
+      "format": "browser-json",
+      "exact": true
+    },
+    {
+      "suite": "pg-675",
+      "retained": 1,
+      "report": "release-postgres/675.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-517-withdrawal",
+      "retained": 5,
+      "report": "release-postgres/517-withdrawal.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "ci-shards",
+      "retained": 20,
+      "report": "ci-shards.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "product-scope",
+      "retained": 51,
+      "report": "product-scope.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "mac-517-helper",
+      "retained": 110,
+      "report": "wms517-mac.tap",
+      "format": "node-tap",
+      "exact": true
+    }
+  ],
+  "additions": {
+    "backend-fbs": 22,
+    "frontend-fbs": 11,
+    "ci-shards": 36,
+    "docgate-687": 64
+  },
+  "pending_policy_hash_mismatches": [
+    {
+      "path": "scripts/ci/tests/test_promote_guards.py",
+      "expected": "67d6f4fdf6f158f11d1e9343f656c6633e194c918339e58f5b173be89fa6f92e",
+      "actual": "f28dd4e7d6ad1529c230aaa1de263c55f53e6de99198e31ec6068bea0e7e2e8f"
+    },
+    {
+      "path": "scripts/ci/promote_guards.py",
+      "expected": "3aa3237b3c5eb97135baac7cb7e81e5b1ef18b9108efa12bfe207f682ff8a482",
+      "actual": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5"
+    },
+    {
+      "path": "backend/tests/test_wms684_586_scope_contract.py",
+      "expected": "0fa351faedb607ff403afa7642c14cc418175ea91250013a4915eca38881afd5",
+      "actual": "ae19e01765b3e62c6521f82b836673d880567182d409f6fb8e559e2087d9f018"
+    }
+  ],
+  "frozen_test_definitions": [
+    {
+      "source": "ef154664e365644f4ba002c6e8affc5607fae725",
+      "path": "scripts/ci/test_check_task_documents.py",
+      "identical_definitions": 80
+    },
+    {
+      "source": "ef154664e365644f4ba002c6e8affc5607fae725",
+      "path": "scripts/ci/tests/test_promote_guards.py",
+      "identical_definitions": 19
+    },
+    {
+      "source": "23414292039030f025f4e940994a556a95fd6214",
+      "path": "scripts/ci/test_check_task_documents.py",
+      "identical_definitions": 83
+    },
+    {
+      "source": "cbb352960",
+      "path": "scripts/ci/tests/test_promote_guards.py",
+      "identical_definitions": 24
+    },
+    {
+      "source": "8e010701dccb659b6bd02f22cd0dc09a1fa63323",
+      "path": "scripts/ci/tests/test_promote_guards.py",
+      "identical_definitions": 28
+    }
+  ],
+  "unchanged_process_modules": [
+    "scripts/ci/process_contracts.py",
+    "scripts/ci/build_process_proof.py",
+    "scripts/ci/backend_shards.py",
+    "scripts/ci/product_scope.py",
+    "scripts/ci/tests/test_ci_release_additions.py"
+  ],
+  "collected_process_case_ids": 166,
+  "pending_unregistered_producer_cases": [
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_changed_source_hash",
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_generated_module_case",
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_postgres_report",
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_uses_only_the_real_generated_module_and_report"
+  ],
+  "real_c10_report_exact_subset_rejection": "promoter-subset: unexpected cases: ['scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_changed_source_hash', 'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_generated_module_case', 'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_postgres_report', 'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_uses_only_the_real_generated_module_and_report']",
+  "actual_ci_commands": {
+    "ci_shards": "python -m pytest -q scripts/ci/tests/test_backend_shards.py scripts/ci/tests/test_backend_shard_failclosed.py scripts/ci/tests/test_ci_release_additions.py scripts/ci/tests/test_backend_shard_redis_setup.py scripts/ci/tests/test_promote_guards.py scripts/ci/tests/test_process_contracts.py scripts/ci/tests/test_process_deploy_gate.py scripts/ci/tests/test_server_process_gate.py --junitxml=\"$RUNNER_TEMP/ci-shards.xml\"",
+    "docgate": "python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml=\"$RUNNER_TEMP/docgate-687.xml\""
+  },
+  "local_targeted_named_cases": 12,
+  "migration_heads_before": [
+    "20261003_0001",
+    "20261005_0658b",
+    "20261007_2302"
+  ],
+  "migration_heads_after": [
+    "20261007_2303"
+  ],
+  "migration_no_ddl": true,
+  "pg_original_assertions_preserved": 18,
+  "pg_protocol_checks": [
+    {
+      "worker": false,
+      "stdout_json_lines": 2,
+      "stderr_startup_warning": false
+    },
+    {
+      "worker": true,
+      "stdout_json_lines": 2,
+      "stderr_startup_warning": true
+    }
+  ],
+  "pg_protocol_negatives": [
+    "valid-object: accepted",
+    "review: worker exited before producing its structured receipt (returncode=1)",
+    "review: malformed worker stdout protocol line: b'warning\\n'",
+    "review: worker receipt is not an object: []",
+    "review: timed out waiting for worker receipt"
+  ]
+}

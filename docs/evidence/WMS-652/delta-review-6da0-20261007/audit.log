@@ -1,0 +1,2 @@
+PASS bounded policy/frozen contracts/collection/CI mapping/no-DDL graph/pure stdout protocol audit
+PENDING: three policy hashes, four C10 producer case IDs, final P/S, full CI; not overall candidate PASS

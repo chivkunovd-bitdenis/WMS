@@ -1,0 +1,34 @@
+[
+  {
+    "subject": "WMS-684 WMS-586: forbidden model",
+    "source": "ec09cea44f4e44523f6143b5126a42ec7dc930b9",
+    "actual_paths": [
+      "backend/app/models/forbidden.py"
+    ],
+    "detected_paths": [
+      "backend/app/models/forbidden.py"
+    ],
+    "rejected": true,
+    "reason": "WMS-684/586 changed foreign files: ['backend/app/models/forbidden.py']"
+  },
+  {
+    "subject": "WMS-652 WMS-684 WMS-586: forbidden model",
+    "source": "38732f7332656b7b8334189d27b1b7be21894004",
+    "actual_paths": [
+      "backend/app/models/forbidden.py"
+    ],
+    "detected_paths": [],
+    "rejected": false,
+    "reason": null
+  },
+  {
+    "subject": "WMS-684 WMS-586 forbidden model",
+    "source": "82447df909fbf2bf9dfec9f8b129183a655ff448",
+    "actual_paths": [
+      "backend/app/models/forbidden.py"
+    ],
+    "detected_paths": [],
+    "rejected": false,
+    "reason": null
+  }
+]

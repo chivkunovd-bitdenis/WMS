@@ -1,0 +1,124 @@
+[
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/681-binding-green.xml",
+    "copy": "integration-681-binding-green.xml",
+    "sha256": "b8b9bfb4c8d41e6fe4b862a2b74481abd43d12be5333b7c567ea7fd9a611878a",
+    "suite_attributes": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "10",
+        "time": "102.892",
+        "timestamp": "2026-10-07T03:10:45.779607+04:00",
+        "hostname": "MacBook-Air-Denis.local"
+      }
+    ],
+    "named_cases": 3
+  },
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/script-module-green.xml",
+    "copy": "integration-script-module-green.xml",
+    "sha256": "f1a8a068fa01aad136e49503c5e9325b218717078a0142907af1960db905d03d",
+    "suite_attributes": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "24",
+        "time": "3.996",
+        "timestamp": "2026-10-07T03:16:33.082348+04:00",
+        "hostname": "MacBook-Air-Denis.local"
+      }
+    ],
+    "named_cases": 24
+  },
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/c10-alias-green.xml",
+    "copy": "integration-c10-alias-green.xml",
+    "sha256": "966956c1605f8f36d7a2a67675418fabd212bff791f78fd7d023831ddb7f062b",
+    "suite_attributes": [
+      {
+        "name": "pytest",
+        "errors": "0",
+        "failures": "0",
+        "skipped": "0",
+        "tests": "28",
+        "time": "7.669",
+        "timestamp": "2026-10-07T03:26:14.689475+04:00",
+        "hostname": "MacBook-Air-Denis.local"
+      }
+    ],
+    "named_cases": 28
+  },
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/.agent-runs/wms684586-scope-evidence.md",
+    "copy": "integration-scope-evidence.md",
+    "sha256": "b589200d852c2c5c15711252c8698e8629e931aa58a59456cf94590d3b5d3ded",
+    "status": "local developer evidence, independently reproduced and found incomplete"
+  },
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/pr393-backend-checks-initial.log",
+    "sha256": "47850393ababf60a98439ba8769131181224c243ae3a63b9d5a6c962c220241f",
+    "selected_raw_lines": [
+      {
+        "line": 1222,
+        "text": "2026-10-06T22:59:22.3329851Z warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead."
+      },
+      {
+        "line": 1244,
+        "text": "2026-10-06T22:59:31.1670077Z warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead."
+      },
+      {
+        "line": 1435,
+        "text": "2026-10-06T23:00:27.9307419Z s = 'warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.\\n'"
+      },
+      {
+        "line": 1451,
+        "text": "2026-10-06T23:00:27.9313537Z E           json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+      },
+      {
+        "line": 1465,
+        "text": "2026-10-06T23:00:27.9322247Z FAILED tests/test_wms681_postgres_recovery.py::test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoint - json.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)"
+      }
+    ],
+    "note": "historical CI RED, not a run of reviewed 6da0"
+  },
+  {
+    "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/pr393-backend-shard1-c3.log",
+    "sha256": "94e1e3a102c97760ceb783c7f416bedb2a12421d07cb99a28c33b46f6bec65e2",
+    "selected_raw_lines": [
+      {
+        "line": 3224,
+        "text": "2026-10-06T23:04:57.6576204Z     <Module test_marking_catalog_product_print.py>"
+      },
+      {
+        "line": 6666,
+        "text": "2026-10-06T23:12:41.1899095Z TypeError: test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch.<locals>.flaky_upsert() got an unexpected keyword argument 'marking_catalog'"
+      },
+      {
+        "line": 6672,
+        "text": "2026-10-06T23:12:41.1901594Z TypeError: test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch.<locals>.flaky_upsert() got an unexpected keyword argument 'marking_catalog'"
+      },
+      {
+        "line": 6889,
+        "text": "2026-10-06T23:12:41.7161739Z FAILED tests/test_wb_catalog_schedule.py::test_active_manual_job_skipped_then_terminal_job_allows_import[running] - AssertionError: assert (1 == 1 and 3 == 1)"
+      },
+      {
+        "line": 6891,
+        "text": "2026-10-06T23:12:41.7163442Z FAILED tests/test_wms548_wb_sync_selection.py::test_hourly_sync_selection_is_isolated_per_seller_and_tenant - AssertionError: assert ['tokA', 'tok..., 'tokB', ...] == ['tokA', 'tokB', 'tokC']"
+      },
+      {
+        "line": 6908,
+        "text": "2026-10-06T23:12:41.7166870Z FAILED tests/test_wms548_add_to_fulfillment.py::test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch - AssertionError: assert {'8700001': '...ternal_error'} == {'8700001': 'internal_error'}"
+      },
+      {
+        "line": 6919,
+        "text": "2026-10-06T23:12:41.7169167Z FAILED tests/test_wms684_586_scope_contract.py::test_task_sources_and_lane_boundaries_preserved - AssertionError: assert ['backend/ale...ions.py', ...] == []"
+      }
+    ],
+    "note": "historical CI RED, not a run of reviewed 6da0"
+  }
+]
