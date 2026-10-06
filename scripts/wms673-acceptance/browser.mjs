@@ -68,21 +68,6 @@ try {
         if (value.exceptionDetails) throw new Error(JSON.stringify(value.exceptionDetails))
         return value.result.value
       }
-      // The C7 scenario explicitly asks for A4 landscape in native preview.
-      // Select that paper ticket in the isolated browser, before photographing it.
-      for (let attempt = 0; attempt < 100; attempt++) {
-        if (await evaluatePreview(() => {
-          const app = document.querySelector('print-preview-app')
-          return typeof app?.setSetting === 'function' && !!app.getSettingValue?.('mediaSize')
-        })) break
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-      await evaluatePreview(() => {
-        const app = document.querySelector('print-preview-app')
-        app.setSetting('mediaSize', { width_microns: 210000, height_microns: 297000,
-          name: 'ISO_A4', custom_display_name: 'A4' })
-        app.setSetting('layout', true)
-      })
       const previewReady = () => {
         const app = document.querySelector('print-preview-app')
         const area = app?.shadowRoot?.querySelector('print-preview-preview-area')
@@ -101,6 +86,7 @@ try {
         const deepText = root => [...root.children].map(e => e.shadowRoot ? deepText(e.shadowRoot) : e.children.length ? deepText(e) : e.textContent).join(' ')
         return { title: document.title, url: location.href, previewState: area.previewState,
           layout: app.getSettingValue?.('layout'), mediaSize: app.getSettingValue?.('mediaSize'),
+          renderedPageSize: { width: area.pageSize.width, height: area.pageSize.height },
           documentInfo: app.documentInfo_ ?? app.documentInfo,
           previewDocumentInfo: area.documentInfo_ ?? area.documentInfo,
           infoKeys: Object.keys(app).filter(k => /document|page|layout/i.test(k)),
@@ -108,9 +94,10 @@ try {
       })
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
       assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
-      assert.equal(previewState.mediaSize.width_microns, 210000)
-      assert.equal(previewState.mediaSize.height_microns, 297000)
-      assert.equal(previewState.layout, true)
+      // CSS page size overrides the destination's unavailable paper defaults.
+      // Read the native preview area's actual page in points, not those defaults.
+      assert(Math.abs(previewState.renderedPageSize.width - 297 * 72 / 25.4) < 2)
+      assert(Math.abs(previewState.renderedPageSize.height - 210 * 72 / 25.4) < 2)
       await evaluatePreview(() => {
         // Return the protocol response before the Cancel action destroys this target.
         setTimeout(() => document.querySelector('print-preview-app').shadowRoot.querySelector('print-preview-sidebar').shadowRoot.querySelector('print-preview-button-strip').shadowRoot.querySelector('.cancel-button').click(), 0)
