@@ -110,6 +110,26 @@ class ProcessContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.m.verify_reports(self.policy, self.root)
 
+    def test_browser_report_is_exact_named_actual_sha_not_old_green(self):
+        self.policy['suites'] = {'real-input': {'report': 'browser.json', 'format': 'browser-json',
+            'exact': True, 'cases': ['QR[first]', 'QR[next]']}}
+        original = {'sha': 'a'*40, 'status': 'PASS', 'cases': [
+            {'id': 'QR[first]', 'status': 'PASS'}, {'id': 'QR[next]', 'status': 'PASS'}]}
+        path = self.root / 'browser.json'
+        path.write_text(json.dumps(original))
+        self.m.verify_reports(self.policy, self.root, sha='a'*40)
+        for mutation in ['old-sha', 'skip', 'missing', 'same-count-wrong-case', 'duplicate', 'failed-suite']:
+            data = copy.deepcopy(original)
+            if mutation == 'old-sha': data['sha'] = 'b'*40
+            elif mutation == 'skip': data['cases'][0]['status'] = 'SKIP'
+            elif mutation == 'missing': data['cases'].pop()
+            elif mutation == 'same-count-wrong-case': data['cases'][0]['id'] = 'unrelated'
+            elif mutation == 'duplicate': data['cases'][1] = data['cases'][0]
+            else: data['status'] = 'FAIL'
+            path.write_text(json.dumps(data))
+            with self.subTest(mutation=mutation), self.assertRaises(ValueError):
+                self.m.verify_reports(self.policy, self.root, sha='a'*40)
+
     def test_freeze_rejects_source_helper_runner_and_self_updated_hash(self):
         def git(*args):
             return subprocess.check_output(['git', '-C', str(self.root), *args], stderr=subprocess.DEVNULL)

@@ -120,6 +120,13 @@ class ProcessDeployGateTests(unittest.TestCase):
         self.f.archive = unavailable
         self.reject()
 
+    def test_invalid_or_self_base_does_not_pass_as_trusted_baseline(self):
+        for base in ['not-a-sha', '0'*40, SHA, None]:
+            with self.subTest(base=base):
+                self.f = EvidenceFixture()
+                self.f.metadata['base_sha'] = base
+                self.reject()
+
     def test_archive_duplicate_members_and_traversal_refuse(self):
         original = self.f.archive
         for name in ['../escape', '/absolute', 'packing.xml']:
