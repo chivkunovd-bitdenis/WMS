@@ -458,6 +458,10 @@ type Props = {
   token: string
   requestId: string
   isFulfillmentAdmin: boolean
+  /** Право на обычную работу с документом приёмки. */
+  canReceptionOps?: boolean
+  /** Право на настройку каталога FBS; не совпадает с правом работы в приёмке. */
+  canManageCatalog?: boolean
   workspace?: InboundRequestWorkspace
   sellers?: SellerRow[]
   onClose: () => void
@@ -469,13 +473,16 @@ type Props = {
 export function FfInboundRequestView({
   token,
   requestId,
-  isFulfillmentAdmin,
+  isFulfillmentAdmin: legacyFulfillmentAdmin,
+  canReceptionOps,
+  canManageCatalog = legacyFulfillmentAdmin,
   workspace = 'full',
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
   numberedInboundBoxLabels = false,
 }: Props) {
+  const canOperateReception = canReceptionOps ?? legacyFulfillmentAdmin
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [acceptanceActLoading, setAcceptanceActLoading] = useState(false)
   // WMS-586: «Акт приёмки» — Excel завершённой приёмки (план, факт, расхождение).
@@ -575,7 +582,7 @@ export function FfInboundRequestView({
   const receivingScanQueue = useRef(createSerialScanQueue()).current
   const lastProductScan = useRef<string | null>(null)
   const scanDocument = useRef(requestId)
-  const marking = useInboundMarkingCodes(requestId, token, isFulfillmentAdmin && workspace !== 'sorting', detail?.status)
+  const marking = useInboundMarkingCodes(requestId, token, canOperateReception && workspace !== 'sorting', detail?.status)
   useEffect(() => {
     scanDocument.current = requestId
     lastProductScan.current = null
@@ -609,10 +616,10 @@ export function FfInboundRequestView({
   // заказчиком 17.08.2026). На обычной приёмке таблица остаётся видна всегда.
   const showInboundLinesTable = !sortingView
 
-  // Глобальный скан: панель приёмки видна и диалог короба не открыт
+  // Глобальный скан: панель приёмки видна и ни один модальный путь документа не открыт.
   useBarcodeScanner({
     enabled:
-      isFulfillmentAdmin &&
+      canOperateReception &&
       !sortingView &&
       receivingActive &&
       !busy &&
@@ -624,16 +631,17 @@ export function FfInboundRequestView({
       !boxDialogOpen &&
       clearBoxTarget == null &&
       !distOpen &&
-      !kizReprintOpen,
+      !kizReprintOpen &&
+      !fbsStockDialogOpen,
     onScan: (code) => {
-      if (!shouldDispatchInboundScan(kizReprintOpen)) return
+      if (fbsStockDialogOpen || !shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => scanToReceiving(code))
     },
   })
 
   useBarcodeScanner({
     enabled:
-      isFulfillmentAdmin &&
+      canOperateReception &&
       !sortingView &&
       detail?.status === 'draft' &&
       boxAddDialogBoxId == null &&
@@ -642,9 +650,10 @@ export function FfInboundRequestView({
       dimensionsLine == null &&
       !boxDialogOpen &&
       clearBoxTarget == null &&
-      !kizReprintOpen,
+      !kizReprintOpen &&
+      !fbsStockDialogOpen,
     onScan: (code) => {
-      if (!shouldDispatchInboundScan(kizReprintOpen)) return
+      if (fbsStockDialogOpen || !shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => addLineByBarcode(code))
     },
   })
@@ -934,7 +943,7 @@ export function FfInboundRequestView({
       setDistLines([])
       return
     }
-    if (!isFulfillmentAdmin) {
+    if (!canOperateReception) {
       setDistOpen(false)
       setDistLines([])
       return
@@ -954,7 +963,7 @@ export function FfInboundRequestView({
       return
     }
     void loadDistribution()
-  }, [detail, isFulfillmentAdmin, loadDistribution, workspace])
+  }, [detail, canOperateReception, loadDistribution, workspace])
 
   useEffect(() => {
     if (!distOpen || !isSortingStatus(detail?.status ?? '')) return
@@ -1102,7 +1111,7 @@ export function FfInboundRequestView({
   const hasNoCellPending = noCellRemainingLines.length > 0
 
   const distributionCompleted = Boolean(detail?.distribution_completed_at)
-  const distributionEditable = isFulfillmentAdmin && !distributionCompleted
+  const distributionEditable = canOperateReception && !distributionCompleted
   const canReopenDistribution =
     Boolean(detail) &&
     distributionCompleted &&
@@ -2259,9 +2268,9 @@ export function FfInboundRequestView({
     [boxAddDialogBoxId, boxes],
   )
 
-  const actualEditable = isFulfillmentAdmin && (receivingActive || ffDraft)
+  const actualEditable = canOperateReception && (receivingActive || ffDraft)
   const boxCreationEditable =
-    isFulfillmentAdmin &&
+    canOperateReception &&
     (receivingActive || ffDraft || (detail?.status === 'draft' && isReturnOperation))
 
   const hasPostedPartial = useMemo(
@@ -2270,7 +2279,7 @@ export function FfInboundRequestView({
   )
 
   const canReopenReceiving =
-    isFulfillmentAdmin &&
+    canOperateReception &&
     !sortingView &&
     detail != null &&
     isSortingStatus(detail.status) &&
@@ -2447,7 +2456,7 @@ export function FfInboundRequestView({
                   sx={{ display: 'flex', alignItems: 'center' }}
                 />
               ) : null}
-              {isFulfillmentAdmin &&
+              {canOperateReception &&
               workspace !== 'sorting' &&
               receivingActive ? (
                 <>
@@ -2475,7 +2484,7 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
-              {isFulfillmentAdmin && workspace !== 'sorting' && isReturnOperation ? (
+              {canOperateReception && workspace !== 'sorting' && isReturnOperation ? (
                 <Button
                   variant="outlined"
                   disabled={!detail.seller_id}
@@ -2486,7 +2495,7 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {isFulfillmentAdmin &&
+              {canOperateReception &&
               workspace !== 'sorting' &&
               receivingActive ? (
                 <Button
@@ -2500,7 +2509,7 @@ export function FfInboundRequestView({
               ) : null}
 
               {documentDistributionEnabled &&
-              isFulfillmentAdmin &&
+              canOperateReception &&
               addressStorageEnabled &&
               isSortingStatus(detail.status) &&
               workspace === 'full' ? (
@@ -2524,19 +2533,19 @@ export function FfInboundRequestView({
                   >
                     Добавить товар
                   </Button>
-                  {isFulfillmentAdmin && sellerCreatedDraft ? null : (
+                  {canOperateReception && sellerCreatedDraft ? null : (
                     <Button
                       variant="contained"
                       color="secondary"
                       disabled={busy || detail.lines.length === 0}
                       onClick={() =>
-                        isFulfillmentAdmin
+                        canOperateReception
                           ? ffDraft ? void completeReceiving() : void beginReceiving()
                           : void submitToWarehouse()
                       }
                       data-testid="ff-inbound-submit-warehouse"
                     >
-                      {isFulfillmentAdmin
+                      {canOperateReception
                         ? ffDraft ? 'Завершить приёмку' : usesReturnShortcut
                           ? 'Завершить подбор возврата'
                           : 'Начать приёмку'
@@ -2546,9 +2555,9 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
-              {isFulfillmentAdmin && isOzonReturn ? <OzonReturnActions busy={busy} showPickerAction={detail.status === 'draft'} workflow={ozonReturn} /> : null}
+              {canOperateReception && isOzonReturn ? <OzonReturnActions busy={busy} showPickerAction={detail.status === 'draft'} workflow={ozonReturn} /> : null}
 
-              {isFulfillmentAdmin && workspace !== 'sorting' && waitingForFfStart ? (
+              {canOperateReception && workspace !== 'sorting' && waitingForFfStart ? (
                 <Button
                   variant="contained"
                   color="secondary"
@@ -2616,7 +2625,7 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {isFulfillmentAdmin &&
+              {canManageCatalog &&
               detail.seller_id &&
               selectedFbsStockRows.length > 0 ? (
                 <Button
@@ -2671,7 +2680,7 @@ export function FfInboundRequestView({
             </>
           ) : null}
 
-          {showInboundLinesTable && isFulfillmentAdmin ? (
+          {showInboundLinesTable && canOperateReception ? (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
               {marking.items.some(inboundMarkingNeedsAttention) ? (
                 <Button size="small" variant="outlined" onClick={() => void marking.download()} data-testid="ff-inbound-kiz-export">Проблемные коды ЧЗ в Excel</Button>
@@ -2714,7 +2723,7 @@ export function FfInboundRequestView({
                   <TableRow>
                     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
                       <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
-                        {isFulfillmentAdmin ? (
+                        {canManageCatalog ? (
                           <CheckboxInput
                             label="Выбрать все товары"
                             hideLabel
@@ -2803,9 +2812,9 @@ export function FfInboundRequestView({
                         meta={displayMeta}
                         productId={ln.product_id}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
-                        markingControl={isFulfillmentAdmin || lineCodes.length > 0 ? (
+                        markingControl={canManageCatalog || lineCodes.length > 0 ? (
                           <Stack direction="row" sx={{ alignItems: 'center' }}>
-                            {isFulfillmentAdmin ? (
+                            {canManageCatalog ? (
                               <CheckboxInput
                                 label={`Выбрать ${ln.product_name}`}
                                 hideLabel
@@ -2851,7 +2860,7 @@ export function FfInboundRequestView({
                           >
                             {formatLineDimensions(ln)}
                           </Typography>
-                          {isFulfillmentAdmin ? (
+                          {canOperateReception ? (
                             <Tooltip title="Габариты">
                               <Box component="span" sx={{ flex: '0 0 40px', display: 'inline-flex' }}>
                                 <IconButton
@@ -3024,7 +3033,7 @@ export function FfInboundRequestView({
                                   <TableCell><Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                     <Tooltip title={code.cz_reason}><Typography variant="body2" tabIndex={0}>{inboundMarkingStatusLabel(code.cz_status)}</Typography></Tooltip>
                                     {inboundMarkingNeedsAttention(code) ? <Tooltip title={code.cz_reason}><ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label={code.cz_reason} /></Tooltip> : null}
-                                    {receivingActive && isFulfillmentAdmin ? (
+                                    {receivingActive && canOperateReception ? (
                                       <Tooltip title="Убрать ошибочно отсканированный код">
                                         <span><IconButton size="small" aria-label="Убрать код из приёмки" disabled={busy || marking.removingCodeId !== null}
                                           onClick={() => { void receivingScanQueue(() => marking.remove(code.id)) }}>
@@ -3065,7 +3074,7 @@ export function FfInboundRequestView({
               sellerName={detail.seller_name ?? '—'}
               chosen={selectedFbsStockRows}
               warehouses={warehouses}
-              canEditBindings={isFulfillmentAdmin}
+              canEditBindings={canManageCatalog}
               onClose={() => setFbsStockDialogOpen(false)}
               onLoadError={setError}
             />
@@ -3077,7 +3086,7 @@ export function FfInboundRequestView({
             </Alert>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView ? (
+          {canOperateReception && !sortingView ? (
             <Accordion
               expanded={packagesExpanded}
               onChange={(_, expanded) => setPackagesExpanded(expanded)}
@@ -3376,7 +3385,7 @@ export function FfInboundRequestView({
             </Accordion>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView ? (
+          {canOperateReception && !sortingView ? (
             <Box sx={{ mt: 2 }}>
               {workspace === 'reception' && isSortingStatus(detail.status) ? (
                 <Alert severity="success" sx={{ mt: 2 }} data-testid="ff-inbound-moved-to-sorting">
