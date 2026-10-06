@@ -78,6 +78,14 @@
       "base": "6c01a6dece601e9297929a41d4b1bb216db65908",
       "mode": "merge separate analyst conclusion; 4 documents only, no product changes",
       "conflicts": []
+    },
+    {
+      "task": "WMS-517 accepted scoped product",
+      "source": "e93f9efba99032028444d7149268f1860dddd379",
+      "base": "1c1a1185261579d5f0e7cd516244b4fd52857440",
+      "mode": "merge frozen scoped test contract before accepted product; no historical checker652 copied",
+      "conflicts": [],
+      "pending": "Final live-read helper/proof SHA is expected separately"
     }
   ]
 }
