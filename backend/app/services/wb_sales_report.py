@@ -341,7 +341,10 @@ async def read_sales_report(
                         await _defer(seller_id, redis, response.headers.get("Retry-After"))
                     raise WbSalesError(f"wb_sales_incomplete_http_{response.status_code}")
                 try:
-                    page = json.loads(response.content, parse_float=Decimal, parse_constant=str)
+                    # Preserve numeric lexemes without constructing Decimal here:
+                    # an unsupported price exponent is an item error, not a reason
+                    # to discard a complete page and its healthy neighboring sales.
+                    page = json.loads(response.content, parse_float=str, parse_constant=str)
                 except (ValueError, UnicodeDecodeError):
                     raise WbSalesError("wb_sales_incomplete_json") from None
                 pages += 1
@@ -354,7 +357,7 @@ async def read_sales_report(
                     raise WbSalesError("wb_sales_incomplete_stalled_cursor")
                 # Keep every digit of the provider cursor, never datetime-format it.
                 cursor = last
-                # Decimal keeps HTTP amounts exact; JSON evidence remains serializable.
+                # Numeric lexemes stay exact and JSON evidence remains serializable.
                 rows.extend(json.loads(json.dumps(page, default=str)))
         by_rid = _select_sales(rows)
         coverage_missing = frozenset(

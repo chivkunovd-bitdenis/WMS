@@ -193,3 +193,23 @@ Final bounded verification / R19 delta, 06.10.2026 06:23 UTC:
   Decimal InvalidOperation, before per-item handling. Independent public-boundary
   contract is requested by parent; NOT closed or accepted by this developer.
   No invented full-PASS/review/acceptance/CI/deploy/live-sale-count/signing claim.
+
+Final F2 fix after independent contract2feb9040d4f937f2ccfd0a250f8594d181bb3437:
+- Own public raw numeric counterexample:4 failed in3.30s, two propagated Decimal
+  InvalidOperation and two actualHTTP500, not a private-helper-only probe.
+- JSON parse_float now preserves the exact numeric lexeme as str, without float
+  or premature Decimal construction. sale_cost performs the existing independent
+  per-item Decimal validation; unsupported exponent stays in evidence and becomes
+  invalid_sale_price while a healthy neighbor retains its exact1234kopeks.
+- Own isolated PostgreSQL latest delta (raw numeric4, waiting-rate1, sales
+  regressions6, partial/Decimal18):29 passed, no deselection,9.71s.
+- Full backend ruff --no-cache PASS and mypy no-cache PASS552sourcefiles.
+  Prior311 PostgreSQL proof is explicitly prior to R19/F2 narrow deltas and was
+  not repeated; latest29 covers the changed mechanisms. Full CI remains separate.
+- Actual Redis8.10.1 extra native-Lua smoke:4clients,3 stale waiting reservations
+  re-reserved after atomic cooldown marker at+244000/+305000/+366000ms, exact61s
+  gaps. This is native slot/marker proof, NOT a full3-caller HTTP/emulator test.
+  Own Redis server56518 was stopped with shutdown nosave; no production Redis.
+- Parent must obtain independent Astra high delta review of final published SHA,
+  then analyst acceptance/CI. No user-facing WMS-517 completion or live signing /
+  deployment / sold-count proof is claimed by the developer.
