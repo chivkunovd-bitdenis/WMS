@@ -200,3 +200,18 @@ for (const operation of ['inbound','return']) {
   } finally {await f.context.close();}
  });
 }
+
+for (const operation of ['inbound','return']) {
+ test(`C10 remaining ${operation}: existing WMS659 bulk creation opens quantity dialog without printing`,async()=>{
+  const f=await fixture(3,operation);
+  try {
+   await f.page.getByTestId('ff-inbound-add-to-box').click();
+   await f.page.waitForTimeout(500); // only diagnostic UI settling, never approval
+   await capture(f,operation+'-659-integration');
+   assert.equal(await f.page.evaluate(()=>window.__wms672Transfers.length),0);
+   assert.equal(f.calls.filter(c=>c.method!=='GET').length,0,'opening WMS659 creation must not immediately mutate');
+   assert.equal(await f.page.getByRole('dialog').count(),1,'existing WMS659 quantity dialog must open');
+   assert.match(await f.page.getByRole('dialog').innerText(),/Количество коробов/);
+  } finally {await f.context.close();}
+ });
+}

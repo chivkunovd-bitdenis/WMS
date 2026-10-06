@@ -63,8 +63,8 @@ jobs:
           node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/proof/vite.log" 2>&1 &
           trap 'kill $! 2>/dev/null || true' EXIT
           for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
-          # C7 is accepted; capture C11 only after real MUI transitions finish.
-          timeout 150s node --test --test-concurrency=1 --test-name-pattern='C11' tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining.log"
+          # C7/C11 preserved separately; reproduce C10 with valid synthetic tenant identity.
+          timeout 150s node --test --test-concurrency=1 --test-name-pattern='C10 remaining' tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining.log"
           browser=${PIPESTATUS[0]}
           integration=skipped
           printf 'browser=%s\nintegration659=%s\n' "$browser" "$integration" > "$RUNNER_TEMP/proof/exits.txt"
