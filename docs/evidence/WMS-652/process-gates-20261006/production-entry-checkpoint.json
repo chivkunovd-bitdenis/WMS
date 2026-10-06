@@ -1,0 +1,16 @@
+{
+  "actual_etalon_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "actual_etalon_deploy_sha256": "17b0cd1333aba5c6c037452dda0f63dd6f04b877d46f8b68d3b257bc4c1854d2",
+  "candidate_deploy_sha256": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
+  "old_normal_entry_ci_verifier": "scripts/ci/verify_ci.py",
+  "candidate_normal_entry_ci_verifier": "scripts/ci/verify_process_ci.py",
+  "actual_environment_id": 17342437220,
+  "branch_policy_id": 62185902,
+  "allowed_branch": "etalon",
+  "allowed_tags": [],
+  "candidate_workflow_no_effect_on_external_environment_policy": true,
+  "secret_scope_inspected": false,
+  "direct_ssh_paths_exhaustively_verified": false,
+  "deployed_server_process_guard_installed": false,
+  "production_changed": false
+}
