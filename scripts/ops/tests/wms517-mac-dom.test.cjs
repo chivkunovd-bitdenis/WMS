@@ -12,7 +12,7 @@ const historicalIds = require('./fixtures/wms517-historical80-row-ids.json');
 const ORIGIN = 'https://wms.sellerfocus.pro';
 const REGISTRY = '/api/operations/marking-codes/self/withdrawals';
 
-test('SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog', async () => {
+async function prepareWithDefaultDom({ registryLatency = 0 } = {}) {
   const dom = new JSDOM(`<section data-testid="seller-kiz-withdrawal-page">
     <div><label for="from">Передано WB с</label><input id="from" type="date" value="2026-09-18"></div>
     <div><label for="to">по</label><input id="to" type="date" value="2026-09-25"></div>
@@ -26,11 +26,12 @@ test('SC17 default DOM adapter clears old filters, selects every page and opens 
   </section>`, { url: `${ORIGIN}/seller/honest-sign/withdrawals` });
   const root = dom.window, doc = root.document;
   const calls = [], selected = [], forbidden = [];
-  let refreshes = 0, opened = 0;
+  let refreshes = 0, opened = 0, loading = 0, slow = false;
+  const backgroundLoads = [];
   const rows = Array.from({ length: 305 }, (_, i) => ({ row_id: historicalIds[i] ?? `new-sale-${i}`,
     status:'not_withdrawn', operation_id:null, error:null, cis:`synthetic-cis-${i}` }));
   root.Response = Response;
-  root.setTimeout = fn => setTimeout(fn, 0);
+  root.setTimeout = (fn, ms) => setTimeout(fn, registryLatency ? ms : 0);
   root.localStorage.setItem('wms_token_seller', 'synthetic-token');
   root.cadesplugin = { sign() { forbidden.push('signature'); throw new Error('unexpected signature'); } };
   const filtersCleared = () => ['from','to','product','search'].every(id => doc.getElementById(id).value === '');
@@ -43,6 +44,7 @@ test('SC17 default DOM adapter clears old filters, selects every page and opens 
       active_seller_id:'0b8da5d8-f43a-42f5-a2ec-43173ea844bd', role:'fulfillment_seller', withdrawal_enabled:true,
     }));
     assert.equal(url.pathname, REGISTRY);
+    if (slow) await new Promise(resolve => setTimeout(resolve, registryLatency));
     const offset = Number(url.searchParams.get('offset') ?? 0), limit = Number(url.searchParams.get('limit') ?? 50);
     const narrowed = ['date_from','date_to','product_id','search'].some(k => url.searchParams.get(k));
     const current = narrowed ? rows.slice(0,5) : rows;
@@ -55,6 +57,19 @@ test('SC17 default DOM adapter clears old filters, selects every page and opens 
     }
     return (await root.fetch(`${ORIGIN}${REGISTRY}?${query}`)).json();
   };
+  // Model the existing React screen's automatic refresh effect: input changes
+  // start successful registry reads and disable Refresh until all finish.
+  // With 700ms latency the old fixed400ms clearFilters sleep ends too early.
+  const onFilterChange = () => {
+    if (!registryLatency) return;
+    slow = true; loading += 1; doc.getElementById('refresh').disabled = true;
+    const request = uiPage(0).then(body => {
+      doc.getElementById('found').textContent = `Найдено: ${body.total}`;
+    }).finally(() => { loading -= 1; doc.getElementById('refresh').disabled = loading > 0; });
+    backgroundLoads.push(request);
+  };
+  for (const id of ['from', 'to', 'search']) doc.getElementById(id).addEventListener('input', onFilterChange);
+  doc.getElementById('only').addEventListener('click', onFilterChange);
   doc.getElementById('refresh').onclick = async () => {
     refreshes += 1; const body = await uiPage(0); doc.getElementById('found').textContent = `Найдено: ${body.total}`;
   };
@@ -84,5 +99,11 @@ test('SC17 default DOM adapter clears old filters, selects every page and opens 
     assert.deepEqual(forbidden,[]); assert.equal(result.signed,false); assert.equal(result.sent,false);
     assert.ok(!JSON.stringify(result).includes('synthetic-token'));
     assert.ok(calls.every(c=>c.method==='GET'));
-  } finally { dom.window.close(); }
-});
+  } finally { await Promise.allSettled(backgroundLoads); dom.window.close(); }
+}
+
+test('SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog',
+  () => prepareWithDefaultDom());
+
+test('SC17 default DOM adapter waits for successful 700ms filter refresh before selecting and opening certificate dialog',
+  () => prepareWithDefaultDom({ registryLatency: 700 }));
