@@ -1,0 +1,118 @@
+[
+  {
+    "case": "act-4",
+    "rows": 4,
+    "pages": 1,
+    "page_sizes": [
+      [
+        0.0,
+        0.0,
+        842.0,
+        595.0
+      ]
+    ],
+    "empty_pages": [],
+    "lost_names": [],
+    "out_of_page_spans": [],
+    "total_excel": [
+      19,
+      22,
+      3
+    ],
+    "source_total": [
+      19,
+      22
+    ],
+    "first_name_excel": "=1+1 худи",
+    "fonts": [
+      [
+        5,
+        "ttf",
+        "Type0",
+        "DKASKH+Droid Sans Fallback Regular",
+        "wms",
+        "Identity-H"
+      ]
+    ],
+    "pdf_sha256": "1c90382361b8bde38554dea1908e9a41c475de515ea99404755aab52d2810505",
+    "xlsx_sha256": "a1bb9fc2613630b17a5ff6e06cef1ee8bc8b4d764ebefe149349f6b5a316e1bd"
+  },
+  {
+    "case": "act-321",
+    "rows": 321,
+    "pages": 40,
+    "page_sizes": [
+      [
+        0.0,
+        0.0,
+        842.0,
+        595.0
+      ]
+    ],
+    "empty_pages": [],
+    "lost_names": [],
+    "out_of_page_spans": [],
+    "total_excel": [
+      1596,
+      1908,
+      312
+    ],
+    "source_total": [
+      1596,
+      1908
+    ],
+    "first_name_excel": "=1+1 худи зимняя коллекция утеплённая хлопковая одежда  зимняя коллекция утеплённая хлопковая одежда  зимняя коллекция утеплённая хлопковая одежда",
+    "fonts": [
+      [
+        5,
+        "ttf",
+        "Type0",
+        "TQWCBS+Droid Sans Fallback Regular",
+        "wms",
+        "Identity-H"
+      ]
+    ],
+    "pdf_sha256": "335f6d37a2dbd5237c33a9a7cc8f07488bded57eb5e3c2157792b366b8ada313",
+    "xlsx_sha256": "3c6ba29882edbae954286582cd9b89cf77c1565a1d0886dd6ba7076c57fe7b4b"
+  },
+  {
+    "case": "act-multiline",
+    "rows": 4,
+    "pages": 1,
+    "page_sizes": [
+      [
+        0.0,
+        0.0,
+        842.0,
+        595.0
+      ]
+    ],
+    "empty_pages": [],
+    "lost_names": [
+      1
+    ],
+    "out_of_page_spans": [],
+    "total_excel": [
+      19,
+      22,
+      3
+    ],
+    "source_total": [
+      19,
+      22
+    ],
+    "first_name_excel": "Худи\nРазмер XL\nЦвет чёрный\nЗимняя коллекция\nУтеплённый хлопок",
+    "fonts": [
+      [
+        5,
+        "ttf",
+        "Type0",
+        "SBJFSH+Droid Sans Fallback Regular",
+        "wms",
+        "Identity-H"
+      ]
+    ],
+    "pdf_sha256": "1cd540780f38fbf6910bf6fe73a3512479bb79358e8c248e8b3cca9a6fc204e2",
+    "xlsx_sha256": "b2c7d013ea371e66126ae9aeb489f93e84e356acd2b910cbdc7b662b25103d96"
+  }
+]

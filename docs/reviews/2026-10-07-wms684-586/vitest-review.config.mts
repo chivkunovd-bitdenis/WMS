@@ -1,0 +1,1 @@
+export default { cacheDir: '../.agent-runs/vite-tester-cache', test: { cache: false, maxWorkers: 1, fileParallelism: false, environment: 'node', include: ['src/**/*.test.ts', 'src/**/*.test.tsx'], testTimeout: 30000 } }
