@@ -98,3 +98,11 @@ branch protection. Main/default/rulesets не менялись; main PR не с�
 Официальные API/event semantics сверены с GitHub Docs:
 https://docs.github.com/en/rest/actions/workflow-runs
 https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows
+
+## Продолжение после независимого Astra A review
+
+Два P1 publication случая исходного22-PASS checkpoint разобраны в
+[publish-fixes.md](publish-fixes.md). Новый контракт9646bef50 до исправления,
+текущий общий результат27 PASS. Валидный trusted event head —failure-only fallback;
+все publishers —одна постоянная non-cancelling очередь. Workflow по-прежнему
+только подготовлен и не установлен в main.

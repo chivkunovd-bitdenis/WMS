@@ -133,12 +133,16 @@ def pages(get, path, key, query=None):
     raise ValueError('Incomplete GitHub list')
 
 
-def pr_scope(pr, repository, number):
+def pr_head(pr, repository, number):
     if (pr['number'] != number or pr['state'] != 'open' or pr['base']['ref'] != 'etalon' or
             pr['base']['repo']['full_name'] != repository or
             pr['head']['repo']['full_name'] != repository):
         raise ValueError('An open repository PR targeting etalon is required')
-    return sha(pr['head']['sha']), sha(pr['base']['sha'])
+    return sha(pr['head']['sha'])
+
+
+def pr_scope(pr, repository, number):
+    return pr_head(pr, repository, number), sha(pr['base']['sha'])
 
 
 def pr_identity(pr, repository, number):
@@ -307,6 +311,30 @@ def event_prs(event):
     raise ValueError('Unsupported trusted workflow event')
 
 
+def failure_event_head(event, repository, number):
+    """Trusted event fallback can withdraw success; it never authorizes success."""
+    try:
+        if event['repository']['full_name'] != repository:
+            return None
+        if os.environ.get('GITHUB_EVENT_NAME') == 'pull_request_target':
+            return pr_head(event['pull_request'], repository, number)
+        if os.environ.get('GITHUB_EVENT_NAME') != 'workflow_run':
+            return None
+        run = event['workflow_run']
+        if (run['status'] != 'completed' or run['event'] != 'pull_request' or
+                run['path'].split('@')[0] != WORKFLOW_PATH or
+                run['repository']['full_name'] != repository or
+                run['head_repository']['full_name'] != repository):
+            return None
+        matches = [pr for pr in run['pull_requests'] if pr['number'] == number]
+        if (len(matches) != 1 or matches[0]['base']['ref'] != 'etalon' or
+                matches[0]['head']['sha'] != run['head_sha']):
+            return None
+        return sha(run['head_sha'])
+    except (KeyError, TypeError, ValueError, AttributeError):
+        return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--repository', required=True)
@@ -317,9 +345,11 @@ def main():
     if args.publish and (os.environ.get('GITHUB_ACTIONS') != 'true' or not args.event or args.pr is not None):
         parser.error('Publishing is only allowed by the installed trusted workflow event')
     try:
+        event = None
         if args.event:
             with open(args.event, encoding='utf-8') as stream:
-                numbers = event_prs(json_object(stream.read()))
+                event = json_object(stream.read())
+                numbers = event_prs(event)
         elif args.pr is not None:
             numbers = [args.pr]
         else:
@@ -338,6 +368,8 @@ def main():
                 print(json.dumps(result, sort_keys=True))
             except (ValueError, KeyError, TypeError):
                 failed = True
+                if args.publish and head is None:
+                    head = failure_event_head(event, args.repository, number)
                 result = {'pr': number, 'head_sha': head, 'evidence_complete': False,
                           'reason': 'Exact trusted process proof is missing, failed or stale'}
                 if args.publish and head:
