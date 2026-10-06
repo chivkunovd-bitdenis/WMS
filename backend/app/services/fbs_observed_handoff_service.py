@@ -60,7 +60,19 @@ def terminal_repair_condition(session: AsyncSession) -> Any:
         if postgres
         else func.json_extract(elements.c.value, "$.movement_id")
     )
-    unfinished = exists(select(1).select_from(elements).where(movement_id.is_(None)))
+    cancellation = (
+        elements.c.value.op("->>")("cancelled_postings")
+        if postgres
+        else func.json_extract(elements.c.value, "$.cancelled_postings")
+    )
+    unfinished = exists(
+        select(1)
+        .select_from(elements)
+        .where(
+            movement_id.is_(None),
+            cancellation.is_(None),
+        )
+    )
     quantity = (
         cast(elements.c.value.op("->>")("quantity"), Integer)
         if postgres
@@ -70,7 +82,7 @@ def terminal_repair_condition(session: AsyncSession) -> Any:
         select(func.coalesce(func.sum(quantity), 0))
         .select_from(elements)
         .where(
-            movement_id.is_not(None),
+            or_(movement_id.is_not(None), cancellation.is_not(None)),
         )
         .correlate(Ledger)
         .scalar_subquery()
@@ -151,6 +163,10 @@ def observation_scope(order: FbsOrder) -> dict[str, Any]:
         "wb_order_id": order.wb_order_id,
         "wb_supply_id": order.wb_supply_id,
         "posting_number": order.external_order_id,
+        "posting_numbers": ((order.meta_details_json or {}).get("ozon_assembly") or {}).get(
+            "posting_numbers",
+            [],
+        ),
         "positions": sorted(
             [
                 [str(p.id), str(p.product_id), p.ozon_sku, p.quantity]
@@ -165,6 +181,7 @@ def make_observation(
     order: FbsOrder,
     targets: dict[uuid.UUID, int],
     row: dict[str, Any] | None,
+    children: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     raw = row or {}
     return {
@@ -183,6 +200,7 @@ def make_observation(
             if key in raw
         },
         "reason": None if targets else "unknown",
+        "children": children or {},
     }
 
 
@@ -253,12 +271,12 @@ async def ozon_targets(
     provider: Any,
     client_id: str,
     api_key: str,
-) -> dict[uuid.UUID, int]:
+) -> tuple[dict[uuid.UUID, int], dict[str, Any]]:
     if row is None or row.get("posting_number") != order.external_order_id:
-        return {}
+        return {}, {}
     expected = expected_quantities(order)
     if not expected:
-        return {}
+        return {}, {}
     assembly = (order.meta_details_json or {}).get("ozon_assembly") or {}
     children = assembly.get("posting_numbers") or []
     if row.get("status") == "cancelled_from_split_pending":
@@ -270,25 +288,161 @@ async def ozon_targets(
             or set(children) != set(remote_children)
             or order.external_order_id in children
         ):
-            return {}
+            return {}, {}
         cards = await provider.fetch_statuses(
             client_id=client_id, api_key=api_key, order_ids=children
         )
         by_number = {c.get("posting_number"): c for c in cards}
         if len(cards) != len(children) or set(by_number) != set(children):
-            return {}
+            return {}, {}
         total: Counter[uuid.UUID] = Counter()
         proved: Counter[uuid.UUID] = Counter()
+        child_evidence: dict[str, Any] = {}
         for child in children:
             quantities = card_quantities(order, by_number[child])
             if quantities is None:
-                return {}
+                return {}, {}
             total.update(quantities)
-            if ozon_proves_handoff(by_number[child]):
+            positive = ozon_proves_handoff(by_number[child])
+            cancelled = by_number[child].get("status") == "cancelled"
+            child_evidence[child] = {
+                "quantities": {str(pid): qty for pid, qty in quantities.items()},
+                "positive": positive,
+                "cancelled": cancelled,
+                "prior_positive": positive,
+            }
+            if positive:
                 proved.update(quantities)
-        return dict(proved) if dict(total) == expected else {}
+        return (dict(proved), child_evidence) if dict(total) == expected else ({}, {})
     quantities = card_quantities(order, row)
-    return quantities if quantities == expected and ozon_proves_handoff(row) else {}
+    return (quantities, {}) if quantities == expected and ozon_proves_handoff(row) else ({}, {})
+
+
+def snapshot_targets(order: FbsOrder, snapshot: dict[str, Any]) -> dict[uuid.UUID, int]:
+    """Validate immutable identity and cap expense at the pre-HTTP quantities."""
+    old_scope = snapshot.get("scope") or {}
+    current_scope = observation_scope(order)
+    if any(
+        old_scope.get(key) != value
+        for key, value in current_scope.items()
+        if key != "positions"
+    ):
+        return {}
+    old_positions = old_scope.get("positions") or []
+    current_positions = {str(p.id): p for p in order.product_positions}
+    if any(
+        str(row[0]) not in current_positions
+        or (
+            str(current_positions[str(row[0])].product_id) != str(row[1])
+            or current_positions[str(row[0])].ozon_sku != row[2]
+            or current_positions[str(row[0])].quantity < row[3]
+        )
+        for row in old_positions
+    ):
+        return {}
+    quantities = {
+        uuid.UUID(pid): int(qty) for pid, qty in (snapshot.get("quantities") or {}).items()
+    }
+    expected = expected_quantities(order)
+    return quantities if quantities and all(
+        0 < qty <= expected.get(pid, 0) for pid, qty in quantities.items()
+    ) else {}
+
+
+async def checkpoint_targets(
+    session: AsyncSession,
+    order: FbsOrder,
+    operation: FbsWbOperation,
+) -> dict[uuid.UUID, int]:
+    """An approve covers its saved postings and source quantities, never current totals."""
+    summary = operation.request_summary_json or {}
+    progress = summary.get("ozon_handoff_progress") or {}
+    if progress.get("carriage_approved") is not True or not progress.get("carriage_id"):
+        return {}
+    assembly = (order.meta_details_json or {}).get("ozon_assembly") or {}
+    numbers = assembly.get("posting_numbers") or []
+    approved_numbers = summary.get("ozon_approved_postings", progress.get("posting_numbers"))
+    if not numbers or len(set(numbers)) != len(numbers):
+        return {}
+    if isinstance(approved_numbers, list):
+        if not approved_numbers or not set(numbers).issubset(set(approved_numbers)):
+            return {}
+    else:
+        # Old singleton checkpoints did not store a posting list. Their one
+        # staged recipe can identify one participant, but never an expanded supply.
+        participant_ids = list(
+            await session.scalars(
+                select(FbsOrder.id).where(
+                    FbsOrder.supply_id == operation.local_entity_id,
+                    FbsOrder.tenant_id == operation.tenant_id,
+                    FbsOrder.status != "cancelled",
+                )
+            )
+        )
+        if participant_ids != [order.id] or numbers != [order.external_order_id]:
+            return {}
+    snapshot = (summary.get("ozon_handoff_orders") or {}).get(str(order.id))
+    if summary.get("ozon_handoff_orders_complete") is True and not isinstance(snapshot, dict):
+        return {}
+    if isinstance(snapshot, dict):
+        return snapshot_targets(order, snapshot)
+    else:
+        # Fence and freeze the legacy source recipe before stock preparation can
+        # extend it to a newly enlarged local quantity. No HTTP follows this lock.
+        await session.scalar(
+            select(FbsSupply.id)
+            .where(
+                FbsSupply.id == operation.local_entity_id,
+                FbsSupply.tenant_id == operation.tenant_id,
+            )
+            .with_for_update()
+        )
+        await session.refresh(operation)
+        snapshot = ((operation.request_summary_json or {}).get("ozon_handoff_orders") or {}).get(
+            str(order.id),
+        )
+        if isinstance(snapshot, dict):
+            return await checkpoint_targets(session, order, operation)
+        # Existing immutable source recipe is the historical quantity snapshot.
+        ledger = await session.scalar(
+            select(Ledger).where(
+                Ledger.tenant_id == operation.tenant_id,
+                Ledger.fbs_order_id == order.id,
+            )
+        )
+        if ledger is None or ledger.reversed_at is not None or not ledger.ozon_positions_json:
+            return {}
+        quantities_counter: Counter[uuid.UUID] = Counter()
+        for recipe_row in ledger.ozon_positions_json:
+            quantities_counter[uuid.UUID(str(recipe_row["product_id"]))] += int(
+                str(recipe_row["quantity"]),
+            )
+        quantities = dict(quantities_counter)
+        operation_summary = dict(operation.request_summary_json or {})
+        if isinstance(approved_numbers, list):
+            operation_summary.setdefault("ozon_approved_postings", list(approved_numbers))
+        snapshots = dict(operation_summary.get("ozon_handoff_orders") or {})
+        snapshots[str(order.id)] = {
+            "scope": observation_scope(order),
+            "quantities": {str(pid): qty for pid, qty in quantities.items()},
+        }
+        operation_summary["ozon_handoff_orders"] = snapshots
+        operation.request_summary_json = operation_summary
+    expected = expected_quantities(order)
+    return (
+        quantities
+        if quantities and all(0 < qty <= expected.get(pid, 0) for pid, qty in quantities.items())
+        else {}
+    )
+
+
+def child_totals(children: dict[str, Any], *, cancelled: bool) -> Counter[uuid.UUID]:
+    result: Counter[uuid.UUID] = Counter()
+    for child in children.values():
+        selected = child.get("cancelled") if cancelled else child.get("positive")
+        if selected:
+            result.update({uuid.UUID(pid): int(qty) for pid, qty in child["quantities"].items()})
+    return result
 
 
 async def save_observations(
@@ -367,9 +521,35 @@ async def save_observations(
             if supply.marketplace == "wb" and order.wb_supply_id != supply.wb_supply_id:
                 continue
             previous = evidence.get(str(order.id)) or {}
+            children = observation.get("children") or {}
+            old_children = previous.get("children") or {}
+            if children and previous.get("scope") == observation.get("scope"):
+                for number, child in children.items():
+                    old = old_children.get(number) or {}
+                    if old.get("quantities") and old["quantities"] != child["quantities"]:
+                        children = {}
+                        observation["targets"] = {}
+                        observation["reason"] = "split_composition_changed"
+                        break
+                    child["previous_positive"] = bool(old.get("prior_positive"))
+                    child["prior_positive"] = bool(
+                        old.get("prior_positive")
+                        or (child["positive"] and not old.get("cancelled"))
+                    )
+                    if old.get("cancelled"):
+                        child["cancelled"] = True
+                        child["positive"] = False
+                observation["children"] = children
+                observation["targets"] = {
+                    str(pid): qty for pid, qty in child_totals(children, cancelled=False).items()
+                }
             # Preserve proven quantities through temporary read failures; cancellation
             # is fenced by the authoritative order state when accounting resumes.
-            if observation.get("targets") or not previous.get("targets"):
+            if (
+                children
+                or observation.get("targets")
+                or not (previous.get("targets") or previous.get("children"))
+            ):
                 evidence[str(order.id)] = observation
         operation.response_summary_json = {"orders": evidence}
         operation.error_code = (
@@ -380,11 +560,17 @@ async def save_observations(
     await session.commit()
 
 
-async def reduce_ozon_reservations(session: AsyncSession, order: FbsOrder, ledger: Ledger) -> None:
+async def reduce_ozon_reservations(
+    session: AsyncSession,
+    order: FbsOrder,
+    ledger: Ledger | None,
+    cancelled_quantities: Counter[uuid.UUID] | None = None,
+) -> None:
     from app.services import inventory_service as inventory
     from app.services.fbs_stock_publish_service import schedule_seller_stock_publish
 
     completed = Counter(completed_quantities(ledger))
+    completed.update(cancelled_quantities or {})
     expected = expected_quantities(order)
     if dict(completed) == expected:
         await inventory.update_fbs_order_reservation(session, order, reserve=False)
@@ -420,6 +606,98 @@ async def reduce_ozon_reservations(session: AsyncSession, order: FbsOrder, ledge
                 await session.delete(reserve)
     await session.flush()
     schedule_seller_stock_publish(session, order.tenant_id, order.seller_id)
+
+
+def attribute_completed_children(ledger: Ledger | None, children: dict[str, Any]) -> None:
+    """Tie existing expense rows to the exact proven child quantities in the same recipe."""
+    if ledger is None or not ledger.ozon_positions_json or not children:
+        return
+    rows = [dict(row) for row in ledger.ozon_positions_json]
+    available = {
+        number: {uuid.UUID(pid): int(qty) for pid, qty in child["quantities"].items()}
+        for number, child in children.items()
+        if child.get("prior_positive")
+    }
+    for row in rows:
+        allocations = row.get("posting_quantities")
+        for number, qty in allocations.items() if isinstance(allocations, dict) else []:
+            if number in available:
+                pid = uuid.UUID(str(row["product_id"]))
+                available[number][pid] = available[number].get(pid, 0) - int(qty)
+    for row in rows:
+        if not row.get("movement_id") or row.get("posting_quantities"):
+            continue
+        pid = uuid.UUID(str(row["product_id"]))
+        remaining = int(str(row["quantity"]))
+        allocated = {}
+        for number in sorted(
+            available,
+            key=lambda number: (
+                not bool(children[number].get("previous_positive")),
+                number,
+            ),
+        ):
+            quantity = min(remaining, max(0, available[number].get(pid, 0)))
+            if quantity:
+                allocated[number] = quantity
+                available[number][pid] -= quantity
+                remaining -= quantity
+        if remaining == 0:
+            row["posting_quantities"] = allocated
+    ledger.ozon_positions_json = rows
+
+
+def cancelled_completed(ledger: Ledger | None, children: dict[str, Any]) -> Counter[uuid.UUID]:
+    result: Counter[uuid.UUID] = Counter()
+    if ledger is None:
+        return result
+    for row in ledger.ozon_positions_json or []:
+        if row.get("movement_id"):
+            allocations = row.get("posting_quantities")
+            for number, qty in allocations.items() if isinstance(allocations, dict) else []:
+                if (children.get(number) or {}).get("cancelled"):
+                    result[uuid.UUID(str(row["product_id"]))] += int(qty)
+    return result
+
+
+def record_cancelled_sources(ledger: Ledger | None, children: dict[str, Any]) -> None:
+    """Retain exact cancellation evidence on the unused rows of the existing recipe."""
+    if ledger is None or not ledger.ozon_positions_json or not children:
+        return
+    remaining = {
+        number: {uuid.UUID(pid): int(qty) for pid, qty in child["quantities"].items()}
+        for number, child in children.items()
+        if child.get("cancelled")
+    }
+    for row in ledger.ozon_positions_json:
+        key = "posting_quantities" if row.get("movement_id") else "cancelled_postings"
+        allocations = row.get(key)
+        if isinstance(allocations, dict):
+            for number, qty in allocations.items():
+                if number in remaining:
+                    pid = uuid.UUID(str(row["product_id"]))
+                    remaining[number][pid] = remaining[number].get(pid, 0) - int(qty)
+    recipe = []
+    for original in ledger.ozon_positions_json:
+        row = dict(original)
+        recipe.append(row)
+        if row.get("movement_id") or row.get("cancelled_postings"):
+            continue
+        pid = uuid.UUID(str(row["product_id"]))
+        quantity = int(str(row["quantity"]))
+        cancelled_allocations: dict[str, int] = {}
+        for number in sorted(remaining):
+            cancelled = min(quantity, max(0, remaining[number].get(pid, 0)))
+            if cancelled:
+                cancelled_allocations[number] = cancelled
+                remaining[number][pid] -= cancelled
+                quantity -= cancelled
+        if cancelled_allocations:
+            row["quantity"] = sum(cancelled_allocations.values())
+            row["cancelled_postings"] = cancelled_allocations
+            if quantity:
+                recipe.append(dict(original, quantity=quantity))
+    ledger.ozon_positions_json = recipe
 
 
 async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
@@ -460,6 +738,7 @@ async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
     )
     evidence = (operation.response_summary_json or {}).get("orders") or {}
     completed_orders: list[FbsOrder] = []
+    billing_quantities: dict[uuid.UUID, dict[uuid.UUID, int]] = {}
     all_complete = True
     for order in orders:
         if order.status in {"cancelled", "defect"}:
@@ -487,11 +766,22 @@ async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
             continue
         saved_observation = evidence.get(str(order.id)) or {}
         raw_targets = saved_observation.get("targets") or {}
-        if raw_targets and saved_observation.get("scope") != observation_scope(order):
+        children = saved_observation.get("children") or {}
+        if (raw_targets or children) and saved_observation.get("scope") != observation_scope(order):
             operation.error_code = "observed_handoff_scope_changed"
             all_complete = False
             continue
         targets = {uuid.UUID(pid): int(qty) for pid, qty in raw_targets.items()}
+        cancelled = child_totals(children, cancelled=True)
+        attribute_completed_children(ledger, children)
+        cancelled_expense = cancelled_completed(ledger, children)
+        # A child cancelled after expense still points at its original movement.
+        # Include that existing expense in the cumulative target, without creating
+        # a new expense for a child cancelled before its stock transaction.
+        if children:
+            target_counter = Counter(targets)
+            target_counter.update(cancelled_expense)
+            targets = dict(target_counter)
         if targets and (
             not expected or any(qty > expected.get(pid, 0) for pid, qty in targets.items())
         ):
@@ -518,7 +808,7 @@ async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
                         )
                         ledger.wb_operation_id = operation.id
                         ledger.written_off_at = ledger.written_off_at or datetime.now(UTC)
-                        await reduce_ozon_reservations(session, order, ledger)
+                        attribute_completed_children(ledger, children)
                     else:
                         assert order.product_id is not None
                         plan = await sources.plan_fbs_shipment_sources(
@@ -548,10 +838,24 @@ async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
             operation.error_code = str(exc)[:64]
             all_complete = False
             continue
-        if expected and completed_quantities(ledger) == expected:
+        completed = Counter(completed_quantities(ledger))
+        cancelled_expense = cancelled_completed(ledger, children)
+        cancelled_outstanding = cancelled - cancelled_expense
+        record_cancelled_sources(ledger, children)
+        settled = Counter(completed)
+        settled.update(cancelled_outstanding)
+        if children:
+            await reduce_ozon_reservations(session, order, ledger, cancelled_outstanding)
+        elif ledger is not None and order.marketplace == "ozon":
+            await reduce_ozon_reservations(session, order, ledger)
+        if expected and dict(settled) == expected:
+            if not completed:
+                order.status = "cancelled"
+                continue
             if order.status not in {"done", "sorted"}:
                 order.status = "in_delivery"
             completed_orders.append(order)
+            billing_quantities[order.id] = dict(completed)
         else:
             all_complete = False
     now = operation.confirmed_at or datetime.now(UTC)
@@ -560,7 +864,9 @@ async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
         operation.state = "confirmed"
         # Accounting evidence is per order. The whole document date follows only
         # once every non-cancelled unit has a persisted expense.
-        await charge_handed_over_orders(session, completed_orders, occurred_at=now)
+        await charge_handed_over_orders(
+            session, completed_orders, occurred_at=now, quantities_by_order=billing_quantities
+        )
     if all_complete and completed_orders:
         supply.delivered_at = supply.delivered_at or now
         if supply.status != "done":

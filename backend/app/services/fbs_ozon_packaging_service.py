@@ -190,7 +190,7 @@ async def plan_shipment_sources(
         completed: Counter[uuid.UUID] = Counter()
         if ledger is not None:
             for completed_row in ledger.ozon_positions_json or []:
-                if completed_row.get("movement_id"):
+                if completed_row.get("movement_id") or completed_row.get("cancelled_postings"):
                     completed[uuid.UUID(str(completed_row["product_id"]))] += int(
                         str(completed_row["quantity"]),
                     )
@@ -203,13 +203,22 @@ async def plan_shipment_sources(
         if ledger is not None and ledger.ozon_positions_json:
             staged: Counter[uuid.UUID] = Counter()
             for staged_row in ledger.ozon_positions_json:
-                if staged_row.get("movement_id"):
+                if staged_row.get("movement_id") or staged_row.get("cancelled_postings"):
                     continue
                 staged[uuid.UUID(str(staged_row["product_id"]))] += int(str(staged_row["quantity"]))
             if staged == expected:
                 recipes[order.id] = [dict(row) for row in ledger.ozon_positions_json
-                                     if not row.get("movement_id")]
+                                    if not row.get("movement_id")
+                                    and not row.get("cancelled_postings")]
                 continue
+            if all(0 < qty <= expected.get(pid, 0) for pid, qty in staged.items()):
+                # Keep the approved quantity at its saved exact source; a later
+                # local extension may need additional units but cannot replace it.
+                recipes[order.id] = [dict(row) for row in ledger.ozon_positions_json
+                                    if not row.get("movement_id")
+                                    and not row.get("cancelled_postings")]
+                expected.subtract(staged)
+                expected = +expected
             # An earlier attempt may have stopped before assembly. Its source
             # recipe must not retain an older quantity after a real composition change.
         # Packaging records work, not a physical stock source. Resolve the
@@ -345,7 +354,8 @@ async def prepare_shipment_sources(
     for order_id, recipe in recipes.items():
         ledger = ledgers.get(order_id)
         completed_rows = [dict(row) for row in (ledger.ozon_positions_json or [])
-                          if row.get("movement_id")] if ledger is not None else []
+                          if row.get("movement_id") or row.get("cancelled_postings")
+                          ] if ledger is not None else []
         recipe = completed_rows + recipe
         first = recipe[0]
         if ledger is None:
@@ -398,7 +408,7 @@ async def write_off_order(
     for original in ledger.ozon_positions_json:
         row = dict(original)
         completed_recipe.append(row)
-        if row.get("movement_id"):
+        if row.get("movement_id") or row.get("cancelled_postings"):
             continue
         product_id = uuid.UUID(str(row["product_id"]))
         original_quantity = int(str(row["quantity"]))

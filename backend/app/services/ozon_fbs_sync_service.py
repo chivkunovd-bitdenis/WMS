@@ -1021,11 +1021,12 @@ async def sync_ozon_orders(
     ).options(selectinload(FbsOrder.product_positions))))
     observations = {}
     for order in imported_orders:
-        targets = await observed.ozon_targets(
+        targets, children = await observed.ozon_targets(
             order, by_number.get(order.external_order_id or ""), provider, client_id, api_key,
         )
         observations[order.id] = observed.make_observation(
             order, targets, by_number.get(order.external_order_id or ""),
+            children,
         )
     if observations:
         await observed.save_observations(session, tenant_id, seller_id, observations)
@@ -1111,10 +1112,12 @@ async def sync_ozon_order_statuses(
     for order in orders:
         row = by_external.get(order.external_order_id or "")
         try:
-            targets = await observed.ozon_targets(order, row, provider, client_id, api_key)
+            targets, children = await observed.ozon_targets(
+                order, row, provider, client_id, api_key,
+            )
         except (MarketplaceProviderError, httpx.HTTPError, ValueError):
-            targets = {}
-        observations[order.id] = observed.make_observation(order, targets, row)
+            targets, children = {}, {}
+        observations[order.id] = observed.make_observation(order, targets, row, children)
     # A saved ordinary approve checkpoint is already external evidence. Read
     # recovery must never execute ship/create/approve again.
     from app.models.fbs_wb_operation import FbsWbOperation
@@ -1122,16 +1125,15 @@ async def sync_ozon_order_statuses(
         FbsWbOperation.tenant_id == tenant_id, FbsWbOperation.seller_id == seller_id,
         FbsWbOperation.operation_kind == "supply_deliver",
         FbsWbOperation.local_entity_id.in_({o.supply_id for o in orders if o.supply_id}),
-    )):
-        progress = (operation.request_summary_json or {}).get("ozon_handoff_progress") or {}
-        if not progress.get("carriage_approved") or not progress.get("carriage_id"):
-            continue
+    ).order_by(FbsWbOperation.local_entity_id, FbsWbOperation.id)):
         for order in orders:
-            assembly = (order.meta_details_json or {}).get("ozon_assembly") or {}
             if (order.supply_id == operation.local_entity_id
-                    and assembly.get("posting_numbers") == [order.external_order_id]):
-                targets = observed.expected_quantities(order)
-                observations[order.id]["targets"] = {str(pid): qty for pid, qty in targets.items()}
+                    and not observations[order.id]["children"]):
+                targets = await observed.checkpoint_targets(session, order, operation)
+                if targets and not observations[order.id]["targets"]:
+                    observations[order.id]["targets"] = {
+                        str(pid): qty for pid, qty in targets.items()
+                    }
     await observed.save_observations(session, tenant_id, seller_id, observations)
     from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
     order_ids = [o.id for o in orders]

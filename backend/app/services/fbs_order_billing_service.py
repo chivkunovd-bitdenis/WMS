@@ -112,7 +112,8 @@ async def confirmed_order_handover_dates(
             operation = operation_by_id[op_id]
             if operation.operation_kind == "observed_handoff" and (
                 ledger.shipment_movement_id is None or ledger.reversed_at is not None
-                or any(not row.get("movement_id") for row in ledger.ozon_positions_json or [])
+                or any(not row.get("movement_id") and not row.get("cancelled_postings")
+                       for row in ledger.ozon_positions_json or [])
             ):
                 continue
             ledger_orders.setdefault(op_id, []).append(order_id)
@@ -192,9 +193,16 @@ async def record_fbs_order_confirmed(
     *,
     occurred_at: datetime | None = None,
     confirmed_handover_at: datetime | None = None,
+    handed_over_quantities: dict[uuid.UUID, int] | None = None,
 ) -> None:
     """Записать факт и начисление за собранный заказ. Повтор безопасен."""
-    if order.status not in CONFIRMED_STATUSES:
+    explicit_partial_handover = (
+        order.marketplace == "ozon"
+        and confirmed_handover_at is not None
+        and bool(handed_over_quantities)
+        and order.status not in {"cancelled", "defect"}
+    )
+    if order.status not in CONFIRMED_STATUSES and not explicit_partial_handover:
         return
     # Только внутренний путь подтверждённой передачи вправе начислить раньше
     # sorted/done; импорт внешнего in_delivery сам по себе недостаточен.
@@ -213,6 +221,8 @@ async def record_fbs_order_confirmed(
         # WMS-406 changes WB; retain Ozon's existing confirmed-status contract.
         moment = confirmed_handover_at or occurred_at or handover_at or order_work_moment(order)
     positions = await _positions(session, order)
+    if handed_over_quantities is not None:
+        positions = list(handed_over_quantities.items())
     quantity = sum(count for _, count in positions)
 
     # Связи заказа не трогаем через `order.seller` и `order.product`: заказы в
@@ -295,7 +305,8 @@ async def record_fbs_order_confirmed(
 
 
 async def charge_handed_over_orders(
-    session: AsyncSession, orders: list[FbsOrder], *, occurred_at: datetime
+    session: AsyncSession, orders: list[FbsOrder], *, occurred_at: datetime,
+    quantities_by_order: dict[uuid.UUID, dict[uuid.UUID, int]] | None = None,
 ) -> None:
     """Начислить после успешной передачи, не откатывая её при ошибке денег."""
     for order in orders:
@@ -303,7 +314,8 @@ async def charge_handed_over_orders(
         try:
             async with session.begin_nested():
                 await record_fbs_order_confirmed(
-                    session, order, confirmed_handover_at=occurred_at
+                    session, order, confirmed_handover_at=occurred_at,
+                    handed_over_quantities=(quantities_by_order or {}).get(order.id),
                 )
         except Exception:
             logger.exception("fbs handover charge skipped: order_id=%s", order_id)
