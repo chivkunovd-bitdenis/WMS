@@ -22,11 +22,14 @@
       "review": {
         "model": "gpt-6-astra",
         "effort": "high",
-        "verdict": "PENDING",
+        "verdict": "PASS",
         "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
         "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+        "review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
         "evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md",
-        "reason": "Actual Astra high FINDINGS 96b330767a74212ee14832eef4aa149f0f3a201e identified cached counteredit; fixed test delta awaits narrow recheck."
+        "evidence_blob": "164ebcf0d882231768691f8e75cfa09f098ca79a",
+        "reviewer_session": "/root/scope666_astra",
+        "evidence_summary": "Actual Astra high review of b1d7 found cached counteredit P2; narrow recheck of cumulative 30aea reproduced the original case and confirmed rejection. Original negative assertions and prior correction provenance retained."
       }
     },
     {
@@ -38,11 +41,14 @@
       "review": {
         "model": "gpt-6-astra",
         "effort": "high",
-        "verdict": "PENDING",
+        "verdict": "PASS",
         "source_commit": "08e0d33ddb54dfa5f0712a316d879032441206dc",
         "correction_commit": "30aea1fbf9cdc8fc3863acfb7541c57d64f98952",
+        "review_commit": "2c24d7bbad63605a2cb33dc8723c7f83516eef85",
         "evidence": "docs/evidence/WMS-666/wms666-task-scope-astra-review-20261006.md",
-        "reason": "Actual Astra high FINDINGS 96b330767a74212ee14832eef4aa149f0f3a201e identified cached counteredit; fixed test delta awaits narrow recheck."
+        "evidence_blob": "164ebcf0d882231768691f8e75cfa09f098ca79a",
+        "reviewer_session": "/root/scope666_astra",
+        "evidence_summary": "Actual Astra high review of b1d7 found cached counteredit P2; narrow recheck of cumulative 30aea reproduced the original case and confirmed rejection. Original negative assertions and prior correction provenance retained."
       }
     }
   ]

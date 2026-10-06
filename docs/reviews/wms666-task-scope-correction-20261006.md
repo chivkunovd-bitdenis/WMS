@@ -159,3 +159,16 @@ collector отклоняет inventory. Старые untracked/staged controls �
 Две cumulative refs перенесены на этот test-only SHA; review остаётся PENDING
 до фактической узкой перепроверки Astra high. Исходные legacy provenance выше
 и FINDINGS artifact сохранены, checker/runtime не изменены.
+
+## Фактическое завершение независимой проверки
+
+Astra high (`gpt-6-astra`, effort `high`, `/root/scope666_astra`) дала **PASS**
+кумулятивной test-only коррекции `30aea1fbf9cdc8fc3863acfb7541c57d64f98952`.
+Проверяющий повторил исходный cached-counteredit и подтвердил отказ коллектора.
+Отчёт `2c24d7bbad63605a2cb33dc8723c7f83516eef85` опубликован и remote проверен;
+исходный FINDINGS сохранён в том же
+[артефакте](../evidence/WMS-666/wms666-task-scope-astra-review-20261006.md).
+Обе canonical scope refs теперь имеют фактический PASS, exact reviewSHA, evidence
+и blob `164ebcf0d882231768691f8e75cfa09f098ca79a`. Это PASS данной коррекции,
+не полного общего CI, staging/печати666 или целого пакета. Старые legacy
+записи/provenance выше сохранены; runtime и checker не изменены.
