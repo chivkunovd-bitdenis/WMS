@@ -71,6 +71,13 @@
       "base": "fa311770fcc41516cbfd168faee7c982be6d8920",
       "mode": "merge scoped reviewed integration with original contracts/corrections/proof ancestry",
       "conflicts": []
+    },
+    {
+      "task": "WMS-662 integration acceptance",
+      "source": "0fa4ea9542e41e8bcf498e1cd8a4967752c63246",
+      "base": "6c01a6dece601e9297929a41d4b1bb216db65908",
+      "mode": "merge separate analyst conclusion; 4 documents only, no product changes",
+      "conflicts": []
     }
   ]
 }
