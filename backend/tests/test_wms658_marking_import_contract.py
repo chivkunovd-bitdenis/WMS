@@ -965,6 +965,7 @@ def _framed_label_page(label_pdf: bytes) -> bytes:
         try:
             page = document.new_page(width=600, height=800)
             page.show_pdf_page(fitz.Rect(30, 30, 250, 250), label, 0)
+            page.draw_rect(fitz.Rect(30, 30, 250, 250))
             return bytes(document.tobytes())
         finally:
             document.close()
@@ -1057,6 +1058,8 @@ async def test_c22_audit_accepts_unchanged_label_cropped_from_supplier_page(
     assert code.label_artifact_pdf is not None
     assert _decoded_values(source_pdf) == [cis]
     assert _decoded_values(code.label_artifact_pdf) == [cis]
+    with fitz.open(stream=code.label_artifact_pdf, filetype="pdf") as artifact:
+        assert tuple(artifact[0].rect) == (0.0, 0.0, 220.0, 220.0)
 
     # The importer can persist the source under the test storage backend.
     # Keep one metadata row whose bytes are supplied by the controlled external
