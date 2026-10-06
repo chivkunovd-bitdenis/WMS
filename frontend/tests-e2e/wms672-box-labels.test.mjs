@@ -43,6 +43,7 @@ async function fixture(n, operation = 'inbound', fault = {}) {
   const original = structuredClone(data);
   const calls = [];
   let marks = 0;
+  const successfulMarks = [];
   await page.route('**/api/**', async route => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
@@ -55,6 +56,7 @@ async function fixture(n, operation = 'inbound', fault = {}) {
         await page.waitForFunction(() => window.__wms672Transfers.length === 1);
         return route.abort('failed');
       }
+      successfulMarks.push({ path, transfers: await page.evaluate(() => window.__wms672Transfers.length) });
       return route.fulfill({ json: {} });
     }
     if (method !== 'GET') return route.fulfill({ status: 409, json: { detail: 'unexpected_mutation' } });
@@ -68,6 +70,13 @@ async function fixture(n, operation = 'inbound', fault = {}) {
     window.__wms672Transfers = [];
     window.__wms672Decoded = 0;
     window.__wms672DecodeStarted = 0;
+    window.__wms672DecodeEvents = [];
+    window.__wms672Active = 0;
+    window.__wms672Frames = 0;
+    const raf = window.requestAnimationFrame.bind(window);
+    window.requestAnimationFrame = callback => fault.stallFrames ? 0 : raf(time => {
+      window.__wms672Frames += 1; callback(time);
+    });
     window.__wms672Fault = fault;
     window.__wms672Hold = Boolean(fault.hold);
     // Each srcdoc navigation has its own prototypes. Install before the real onload handler.
@@ -79,16 +88,21 @@ async function fixture(n, operation = 'inbound', fault = {}) {
         const decode = w.HTMLImageElement.prototype.decode;
         w.HTMLImageElement.prototype.decode = async function () {
           if (!this.classList.contains('barcode')) return decode.call(this);
+          window.__wms672Active += 1;
+          try {
           const index = ++window.__wms672DecodeStarted;
-          if (window.__wms672Fault.decodeAt === index) throw new Error('WMS672 decode failed at 150');
+          window.__wms672DecodeEvents.push({ index, frame: window.__wms672Frames });
+          if (window.__wms672Fault.decodeAt === index) throw new Error(`WMS672 decode failed at ${index}`);
           while (window.__wms672Hold) await new Promise(r => setTimeout(r, 10));
           if (fault.delayMs) await new Promise(r => setTimeout(r, fault.delayMs));
           await decode.call(this);
           window.__wms672Decoded += 1;
+          } finally { window.__wms672Active -= 1; }
         };
         w.focus = () => {};
         w.print = () => {
-          window.__wms672Transfers.push({ html: node.srcdoc, decoded: window.__wms672Decoded });
+          window.__wms672Transfers.push({ html: node.srcdoc, decoded: window.__wms672Decoded,
+            attempt: Object.values(localStorage).map(value => { try { return JSON.parse(value)?.labelAttempt; } catch { return null; } }).find(Boolean) });
         };
       });
       return result;
@@ -98,7 +112,7 @@ async function fixture(n, operation = 'inbound', fault = {}) {
   }, { fault });
   await page.getByTestId('ff-inbound-packages-toggle').click();
   await page.getByTestId('ff-inbound-boxes-print-all').waitFor();
-  return { page, context, data, original, calls, marks: () => marks };
+  return { page, context, data, original, calls, marks: () => marks, successfulMarks };
 }
 
 async function confirm(f, action = 'ff-inbound-boxes-print-all') {
@@ -112,7 +126,15 @@ async function transfer(f, count = 1) {
 async function renderTape(context, html) {
   const page = await context.newPage();
   await page.setContent(html);
-  await page.locator('img').evaluateAll(images => Promise.all(images.map(i => i.decode())));
+  const decoded = await page.locator('img').evaluateAll(async images => {
+    let ready = 0;
+    for (let start = 0; start < images.length; start += 32) {
+      await Promise.all(images.slice(start, start + 32).map(async image => { await image.decode(); ready += 1; }));
+      if (start + 32 < images.length) await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    }
+    return ready;
+  });
+  assert.equal(decoded, await page.locator('img').count(), 'PDF helper decodes every original image');
   await page.emulateMedia({ media: 'print' });
   return page;
 }
@@ -200,46 +222,107 @@ test('C3 renderer: short/long CODE128, >99 title, escaped special text and saved
   } finally { await f.context.close(); }
 });
 
+// Assertions also exercised with deliberately invalid snapshots below: these are
+// business assertions changed under authorizer 6f1b196b, not fixture-only edits.
+function assertPending({ started, decoded, transfers, marks }, n) {
+  assert.ok(started >= Math.min(n, 2), 'actual parallel decode overlap required');
+  assert.equal(decoded, 0, 'held group has not completed');
+  assert.equal(transfers, 0, 'no partial transfer');
+  assert.equal(marks, 0, 'no early marks');
+}
+function assertComplete(jobs, n) {
+  assert.equal(jobs.length, 1, 'exactly one transfer');
+  assert.equal(jobs[0].decoded, n, 'all N native decodes before transfer');
+}
+async function heldGroup(f, n) {
+  await f.page.waitForFunction(n => window.__wms672DecodeStarted >= Math.min(n, 2), n);
+  const state = await f.page.evaluate(() => ({ started: window.__wms672DecodeStarted,
+    decoded: window.__wms672Decoded, transfers: window.__wms672Transfers.length }));
+  assertPending({ ...state, marks: f.marks() }, n);
+  assert.equal(await f.page.evaluate(() => new Promise(r => setTimeout(() => r('responsive'), 0))), 'responsive');
+  return state.started;
+}
+function assertMarks(successful, boxes) {
+  assert.deepEqual(successful.map(m => m.path.split('/').at(-2)), boxes.map(b => b.id), 'all original boxes marked exactly once in order');
+  assert.ok(successful.every(m => m.transfers === 1), 'every mark follows the single transfer');
+}
+async function allMarks(f, job) {
+  await f.page.waitForFunction(() => Object.values(localStorage).some(value => {
+    try { return JSON.parse(value)?.labelAttempt?.state === 'complete'; } catch { return false; }
+  }));
+  assertMarks(f.successfulMarks, f.data.boxes);
+  const attempt = await f.page.evaluate(() => Object.values(localStorage).map(value => {
+    try { return JSON.parse(value)?.labelAttempt; } catch { return null; }
+  }).find(Boolean));
+  assert.equal(attempt.id, job.attempt.id, 'completion retains original attempt ID');
+  assert.equal(attempt.html, job.html, 'completion retains original source');
+  assert.deepEqual(attempt.paths, []);
+}
+
 test('C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds', async () => {
+  // Reject serialized, partial, duplicate and early/incomplete-mark outcomes.
+  assert.throws(() => assertPending({ started: 1, decoded: 0, transfers: 0, marks: 0 }, 300));
+  assert.throws(() => assertPending({ started: 2, decoded: 0, transfers: 1, marks: 0 }, 300));
+  assert.throws(() => assertPending({ started: 2, decoded: 0, transfers: 0, marks: 1 }, 300));
+  assert.throws(() => assertComplete([{ decoded: 299 }], 300));
+  assert.throws(() => assertComplete([{ decoded: 300 }, { decoded: 300 }], 300));
+  const boxes = detail(2).boxes;
+  assert.throws(() => assertMarks([{ path: '/672-box-1/mark-label-printed', transfers: 1 }], boxes));
+  assert.throws(() => assertMarks(boxes.map(b => ({ path: `/${b.id}/mark-label-printed`, transfers: 0 })), boxes));
+  assert.throws(() => assertMarks(boxes.map(() => ({ path: '/672-box-1/mark-label-printed', transfers: 1 })), boxes));
   const measurements = [];
   for (const n of [1, 200, 300]) {
     const f = await fixture(n, 'inbound', { hold: true, delayMs: 20 });
     try {
       const started = performance.now();
       await confirm(f);
-      await f.page.waitForFunction(n => window.__wms672DecodeStarted === n, n);
-      const concurrent = await f.page.evaluate(() => window.__wms672DecodeStarted);
-      assert.equal(concurrent, n, 'no serial per-image waits');
-      assert.equal(await f.page.evaluate(() => new Promise(r => setTimeout(() => r('responsive'), 0))), 'responsive');
-      assert.equal(await f.page.evaluate(() => window.__wms672Transfers.length), 0);
+      const concurrent = await heldGroup(f, n);
+      const holdMs = performance.now() - started;
       await f.page.evaluate(() => { window.__wms672Hold = false; });
-      await transfer(f);
-      measurements.push({ n, preparationMs: performance.now() - started, concurrentDecodes: concurrent });
+      const jobs = await transfer(f);
+      assertComplete(jobs, n);
+      const preparationMs = performance.now() - started;
+      const events = await f.page.evaluate(() => window.__wms672DecodeEvents);
+      if (n > 1) assert.ok(events.at(-1).frame > events[0].frame, 'browser frames yielded between groups');
+      await allMarks(f, jobs[0]);
+      measurements.push({ n, preparationMs, artificialHoldMs: holdMs, concurrentDecodes: concurrent });
     } finally { await f.context.close(); }
   }
+  // Existing production fallback must finish when parent animation frames stop.
+  const stalled = await fixture(300, 'inbound', { stallFrames: true });
+  try {
+    await assert.rejects(() => renderTape(stalled.context, '<img src="data:image/png;base64,AAAA">'), 'PDF helper must propagate actual bad PNG native decode');
+    await confirm(stalled); const jobs = await transfer(stalled); assertComplete(jobs, 300); await allMarks(stalled, jobs[0]); }
+  finally { await stalled.context.close(); }
   await writeFile(resolve(evidence, 'timing.json'), JSON.stringify({
     node: process.version, platform: process.platform, arch: process.arch,
     browser: browser.version(), delayMs: 20, measurements,
-    boundary: 'synthetic intercepted preview-ready transfer; excludes hardware and initial screen load',
+    boundary: 'synthetic intercepted preview-ready transfer; artificial hold reported separately; excludes hardware and initial screen load',
   }, null, 2));
 });
 
 test('C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry', async () => {
-  const f = await fixture(300, 'inbound', { decodeAt: 150 });
-  try {
-    await confirm(f);
-    await f.page.waitForFunction(() => window.__wms672DecodeStarted === 300);
-    await f.page.getByTestId('ff-inbound-boxes-print-all').waitFor({ state: 'visible' });
-    await f.page.waitForTimeout(200);
-    assert.equal(await f.page.evaluate(() => window.__wms672Transfers.length), 0);
-    assert.equal(f.marks(), 0, 'failed preparation must not mark existing boxes printed');
-    assert.ok(await f.page.getByRole('alert').count(), 'decode error visible in existing action context');
-    assert.equal(await f.page.getByTestId('ff-inbound-boxes-print-all').isEnabled(), true);
-    await f.page.evaluate(() => { window.__wms672Fault.decodeAt = null; });
-    await confirm(f);
-    const [job] = await transfer(f);
-    assert.equal(await (await renderTape(f.context, job.html)).locator('.label').count(), 300);
-  } finally { await f.context.close(); }
+  for (const failedIndex of [150, 299]) {
+    const f = await fixture(300, 'inbound', { decodeAt: failedIndex });
+    try {
+      await confirm(f);
+      await f.page.getByRole('alert').filter({ hasText: `WMS672 decode failed at ${failedIndex}` }).waitFor();
+      await f.page.waitForFunction(() => !document.querySelector('[data-testid="ff-inbound-boxes-print-all"]').disabled);
+      await f.page.waitForFunction(() => window.__wms672Active === 0);
+      assert.ok(await f.page.evaluate(index => window.__wms672DecodeStarted >= index, failedIndex));
+      assert.equal(await f.page.evaluate(() => window.__wms672Transfers.length), 0);
+      assert.equal(f.marks(), 0, 'failed preparation must not mark existing boxes printed');
+      assert.equal(await f.page.getByTestId('ff-inbound-boxes-print-all').isEnabled(), true);
+      assert.equal(await f.page.evaluate(() => new Promise(r => setTimeout(() => r('responsive'), 0))), 'responsive');
+      await f.page.evaluate(() => { window.__wms672Fault.decodeAt = null; window.__wms672Decoded = 0; window.__wms672DecodeStarted = 0; });
+      await confirm(f);
+      const jobs = await transfer(f);
+      assertComplete(jobs, 300);
+      const tape = await renderTape(f.context, jobs[0].html);
+      assert.deepEqual(await tape.locator('.label').evaluateAll(nodes => nodes.map(n => n.dataset.barcode)), f.data.boxes.map(b => b.internal_barcode));
+      await allMarks(f, jobs[0]);
+    } finally { await f.context.close(); }
+  }
 });
 
 test('C6 fast double confirmation belongs to one attempt and transfers at most once', async () => {
@@ -249,12 +332,15 @@ test('C6 fast double confirmation belongs to one attempt and transfers at most o
     await f.page.getByTestId('ff-inbound-box-print-dialog-confirm').evaluate(button => {
       button.click(); button.click();
     });
-    await f.page.waitForFunction(() => window.__wms672DecodeStarted >= 200);
+    await heldGroup(f, 200);
+    assert.equal(await f.page.locator('iframe').count(), 1, 'one preparation for double confirmation');
     await f.page.evaluate(() => { window.__wms672Hold = false; });
-    await transfer(f);
-    await f.page.waitForTimeout(300);
+    const jobs = await transfer(f);
+    assertComplete(jobs, 200);
+    const tape = await renderTape(f.context, jobs[0].html);
+    assert.deepEqual(await tape.locator('.label').evaluateAll(nodes => nodes.map(n => n.dataset.barcode)), f.data.boxes.map(b => b.internal_barcode));
+    await allMarks(f, jobs[0]);
     assert.equal(await f.page.evaluate(() => window.__wms672Transfers.length), 1, 'same confirmation must not make a second tape');
-    assert.ok(f.marks() <= 200, 'technical repeat does not duplicate per-box mutations');
   } finally { await f.context.close(); }
 });
 

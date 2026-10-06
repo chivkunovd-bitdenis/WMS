@@ -148,10 +148,10 @@ for (const operation of ['inbound', 'return']) for (const n of [200, 300]) {
 }
 test('C5 300 labels: decode failure at 150 cannot write successful marks before transfer', async () => {
   await fixture(); failDecode = true; await confirm()
-  expect(decoded).toBe(300) // all real labels were submitted to decode concurrently
+  expect(decoded).toBeGreaterThan(1) // actual first parallel group is held
   expect(transfers).toHaveLength(0)
   const earlyMarks = [...calls]
-  release(); await act(async () => { await new Promise(r => setTimeout(r, 200)) })
+  release(); await until(() => document.querySelector('[role="alert"]')?.textContent?.includes('decode failed') === true && !button('ff-inbound-boxes-print-all').disabled)
   expect(transfers).toHaveLength(0)
   expect(earlyMarks, 'no successful marks while decode is still pending').toEqual([])
   expect(calls, 'failed preparation must not mark boxes printed').toEqual([])
