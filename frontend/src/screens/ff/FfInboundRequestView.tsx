@@ -442,7 +442,8 @@ const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
 
 function inboundReceiptDate(value: string | null | undefined): string {
   if (!value) return '—'
-  const date = new Date(value)
+  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
   if (Number.isNaN(date.getTime())) return '—'
   const pieces = new Intl.DateTimeFormat('ru-RU', {
     timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
@@ -1641,7 +1642,7 @@ export function FfInboundRequestView({
         metadata: target.kind === 'box' ? [
           `Короб № ${target.number}`,
           detail?.seller_name?.trim() || '—',
-          `Приёмка ${(detail?.display_number || detail?.document_number || '—').trim() || '—'} от ${inboundReceiptDate(detail?.created_at)}`,
+          `Приёмка ${formatHumanDocumentNumber(detail) ?? '—'} от ${inboundReceiptDate(detail?.created_at)}`,
         ] : undefined,
         labelSize,
         layout: 'internalBox' as const,

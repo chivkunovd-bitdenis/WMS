@@ -59,13 +59,14 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
   if (optionsList.some((options) => options.labelSize?.id !== labelSize?.id || (options.layout ?? 'default') !== layout)) {
     throw new Error('Все этикетки в одной печати должны иметь одинаковый размер и макет.')
   }
+  const hasReceiptMetadata = Boolean(first.metadata?.length)
   const pageStyle = layout === 'storageCell'
     ? `@page { margin: 4mm; }
       .wrap { min-height: calc(100vh - 8mm); padding: 2mm; box-sizing: border-box; }
       .title { font-size: 24pt; }
       .code { font-size: 18pt; }
       .barcode { width: 96%; max-width: 190mm; height: 48mm; object-fit: fill; }`
-    : layout === 'internalBox' && labelSize
+    : layout === 'internalBox' && labelSize && hasReceiptMetadata
       ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
       html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
       .label { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; box-sizing: border-box; }
@@ -75,6 +76,15 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
       .metadata { font-size: 5.2pt; line-height: 1; text-align: center; overflow-wrap: anywhere; }
       .code { font-size: 7pt; text-align: center; }
       .barcode { width: 100%; max-width: none; min-height: 0; height: 100%; max-height: none; display: block; object-fit: fill; image-rendering: pixelated; }`
+    : layout === 'internalBox' && labelSize
+      ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
+      html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }
+      .label { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; box-sizing: border-box; }
+      .label--next { break-after: page; page-break-after: always; }
+      .wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto 1fr auto; gap: 1mm; justify-items: stretch; align-items: center; }
+      .title { font-size: 13pt; font-weight: 800; text-align: center; }
+      .code { font-size: 9pt; text-align: center; }
+      .barcode { width: 100%; max-width: none; height: auto; max-height: none; display: block; image-rendering: pixelated; }`
     : labelSize
       ? `@page { size: ${labelSize.widthMm}mm ${labelSize.heightMm}mm; margin: 0; }
       html, body { width: ${labelSize.widthMm}mm; height: ${labelSize.heightMm}mm; }

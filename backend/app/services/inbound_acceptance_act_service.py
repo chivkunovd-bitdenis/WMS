@@ -142,10 +142,10 @@ async def build_acceptance_act_workbook(
 
 
 def _pdf_row_height(values: tuple[str, str, str, str]) -> float:
-    """Reserve enough vertical space for wrapped identifiers before drawing a row."""
+    """Initial row-height estimate; final fit is measured by PyMuPDF below."""
     character_widths = (43, 22, 17, 19)
     lines = max(
-        math.ceil(len(value) / width) if value else 1
+        sum(max(1, math.ceil(len(part) / width)) for part in value.splitlines()) if value else 1
         for value, width in zip(values, character_widths, strict=True)
     )
     return max(15.0, lines * 9.5 + 5.0)
@@ -160,7 +160,7 @@ def _pdf_textbox(
     color: tuple[float, float, float] | None = None,
     align: int = 0,
 ) -> None:
-    """Write Cyrillic text with the bundled CJK font, shrinking only when necessary."""
+    """Write a fixed-size PDF field, never silently dropping an overflow."""
     import fitz
 
     box = fitz.Rect(rect)
@@ -174,9 +174,36 @@ def _pdf_textbox(
         ):
             shape.commit()
             return
-    # A row's height is deliberately calculated with a margin. This fallback is
-    # retained for unusual user text rather than silently omitting it.
-    page.insert_textbox(box, text, fontsize=5.0, fontname="wms", color=color, align=align)
+    raise ValueError("acceptance_act_pdf_text_overflow")
+
+
+def _pdf_row_shapes(
+    page: Any,
+    columns: list[float],
+    y: float,
+    row_height: float,
+    fields: tuple[str, ...],
+    difference: int,
+) -> tuple[list[Any], float]:
+    """Measure every cell before committing any of the row to the PDF page."""
+    import fitz
+
+    shapes: list[Any] = []
+    missing_height = 0.0
+    for column, value in enumerate(fields):
+        color = (176 / 255, 0.0, 32 / 255) if column == 7 and difference else None
+        shape = page.new_shape()
+        remaining = shape.insert_textbox(
+            fitz.Rect(columns[column] + 2, y + 2, columns[column + 1] - 2, y + row_height - 1),
+            value,
+            fontsize=7.5,
+            fontname="wms",
+            color=color,
+            align=1 if column in {0, 5, 6, 7} else 0,
+        )
+        missing_height = max(missing_height, -remaining)
+        shapes.append(shape)
+    return shapes, missing_height
 
 
 async def build_acceptance_act_pdf(
@@ -252,24 +279,26 @@ async def build_acceptance_act_pdf(
         return page, header_top + 24
 
     page, y = start_page()
+    max_row_height = page_height - (top + 52) - bottom - 24
     for index, name, vendor, sku, barcode, plan, fact, difference in rows:
         row_height = _pdf_row_height((name, vendor, sku, barcode))
-        if y + row_height + 24 > page_height - bottom:
-            page, y = start_page()
         fields = (
             str(index), name, vendor, sku, barcode, str(plan), str(fact),
             f"{difference:+d}" if difference else "0",
         )
-        for column, value in enumerate(fields):
-            color = (176 / 255, 0.0, 32 / 255) if column == 7 and difference else None
-            _pdf_textbox(
-                page,
-                fitz.Rect(columns[column] + 2, y + 2, columns[column + 1] - 2, y + row_height - 1),
-                value,
-                size=7.5,
-                color=color,
-                align=1 if column in {0, 5, 6, 7} else 0,
+        while True:
+            if row_height > max_row_height:
+                raise ValueError("acceptance_act_pdf_row_too_tall")
+            if y + row_height + 24 > page_height - bottom:
+                page, y = start_page()
+            shapes, missing_height = _pdf_row_shapes(
+                page, columns, y, row_height, fields, difference
             )
+            if missing_height <= 0:
+                for shape in shapes:
+                    shape.commit()
+                break
+            row_height += missing_height + 2
         page.draw_line(
             (left, y + row_height),
             (page_width - right, y + row_height),
