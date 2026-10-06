@@ -8,6 +8,9 @@ import {
   CreateCellDialog,
   CreateWarehouseDialog,
   WarehouseMapToolbar,
+  type CreateCellBody,
+  type CreateCellSuggestion,
+  type CreateCellSuggestionRequest,
 } from './WarehouseMapToolbar'
 import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../../utils/labelSize'
@@ -40,14 +43,13 @@ const UNASSIGNED_TARGET: IntentTarget = {
 // Экран ничего не знает про сервер — он показывает данные и сообщает наверх о
 // том, что оператор сделал. Сервер по этому же контракту подключается отдельно.
 
-type Props = {
+type CommonProps = {
   data: WarehouseMapData | null
   loading: boolean
   error: string | null
   warehouseId: string | null
   onWarehouseChange: (warehouseId: string) => void
   onMove: (intent: MoveIntent, qty: number) => void
-  onCreateCell: (code: string) => void
   onCreateWarehouse: (name: string, code: string) => void
   onPrinter?: () => void
   onPrintCell: (row: MapRow, size: LabelSize) => void
@@ -56,21 +58,20 @@ type Props = {
   /** История одной строки. Пока сервера нет — журнал целиком. */
   historyFor: (row: MapRow) => MovementEntry[]
 }
+type Props = CommonProps & (
+  | {
+      legacyCreateCell?: false
+      onCreateCell: (body: CreateCellBody) => Promise<boolean> | boolean
+      onSuggestCell?: (request: CreateCellSuggestionRequest) => Promise<CreateCellSuggestion | null>
+    }
+  | { legacyCreateCell: true; onCreateCell: (code: string) => void }
+)
 
-export function FfWarehouseMapScreen({
-  data,
-  loading,
-  error,
-  warehouseId,
-  onWarehouseChange,
-  onMove,
-  onCreateCell,
-  onCreateWarehouse,
-  onPrinter = () => {},
-  onPrintCell,
-  onInventory,
-  historyFor,
-}: Props) {
+export function FfWarehouseMapScreen(props: Props) {
+  const {
+    data, loading, error, warehouseId, onWarehouseChange, onMove,
+    onCreateWarehouse, onPrinter = () => {}, onPrintCell, onInventory, historyFor,
+  } = props
   // Держим не «что раскрыто», а «что свёрнуто»: владелец просил, чтобы по
   // умолчанию было раскрыто всё, и при таком хранении новые ячейки и короба
   // приезжают уже раскрытыми сами собой, без отдельной синхронизации.
@@ -297,16 +298,28 @@ export function FfWarehouseMapScreen({
         entries={historyRow ? historyFor(historyRow) : []}
         onClose={() => setHistoryRow(null)}
       />
-      <CreateCellDialog
+      {props.legacyCreateCell ? <CreateCellDialog
         open={cellDialogOpen}
         warehouseName={currentWarehouse?.name ?? ''}
         existingCodes={cellCodes}
         onClose={() => setCellDialogOpen(false)}
+        legacyCreateCell
         onCreate={(code) => {
-          onCreateCell(code)
+          props.onCreateCell(code)
           setCellDialogOpen(false)
         }}
-      />
+      /> : <CreateCellDialog
+        open={cellDialogOpen}
+        warehouseName={currentWarehouse?.name ?? ''}
+        existingCodes={cellCodes}
+        onClose={() => setCellDialogOpen(false)}
+        onSuggest={props.onSuggestCell}
+        onCreate={async (body) => {
+          const created = await props.onCreateCell(body)
+          if (created) setCellDialogOpen(false)
+          return created
+        }}
+      />}
       <BoxLabelPrintDialog
         open={printRow !== null}
         title={printRow ? `Печать ШК ячейки ${printRow.title}` : ''}

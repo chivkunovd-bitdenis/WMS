@@ -894,6 +894,7 @@ export function SortingObjectsScreen({
         testId="objects-print-dialog"
       />
       <CreateCellDialog
+        legacyCreateCell
         open={cellDialogOpen}
         warehouseName={warehouseName ?? 'Ярцево'}
         existingCodes={cells.map((one) => one.code)}

@@ -47,6 +47,7 @@ class StorageLocation(Base):
         index=True,
     )
     side: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    tier: Mapped[int | None] = mapped_column(Integer, nullable=True)
     position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     barcode: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     deleted_at: Mapped[datetime | None] = mapped_column(

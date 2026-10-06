@@ -1,8 +1,7 @@
 import type { FormEventHandler } from 'react'
 import { useEffect, useMemo, useState } from 'react'
-import { suggestNextLocationForRack } from '../utils/formatLocationCode'
+import { formatLocationCode, normalizeRackName, suggestNextLocationForRack } from '../utils/formatLocationCode'
 import { storageLocationLabel } from '../utils/inboundQueues'
-import { suggestNextLocationCode } from '../utils/suggestNextLocationCode'
 import { DeleteOutlined, EditOutlined, PrintOutlined } from '@mui/icons-material'
 import JsBarcode from 'jsbarcode'
 import {
@@ -31,6 +30,8 @@ import {
   ToggleButtonGroup,
   Tooltip,
   Typography,
+  FormControlLabel,
+  Switch,
 } from '@mui/material'
 
 type WarehouseRow = { id: string; name: string; code: string }
@@ -85,8 +86,11 @@ type Props = {
   onCreateLocation: (body: {
     code?: string
     rack_name?: string
-    side?: 1 | 2
+    side?: 1 | 2 | null
+    tier?: number | null
     position?: number
+    use_sides?: boolean
+    use_tiers?: boolean
   }) => Promise<boolean> // code — превью/совместимость со старым API
   onRenameWarehouse: (warehouseId: string, name: string) => Promise<boolean>
   onDeleteWarehouse: (warehouseId: string) => Promise<boolean>
@@ -101,7 +105,8 @@ type Props = {
   onSuggestLocation: (
     warehouseId: string,
     rackName: string,
-    side: 1 | 2,
+    side: 1 | 2 | null,
+    options?: { tier: number | null; use_sides: boolean; use_tiers: boolean },
   ) => Promise<{ position: number; code: string } | null>
   onCreateProduct: FormEventHandler<HTMLFormElement>
 
@@ -150,9 +155,12 @@ export function CatalogSection(props: Props) {
   const [warehouseDialogOpen, setWarehouseDialogOpen] = useState(false)
   const [locationDialogOpen, setLocationDialogOpen] = useState(false)
   const [rackNameDraft, setRackNameDraft] = useState('')
+  const [useSidesDraft, setUseSidesDraft] = useState(true)
+  const [useTiersDraft, setUseTiersDraft] = useState(true)
   const [sideDraft, setSideDraft] = useState<1 | 2>(1)
+  const [tierDraft, setTierDraft] = useState<number | null>(1)
   const [positionDraft, setPositionDraft] = useState<number | null>(null)
-  const [generatedCode, setGeneratedCode] = useState('')
+  const [manualPosition, setManualPosition] = useState<{ signature: string; value: number | null } | null>(null)
   const [rackOptions, setRackOptions] = useState<string[]>([])
   const [printDialogOpen, setPrintDialogOpen] = useState(false)
   const [printLocation, setPrintLocation] = useState<LocationRow | null>(null)
@@ -176,6 +184,16 @@ export function CatalogSection(props: Props) {
     if (!selectedWarehouseId) return []
     return locations.filter((l) => l.warehouse_id === selectedWarehouseId)
   }, [locations, selectedWarehouseId])
+
+  const addressSignature = `${normalizeRackName(rackNameDraft)}|${useSidesDraft ? sideDraft : ''}|${useTiersDraft ? tierDraft ?? '' : ''}`
+  const effectiveSide = useSidesDraft ? sideDraft : null
+  const effectiveTier = useTiersDraft ? tierDraft : null
+  const effectivePosition = manualPosition?.signature === addressSignature
+    ? manualPosition.value
+    : positionDraft
+  const generatedCode = rackNameDraft.trim() && effectivePosition !== null
+    ? formatLocationCode(rackNameDraft, effectiveSide, effectiveTier, effectivePosition)
+    : ''
 
   const locationDeleteQty = useMemo(
     () => locationDeleteBalances.reduce((sum, row) => sum + row.quantity, 0),
@@ -256,31 +274,37 @@ export function CatalogSection(props: Props) {
     }
     const trimmed = rackNameDraft.trim()
     if (!trimmed) {
-      setGeneratedCode('')
       setPositionDraft(null)
       return
     }
     const local = suggestNextLocationForRack(
       trimmed,
-      sideDraft,
+      effectiveSide,
+      effectiveTier,
       visibleLocations.map((l) => l.code),
     )
-    setGeneratedCode(local.code)
     setPositionDraft(local.position)
-
+    let cancelled = false
     void (async () => {
-      const s = await onSuggestLocation(selectedWarehouseId, trimmed, sideDraft)
-      if (s) {
-        setGeneratedCode(s.code)
+      const s = await onSuggestLocation(selectedWarehouseId, trimmed, effectiveSide, {
+        tier: effectiveTier,
+        use_sides: useSidesDraft,
+        use_tiers: useTiersDraft,
+      })
+      if (!cancelled && s) {
         setPositionDraft(s.position)
       }
     })()
+    return () => { cancelled = true }
   }, [
+    effectiveSide,
+    effectiveTier,
     locationDialogOpen,
     onSuggestLocation,
     rackNameDraft,
     selectedWarehouseId,
-    sideDraft,
+    useSidesDraft,
+    useTiersDraft,
     visibleLocations,
   ])
 
@@ -426,12 +450,12 @@ export function CatalogSection(props: Props) {
                 disabled={!selectedWarehouseId}
                 onClick={() => {
                   setRackNameDraft('')
+                  setUseSidesDraft(true)
+                  setUseTiersDraft(true)
                   setSideDraft(1)
+                  setTierDraft(1)
                   setPositionDraft(null)
-                  setGeneratedCode(
-                    // Fallback for the very first cell (legacy numeric pattern).
-                    suggestNextLocationCode(visibleLocations.map((l) => l.code)),
-                  )
+                  setManualPosition(null)
                   setLocationDialogOpen(true)
                 }}
               >
@@ -1064,8 +1088,11 @@ export function CatalogSection(props: Props) {
                   trimmedRack
                     ? {
                         rack_name: trimmedRack,
-                        side: sideDraft,
-                        position: positionDraft ?? undefined,
+                        side: effectiveSide,
+                        tier: effectiveTier,
+                        position: effectivePosition ?? undefined,
+                        use_sides: useSidesDraft,
+                        use_tiers: useTiersDraft,
                         code: generatedCode,
                       }
                     : { code: generatedCode },
@@ -1074,7 +1101,7 @@ export function CatalogSection(props: Props) {
                   setLocationDialogOpen(false)
                   setRackNameDraft('')
                   setPositionDraft(null)
-                  setGeneratedCode('')
+                  setManualPosition(null)
                 }
               })()
             }}
@@ -1107,7 +1134,18 @@ export function CatalogSection(props: Props) {
                 )}
               />
 
-              <Box>
+              <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1}>
+                <FormControlLabel
+                  control={<Switch checked={useSidesDraft} onChange={(_, checked) => setUseSidesDraft(checked)} />}
+                  label="Учитывать стороны"
+                />
+                <FormControlLabel
+                  control={<Switch checked={useTiersDraft} onChange={(_, checked) => setUseTiersDraft(checked)} />}
+                  label="Учитывать ярусы"
+                />
+              </Stack>
+
+              {useSidesDraft ? <Box>
                 <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                   Сторона
                 </Typography>
@@ -1127,7 +1165,37 @@ export function CatalogSection(props: Props) {
                     2
                   </ToggleButton>
                 </ToggleButtonGroup>
-              </Box>
+              </Box> : null}
+
+              {useTiersDraft ? <TextField
+                type="number"
+                name="location_tier"
+                label="Ярус"
+                value={tierDraft ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setTierDraft(value === '' ? null : Number(value))
+                }}
+                slotProps={{ htmlInput: { min: 1 } }}
+                required
+              /> : null}
+
+              <TextField
+                type="number"
+                name="location_position"
+                label="Позиция"
+                value={effectivePosition ?? ''}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setManualPosition({
+                    signature: addressSignature,
+                    value: value === '' ? null : Number(value),
+                  })
+                }}
+                slotProps={{ htmlInput: { min: 1 } }}
+                required
+                helperText="Свободная позиция подставлена автоматически"
+              />
 
               <TextField
                 name="location_generated_code"
@@ -1137,7 +1205,7 @@ export function CatalogSection(props: Props) {
                 value={generatedCode}
                 helperText={
                   rackNameDraft.trim()
-                    ? 'Название формируется автоматически: стеллаж + сторона + номер.'
+                    ? 'Название формируется автоматически из выбранных частей адреса.'
                     : 'Сначала укажите стеллаж.'
                 }
                 slotProps={{ input: { readOnly: true } }}
