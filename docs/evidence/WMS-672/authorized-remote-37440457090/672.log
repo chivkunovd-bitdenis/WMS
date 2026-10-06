@@ -1,0 +1,19 @@
+✔ C1/C2 inbound 300: one complete ordered 58x40 tape, real PDF and readable samples (21591.692296ms)
+✖ C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry (40060.577786ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 1
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 62361.965086
+
+✖ failing tests:
+
+test at tests-e2e/wms672-box-labels.test.mjs:304:1
+✖ C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry (40060.577786ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:311:20) {
+    name: 'TimeoutError'
+  }

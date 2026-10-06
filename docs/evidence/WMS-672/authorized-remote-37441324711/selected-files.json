@@ -1,0 +1,112 @@
+[
+  {
+    "name": "672/fixture-1/events.json",
+    "rawBytes": 2,
+    "rawSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672/fixture-1/page-0.state.json",
+    "rawBytes": 3195665,
+    "rawSHA256": "fc60f23842b7161abb38ebb3fe7572e631dce806ebe33161e73d26afb3589a8c"
+  },
+  {
+    "name": "672/fixture-1/page-1.state.json",
+    "rawBytes": 66,
+    "rawSHA256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672/fixture-2/events.json",
+    "rawBytes": 2,
+    "rawSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672/fixture-2/page-0.state.json",
+    "rawBytes": 3195665,
+    "rawSHA256": "13b192c0d47be6eb1aed49e410b120caae48d4064c5ccc456cf176d5f74f79ed"
+  },
+  {
+    "name": "672/fixture-2/page-1.state.json",
+    "rawBytes": 66,
+    "rawSHA256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672-delta/fixture-1/events.json",
+    "rawBytes": 2,
+    "rawSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-1/page-0.state.json",
+    "rawBytes": 12534,
+    "rawSHA256": "e6d4205b74ba78c9ccec7e58ffc7691ecac7bf677fa4be9e646062697721fd2b"
+  },
+  {
+    "name": "672-delta/fixture-2/events.json",
+    "rawBytes": 2,
+    "rawSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-2/page-0.state.json",
+    "rawBytes": 2130360,
+    "rawSHA256": "61c5e5e1baffc627bcf5ef51626c596d53d943bb89f01b9db98fb08382719fd7"
+  },
+  {
+    "name": "672-delta/fixture-3/events.json",
+    "rawBytes": 2,
+    "rawSHA256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-3/page-0.state.json",
+    "rawBytes": 3195680,
+    "rawSHA256": "56cf8ab5b639db216100a11e68e16db4d82a2c6a0804e5e17414544ca626daaa"
+  },
+  {
+    "name": "672-delta/fixture-4/events.json",
+    "rawBytes": 229,
+    "rawSHA256": "b268868ea9fca9d19b3b0e637f1a3eda4042fcd9b2acda859ae1c28bfd2dd14c"
+  },
+  {
+    "name": "672-delta/fixture-4/page-0.state.json",
+    "rawBytes": 3195668,
+    "rawSHA256": "ec161c7e77edd1c2807ca75d396032655fe9ebfe01314af91090cc6bfd6730bb"
+  },
+  {
+    "name": "672-delta/fixture-4/page-1.state.json",
+    "rawBytes": 66,
+    "rawSHA256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672-delta/timing.json",
+    "rawBytes": 707,
+    "rawSHA256": "f4ef73f9ee4f5d35033128fc656b60939591a85a2da63cdc2a8319bb66e0e836"
+  },
+  {
+    "name": "672-delta.log",
+    "rawBytes": 374,
+    "rawSHA256": "d4673b76a82b62fdac5d168e1ee97cd90a20635f4cbce22307eb11ae31eb77a0"
+  },
+  {
+    "name": "672.log",
+    "rawBytes": 234,
+    "rawSHA256": "1e8e18e872e8231527ed9f363fa276327df7003c2d09a9e34738813fcdd99f47"
+  },
+  {
+    "name": "contract-blobs.txt",
+    "rawBytes": 129,
+    "rawSHA256": "a1f53d4d19fdfb1a157b64b51c53b69dc788efc5dc87690b67bfc3e945b2ee19"
+  },
+  {
+    "name": "exit-codes.txt",
+    "rawBytes": 51,
+    "rawSHA256": "46a88b58974f59545f49107d8fd0dbe00a81ef1210f81baf9259f1bd9fd53c58"
+  },
+  {
+    "name": "source-pin.txt",
+    "rawBytes": 207,
+    "rawSHA256": "02c1008c4d8ece313a64d14057b989a19ac89b9901c34f351c652d321b3c0588"
+  },
+  {
+    "name": "source-hashes.txt",
+    "rawBytes": 474,
+    "rawSHA256": "e81a93875ac99536674a5253dce8ac44c66cc8d0066bf37bdaab1c44060659b7"
+  }
+]

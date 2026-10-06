@@ -1,0 +1,162 @@
+[
+  {
+    "name": "672/fixture-1/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672/fixture-1/page-0.state.json",
+    "bytes": 3213643,
+    "sha256": "a08d54de9fdae93001770b6c3997d4fd1402c9a3a4118bf95b1b4db805ebe802"
+  },
+  {
+    "name": "672/fixture-1/page-1.state.json",
+    "bytes": 66,
+    "sha256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672/fixture-2/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672/fixture-2/page-0.state.json",
+    "bytes": 202,
+    "sha256": "041b05ac8e4b2b81a81f226d97e5337be16d0d53f6ad7162858cc0f80deefe0b"
+  },
+  {
+    "name": "672/inbound-300-page-1.png",
+    "bytes": 20365,
+    "sha256": "039b8622442f039b38484520ddd3f798e2f1f6b1b89febc17eec3e735ddeeb59"
+  },
+  {
+    "name": "672/inbound-300-page-151.png",
+    "bytes": 22417,
+    "sha256": "def64d9794e02d99bf2daa2505858c00c00a602b50561de27a8247d8a2019b23"
+  },
+  {
+    "name": "672/inbound-300-page-300.png",
+    "bytes": 24066,
+    "sha256": "3caee2809e9955559f78de5d34eae116dc46d01b4ccb2442ba25208f9d0d42e6"
+  },
+  {
+    "name": "672-delta/fixture-1/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-1/page-0.state.json",
+    "bytes": 3213553,
+    "sha256": "af8e1e48b19da02aa518df62d9d2319839c513a9ccb2f23ba7b0cd9d1679cc0d"
+  },
+  {
+    "name": "672-delta/fixture-1/page-1.state.json",
+    "bytes": 66,
+    "sha256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672-delta/fixture-2/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-2/page-0.state.json",
+    "bytes": 12534,
+    "sha256": "4d6205d284c9617685e8a96e6c12bf6d60adf1ec7995d717d10a39831b2ccecb"
+  },
+  {
+    "name": "672-delta/fixture-3/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-3/page-0.state.json",
+    "bytes": 2130360,
+    "sha256": "214aa6cdfd89c9182bda12f979c79077afb71ba61ebdc42614712628b22368c7"
+  },
+  {
+    "name": "672-delta/fixture-4/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-4/page-0.state.json",
+    "bytes": 3195680,
+    "sha256": "5a574a0ab8a96c3000391662ef5fd2200d367936e7191959908fbbf425dbceec"
+  },
+  {
+    "name": "672-delta/fixture-5/events.json",
+    "bytes": 229,
+    "sha256": "b268868ea9fca9d19b3b0e637f1a3eda4042fcd9b2acda859ae1c28bfd2dd14c"
+  },
+  {
+    "name": "672-delta/fixture-5/page-0.state.json",
+    "bytes": 3195668,
+    "sha256": "5714558da286face35ce1a3868ac26b3d893c5b531d1da475aeb30ef22a021d5"
+  },
+  {
+    "name": "672-delta/fixture-5/page-1.state.json",
+    "bytes": 66,
+    "sha256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672-delta/fixture-6/events.json",
+    "bytes": 2,
+    "sha256": "4f53cda18c2baa0c0354bb5f9a3ecbe5ed12ab4d8e11ba873c2f11161202b945"
+  },
+  {
+    "name": "672-delta/fixture-6/page-0.state.json",
+    "bytes": 2130341,
+    "sha256": "c2223b25a987fb1f1e32b170c9ebca9cadab3e6c3306eb398f504a6cf83d3297"
+  },
+  {
+    "name": "672-delta/fixture-6/page-1.state.json",
+    "bytes": 66,
+    "sha256": "a07ed9b8d56e3a2bcf6aa72f705d4a3a3285e2fd420b6aa81c8aa25645357b96"
+  },
+  {
+    "name": "672-delta/return-300-page-1.png",
+    "bytes": 20365,
+    "sha256": "039b8622442f039b38484520ddd3f798e2f1f6b1b89febc17eec3e735ddeeb59"
+  },
+  {
+    "name": "672-delta/return-300-page-151.png",
+    "bytes": 22417,
+    "sha256": "def64d9794e02d99bf2daa2505858c00c00a602b50561de27a8247d8a2019b23"
+  },
+  {
+    "name": "672-delta/return-300-page-300.png",
+    "bytes": 24066,
+    "sha256": "3caee2809e9955559f78de5d34eae116dc46d01b4ccb2442ba25208f9d0d42e6"
+  },
+  {
+    "name": "672-delta.log",
+    "bytes": 1200,
+    "sha256": "870bb18fea4ad455ef26e6798ba4db289e9220e5d3fb6b5a3d30295fc15a9e4a"
+  },
+  {
+    "name": "672.log",
+    "bytes": 723,
+    "sha256": "f176776e429db8867554e039aab4bb3d4dc51ca3ff5c4b1fa861855432080ad4"
+  },
+  {
+    "name": "contract-blobs.txt",
+    "bytes": 129,
+    "sha256": "7fcb016907c6cdaa2d6b560395566f208b8419b76b586bf35e6ced068e246b7e"
+  },
+  {
+    "name": "exit-codes.txt",
+    "bytes": 51,
+    "sha256": "be8d49f6f862ac4c3b2d32e39afdbd5ba585c882c0a083c7dc0deb4a63d8343d"
+  },
+  {
+    "name": "source-hashes.txt",
+    "bytes": 474,
+    "sha256": "07b8cab38f6980587a703bda4f1762b8ed1d30dd0fbb54477fb711350edd5936"
+  },
+  {
+    "name": "source-pin.txt",
+    "bytes": 207,
+    "sha256": "cd4e926aea196476a4c6ce8225e70a00bf8e3703132c7de3b8ff75e03eacfff4"
+  }
+]

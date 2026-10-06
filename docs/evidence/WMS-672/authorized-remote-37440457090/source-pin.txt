@@ -1,0 +1,4 @@
+source=0e6a7fbc3eb11f951febf972b35c6e117c42678a
+runner=d36f7ec68f4f81dd71f13143dd2fdfc6998473a2
+business-authorizer=6f1b196b4cb09091df341e79f6c663efb4d721d4
+contract=8afc05d0bc531fd310b7d6d5273f0b382223db11

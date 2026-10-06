@@ -1,0 +1,4 @@
+26a096a52bfe5a92e68a9844cf1679d5193d0690036e010dcf8262ccb4f5f5b6  /home/runner/work/_temp/print-contract/product-runner.manifest
+26a096a52bfe5a92e68a9844cf1679d5193d0690036e010dcf8262ccb4f5f5b6  /home/runner/work/_temp/print-contract/product-source.manifest
+69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d  frontend/tests-e2e/wms672-box-labels.test.mjs
+909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0  frontend/tests-e2e/wms672-harness.tsx

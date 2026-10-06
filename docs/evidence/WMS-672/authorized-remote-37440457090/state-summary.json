@@ -1,0 +1,218 @@
+[
+  {
+    "file": "672-delta/fixture-6/page-0.state.json",
+    "decoded": 200,
+    "decodeStarted": 200,
+    "transfers": [
+      {
+        "decoded": 200,
+        "htmlLength": 2097083
+      }
+    ],
+    "fault": {
+      "hold": true
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "10bed5c2-cb52-4f8f-82f9-a57b2cb5b1f9",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 2097083,
+        "htmlSHA256": "ad0dae4b5a8f7b41bfa5ffd00fcdfca6c528a18529968d9c79017f670d22b99d"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-6/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672-delta/fixture-1/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {},
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "e5f5ea25-4368-4d4b-a194-07afecdafb53",
+        "state": "transferred",
+        "pendingPaths": 199,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-1/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672-delta/fixture-2/page-0.state.json",
+    "decoded": 1,
+    "decodeStarted": 1,
+    "transfers": [
+      {
+        "decoded": 1,
+        "htmlLength": 11799
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "448d6678-cc6a-4038-89ad-41587553419f",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 11799,
+        "htmlSHA256": "a38358b20226831275b766eaf93431f7e744c5c9366bed84bea22dbd85ece9f5"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-5/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "stallFrames": true
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "da2759b8-6057-4963-84eb-8b9cc92466f4",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-5/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672-delta/fixture-4/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "1e02c639-a6a9-4090-8c8d-5002885765f2",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-3/page-0.state.json",
+    "decoded": 200,
+    "decodeStarted": 200,
+    "transfers": [
+      {
+        "decoded": 200,
+        "htmlLength": 2097083
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "303ac7ce-41c1-4658-b091-3d6e062a4640",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 2097083,
+        "htmlSHA256": "ad0dae4b5a8f7b41bfa5ffd00fcdfca6c528a18529968d9c79017f670d22b99d"
+      }
+    ]
+  },
+  {
+    "file": "672/fixture-1/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {},
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "bd64ef0f-29cd-4ee2-b1e4-7be4ff9dd926",
+        "state": "transferred",
+        "pendingPaths": 200,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672/fixture-1/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672/fixture-2/page-0.state.json",
+    "decoded": 128,
+    "decodeStarted": 160,
+    "transfers": [],
+    "fault": {
+      "decodeAt": 150
+    },
+    "alerts": [
+      "WMS672 decode failed at 150"
+    ],
+    "attempts": []
+  }
+]

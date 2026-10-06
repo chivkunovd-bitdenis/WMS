@@ -1,0 +1,15 @@
+Diagnostic capture: page.screenshot: Timeout 3000ms exceeded.
+Call log:
+  - taking page screenshot
+  - waiting for fonts to load...
+  - fonts loaded
+
+✔ C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds (94815.041986ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 95442.681173

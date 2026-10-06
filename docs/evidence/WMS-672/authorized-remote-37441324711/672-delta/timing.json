@@ -1,0 +1,28 @@
+{
+  "node": "v24.21.0",
+  "platform": "linux",
+  "arch": "x64",
+  "browser": "141.0.7390.37",
+  "delayMs": 20,
+  "measurements": [
+    {
+      "n": 1,
+      "preparationMs": 710.0050250000002,
+      "artificialHoldMs": 480.32402000000025,
+      "concurrentDecodes": 1
+    },
+    {
+      "n": 200,
+      "preparationMs": 3780.237366999999,
+      "artificialHoldMs": 2778.117159999999,
+      "concurrentDecodes": 32
+    },
+    {
+      "n": 300,
+      "preparationMs": 5073.35022,
+      "artificialHoldMs": 3644.9284210000005,
+      "concurrentDecodes": 32
+    }
+  ],
+  "boundary": "synthetic intercepted preview-ready transfer; artificial hold reported separately; excludes hardware and initial screen load"
+}

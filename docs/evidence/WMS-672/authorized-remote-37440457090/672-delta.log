@@ -1,0 +1,33 @@
+✔ C1/C2 return 300: one complete ordered 58x40 tape, real PDF and readable samples (19422.70001ms)
+Diagnostic capture: page.screenshot: Timeout 3000ms exceeded.
+Call log:
+  - taking page screenshot
+  - waiting for fonts to load...
+  - fonts loaded
+
+✖ C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds (100880.867623ms)
+Diagnostic capture: page.screenshot: Timeout 3000ms exceeded.
+Call log:
+  - taking page screenshot
+  - waiting for fonts to load...
+  - fonts loaded
+
+✔ C6 fast double confirmation belongs to one attempt and transfers at most once (23400.528287ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 2
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 144267.531545
+
+✖ failing tests:
+
+test at tests-e2e/wms672-box-labels.test.mjs:262:1
+✖ C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds (100880.867623ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:123:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:295:48) {
+    name: 'TimeoutError'
+  }

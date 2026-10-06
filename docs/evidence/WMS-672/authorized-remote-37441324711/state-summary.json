@@ -1,0 +1,176 @@
+[
+  {
+    "file": "672/fixture-1/page-0.state.json",
+    "decoded": 428,
+    "decodeStarted": 460,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "decodeAt": null
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "2973026a-4600-4bcb-8e33-c824c22b8fb9",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672/fixture-1/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672/fixture-2/page-0.state.json",
+    "decoded": 588,
+    "decodeStarted": 600,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "decodeAt": null
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "f34fa959-8e47-4893-9bb6-1c0d7b4934e0",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672/fixture-2/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  },
+  {
+    "file": "672-delta/fixture-1/page-0.state.json",
+    "decoded": 1,
+    "decodeStarted": 1,
+    "transfers": [
+      {
+        "decoded": 1,
+        "htmlLength": 11799
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "fcebe14e-9772-4983-8337-063c91992ac7",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 11799,
+        "htmlSHA256": "a38358b20226831275b766eaf93431f7e744c5c9366bed84bea22dbd85ece9f5"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-2/page-0.state.json",
+    "decoded": 200,
+    "decodeStarted": 200,
+    "transfers": [
+      {
+        "decoded": 200,
+        "htmlLength": 2097083
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "5c539414-8488-4ef8-a6dc-6b3a7ef58334",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 2097083,
+        "htmlSHA256": "ad0dae4b5a8f7b41bfa5ffd00fcdfca6c528a18529968d9c79017f670d22b99d"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-3/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "hold": true,
+      "delayMs": 20
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "88b7764e-f7f3-4b7b-bd40-1611987ed3b3",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-4/page-0.state.json",
+    "decoded": 300,
+    "decodeStarted": 300,
+    "transfers": [
+      {
+        "decoded": 300,
+        "htmlLength": 3146003
+      }
+    ],
+    "fault": {
+      "stallFrames": true
+    },
+    "alerts": [],
+    "attempts": [
+      {
+        "id": "1fa7b970-b1a7-4985-995f-75dcd8786396",
+        "state": "complete",
+        "pendingPaths": 0,
+        "htmlLength": 3146003,
+        "htmlSHA256": "49aa3877029f48ee44e074f360277b61ab7c0830d226b232fdfd53b9a5b24c4a"
+      }
+    ]
+  },
+  {
+    "file": "672-delta/fixture-4/page-1.state.json",
+    "decoded": null,
+    "decodeStarted": null,
+    "transfers": null,
+    "fault": null,
+    "alerts": [],
+    "attempts": []
+  }
+]

@@ -1,0 +1,6 @@
+[
+  {
+    "type": "console",
+    "text": "WMS672 native decode failure {\"name\":\"EncodingError\",\"message\":\"The source image cannot be decoded.\",\"code\":0,\"srcLength\":26,\"complete\":true,\"width\":0,\"height\":0}"
+  }
+]
