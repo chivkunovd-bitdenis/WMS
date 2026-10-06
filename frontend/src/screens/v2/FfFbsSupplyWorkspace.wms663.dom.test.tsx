@@ -318,7 +318,7 @@ it('owner663 A6: concrete Ozon failure stays visible next to the shared choice; 
   await openWorkspace(); await boxes()
   expect(choice()).toHaveLength(1)
   await act(async () => choice()[0]!.click()); await settle()
-  expect(document.body.textContent).toContain('gtd_invalid')
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('gtd_invalid')
   expect(choice()[0]?.checked).toBe(false)
   expect(writes()).toHaveLength(1)
   expect(document.querySelectorAll('[data-testid^="ozon-documents-"]')).toHaveLength(0)
