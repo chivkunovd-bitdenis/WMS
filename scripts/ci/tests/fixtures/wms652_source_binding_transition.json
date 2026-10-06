@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "status": "pending-final-independent-freeze",
+  "current_reviewed_source": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "accepted_reviewed_sources": [
+    "d61805978b3e7878d1056c99b4e6e0823edf49a5"
+  ],
+  "final_reviewed_source": null,
+  "self_selecting_references": [
+    "HEAD",
+    "${GITHUB_SHA}"
+  ],
+  "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc",
+  "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate."
+}
