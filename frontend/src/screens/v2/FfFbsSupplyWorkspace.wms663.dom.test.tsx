@@ -309,7 +309,7 @@ describe('WMS-663 · явный ГТД/РНПТ у экземпляра Ozon', (
       },
     })
 
-    const close = button('Закрыть')
+    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Закрыть"]')
     expect(close).toBeDefined()
     close!.focus()
     expect(document.activeElement).toBe(close)
