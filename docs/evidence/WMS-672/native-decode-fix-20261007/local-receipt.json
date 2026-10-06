@@ -1,0 +1,21 @@
+{
+  "base_sha": "ecb1d5721ea823a0ffd861303302c4b8dc731e6d",
+  "testwriter_sha": "05a7d08a65e135256fa69e8bf84519e95bcdef96",
+  "testwriter_cherry_pick_sha": "a52257b23660fe448f9d12fd53f14d1fb61111f3",
+  "node": "v24.13.1",
+  "precode": {
+    "passed": 4,
+    "failed": 3,
+    "skipped": 0
+  },
+  "after": {
+    "passed": 7,
+    "failed": 0,
+    "skipped": 0
+  },
+  "typecheck_exit": 0,
+  "build_exit": 0,
+  "old_test_sources_unchanged": true,
+  "new_test_source_unchanged": true,
+  "linux_comparison": "pending; coordinator only"
+}
