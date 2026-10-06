@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "a119bbaebd81f9f379167d647bdc74571ca4314ae2afed810f0de05a5a3e5361",
+    ".github/workflows/ci.yml": "47b6f8d722586c78e016adbf232e1c978cecf60a5ddbe2fb6ccf0e912a7097af",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -171,7 +171,7 @@
     "frontend/tests-e2e/wms652-critical/vite.config.ts": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
     "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
     "frontend/tests-e2e/wms672-dom.config.ts": "dd41131adc4f3dedcd82bf466b52a157fcd320131a4651656415bfa47ad7f0a4",
-    "frontend/tests-e2e/wms672-dom.test.tsx": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+    "frontend/tests-e2e/wms672-dom.test.tsx": "1715ec6f9e8e036beee25ff55d5dd49e9384aa4b536854639e53ec65cb391b0b",
     "frontend/tests-e2e/wms672-harness.html": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
     "frontend/tests-e2e/wms672-harness.tsx": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
     "frontend/tests-e2e/wms672-remaining.test.mjs": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
@@ -226,7 +226,12 @@
     "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "1806c766bd141b9ce2d7c760cd2606a64c4b67648f0b57922c538c77ddf2213b",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
-    "scripts/ci/promote_guards.py": "33c760cf1a41c7e5af163bc2ab775372e9441d15cd03700cb522171c92786d3b"
+    "scripts/ci/promote_guards.py": "33c760cf1a41c7e5af163bc2ab775372e9441d15cd03700cb522171c92786d3b",
+    "backend/tests/test_wms654_cells.py": "00931612a0788579440ac37d1bb6afa8e472cc89998d39b8de47443e178f7923",
+    "backend/tests/test_wms654_migration.py": "36b998e36ff5e6f6478e9c31f45c1c89616b9a6ef5cad2878b993940406a2d3c",
+    "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
+    "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
+    "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc"
   },
   "suites": {
     "backend-fbs": {
@@ -833,7 +838,23 @@
         "tests.test_wms662_observed_handoff::test_c7_split_quantity_remainder_and_recipe",
         "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[missing]",
         "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[overlap]",
-        "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[unmapped]"
+        "tests.test_wms662_observed_handoff::test_c8_split_incomplete_never_expenses_parent[unmapped]",
+        "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[False-False-\\u0410 4]",
+        "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[True-False-\\u0410 2.4]",
+        "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[False-True-\\u0410 3.4]",
+        "tests.test_wms654_cells::test_c1_four_address_combinations_survive_reload[True-True-\\u0410 2.3.4]",
+        "tests.test_wms654_cells::test_c2_suggestions_use_coordinate_context_and_skip_code_collisions",
+        "tests.test_wms654_cells::test_c3_legacy_api_and_existing_rows_are_unchanged",
+        "tests.test_wms654_cells::test_c4_repeat_conflict_does_not_duplicate_new_address",
+        "tests.test_wms654_cells::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[False]",
+        "tests.test_wms654_cells::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[True]",
+        "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad0]",
+        "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad1]",
+        "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad2]",
+        "tests.test_wms654_cells::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad3]",
+        "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[False]",
+        "tests.test_wms654_cells::test_c10_creation_keeps_existing_stock_placement_and_barcodes[True]",
+        "tests.test_wms654_cells::test_c3_new_creation_preserves_legacy_coordinates_and_barcode"
       ]
     },
     "pg-663-retry": {
@@ -1110,7 +1131,27 @@
         "src/utils/printPreparedQr.test.ts::direct OS queue printing does not retry automatically or use browser printing after losing the response",
         "src/utils/printPreparedQr.test.ts::direct OS queue printing keeps the selected packing order until a real queue receipt is recovered",
         "src/utils/printPreparedQr.test.ts::direct OS queue printing preserves scanner focus without browser print UI or confirmation",
-        "src/utils/printPreparedQr.test.ts::direct OS queue printing waits for the first OS receipt before sending the next scan"
+        "src/utils/printPreparedQr.test.ts::direct OS queue printing waits for the first OS receipt before sending the next scan",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=false tiers=true",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C6 independent coordinates sides=true tiers=true",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C7 failure keeps inputs, retry allows correction and refresh keeps neighboring cells",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C4/C7 manual position survives suggestion response and context change does not reuse it",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C2/C7 late response from a previous row cannot overwrite the current suggestion",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 actual CatalogSection contract C10 refreshed saved cell prints its original barcode through existing dialog",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C7 map creation failure keeps the form and selected coordinates for retry",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=false tiers=true",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-cell sides=true tiers=true",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=false",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=false tiers=true",
+        "src/sections/CatalogSection.wms654.test.tsx::WMS-654 real map form openings C6 warehouse-map-create-first-cell sides=true tiers=true",
+        "src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx::WMS-654 legacy CreateCellDialog contract C11 keeps the side-only address and next automatic position for string callers",
+        "src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx::WMS-654 real warehouse-map suggestion contract C2 uses the server suggestion scoped to active side/tier instead of ambiguous map code text",
+        "src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx::WMS-654 real warehouse-map suggestion contract C7 ignores a late previous-rack response and keeps the manual position in the current row"
       ]
     },
     "print-672": {
@@ -1330,7 +1371,9 @@
         "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_workflow_requires_wms686_raw_tap_receipt_and_exact_attempt_artifact",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference",
-        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion"
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_promotes_only_permanent_tests_and_updates_references",
+        "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_rejects_test_outside_supported_trees"
       ]
     },
     "product-scope": {
@@ -1524,6 +1567,24 @@
         "C8: сброс демо полностью восстанавливает исходные короба, КИЗ и прогресс",
         "C8: сохранение и повторная загрузка восстанавливают точный прогресс и связи КИЗ",
         "C9: неизвестный API-маршрут явно отказывает без любого сетевого fallback"
+      ]
+    },
+    "pg-654": {
+      "report": "release-postgres/654.xml",
+      "format": "junit",
+      "exact": true,
+      "cases": [
+        "tests.test_wms654_migration::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates",
+        "tests.test_wms654_cells::test_c4_postgresql_concurrent_requests_have_one_winner[False]",
+        "tests.test_wms654_cells::test_c4_postgresql_concurrent_requests_have_one_winner[True]"
+      ]
+    },
+    "print-672-c5a": {
+      "report": "wms672-c5a.json",
+      "format": "vitest",
+      "exact": false,
+      "cases": [
+        "tests-e2e/wms672-dom.test.tsx::C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry"
       ]
     }
   }

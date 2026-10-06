@@ -1,0 +1,14 @@
+{
+  "cases": {
+    "pg-654": 3,
+    "print-672-c5a": 1,
+    "ci-shards": 29
+  },
+  "policy_files": 231,
+  "policy_suites": 21,
+  "policy_case_ids": 1206,
+  "old1146_preserved": true,
+  "full_ci": "NOT_RUN",
+  "P": "PENDING",
+  "S": "PENDING"
+}

@@ -136,6 +136,12 @@ jobs:
           pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py --junitxml="$RUNNER_TEMP/release-postgres/517-withdrawal.xml"
           pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe
           pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply
+      - name: WMS-654 migration and both concurrent modes on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_654_combined
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_654_combined'); c.close()"
+          pytest -n 0 -q tests/test_wms654_migration.py::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner --junitxml="$RUNNER_TEMP/release-postgres/654.xml"
       - name: Required PostgreSQL handoff cancellation documents and catalog contracts
         run: bash ../scripts/ci/run_release_postgres.sh
       - name: WMS-675 real incident recovery on isolated PostgreSQL
@@ -352,6 +358,8 @@ jobs:
           test -x "$WMS_PRINT_CHROMIUM"
           command -v pdfimages
           npx vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
+      - name: WMS-672 frozen cross-realm C5a decode contract
+        run: npx vitest run --config tests-e2e/wms672-dom.config.ts -t 'C5a 33 labels' --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/wms672-c5a.json"
       - name: Build
         run: npm run build
       - uses: actions/upload-artifact@v4
@@ -360,6 +368,7 @@ jobs:
           name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/frontend-all.json
+            ${{ runner.temp }}/wms672-c5a.json
             ${{ runner.temp }}/wms517-mac.tap
           retention-days: 14
 
@@ -421,6 +430,7 @@ jobs:
           scripts/ci/tests/test_backend_shard_failclosed.py
           scripts/ci/tests/test_ci_release_additions.py
           scripts/ci/tests/test_backend_shard_redis_setup.py
+          scripts/ci/tests/test_promote_guards.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
       - uses: actions/upload-artifact@v4
         if: always()
