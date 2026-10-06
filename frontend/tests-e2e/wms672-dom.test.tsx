@@ -16,6 +16,10 @@ let transfers: string[]
 let failMark: boolean
 let decoded: number
 let failDecode: boolean
+let crossRealmDecodeAt: number | null
+let crossRealmIsParentError: boolean[]
+let decodeStats: Array<{ started: number, ready: number, active: number, maxActive: number }>
+let transferReadiness: number[]
 let release: () => void
 let gate: Promise<void>
 let loadFrames: () => void
@@ -36,8 +40,13 @@ async function click(id: string) { await act(async () => { button(id).click() })
 
 beforeEach(() => {
   Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  // jsdom has no scrolling implementation; the real screen scrolls an error into view.
+  if (!Element.prototype.scrollIntoView) {
+    Object.defineProperty(Element.prototype, 'scrollIntoView', { configurable: true, value: () => {} })
+  }
   localStorage.clear(); sessionStorage.clear()
   calls = []; frames = []; transfers = []; failMark = false; decoded = 0; failDecode = false
+  crossRealmDecodeAt = null; crossRealmIsParentError = []; decodeStats = []; transferReadiness = []
   gate = new Promise(r => { release = r })
   // Minimal raster canvas for real CODE128 bars (no replacement of barcode strings).
   // JsBarcode uses fillRect, save/restore and translate with displayValue=false.
@@ -81,14 +90,29 @@ beforeEach(() => {
       // jsdom does not navigate srcdoc: supply the utility's own complete HTML.
       frame.contentDocument!.open(); frame.contentDocument!.write(frame.srcdoc); frame.contentDocument!.close()
       const win = frame.contentWindow!
+      const stats = { started: 0, ready: 0, active: 0, maxActive: 0 }
+      decodeStats.push(stats)
       Object.defineProperty(win.HTMLImageElement.prototype, 'decode', { configurable: true,
         value: async function () {
           const index = ++decoded
-          await gate
-          if (failDecode && index === 150) throw new Error('WMS672 decode failed at 150')
+          stats.started += 1
+          stats.active += 1
+          stats.maxActive = Math.max(stats.maxActive, stats.active)
+          try {
+            await gate
+            if (failDecode && index === 150) throw new Error('WMS672 decode failed at 150')
+            if (crossRealmDecodeAt === index) {
+              const error = new win.DOMException(`WMS672 decode failed at ${index}`, 'EncodingError')
+              crossRealmIsParentError.push(error instanceof Error)
+              throw error
+            }
+            stats.ready += 1
+          } finally {
+            stats.active -= 1
+          }
         } })
       win.focus = () => {}
-      win.print = () => { transfers.push(frame.srcdoc) }
+      win.print = () => { transferReadiness.push(stats.ready); transfers.push(frame.srcdoc) }
       frame.onload!(new Event('load') as any)
     }
   }
@@ -157,6 +181,28 @@ test('C5 300 labels: decode failure at 150 cannot write successful marks before 
   expect(calls, 'failed preparation must not mark boxes printed').toEqual([])
   expect(document.querySelector('[role="alert"]')?.textContent).toContain('decode failed')
   expect(button('ff-inbound-boxes-print-all').disabled).toBe(false)
+})
+test('C5a 33 labels: iframe EncodingError preserves its message; bounded readiness completes one explicit retry', async () => {
+  await fixture(33); crossRealmDecodeAt = 2; await confirm()
+  expect(decodeStats[0]!.maxActive, 'decode stays concurrent, not one-by-one').toBeGreaterThan(1)
+  expect(decodeStats[0]!.maxActive, 'decode stays bounded below the complete tape').toBeLessThan(33)
+  release()
+  await until(() => !!document.querySelector('[role="alert"]')
+    && !button('ff-inbound-boxes-print-all').disabled)
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('WMS672 decode failed at 2')
+  expect(crossRealmIsParentError).toEqual([false])
+  expect(transfers, 'a failed iframe decode cannot transfer a partial tape').toEqual([])
+  expect(calls, 'a failed preparation cannot mark boxes printed').toEqual([])
+
+  crossRealmDecodeAt = null
+  await confirm()
+  await until(() => transfers.length === 1)
+  expect(decodeStats).toHaveLength(2)
+  expect(decodeStats[1]!.maxActive, 'retry remains concurrent').toBeGreaterThan(1)
+  expect(decodeStats[1]!.maxActive, 'retry remains memory-bounded').toBeLessThan(33)
+  expect(transferReadiness).toEqual([33])
+  expect(calls).toHaveLength(33)
+  expect(transfers, 'one explicit retry produces one full tape').toHaveLength(1)
 })
 test('C8 300 labels: lost mark response retry cannot silently send a second tape', async () => {
   await fixture(); failMark = true; await confirm(); release()
