@@ -337,6 +337,14 @@
       "review": "6b1aaf66b1fab7322b20782eead4dc7bb3f43ad9",
       "mode": "mergeoriginaltestcorrection+actualindependentreview+cumulativeledger",
       "facts": "actualCI3REDreproduced;only2exactsharedproofpathsallowed;34authorPASS/5newindependentPASS;oldfunctionsASTidentical;adjacentforeignmanifest/guards/ledgerreject"
+    },
+    {
+      "task": "WMS-666 immutable historical CI ancestry attribution",
+      "source": "e56de089b4564ea3b379c8c0fa31ab297d0441a4",
+      "correction": "9e72ac09f537fc48a02e1681bcc4ace917b7759e",
+      "review": "d814f65891b6f7f5d9ca81197689fa3085232611",
+      "mode": "merge original test-only correction, actual independent Sol high review and cumulative ledger",
+      "facts": "Only exact commit720307d280439e815057ee4fdd78b72134149a39/workflow/before+after blob tuple accepted; 8 author cases PASS, 3 independent new cases PASS and actual shared history PASS; original5 bodies/raw validator unchanged"
     }
   ],
   "local_product_fixes": [
@@ -376,6 +384,7 @@
     "protection": "Both Python ASTs identical before/after; frozen expectations/composition unchanged",
     "proof": "docs/reviews/priority-five-ruff-format-only-proof-20261006.json"
   },
-  "final_ci_input": "6517b1e93478d918c455d8f419d535dd59c92675",
-  "staging_base_confirmed": "727575a0fd47dec56f34b38b987925686626c2b9"
+  "final_ci_input": "ec5f9b08eac5b55a688524e0ff2152e538a55b9d",
+  "staging_base_confirmed": "727575a0fd47dec56f34b38b987925686626c2b9",
+  "final_ci_input_note": "Integration source before final tracking commit. Actual tested and published HEAD is retained in scope logs and CI run metadata."
 }
