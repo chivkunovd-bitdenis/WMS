@@ -1,0 +1,79 @@
+
+ RUN  v3.2.6 /home/runner/work/WMS/WMS/frontend
+
+ × src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 digital print controls > C7 control: externally rendered actual PDF is as A4 landscape before color implementation 10ms
+   → `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ × src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7: real renderer keeps size657 fixed geometry and complete color within eleven columns 2ms
+   → `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ × src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary 5ms
+   → `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ ✓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 PDF input contract without browser execution > C7 print input preserves A4 landscape, 10mm margins, fixed size657 widths/font 30ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 PDF input contract without browser execution > C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required 12ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 digital print controls > C7 control: externally rendered actual PDF is as A4 landscape before color implementation
+TypeError: `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ ❯ Object.exports.assertIs node_modules/pdf-lib/src/utils/validators.ts:156:9
+ ❯ PDFDocument.<anonymous> node_modules/pdf-lib/src/api/PDFDocument.ts:138:5
+ ❯ step node_modules/pdf-lib/node_modules/tslib/tslib.js:141:27
+ ❯ Object.next node_modules/pdf-lib/node_modules/tslib/tslib.js:122:57
+ ❯ node_modules/pdf-lib/node_modules/tslib/tslib.js:115:75
+ ❯ Object.__awaiter node_modules/pdf-lib/node_modules/tslib/tslib.js:111:16
+ ❯ PDFDocument.load node_modules/pdf-lib/cjs/api/PDFDocument.js:116:24
+ ❯ renderPdf src/screens/v2/wms673PrintRenderer.ts:201:33
+    199| async function renderPdf(html: string, _evidenceName = 'picking-list')…
+    200|   const output = artifactPath(html, 'pdf')
+    201|   const pdf = await PDFDocument.load(readFileSync(output))
+       |                                 ^
+    202|   const textReport = parsePdfTextReport(execFileSync('pdftotext', ['-b…
+    203|   return { pdf, textReport }
+ ❯ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts:22:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7: real renderer keeps size657 fixed geometry and complete color within eleven columns
+TypeError: `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ ❯ Object.exports.assertIs node_modules/pdf-lib/src/utils/validators.ts:156:9
+ ❯ PDFDocument.<anonymous> node_modules/pdf-lib/src/api/PDFDocument.ts:138:5
+ ❯ step node_modules/pdf-lib/node_modules/tslib/tslib.js:141:27
+ ❯ Object.next node_modules/pdf-lib/node_modules/tslib/tslib.js:122:57
+ ❯ node_modules/pdf-lib/node_modules/tslib/tslib.js:115:75
+ ❯ Object.__awaiter node_modules/pdf-lib/node_modules/tslib/tslib.js:111:16
+ ❯ PDFDocument.load node_modules/pdf-lib/cjs/api/PDFDocument.js:116:24
+ ❯ renderPdf src/screens/v2/wms673PrintRenderer.ts:201:33
+    199| async function renderPdf(html: string, _evidenceName = 'picking-list')…
+    200|   const output = artifactPath(html, 'pdf')
+    201|   const pdf = await PDFDocument.load(readFileSync(output))
+       |                                 ^
+    202|   const textReport = parsePdfTextReport(execFileSync('pdftotext', ['-b…
+    203|   return { pdf, textReport }
+ ❯ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts:36:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary
+TypeError: `pdf` must be of type `string` or `Uint8Array` or `ArrayBuffer`, but was actually of type `NaN`
+ ❯ Object.exports.assertIs node_modules/pdf-lib/src/utils/validators.ts:156:9
+ ❯ PDFDocument.<anonymous> node_modules/pdf-lib/src/api/PDFDocument.ts:138:5
+ ❯ step node_modules/pdf-lib/node_modules/tslib/tslib.js:141:27
+ ❯ Object.next node_modules/pdf-lib/node_modules/tslib/tslib.js:122:57
+ ❯ node_modules/pdf-lib/node_modules/tslib/tslib.js:115:75
+ ❯ Object.__awaiter node_modules/pdf-lib/node_modules/tslib/tslib.js:111:16
+ ❯ PDFDocument.load node_modules/pdf-lib/cjs/api/PDFDocument.js:116:24
+ ❯ renderPdf src/screens/v2/wms673PrintRenderer.ts:201:33
+    199| async function renderPdf(html: string, _evidenceName = 'picking-list')…
+    200|   const output = artifactPath(html, 'pdf')
+    201|   const pdf = await PDFDocument.load(readFileSync(output))
+       |                                 ^
+    202|   const textReport = parsePdfTextReport(execFileSync('pdftotext', ['-b…
+    203|   return { pdf, textReport }
+ ❯ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts:67:39
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 2 passed (5)
+   Start at  07:49:36
+   Duration  831ms (transform 123ms, setup 0ms, collect 214ms, tests 61ms, environment 328ms, prepare 67ms)
