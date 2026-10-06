@@ -69,6 +69,8 @@ export type PackagingTaskLine = {
   seller_name?: string | null
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   storage_location_id: string
   storage_location_code: string
   packaging_instructions: string | null
@@ -426,6 +428,8 @@ export function FfPackagingTaskPanel({
           photo_url: displayMeta.wb_primary_image_url,
           instructions: ln.packaging_instructions,
           quantity: ln.qty_need_pack,
+          size: ln.size,
+          color: ln.color,
         }
       }),
     })

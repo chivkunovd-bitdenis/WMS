@@ -23,6 +23,7 @@ from app.models.user import User
 from app.services import outbound_shipment_service as svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.outbound_shipment_service import OutboundShipmentError
+from app.services.print_product_metadata_service import populate_print_variant_attributes
 
 router = APIRouter(
     prefix="/operations/outbound-shipment-requests",
@@ -53,6 +54,8 @@ class OutboundShipmentLineOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
+    size: str | None = None
+    color: str | None = None
     quantity: int
     shipped_qty: int
     storage_location_id: str | None
@@ -116,12 +119,13 @@ def _line_out(
     )
 
 
-def _request_out(
+async def _request_out(
+    session: AsyncSession,
     r: OutboundShipmentRequest,
     *,
     reveal_storage: bool,
 ) -> OutboundShipmentRequestOut:
-    return OutboundShipmentRequestOut(
+    result = OutboundShipmentRequestOut(
         id=str(r.id),
         warehouse_id=str(r.warehouse_id),
         status=r.status,
@@ -133,6 +137,10 @@ def _request_out(
             for ln in r.lines
         ],
     )
+    await populate_print_variant_attributes(
+        session, [ln.product for ln in r.lines], result.lines
+    )
+    return result
 
 
 def _movement_out(
@@ -301,7 +309,7 @@ async def get_outbound_request(
     # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
     # объект догружает свои строки уже после него и падает вне контекста.
     reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
-    return _request_out(r, reveal_storage=reveal)
+    return await _request_out(session, r, reveal_storage=reveal)
 
 
 @router.get(
@@ -376,13 +384,15 @@ async def add_outbound_line(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out(
+    result = _line_out(
         line,
         prod,
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
     )
+    await populate_print_variant_attributes(session, [prod], [result])
+    return result
 
 
 @router.post(
@@ -416,7 +426,7 @@ async def ship_outbound_line(
     # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
     # объект догружает свои строки уже после него и падает вне контекста.
     reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
-    return _request_out(r2, reveal_storage=reveal)
+    return await _request_out(session, r2, reveal_storage=reveal)
 
 
 @router.delete(
@@ -437,7 +447,7 @@ async def delete_outbound_line(
         r = await svc.delete_line(session, user.tenant_id, request_id, line_id)
     except OutboundShipmentError as exc:
         raise _map_out_err(exc) from None
-    return _request_out(r, reveal_storage=reveal)
+    return await _request_out(session, r, reveal_storage=reveal)
 
 
 @router.patch(
@@ -468,13 +478,15 @@ async def patch_outbound_line_storage(
             detail="product_missing",
         )
     await session.refresh(line, attribute_names=["storage_location"])
-    return _line_out(
+    result = _line_out(
         line,
         prod,
         reveal_storage=await tenant_settings_svc.is_address_storage_enabled(
             session, user.tenant_id
         ),
     )
+    await populate_print_variant_attributes(session, [prod], [result])
+    return result
 
 
 @router.post("/{request_id}/submit", response_model=OutboundShipmentRequestOut)
@@ -503,7 +515,7 @@ async def submit_outbound_request(
     # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
     # объект догружает свои строки уже после него и падает вне контекста.
     reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
-    return _request_out(r2, reveal_storage=reveal)
+    return await _request_out(session, r2, reveal_storage=reveal)
 
 
 @router.post("/{request_id}/post", response_model=OutboundShipmentRequestOut)
@@ -530,4 +542,4 @@ async def post_outbound_request(
     # Флаг считаем ДО сборки ответа: если оставить await прямо в аргументе,
     # объект догружает свои строки уже после него и падает вне контекста.
     reveal = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
-    return _request_out(r2, reveal_storage=reveal)
+    return await _request_out(session, r2, reveal_storage=reveal)

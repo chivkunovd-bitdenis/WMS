@@ -1023,13 +1023,10 @@ def _product_label_metadata(product: Product | None, ctx: dict[str, Any]) -> dic
     """Existing catalog characteristics for one exact WMS product."""
     card_raw = _card_raw_for_product(product, ctx)
     catalog_barcode = product.wb_barcode if product is not None else None
+    saved_size = (product.wb_size or "").strip() if product is not None else ""
     return {
-        "size": (
-            product.wb_size
-            if product is not None and product.wb_size
-            else size_from_card_for_barcode(card_raw, catalog_barcode)
-            if card_raw
-            else None
+        "size": saved_size or (
+            size_from_card_for_barcode(card_raw, catalog_barcode) if card_raw else None
         ),
         "color": color_from_card(card_raw) if card_raw else None,
         "brand": brand_from_card(card_raw) if card_raw else None,
@@ -1070,8 +1067,9 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     brand = brand_from_card(card_raw) if card_raw else None
     composition = composition_from_card(card_raw) if card_raw else None
     size = None
-    if not is_ozon and product and product.wb_size:
-        size = product.wb_size
+    saved_size = (product.wb_size or "").strip() if product is not None else ""
+    if not is_ozon and saved_size:
+        size = saved_size
     elif card_raw:
         size = size_from_card_for_barcode(card_raw, barcode)
     # Расположение — по (склад, товар), физический факт "где лежит".

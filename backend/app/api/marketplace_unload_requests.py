@@ -47,12 +47,14 @@ from app.services import marketplace_unload_box_service as box_svc
 from app.services import marketplace_unload_collect_service as collect_svc
 from app.services import marketplace_unload_pick_service as pick_svc
 from app.services import marketplace_unload_service as svc
+from app.services import marketplace_unload_wb_fbw_export_service as wb_fbw_export_svc
 from app.services import packaging_task_service as pkg_svc
 from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_warehouse
 from app.services.marketplace_unload_box_service import MarketplaceUnloadBoxError
 from app.services.marketplace_unload_pick_service import MarketplaceUnloadPickError
 from app.services.marketplace_unload_service import MarketplaceUnloadError
+from app.services.marketplace_unload_wb_fbw_export_service import WbFbwPackagingExportError
 
 # Продукт (RU): отгрузка фулфилмента на маркетплейс. Имя префикса API — историческое.
 router = APIRouter(
@@ -895,6 +897,42 @@ async def get_marketplace_unload(
         seller_name=r.seller.name if r.seller is not None else None,
         sync_packaging=True,
         seller_plan_only=_seller_plan_only(user),
+    )
+
+
+@router.get("/{request_id}/wb-fbw-packaging.xlsx")
+async def export_wb_fbw_packaging_xlsx(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(require_mp_shipments_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    credentials: Annotated[
+        HTTPAuthorizationCredentials | None, Depends(_bearer)
+    ],
+    effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
+) -> Response:
+    await _get_visible_request(
+        session,
+        user,
+        request_id,
+        credentials,
+        effective_seller_id=effective_seller_id,
+    )
+    try:
+        export = await wb_fbw_export_svc.export_wb_fbw_packaging_xlsx(
+            session, tenant_id=user.tenant_id, request_id=request_id
+        )
+    except WbFbwPackagingExportError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail=str(exc),
+        ) from exc
+    headers = {"Content-Disposition": 'attachment; filename="wb-fbw-packaging.xlsx"'}
+    if export.warnings:
+        headers["X-WMS-Warning-Code"] = "wb-shelf-life-date-required"
+    return Response(
+        content=export.content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers=headers,
     )
 
 

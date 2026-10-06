@@ -327,12 +327,14 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
   for (const workspace of workspaces) {
     const orders = [...workspace.orders].sort((a, b) => a.tape_order_index - b.tape_order_index)
     for (const order of orders) {
-      const rows = order.marketplace === 'ozon' && order.positions.length > 0
+      // Older position-bearing responses can omit the marketplace discriminator.
+      const rows = order.marketplace !== 'wb' && (order.positions?.length ?? 0) > 0
         ? order.positions.map((position, positionIndex) => ({
             key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
             name: position.name,
+            article: position.seller_article?.trim() || position.sku?.trim() || null,
             size: position.size ?? null,
-            color: position.color?.trim() || null,
+            color: position.color ?? null,
             imageUrl: position.image_url ?? null,
             identifiers: [
               position.seller_article,
@@ -345,8 +347,9 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
         : [{
             key: order.product.id ?? `unmapped-${order.id}`,
             name: order.product.name,
+            article: order.product.seller_article?.trim() || null,
             size: order.product.size,
-            color: order.product.color?.trim() || null,
+            color: order.product.color ?? null,
             imageUrl: order.product.image_url,
             identifiers: [
               order.product.seller_article,

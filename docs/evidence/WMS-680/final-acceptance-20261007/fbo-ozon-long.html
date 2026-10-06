@@ -1,0 +1,480 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Лист отгрузки — №000680</title>
+    <style>
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 7mm 8mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 10.5px;
+        color: #111;
+        margin: 0;
+        width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .pk-head {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px 12px;
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .pk-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .pk-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+        overflow-wrap: anywhere;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+      .pk-photo-cell { width: 24mm; }
+      .pk-product-cell { width: auto; }
+      .pk-barcode-cell { word-break: break-word; font-weight: 700; }
+      .pk-qty-cell { text-align: right; font-weight: 700; font-size: 13px; }
+      .pk-instructions-cell { width: auto; }
+      .pk-fact-cell { min-height: 24mm; }
+      .pk-photo {
+        width: 21mm;
+        height: 21mm;
+        object-fit: contain;
+        border: 1px solid #eee;
+        display: block;
+        margin: 0;
+      }
+      .pk-photo-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 11px;
+        background: #f5f5f5;
+      }
+      .pk-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .pk-meta { margin: 0; color: #555; word-break: break-word; }
+      .pk-instructions-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.35;
+      }
+      .pk-empty-text { color: #999; font-style: italic; }
+      .pk-empty { color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1>Лист отгрузки</h1>
+    <dl class="pk-head">
+      <div><dt>Селлер</dt><dd>Селлер680</dd></div>
+      <div><dt>Дата</dt><dd>07.10.2026, 04:00:00</dd></div>
+      <div><dt>Тип</dt><dd>Отгрузка на маркетплейс</dd></div>
+      <div><dt>Номер</dt><dd>№000680</dd></div>
+      <div><dt>Склад ФФ</dt><dd>Склад680</dd></div>
+      <div><dt>Склад МП</dt><dd>—</dd></div>
+    </dl>
+    <table data-testid="shipment-sheet-table">
+      <colgroup><col style="width:12.3711%" /><col style="width:28.8402%" /><col style="width:7.5773%" /><col style="width:8.2474%" /><col style="width:8.2474%" /><col style="width:13.4021%" /><col style="width:6.7010%" /><col style="width:9.6134%" /><col style="width:5.0000%" /></colgroup>
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th>Артикул</th>
+          <th>Цвет</th>
+          <th>Размер</th>
+          <th>ШК</th>
+          <th>Кол-во</th>
+          <th>Инструкции</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody><tr data-testid="tz-sheet-card" data-row-index="0">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 0 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-0</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000000</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">1</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="1">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 1 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-1</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000001</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">2</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="2">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 2 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-2</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000002</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">3</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="3">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 3 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-3</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000003</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">4</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="4">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 4 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-4</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000004</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">5</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="5">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 5 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-5</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000005</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">6</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="6">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 6 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-6</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000006</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">7</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="7">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 7 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-7</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000007</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">8</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="8">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 8 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-8</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000008</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">9</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="9">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 9 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-9</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000009</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">10</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="10">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 10 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-10</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000010</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">11</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="11">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 11 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-11</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000011</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">12</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="12">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 12 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-12</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000012</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">13</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="13">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 13 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-13</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000013</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">14</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="14">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 14 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-14</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000014</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">15</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="15">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 15 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-15</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000015</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">16</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="16">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 16 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-16</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000016</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">17</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="17">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 17 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-17</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000017</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">18</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="18">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 18 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-18</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000018</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">19</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="19">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 19 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-19</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000019</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">20</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="20">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 20 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-20</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000020</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">21</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="21">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 21 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-21</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000021</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">22</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="22">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 22 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-22</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000022</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">23</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="23">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 23 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-23</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000023</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">24</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="24">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 24 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-24</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Красный / красно-синий &amp; белый цвет с длинным составным описанием оттенка / красно-синий &amp; белый цвет с длинным составным описанием оттенка</td>
+  <td class="pk-size-cell">S</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000024</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">25</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="25">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 25 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-25</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Синий</td>
+  <td class="pk-size-cell">M / M 46–48 международный размер взрослый</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000025</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">26</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="26">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 26 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-26</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">—</td>
+  <td class="pk-size-cell">0</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000026</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">27</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="27">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 27 — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений — длинное название хлопковой футболки для проверки переноса строки и реквизитов без наложений</p>
+    <p class="pk-meta"><span>SKU: SKU-27</span> · <span>Артикул WB: 680</span></p>
+  </td>
+  <td class="pk-article-cell">ONE</td>
+  <td class="pk-color-cell">Зелёный</td>
+  <td class="pk-size-cell">—</td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">4600000000027</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">28</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr></tbody>
+    </table>
+  </body>
+</html>
