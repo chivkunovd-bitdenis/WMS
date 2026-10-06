@@ -20,6 +20,7 @@ from sqlalchemy.orm import selectinload
 from test_wms662_observed_handoff import saved, seed, shipped
 
 from app.db.session import SessionLocal, engine
+from app.models.billing import BillingLedgerLine
 from app.models.fbs_order import FbsOrder, FbsOrderProduct
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger as Ledger
 from app.models.fbs_supply import FbsSupply
@@ -285,12 +286,30 @@ def billing_snapshot(state):
             row.service_code,
             row.quantity,
             row.amount,
-            row.physical_quantity,
-            row.billing_quantity,
             row.reversal_of_id,
         )
         for row in state.charges
     }
+
+
+async def billing_lines(case):
+    async with SessionLocal() as reader:
+        rows = await reader.scalars(
+            select(BillingLedgerLine).where(
+                BillingLedgerLine.tenant_id == case.tenant.id,
+            )
+        )
+        return {
+            (
+                row.id,
+                row.ledger_entry_id,
+                row.product_id,
+                row.physical_quantity,
+                row.billing_quantity,
+                row.amount,
+            )
+            for row in rows
+        }
 
 
 async def test_bambook_exact_31_recovers_26_once(incident_db, external_boundaries_only):
@@ -303,9 +322,12 @@ async def test_bambook_exact_31_recovers_26_once(incident_db, external_boundarie
     assert all(not observed.completed_quantities(ledger) for ledger in before.ledgers.values())
     old_facts = {(fact.id, fact.source_event_id, fact.item_quantity) for fact in before.facts}
     old_charges = billing_snapshot(before)
+    old_lines = await billing_lines(case)
+    assert len(old_lines) == 22
     calls = []
     await recover_exact_supply(case, calls)
     first = await saved(case)
+    first_lines = await billing_lines(case)
     assert Counter(calls) == Counter(case.cards.keys())
     positive_ids = {order.id for order in case.orders if order.status in {"done", "in_delivery"}}
     excluded_ids = {order.id for order in case.orders} - positive_ids
@@ -339,11 +361,12 @@ async def test_bambook_exact_31_recovers_26_once(incident_db, external_boundarie
         {(oid, code): 1 for oid in positive_ids for code in ("fbs_order", "packing")}
     )
     assert all(
-        row.quantity == row.physical_quantity == row.billing_quantity == 1
-        and row.entry_type == "charge"
-        and row.reversal_of_id is None
+        row.quantity == 1 and row.entry_type == "charge" and row.reversal_of_id is None
         for row in first.charges
     )
+    assert len(first_lines) == 52 and old_lines <= first_lines
+    assert Counter(line[1] for line in first_lines) == Counter({row.id: 1 for row in first.charges})
+    assert all(line[3] == line[4] == 1 for line in first_lines)
     assert external_boundaries_only, "normal stock-publish intentions must remain scheduled"
     assert all(args[:2] == (case.tenant.id, case.seller.id) for args in external_boundaries_only)
 
@@ -357,6 +380,11 @@ async def test_bambook_exact_31_recovers_26_once(incident_db, external_boundarie
         (fact.id, fact.source_event_id, fact.item_quantity) for fact in first.facts
     }
     assert billing_snapshot(again) == billing_snapshot(first)
+    assert await billing_lines(case) == first_lines
     assert {
         oid: observed.completed_quantities(ledger) for oid, ledger in again.ledgers.items()
     } == {oid: observed.completed_quantities(ledger) for oid, ledger in first.ledgers.items()}
+    print(
+        "WMS675 recovery verified: expense=26 reserve=16->1 facts=11->26 charges=22->52 "
+        "existing IDs preserved; repeat expense/facts/charges delta=0; SKU deltas=4/8/5/0/2/7"
+    )
