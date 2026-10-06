@@ -1,0 +1,21 @@
+{
+  "scope": "fixture2 first299 native preparation plus1s BEFORE corrected retry; full trace is lossy",
+  "clock_retained": 2,
+  "clock_interval_width_ms": 2.0,
+  "cut_epoch_ms": 1791328516632.1,
+  "retry_start_epoch_ms": 1791328519367.3,
+  "native_starts": 299,
+  "queues": 299,
+  "original_add_remove_pairs": 299,
+  "scaled_1x1_add_remove_pairs": 299,
+  "end_tracked_entries": 0,
+  "peak_original_entries": 55,
+  "peak_tracked_bytes": 65475528,
+  "original_release_within_1ms_of_scaled_get": 224,
+  "original_reservation_duration_ms": [
+    21.147,
+    524.461
+  ],
+  "global_no_loss": false,
+  "whole_run_cache_accounting": false
+}

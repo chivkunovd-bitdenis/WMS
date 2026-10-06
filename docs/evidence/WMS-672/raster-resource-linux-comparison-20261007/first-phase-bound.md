@@ -1,0 +1,7 @@
+# Bounded first preparation in the lossy successful-run trace
+
+This is a prefix accounting bound, not a no-loss whole-run claim. Two retained clocks give a2ms offset interval. All299 first-attempt native-start records match299 engine Queue requests before the known299screen error plus1s. Correctedretry starts3.735s after that error and therefore follows the analysis cutoff. The saved parser asserts299Original836x356 Add/Remove pairs,299SubrectAndScale1x1 pairs, no missing/duplicate budget identity and zero tracked entries at cutoff.
+
+Peak original reservation count is55 in this prefix versus225 at the prior measured admission saturation;224 original removals occur within1ms of the matching scaled GetTask. The remaining75 are later releases; do not claim every image/cohort is immediately unlocked by paint. Original reservation durations span21.147–524.461ms. This supports the source-backed render-consumption counterfactual while preserving the global dataLoss=true/missing end-clock limit.
+
+The collector repair can stop1s after the fixture2 knownscreen299 event, preserving the complete first299native preparation and release tail before correctedretry begins. Saved usage is about51% near that duration, versus saturation during the35s whole fixture. The ordinary complete C5 continues unaffected; genuine native error during active capture retains its existing failure stop. Product, frozen tests,64MiB/light250ms/native forwarding and full C5 assertions/timeouts remain unchanged.
