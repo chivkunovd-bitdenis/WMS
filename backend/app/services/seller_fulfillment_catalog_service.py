@@ -94,6 +94,14 @@ logger = logging.getLogger(__name__)
 OnFulfillmentFilter = Literal["all", "yes", "no"]
 MarketplaceFilter = Literal["wildberries", "ozon"]
 
+# Python str.strip() whitespace, shared by SQLite/PostgreSQL trim so SQL
+# category/size labels match the existing displayed labels (including NBSP).
+_DISPLAY_WHITESPACE = (
+    "\t\n\v\f\r\x1c\x1d\x1e\x1f \x85\xa0\u1680"
+    "\u2000\u2001\u2002\u2003\u2004\u2005\u2006\u2007\u2008\u2009\u200a"
+    "\u2028\u2029\u202f\u205f\u3000"
+)
+
 # Тот же порядок величины, что и у пачек nmID/product_id в других местах
 # каталога (см. catalog_service.ID_IN_BATCH_SIZE) — но контракт /seller-catalog
 # ограничивает запрос на добавление 500 идентификаторами, так что здесь это
@@ -478,7 +486,7 @@ async def _catalog_fields(session: AsyncSession) -> tuple[Any, Any, Any, Any, An
                 (
                     (func.json_type(entry[key]) if sqlite else func.json_typeof(entry[key]))
                     == ("text" if sqlite else "string"),
-                    func.nullif(func.trim(entry[key].as_string()), ""),
+                    func.nullif(func.trim(entry[key].as_string(), _DISPLAY_WHITESPACE), ""),
                 ),
                 else_=None,
             )
@@ -542,14 +550,16 @@ async def _catalog_fields(session: AsyncSession) -> tuple[Any, Any, Any, Any, An
         .correlate(Product, SellerWildberriesImportedCard)
         .scalar_subquery()
     )
-    product_size = func.coalesce(func.nullif(func.trim(Product.wb_size), ""), fallback_size)
+    product_size = func.coalesce(
+        func.nullif(func.trim(Product.wb_size, _DISPLAY_WHITESPACE), ""), fallback_size
+    )
     category = func.coalesce(
         *(
             case(
                 (
                     (func.json_type(raw[key]) if sqlite else func.json_typeof(raw[key]))
                     == ("text" if sqlite else "string"),
-                    func.nullif(func.trim(raw[key].as_string()), ""),
+                    func.nullif(func.trim(raw[key].as_string(), _DISPLAY_WHITESPACE), ""),
                 ),
                 else_=None,
             )
