@@ -1,0 +1,101 @@
+✔ C1/C2 inbound 200: one complete ordered 58x40 tape, real PDF and readable samples (7918.020317ms)
+✖ C1/C2 inbound 300: one complete ordered 58x40 tape, real PDF and readable samples (34554.668157ms)
+✔ C1/C2 return 200: one complete ordered 58x40 tape, real PDF and readable samples (9144.005223ms)
+✖ C1/C2 return 300: one complete ordered 58x40 tape, real PDF and readable samples (34262.166973ms)
+✔ C3 renderer: short/long CODE128, >99 title, escaped special text and saved alternate size (1949.214699ms)
+✖ C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds (40303.799437ms)
+✖ C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry (4801.686427ms)
+✖ C6 fast double confirmation belongs to one attempt and transfers at most once (5440.982316ms)
+✖ C7/C8 response lost after transfer: restore source/attempt across reload before another external action (34197.476822ms)
+✖ C8 mark failure retry repairs original attempt without silently printing another tape (34201.827266ms)
+✔ C10 controls: empty/one/cargo, creation dialog and opening never print (2923.396559ms)
+ℹ Error: Test hook "before" at tests-e2e/wms672-box-labels.test.mjs:16:1 generated asynchronous activity after the test ended. This activity created the error "Error: "page.waitForFunction: Target page, context or browser has been closed" while running route callback.
+Consider awaiting `await page.unrouteAll({ behavior: 'ignoreErrors' })`
+before the end of the test to ignore remaining routes in flight." and would have caused the test to fail, but instead triggered an unhandledRejection event.
+ℹ Error: Test hook "before" at tests-e2e/wms672-box-labels.test.mjs:16:1 generated asynchronous activity after the test ended. This activity created the error "Error: "page.waitForFunction: Target page, context or browser has been closed" while running route callback.
+Consider awaiting `await page.unrouteAll({ behavior: 'ignoreErrors' })`
+before the end of the test to ignore remaining routes in flight." and would have caused the test to fail, but instead triggered an unhandledRejection event.
+ℹ tests 11
+ℹ suites 0
+ℹ pass 4
+ℹ fail 7
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 210117.204132
+
+✖ failing tests:
+
+test at tests-e2e/wms672-box-labels.test.mjs:134:5
+✖ C1/C2 inbound 300: one complete ordered 58x40 tape, real PDF and readable samples (34554.668157ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:109:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:139:28) {
+    name: 'TimeoutError'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:134:5
+✖ C1/C2 return 300: one complete ordered 58x40 tape, real PDF and readable samples (34262.166973ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:109:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:139:28) {
+    name: 'TimeoutError'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:203:1
+✖ C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds (40303.799437ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:109:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:216:13) {
+    name: 'TimeoutError'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:227:1
+✖ C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry (4801.686427ms)
+  AssertionError [ERR_ASSERTION]: failed preparation must not mark existing boxes printed
+  
+  59 !== 0
+  
+      at TestContext.<anonymous> (file:///home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:235:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 59,
+    expected: 0,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:245:1
+✖ C6 fast double confirmation belongs to one attempt and transfers at most once (5440.982316ms)
+  AssertionError [ERR_ASSERTION]: same confirmation must not make a second tape
+  
+  2 !== 1
+  
+      at TestContext.<anonymous> (file:///home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:256:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: 2,
+    expected: 1,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:261:1
+✖ C7/C8 response lost after transfer: restore source/attempt across reload before another external action (34197.476822ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:109:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:265:25) {
+    name: 'TimeoutError'
+  }
+
+test at tests-e2e/wms672-box-labels.test.mjs:291:1
+✖ C8 mark failure retry repairs original attempt without silently printing another tape (34201.827266ms)
+  page.waitForFunction: Timeout 30000ms exceeded.
+      at transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:109:16)
+      at TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:295:11) {
+    name: 'TimeoutError'
+  }
