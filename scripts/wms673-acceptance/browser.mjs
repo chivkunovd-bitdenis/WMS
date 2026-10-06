@@ -71,7 +71,7 @@ try {
       const previewReady = () => {
         const app = document.querySelector('print-preview-app')
         const area = app?.shadowRoot?.querySelector('print-preview-preview-area')
-        return area && area.previewState === 2
+        return area && area.previewState === 'display-preview'
       }
       let ready = false
       for (let attempt = 0; attempt < 120; attempt++) {
@@ -81,9 +81,10 @@ try {
       execFileSync('import', ['-window', 'root', `${out}/${kind}-${repeat}-native-preview.png`])
       const previewState = await evaluatePreview(() => {
         const app = document.querySelector('print-preview-app')
-        const model = app.shadowRoot.querySelector('print-preview-model')
         const area = app.shadowRoot.querySelector('print-preview-preview-area')
-        return { title: document.title, url: location.href, previewState: area.previewState, settings: model?.settings, text: app.shadowRoot.textContent }
+        const deepText = root => [...root.children].map(e => e.shadowRoot ? deepText(e.shadowRoot) : e.children.length ? deepText(e) : e.textContent).join(' ')
+        return { title: document.title, url: location.href, previewState: area.previewState,
+          layout: app.getSettingValue?.('layout'), mediaSize: app.getSettingValue?.('mediaSize'), text: deepText(app.shadowRoot) }
       })
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
       assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
