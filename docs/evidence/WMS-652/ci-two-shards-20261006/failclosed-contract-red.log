@@ -1,0 +1,14 @@
+.F.
+======================================================================
+FAIL: test_collection_setup_error_outside_case_is_preserved_and_cannot_be_green (scripts.ci.tests.test_backend_shard_failclosed.BackendFailClosedContracts.test_collection_setup_error_outside_case_is_preserved_and_cannot_be_green)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-two-shards/scripts/ci/tests/test_backend_shard_failclosed.py", line 41, in test_collection_setup_error_outside_case_is_preserved_and_cannot_be_green
+    self.assertFalse(result['success'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: True is not false
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.134s
+
+FAILED (failures=1)
