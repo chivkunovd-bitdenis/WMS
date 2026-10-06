@@ -499,7 +499,13 @@ def test_c6_every_contract_case_rejects_missing_or_reversed_search_duty(
     def altered_scenario(**options: Any) -> Any:
         env = scenario(**options)
         if mutation == "installed_paraphrase":
-            env.agent.system = env.agent.system.replace("сначала вызови", "первым делом вызови")
+            # Self-contained paraphrase of the draft-first directive in installed 8cd8.
+            original_system = env.agent.system
+            wrong_order = "Для вопроса или описания первым делом вызови `task_record(confirm_author=false)` и получи `ticket_id`."
+            env.agent.system = original_system + "\n\n" + wrong_order
+            assert env.agent.system != original_system, "negative fixture must change the instructions"
+            assert wrong_order in env.agent.system and CREATE_FIRST.search(normalize_instruction(wrong_order)), (
+                "negative fixture must contain the installed draft-first ordering")
         else:
             remainder = COMPLIANT_INSTRUCTION.split("\n\n", 1)[1]
             env.agent.system = INSTRUCTION_MUTATIONS[mutation] + "\n\n" + remainder
