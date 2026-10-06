@@ -1,0 +1,24 @@
+{
+  "test_only_commit": "6da0eb63b143d71d789c25a20ee04e3c49cbf14b",
+  "actual_targeted_cases": 4,
+  "source_and_expectations_review": "pending independent reviewer1830",
+  "artifacts": [
+    {
+      "path": "docs/reviews/2026-10-07-wms684-586-scope-correction/wms684586-scope-evidence.md",
+      "sha256": "b589200d852c2c5c15711252c8698e8629e931aa58a59456cf94590d3b5d3ded"
+    },
+    {
+      "path": "docs/reviews/2026-10-07-wms684-586-scope-correction/wms684586-scope-task-history.log",
+      "sha256": "8fbc6026d471d044fff197b259fdf8d95117e0de7e52f484afe7c85e36d0a8cd"
+    },
+    {
+      "path": "docs/reviews/2026-10-07-wms684-586-scope-correction/wms684586-scope-6da0eb63.log",
+      "sha256": "897239d3d9a28a965f0c8fce366e6d7462c0bfc1c18cec4462462fc814e30a53"
+    },
+    {
+      "path": "docs/reviews/2026-10-07-wms684-586-scope-correction/wms684586-scope-owned-history.tsv",
+      "sha256": "020e2293caad8d9f5a3c31ea6a9735e35e787d1e0b35cf8542e8021bc590de23"
+    }
+  ],
+  "before_after_source_snapshots": "Original371e18f97/b5f2a6cfb immutable Git blobs, hashes listed in evidence; existing Git history retains exact source bytes."
+}
