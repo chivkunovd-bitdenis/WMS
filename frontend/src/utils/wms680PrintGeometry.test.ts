@@ -133,6 +133,35 @@ function fixtureFileName(label: string) {
   return slug || 'wms680-pdf-fixture'
 }
 
+function pause(milliseconds: number) {
+  return new Promise<void>((resolve) => setTimeout(resolve, milliseconds))
+}
+
+async function stopOwnedChrome(process: ReturnType<typeof spawn>) {
+  if (process.exitCode !== null) return
+  const exited = new Promise<void>((resolve) => process.once('exit', () => resolve()))
+  process.kill('SIGTERM')
+  await Promise.race([exited, pause(5_000)])
+  if (process.exitCode === null) {
+    process.kill('SIGKILL')
+    await exited
+  }
+}
+
+async function removeOwnedFixtureDirectory(dir: string) {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    try {
+      rmSync(dir, { recursive: true, force: true })
+      return
+    } catch (error) {
+      lastError = error
+      await pause(100)
+    }
+  }
+  throw lastError
+}
+
 async function renderPdf(html: string, label: string) {
   expect(chrome, 'C680-18 требует уже установленный Chrome/Chromium; зависимости не устанавливаются').toBeTruthy()
   const dir = mkdtempSync(join(tmpdir(), 'wms680-pdf-'))
@@ -151,13 +180,12 @@ async function renderPdf(html: string, label: string) {
       if (Date.now() >= deadline) throw new Error(`Chrome не записал PDF ${label} за 30 секунд`)
       await new Promise((resolve) => setTimeout(resolve, 100))
     }
-    process.kill('SIGTERM')
     const pdf = await PDFDocument.load(readFileSync(output))
     const text = execFileSync('pdftotext', ['-bbox-layout', output, '-'], { encoding: 'utf8' })
     return { pdf, text }
   } finally {
-    process.kill('SIGTERM')
-    rmSync(dir, { recursive: true, force: true })
+    await stopOwnedChrome(process)
+    await removeOwnedFixtureDirectory(dir)
   }
 }
 
@@ -220,18 +248,51 @@ function compact(text: string) {
   return text.replace(/\s+/g, '').toUpperCase()
 }
 
+type PdfWord = { left: number; top: number; right: number; bottom: number; text: string }
+
+function pdfWords(xml: string): PdfWord[] {
+  return [...xml.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)]
+    .map((word) => ({ left: Number(word[1]), top: Number(word[2]), right: Number(word[3]), bottom: Number(word[4]), text: word[5]! }))
+}
+
+function pdfTextFragments(words: PdfWord[], expected: string) {
+  const target = compact(expected)
+  for (let firstIndex = 0; firstIndex < words.length; firstIndex += 1) {
+    const fragments: PdfWord[] = []
+    let joined = ''
+    for (let index = firstIndex; index < Math.min(words.length, firstIndex + 12); index += 1) {
+      const word = words[index]!
+      if (fragments.length && (Math.abs(word.left - fragments[0]!.left) > 1 || word.top < fragments.at(-1)!.top - 1)) break
+      const next = `${joined}${compact(word.text)}`
+      if (!target.startsWith(next)) break
+      fragments.push(word)
+      joined = next
+      if (joined === target) return fragments
+    }
+  }
+  return undefined
+}
+
+function expectPdfTextFragments(words: PdfWord[], expected: string) {
+  const fragments = pdfTextFragments(words, expected)
+  expect(fragments, `реальный PDF должен содержать полный текст «${expected}» в одной ячейке, а не только его обрезок`).toBeTruthy()
+  return fragments!
+}
+
 function assertRealPdfGeometry(xml: string, expectedName: string) {
   const pages = [...xml.matchAll(/<page\b[^>]*width="([\d.]+)"[^>]*height="([\d.]+)"[^>]*>([\s\S]*?)<\/page>/g)]
   expect(pages.length, 'pdftotext должен вернуть страницы реального PDF').toBeGreaterThan(0)
-  const words = [...xml.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)]
+  const words = pdfWords(xml)
   expect(words.length, 'pdftotext должен вернуть реальные координаты PDF').toBeGreaterThan(0)
-  expect(compact(xml)).toContain(compact(expectedName))
-  for (const token of ['АРТИКУЛ', 'ЦВЕТ', 'РАЗМЕР']) expect(compact(xml)).toContain(token)
+  const nameFragments = expectPdfTextFragments(words, expectedName)
+  for (const token of ['АРТИКУЛ', 'ЦВЕТ', 'РАЗМЕР']) expect(words.some((word) => compact(word.text) === token), `PDF должен содержать заголовок «${token}»`).toBe(true)
   const headerX = (token: string) => {
-    const match = words.find((word) => compact(word[5]!) === token)
+    const match = words.find((word) => compact(word.text) === token)
     expect(match, `PDF должен физически разместить заголовок «${token}»`).toBeTruthy()
-    return Number(match![1])
+    return match!.left
   }
+  const articleX = headerX('АРТИКУЛ')
+  expect(Math.max(...nameFragments.map((word) => word.right)), 'название товара не выходит в отдельную колонку Артикул').toBeLessThanOrEqual(articleX)
   expect(headerX('АРТИКУЛ')).toBeLessThan(headerX('ЦВЕТ'))
   expect(headerX('ЦВЕТ')).toBeLessThan(headerX('РАЗМЕР'))
   for (const page of pages) {
@@ -247,8 +308,7 @@ function assertRealPdfGeometry(xml: string, expectedName: string) {
 }
 
 function assertPickTablePdf(xml: string, allocations: ShipmentWaybillData['pickAllocations']) {
-  const words = [...xml.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)]
-    .map((word) => ({ left: Number(word[1]), top: Number(word[2]), text: word[5]! }))
+  const words = pdfWords(xml)
   const quantityHeaders = words.filter((word) => compact(word.text) === 'КОЛ-ВО')
   const quantity = quantityHeaders.sort((left, right) => right.top - left.top)[0]
   expect(quantity, 'в PDF должна быть числовая колонка именно таблицы подбора').toBeTruthy()
@@ -260,9 +320,9 @@ function assertPickTablePdf(xml: string, allocations: ShipmentWaybillData['pickA
   expect(location!.left).toBeLessThan(sku!.left)
   expect(sku!.left).toBeLessThan(quantity!.left)
   for (const allocation of allocations ?? []) {
-    expect(compact(xml)).toContain(compact(allocation.location_code))
-    expect(compact(xml)).toContain(compact(allocation.sku_code))
-    expect(compact(xml)).toContain(String(allocation.quantity))
+    expectPdfTextFragments(words, allocation.location_code)
+    expectPdfTextFragments(words, allocation.sku_code)
+    expectPdfTextFragments(words, String(allocation.quantity))
   }
 }
 
@@ -305,5 +365,13 @@ describe('WMS-680 · C680-18 реальная PDF-геометрия', () => {
     expect(dom.columns[2]!.width, 'R9: Кол-во уже текстового SKU').toBeLessThan(dom.columns[1]!.width)
     expect(dom.table.left).toBeGreaterThanOrEqual(0)
     expect(dom.table.right).toBeGreaterThan(dom.table.left)
+  }, 120_000)
+
+  it('C680-18: канарейка не принимает обрезанное название, даже если остальные слова PDF сохранены', async () => {
+    const expectedName = 'PACKAGING-LONG-NAME-01-680'
+    const pdf = await renderPdf(packaging(4), 'fbo-complete-name-canary')
+    const words = pdfWords(pdf.text)
+    const fragments = expectPdfTextFragments(words, expectedName)
+    expect(pdfTextFragments(words.filter((word) => word !== fragments.at(-1)), expectedName)).toBeUndefined()
   }, 120_000)
 })
