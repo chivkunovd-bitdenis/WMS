@@ -70,6 +70,13 @@ try {
       }
       // The C7 scenario explicitly asks for A4 landscape in native preview.
       // Select that paper ticket in the isolated browser, before photographing it.
+      for (let attempt = 0; attempt < 100; attempt++) {
+        if (await evaluatePreview(() => {
+          const app = document.querySelector('print-preview-app')
+          return typeof app?.setSetting === 'function' && !!app.getSettingValue?.('mediaSize')
+        })) break
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
       await evaluatePreview(() => {
         const app = document.querySelector('print-preview-app')
         app.setSetting('mediaSize', { width_microns: 210000, height_microns: 297000,
