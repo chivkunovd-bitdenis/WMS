@@ -125,6 +125,50 @@ class PromoteGuardsTests(unittest.TestCase):
         self.git("commit", "-qm", "WMS-652 protected ci-shards fixture")
         return source, test_name
 
+    def protected_wms663_c10_copy_fixture(
+        self,
+        *,
+        digest: str | None = None,
+        case: str | None = None,
+        report: str = "release-postgres/663-669-670-683.xml",
+    ) -> tuple[str, str, str]:
+        source = "scripts/ci/wms663-proof/c10_mixed.py"
+        generated = "backend/tests/test_wms663_remote_c10.py"
+        test_name = "test_c10_document_claim_blocks_concurrent_marking_without_losing_either"
+        actual_case = "tests.test_wms663_remote_c10::" + test_name
+        source_text = "\n".join(
+            (
+                "async def " + test_name + "(db_session, monkeypatch):",
+                "    assert db_session is not None",
+                "    assert monkeypatch is not None",
+                "",
+            )
+        )
+        self.write(
+            source,
+            source_text,
+        )
+        self.write_saved_process_protection(
+            source,
+            actual_case if case is None else case,
+            digest=digest,
+            report=report,
+            suite_name="pg-663-669-670-683",
+        )
+        self.write_manifest("active")
+        self.write(
+            "docs/requirements/WMS-663.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C10 | навсегда | {source}::{test_name} | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "WMS-663 protected C10 copy fixture")
+        self.write(generated, source_text)
+        self.addCleanup((self.root / generated).unlink, missing_ok=True)
+        return source, test_name, generated
+
     def wms654_expanded_cases(self, owner: str) -> list[str]:
         catalog = [
             f"{owner}::WMS-654 actual CatalogSection contract "
@@ -390,6 +434,49 @@ class PromoteGuardsTests(unittest.TestCase):
 
         with self.assertRaisesRegex(ValueError, "обязательного case/report"):
             promoter.promote(self.root, "WMS-652")
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_wms663_c10_copy_uses_only_the_real_generated_module_and_report(self):
+        source, _, generated = self.protected_wms663_c10_copy_fixture()
+        original_document = (self.root / "docs/requirements/WMS-663.md").read_text()
+        self.assertEqual((self.root / source).read_bytes(), (self.root / generated).read_bytes())
+
+        promoter.promote(self.root, "WMS-663")
+
+        (self.root / generated).unlink()
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+        self.assertEqual((self.root / "docs/requirements/WMS-663.md").read_text(), original_document)
+
+    def test_protected_wms663_c10_copy_rejects_changed_source_hash(self):
+        source, _, generated = self.protected_wms663_c10_copy_fixture(digest="0" * 64)
+
+        with self.assertRaisesRegex(ValueError, "Изменён защищённый original тест"):
+            promoter.promote(self.root, "WMS-663")
+        (self.root / generated).unlink()
+        self.assertTrue((self.root / source).is_file())
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_wms663_c10_copy_rejects_wrong_generated_module_case(self):
+        _, _, generated = self.protected_wms663_c10_copy_fixture(
+            case="tests.test_wms663_other_c10::"
+            "test_c10_document_claim_blocks_concurrent_marking_without_losing_either"
+        )
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-663")
+        (self.root / generated).unlink()
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_protected_wms663_c10_copy_rejects_wrong_postgres_report(self):
+        source, _, generated = self.protected_wms663_c10_copy_fixture(
+            report="release-postgres/other.xml"
+        )
+
+        with self.assertRaisesRegex(ValueError, "обязательного case/report"):
+            promoter.promote(self.root, "WMS-663")
+        (self.root / generated).unlink()
         self.assertTrue((self.root / source).is_file())
         self.assertEqual(self.git("status", "--porcelain"), "")
 
