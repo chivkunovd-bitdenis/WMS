@@ -83,7 +83,6 @@ import {
   type WbProductCatalogRow,
 } from '../../types/wbProductCatalog'
 import { normalizeProductBarcodes } from '../../utils/productBarcodes'
-import { randomId } from '../../utils/randomId'
 import { printBarcodeLabel, printBarcodeLabels } from '../../utils/printBarcodeLabel'
 import { BoxLabelPrintDialog } from '../../components/BoxLabelPrintDialog'
 import type { LabelSize } from '../../utils/labelSize'
