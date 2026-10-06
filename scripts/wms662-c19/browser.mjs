@@ -23,10 +23,23 @@ try {
   let body; try {body=JSON.parse(raw)} catch {body={raw}}
   facts[phase]=body
   if(response.status()!==200) throw Error(JSON.stringify(body))
-  await page.goto(url)
+  await Promise.all([
+   page.waitForResponse(r => r.url().endsWith('/workspace') && r.status()===200),
+   page.goto(url),
+  ])
+  await page.getByRole('tab',{name:/^Состав/}).click()
   await page.getByText('Состав поставки',{exact:true}).waitFor()
   await page.screenshot({path:`${out}/${phase}-composition.png`,fullPage:true})
   facts.screens.push({name:`${phase}-composition`,text:await page.locator('body').innerText()})
+  for(const label of ['Подбор','Упаковка и маркировка','Короба']) {
+   const tab=page.getByRole('tab',{name:new RegExp(`^${label}`)})
+   if(await tab.isEnabled()) {
+    await tab.click()
+    await page.screenshot({path:`${out}/${phase}-${label}.png`,fullPage:true})
+    facts.screens.push({name:`${phase}-${label}`,text:await page.locator('body').innerText()})
+   }
+  }
+  await page.getByRole('tab',{name:/^Состав/}).click()
   await page.getByTestId('fbs-supply-history-open').click()
   await page.getByTestId('fbs-supply-history-timeline').waitFor()
   await page.screenshot({path:`${out}/${phase}-history.png`,fullPage:true})
@@ -43,6 +56,8 @@ try {
   facts.screens.push({name:`${phase}-refresh`,text:await page.locator('body').innerText()})
  }
 } finally {
+ await page.screenshot({path:`${out}/last-state.png`,fullPage:true}).catch(()=>{})
+ facts.lastText=await page.locator('body').innerText().catch(()=>'')
  fs.writeFileSync(`${out}/facts.json`,JSON.stringify(facts,null,2))
  await browser.close()
 }

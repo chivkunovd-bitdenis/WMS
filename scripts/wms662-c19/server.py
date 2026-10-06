@@ -12,16 +12,18 @@ from fastapi.responses import JSONResponse
 from app.db.session import engine, SessionLocal
 from app.models import Base
 from app.models.user import User
-from app.api.deps import require_fbs_operator_access
+from app.api.deps import require_fbs_operator_access, get_current_user
+from app.api.products import router as products_router
 from app.api.fbs_supplies import router
 from test_wms662_observed_handoff import seed, external, sync, saved, shipped
 
 app = FastAPI()
 app.include_router(router)
+app.include_router(products_router)
 
 @app.middleware('http')
 async def read_only_ui(request, call_next):
-    if request.url.path.startswith('/operations/') and request.method not in {'GET', 'HEAD'}:
+    if not request.url.path.startswith('/fixture') and request.method not in {'GET', 'HEAD'}:
         return JSONResponse({'detail': 'C19 fixture forbids UI mutation/print'}, status_code=403)
     return await call_next(request)
 
@@ -30,6 +32,7 @@ case = api = user = None
 async def fixture_user():
     return user
 app.dependency_overrides[require_fbs_operator_access] = fixture_user
+app.dependency_overrides[get_current_user] = fixture_user
 
 async def no_marketplace_socket(*args, **kwargs):
     raise AssertionError('C19 prohibits real external HTTP')
