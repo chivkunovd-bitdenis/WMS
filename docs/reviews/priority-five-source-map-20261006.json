@@ -120,6 +120,15 @@
       "mode": "merge operational evidence only; no application runtime added",
       "conflicts": [],
       "pending": "New 31 real Ozon card proofs and resulting honest requirements/acceptance from independent analyst are expected next"
+    },
+    {
+      "task": "WMS-675 real Ozon read proof",
+      "source": "5b5da992a6cd766eb250ab83f4575fc8b11cdf22",
+      "base": "b0f9c3e07cbe97102604531281549ef986631579",
+      "mode": "merge separately saved read-only HTTP proof; no application mutation",
+      "conflicts": [],
+      "facts": "31 HTTP200 cards:26 positive,4 cancelled,1 awaiting",
+      "pending": "Final fresh ledger delta plan and current requirements/backlog still being saved by original executor"
     }
   ]
 }
