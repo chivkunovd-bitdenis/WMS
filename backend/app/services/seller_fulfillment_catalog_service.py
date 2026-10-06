@@ -473,8 +473,17 @@ async def _catalog_fields(session: AsyncSession) -> tuple[Any, Any, Any, Any, An
         JSON,
     )
     label = func.coalesce(
-        func.nullif(func.trim(entry["techSize"].as_string()), ""),
-        func.nullif(func.trim(entry["wbSize"].as_string()), ""),
+        *(
+            case(
+                (
+                    (func.json_type(entry[key]) if sqlite else func.json_typeof(entry[key]))
+                    == ("text" if sqlite else "string"),
+                    func.nullif(func.trim(entry[key].as_string()), ""),
+                ),
+                else_=None,
+            )
+            for key in ("techSize", "wbSize")
+        ),
     )
     labels = (
         select(label.label("label"))
@@ -534,7 +543,20 @@ async def _catalog_fields(session: AsyncSession) -> tuple[Any, Any, Any, Any, An
         .scalar_subquery()
     )
     product_size = func.coalesce(func.nullif(func.trim(Product.wb_size), ""), fallback_size)
-    return raw["subjectName"].as_string(), product_size, card_size, entries, label
+    category = func.coalesce(
+        *(
+            case(
+                (
+                    (func.json_type(raw[key]) if sqlite else func.json_typeof(raw[key]))
+                    == ("text" if sqlite else "string"),
+                    func.nullif(func.trim(raw[key].as_string()), ""),
+                ),
+                else_=None,
+            )
+            for key in ("subjectName", "subject_name")
+        ),
+    )
+    return category, product_size, card_size, entries, label
 
 
 def _exact_catalog_filters(value: Any, requested: str | None, sqlite: bool) -> list[Any]:
