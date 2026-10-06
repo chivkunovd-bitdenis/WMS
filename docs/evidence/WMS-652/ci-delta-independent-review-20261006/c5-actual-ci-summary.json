@@ -1,0 +1,22 @@
+{
+  "run_id": 37523087363,
+  "run_attempt": 1,
+  "printJobId": 112473176356,
+  "headSha": "f6066d68bd198794602a6e8916612d0d3b32460f",
+  "testedMergeSha": "2d1707cacdb9bbd2e92eee75115c9749ac969fcc",
+  "fixture": 11,
+  "verifiedLocalSourceHashes": {
+    "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "frontend/src/utils/printBarcodeLabel.ts": "2438d01e8a7a7df6ba73e83cbbdfce3bc4123832c3524682e129dd2176032f74",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "b549cda5add9fa01a75ada7528382042c42604610273d67f00549e1a56930504"
+  },
+  "htmlSha256": "a735b8f2c81e896327888a41a9c25f4a0b4561b1e7cd270510e0424840f86a22",
+  "alerts": [
+    "Не удалось напечатать этикетки."
+  ],
+  "iframeCount": 0,
+  "printButtonDisabled": false,
+  "requestCount": 147,
+  "nonGETRequests": [],
+  "diagnosticLimit": "Raw error identity, decode counter/index and actual native image rejection were not captured in CI artifact."
+}
