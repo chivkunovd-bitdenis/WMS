@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "source": ".agent-runs/night-20261006-01a112a8/frozen-contract-audit/independent-review-mapping-20261007.json",
+  "tasks": {
+    "WMS-658": {
+      "reviewed_source_commit": "2a7d3100d0405762761c6884bb1e0e142dfcdfc1",
+      "original_contract": "6a5ff0e39ea05d0503908a7ca1cb9139018db24d",
+      "final_correction_commit": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd",
+      "report": {
+        "path": "docs/reviews/WMS-658-frozen-corrections-review-20261007.md",
+        "commit": "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+        "blob": "0a48a0167af6e83b156ff003b66a842df09c42c6"
+      },
+      "frozen_files": [
+        "backend/tests/test_wms658_marking_import_contract.py",
+        "backend/tests/test_wms658_normalized_identity_regression.py",
+        "backend/tests/test_wms658_wb_honest_sign_contract.py",
+        "frontend/src/screens/shared/MarkingImportDialog.wms658.test.ts"
+      ],
+      "steps": [
+        {"transform": "wms658-source-label-raster-and-nmid", "source": "6e0926102c6d7e71aee001b1ccda7bc8fc9bdf1b", "correction": "4769712e70ca825dbc8d1f98ea632343e5b25b57", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["9661a123265f1ea75d084fbf1b6da13d34481856", "0a267634279a868660cbc014c6312bbf4cfc7798"], "backend/tests/test_wms658_wb_honest_sign_contract.py": ["9bf03cba6847065ee8b59030aece6f1695b4d22d", "946ec81ef52d7fb888379b327dcd74be8ce52a99"]}, "ancillary": {"docs/requirements/WMS-658.md": ["88a79ede1de989790d4cf814d208f3615420740f", "a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58"]}},
+        {"transform": "wms658-supplier-page-crop", "source": "24fcbdabc5560012e5ac849c8ae229e4ba740d28", "correction": "16a58ac82df16fada0571d249b0827e8900527ad", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["0a267634279a868660cbc014c6312bbf4cfc7798", "ff481b1e693884c103e46624a05807f3120bc040"]}},
+        {"transform": "wms658-actual-220-crop", "source": "f6f382e684fab4d9da291d439a61b452a01666b2", "correction": "ff86e9126c0ac87b02cd0588c17a5884e964a246", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["ff481b1e693884c103e46624a05807f3120bc040", "cee12538b9d752f040edcc2c7a892726d307d68d"]}},
+        {"transform": "wms658-same-cis-layout", "source": "3df33bab79ab27d5612271e351f06f2a5edf17e6", "correction": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["cee12538b9d752f040edcc2c7a892726d307d68d", "6e76bf1d4bcf38ff59341e6d3459346313421e6c"]}}
+      ]
+    },
+    "WMS-681": {
+      "reviewed_source_commit": "a9b4a6194eb3d63536297874d0e60a5d666c9d15",
+      "original_contract": "75b7d074f00ea6ad1b63b1ba229c4d9b2333f8f9",
+      "final_correction_commit": "0e39bf4ed8f444f5b00e1287aa27f1161596a101",
+      "report": {
+        "path": "docs/reviews/WMS-681-frozen-corrections-review-20261007.md",
+        "commit": "4c3c53bb1a4057da7e003e024680c842c05abdc1",
+        "blob": "fc539ecf01b0d652920d4f9a26b913e519eacaf9"
+      },
+      "frozen_files": [
+        "backend/tests/test_fbs_packing_box.py",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx"
+      ],
+      "steps": [
+        {"transform": "wms681-independent-assignments", "source": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d", "correction": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385", "files": {"backend/tests/test_fbs_packing_box.py": ["7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3", "bf92738de529c1ca4882240a0b617df5db82dedd"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4", "c809482c9eb151425e9031e33b06246cb1e6039a"]}},
+        {"transform": "wms681-partial-qr-readback", "source": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4", "correction": "0e39bf4ed8f444f5b00e1287aa27f1161596a101", "files": {"backend/tests/test_fbs_packing_box.py": ["bf92738de529c1ca4882240a0b617df5db82dedd", "1cca9c86a4e50842919d0ca4aec4c57607c0fe7a"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c809482c9eb151425e9031e33b06246cb1e6039a", "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3"]}}
+      ]
+    }
+  }
+}

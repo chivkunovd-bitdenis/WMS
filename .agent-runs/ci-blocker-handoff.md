@@ -197,3 +197,31 @@ requires `report_commit` whenever any report field exists. The second case
 still rejects. The fix therefore must make the proof-SHA requirement specific
 to the new ancillary WMS-687 path, while retaining frozen-file equality and
 existing model/effort/verdict validation for WMS-654.
+
+## Stage handoff: bounded independent-review chains WMS-658 and WMS-681
+
+`scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json` is a
+checked-in, immutable transcription of the published Sol 6.1/high mapping for
+658 and 681:
+the original contract, each exact source/correction pair, every frozen blob
+transition, the sole WMS-658 own-requirements Test-links companion, and the
+published review report commit/blob.  It intentionally contains no WMS-680
+numeric-subtable extension: that later blob still needs the separate narrow
+review stated by the integrator.
+
+Two positive tests in `test_check_task_documents.py` build isolated Git graphs
+from those published blob objects, rather than from moving `HEAD`.  They require
+WMS-658's 2-frozen-files-plus-only-own-Test-links first correction followed by
+its three single-file corrections, and WMS-681's two corrections that each
+change both of its two frozen tests.  Current checker RED is exact for both:
+`fixture-only: неподдерживаемое преобразование или изменены frozen
+expectations`.  This records the missing bounded registration, not a generic
+failure in the synthetic graph.
+
+The accompanying canaries retain rejection for a changed source, changed blob,
+extra product file, missing permitted high/PASS review, and rewritten report.
+The process fix must extend the existing `fixture_corrections` path with only
+the recorded transforms and review/report bindings (including true source and
+ancestor checks); it must not add a task-wide exemption, arbitrary blob pair,
+or generic requirements companion.  Existing legacy, WMS-654 and WMS-687 paths
+remain outside this requested scope.
