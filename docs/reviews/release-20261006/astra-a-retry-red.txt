@@ -1,0 +1,31 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/priority-five-release-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+FIRST rejected True 1 1
+RETRY unknown True 1 1
+F
+=================================== FAILURES ===================================
+_______________ test_definite_set_rejection_then_explicit_retry ________________
+
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x112156270>
+
+    @pytest.mark.asyncio
+    async def test_definite_set_rejection_then_explicit_retry(db_session):
+        order, _, _ = await _seed_order(db_session)
+        transport = _transport(status={**_remote_snapshot(), 'status': 'update_available'})
+        path = '/v6/fbs/posting/product/exemplar/set'
+        transport.errors[path] = MarketplaceProviderError('ozon', 429, code='fixture_rate_limit')
+        first = await docs.save_absent_exemplar_documents(db_session, **kwargs(order, transport), expected_version=0)
+        print('FIRST', first['state'], first['absence_selected'], first['version'], len(writes(transport)))
+        transport.errors.pop(path)
+        again = await docs.save_absent_exemplar_documents(db_session, **kwargs(order, transport), expected_version=first['version'])
+        print('RETRY', again['state'], again['absence_selected'], again['version'], len(writes(transport)))
+>       assert len(writes(transport)) == 2, 'Definite rejected SET should allow a new explicit SET after recovery'
+E       AssertionError: Definite rejected SET should allow a new explicit SET after recovery
+E       assert 1 == 2
+E        +  where 1 = len([{'multi_box_qty': 3, 'posting_number': '019663-0001-1', 'products': [{'exemplars': [{'exemplar_id': 81, 'gtd': '', 'i...mplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'is_rnpt_absent': True, ...}], 'product_id': 663002}]}])
+E        +    where [{'multi_box_qty': 3, 'posting_number': '019663-0001-1', 'products': [{'exemplars': [{'exemplar_id': 81, 'gtd': '', 'i...mplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'is_rnpt_absent': True, ...}], 'product_id': 663002}]}] = writes(FakeMarketplaceTransport(orders=[], warehouses=[], statuses=[], order_labels=[], supply_qr=b'', errors={}, calls=[], e...d': 663002}]}), ('/v5/fbs/posting/product/exemplar/status', {'posting_number': '019663-0001-1'})], published_stocks=[]))
+
+/tmp/test_wms_release_a_retry.py:18: AssertionError
+=========================== short test summary info ============================
+FAILED ::test_definite_set_rejection_then_explicit_retry - AssertionError: De...
+1 failed in 0.67s
