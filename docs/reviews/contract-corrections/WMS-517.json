@@ -1,21 +1,61 @@
 {
   "task": "WMS-517",
-  "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
-  "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
-  "files": [
-    "backend/tests/test_wms517_sales_contract.py"
+  "fixture_corrections": [
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-uuid-before-rollback",
+          "before_blob": "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",
+          "after_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+        "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+        "evidence_commit": "445c78a378d04def5483e416b526d3cedc0c4e41",
+        "evidence": "docs/reviews/wms517-astra-096475c.md",
+        "evidence_blob": "e8ed0a702524e0717796846dbeba9e0b13756031"
+      }
+    },
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "correction_commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-explicit-sales-fixture",
+          "before_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e",
+          "after_blob": "b5ddcb3b42810902b05da09726222b7e500684cf"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "backend/tests/test_withdrawal_ledger.py",
+          "before_blob": "d7f0d01d0f417aea487d0d7f616ba240b133f5a4",
+          "after_blob": "a7ba000fd763b978784d0a5b6f4120df188c3084"
+        }
+      ],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+        "correction_commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+        "evidence_commit": "2882b25042cdd7b2b55818936c4aa2e5d53512aa",
+        "evidence": "docs/reviews/wms517-fixture-432516e8-astra.md",
+        "evidence_blob": "1b9f5e7838a45f25cf2ac43f8030e5ad3fd2dd27"
+      }
+    }
   ],
-  "review": {
-    "model": "gpt-6-astra",
-    "effort": "high",
-    "verdict": "PASS",
-    "scope": "SC10 fixture correction only; not product acceptance",
-    "evidence": "docs/reviews/wms517-astra-096475c.md",
-    "evidence_commit": "445c78a378d04def5483e416b526d3cedc0c4e41",
-    "summary": "Independent review found SC10 scalar operation_id capture before rollback justified, with exact price, evidence and immutable bytes checks preserved."
-  },
-  "protocol_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
-  "format_reason": "Historical single-file contract; the array format rejects singleton wholesale replacements.",
   "excluded_changes": [
     {
       "commit": "9b90320b58c51f8f5d35e6e90db3b855207834fb",
@@ -32,14 +72,12 @@
       "review_evidence": "docs/reviews/wms517-astra-096475c.md"
     }
   ],
-  "protocol_status": "BLOCKED_AT_CURRENT_HEAD",
-  "blocker": {
-    "code": "FROZEN_FILE_CHANGED_AFTER_REVIEWED_CORRECTION",
-    "commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
-    "path": "backend/tests/test_wms517_sales_contract.py",
-    "change": "fixture_order now calls seed(db, sales_evidence=False)",
-    "reason": "SC10 baseline validates, but current file differs from it. Array entries cannot overlap this file; 432516e8 also changes test_withdrawal_ledger.py outside the original frozen set.",
-    "checker_acceptance": false,
-    "resolution": "Controller must resolve this additional fixture change through the authorized contract process. Do not replace the reviewed correction SHA, record overlapping entries, or legalize business assertion changes as scope-only."
-  }
+  "protocol_commit": "de8e8973549eaedbd3f6c34e779405a44a5141ad",
+  "protocol_review": {
+    "evidence_commit": "bed11e717fc9d30073550b71e7ddc19e332ef683",
+    "evidence": "docs/reviews/2026-10-06-wms652-astra-de8e897.md",
+    "verdict": "PASS",
+    "scope": "checker R36–R38 only; not product acceptance"
+  },
+  "scope": "Exact reviewed fixture-only corrections; business migration 427fc2 remains excluded. Product acceptance, full CI and release are separate evidence."
 }

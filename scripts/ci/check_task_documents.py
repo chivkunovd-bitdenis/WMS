@@ -384,7 +384,7 @@ def reviewed_contract_correction(
 
     A correction is deliberately stricter than an ordinary follow-up commit: it
     may touch only files frozen by the original contract and must have a separate
-    machine-readable ledger recording the independent Astra-high PASS.  CI can
+    machine-readable ledger recording the independent Astra-high PASS. CI can
     validate the Git facts; the controller remains responsible for obtaining
     and recording the review before the ledger is committed.
     """
