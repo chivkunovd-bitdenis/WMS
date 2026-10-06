@@ -6,6 +6,7 @@ import { tmpdir } from 'node:os';
 import { createRequire } from 'node:module';
 import assert from 'node:assert/strict';
 import { workspace, selectionFixtures } from './fixtures.mjs';
+import { geometryContracts } from './geometry.mjs';
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const bwip = require('bwip-js'), { PNG } = require('pngjs');
 const { RGBLuminanceSource, BinaryBitmap, HybridBinarizer, DataMatrixReader } = require('@zxing/library');
@@ -88,6 +89,9 @@ async function intercept({requestId,request}) {
   requestLog.push({method:request.method,path:path+u.search,body});
   const ws=path.match(/^\/operations\/fbs-supplies\/([^/]+)\/workspace$/);
   if(ws)return fulfill(requestId,state[ws[1]]);
+  if(mode==='geometry-list'&&path==='/operations/fbs-orders/worklist')return fulfill(requestId,{items:selectionState.orders,total:selectionState.orders.length,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
+  if(path.endsWith('/pick-options')||path==='/products/linked-wb-catalog')return fulfill(requestId,[]);
+  if(path.endsWith('/print-assets'))return fulfill(requestId,{items:[],ready:0,total:0,errors:[]});
   if(mode==='selection'&&path.startsWith('/operations/'))return selectionBoundary(requestId,request.method,path,u,body);
   if(path.endsWith('/worklist')||path==='/operations/fbs-assembly-tasks')return fulfill(requestId,{items:[],total:0,warehouse_options:[],server_now:'2026-10-06T08:00:00Z'});
   if(path==='/auth/me')return fulfill(requestId,{separate_marking_print_enabled:false});
@@ -126,7 +130,7 @@ async function intercept({requestId,request}) {
   const task=path.match(/^\/operations\/packaging-tasks\/task-([^/]+)$/);
   if(task)return fulfill(requestId,{id:`task-${task[1]}`,document_number:task[1],display_number:task[1],status:'in_progress',
     lines:state[task[1]].orders.map(o=>({id:`line-${o.id}`,product_id:o.product.id,product_name:o.product.name,
-      sku_code:o.product.sku,requires_honest_sign:true,packaging_instructions:'',qty_total:1,qty_need_pack:1,marking_available_count:0}))});
+      sku_code:o.product.sku,requires_honest_sign:true,packaging_instructions:'',qty_total:1,qty_need_pack:1,marking_available_count:mode==='geometry-packing'?2:0}))});
   if(path.endsWith('/pack')){trace.push(`pack:${body.order_id}`);return fulfill(requestId,{});}
   return fulfill(requestId,{detail:{code:'unhandled_synthetic_endpoint',message:path}},404);
 }
@@ -211,6 +215,11 @@ try {
   }
   await selectionContracts();
   await flagContracts();
+  await geometryContracts({cdp,evaluate,until,click,clickElement,report,dir,origin:ORIGIN,
+    startPacking(data){mode='geometry-packing';state={...state,...data};resetGeometry();},
+    startSelection(data,list=false){mode=list?'geometry-list':'selection';selectionState=data;failedGroup='';groupAttempts={};addAttempts=0;createdRefs=[];heldAdd=undefined;resetGeometry();},
+    logs:()=>({requestLog,printLog,trace,blocked,errors}),
+  });
   assert(report.cases.every(one=>one.status==='PASS'),'one or more real-screen cases failed');
   assert.deepEqual(report.cases.map(one=>one.id),JSON.parse(readFileSync(new URL('./cases.json',import.meta.url),'utf8')),'complete exact browser IDs must execute');
   report.status='PASS';
@@ -430,3 +439,5 @@ async function flagContracts(){
     await writeFile(`${dir}/${report.currentCase.replaceAll(/[^a-zA-Z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors,acceptedPrintKeys:[...acceptedPrints.keys()]},null,2));
   }
 }
+
+function resetGeometry(){requestLog=[];printLog=[];trace=[];blocked=[];errors=[];heldLookup=undefined;holdFirst=false;heldPrint=undefined;acceptedPrints=new Map();boundOrders=new Map();restored=false;lostAck=false;receiptMode='';}
