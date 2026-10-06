@@ -74,6 +74,7 @@ async function intercept({ requestId, request }) {
   if (path === '/assets/wms666-wb.png') return fulfill(requestId, qrPng, 200, 'image/png');
   const ws = path.match(/^\/operations\/fbs-supplies\/([^/]+)\/(workspace|start-work)$/);
   if (ws && state[ws[1]]) return fulfill(requestId, state[ws[1]]);
+  if (/^\/operations\/packaging-tasks\/task-[^/]+\/lines\/[^/]+\/pack$/.test(path)) return fulfill(requestId, {});
   const task = path.match(/^\/operations\/packaging-tasks\/task-([^/]+)$/);
   if (task && state[task[1]]) {
     const w = state[task[1]];
@@ -107,6 +108,7 @@ async function capture(name) {
   await writeFile(`${dir}/${name}.html`, await evaluate('document.documentElement.outerHTML'));
 }
 async function scan(code) {
+  await until(`document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]') && !document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]').disabled`);
   await evaluate(`document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]')?.focus()`);
   await cdp.send('Input.insertText', { text: code });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
@@ -181,7 +183,10 @@ try {
       const bytes=Buffer.from(p.imageDataUrl.split(',')[1],'base64'); const image=PNG.sync.read(bytes);
       await writeFile(`${dir}/mixed-wb-qr-payload.png`,bytes);
       report.qrPayload={widthMm:p.widthMm,heightMm:p.heightMm,pixelWidth:image.width,pixelHeight:image.height,sha256:createHash('sha256').update(bytes).digest('hex'),idempotencyKey:p.idempotencyKey};
-      await scan('OZON-POS-666-A'); await sleep(700);
+      for(let i=0;i<60&&!requestLog.some(r=>r.path.endsWith('/pack'));i++) await sleep(100);
+      await sleep(350);
+      await scan('OZON-POS-666-A');
+      for(let i=0;i<60&&!requestLog.some(r=>r.path.includes(`/fbs-supplies/${OZ}/boxes/`));i++) await sleep(100);
       assert(requestLog.some(r=>r.path.includes(`/fbs-supplies/${OZ}/boxes/`)&&r.body?.order_product_ids?.includes(`${OZ}-position-a`)));
       assert.equal(printLog.length,1,'Mixed Ozon emitted QR print');
       await capture('mixed-after-scans');
