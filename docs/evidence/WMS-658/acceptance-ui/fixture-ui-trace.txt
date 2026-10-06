@@ -1,0 +1,18 @@
+PREVIEW synthetic-source.pdf
+FIXTURE_FILE prepared via test control, native picker unavailable
+AUTO request_id=8db4e3d3-0637-4b02-93f2-bf26547cca4d
+ERROR Тестовый временный отказ распознавания
+AUTO request_id=8db4e3d3-0637-4b02-93f2-bf26547cca4d
+IMPORTED Загружено 1 КИЗ
+ASSIGN product_id=p-false keys=["row-b"]
+ERROR Тестовый временный отказ назначения
+ASSIGN product_id=p-false keys=["row-b"]
+IMPORTED Добавлено к товару: 1 КИЗ
+RESULT_PDF /api/operations/marking-codes/imports/import-auto-658/result.pdf?additional_import_id=import-assign-658
+ERROR Тестовый отказ подготовки PDF
+RESULT_PDF /api/operations/marking-codes/imports/import-auto-658/result.pdf?additional_import_id=import-assign-658
+PREVIEW synthetic-source.pdf
+FIXTURE_FILE prepared via test control, native picker unavailable
+MANUAL pools=[{"gtin":"04601234567890","title":"Тестовая загрузка полного КИЗ","product_ids":["p-false"]}]
+IMPORTED Загружено 2
+RESULT_PDF /api/operations/marking-codes/imports/import-manual-658/result.pdf
