@@ -706,7 +706,7 @@ export function SellerKizWithdrawalScreen({
           <Typography variant="overline" color="text.secondary">Честный знак</Typography>
           <Typography variant="h5">Вывод КИЗ из оборота</Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5, maxWidth: 760 }}>
-            Только КИЗ FBS-заказов, по которым в WMS уже зафиксирована передача Wildberries. Период считается по дате передачи.
+            Только КИЗ проданных FBS-заказов Wildberries с подтверждённой в WMS передачей. Период считается по дате передачи.
           </Typography>
         </Box>
         <Button

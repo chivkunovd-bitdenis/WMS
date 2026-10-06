@@ -33,6 +33,7 @@ SALES_URL = "https://statistics-api.wildberries.ru" + SALES_SOURCE
 MOSCOW = ZoneInfo("Europe/Moscow")
 PAUSE_SECONDS = 61
 _local_next: dict[uuid.UUID, float] = {}
+_local_defer: dict[uuid.UUID, str] = {}
 # Reserve a request slot atomically across API replicas, using Redis server time.
 _RESERVE = """
 local t = redis.call('TIME')
@@ -46,6 +47,7 @@ local t = redis.call('TIME')
 local now = tonumber(t[1]) * 1000 + math.floor(tonumber(t[2]) / 1000)
 local slot = math.max(now + tonumber(ARGV[1]), tonumber(redis.call('GET', KEYS[1]) or '0'))
 redis.call('SET', KEYS[1], slot, 'PX', slot - now + 122000)
+redis.call('SET', KEYS[1] .. ':defer', ARGV[2], 'PX', slot - now + 122000)
 return 1
 """
 
@@ -175,28 +177,36 @@ async def _wait_slot(
     redis: Redis | None,
     progress: Callable[[], Awaitable[None]] | None,
 ) -> None:
-    if redis is not None:
-        wait_ms = int(
-            await cast(Awaitable[Any], redis.eval(_RESERVE, 1, f"wb:sales:rate:{seller_id}"))
+    key = f"wb:sales:rate:{seller_id}"
+    while True:
+        generation = (
+            await redis.get(key + ":defer") if redis is not None else _local_defer.get(seller_id)
         )
-        delay = max(0, wait_ms / 1000)
-    else:
-        # Development without Redis still respects the vendor interval. Production
-        # must use the shared broker, so two replicas cannot independently burst.
-        now = time.monotonic()
-        slot = max(now, _local_next.get(seller_id, now))
-        _local_next[seller_id] = slot + PAUSE_SECONDS
-        delay = max(0, slot - now)
-    # Long reports preserve the existing workflow lease while waiting for vendor
-    # rate slots. Each heartbeat commits before sleep, never holding row locks.
-    if progress is not None:
-        await progress()
-    while delay > 0:
-        chunk = min(delay, 30) if progress is not None else delay
-        await asyncio.sleep(chunk)
-        delay -= chunk
+        if redis is not None:
+            wait_ms = int(await cast(Awaitable[Any], redis.eval(_RESERVE, 1, key)))
+            delay = max(0, wait_ms / 1000)
+        else:
+            # Production must use the shared broker, never replica-local slots.
+            now = time.monotonic()
+            slot = max(now, _local_next.get(seller_id, now))
+            _local_next[seller_id] = slot + PAUSE_SECONDS
+            delay = max(0, slot - now)
+        # Every heartbeat commits before sleeping, never holding row locks.
         if progress is not None:
             await progress()
+        while delay > 0:
+            chunk = min(delay, 30) if progress is not None else delay
+            await asyncio.sleep(chunk)
+            delay -= chunk
+            if progress is not None:
+                await progress()
+        latest = (
+            await redis.get(key + ":defer") if redis is not None else _local_defer.get(seller_id)
+        )
+        if latest is None or latest == generation:
+            return
+        # A 429 invalidates reservations made before it. Reserve again atomically
+        # instead of moving all waiting readers onto the same cooldown deadline.
 
 
 async def _defer(seller_id: uuid.UUID, redis: Redis | None, retry_after: str | None) -> None:
@@ -220,10 +230,12 @@ async def _defer(seller_id: uuid.UUID, redis: Redis | None, retry_after: str | N
                 1,
                 f"wb:sales:rate:{seller_id}",
                 str(int(delay * 1000)),
+                uuid.uuid4().hex,
             ),
         )
     else:
         _local_next[seller_id] = max(_local_next.get(seller_id, 0), time.monotonic() + delay)
+        _local_defer[seller_id] = uuid.uuid4().hex
 
 
 def _select_sales(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:

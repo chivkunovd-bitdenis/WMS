@@ -169,3 +169,27 @@ only healthy item proceeds through exact bytes, signature and terminal recovery.
 After fix, all18 passed in15.85s; targeted ruff and diff-check PASS. Full final-code
 regressions are still pending. Reserved-waiter/429 and one caption guards were NOT
 present in published tester contract: no fabricated RED or closed-review claim.
+
+Final bounded verification / R19 delta, 06.10.2026 06:23 UTC:
+- Mixed/Decimal fix published096475cffeb0325573d37d420fb488ca0cb7c5a4.
+- One PostgreSQL run on own56517, 12 withdrawal modules (all75 sales contracts,
+  ledger, orchestration, row status, readiness, review fixes, access, WMS563,
+  TrueAPI and price backfill): 311 passed, no skip/deselection,292.79s.
+  This full run predates the following narrow R19 limiter delta; not repeated.
+- Independent R19 contract3243caa26 plus independent fake adapter9b90320b:
+  own pre-fix RED1failed0.15s, precisely caller B HTTP at61s after A429/120s.
+  _DEFER atomically saves cooldown generation together with seller next-slot in
+  Redis Lua; sleepers compare generations and reserve a fresh shared slot before
+  HTTP. No external/non-atomic marker write, no new HTTP retry, no collapsed gaps.
+  After delta: waiting-rate1 + sales regressions6 + partial/Decimal18 =>25 passed
+  in9.53s. Their expectations unchanged by developer.
+- Real ownRedis8.10.1 at56518 smoke checks atomic generation across two clients
+  and re-reservation after120s; outcome recorded separately in final handoff.
+- Parent explicitly waived a mirror-test for the single R21 caption correction.
+  Only one caption changed, no layout/components/signing UI changes. Used existing
+  main checkout node_modules via ignored worktree symlink; no dependency install.
+  TypeScript --noEmit PASS; existing state/API tests18 passed (2files),869ms.
+- Astra reported raw numeric JSON exponent1e9999999999999999999 parser
+  Decimal InvalidOperation, before per-item handling. Independent public-boundary
+  contract is requested by parent; NOT closed or accepted by this developer.
+  No invented full-PASS/review/acceptance/CI/deploy/live-sale-count/signing claim.
