@@ -9,3 +9,12 @@
 5. Existing ci.yml и fixed-reference infrastructuretest являются защищёнными bytes. Hash delta допустима только в перечисленном independently accepted SOURCE; она не является self-approval. Остальные protectedbytes/gitmodes/cases сохраняются. Зелёный coreCI даёт rawproof новойSOURCE; main anchor до pin будетRED. Root затем меняет только source_sha bootstrap, base4b298 остаётся; recheck currentcandidate/mainanchor и негативный canary сохраняют реальное enforcement.
 
 Исходный testcommit686 ed4b88703, productreviewPASS bde62872, acceptance4350a0e09, originalCIwiringreview0d054 сохранены в mergehistory. Полный CI текущего candidate ещё не запускался; прежние7fixture/C5 failures исправляются отдельными ролями. Main/etalon/deploy не изменены интегратором.
+
+
+## Два разных immutable SHA: P и S
+
+`P` — PRODUCT_REFERENCE: точный независимо принятый commit с финальным продуктовым деревом всех входящих задач. Его producttree замораживается после review/acceptance; этот40SHA указывается в literal product_scope command и final_reviewed_source fixture перехода. Новые продуктовые правки после freeze потребуют новой приёмки P.
+
+`S` — PROTECTION_SOURCE: последующий точный commit, содержащий CI pinP, реальную receipt wiring и policy closure, затем проверенный независимым процессным review. `scripts/ci/process_bootstrap.json` в main получает source_sha=S, при прежнем base_sha4b298. Это не самоизбрание кандидатом: root выполняет уже авторизованный точный pin после реальных проверок SOURCE.
+
+P и S различаются; собственный финальныйSHA нельзя встроить в свойci.yml. Tester transition final_reviewed_source — P, а не будущий S. Пока весь продукт не принят/заморожен, текущийliteral d618 остаётся и новый40SHA не выдумывается. Все старые1146IDs/непротиворечащие expectations и reports сохраняются, изменяемыеprotectedbytes перечисляются в независимомreview.
