@@ -9,7 +9,9 @@ from datetime import UTC, datetime
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import aliased
 
+from app.models.billing import BillingLedgerEntry
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_CANCELLED,
     FBS_ORDER_STATUS_DEFECT,
@@ -18,6 +20,7 @@ from app.models.fbs_order import (
     FBS_ORDER_STATUS_SORTED,
     FbsOrder,
 )
+from app.models.seller import Seller
 from app.services.billing_ledger_service import (
     PACKING_SERVICE_CODE,
     record_operational_reversal,
@@ -122,7 +125,7 @@ async def reverse_fbs_order_billing(
     Для WB подтверждённая передача через WMS означает выполненную работу:
     последующая отмена покупателем не сторнирует сборку и упаковку. Для старых
     начислений без доказанной передачи и для Ozon сохраняется прежнее сторно
-    обеих строк документа.
+    всех активных начислений сборки и упаковки документа.
 
     Второе сторно появиться не может: начисление, у которого сторно уже есть,
     перестаёт быть активным, и повторная отмена возвращает прежнюю строку, не
@@ -144,17 +147,40 @@ async def reverse_fbs_order_billing(
                     # WMS-406: a later buyer cancellation does not undo work
                     # already performed by the warehouse at successful handover.
                     return
+            # Use the same seller fence as continuation and invoice creation,
+            # before touching ledger rows. No concurrent continuation can add
+            # another charge outside this cancellation's fixed active set.
+            if order.seller_id is not None:
+                await session.scalar(select(Seller.id).where(
+                    Seller.id == order.seller_id, Seller.tenant_id == order.tenant_id,
+                ).with_for_update(key_share=True))
+            charge, reversal = aliased(BillingLedgerEntry), aliased(BillingLedgerEntry)
+            active_services = list(await session.scalars(
+                select(charge.service_code).outerjoin(
+                    reversal, reversal.reversal_of_id == charge.id,
+                ).where(
+                    charge.tenant_id == order.tenant_id,
+                    charge.source_type == FBS_ORDER_BILLING_SOURCE_TYPE,
+                    charge.source_id == order.id,
+                    charge.service_code.in_((FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE)),
+                    charge.entry_type == "charge", reversal.id.is_(None),
+                )
+            ))
             occurred_at = datetime.now(UTC)
             for service_code in (FBS_ORDER_SERVICE_CODE, PACKING_SERVICE_CODE):
-                await record_operational_reversal(
-                    session,
-                    tenant_id=order.tenant_id,
-                    source_type=FBS_ORDER_BILLING_SOURCE_TYPE,
-                    source_id=order.id,
-                    occurred_at=occurred_at,
-                    performer_id=performer_id,
-                    service_code=service_code,
-                )
+                # The existing writer reverses the latest active charge. Each
+                # flush removes it from that set; consume the bounded snapshot
+                # entirely within this savepoint, not one charge per retry.
+                for _ in range(active_services.count(service_code)):
+                    await record_operational_reversal(
+                        session,
+                        tenant_id=order.tenant_id,
+                        source_type=FBS_ORDER_BILLING_SOURCE_TYPE,
+                        source_id=order.id,
+                        occurred_at=occurred_at,
+                        performer_id=performer_id,
+                        service_code=service_code,
+                    )
     except Exception:
         logger.exception("fbs order billing reversal skipped: order_id=%s", order.id)
 

@@ -392,8 +392,7 @@ async def _extend_handover_charge(
     if occupied:
         # Issued sources remain immutable. Only the additional work gets another
         # existing ledger event, selected by the ordinary invoice source lookup.
-        if existing.unit == "document" and all(row.billing_unit == "document"
-                                               for row in existing.lines):
+        if existing.unit == "document" and not lines:
             return existing
         cumulative = postgres_numeric(quantity, precision=14, scale=4, field="billing_quantity")
         template = existing
@@ -420,10 +419,15 @@ async def _extend_handover_charge(
         await session.flush()
     others = [entry for entry in active if entry.id != existing.id]
     previous: dict[uuid.UUID | None, Decimal] = {}
+    document_billed: dict[uuid.UUID | None, Decimal] = {}
     for entry in others:
         for billed_line in entry.lines:
             previous[billed_line.product_id] = previous.get(billed_line.product_id, Decimal(0)) \
                 + billed_line.physical_quantity
+            if billed_line.billing_unit == "document":
+                document_billed[billed_line.product_id] = document_billed.get(
+                    billed_line.product_id, Decimal(0),
+                ) + billed_line.billing_quantity
     lines = [replace(line, quantity=max(Decimal(0), line.quantity - previous.get(
         line.product_id, Decimal(0),
     ))) for line in lines]
@@ -464,13 +468,20 @@ async def _extend_handover_charge(
         row.physical_quantity = max(row.physical_quantity, postgres_numeric(
             incoming.quantity, precision=14, scale=4, field="billing_quantity",
         ))
-        row.billing_quantity = Decimal(1) if row.billing_unit == "document" \
-            else row.physical_quantity
+        # V2 units belong to individual lines, not the legacy parent. Keep the
+        # physical delta even when the same document service was already paid:
+        # its zero-money line lets the next invoice select the new work without
+        # selecting (or changing) the issued source again. Item lines in a mixed
+        # tariff retain their ordinary physical-quantity billing.
+        row.billing_quantity = max(row.billing_quantity, max(
+            Decimal(0), Decimal(1) - document_billed.get(row.product_id, Decimal(0)),
+        )) if row.billing_unit == "document" else row.physical_quantity
         row.amount = None if row.rate is None else postgres_integer(
             Decimal(row.rate) * row.billing_quantity, field="billing_amount",
         )
     existing.quantity = max(existing.quantity, postgres_numeric(
-        Decimal(1) if existing.unit == "document" else quantity,
+        max(Decimal(0), Decimal(1) - sum((entry.quantity for entry in others), Decimal(0)))
+        if existing.unit == "document" else quantity,
         precision=14, scale=4, field="billing_quantity",
     ))
     if existing.lines:
