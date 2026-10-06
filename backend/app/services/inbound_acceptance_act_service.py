@@ -206,6 +206,76 @@ def _pdf_row_shapes(
     return shapes, missing_height
 
 
+def _pdf_row_fragment(
+    page: Any,
+    columns: list[float],
+    y: float,
+    height: float,
+    fields: tuple[str, ...],
+    difference: int,
+) -> tuple[tuple[str, ...], float]:
+    """Place a complete page fragment and return only the unprinted text.
+
+    Each cell uses the actual textbox fit, including explicit newlines. Short
+    cells (ordinal, quantities and identifiers) are consumed on the first page;
+    a continued cell does not repeat them. Uncommitted shapes measure fit only.
+    """
+    import fitz
+
+    remaining_fields: list[str] = []
+    shapes: list[tuple[bool, Any]] = []
+    used_height = 0.0
+    for column, value in enumerate(fields):
+        if not value:
+            remaining_fields.append("")
+            continue
+        rect = fitz.Rect(columns[column] + 2, y + 2, columns[column + 1] - 2, y + height - 1)
+
+        def measure(
+            text: str, cell_rect: Any = rect, cell_column: int = column
+        ) -> tuple[Any, float]:
+            shape = page.new_shape()
+            space = shape.insert_textbox(
+                cell_rect,
+                text,
+                fontsize=7.5,
+                fontname="wms",
+                color=(176 / 255, 0.0, 32 / 255) if cell_column == 7 and difference else None,
+                align=1 if cell_column in {0, 5, 6, 7} else 0,
+            )
+            return shape, space
+
+        shape, space = measure(value)
+        continued = space < 0
+        consumed = len(value)
+        if continued:
+            # Find the longest prefix that fits. Prefer a line/word boundary so
+            # text continues naturally without deleting any source characters.
+            low, high = 0, len(value)
+            while low < high:
+                middle = (low + high + 1) // 2
+                if measure(value[:middle])[1] >= 0:
+                    low = middle
+                else:
+                    high = middle - 1
+            consumed = low
+            boundary = max(value.rfind("\n", 0, consumed), value.rfind(" ", 0, consumed))
+            if boundary >= 0:
+                consumed = boundary + 1
+            if consumed == 0:
+                raise ValueError("acceptance_act_pdf_fragment_too_small")
+            shape, space = measure(value[:consumed])
+        remaining_fields.append(value[consumed:])
+        used_height = max(used_height, height - space)
+        shapes.append((continued, shape))
+
+    # Finish short cells before the continuing text, keeping a continued name
+    # last in this page's reading order and first on its continuation page.
+    for _, shape in sorted(shapes, key=lambda item: item[0]):
+        shape.commit()
+    return tuple(remaining_fields), max(15.0, used_height)
+
+
 async def build_acceptance_act_pdf(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -252,9 +322,13 @@ async def build_acceptance_act_pdf(
 
     document = fitz.open()
 
-    def start_page() -> tuple[Any, float]:
+    def start_page(*, continuation: bool = False) -> tuple[Any, float]:
         page = document.new_page(width=page_width, height=page_height)
         page.insert_font(fontname="wms", fontbuffer=fitz.Font("cjk").buffer)
+        # A continuation belongs to the same table row and keeps the original
+        # column positions, without interleaving headings into the product text.
+        if continuation:
+            return page, top
         _pdf_textbox(
             page,
             fitz.Rect(left, top, page_width - right, top + 20),
@@ -288,7 +362,19 @@ async def build_acceptance_act_pdf(
         )
         while True:
             if row_height > max_row_height:
-                raise ValueError("acceptance_act_pdf_row_too_tall")
+                if y > top + 52:
+                    page, y = start_page()
+                remaining_fields: tuple[str, ...] = fields
+                while True:
+                    remaining_fields, fragment_height = _pdf_row_fragment(
+                        page, columns, y, page_height - bottom - y,
+                        remaining_fields, difference,
+                    )
+                    if not any(remaining_fields):
+                        row_height = fragment_height
+                        break
+                    page, y = start_page(continuation=True)
+                break
             if y + row_height + 24 > page_height - bottom:
                 page, y = start_page()
             shapes, missing_height = _pdf_row_shapes(
