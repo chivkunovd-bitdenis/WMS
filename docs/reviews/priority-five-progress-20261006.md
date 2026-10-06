@@ -205,3 +205,7 @@ sideeffects разбор6products и существующего billedquantityre
 ## Интеграция 19 — узкий662reviewPASS
 
 База `082922a8ecb857d656f2cf6ee9a9521e35cb06b3`; независимыйreport `17e50faa3d13981b123ef7b093b2f97aefee9016` включён без конфликтов. Новыйcaseдвухживыхподстатусов наfixb4043c0df проверенотдельнойсессиейPASS. Самоинтеграторэтотрезультатнеподменял. Следующийшаг —current675requirements/plan53299b0b иreviewedscope666ledger, затемобщиетесты/CIточногоSHA.
+
+## Интеграция 20 — WMS-675 currentrequirements/exactplan
+
+База `d10b8ca786b912794c23912b1bdca13b42a3173c`; source `53299b0b7567a6f1b4c67b46fe4da8d0a039f36b` включён, восстановлентекущийrequirements675. Единственныйконфликтдобавленияbacklog675решён сохранениемвсехпрежнихсекций иточнойновой675. FreshSQL: missing26,reserve16→1;11facts/22chargesпереиспользуются,ожидаются15newfacts/30newcharges. Планнеприменён. Исходный675исполнительсейчасубираетизплана custom suppression и явноучитываетнормальнуюфоновуюstockpublication послеобщегопроверенногодеплоя. Этоещёdoccommit, runtimeне меняется. Scope666узкийP2fix30aea1fb проходитreview; ledgerPASSещёожидается. Подготовкаобщеготестовогоэтапаидёт, ни CI ни deployне запущены.

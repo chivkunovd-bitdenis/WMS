@@ -183,6 +183,20 @@
       "conflicts": [],
       "reviewed_product_sha": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
       "verdict": "PASS"
+    },
+    {
+      "task": "WMS-675 exact fresh accounting plan and current requirements",
+      "source": "53299b0b7567a6f1b4c67b46fe4da8d0a039f36b",
+      "base": "d10b8ca786b912794c23912b1bdca13b42a3173c",
+      "mode": "merge current operational plan and task documents; no application changes",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve current accepted sections and insert exact new WMS-675 section"
+        }
+      ],
+      "facts": "Missing26;reserve16 to1;reuse11facts/22charges;new15facts/30charges expected; no mutation applied",
+      "pending": "One short plan correction removes proposed custom suppression and states ordinary publication after checked combined deployment"
     }
   ],
   "local_product_fixes": [

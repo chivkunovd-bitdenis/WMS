@@ -1,0 +1,2 @@
+db_at,current_user,read_only,rls,id,tenant_id,seller_id,warehouse_id,status,external_supply_id,wb_supply_id,created_at,updated_at
+2026-10-06 11:36:18.038778+00,wms_agent_t_b80a893bab8742b68fd76d41502c900f,on,on,b82d1e9a-30d2-4d7b-b52d-9775c3d266e3,b80a893b-ab87-42b6-8fd7-6d41502c900f,cf6d31c5-944b-4382-af34-636ca9aa8cc3,2d968c65-4a8d-414e-9076-0f201c2dba63,draft,,PENDING-720eff4f-ad78-4bf1-b16c-bde4506b5ed9,2026-10-02 14:14:45.486599+00,2026-10-02 14:14:45.486599+00
