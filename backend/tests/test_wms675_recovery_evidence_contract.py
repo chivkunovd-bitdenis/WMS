@@ -12,6 +12,7 @@ import hashlib
 import json
 import subprocess
 from collections import Counter
+from decimal import Decimal
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -124,7 +125,10 @@ def test_p3_existing_facts_and_charges_are_preserved_by_id_and_fields() -> None:
     assert len(charges) == len({row["id"] for row in charges}) == 22
     assert all(row["item_quantity"] == "1" for row in facts)
     assert {row["service_code"] for row in charges} == {"fbs_order", "packing"}
-    assert all(row["physical_quantity"] == row["billing_quantity"] == "1" for row in charges)
+    assert all(
+        Decimal(row["physical_quantity"]) == Decimal(row["billing_quantity"]) == Decimal(1)
+        for row in charges
+    )
     assert all(row["amount"] == "" and row["reversal_of_id"] == "" for row in charges)
 
 
@@ -135,7 +139,7 @@ def test_p4_current_plan_marks_26_and_no_publish_as_historical_only() -> None:
     assert historical["actual_recovery"] == "NOT_PERFORMED"
     assert historical["mutation_authorized"] is False
     assert "WAIT_662_SUBSTATUS_FIX" in historical["execution_state"]
-    assert "current662_missing_delta" in historical
+    assert historical["totals"]["current662_missing_delta"] == 11
     assert "штатный сервис662 на exact scope" in current_plan
     assert "свежие external proof/current ledger" in current_plan
     assert "Фактическое восстановление NOT_PERFORMED" in current_plan
