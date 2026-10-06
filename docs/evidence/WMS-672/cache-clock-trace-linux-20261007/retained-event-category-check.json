@@ -1,0 +1,63 @@
+{
+  "source_run": 37536969311,
+  "source_trace_sha256": "1b8cac94bb4d0fd372729e11b41a3ca39fbe087caf521ec169c37cd63899bfcb",
+  "data_loss": true,
+  "phase_limit": "prefix only; refusal phase missing",
+  "event_categories": [
+    {
+      "name": "DecodedImageTracker::QueueImageDecode",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 159
+    },
+    {
+      "name": "LayerTreeHost::QueueImageDecode",
+      "cat": "cc",
+      "count": 159
+    },
+    {
+      "name": "LayerTreeHostImpl::QueueImageDecode",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 159
+    },
+    {
+      "name": "ProxyMain::QueueImageDecode",
+      "cat": "cc",
+      "count": 159
+    },
+    {
+      "name": "SoftwareImageDecodeCache::AddBudgetForImage",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 159
+    },
+    {
+      "name": "SoftwareImageDecodeCache::DecodeImageIfNecessary",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 157
+    },
+    {
+      "name": "SoftwareImageDecodeCache::GetTaskForImageAndRefInternal",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 181
+    },
+    {
+      "name": "SoftwareImageDecodeCache::RemoveBudgetForImage",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 159
+    },
+    {
+      "name": "SoftwareImageDecodeCache::UnrefImage",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 159
+    },
+    {
+      "name": "SoftwareImageDecodeCacheUtils::DoDecodeImage - decode",
+      "cat": "disabled-by-default-cc.debug",
+      "count": 157
+    },
+    {
+      "name": "clock_sync",
+      "cat": "__metadata",
+      "count": 2
+    }
+  ]
+}
