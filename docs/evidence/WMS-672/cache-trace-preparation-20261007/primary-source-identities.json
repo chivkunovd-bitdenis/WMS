@@ -1,0 +1,52 @@
+[
+  {
+    "path": "cc/tiles/software_image_decode_cache.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/software_image_decode_cache.cc",
+    "decoded_sha256": "377eeb087d659afb23f35291e9344eba73638b02b8e963a1298491473a6a95a6"
+  },
+  {
+    "path": "cc/tiles/gpu_image_decode_cache.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/gpu_image_decode_cache.cc",
+    "decoded_sha256": "bdbc04db06d487abbf25ebf246bdc5099e39ee3183440f10641f136a98572683"
+  },
+  {
+    "path": "cc/tiles/image_controller.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/image_controller.cc",
+    "decoded_sha256": "8112f6c91a96ec4e9abbc113c67954f864ea559b52ebbdcc500e01daafa5115d"
+  },
+  {
+    "path": "cc/tiles/decoded_image_tracker.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/decoded_image_tracker.cc",
+    "decoded_sha256": "0af5c3800ffdc32a9a9fba0c575a447d5a66d91b1d0c698f536e200094dccc1a"
+  },
+  {
+    "path": "cc/tiles/software_image_decode_cache_utils.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/software_image_decode_cache_utils.cc",
+    "decoded_sha256": "51f994b39c7ee78da840cea3b7d055dac90af4c906faab55526a98cb997f6316"
+  },
+  {
+    "path": "cc/tiles/image_decode_cache_utils.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/tiles/image_decode_cache_utils.cc",
+    "decoded_sha256": "d41da8548c017e7e4339cd4059ccaa9015cb08671ac3ab9affacf31e659a9174"
+  },
+  {
+    "path": "cc/trees/layer_tree_host_impl.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/cc/trees/layer_tree_host_impl.cc",
+    "decoded_sha256": "1753e30ae733fdc6bcb63eda8a17659bc5e619fecf516f69f72c19de4bbdf0bf"
+  },
+  {
+    "path": "base/trace_event/memory_infra_background_allowlist.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/base/trace_event/memory_infra_background_allowlist.cc",
+    "decoded_sha256": "2fb961070980b6ec33bc3d52ffdc4a5b8643eb68b416159aadb49d57ea59ea04"
+  },
+  {
+    "path": "base/trace_event/trace_config.cc",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/base/trace_event/trace_config.cc",
+    "decoded_sha256": "efd2e21b7dadc8a219f5cd1d79898f2852823bbac5db1d090276f1421b3f11c1"
+  },
+  {
+    "path": "third_party/blink/public/devtools_protocol/domains/Tracing.pdl",
+    "url": "https://chromium.googlesource.com/chromium/src/+/refs/tags/141.0.7390.37/third_party/blink/public/devtools_protocol/domains/Tracing.pdl",
+    "decoded_sha256": "9965b4124cc07d269b4bb50354a48bbbbc888bd76e5993e7cd8b4ceedecc4ff4"
+  }
+]

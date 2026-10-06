@@ -1,0 +1,36 @@
+COMMAND node --check scripts/ci/wms672-c5-diagnostic/adapter.mjs
+EXIT 0
+
+COMMAND node --check scripts/ci/wms672-c5-diagnostic/trace-summary.mjs
+EXIT 0
+
+COMMAND bash -n scripts/ci/wms672-c5-diagnostic/run.sh
+EXIT 0
+
+COMMAND git diff --check
+EXIT 0
+
+COMMAND trace-summary synthetic cache/memory/marker control
+EXIT 0
+{
+  "events": 3,
+  "cacheEvents": 1,
+  "markers": 1,
+  "imageMemorySnapshots": 1,
+  "completion": {
+    "dataLossOccurred": false,
+    "usage": []
+  },
+  "relevantEventCounts": {
+    "SoftwareImageDecodeCache::AddBudgetForImage": 1,
+    "C5-fixture-1-frame-3-native-reject-227": 1
+  }
+}
+FINAL COMMAND node --check scripts/ci/wms672-c5-diagnostic/adapter.mjs
+EXIT 0
+FINAL COMMAND node --check scripts/ci/wms672-c5-diagnostic/trace-summary.mjs
+EXIT 0
+FINAL COMMAND bash -n scripts/ci/wms672-c5-diagnostic/run.sh
+EXIT 0
+FINAL COMMAND git diff --check
+EXIT 0
