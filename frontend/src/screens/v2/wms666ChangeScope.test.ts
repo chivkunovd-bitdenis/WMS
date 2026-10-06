@@ -5,6 +5,12 @@ import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
+const WMS_666_HISTORY_CHECKOUT_CHANGE = {
+  commit: '720307d280439e815057ee4fdd78b72134149a39',
+  path: '.github/workflows/ci.yml',
+  beforeBlob: '621ee62065c67ae66d756b25057d56e780bb411d',
+  afterBlob: 'bbec58a4b781913e7792a6718158a9fc4b806c90',
+}
 const WMS_666_PROOF_FILES = new Set([
   '.github/workflows/wms666-browser-proof.yml',
   'scripts/ci/wms666-browser-proof.mjs',
@@ -18,6 +24,16 @@ const WMS_666_PROOF_FILES = new Set([
   'docs/reviews/priority-five-progress-20261006.md',
   'docs/reviews/priority-five-source-map-20261006.json',
 ])
+
+export function wms666AcceptedHistoryChange(cwd: string | URL, commit: string, path: string): boolean {
+  const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
+  if (commit !== accepted.commit || path !== accepted.path) return false
+  const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  // Only the immutable four-line fetch-depth fix is already accepted.
+  // Future commits and pending edits of this path receive no exemption.
+  return git('rev-parse', `${commit}^:${path}`) === accepted.beforeBlob
+    && git('rev-parse', `${commit}:${path}`) === accepted.afterBlob
+}
 
 export function wms666TaskChangedPaths(
   cwd: string | URL,
@@ -38,7 +54,9 @@ export function wms666TaskChangedPaths(
     const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', '-z',
       ...(merge ? ['--cc'] : ['--root']), commit)
     // A merge's combined diff catches its own resolutions, not imported task trees.
-    for (const path of changed.split('\0')) if (path) paths.add(path)
+    for (const path of changed.split('\0')) {
+      if (path && !wms666AcceptedHistoryChange(cwd, commit, path)) paths.add(path)
+    }
   }
   // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
   for (const changed of [
@@ -169,6 +187,50 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([
         'backend/app/services/inventory_service.py',
       ])
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('rejects a new task workflow edit and pending CI changes independently', () => {
+    const repo = fixtureRepository()
+    const path = '.github/workflows/ci.yml'
+    expect(wms666ScopeViolations([path])).toEqual([path])
+    try {
+      repo.write(path, 'new untracked workflow\n')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.write(path, 'accepted independent CI\n')
+      const baseline = repo.commit('WMS-652: independent workflow')
+      repo.write(path, 'skip mandatory checks\n')
+      repo.commit('WMS-666: new forbidden workflow edit')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.git('reset', '--hard', baseline)
+      repo.write(path, 'unstaged forbidden workflow\n')
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.git('add', path)
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+      repo.write(path, 'accepted independent CI\n')
+      expect(repo.git('diff', '--name-only', 'HEAD', '--', path)).toBe('')
+      expect(repo.git('diff', '--cached', '--name-only', 'HEAD', '--', path)).toBe(path)
+      expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
+    } finally {
+      repo.close()
+    }
+  })
+
+  it('accepts only the exact immutable history checkout delta', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
+    expect(wms666AcceptedHistoryChange(cwd, accepted.commit, accepted.path)).toBe(true)
+    expect(wms666AcceptedHistoryChange(cwd, '5ddd09aac4df17e7ecdefaf1625462c05f8039ce', accepted.path)).toBe(false)
+    expect(wms666AcceptedHistoryChange(cwd, accepted.commit, 'guards/MANIFEST.json')).toBe(false)
+  })
+
+  it('fails an accepted history lookup if its immutable source is missing', () => {
+    const repo = fixtureRepository()
+    try {
+      const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
+      expect(() => wms666AcceptedHistoryChange(repo.cwd, accepted.commit, accepted.path)).toThrow()
     } finally {
       repo.close()
     }
