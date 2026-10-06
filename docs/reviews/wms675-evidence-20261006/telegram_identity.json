@@ -1,0 +1,26 @@
+{
+  "observed_at": "2026-10-06T06:53:15.223436+00:00",
+  "source": "local Telegram state.db, SQLite mode=ro",
+  "needles": [
+    "%FullHuman%",
+    "%Full Human%",
+    "%Фул Хьюман%",
+    "%Фулхьюман%",
+    "%Фуллхьюман%"
+  ],
+  "binding_bambook": [
+    {
+      "chat_id": -5515853898,
+      "seller_id": "",
+      "seller_name": "",
+      "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+      "tenant_name": "Бамбук",
+      "bound_by": "689889703",
+      "chat_title": "Короб ВМС-Фулфилмент Бамбук",
+      "level": "tenant"
+    }
+  ],
+  "fullhuman_messages": [],
+  "fullhuman_revisions": [],
+  "fullhuman_bindings": []
+}

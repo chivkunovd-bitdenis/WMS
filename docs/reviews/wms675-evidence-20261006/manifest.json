@@ -1,0 +1,108 @@
+{
+  "started_at": "2026-10-06T06:53:00.632467+00:00",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "role": "wms_agent_t_b80a893bab8742b68fd76d41502c900f",
+  "max_rows": 100,
+  "timeout_sec": 30,
+  "queries": [
+    {
+      "name": "identity",
+      "started_at": "2026-10-06T06:53:00.632722+00:00",
+      "sql_file": "identity.sql",
+      "status": "ok",
+      "csv_file": "identity.csv",
+      "rows": 1,
+      "truncated": false,
+      "sha256": "53fe147739be8845357a0f34e64afd28023751fbb8d28471a7c67d9649ed1f4a",
+      "finished_at": "2026-10-06T06:53:02.206541+00:00"
+    },
+    {
+      "name": "orders_positions_reserves",
+      "started_at": "2026-10-06T06:53:02.207152+00:00",
+      "sql_file": "orders_positions_reserves.sql",
+      "status": "ok",
+      "csv_file": "orders_positions_reserves.csv",
+      "rows": 31,
+      "truncated": false,
+      "sha256": "a40f1b5b3ee58e0ed12b7474a90dc43b1f24e941c8d4421367846bc993a6b7dd",
+      "finished_at": "2026-10-06T06:53:03.906937+00:00"
+    },
+    {
+      "name": "ledger",
+      "started_at": "2026-10-06T06:53:03.907187+00:00",
+      "sql_file": "ledger.sql",
+      "status": "ok",
+      "csv_file": "ledger.csv",
+      "rows": 31,
+      "truncated": false,
+      "sha256": "a5da212616b94df25a0105668e63663f718d85fb4fd3a2ade6a77bd478c715c6",
+      "finished_at": "2026-10-06T06:53:05.484264+00:00"
+    },
+    {
+      "name": "balances_locations",
+      "started_at": "2026-10-06T06:53:05.484569+00:00",
+      "sql_file": "balances_locations.failed.sql",
+      "status": "failed",
+      "error": "ошибка запроса (код 1): 42703: column s.name does not exist",
+      "finished_at": "2026-10-06T06:53:07.015700+00:00"
+    },
+    {
+      "name": "movements_types_all_history",
+      "started_at": "2026-10-06T06:53:07.016076+00:00",
+      "sql_file": "movements_types_all_history.sql",
+      "status": "ok",
+      "csv_file": "movements_types_all_history.csv",
+      "rows": 18,
+      "truncated": false,
+      "sha256": "38995ff956d073f673934b4f2de054841f1d74fbe84fbc343b5dd6e0c4b06c46",
+      "finished_at": "2026-10-06T06:53:08.643531+00:00"
+    },
+    {
+      "name": "fbs_movements_all_history_links",
+      "started_at": "2026-10-06T06:53:08.644133+00:00",
+      "sql_file": "fbs_movements_all_history_links.sql",
+      "status": "ok",
+      "csv_file": "fbs_movements_all_history_links.csv",
+      "rows": 6,
+      "truncated": false,
+      "sha256": "9eacc18ffa3df0d8f7fcb44932f85075b67981af6cebd6bd314bb265e4739240",
+      "finished_at": "2026-10-06T06:53:10.230838+00:00"
+    },
+    {
+      "name": "unlinked_fbs_movements",
+      "started_at": "2026-10-06T06:53:10.231065+00:00",
+      "sql_file": "unlinked_fbs_movements.sql",
+      "status": "ok",
+      "csv_file": "unlinked_fbs_movements.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "5dd344d4192b2b16662607b2315dcc8b9d56f3ee0826aa1f73739f0e3964d4dd",
+      "finished_at": "2026-10-06T06:53:11.924858+00:00"
+    },
+    {
+      "name": "negative_other_movements_after_orders",
+      "started_at": "2026-10-06T06:53:11.925067+00:00",
+      "sql_file": "negative_other_movements_after_orders.sql",
+      "status": "ok",
+      "csv_file": "negative_other_movements_after_orders.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "499a55f8e23b2ce4c32bab656e701ffb686e6491a3d8335842e1841ad341c592",
+      "finished_at": "2026-10-06T06:53:13.537236+00:00"
+    },
+    {
+      "name": "position_picks",
+      "started_at": "2026-10-06T06:53:13.537451+00:00",
+      "sql_file": "position_picks.sql",
+      "status": "ok",
+      "csv_file": "position_picks.csv",
+      "rows": 0,
+      "truncated": false,
+      "sha256": "401b897533344302451caef677d444f7c1fe446415f800fa9bb872504f329ffd",
+      "finished_at": "2026-10-06T06:53:15.222816+00:00"
+    }
+  ],
+  "finished_at": "2026-10-06T06:53:15.223122+00:00"
+}
