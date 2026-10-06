@@ -363,6 +363,27 @@ jobs:
             ${{ runner.temp }}/wms517-mac.tap
           retention-days: 14
 
+  wms686-mockup:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install existing frontend dependencies
+        run: |
+          npm ci --prefix frontend
+          ln -s frontend/node_modules node_modules
+      - name: WMS-686 frozen model and isolation contract
+        run: node --test docs/mockups/WMS-686/model.test.ts
+      - name: WMS-686 demo typecheck and build
+        run: |
+          frontend/node_modules/.bin/tsc --noEmit -p docs/mockups/WMS-686/tsconfig.json
+          frontend/node_modules/.bin/vite build --config docs/mockups/WMS-686/vite.config.ts
+
   guards:
     timeout-minutes: 10
     name: охрана

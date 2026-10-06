@@ -1,0 +1,10 @@
+{
+  "extends": "../../../frontend/tsconfig.app.json",
+  "compilerOptions": {
+    "tsBuildInfoFile": "./node_modules/.tmp/wms686.tsbuildinfo",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false
+  },
+  "include": ["*.ts", "*.tsx", "../../../frontend/src/**/*.d.ts"],
+  "exclude": ["model.test.ts"]
+}

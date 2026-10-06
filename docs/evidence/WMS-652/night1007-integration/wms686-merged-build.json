@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T20:57:24.137852+00:00",
+  "base": "92d5e402df23d45ebdb0350ce8d674106e4fba8d",
+  "accepted686": "0d054a2256322428e815ed78fc8d149b0c140aa6",
+  "tsc": "PASS",
+  "vite": "PASS",
+  "vite_modules": 11941,
+  "vite_build_seconds": 1.7,
+  "dependencies": "only symlink existing shared frontend/node_modules, no install",
+  "actual_product_frontend_changes_in_686": false,
+  "tests": "original11 frozen testcommit preserved; no redundant test rerun here",
+  "policy": "original222 policy hashes unchanged; ci.yml accepted686 delta pending next reviewedSOURCE policy wiring; current fullCI not claimed"
+}
