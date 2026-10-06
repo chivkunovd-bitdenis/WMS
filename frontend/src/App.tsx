@@ -91,7 +91,6 @@ type ProductRow = {
   ozon_offer_id?: string | null
   wb_barcodes?: string[]
   wb_primary_barcode?: string | null
-  product_primary_barcode?: string | null
 }
 
 type SellerRow = { id: string; name: string; ozon_connected?: boolean | null }
@@ -545,10 +544,9 @@ export default function App() {
         id: string
         wb_barcodes?: string[]
         wb_primary_barcode?: string | null
-        product_primary_barcode?: string | null
       }[]
       const barcodesById = new Map(
-        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode, product_primary_barcode: r.product_primary_barcode }]),
+        catalog.map((r) => [r.id, { wb_barcodes: r.wb_barcodes ?? [], wb_primary_barcode: r.wb_primary_barcode }]),
       )
       return base.map((p) => {
         const wb = barcodesById.get(p.id)
@@ -790,11 +788,10 @@ export default function App() {
     setOpsError(null)
     const canLoadCatalogReception = canAccessFfBlock(me.role, me.permissions, 'reception')
     const canLoadCatalogMpShipments = canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
-    const canLoadPackaging = canAccessFfBlock(me.role, me.permissions, 'packaging') || canAccessFfBlock(me.role, me.permissions, 'fbs')
+    const canLoadPackaging = canAccessFfBlock(me.role, me.permissions, 'packaging')
     const canLoadCells =
       canAccessFfBlock(me.role, me.permissions, 'cells') ||
-      canAccessFfBlock(me.role, me.permissions, 'inventory') ||
-      canAccessFfBlock(me.role, me.permissions, 'storage')
+      canAccessFfBlock(me.role, me.permissions, 'inventory')
     const canLoadWarehouseCatalog =
       me.role === 'fulfillment_admin' ||
       canLoadCatalogReception ||
@@ -2994,10 +2991,6 @@ export default function App() {
       isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'mp_shipments')
     const canPackagingOps =
       isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'packaging')
-    const canFbsOps = canAccessFfBlock(me.role, me.permissions, 'fbs')
-    const canBillingOps = canAccessFfBlock(me.role, me.permissions, 'billing')
-    const canStorageOps = canAccessFfBlock(me.role, me.permissions, 'storage')
-    const canHonestSignOps = canAccessFfBlock(me.role, me.permissions, 'honest_sign')
     const canShiftLeadOps = canAccessFfBlock(me.role, me.permissions, 'shift_lead')
     const canReceptionOps = canAccessFfBlock(me.role, me.permissions, 'reception')
     const canInventoryOps = canAccessFfBlock(me.role, me.permissions, 'inventory')
@@ -3021,7 +3014,6 @@ export default function App() {
         meRole={me.role}
         ffPermissions={ffPermissions}
         portal={portal} addressStorageEnabled={me.address_storage_enabled !== false}
-        assistantProfile={me}
       >
         <>
         <Routes>
@@ -3195,7 +3187,6 @@ export default function App() {
                   sellers={sellers}
                   warehouses={warehouses}
                   canManageCatalog={isFulfillmentAdmin} addressStorageEnabled={me.address_storage_enabled !== false}
-                  canManageFbsStock={canFbsOps}
                   canViewMovements={isFulfillmentAdmin || canInventoryOps}
                   onOpenInbound={(id) => openInboundDocument(id, 'full')}
                 />
@@ -3208,7 +3199,7 @@ export default function App() {
           <Route
             path="ff/fbs"
             element={
-              <SectionErrorBoundary component="route">{token && canFbsOps ? (
+              <SectionErrorBoundary component="route">{token && canPackagingOps ? (
                 <FfFbsOrdersScreen
                   token={token}
                   authHeaders={authHeaders}
@@ -3267,7 +3258,7 @@ export default function App() {
           <Route
             path="ff/honest-sign"
             element={
-              <SectionErrorBoundary component="route">{token && canHonestSignOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfHonestSignPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
@@ -3281,7 +3272,7 @@ export default function App() {
           <Route
             path="ff/honest-sign/pool/:poolId"
             element={
-              <SectionErrorBoundary component="route">{token && canHonestSignOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignPoolPage token={token} testIdPrefix="ff-honest-sign-pool" />
               ) : (
                 ffAccessDenied
@@ -3291,7 +3282,7 @@ export default function App() {
           <Route
             path="ff/honest-sign/product/:productId"
             element={
-              <SectionErrorBoundary component="route">{token && canHonestSignOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignProductPage token={token} testIdPrefix="ff-honest-sign-product" />
               ) : (
                 ffAccessDenied
@@ -3301,7 +3292,7 @@ export default function App() {
           <Route
             path="ff/honest-sign/ledger"
             element={
-              <SectionErrorBoundary component="route">{token && canHonestSignOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfHonestSignLedgerPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
@@ -3314,7 +3305,7 @@ export default function App() {
           <Route
             path="ff/reports"
             element={
-              <SectionErrorBoundary component="route">{token && canInventoryOps ? (
+              <SectionErrorBoundary component="route">{token && (isFulfillmentAdmin || canAccessFfBlock(me.role, me.permissions, 'inventory')) ? (
                 <FfReportsPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
@@ -3344,7 +3335,7 @@ export default function App() {
           <Route
             path="ff/billing"
             element={
-              <SectionErrorBoundary component="route">{token && canBillingOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfBillingScreen
                   token={token}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
@@ -3368,7 +3359,7 @@ export default function App() {
           <Route
             path="ff/honest-sign/import"
             element={
-              <SectionErrorBoundary component="route">{token && canHonestSignOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <HonestSignImportPage />
               ) : (
                 ffAccessDenied
@@ -3397,7 +3388,7 @@ export default function App() {
           <Route
             path="ff/inventory"
             element={
-              <SectionErrorBoundary component="route">{token && canStorageOps ? (
+              <SectionErrorBoundary component="route">{token && canInventoryOps ? (
                 <FfStorageReportPage
                   token={token}
                   sellers={sellers.map((s) => ({ id: s.id, name: s.name }))}
@@ -3445,10 +3436,9 @@ export default function App() {
           <Route
             path="ff/fbs-stock"
             element={
-              <SectionErrorBoundary component="route">{token && canFbsOps ? (
+              <SectionErrorBoundary component="route">{token && isFulfillmentAdmin ? (
                 <FfProductsFbsPage
                   token={token}
-                  canEditBindings={isFulfillmentAdmin}
                   sellers={sellers.map((seller) => ({ id: seller.id, name: seller.name }))}
                   warehouses={warehouses}
                 />
@@ -3803,10 +3793,6 @@ export default function App() {
           open={ffDocModal !== null}
           onClose={closeFfDocument}
           fullScreen
-          // WMS-433: окно помощника живёт в каркасе поверх этого диалога; без
-          // этого флага диалог возвращает себе фокус и в поле помощника нельзя
-          // печатать. Обход по Tab внутри документа флаг не меняет.
-          disableEnforceFocus
           data-testid="ff-doc-dialog"
         >
           <MuiAppBar position="sticky" color="inherit" elevation={1}>

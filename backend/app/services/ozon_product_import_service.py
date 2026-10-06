@@ -742,26 +742,8 @@ async def process_one_ozon_card(
     if offer_id is not None and not link.external_offer_id:
         link.external_offer_id = offer_id
     barcodes = card_barcodes(card)
-    if barcodes:
-        # A barcode already printed on a product remains scannable after Ozon
-        # replaces its current barcode list. Keep current codes first so a
-        # product without an operator selection follows the latest card.
-        known_barcodes = list(
-            dict.fromkeys(
-                [
-                    *barcodes,
-                    *(
-                        code.strip()
-                        for code in (link.external_barcodes or [])
-                        if isinstance(code, str) and code.strip()
-                    ),
-                ]
-            )
-        )
-    else:
-        known_barcodes = list(link.external_barcodes or [])
-    if list(link.external_barcodes or []) != known_barcodes:
-        link.external_barcodes = known_barcodes
+    if barcodes and list(link.external_barcodes or []) != barcodes:
+        link.external_barcodes = barcodes
         result.barcodes_applied += 1
     image_url = card_primary_image_url(card)
     if image_url is not None:

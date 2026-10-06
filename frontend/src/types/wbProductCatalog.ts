@@ -19,7 +19,6 @@ export type MarketplaceProductCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
-  product_primary_barcode?: string | null
   wb_size: string | null
   wb_color: string | null
   wb_brand?: string | null
@@ -38,7 +37,6 @@ export type ProductLineDisplayMeta = {
   seller_name?: string | null
   wb_primary_image_url: string | null
   wb_primary_barcode: string | null
-  product_primary_barcode?: string | null
   wb_barcodes: string[]
   wb_vendor_code: string | null
   wb_nm_id: number | null
@@ -65,7 +63,6 @@ export function productDisplayMetaFromMarketplaceCatalog(
       seller_name: cat.seller_name ?? null,
       wb_primary_image_url: cat.wb_primary_image_url,
       wb_primary_barcode: cat.wb_primary_barcode,
-      product_primary_barcode: cat.product_primary_barcode,
       wb_barcodes: cat.wb_barcodes,
       wb_vendor_code: cat.wb_vendor_code,
       wb_nm_id: cat.wb_nm_id,
@@ -83,7 +80,6 @@ export function productDisplayMetaFromMarketplaceCatalog(
     seller_name: null,
     wb_primary_image_url: null,
     wb_primary_barcode: null,
-    product_primary_barcode: null,
     wb_barcodes: [],
     wb_vendor_code: null,
     wb_nm_id: null,
@@ -104,7 +100,6 @@ export function catalogRowToDisplayMeta(row: {
   seller_name?: string | null
   wb_primary_image_url?: string | null
   wb_primary_barcode?: string | null
-  product_primary_barcode?: string | null
   wb_barcodes?: string[]
   wb_vendor_code?: string | null
   wb_nm_id?: number | null
@@ -122,7 +117,6 @@ export function catalogRowToDisplayMeta(row: {
     seller_name: row.seller_name ?? null,
     wb_primary_image_url: row.wb_primary_image_url ?? null,
     wb_primary_barcode: row.wb_primary_barcode ?? null,
-    product_primary_barcode: row.product_primary_barcode ?? null,
     wb_barcodes: row.wb_barcodes ?? [],
     wb_vendor_code: row.wb_vendor_code ?? null,
     wb_nm_id: row.wb_nm_id ?? null,
@@ -142,7 +136,6 @@ export type ProductBarcodeOption = {
 }
 
 type ProductBarcodeSource = {
-  product_primary_barcode?: string | null
   wb_primary_barcode?: string | null
   wb_barcodes?: string[]
   marketplace_bindings?: MarketplaceProductBinding[]
@@ -179,7 +172,7 @@ export function resolveProductBarcodeSelection(
 }
 
 export function resolveProductPrimaryBarcode(meta: ProductBarcodeSource): string {
-  return meta.product_primary_barcode?.trim() || resolveProductBarcodeOptions(meta)[0]?.barcode || ''
+  return resolveProductBarcodeOptions(meta)[0]?.barcode ?? ''
 }
 
 export function formatProductBarcodeDisplay(meta: ProductBarcodeSource): string {

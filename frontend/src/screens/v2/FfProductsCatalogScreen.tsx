@@ -80,11 +80,6 @@ type FfCatalogRow = {
   wb_primary_image_url: string | null
   wb_barcodes: string[]
   wb_primary_barcode: string | null
-  product_primary_barcode?: string | null
-  marketplace_bindings?: Array<{
-    marketplace: 'wb' | 'ozon'
-    external_barcodes?: string[]
-  }>
   wb_size: string | null
   wb_color: string | null
   wb_brand: string | null
@@ -167,7 +162,6 @@ type Props = {
   sellers: SellerRow[]
   warehouses: WarehouseRow[]
   canManageCatalog?: boolean; addressStorageEnabled?: boolean
-  canManageFbsStock?: boolean
   /** Доступен отчёт «Остатки и движения» — решает, видна ли вкладка «Движения» в карточке товара (WMS-490, R3). */
   canViewMovements?: boolean
   /** Открыть документ приёмки из вкладки «Движения» карточки товара — как у отчёта. */
@@ -224,7 +218,6 @@ export function FfProductsCatalogScreen({
   sellers,
   warehouses,
   canManageCatalog = false, addressStorageEnabled = true,
-  canManageFbsStock = false,
   canViewMovements = false,
   onOpenInbound,
 }: Props) {
@@ -1102,17 +1095,15 @@ export function FfProductsCatalogScreen({
               <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
                 {/* Как на согласованном макете: кнопка открывает настройку доли
                     остатка с ползунками, а не разом отдаёт весь остаток. */}
-                {canManageFbsStock ? (
-                  <Button
-                    variant="contained"
-                    onClick={() => void openFbsStockDialog()}
-                    data-testid="ff-catalog-fbs-set-stock"
-                  >
-                    Задать остаток · {selectedIds.size}
-                  </Button>
-                ) : null}
+                <Button
+                  variant="contained"
+                  onClick={() => void openFbsStockDialog()}
+                  data-testid="ff-catalog-fbs-set-stock"
+                >
+                  Задать остаток · {selectedIds.size}
+                </Button>
                 {/* Ручное объединение (WMS-349) — ровно две карточки за раз. */}
-                {canManageCatalog ? <Button
+                <Button
                   variant="outlined"
                   disabled={mergeCandidates.length !== 2}
                   onClick={() => {
@@ -1122,7 +1113,7 @@ export function FfProductsCatalogScreen({
                   data-testid="ff-catalog-merge-open"
                 >
                   Объединить
-                </Button> : null}
+                </Button>
               </Stack>
             </Stack>
             {/* Отказ показываем здесь, у самой кнопки. Раньше он рисовался в самом
@@ -1188,7 +1179,7 @@ export function FfProductsCatalogScreen({
                   <Checkbox
                     checked={allVisibleSelected}
                     indeterminate={someVisibleSelected && !allVisibleSelected}
-                    disabled={!canManageFbsStock || filteredRows.length === 0}
+                    disabled={!canManageCatalog || filteredRows.length === 0}
                     onChange={(_, checked) => toggleSelectAllVisible(checked)}
                     data-testid="ff-catalog-select-all"
                   />
@@ -1230,7 +1221,7 @@ export function FfProductsCatalogScreen({
                     <TableCell padding="checkbox">
                       <Checkbox
                         checked={selectedIds.has(p.id)}
-                        disabled={!canManageFbsStock}
+                        disabled={!canManageCatalog}
                         onChange={(e) => toggleRowSelected(p.id, e.target.checked)}
                         onClick={(e) => e.stopPropagation()}
                         data-testid={`ff-catalog-select-${p.id}`}
@@ -1436,7 +1427,7 @@ export function FfProductsCatalogScreen({
                               size="small"
                               aria-label={`Остаток для FBS ${p.sku_code}`}
                               data-testid={`ff-catalog-fbs-row-${p.id}`}
-                              disabled={!canManageFbsStock || !p.seller_id}
+                              disabled={!canManageCatalog || !p.seller_id}
                               onClick={() => void openFbsStockDialog([p.id])}
                             >
                               <TuneOutlined fontSize="small" />
@@ -1953,7 +1944,6 @@ export function FfProductsCatalogScreen({
             token={token}
             authHeaders={authHeaders}
             canManageCatalog={canManageCatalog}
-            canManageFbsStock={canManageFbsStock}
             canViewMovements={canViewMovements}
             addressStorageEnabled={addressStorageEnabled}
             warehouses={warehouses}

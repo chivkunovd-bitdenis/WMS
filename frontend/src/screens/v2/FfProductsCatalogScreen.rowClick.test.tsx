@@ -134,9 +134,6 @@ async function mount() {
           sellers={[{ id: 's-1', name: 'Селлер Один' }]}
           warehouses={[]}
           canManageCatalog
-          // WMS-594: выбор строк и «Остаток для FBS» закрыты отдельным правом FBS;
-          // администратор ФФ получает его вместе с остальными (App: canFbsOps).
-          canManageFbsStock
           addressStorageEnabled
         />
       </MemoryRouter>,

@@ -84,36 +84,7 @@ private func parseReceipt(_ output: String, queue: String) -> String? {
     return String(output[range])
 }
 
-private func labelSize(_ body: [String: Any]) throws -> (width: Double, height: Double) {
-    guard let width = (body["widthMm"] as? NSNumber)?.doubleValue,
-          let height = (body["heightMm"] as? NSNumber)?.doubleValue,
-          width >= 10, width <= 300, height >= 10, height <= 300 else {
-        throw PrintError.message("WMS не передала корректный размер этикетки")
-    }
-    return (width, height)
-}
-
-private func millimeters(_ value: Double) -> String {
-    value.rounded() == value
-        ? String(Int(value))
-        : String(format: "%.2f", locale: Locale(identifier: "en_US_POSIX"), value)
-}
-
-private func printArguments(
-    queue: String, label: String, width: Double, height: Double
-) -> [String] {
-    [
-        "-d", queue,
-        "-o", "media=Custom.\(millimeters(width))x\(millimeters(height))mm",
-        "-o", "fit-to-page",
-        "-o", "copies=1",
-        "--", label,
-    ]
-}
-
-private func submitToDefaultPrinter(
-    _ data: Data, queue: String, width: Double, height: Double
-) throws -> String {
+private func submitToDefaultPrinter(_ data: Data, queue: String) throws -> String {
     let directory = FileManager.default.temporaryDirectory.appendingPathComponent("wms-qr-\(UUID().uuidString)")
     try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     defer { try? FileManager.default.removeItem(at: directory) }
@@ -121,7 +92,7 @@ private func submitToDefaultPrinter(
     try data.write(to: label, options: .atomic)
     let result = try run(
         "/usr/bin/lp",
-        printArguments(queue: queue, label: label.path, width: width, height: height),
+        ["-d", queue, "-o", "fit-to-page", "-o", "copies=1", "--", label.path],
         timeout: 60
     )
     guard !result.timedOut, result.status == 0 else {
@@ -138,13 +109,13 @@ private func submitToDefaultPrinter(
 private final class Printer {
     private let lock = NSLock()
     private let storeURL: URL
-    private let submit: (Data, String, Double, Double) throws -> String
+    private let submit: (Data, String) throws -> String
     private let queue: () throws -> String
     private var jobs: [String: StoredJob]
 
     init(
         directory: URL,
-        submit: @escaping (Data, String, Double, Double) throws -> String = submitToDefaultPrinter,
+        submit: @escaping (Data, String) throws -> String = submitToDefaultPrinter,
         queue: @escaping () throws -> String = defaultPrinter
     ) throws {
         self.submit = submit
@@ -177,10 +148,7 @@ private final class Printer {
               data.count <= 4_000_000, data.starts(with: pngPrefix) else {
             throw PrintError.message("Ожидается корректная PNG-этикетка")
         }
-        let size = try labelSize(body)
-        var identity = data
-        identity.append(Data("|\(size.width)x\(size.height)".utf8))
-        let digest = SHA256.hash(data: identity).map { String(format: "%02x", $0) }.joined()
+        let digest = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
 
         lock.lock()
         defer { lock.unlock() }
@@ -195,7 +163,7 @@ private final class Printer {
         let queue = try queue()
         jobs[key] = StoredJob(hash: digest, receipt: nil)
         try persist()
-        let receipt = try submit(data, queue, size.width, size.height)
+        let receipt = try submit(data, queue)
         jobs[key] = StoredJob(hash: digest, receipt: receipt)
         try persist()
         return receipt
@@ -341,30 +309,17 @@ private func runSelfTest() throws {
     var submissions = 0
     let printer = try Printer(
         directory: directory,
-        submit: { _, _, width, height in
-            guard width == 58, height == 40 else {
-                throw PrintError.message("Размер этикетки не передан в системную печать")
-            }
-            submissions += 1
-            return "test-1"
-        },
+        submit: { _, _ in submissions += 1; return "test-1" },
         queue: { "test-printer" }
     )
     let image = "data:image/png;base64," + pngPrefix.base64EncodedString()
-    let body: [String: Any] = [
-        "idempotencyKey": "self-test", "imageDataUrl": image,
-        "widthMm": 58, "heightMm": 40,
-    ]
+    let body: [String: Any] = ["idempotencyKey": "self-test", "imageDataUrl": image]
     guard try printer.printJob(body) == "test-1", try printer.printJob(body) == "test-1", submissions == 1 else {
         throw PrintError.message("Проверка защиты от повторной печати не пройдена")
     }
     guard parseReceipt("request id is Test_Printer-41 (1 file)", queue: "Test_Printer") == "Test_Printer-41",
           parseReceipt("id запроса Test_Printer-42 (файлов 1)", queue: "Test_Printer") == "Test_Printer-42" else {
         throw PrintError.message("Проверка квитанции очереди не пройдена")
-    }
-    guard printArguments(queue: "Test_Printer", label: "/tmp/label.png", width: 58, height: 40)
-        .contains("media=Custom.58x40mm") else {
-        throw PrintError.message("Размер 58x40 не передан системной печати")
     }
     guard FileManager.default.isExecutableFile(atPath: "/usr/bin/lp"),
           FileManager.default.isExecutableFile(atPath: "/usr/bin/lpstat") else {

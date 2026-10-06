@@ -18,14 +18,10 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import (
-    FBS_ORDER_STATUS_ASSEMBLING,
-    FBS_ORDER_STATUS_IN_DELIVERY,
-    FbsOrder,
-)
+from app.models.fbs_order import FBS_ORDER_STATUS_ASSEMBLING, FbsOrder
 from app.models.fbs_supply import (
     FBS_SUPPLY_STATUS_ASSEMBLING,
-    FBS_SUPPLY_STATUS_IN_DELIVERY,
+    FBS_SUPPLY_STATUS_DONE,
     FbsSupply,
 )
 from app.models.product import Product
@@ -160,12 +156,12 @@ async def _create_product(
         return product
 
 
-# A closed WB supply with an order still in confirm is not safe to link.
+# TC-NEW-SUPPLY-SYNC-001: a terminal WB supply is adopted but never receives an order
 @pytest.mark.asyncio
 async def test_adoption_with_supplies_list_done_true(
     async_client: AsyncClient,
 ) -> None:
-    """A WB-handover supply is recorded; a stale confirm order stays unlinked."""
+    """A done WB supply is recorded, but its order remains unlinked for safe repair."""
     tenant_id, seller_id, warehouse_id, _location_id = await _register_tenant_and_seller(
         async_client
     )
@@ -246,7 +242,7 @@ async def test_adoption_with_supplies_list_done_true(
         res = await session.execute(stmt)
         supply = res.scalar_one()
 
-        assert supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        assert supply.status == FBS_SUPPLY_STATUS_DONE
         assert supply.name == "ПИТЕР Поставка 18.08.2026"
         assert result["supply_links_created"] == 1
         assert result["supply_linked_orders"] == 0
@@ -261,67 +257,6 @@ async def test_adoption_with_supplies_list_done_true(
             }
         ]
         assert order.supply_id is None
-
-
-@pytest.mark.asyncio
-async def test_created_and_closed_between_cycles_links_complete_order_once(
-    async_client: AsyncClient,
-) -> None:
-    """The first local sighting can already be WB handover, without a prior open row."""
-    tenant_id, seller_id, warehouse_id, _ = await _register_tenant_and_seller(async_client)
-    async with SessionLocal() as session:
-        await seed_fbs_warehouse_binding(
-            session, tenant_id=tenant_id, seller_id=seller_id,
-            wms_warehouse_id=warehouse_id, wb_warehouse_id=DEFAULT_WB_WAREHOUSE_ID,
-        )
-        product = Product(
-            tenant_id=tenant_id, seller_id=seller_id,
-            name="Between cycles", sku_code="WB-BETWEEN-CYCLES", wb_nm_id=991001,
-        )
-        session.add(product)
-        await session.flush()
-        order = await _create_confirmed_order(
-            session, tenant_id, seller_id, warehouse_id, product,
-            991001, "WB-GI-BETWEEN-CYCLES",
-        )
-        order.supplier_status = "complete"
-        await session.flush()
-
-        methods: list[str] = []
-
-        def handler(request: httpx.Request) -> httpx.Response:
-            methods.append(request.method)
-            if request.url.path == "/api/v3/supplies" and "limit" in request.url.params:
-                return httpx.Response(200, json={
-                    "supplies": [{
-                        "id": "WB-GI-BETWEEN-CYCLES", "name": "Передана в кабинете",
-                        "done": True,
-                    }], "next": None,
-                })
-            return httpx.Response(500, text="unexpected WB request")
-
-        async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
-            first = await link_confirmed_orders_to_wb_supplies(
-                session, tenant_id=tenant_id, seller_id=seller_id,
-                http_client=client, api_token="wb-test-token",
-            )
-            second = await link_confirmed_orders_to_wb_supplies(
-                session, tenant_id=tenant_id, seller_id=seller_id,
-                http_client=client, api_token="wb-test-token",
-            )
-        supply = await session.scalar(select(FbsSupply).where(
-            FbsSupply.tenant_id == tenant_id,
-            FbsSupply.wb_supply_id == "WB-GI-BETWEEN-CYCLES",
-        ))
-        assert supply is not None
-        assert supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
-        assert order.supply_id == supply.id
-        assert order.status == FBS_ORDER_STATUS_IN_DELIVERY
-        assert first["supply_links_created"] == 1
-        assert first["supply_linked_orders"] == 1
-        assert second["supply_links_created"] == 0
-        assert second["supply_linked_orders"] == 0
-        assert methods == ["GET", "GET"]
 
 
 # TC-NEW-SUPPLY-SYNC-002: adoption uses supplies_dict without individual fetch
@@ -635,7 +570,7 @@ async def test_supplies_pagination_merged_into_dict(
         assert supply1.name == "Page 1 Supply 1"
         assert supply1.status == FBS_SUPPLY_STATUS_ASSEMBLING
         assert supply2.name == "Page 2 Supply 2"
-        assert supply2.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+        assert supply2.status == FBS_SUPPLY_STATUS_DONE
         assert result["supply_links_created"] == 2
         assert result["supply_linked_orders"] == 1
         assert [row["reason"] for row in result["supply_link_discrepancies"]] == [

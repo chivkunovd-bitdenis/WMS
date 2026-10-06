@@ -66,7 +66,6 @@ from app.services.fbs_stock_rule_service import (
     get_rule_views,
     set_rule_for_products,
 )
-from app.services.product_barcode_service import set_primary_product_barcode
 from app.services.product_merge_service import (
     ProductMergeError,
     merge_products,
@@ -88,7 +87,6 @@ from app.services.seller_wb_catalog_service import (
     list_seller_wb_catalog_rows,
 )
 from app.services.staff_permissions_service import (
-    PERM_FBS,
     PERM_INVENTORY,
     PERM_RECEPTION,
     PERM_SHIFT_LEAD,
@@ -155,7 +153,6 @@ class SellerWbCatalogOut(BaseModel):
     marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
-    product_primary_barcode: str | None = None
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -186,7 +183,6 @@ class FfCatalogOut(BaseModel):
     marketplace_bindings: list[MarketplaceProductBindingOut] = Field(default_factory=list)
     wb_barcodes: list[str]
     wb_primary_barcode: str | None = None
-    product_primary_barcode: str | None = None
     wb_size: str | None = None
     wb_color: str | None = None
     wb_brand: str | None = None
@@ -339,12 +335,6 @@ class ProductOzonLinkPatch(BaseModel):
 
     ozon_sku: str | None = Field(default=None, max_length=255)
     ozon_offer_id: str | None = Field(default=None, max_length=255)
-
-
-class ProductPrimaryBarcodePatch(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    barcode: str = Field(min_length=1, max_length=64)
 
 
 class ProductMergeBody(BaseModel):
@@ -1183,23 +1173,6 @@ async def get_product_card(
     )
 
 
-@router.patch("/{product_id}/primary-barcode", response_model=ProductCardOut)
-async def patch_product_primary_barcode(
-    product_id: uuid.UUID,
-    body: ProductPrimaryBarcodePatch,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
-    session: Annotated[AsyncSession, Depends(get_db)],
-) -> ProductCardOut:
-    product = await get_product(session, user.tenant_id, product_id)
-    if product is None:
-        raise HTTPException(status_code=404, detail="product_not_found")
-    try:
-        await set_primary_product_barcode(session, product, body.barcode)
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from None
-    return await get_product_card(product_id, user, session)
-
-
 @router.get("/import-tz/template")
 async def get_product_tz_import_template(
     user: Annotated[User, Depends(require_fulfillment_admin)],
@@ -1635,11 +1608,7 @@ async def patch_product_fbs_stock_sync(
     session: Annotated[AsyncSession, Depends(get_db)],
     effective_seller_id: Annotated[uuid.UUID | None, Depends(get_effective_seller_id)],
 ) -> ProductOut:
-    if user.role == FULFILLMENT_STAFF:
-        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
-            raise HTTPException(status_code=403, detail="forbidden")
-    else:
-        await assert_seller_permission(session, user, PERM_PRODUCTS)
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     p = await get_product(session, user.tenant_id, product_id)
     if p is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -1649,7 +1618,7 @@ async def patch_product_fbs_stock_sync(
             owner_id = effective_seller_id
         if owner_id is None or p.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
+    elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
     enabled_patch: bool | _SkipSentinel = PATCH_SKIP
@@ -1697,11 +1666,7 @@ async def _assert_product_rule_access(
     effective_seller_id: uuid.UUID | None,
 ) -> None:
     """Правило остатка правит фулфилмент или сам продавец — но только свой товар."""
-    if user.role == FULFILLMENT_STAFF:
-        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
-            raise HTTPException(status_code=403, detail="forbidden")
-    else:
-        await assert_seller_permission(session, user, PERM_PRODUCTS)
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     product = await get_product(session, user.tenant_id, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -1711,7 +1676,7 @@ async def _assert_product_rule_access(
             owner_id = effective_seller_id
         if owner_id is None or product.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
+    elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
@@ -1722,11 +1687,7 @@ async def _assert_products_rule_access(
     effective_seller_id: uuid.UUID | None,
 ) -> None:
     """Пакетная версия той же tenant/seller-проверки, что у одиночной ручки."""
-    if user.role == FULFILLMENT_STAFF:
-        if not (await get_staff_permissions(session, user)).has(PERM_FBS):
-            raise HTTPException(status_code=403, detail="forbidden")
-    else:
-        await assert_seller_permission(session, user, PERM_PRODUCTS)
+    await assert_seller_permission(session, user, PERM_PRODUCTS)
     rows = list(
         (
             await session.execute(
@@ -1747,7 +1708,7 @@ async def _assert_products_rule_access(
             owner_id = effective_seller_id
         if owner_id is None or any(seller_id != owner_id for _product_id, seller_id in rows):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role not in {FULFILLMENT_ADMIN, FULFILLMENT_STAFF}:
+    elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 

@@ -140,10 +140,9 @@ type Props = {
   token: string
   sellers: Array<{ id: string; name: string }>
   warehouses: Array<{ id: string; name: string; code?: string; is_operational?: boolean }>
-  canEditBindings: boolean
 }
 
-export function FfProductsFbsPage({ token, sellers: sellerList, warehouses, canEditBindings }: Props) {
+export function FfProductsFbsPage({ token, sellers: sellerList, warehouses }: Props) {
   // Список продавцов приходит сверху новым массивом на каждую перерисовку.
   // Если держать загрузку зависимой от самого массива, она перезапускает себя
   // бесконечно: загрузила — обновила состояние — перерисовка — новый массив —
@@ -277,7 +276,7 @@ export function FfProductsFbsPage({ token, sellers: sellerList, warehouses, canE
             wb_size: one.size,
           }))}
           warehouses={warehouses}
-          canEditBindings={canEditBindings}
+          canEditBindings
           onClose={() => setStockDialog(null)}
           onChanged={() => void load()}
           onLoadError={setError}

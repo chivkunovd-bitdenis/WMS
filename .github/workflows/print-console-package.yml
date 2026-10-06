@@ -3,7 +3,7 @@ on:
   workflow_dispatch:
   push:
     branches: ['codex/wms607-staging-print', 'codex/wms607-production']
-    paths: ['tools/print-agent/build_console.py', 'tools/print-agent/wms_print_direct.py', 'tools/print-agent/wms_print_direct_macos.swift', '.github/workflows/print-console-package.yml']
+    paths: ['tools/print-agent/build_console.py', 'tools/print-agent/wms_print_direct.py', '.github/workflows/print-console-package.yml']
 jobs:
   package:
     strategy:

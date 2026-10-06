@@ -37,28 +37,21 @@ import {
 } from '../utils/markingPrintPresets'
 import { resolvePrintTemplate, type PrintLabelOptions, type PrintLayout } from '../utils/printTemplate'
 import { labelOptionsFromLayout } from '../utils/printMarkingCodeLabel'
+import type { ProductLabelPrintOptions } from '../utils/productLabelText'
 import { readApiErrorMessage } from '../utils/readApiErrorMessage'
 import {
   beginPrintUserGesture,
   cancelPendingPrintWindow,
   buildMarkingTapeSections,
-  buildProductLabelSections,
   buildWbOrderQrLabelHtml,
   printCzArtifactTape,
   printTapeSections,
   type MarkingTapeUnitInput,
 } from '../utils/printMarkingCodeLabel'
-import type { ProductThermalLabelData } from '../utils/printProductThermalLabel'
+import { buildProductLabelSectionHtml, type ProductThermalLabelData } from '../utils/printProductThermalLabel'
 import { printProductThermalLabels } from '../utils/printProductThermalLabel'
 import { resolveManualWbLabelCount } from '../utils/productBarcodePrint'
-import {
-  buildFboBulkTapeSections,
-  countFboBulkSections,
-  groupFboBulkLinesByProduct,
-  type FboBulkGroup,
-  type FboBulkIssuedCode,
-  type FboBulkLineInput,
-} from '../utils/fboBulkTape'
+import { renderBarcodeDataUrl } from '../utils/renderBarcodeDataUrl'
 import {
   loadLabelPrintOrientation,
   loadLabelSizeId,
@@ -260,56 +253,25 @@ function labelCopiesFromLayout(layout: PrintLayout): number {
     .reduce((sum, unit) => sum + Math.max(1, unit.copies), 0)
 }
 
-/**
- * WMS-618: контекст общей печати по всей FBO-отгрузке. Это тот же
- * `MarkingPrintDialog`, в тот же `openPrint` передают контекст с меткой
- * `fboBulk`. Отдельного диалога, второго хука и параллельных ленточных
- * конвейеров нет — лента и превью строятся одной функцией
- * (`buildFboBulkTapeSections`), сервер идемпотентно выдаёт ЧЗ одним запросом
- * и возвращает актуальный снимок всех строк (с полным списком связанных КМ)
- * — именно по нему и собирается физическая лента.
- */
-export type FboBulkLinePlan = FboBulkLineInput
-
-/** Полный ответ `/print-fbo-bulk` после нормализации в клиенте. */
-export type FboBulkPrintResponseLine = {
-  lineId: string
-  productId: string
-  skuCode: string
-  productName: string
-  requiresHonestSign: boolean
-  quantity: number
-  shortage: number
-  printedCodes: FboBulkIssuedCode[]
-  productLabel: ProductThermalLabelData
-}
-
-export type FboBulkPrintResponse = {
-  lines: FboBulkPrintResponseLine[]
-  shortage: number
-}
-
-export type FboBulkContext = {
-  taskId: string
-  /**
-   * Моментальный снимок строк задания в исходном порядке — тот же порядок,
-   * который видит оператор в таблице экрана упаковки. Используется только
-   * для предпросмотра до нажатия «Печать»: после подтверждения авторитетный
-   * состав приезжает в ответе сервера (`print(...)`), и дальнейшие расчёты
-   * идут от него.
-   */
-  lines: FboBulkLinePlan[]
-  /**
-   * Один атомарный запрос. Сервер отвечает полным текущим списком строк
-   * задания (CZ и не-CZ, в текущем порядке и с текущими количествами) и
-   * для каждой ЧЗ-строки — всеми привязанными к ней КМ (ранее выпущенные +
-   * выпущенные этим вызовом). Повтор запроса возвращает те же коды.
-   */
-  print: (args: {
-    layout: PrintLayout
-    allowPartial: boolean
-    issueMarkingCodes: boolean
-  }) => Promise<FboBulkPrintResponse>
+function buildProductLabelSections(
+  product: ProductThermalLabelData,
+  count: number,
+  size: LabelSize,
+  labelOptions?: ProductLabelPrintOptions,
+): string[] {
+  const barcode = product.barcode?.trim()
+  if (!barcode) {
+    throw new Error('У товара нет штрихкода для печати.')
+  }
+  const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
+  return Array.from({ length: count }, () =>
+    buildProductLabelSectionHtml(
+      product,
+      barcodeDataUrl,
+      labelOptions,
+      size,
+    ).replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
+  )
 }
 
 export type MarkingPrintContext = {
@@ -333,8 +295,6 @@ export type MarkingPrintContext = {
   packagingInstructions?: string | null
   unitsInPack?: number | null
   fbsTape?: FbsTapeContext
-  /** WMS-618: общая печать по всей FBO-отгрузке. */
-  fboBulk?: FboBulkContext
   onPrinted: () => void
 }
 
@@ -385,8 +345,6 @@ export function resolveFbsFallbackLabelCopies(
 export function resolveMarkingPrintAvailability(args: {
   requiresHonestSign: boolean
   fbsTapeMode: boolean
-  /** WMS-618: FBO bulk — наличие ЧЗ проверяет сервер атомарно, как и в FBS. */
-  fboBulkMode?: boolean
   qrOnlyTape: boolean
   effectiveReprint: boolean
   layout: PrintLayout
@@ -397,26 +355,21 @@ export function resolveMarkingPrintAvailability(args: {
   totalWbLabels: number
   fbsTapeProductUnits: number
   fbsTapeOrders: number
-  /** WMS-618: суммарное количество единиц FBO-отгрузки (включая не-ЧЗ). */
-  fboBulkTotalUnits?: number
 }) {
-  const serverChecksPool = args.fbsTapeMode || Boolean(args.fboBulkMode)
   const markingPoolRequired = args.requiresHonestSign && (
-    !serverChecksPool || args.layout.units.some((unit) => unit.block === 'cz' && unit.copies > 0)
+    !args.fbsTapeMode || args.layout.units.some((unit) => unit.block === 'cz' && unit.copies > 0)
   )
   const canPrintCount = args.qrOnlyTape
     ? args.fbsTapeOrders
     : args.effectiveReprint
       ? args.fbsTapeMode ? args.qtyNeed : args.selectedReprintCount
-      : args.fboBulkMode
-        ? args.fboBulkTotalUnits ?? 0
-        : markingPoolRequired
-          ? args.allowPartial
-            ? Math.min(args.available, args.qtyNeed)
-            : args.available >= args.qtyNeed ? args.qtyNeed : 0
-          : args.fbsTapeMode
-            ? args.fbsTapeProductUnits
-            : args.totalWbLabels
+      : markingPoolRequired
+        ? args.allowPartial
+          ? Math.min(args.available, args.qtyNeed)
+          : args.available >= args.qtyNeed ? args.qtyNeed : 0
+        : args.fbsTapeMode
+          ? args.fbsTapeProductUnits
+          : args.totalWbLabels
   return { markingPoolRequired, canPrintCount }
 }
 
@@ -440,12 +393,6 @@ export function MarkingPrintDialog(props: Props) {
 }
 
 function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onClose }: Props) {
-  // WMS-618: синхронная защита от двойного нажатия. React-состояние `busy`
-  // поднимается до следующего рендера, поэтому второй клик в том же тике
-  // не видит его. Ref взводится прямо перед вызовом сервера и держится до
-  // конца; это настоящая защита, которую не нужно подпирать busy=true из
-  // теста.
-  const requestInFlight = useRef(false)
   const [error, setError] = useState<string | null>(null)
   const [productBarcodeKey, setProductBarcodeKey] = useState('')
   const barcodeOptions = ctx?.productBarcodeOptions
@@ -498,24 +445,9 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     total: number
   } | null>(null)
   const fbsTapeBuildAbortRef = useRef<AbortController | null>(null)
-  /** WMS-618: «Разделять артикулами» — только в bulk-контексте FBO; по умолчанию выключено. */
-  const [fboSplitArticles, setFboSplitArticles] = useState(false)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
-  const fboBulkMode = Boolean(ctx?.fboBulk)
-  /** Моментальный снимок состава FBO-отгрузки на момент открытия диалога. */
-  const fboBulkLines = useMemo(() => ctx?.fboBulk?.lines ?? [], [ctx?.fboBulk?.lines])
-  const fboBulkPlanTotal = fboBulkLines.reduce(
-    (sum, line) => sum + Math.max(0, line.qtyNeedPack),
-    0,
-  )
-  /** R6: группы по product_id в порядке первого появления; одна общая функция. */
-  const fboBulkGroups = useMemo<FboBulkGroup[]>(() => {
-    if (!fboBulkMode) return []
-    return groupFboBulkLinesByProduct(fboBulkLines)
-  }, [fboBulkMode, fboBulkLines])
-  const fboBulkHasHonestSign = fboBulkLines.some((line) => line.requiresHonestSign)
   const fbsTapeOrders = ctx?.fbsTape?.orders ?? []
   const isOzonFbsTape = fbsTapeMode && fbsTapeOrders[0]?.marketplace === 'ozon'
   const productBarcodeName = isOzonBarcode || isOzonFbsTape ? 'ШК Ozon' : 'ШК ВБ'
@@ -538,15 +470,13 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
    * попросил reprint:true — это тот же признак requiresHonestSign, что и у
    * NON_HONEST_SIGN_LABEL_LAYOUT выше.
    */
-  const effectiveReprint = (reprint || inlineReprint) && requiresHonestSign && !fboBulkMode
+  const effectiveReprint = (reprint || inlineReprint) && requiresHonestSign
   const markingAlreadyPrinted = (ctx?.qtyMarkingPrinted ?? 0) > 0
   const canOpenInlineReprint = Boolean(
-    ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode && !fboBulkMode && requiresHonestSign,
+    ctx?.lineId && markingAlreadyPrinted && !fbsTapeMode && requiresHonestSign,
   )
   const separateEnabled = separateModeChoice ?? (separateEnabledFromProfile ?? separateEnabledFromStore)
-  /** Раздельный режим: для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ).
-   *  WMS-618: в общей печати по FBO тот же раздельный режим; сервер идемпотентно
-   *  выдаёт КМ (R10 — поведение CZ и ШК не меняется). */
+  /** Раздельный режим: только для товаров с ЧЗ и не для перепечатки (там печатается один ЧЗ). */
   const separateMode = separateEnabled && requiresHonestSign && !effectiveReprint && !fbsTapeMode
   const separateModeResolving =
     open &&
@@ -655,14 +585,13 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     setFbsTapeBuildProgress(null)
     setAllowPartial(false)
     setSeparateModeChoice(null)
-    setFboSplitArticles(false)
     // Этикетка ШК ВБ клеится на единицу товара: разумное первое значение — сколько
     // единиц нужно напечатать/упаковать, а не жёсткая «1» (иначе оператор по умолчанию
     // печатает одну этикетку на несколько единиц и должен сам это заметить).
     // I4 (20.08.2026): в ленте FBS печать идёт циклом по заказам, и это поле —
     // число ШК-этикеток НА ОДИН заказ. Подставлять сюда число заказов значило
     // печатать 155 × 155 = 24 тысячи листов, что и случилось на бою.
-    const wbDefaultQty = ctx.source === 'catalog' || ctx.fbsTape || ctx.fboBulk ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
+    const wbDefaultQty = ctx.source === 'catalog' || ctx.fbsTape ? 1 : Math.max(1, ctx.qtyNeedPack || 1)
     setWbBarcodeQty(wbDefaultQty)
     setPrintDoubleWbBarcode(false)
     setCatalogPrintQty(1)
@@ -805,10 +734,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     }
   }, [open, effectiveReprint, reprintLineId, reprintToken])
 
-  /** WMS-618: сколько единиц в FBO-отгрузке реально расходуют КМ (ЧЗ-строки). */
-  const fboBulkCzUnits = fboBulkLines
-    .filter((line) => line.requiresHonestSign)
-    .reduce((sum, line) => sum + Math.max(0, line.qtyNeedPack), 0)
   const qtyNeed = effectiveReprint
     ? fbsTapeMode
       ? fbsHonestSignOrders.length || fbsTapeOrders.length
@@ -819,28 +744,8 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       ? catalogPrintQty
       : fbsTapeMode
         ? fbsHonestSignOrders.length || fbsTapeOrders.length
-        : fboBulkMode
-          ? fboBulkCzUnits
-          : (ctx?.qtyNeedPack ?? 0)
+        : (ctx?.qtyNeedPack ?? 0)
   const totalWbLabels = resolveManualWbLabelCount(wbBarcodeQty, printDoubleWbBarcode)
-  /**
-   * WMS-618 R3/C2: тот же layout, что уйдёт в `buildFboBulkTapeSections`
-   * при подтверждении joint-печати. Для отгрузки без ЧЗ оператор выбирает
-   * количество ШК через `wbBarcodeQty` + «Печатать 2 ШК» (не через ЧЗ/ШК
-   * конструктор), поэтому реальный layout раздувается до `totalWbLabels`
-   * копий label-блока. Используем ОДИН источник правды — и в `handlePrint`,
-   * и в сводной подписи «К печати: … блок(ов) в ленте».
-   */
-  const fboBulkEffectiveJointLayout = useMemo<PrintLayout>(() => {
-    if (!fboBulkMode) return layout
-    if (fboBulkHasHonestSign) return layout
-    return {
-      units: totalWbLabels > 0
-        ? [{ block: 'label', copies: totalWbLabels }]
-        : [],
-      label_options: layout.label_options,
-    }
-  }, [fboBulkMode, fboBulkHasHonestSign, layout, totalWbLabels])
   /**
    * I4/L2 (21.08.2026): в ленте FBS «Количество этикеток» — это копии ШК на ОДИН
    * заказ, и ноль здесь разрешён: тогда в ленту идут только QR заказов.
@@ -870,7 +775,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
   const { markingPoolRequired, canPrintCount } = resolveMarkingPrintAvailability({
     requiresHonestSign,
     fbsTapeMode,
-    fboBulkMode,
     qrOnlyTape,
     effectiveReprint,
     layout,
@@ -881,7 +785,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     totalWbLabels,
     fbsTapeProductUnits,
     fbsTapeOrders: fbsTapeOrders.length,
-    fboBulkTotalUnits: fboBulkPlanTotal,
   })
   /**
    * PRN-04: printFbsTape (ниже) печатает циклом по заказам — на каждый заказ
@@ -904,24 +807,20 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     qrOnlyTape ? 0 : fbsHonestSignOrders.length > 0
       ? Math.max(1, labelCopiesFromLayout(layout))
       : fbsLabelCopiesPerOrder
-  const quantitySummaryText = fboBulkMode
-    ? fboBulkHasHonestSign
-      ? `В отгрузке: ${fboBulkPlanTotal} ед., с ЧЗ: ${fboBulkCzUnits}`
-      : `В отгрузке: ${fboBulkPlanTotal} ед.`
-    : markingPoolRequired
-      ? effectiveReprint
-        ? fbsTapeMode
-          ? `К перепечатке: ${qtyNeed}`
-          : `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx?.qtyMarkingPrinted ?? 0}`
-        : isCatalogSource
-          ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
-          : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+  const quantitySummaryText = markingPoolRequired
+    ? effectiveReprint
+      ? fbsTapeMode
+        ? `К перепечатке: ${qtyNeed}`
+        : `Выбрано для перепечатки: ${selectedReprintCodeIds.length} из ${ctx?.qtyMarkingPrinted ?? 0}`
       : isCatalogSource
-        ? `К печати: ${totalWbLabels}`
-        : fbsTapeMode
-          ? `К печати: ${fbsTapeProductUnits}`
-          : `К упаковке: ${qtyNeed}`
-  const shortage = markingPoolRequired && !qrOnlyTape && !effectiveReprint && !fboBulkMode
+        ? `К печати: ${catalogPrintQty} · Доступно в пуле: ${available}`
+        : `Нужно: ${qtyNeed} · Доступно в пуле: ${available}`
+    : isCatalogSource
+      ? `К печати: ${totalWbLabels}`
+      : fbsTapeMode
+        ? `К печати: ${fbsTapeProductUnits}`
+        : `К упаковке: ${qtyNeed}`
+  const shortage = markingPoolRequired && !qrOnlyTape && !effectiveReprint
     ? ctx?.fbsTape?.markingShortage ?? Math.max(0, qtyNeed - available)
     : 0
   /**
@@ -1398,84 +1297,16 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
   const nonCzPrintSize = separateEnabled ? wbLabelSize : labelSize
   const reprintPrintSize = czTapePrintSize
 
-  /**
-   * WMS-618: один атомарный серверный вызов выдаёт ЧЗ по всей отгрузке и
-   * возвращает авторитетный снимок всех строк. Лента собирается от этого
-   * снимка общей функцией `buildFboBulkTapeSections` — ровно той же, что
-   * рисует превью. Защиты от двойного клика: кнопка блокируется `busy`,
-   * сервер идемпотентно возвращает те же коды на повторный запрос.
-   *
-   * Каждый вид ленты получает свежий снимок. Выдача ЧЗ запрашивается только
-   * для ленты с ЧЗ; для ШК сервер возвращает состав без выдачи кодов.
-   */
-  const printFboBulkTape = async (args: {
-    renderLayout: PrintLayout
-    size: LabelSize
-    issueOnServer: boolean
-  }) => {
-    if (!ctx?.fboBulk) {
-      return false
-    }
-    const result = await ctx.fboBulk.print({
-      layout: args.renderLayout,
-      allowPartial,
-      issueMarkingCodes: args.issueOnServer,
-    })
-    if (result.shortage > 0 && !allowPartial) {
-      setError(`Не хватает ${result.shortage} КМ в пуле.`)
-      return false
-    }
-    // Build groups from the SERVER snapshot (freshness): current task
-    // composition at confirm time, including product_label fields the server
-    // enriches from the catalog. The dialog never falls back to the local
-    // open-time snapshot for the actual tape — the review marked that path
-    // as the reason mixed/updated shipments printed with stale data.
-    const serverLines: FboBulkLineInput[] = result.lines.map((line) => ({
-      lineId: line.lineId,
-      productId: line.productId,
-      productName: line.productName,
-      skuCode: line.skuCode,
-      requiresHonestSign: line.requiresHonestSign,
-      qtyNeedPack: line.quantity,
-      productLabel: line.productLabel,
-    }))
-    const groupsForTape = groupFboBulkLinesByProduct(serverLines)
-    const codesByLineId = new Map(result.lines.map((line) => [line.lineId, line.printedCodes]))
-
-    if (groupsForTape.length < 1) {
-      setError('Нет строк для печати.')
-      return false
-    }
-
-    const sections = await buildFboBulkTapeSections({
-      layout: args.renderLayout,
-      labelSize: args.size,
-      splitArticles: fboSplitArticles,
-      groups: groupsForTape,
-      codesByLineId,
-      authToken: ctx.token,
-    })
-    if (sections.length < 1) {
-      setError('Нет этикеток для печати.')
-      return false
-    }
-    await printTapeSections(sections, args.size)
-    ctx.onPrinted()
-    return true
-  }
-
   const handlePrint = async (opts?: { forceReprint?: boolean }) => {
-    if (!ctx || busy || requestInFlight.current) {
+    if (!ctx) {
       return
     }
-    requestInFlight.current = true
     const forceReprint = opts?.forceReprint ?? false
     // Confirm while the source tab is still foreground. Opening a popup first
     // hides the blocking confirmation behind an unpainted blank print tab.
     if (ctx.fbsTape && fbsTapeSheets > 100 && !window.confirm(
       `На печать уйдёт ${fbsTapeSheets} листов. Продолжить?`,
     )) {
-      requestInFlight.current = false
       return
     }
     if (requiresHonestSign) {
@@ -1496,22 +1327,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
           size: requiresHonestSign ? czTapePrintSize : nonCzPrintSize,
           closeAfter: true,
         })
-      } else if (ctx.fboBulk) {
-        // WMS-618: единый диалог печатает ту же ленту, что показывает превью.
-        // Сервер выдаёт КМ только для ленты с ЧЗ; состав обновляет всегда.
-        // `fboBulkEffectiveJointLayout` — тот же источник, который считает
-        // сводная подпись «К печати», R3/C2 (без двух моделей расчёта).
-        const renderLayout = fboBulkEffectiveJointLayout
-        const needsServerIssue =
-          fboBulkHasHonestSign && renderLayout.units.some((u) => u.block === 'cz' && u.copies > 0)
-        const ok = await printFboBulkTape({
-          renderLayout,
-          size: fboBulkHasHonestSign ? czTapePrintSize : nonCzPrintSize,
-          issueOnServer: needsServerIssue,
-        })
-        if (ok) {
-          onClose()
-        }
       } else if (!requiresHonestSign) {
         if (wbBarcodeQty >= 1) {
           await printLabelOnlyTape(totalWbLabels, nonCzPrintSize, true)
@@ -1538,7 +1353,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       )
     } finally {
       cancelPendingPrintWindow()
-      requestInFlight.current = false
       onBusyChange(false)
     }
   }
@@ -1547,47 +1361,24 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
   const sepCzLayout: PrintLayout = {
     units: [{ block: 'cz', copies: Math.max(1, sepCzQty) }],
   }
-  /**
-   * WMS-618 R3/C2: раздельная ЧЗ-лента печатает КМ только на требующие ЧЗ
-   * единицы. В смешанной FBO-пачке `canPrintCount == fboBulkPlanTotal`
-   * (все единицы, включая не-ЧЗ), поэтому для сводной подписи и серверного
-   * предсказания нужно взять `fboBulkCzUnits`. Вне bulk ничего не меняется.
-   */
-  const sepCzUnitBase = fboBulkMode ? fboBulkCzUnits : canPrintCount
-  const sepCzTotal = sepCzUnitBase * Math.max(1, sepCzQty)
+  const sepCzTotal = canPrintCount * Math.max(1, sepCzQty)
   const sepWbTotal = resolveManualWbLabelCount(sepWbQty, printDoubleWbBarcode)
-  const sepWbLayout: PrintLayout = {
-    units: [{ block: 'label', copies: sepWbTotal }],
-    label_options: layout.label_options,
-  }
 
   const handleSeparateCzPrint = async () => {
-    if (!ctx || busy || requestInFlight.current) {
+    if (!ctx) {
       return
     }
     if (canOpenInlineReprint) {
       setInlineReprint(true)
       return
     }
-    if (canPrintCount < 1 && !fboBulkMode) {
+    if (canPrintCount < 1) {
       return
     }
-    requestInFlight.current = true
     beginPrintUserGesture()
     onBusyChange(true)
     setError(null)
     try {
-      if (ctx.fboBulk) {
-        // WMS-618 + R10: раздельный ЧЗ в общей печати. Серверный вызов тот же,
-        // идемпотентный; CZ-only layout — та же разметка, что показывает превью.
-        const ok = await printFboBulkTape({
-          renderLayout: sepCzLayout,
-          size: resolvedCzPrintSize,
-          issueOnServer: true,
-        })
-        if (ok) markSectionDone('cz')
-        return
-      }
       const opts: TapePrintOptions = {
         layout: sepCzLayout,
         size: resolvedCzPrintSize,
@@ -1603,35 +1394,21 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       setError(e instanceof Error ? e.message : 'Не удалось напечатать ЧЗ.')
     } finally {
       cancelPendingPrintWindow()
-      requestInFlight.current = false
       onBusyChange(false)
     }
   }
 
   const handleSeparateWbPrint = async () => {
-    if (!ctx || busy || requestInFlight.current) {
+    if (!ctx || sepWbTotal < 1) {
       return
     }
-    requestInFlight.current = true
     onBusyChange(true)
     setError(null)
     try {
-      if (ctx.fboBulk) {
-        // Свежий серверный состав без выдачи КМ, включая товары с ЧЗ.
-        if (sepWbTotal < 1) return
-        await printFboBulkTape({
-          renderLayout: sepWbLayout,
-          size: wbLabelSize,
-          issueOnServer: false,
-        })
-        return
-      }
-      if (sepWbTotal < 1) return
       await printLabelOnlyTape(sepWbTotal, wbLabelSize, false, 'wb')
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
     } finally {
-      requestInFlight.current = false
       onBusyChange(false)
     }
   }
@@ -1645,36 +1422,31 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
   const printDisabled =
     busy ||
     (fbsTapeMode && fbsTapeOrders.length < 1) ||
-    (fboBulkMode && fboBulkPlanTotal < 1) ||
     (effectiveReprint &&
       !fbsTapeMode &&
-      !fboBulkMode &&
       requiresHonestSign &&
       (reprintCodesLoading || selectedReprintCodeIds.length < 1)) ||
-    (!effectiveReprint && !fboBulkMode && qtyNeed < 1) ||
-    // FBS и bulk FBO проверяют пул на сервере атомарно. Поле «доступно» в задании
-    // устаревает между открытием диалога и подтверждением — его отсутствие не должно
-    // гасить кнопку, иначе общая печать не стартует даже на зелёном пуле.
-    (!fbsTapeMode && !fboBulkMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
-    (!fbsTapeMode && !fboBulkMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
+    (!effectiveReprint && qtyNeed < 1) ||
+    // FBS checks the current pool and already bound codes on the server.
+    // A stale packaging-task snapshot must not prevent submitting the print.
+    (!fbsTapeMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && available < 1) ||
+    (!fbsTapeMode && markingPoolRequired && !qrOnlyTape && !effectiveReprint && !forceReprintOnConfirm && !allowPartial && shortage > 0) ||
     // L2 (21.08.2026): ноль этикеток ШК — не повод гасить кнопку, если в ленту всё равно
     // идут QR заказов. Гасим, только когда печатать действительно нечего. Считаем по
     // fbsLabelCopiesPerOrder: totalWbLabels проходит через clampPackUnits и никогда не
     // бывает меньше единицы, поэтому проверять его тут бессмысленно.
     (!requiresHonestSign && !includesOrderQr && fbsTapeMode && fbsLabelCopiesPerOrder < 1) ||
-    (!requiresHonestSign && !fbsTapeMode && !fboBulkMode && totalWbLabels < 1)
+    (!requiresHonestSign && !fbsTapeMode && totalWbLabels < 1)
 
   const dialogTitle = effectiveReprint
     ? 'Повторная печать'
-    : fboBulkMode
-      ? 'Печать всё по отгрузке'
-      : includesOrderQr
-        ? requiresHonestSign
-          ? 'Печать ЧЗ, ШК и QR заказа'
-          : 'Печать ШК и QR заказа'
-        : requiresHonestSign
-          ? 'Печать ЧЗ'
-          : isOzonBarcode ? 'Печать ШК Ozon' : 'Печать ШК ВБ'
+    : includesOrderQr
+      ? requiresHonestSign
+        ? 'Печать ЧЗ, ШК и QR заказа'
+        : 'Печать ШК и QR заказа'
+      : requiresHonestSign
+        ? 'Печать ЧЗ'
+        : isOzonBarcode ? 'Печать ШК Ozon' : 'Печать ШК ВБ'
 
   return (
     <>
@@ -1746,20 +1518,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
               </Box>
             ) : null}
 
-            {fboBulkMode ? (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={fboSplitArticles}
-                    onChange={(event) => setFboSplitArticles(event.target.checked)}
-                    disabled={busy}
-                    data-testid="marking-print-fbo-split-articles"
-                  />
-                }
-                label="Разделять артикулами"
-              />
-            ) : null}
-
             {separateMode || separateModeResolving ? null : separateEnabled && !requiresHonestSign ? (
               <LabelSizeSelect
                 value={wbLabelSize.id}
@@ -1829,7 +1587,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
               </Alert>
             ) : null}
 
-            {!effectiveReprint && !fboBulkMode && requiresHonestSign && markingAlreadyPrinted ? (
+            {!effectiveReprint && requiresHonestSign && markingAlreadyPrinted ? (
               <Alert severity="warning" data-testid="marking-print-already-printed-warning">
                 ЧЗ по этой строке уже печатался ранее. Повторная печать выпустит те же КМ.
               </Alert>
@@ -1845,19 +1603,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                   />
                 }
                 label={`Печатать доступные ${available}`}
-              />
-            ) : null}
-
-            {fboBulkMode && fboBulkHasHonestSign ? (
-              <FormControlLabel
-                control={
-                  <Checkbox
-                    checked={allowPartial}
-                    onChange={(e) => setAllowPartial(e.target.checked)}
-                    data-testid="marking-print-allow-partial"
-                  />
-                }
-                label="Печатать доступные при нехватке КМ в пуле"
               />
             ) : null}
 
@@ -1899,34 +1644,18 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                   ) : null}
                 </Box>
                 <Box sx={{ mt: 1 }}>
-                  {fboBulkMode ? (
-                    // WMS-618 R3/C2+R8: та же функция, что собирает ленту, и тот
-                    // же `fboBulkEffectiveJointLayout`, который считает сводная
-                    // подпись и уйдёт в `handlePrint`.
-                    <MarkingLabelPreview
-                      variant="tape"
-                      layout={fboBulkEffectiveJointLayout}
-                      size={nonCzPrintSize}
-                      unitsToShow={Math.min(Math.max(totalWbLabels, 1), 3)}
-                      totalUnits={Math.max(totalWbLabels, 1)}
-                      productLabel={selectedProductLabel ?? null}
-                      fboBulkPreview={{ groups: fboBulkGroups, splitArticles: fboSplitArticles }}
-                      testId="marking-print-wb-only-preview"
-                    />
-                  ) : (
-                    <MarkingLabelPreview
-                      variant="product"
-                      productLabel={selectedProductLabel ?? null}
-                      size={nonCzPrintSize}
-                      unitsToShow={Math.max(1, totalWbLabels)}
-                      totalUnits={Math.max(1, totalWbLabels)}
-                      showOrderQr={includesOrderQr}
-                      fbsOrders={fbsPreviewOrders}
-                      fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
-                      printOptions={labelOptionsFromLayout(layout)}
-                      testId="marking-print-wb-only-preview"
-                    />
-                  )}
+                  <MarkingLabelPreview
+                    variant="product"
+                    productLabel={selectedProductLabel ?? null}
+                    size={nonCzPrintSize}
+                    unitsToShow={Math.max(1, totalWbLabels)}
+                    totalUnits={Math.max(1, totalWbLabels)}
+                    showOrderQr={includesOrderQr}
+                    fbsOrders={fbsPreviewOrders}
+                    fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
+                    printOptions={labelOptionsFromLayout(layout)}
+                    testId="marking-print-wb-only-preview"
+                  />
                 </Box>
               </>
             ) : null}
@@ -2007,7 +1736,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                       sx={{ mt: 0.75, display: 'block' }}
                       data-testid="marking-print-sep-cz-total"
                     >
-                      К печати: {sepCzTotal} ЧЗ ({sepCzUnitBase} ед. × {Math.max(1, sepCzQty)})
+                      К печати: {sepCzTotal} ЧЗ ({canPrintCount} ед. × {Math.max(1, sepCzQty)})
                     </Typography>
                   ) : !canOpenInlineReprint && !sepCzDone ? (
                     <Typography
@@ -2029,7 +1758,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                       size={resolvedCzPrintSize}
                       unitsToShow={1}
                       productLabel={null}
-                      fboBulkPreview={fboBulkMode ? { groups: fboBulkGroups, splitArticles: fboSplitArticles } : undefined}
                       testId="marking-print-sep-cz-preview"
                     />
                   </Box>
@@ -2100,20 +1828,18 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                       sx={{ mt: 0.75, display: 'block' }}
                       data-testid="marking-print-sep-wb-total"
                     >
-                      К печати: {sepWbTotal * (fboBulkMode ? fboBulkPlanTotal : 1)} {productBarcodeName}
+                      К печати: {sepWbTotal} {productBarcodeName}
                       {printDoubleWbBarcode ? ' (× 2)' : ''}
                     </Typography>
                   ) : null}
                   <Box sx={{ mt: 1.5 }}>
                     <MarkingLabelPreview
-                      variant={fboBulkMode ? 'tape' : 'product'}
-                      layout={sepWbLayout}
+                      variant="product"
                       size={wbLabelSize}
                       unitsToShow={Math.max(1, sepWbTotal)}
                       totalUnits={Math.max(1, sepWbTotal)}
                       productLabel={selectedProductLabel ?? null}
                       printOptions={labelOptionsFromLayout(layout)}
-                      fboBulkPreview={fboBulkMode ? { groups: fboBulkGroups, splitArticles: fboSplitArticles } : undefined}
                       testId="marking-print-sep-wb-preview"
                     />
                   </Box>
@@ -2252,7 +1978,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
                     showOrderQr={includesOrderQr}
                     fbsOrders={fbsPreviewOrders}
                     fbsNonHonestLabelCopies={fbsPreviewLabelCopies}
-                    fboBulkPreview={fboBulkMode ? { groups: fboBulkGroups, splitArticles: fboSplitArticles } : undefined}
                     testId="marking-print-tape-preview"
                   />
                 </Box>
@@ -2320,24 +2045,10 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
               </Typography>
             ) : null}
 
-            {!effectiveReprint && requiresHonestSign && !separateMode && !fboBulkMode && canPrintCount > 0 ? (
+            {!effectiveReprint && requiresHonestSign && !separateMode && canPrintCount > 0 ? (
               <Typography variant="body2" data-testid="marking-print-will-print">
                 К печати: {canPrintCount} ед. · {czQty * canPrintCount} ЧЗ + {wbQty * canPrintCount} {productBarcodeName} ·{' '}
                 {totalTapeCount} {plural(totalTapeCount, ['блок', 'блока', 'блоков'])} в ленте
-              </Typography>
-            ) : null}
-
-            {fboBulkMode && !separateMode && !separateModeResolving && fboBulkPlanTotal > 0 ? (
-              <Typography variant="body2" data-testid="marking-print-will-print">
-                К печати: {fboBulkPlanTotal} ед. · {fboBulkGroups.length}{' '}
-                {plural(fboBulkGroups.length, ['артикул', 'артикула', 'артикулов'])}
-                {fboBulkCzUnits > 0 ? ` · ЧЗ: ${fboBulkCzUnits * czQty}` : ''}
-                {' · '}
-                {/* R3/C2: счётчик совпадает с ЭФФЕКТИВНЫМ layout, который реально
-                    уйдёт в `buildFboBulkTapeSections` при подтверждении — иначе
-                    пачка без ЧЗ показывала 3 блока, а печатала 6. */}
-                {countFboBulkSections(fboBulkEffectiveJointLayout, fboBulkGroups, fboSplitArticles)} блок(ов) в ленте
-                {fboSplitArticles ? ' (с пустыми разделителями)' : ''}
               </Typography>
             ) : null}
 

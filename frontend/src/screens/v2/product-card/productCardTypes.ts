@@ -6,7 +6,7 @@
 
 /** Привязка товара к площадке (сейчас — только Ozon, см. R6). */
 export type ProductCardMarketplaceBinding = {
-  marketplace: 'wb' | 'ozon'
+  marketplace: string
   external_product_id: string | null
   external_offer_id: string | null
   external_sku: string | null
@@ -35,7 +35,6 @@ export type ProductCardData = {
   marketplace_bindings: ProductCardMarketplaceBinding[]
   wb_barcodes: string[]
   wb_primary_barcode: string | null
-  product_primary_barcode?: string | null
   wb_size: string | null
   wb_color: string | null
   wb_brand: string | null

@@ -19,7 +19,7 @@ from app.api.billing_invoice_v2_schemas import (
     InvoiceV2DraftRequest,
     InvoiceV2Out,
 )
-from app.api.deps import require_billing_access
+from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
 from app.models.user import User
 from app.services.billing_invoice_v2_service import (
@@ -52,7 +52,7 @@ async def list_billing_invoices_v2(
     number: str | None = None,
     cursor: str | None = None,
     limit: int = 50,
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
@@ -72,7 +72,7 @@ async def list_billing_invoices_v2(
 @router.post("/invoices-v2/preview", response_model=InvoiceV2Out)
 async def preview_billing_invoice_v2(
     body: InvoiceV2DraftRequest,
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     # Preview may calculate missing charges, but must never retain them.
@@ -90,7 +90,7 @@ async def preview_billing_invoice_v2(
 @router.post("/invoices-v2", response_model=InvoiceV2Out, status_code=status.HTTP_201_CREATED)
 async def create_billing_invoice_v2(
     body: InvoiceV2DraftRequest,
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
     idempotency_key: Annotated[str | None, Header(alias="Idempotency-Key")] = None,
 ) -> dict[str, Any]:
@@ -112,7 +112,7 @@ async def create_billing_invoice_v2(
 @router.get("/invoices-v2/{invoice_id}", response_model=InvoiceV2Out)
 async def get_billing_invoice_v2(
     invoice_id: uuid.UUID,
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
@@ -126,7 +126,7 @@ async def get_billing_invoice_v2(
 @router.post("/invoices-v2/{invoice_id}/cancel", response_model=InvoiceV2Out)
 async def cancel_billing_invoice_v2(
     invoice_id: uuid.UUID,
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:

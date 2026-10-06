@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Box } from '@mui/material'
 import { apiUrl } from '../../api'
 import { fetchMarketplaceProductCatalogRows } from '../../hooks/useWbProductCatalog'
-import { resolveProductPrimaryBarcode, type MarketplaceProductCatalogRow } from '../../types/wbProductCatalog'
+import type { MarketplaceProductCatalogRow } from '../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../ui-kit'
 import { PickScanSourceError, resolveProductScanSource, scanSourceKey } from '../ff/unload-pick/pickScanSource'
@@ -351,7 +351,7 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
         name: item.product_name,
         sku: item.sku_code ?? '',
         sellerArticle: catalog?.wb_vendor_code ?? '',
-        barcode: catalog ? resolveProductPrimaryBarcode(catalog) : '',
+        barcode: catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
         photo: catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
       }

@@ -3,7 +3,6 @@ import { Box } from '@mui/material'
 import { useNavigate, useParams } from 'react-router-dom'
 import { apiUrl } from '../../../api'
 import { useMarketplaceProductCatalog } from '../../../hooks/useWbProductCatalog'
-import { resolveProductPrimaryBarcode } from '../../../types/wbProductCatalog'
 import { readApiErrorMessage } from '../../../utils/readApiErrorMessage'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
 import { resolveProductScanSource, scanSourceKey } from './pickScanSource'
@@ -256,7 +255,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
         name: item.name,
         sku: item.sku ?? '',
         sellerArticle: isOzonFbs ? item.sellerArticle ?? '' : catalog?.wb_vendor_code ?? '',
-        barcode: catalog ? resolveProductPrimaryBarcode(catalog) : item.barcode ?? '',
+        barcode: isOzonFbs ? item.barcode ?? '' : catalog?.wb_primary_barcode ?? catalog?.wb_barcodes[0] ?? '',
         photo: isOzonFbs ? '' : catalog?.wb_primary_image_url ?? '',
         size: catalog?.wb_size ?? null,
       }

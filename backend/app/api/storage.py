@@ -27,7 +27,7 @@ from app.services import background_job_service as job_svc
 from app.services.background_job_service import JOB_TYPE_STORAGE_MEASUREMENT_REBUILD
 from app.services.billing_tariff_matrix_service import get_tariff_matrix
 from app.services.staff_packaging_billing_service import kopecks_to_rub_str
-from app.services.staff_permissions_service import PERM_STORAGE
+from app.services.staff_permissions_service import PERM_INVENTORY
 from app.services.storage_measurement_service import (
     MOSCOW,
     StorageMeasurementError,
@@ -47,7 +47,7 @@ from app.services.storage_statement_service import (
 )
 
 router = APIRouter(prefix="/operations/storage", tags=["storage"])
-require_storage_access = require_ff_or_seller_with_permission(PERM_STORAGE)
+require_storage_access = require_ff_or_seller_with_permission(PERM_INVENTORY)
 
 
 class StorageRebuildBody(BaseModel):
@@ -302,9 +302,9 @@ def _apply_night_charges(
         total_kopecks = (total_kopecks or 0) + charge.amount_kopecks
         if charge.liter_days > 0:
             public_row["rate_snapshot"] = _rate_snapshot(
-                (Decimal(charge.amount_kopecks) / Decimal(100) / charge.liter_days).quantize(
-                    Decimal("0.01"), rounding=ROUND_HALF_UP
-                )
+                (
+                    Decimal(charge.amount_kopecks) / Decimal(100) / charge.liter_days
+                ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
             )
     if charged:
         output.total_liter_days = str(total_liter_days)
@@ -342,8 +342,12 @@ async def list_statements(
         )
         .order_by(Warehouse.name, Warehouse.id)
     )
-    all_operational_warehouses = list((await session.scalars(warehouse_query)).all())
-    operational_ids = {warehouse.id for warehouse in all_operational_warehouses}
+    all_operational_warehouses = list(
+        (await session.scalars(warehouse_query)).all()
+    )
+    operational_ids = {
+        warehouse.id for warehouse in all_operational_warehouses
+    }
     warehouses = [
         warehouse
         for warehouse in all_operational_warehouses
@@ -423,7 +427,9 @@ async def list_statements(
         )
         for statement in statements
     }
-    fixed_statements = [statement for statement in statements if statement.status == "fixed"]
+    fixed_statements = [
+        statement for statement in statements if statement.status == "fixed"
+    ]
     ledger_by_statement = await get_storage_ledger_rows_batch(
         session,
         user.tenant_id,
@@ -661,7 +667,9 @@ def _period_rate_kopecks(liter_days: Decimal, amount_kopecks: int | None) -> str
     if amount_kopecks is None or liter_days <= 0:
         return None
     return str(
-        (Decimal(amount_kopecks) / liter_days).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        (Decimal(amount_kopecks) / liter_days).quantize(
+            Decimal("0.01"), rounding=ROUND_HALF_UP
+        )
     )
 
 

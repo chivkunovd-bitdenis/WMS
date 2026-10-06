@@ -642,7 +642,7 @@ def _line_out_from_orm(
         product_id=str(line.product_id),
         sku_code=product.sku_code,
         product_name=product.name,
-        wb_barcode=product.primary_print_barcode or product.wb_barcode,
+        wb_barcode=product.wb_barcode,
         requires_honest_sign=bool(product.requires_honest_sign),
         length_mm=product.length_mm,
         width_mm=product.width_mm,

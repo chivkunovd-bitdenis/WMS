@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_settings_access
+from app.api.deps import require_fulfillment_admin
 from app.core.settings import settings
 from app.db.session import get_db
 from app.models.user import User
@@ -36,7 +36,7 @@ class TenantSettingsPatch(BaseModel):
 
 @router.get("/settings", response_model=TenantSettingsOut)
 async def read_tenant_settings(
-    user: Annotated[User, Depends(require_settings_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TenantSettingsOut:
     try:
@@ -52,7 +52,7 @@ async def read_tenant_settings(
 @router.patch("/settings", response_model=TenantSettingsOut)
 async def patch_tenant_settings(
     body: TenantSettingsPatch,
-    user: Annotated[User, Depends(require_settings_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TenantSettingsOut:
     fields = body.model_fields_set

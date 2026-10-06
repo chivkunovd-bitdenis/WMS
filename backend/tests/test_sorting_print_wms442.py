@@ -234,7 +234,7 @@ async def test_sorting_labels_marketplace_location_immutable_replay_and_no_stock
     connection = await connect(f)
     for kind, marketplace, barcode in [
         ("product", "wb", "4601234567893"),
-        ("product", "ozon", "4601234567893"),
+        ("product", "ozon", "OZN442234567"),
         ("location", None, "LOC-9DF85B314B88"),
     ]:
         body = intent(f, connection, kind, marketplace)
