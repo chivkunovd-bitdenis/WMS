@@ -1,0 +1,44 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90m/home/runner/work/WMS/WMS/frontend[39m
+
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mvalidates positive integers, recovers from API failure and refreshes the box list[32m 27[2mms[22m[39m
+[31m   → Cannot read properties of undefined (reading 'replace')[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mreuses one mutation after a lost response and gives the next intentional batch a new one[32m 2[2mms[22m[39m
+[31m   → Cannot read properties of undefined (reading 'replace')[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22moffers the same enabled bulk action in an editable return[32m 2[2mms[22m[39m
+[31m   → Cannot read properties of undefined (reading 'replace')[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mkeeps the bulk action disabled in completed inbound and return documents[32m 2[2mms[22m[39m
+[31m   → Cannot read properties of undefined (reading 'replace')[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mvalidates positive integers, recovers from API failure and refreshes the box list
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mreuses one mutation after a lost response and gives the next intentional batch a new one
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22moffers the same enabled bulk action in an editable return
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mkeeps the bulk action disabled in completed inbound and return documents
+[31m[1mTypeError[22m: Cannot read properties of undefined (reading 'replace')[39m
+[36m [2m❯[22m intakeStorageKey src/screens/ff/inboundDraftPersistence.ts:[2m24:52[22m[39m
+    [90m 22| [39m
+    [90m 23| [39mexport function intakeStorageKey(token: string, document: string): str…
+    [90m 24| [39m  const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+'…
+    [90m   | [39m                                                   [31m^[39m
+    [90m 25| [39m  return `wms440:${apiUrl('')}:${claims.tenant_id}:${claims.sub}:${doc…
+    [90m 26| [39m}
+[90m [2m❯[22m readIntake src/screens/ff/inboundDraftPersistence.ts:[2m28:36[22m[39m
+[90m [2m❯[22m src/screens/ff/FfInboundRequestView.tsx:[2m517:96[22m[39m
+[90m [2m❯[22m mountStateImpl node_modules/react-dom/cjs/react-dom-client.development.js:[2m8268:24[22m[39m
+[90m [2m❯[22m mountState node_modules/react-dom/cjs/react-dom-client.development.js:[2m8289:22[22m[39m
+[90m [2m❯[22m Object.useState node_modules/react-dom/cjs/react-dom-client.development.js:[2m26243:18[22m[39m
+[90m [2m❯[22m process.env.NODE_ENV.exports.useState node_modules/react/cjs/react.development.js:[2m1263:34[22m[39m
+[90m [2m❯[22m FfInboundRequestView src/screens/ff/FfInboundRequestView.tsx:[2m517:57[22m[39m
+[90m [2m❯[22m Object.react_stack_bottom_frame node_modules/react-dom/cjs/react-dom-client.development.js:[2m25904:20[22m[39m
+[90m [2m❯[22m renderWithHooks node_modules/react-dom/cjs/react-dom-client.development.js:[2m7662:22[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[90m (4)[39m
+[2m   Start at [22m 09:43:45
+[2m   Duration [22m 2.36s[2m (transform 657ms, setup 0ms, collect 1.78s, tests 33ms, environment 268ms, prepare 60ms)[22m
+

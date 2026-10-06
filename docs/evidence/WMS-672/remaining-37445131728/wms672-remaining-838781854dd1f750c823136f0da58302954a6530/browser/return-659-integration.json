@@ -1,0 +1,110 @@
+{
+  "calls": [
+    {
+      "path": "/api/operations/inbound-intake-requests/672-document/marking-codes",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/operations/inbound-intake-requests/672-document",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/operations/inbound-intake-requests/672-document/marking-codes",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/products/linked-wb-catalog",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/warehouses/672-warehouse/locations",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/warehouses",
+      "method": "GET",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    },
+    {
+      "path": "/api/operations/inbound-intake-requests/672-document/boxes",
+      "method": "POST",
+      "body": null,
+      "headers": {
+        "accept": "*/*",
+        "authorization": "Bearer synthetic.eyJ0ZW5hbnRfaWQiOiI2NzItdGVuYW50Iiwic3ViIjoiNjcyLXVzZXIifQ==.synthetic",
+        "origin": "http://127.0.0.1:16724",
+        "referer": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html",
+        "user-agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+        "sec-ch-ua": "\"Chromium\";v=\"154\", \"Google Chrome\";v=\"154\", \"Not A(Brand\";v=\"99\"",
+        "sec-ch-ua-mobile": "?0",
+        "sec-ch-ua-platform": "\"Linux\""
+      }
+    }
+  ],
+  "state": {
+    "local": [],
+    "alerts": [
+      "Не удалось выполнить действие. Проверьте заявку и попробуйте ещё раз."
+    ],
+    "transfers": 0
+  }
+}

@@ -1,0 +1,80 @@
+
+[1m[46m RUN [49m[22m [36mv3.2.6 [39m[90m/home/runner/work/WMS/WMS/frontend[39m
+
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mvalidates positive integers, recovers from API failure and refreshes the box list[32m 13[2mms[22m[39m
+[31m   → React is not defined[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mreuses one mutation after a lost response and gives the next intentional batch a new one[32m 1[2mms[22m[39m
+[31m   → React is not defined[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22moffers the same enabled bulk action in an editable return[32m 1[2mms[22m[39m
+[31m   → React is not defined[39m
+ [31m×[39m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mkeeps the bulk action disabled in completed inbound and return documents[32m 1[2mms[22m[39m
+[31m   → React is not defined[39m
+
+[31m⎯⎯⎯⎯⎯⎯⎯[39m[1m[41m Failed Tests 4 [49m[22m[31m⎯⎯⎯⎯⎯⎯⎯[39m
+
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mvalidates positive integers, recovers from API failure and refreshes the box list
+[31m[1mReferenceError[22m: React is not defined[39m
+[36m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m149:7[22m[39m
+    [90m147| [39m  [35mawait[39m [34mact[39m([35masync[39m () [33m=>[39m {
+    [90m148| [39m    root[33m.[39m[34mrender[39m(
+    [90m149| [39m      [33m<[39m[33mFfInboundRequestView[39m
+    [90m   | [39m      [31m^[39m
+    [90m150| [39m        [33mtoken[39m[33m=[39m[32m"wms659-token"[39m
+    [90m151| [39m        [33mrequestId[39m[33m=[39m[32m"request-659"[39m
+[90m [2m❯[22m process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:[2m814:22[22m[39m
+[90m [2m❯[22m render tests-e2e/wms659-frozen.dom.test.tsx:[2m147:9[22m[39m
+[90m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m215:11[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mreuses one mutation after a lost response and gives the next intentional batch a new one
+[31m[1mReferenceError[22m: React is not defined[39m
+[36m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m149:7[22m[39m
+    [90m147| [39m  [35mawait[39m [34mact[39m([35masync[39m () [33m=>[39m {
+    [90m148| [39m    root[33m.[39m[34mrender[39m(
+    [90m149| [39m      [33m<[39m[33mFfInboundRequestView[39m
+    [90m   | [39m      [31m^[39m
+    [90m150| [39m        [33mtoken[39m[33m=[39m[32m"wms659-token"[39m
+    [90m151| [39m        [33mrequestId[39m[33m=[39m[32m"request-659"[39m
+[90m [2m❯[22m process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:[2m814:22[22m[39m
+[90m [2m❯[22m render tests-e2e/wms659-frozen.dom.test.tsx:[2m147:9[22m[39m
+[90m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m240:11[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22moffers the same enabled bulk action in an editable return
+[31m[1mReferenceError[22m: React is not defined[39m
+[36m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m149:7[22m[39m
+    [90m147| [39m  [35mawait[39m [34mact[39m([35masync[39m () [33m=>[39m {
+    [90m148| [39m    root[33m.[39m[34mrender[39m(
+    [90m149| [39m      [33m<[39m[33mFfInboundRequestView[39m
+    [90m   | [39m      [31m^[39m
+    [90m150| [39m        [33mtoken[39m[33m=[39m[32m"wms659-token"[39m
+    [90m151| [39m        [33mrequestId[39m[33m=[39m[32m"request-659"[39m
+[90m [2m❯[22m process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:[2m814:22[22m[39m
+[90m [2m❯[22m render tests-e2e/wms659-frozen.dom.test.tsx:[2m147:9[22m[39m
+[90m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m263:11[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯[22m[39m
+
+[41m[1m FAIL [22m[49m tests-e2e/wms659-frozen.dom.test.tsx[2m > [22mWMS-659 bulk inbound boxes[2m > [22mkeeps the bulk action disabled in completed inbound and return documents
+[31m[1mReferenceError[22m: React is not defined[39m
+[36m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m149:7[22m[39m
+    [90m147| [39m  [35mawait[39m [34mact[39m([35masync[39m () [33m=>[39m {
+    [90m148| [39m    root[33m.[39m[34mrender[39m(
+    [90m149| [39m      [33m<[39m[33mFfInboundRequestView[39m
+    [90m   | [39m      [31m^[39m
+    [90m150| [39m        [33mtoken[39m[33m=[39m[32m"wms659-token"[39m
+    [90m151| [39m        [33mrequestId[39m[33m=[39m[32m"request-659"[39m
+[90m [2m❯[22m process.env.NODE_ENV.exports.act node_modules/react/cjs/react.development.js:[2m814:22[22m[39m
+[90m [2m❯[22m render tests-e2e/wms659-frozen.dom.test.tsx:[2m147:9[22m[39m
+[90m [2m❯[22m tests-e2e/wms659-frozen.dom.test.tsx:[2m275:13[22m[39m
+
+[31m[2m⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯[22m[39m
+
+
+[2m Test Files [22m [1m[31m1 failed[39m[22m[90m (1)[39m
+[2m      Tests [22m [1m[31m4 failed[39m[22m[90m (4)[39m
+[2m   Start at [22m 09:42:29
+[2m   Duration [22m 2.31s[2m (transform 729ms, setup 0ms, collect 1.87s, tests 18ms, environment 241ms, prepare 53ms)[22m
+

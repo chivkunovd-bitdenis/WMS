@@ -1,0 +1,12 @@
+✔ C7 remaining inbound: unknown reload, operator clarification then distinct explicit reprint (13370.931348ms)
+✔ C11 inbound: actual placement dialog long names preview error and neighbors (3458.573322ms)
+✔ C7 remaining return: unknown reload, operator clarification then distinct explicit reprint (3948.628489ms)
+✔ C11 return: actual placement dialog long names preview error and neighbors (3485.874693ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 24735.193536
