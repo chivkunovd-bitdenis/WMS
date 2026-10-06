@@ -1,0 +1,47 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/support-task-18/frontend
+
+ ✓ src/screens/v2/FfProductsCatalogScreen.sellerUrlFilter.dom.test.tsx (3 tests) 1303ms
+   ✓ FfProductsCatalogScreen — filter applied from ?seller_id= survives only until a fresh menu entry > menu click after entry via seller card link resets the filter to «Все селлеры»  620ms
+   ✓ FfProductsCatalogScreen — filter applied from ?seller_id= survives only until a fresh menu entry > menu click does not revert a filter the operator picked manually  316ms
+   ✓ FfProductsCatalogScreen — filter applied from ?seller_id= survives only until a fresh menu entry > the catalog own cleanup of ?fbs_limit= does not drop the ?seller_id= filter (F6)  365ms
+ ❯ src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx (3 tests | 2 failed) 2021ms
+   × c8_toggle_resets_page_preserves_filters_and_renders_server_selection 1913ms
+     → C8/C9: existing filters need a «С остатком» control: expected null not to be null
+   × c9_empty_stock_result_can_be_disabled_without_remount 56ms
+     → C8/C9: existing filters need a «С остатком» control: expected null not to be null
+   ✓ regression_real_dom_follows_unfiltered_server_page_and_count 50ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx > c8_toggle_resets_page_preserves_filters_and_renders_server_selection
+AssertionError: C8/C9: existing filters need a «С остатком» control: expected null not to be null
+ ❯ toggleStock src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx:95:78
+     93| async function toggleStock() {
+     94|   const control = host.querySelector('[data-testid="ff-catalog-has-sto…
+     95|   expect(control, 'C8/C9: existing filters need a «С остатком» control…
+       |                                                                              ^
+     96|   expect(host.querySelector('[data-testid="ff-catalog-filters"]')?.con…
+     97|   expect(control?.textContent || control?.closest('label')?.textConten…
+ ❯ src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx:120:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx > c9_empty_stock_result_can_be_disabled_without_remount
+AssertionError: C8/C9: existing filters need a «С остатком» control: expected null not to be null
+ ❯ toggleStock src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx:95:78
+     93| async function toggleStock() {
+     94|   const control = host.querySelector('[data-testid="ff-catalog-has-sto…
+     95|   expect(control, 'C8/C9: existing filters need a «С остатком» control…
+       |                                                                              ^
+     96|   expect(host.querySelector('[data-testid="ff-catalog-filters"]')?.con…
+     97|   expect(control?.textContent || control?.closest('label')?.textConten…
+ ❯ src/screens/v2/FfProductsCatalogScreen.hasStock.wms667.dom.test.tsx:148:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 4 passed (6)
+   Start at  10:51:30
+   Duration  5.87s (transform 841ms, setup 0ms, collect 5.35s, tests 3.32s, environment 1.38s, prepare 238ms)
