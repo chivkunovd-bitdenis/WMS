@@ -226,7 +226,7 @@
     "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "bb5a739417bec7f370f84a16f38f9de20f2b10cd7b045b44a6173fa94d88c503",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
-    "scripts/ci/promote_guards.py": "4d01ce65faf6af9227ac2529339297564c4ed3775350c9fc262f931c1068e210",
+    "scripts/ci/promote_guards.py": "3aa3237b3c5eb97135baac7cb7e81e5b1ef18b9108efa12bfe207f682ff8a482",
     "backend/tests/test_wms654_cells.py": "00931612a0788579440ac37d1bb6afa8e472cc89998d39b8de47443e178f7923",
     "backend/tests/test_wms654_migration.py": "36b998e36ff5e6f6478e9c31f45c1c89616b9a6ef5cad2878b993940406a2d3c",
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",

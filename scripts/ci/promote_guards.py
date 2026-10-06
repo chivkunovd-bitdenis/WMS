@@ -170,7 +170,19 @@ def verify_registered_case(root: Path, policy: dict, source: PurePosixPath, test
     module_parts = source.with_suffix("").parts
     module = ".".join(module_parts[1:] if module_parts[0] == "backend" else module_parts)
     frontend = str(source).removeprefix("frontend/")
+    script_reports = {
+        "scripts/ci/test_check_task_documents.py": "docgate-687.xml",
+        "scripts/ci/tests/test_product_scope.py": "product-scope.xml",
+        **{f"scripts/ci/tests/{name}.py": "ci-shards.xml" for name in (
+            "test_backend_shards", "test_backend_shard_failclosed", "test_ci_release_additions",
+            "test_backend_shard_redis_setup", "test_promote_guards", "test_process_contracts",
+            "test_process_deploy_gate", "test_server_process_gate",
+        )},
+    }
     for suite in policy["suites"].values():
+        required_report = script_reports.get(str(source))
+        if required_report and (suite["format"] != "junit" or suite["report"] != required_report):
+            continue
         # These two accepted test.each templates represent fixed four-mode
         # matrices. A wildcard/one matching case would silently lose a mode.
         if (str(source) == "frontend/src/sections/CatalogSection.wms654.test.tsx"
