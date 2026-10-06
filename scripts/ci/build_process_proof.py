@@ -32,7 +32,7 @@ def main():
         ['git', 'cat-file', '-e', f'{args.base}:{POLICY_PATH}'], cwd=root,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
     policy = verify_integrity(root, args.base, bootstrap=not baseline_has_policy)
-    results = verify_reports(policy, args.reports)
+    results = verify_reports(policy, args.reports, sha=sha)
     output = args.reports.parent / 'process-proof-final'
     if output.exists():
         raise ValueError('Evidence output already exists; do not reuse an earlier attempt')

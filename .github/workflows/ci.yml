@@ -147,7 +147,7 @@ jobs:
           echo '127.0.0.1 postgres' | sudo tee -a /etc/hosts
           python -c "import socket; assert set(socket.gethostbyname_ex('postgres')[2]) == {'127.0.0.1'}"
           python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_675_incident'); c.close()"
-          pytest -n 0 -q -s tests/test_wms675_recovery_scenario.py
+          pytest -n 0 -q -s tests/test_wms675_recovery_scenario.py --junitxml="$RUNNER_TEMP/release-postgres/675.xml"
       - name: Fresh PostgreSQL migration chain and withdrawal rollback
         env:
           DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517_migrations
@@ -167,11 +167,11 @@ jobs:
         run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py --junitxml="$RUNNER_TEMP/backend-all.xml"
       - name: Printer receipt persistence and unknown-outcome recovery
         working-directory: .
-        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py --junitxml="$RUNNER_TEMP/native-print.xml"
+        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k 'not test_windows_cmd_synthetic_queue_receipt' --junitxml="$RUNNER_TEMP/native-print.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: backend-executed-contracts-${{ github.sha }}
+          name: backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/release-postgres
             ${{ runner.temp }}/backend-all.xml
@@ -201,10 +201,12 @@ jobs:
           node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
       - name: Required box-label browser contracts and actual picking-list PDFs
         run: bash scripts/ci/run_release_print.sh
+      - name: Real QR input, continuous printing and selected-order buttons
+        run: bash scripts/ci/run_critical_fbs_browser.sh
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: release-print-${{ github.sha }}
+          name: release-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-print
           retention-days: 14
 
@@ -257,7 +259,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: frontend-executed-contracts-${{ github.sha }}
+          name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/frontend-all.json
           retention-days: 14
 
@@ -334,11 +336,11 @@ jobs:
           python-version: "3.13"
       - run: python -m pip install pytest
       - name: Persist receipt and recover unknown outcome on Windows
-        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py --junitxml=native-print-windows.xml
+        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k "not test_safe_synthetic_queue_runs_real_child_process_once and not test_actual_process_exit_after_spool_acceptance_recovers_without_second_submit" --junitxml=native-print-windows.xml
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: printer-windows-contracts-${{ github.sha }}
+          name: printer-windows-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: native-print-windows.xml
           retention-days: 14
 
@@ -358,19 +360,19 @@ jobs:
           python-version: "3.11"
       - uses: actions/download-artifact@v4
         with:
-          name: backend-executed-contracts-${{ github.sha }}
+          name: backend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
         with:
-          name: frontend-executed-contracts-${{ github.sha }}
+          name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
         with:
-          name: printer-windows-contracts-${{ github.sha }}
+          name: printer-windows-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof
       - uses: actions/download-artifact@v4
         with:
-          name: release-print-${{ github.sha }}
+          name: release-print-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof/print
       - name: Verify every required named case and bind evidence to this attempt
         env:

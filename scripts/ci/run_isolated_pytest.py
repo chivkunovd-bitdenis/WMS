@@ -32,6 +32,11 @@ def boundary(event, args):
 
 
 sys.addaudithook(boundary)
+# The runner lives outside backend; resolve this checkout's app before any
+# globally installed editable package from another worktree.
+if not (Path.cwd() / 'app').is_dir():
+    raise RuntimeError('Run isolated backend tests from the backend directory')
+sys.path.insert(0, str(Path.cwd()))
 import pytest
 
 result = pytest.main(sys.argv[1:])

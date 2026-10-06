@@ -7,6 +7,7 @@ import base64
 import hashlib
 import io
 import json
+import re
 from pathlib import Path
 import subprocess
 import sys
@@ -78,12 +79,16 @@ def verify_execution(get, download, repository: str, sha: str, policy_bytes: byt
                             run_attempt=run['run_attempt'], policy_sha256=hashlib.sha256(policy_bytes).hexdigest())
             if any(metadata.get(key) != value for key, value in expected.items()):
                 raise GateError('Отчёт относится к другой версии, попытке или набору обязательных сценариев')
+            baseline = metadata.get('base_sha')
+            if (not isinstance(baseline, str) or not re.fullmatch('[0-9a-f]{40}', baseline)
+                    or baseline in {'0'*40, sha}):
+                raise GateError('В отчёте отсутствует допустимый отдельный SHA базы сравнения')
             report_root = Path(tmp)
             for name in required_files - {'execution.json'}:
                 path = report_root / relative_path(name)
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(archive.read(name))
-            cases = verify_reports(policy, report_root)
+            cases = verify_reports(policy, report_root, sha=sha)
         # A rerun/new run during artifact download invalidates even a complete report.
         if verify(get, repository, sha) != run:
             raise GateError('CI изменился во время чтения отчёта; нужна повторная проверка', 4)

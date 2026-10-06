@@ -59,7 +59,7 @@ def validate_policy(policy: dict) -> None:
         if suite['report'] in reports:
             raise ValueError('Two suites cannot claim the same report')
         reports.add(suite['report'])
-        if suite['format'] not in {'junit', 'vitest', 'node-tap'} or type(suite['exact']) is not bool:
+        if suite['format'] not in {'junit', 'vitest', 'node-tap', 'browser-json'} or type(suite['exact']) is not bool:
             raise ValueError(f'Invalid suite format: {name}')
         cases = suite['cases']
         if (not isinstance(cases, list) or not cases or
@@ -168,12 +168,26 @@ def node_tap_results(raw: bytes) -> dict[str, str]:
     return result
 
 
-def verify_reports(policy: dict, root: Path) -> dict[str, list[str]]:
+def browser_results(raw: bytes, sha: str | None) -> dict[str, str]:
+    data = json.loads(raw)
+    if not sha or data.get('sha') != sha or data.get('status') != 'PASS':
+        raise ValueError('Real browser proof did not pass for the tested SHA')
+    result = {}
+    for case in data['cases']:
+        if case['id'] in result:
+            raise ValueError(f"Duplicate browser case: {case['id']}")
+        result[case['id']] = 'passed' if case['status'] == 'PASS' else case['status']
+    return result
+
+
+def verify_reports(policy: dict, root: Path, *, sha: str | None = None) -> dict[str, list[str]]:
     validate_policy(policy)
     readers = {'junit': junit_results, 'vitest': vitest_results, 'node-tap': node_tap_results}
     verified = {}
     for name, suite in policy['suites'].items():
-        actual = readers[suite['format']](local_file(root, suite['report']).read_bytes())
+        raw = local_file(root, suite['report']).read_bytes()
+        actual = (browser_results(raw, sha) if suite['format'] == 'browser-json'
+                  else readers[suite['format']](raw))
         required = set(suite['cases'])
         missing = required - actual.keys()
         if missing:
@@ -196,7 +210,8 @@ def main() -> None:
     args = parser.parse_args()
     policy = verify_integrity(args.root, args.base, bootstrap=args.bootstrap)
     if args.reports:
-        print(json.dumps(verify_reports(policy, args.reports), ensure_ascii=False))
+        sha = git(args.root, 'rev-parse', 'HEAD').decode().strip()
+        print(json.dumps(verify_reports(policy, args.reports, sha=sha), ensure_ascii=False))
     else:
         print(f"Process contract integrity: {len(policy['files'])} files")
 
