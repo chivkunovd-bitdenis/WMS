@@ -81,6 +81,7 @@ from app.services.wb_card_enrichment import (
     sku_code_for_wb_variant,
     subject_name_from_card,
 )
+from app.services.wb_honest_sign_service import WbCategoryCatalog
 from app.services.wildberries_product_import_service import upsert_products_from_wb_cards
 
 logger = logging.getLogger(__name__)
@@ -815,6 +816,8 @@ async def add_cards_to_fulfillment(
     *,
     wb_nm_ids: list[int],
     ozon_product_ids: list[str],
+    marking_catalog: WbCategoryCatalog | None = None,
+    marking_catalog_error: str | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     """Turn selected WB cards into WMS products; report per-card outcome.
 
@@ -832,6 +835,12 @@ async def add_cards_to_fulfillment(
     nm_ids = _dedupe_preserve_order(wb_nm_ids)
     added_wb_nm_ids: list[int] = []
     if nm_ids:
+        if marking_catalog_error is not None:
+            logger.warning(
+                "seller_catalog.add_to_fulfillment: WB marking catalog unavailable "
+                "seller=%s; clothing inference deferred",
+                seller_id,
+            )
         cards_by_nm: dict[int, SellerWildberriesImportedCard] = {}
         for batch in chunked(sorted(set(nm_ids)), 2000):
             stmt = select(SellerWildberriesImportedCard).where(
@@ -900,7 +909,12 @@ async def add_cards_to_fulfillment(
                         )
                         continue
                     counts = await upsert_products_from_wb_cards(
-                        session, tenant_id, seller_id, [raw]
+                        session,
+                        tenant_id,
+                        seller_id,
+                        [raw],
+                        marking_catalog=marking_catalog,
+                        marking_catalog_error=marking_catalog_error,
                     )
             except Exception:
                 await session.rollback()
