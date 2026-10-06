@@ -1,5 +1,5 @@
 name: WMS-673 isolated actual browser acceptance
-# Dedicated acceptance only; does not invoke the release CI workflow.
+# Dedicated A4/native-preview acceptance only; does not invoke release CI.
 on:
   push:
     branches: [codex/wms672-673-analyst-20261006]
