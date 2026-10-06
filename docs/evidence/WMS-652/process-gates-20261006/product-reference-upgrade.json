@@ -1,0 +1,23 @@
+{
+  "previous_product_reference": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "accepted_product_reference": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "independent_technical_review": "bfba7536566962de5c6bb16667b3ce80420d6302",
+  "replacement_analyst_acceptance": "4eb81c378babf081b3342f3bf36ac17bf136a8bf",
+  "workflow_sha256": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+  "policy_sha256": "e9d83920496bc11d20b3e3105154d858841d3e8f29a0cfc1027747dbdc1ee0be",
+  "protected_files": 229,
+  "suites": 21,
+  "case_ids": 1173,
+  "scope_cli": {
+    "command": "python3 scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+    "unapproved_product_paths": []
+  },
+  "integrity": {
+    "command": "python3 scripts/ci/process_contracts.py --base origin/etalon --bootstrap",
+    "result": "PASS229files"
+  },
+  "frozen_scope_cases": 51,
+  "tests_repeated": false,
+  "main_bootstrap_source_still": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "new_source_pin_and_full_ci_and_deploy_pending": true
+}

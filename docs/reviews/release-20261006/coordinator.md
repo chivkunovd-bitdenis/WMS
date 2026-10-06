@@ -308,3 +308,10 @@ Actual Linux run37545334001/attempt1 наb3adc5d73c24f7dcbc15e40f22ed115e1a756b4
 Late trace overflow сохранён честно. Published26af10f1f5ffd25de83d058c779f758539f2341c/35f492e74aadeb587d87dc48bd28fb942cc59104 интегрированы82afab3e2/5c769670f: полный ограниченный первый299prefix имеет299original+299scaled Add/Remove pairs, residual0/peakoriginal55. Для первых16CID300–315 положительные original836x356Add→SAMEidentityscaled1x1Get→originalUnref/Remove происходят6.790–10.001ms до nativeQueue316.224 освобождения следуют менее1ms послеscaledGet,75позже; это не утверждение немедленногоосвобождения всехгрупп. Потерянные поздние события не используются для отсутствия илиwhole-run peak. ДополнительныйsuccessfulC5 радиtrace не запускается.
 
 Отдельный Sol6.1/high bundledCLI reviewer в namedreviewbranch независимо проверяет contract/product/wiring/raw и положительнуюцепочку; повторов unchangedtests/build/browser нет. Затем отдельный replacementanalyst принимает672 delta и product-reference migration. Prepared229files/21suites1173IDs сохранены; CLIreference покаd618 и mainSOURCE0151, поэтому окончательныйpin/fullCI/deploy ещё не объявлены.
+
+
+## Checkpoint 23:40 UTC: отдельная приёмка опубликована, product reference обновлён
+
+Replacement Solаналитик4eb81c378babf081b3342f3bf36ac17bf136a8bf отдельно принял bounded672 software и разрешил exact product-reference25ebc6fe13384a55cf1f2b7e5e4054bb862d002d на основании независимогоbfba иactualfullC5/12PASS. Исторические C7/C10/C11 finish и физическаяpostdeployC12 сохранены, новых gate/повторов нет. Интегратор изменил только CLIreference/digest; frozen51scope/script сохранены, actualscopeCLI пустойunapprovedlist и229integrityPASS. Это preparedacceptedreference, не mainSOURCE/fullCI/deploy.
+
+Окончательный commonSOURCE сейчас передаётся той же независимой Solreviewerсессии для bounded229hashes/21suites/1173IDs/sourcepin проверки. После точного APPROVE обычный mainPR обновит ONLYbootstrapconfig, затем acceptedPR387 получает один полныйCI. Stagingcc8e иproduction8f11d912 прежние.
