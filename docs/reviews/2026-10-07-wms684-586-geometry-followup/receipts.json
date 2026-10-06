@@ -1,0 +1,337 @@
+[
+  {
+    "case": "64",
+    "pages": [
+      {
+        "page": 1,
+        "visible_chars": 120,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 2,
+        "visible_chars": 252,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 3,
+        "visible_chars": 104,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      }
+    ],
+    "numeric_columns_once": [
+      {
+        "column": 0,
+        "values": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      {
+        "column": 5,
+        "values": [
+          "5",
+          "6",
+          "4",
+          "15"
+        ]
+      },
+      {
+        "column": 6,
+        "values": [
+          "3",
+          "4",
+          "5",
+          "12"
+        ]
+      },
+      {
+        "column": 7,
+        "values": [
+          "-2",
+          "-2",
+          "+1",
+          "-3"
+        ]
+      }
+    ],
+    "totals_once_on_last_page": true,
+    "last_name_glyph": {
+      "origin": [
+        50.0,
+        177.12860107421875
+      ],
+      "bbox": [
+        50.0,
+        169.3135986328125,
+        54.095001220703125,
+        179.11610412597656
+      ],
+      "c": "Х",
+      "synthetic": false
+    },
+    "following_name_glyph": {
+      "origin": [
+        50.0,
+        191.9383544921875
+      ],
+      "bbox": [
+        50.0,
+        184.12335205078125,
+        54.50749969482422,
+        193.9258575439453
+      ],
+      "c": "С",
+      "synthetic": false
+    },
+    "gap_pt": 5.0072479248046875,
+    "separator_y_between_glyphs": [
+      182.1160888671875
+    ]
+  },
+  {
+    "case": "128",
+    "pages": [
+      {
+        "page": 1,
+        "visible_chars": 120,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 2,
+        "visible_chars": 154,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 3,
+        "visible_chars": 54,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 4,
+        "visible_chars": 84,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      }
+    ],
+    "numeric_columns_once": [
+      {
+        "column": 0,
+        "values": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      {
+        "column": 5,
+        "values": [
+          "5",
+          "6",
+          "4",
+          "15"
+        ]
+      },
+      {
+        "column": 6,
+        "values": [
+          "3",
+          "4",
+          "5",
+          "12"
+        ]
+      },
+      {
+        "column": 7,
+        "values": [
+          "-2",
+          "-2",
+          "+1",
+          "-3"
+        ]
+      }
+    ],
+    "totals_once_on_last_page": true,
+    "last_name_glyph": {
+      "origin": [
+        50.0,
+        279.49029541015625
+      ],
+      "bbox": [
+        50.0,
+        271.67529296875,
+        54.095001220703125,
+        281.477783203125
+      ],
+      "c": "Х",
+      "synthetic": false
+    },
+    "following_name_glyph": {
+      "origin": [
+        50.0,
+        294.300048828125
+      ],
+      "bbox": [
+        50.0,
+        286.48504638671875,
+        54.50749969482422,
+        296.28753662109375
+      ],
+      "c": "С",
+      "synthetic": false
+    },
+    "gap_pt": 5.00726318359375,
+    "separator_y_between_glyphs": [
+      284.477783203125
+    ]
+  },
+  {
+    "case": "empty-lines",
+    "pages": [
+      {
+        "page": 1,
+        "visible_chars": 113,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 2,
+        "visible_chars": 106,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      },
+      {
+        "page": 3,
+        "visible_chars": 83,
+        "all_char_bounds_inside_page": true,
+        "rect": [
+          0.0,
+          0.0,
+          842.0,
+          595.0
+        ]
+      }
+    ],
+    "numeric_columns_once": [
+      {
+        "column": 0,
+        "values": [
+          "1",
+          "2",
+          "3"
+        ]
+      },
+      {
+        "column": 5,
+        "values": [
+          "5",
+          "6",
+          "4",
+          "15"
+        ]
+      },
+      {
+        "column": 6,
+        "values": [
+          "3",
+          "4",
+          "5",
+          "12"
+        ]
+      },
+      {
+        "column": 7,
+        "values": [
+          "-2",
+          "-2",
+          "+1",
+          "-3"
+        ]
+      }
+    ],
+    "totals_once_on_last_page": true,
+    "last_name_glyph": {
+      "origin": [
+        50.0,
+        33.822265625
+      ],
+      "bbox": [
+        50.0,
+        26.007265090942383,
+        54.41749954223633,
+        35.80976486206055
+      ],
+      "c": "Я",
+      "synthetic": false
+    },
+    "following_name_glyph": {
+      "origin": [
+        50.0,
+        48.822265625
+      ],
+      "bbox": [
+        50.0,
+        41.00726318359375,
+        53.89250183105469,
+        50.80976486206055
+      ],
+      "c": "Т",
+      "synthetic": false
+    },
+    "gap_pt": 5.197498321533203,
+    "separator_y_between_glyphs": [
+      39.0
+    ]
+  }
+]
