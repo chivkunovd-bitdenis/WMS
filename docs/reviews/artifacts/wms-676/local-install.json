@@ -1,22 +1,22 @@
 {
-  "installed_sha": "1906222619556db64bba92165221dab8b3803180",
+  "installed_sha": "8cd8db61598e6c80c91d7eff13301230a4ca6102",
   "published_branch": "codex/wms676-sol61-pipeline",
   "model": "gpt-6.1-sol",
+  "codex_bin": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
   "review_model": "gpt-6-astra",
   "review_effort": "high",
-  "previous_package_sha": "e9fc69ba001b6573eeabd24f644b4310001dc54d",
+  "previous_package_sha": "1906222619556db64bba92165221dab8b3803180",
   "files": {
-    "support_agent/agent_instructions.md": "db6e879619e2f1ec8179e89259c8971e1e0813511610b75130c8d03dde0207e7",
-    "support_agent/config.py": "088920e359cf3ef85647d8b1ba1c4cd51933d11969125b82b386e2304752337b",
-    "support_agent/llm.py": "2234c9d653c0e7824955f8736e822a612d162f1f88504a7b9c5b6b262c3482bb",
-    "support_agent/night.py": "4c31c8b13f673f875e7db85bfc91fe6ef7ee34acaf327c4530532b38d3d9a58b"
+    "support_agent/pipeline.py": "6f98eec4c8adba091ffe3acc05ff5c97541043ec4d01583217606b91aaf651a7"
   },
   "state_preserved_during_install": true,
+  "old_process_drained_before_bootout": true,
+  "respawn_gated_before_sigterm": true,
   "all_package_modules_match_commit": true,
   "initial_ticket_count": 21,
-  "backup": "/Users/deniscivkunov/.wms-support-agent/sol61-before-pb08paq7",
+  "backup": "/Users/deniscivkunov/.wms-support-agent/sol61-before-qj94_ge7",
   "service_running": true,
-  "heartbeat_age_sec": 0.18564820289611816,
+  "heartbeat_age_sec": 7.880837917327881,
   "non_model_configuration_preserved": true,
   "scope": "Local Telegram service only; no merge or WMS production deploy"
 }
