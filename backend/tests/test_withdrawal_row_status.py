@@ -16,7 +16,11 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession
-from test_withdrawal_ledger import document, seed  # type: ignore[import-not-found]
+from test_withdrawal_ledger import (  # type: ignore[import-not-found]
+    document,
+    legacy_sales_http,  # noqa: F401 -- same synthetic I/O fixture
+    seed,
+)
 
 from app.db.withdrawal_repository import (
     current_items,
