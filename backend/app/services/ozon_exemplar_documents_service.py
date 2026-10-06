@@ -433,6 +433,10 @@ async def get_exemplar_documents(
 def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
     status = raw.get("status")
     completed = data.get("state") == "accepted"
+    rejected = data.get("state") == "rejected" and data.get("choice", {}).get(
+        "all_required_absent"
+    ) is True
+    rejection_errors = data.get("errors", [])
     data.update(
         status=status, state="accepted" if completed else "unknown",
         errors=[], document_errors={}, last_status=raw,
@@ -496,6 +500,12 @@ def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
             )
             if not confirmed and status != "validation_in_process":
                 data["state"] = "unknown"
+        # A stale readback cannot erase an already proven refusal. Keep that
+        # explicit retry reachable, while reads never make an unknown SET retryable.
+        if rejected and data["state"] in {"unknown", "editable"}:
+            data["state"] = "rejected"
+        if rejected and data["state"] == "rejected" and not data["errors"]:
+            data["errors"] = rejection_errors
 
 
 async def resume_exemplar_document_check(
@@ -512,6 +522,9 @@ async def resume_exemplar_document_check(
     order = await document_order(session, tenant_id, order_id)
     data = document_data(order)
     completed = data.get("state") == "accepted"
+    rejected = data.get("state") == "rejected" and data.get("choice", {}).get(
+        "all_required_absent"
+    ) is True
     # Preparing has not checkpointed /set; a reader cannot release the writer's claim.
     if data.get("in_flight"):
         lease_until = datetime.fromisoformat(data["lease_until"])
@@ -557,7 +570,8 @@ async def resume_exemplar_document_check(
         raw = response.model_dump(exclude_none=True)
         if response.posting_number and response.posting_number != order.external_order_id:
             data.update(
-                state="accepted" if completed else "unknown", errors=["ozon_posting_mismatch"]
+                state="accepted" if completed else "rejected" if rejected else "unknown",
+                errors=["ozon_posting_mismatch"],
             )
         else:
             classify_document_status(data, raw)
@@ -591,7 +605,10 @@ async def resume_exemplar_document_check(
     except (MarketplaceProviderError, OzonFbsProcessError) as exc:
         # A failed read cannot undo a previously confirmed write. An unresolved
         # write still stays unknown and cannot be repeated blindly.
-        data.update(state="accepted" if completed else "unknown", errors=[exc.code])
+        data.update(
+            state="accepted" if completed else "rejected" if rejected else "unknown",
+            errors=[exc.code],
+        )
     await checkpoint(session, tenant_id, order_id, data)
     order = await document_order(session, tenant_id, order_id)
     return await document_view(session, order)
@@ -748,7 +765,9 @@ async def save_absent_exemplar_documents(
     """One explicit posting choice; every required document shares the same SET."""
     order = await document_order(session, tenant_id, order_id)
     previous = document_data(order)
-    if previous.get("state") in PENDING_STATES or absent_documents_selected(previous):
+    if previous.get("state") in PENDING_STATES or (
+        absent_documents_selected(previous) and previous.get("state") != "rejected"
+    ):
         return await resume_exemplar_document_check(
             session,
             tenant_id=tenant_id,

@@ -1,0 +1,57 @@
+FFF                                                                      [100%]
+=================================== FAILURES ===================================
+____ test_unknown_with_old_update_available_readback_cannot_duplicate_batch ____
+tests/test_wms663_release_retry_contract.py:99: in test_unknown_with_old_update_available_readback_cannot_duplicate_batch
+    assert writes(transport) == [expected_payload()]
+E   AssertionError: assert [{'multi_box_...d': 663002}]}] == [{'posting_nu... '', ...}]}]}]
+E     
+E     Left contains 2 more items, first extra item: {'multi_box_qty': 3, 'posting_number': '019663-0001-1', 'products': [{'exemplars': [{'exemplar_id': 81, 'gtd': '', 'is...emplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'is_rnpt_absent': True, ...}], 'product_id': 663002}]}
+E     Use -v to get more diff
+__________ test_accepted_batch_reopen_and_repeat_never_create_new_set __________
+tests/test_wms663_release_retry_contract.py:118: in test_accepted_batch_reopen_and_repeat_never_create_new_set
+    assert writes(transport) == [expected_payload()]
+E   AssertionError: assert [{'multi_box_...d': 663002}]}] == [{'posting_nu... '', ...}]}]}]
+E     
+E     Left contains one more item: {'multi_box_qty': 3, 'posting_number': '019663-0001-1', 'products': [{'exemplars': [{'exemplar_id': 81, 'gtd': '', 'is...emplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'is_rnpt_absent': True, ...}], 'product_id': 663002}]}
+E     Use -v to get more diff
+____ test_two_sessions_same_version_batch_allow_only_one_set[initial-batch] ____
+tests/test_wms663_release_retry_contract.py:172: in test_two_sessions_same_version_batch_allow_only_one_set
+    assert writes(second_transport) == []
+E   AssertionError: assert [{'multi_box_...d': 663002}]}] == []
+E     
+E     Left contains one more item: {'multi_box_qty': 3, 'posting_number': '019663-0001-1', 'products': [{'exemplars': [{'exemplar_id': 81, 'gtd': '', 'is...emplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'is_rnpt_absent': True, ...}], 'product_id': 663002}]}
+E     Use -v to get more diff
+
+During handling of the above exception, another exception occurred:
+tests/test_wms663_release_retry_contract.py:175: in test_two_sessions_same_version_batch_allow_only_one_set
+    outcome = await first
+              ^^^^^^^^^^^
+tests/test_wms663_release_retry_contract.py:158: in save
+    return await documents.save_absent_exemplar_documents(
+app/services/ozon_exemplar_documents_service.py:809: in save_absent_exemplar_documents
+    return await send_exemplar_payload(
+app/services/ozon_exemplar_documents_service.py:617: in send_exemplar_payload
+    raise OzonFbsProcessError(
+E   app.services.ozon_fbs_errors.OzonFbsProcessError: ozon_exemplar_documents_conflict
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms663-retry-contract-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_wms663_release_retry_contract.py::test_unknown_with_old_update_available_readback_cannot_duplicate_batch
+FAILED tests/test_wms663_release_retry_contract.py::test_accepted_batch_reopen_and_repeat_never_create_new_set
+FAILED tests/test_wms663_release_retry_contract.py::test_two_sessions_same_version_batch_allow_only_one_set[initial-batch]
+3 failed, 2 deselected, 6 warnings in 1.66s
