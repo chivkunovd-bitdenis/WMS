@@ -36,7 +36,7 @@ if (!launcher || typeof launcher.launch !== 'function') {
 }
 
 const chromeApp = Application('Google Chrome');
-const targetUrl = 'https://sellerfocus.pro/seller/honest-sign/withdrawals';
+const targetUrl = 'https://wms.sellerfocus.pro/seller/honest-sign/withdrawals';
 const focusFailureMessage = 'Не удалось безопасно показать подготовленную вкладку Chrome. Подпись и отправка не выполнялись.';
 let originalTargetTabId = null;
 

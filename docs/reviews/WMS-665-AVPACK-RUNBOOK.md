@@ -85,7 +85,7 @@ CryptoPro Browser Plug-in не ниже 2.0.15003 и его браузерное
 
 Виталию передаётся один файл `avpack-sold-kiz.command` из `scripts/ops/`.
 Сохранить его в «Загрузки», оставить открытой ровно одну авторизованную вкладку
-Chrome `https://sellerfocus.pro/seller/honest-sign/withdrawals` и выполнить в
+Chrome `https://wms.sellerfocus.pro/seller/honest-sign/withdrawals` и выполнить в
 Терминале одну команду:
 
 ```sh

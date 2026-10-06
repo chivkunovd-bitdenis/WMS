@@ -5,7 +5,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.Wms665MacLauncher = api;
 })(typeof globalThis === 'undefined' ? this : globalThis, function buildMacLauncher() {
-  const TARGET_URL = 'https://sellerfocus.pro/seller/honest-sign/withdrawals';
+  const TARGET_URL = 'https://wms.sellerfocus.pro/seller/honest-sign/withdrawals';
   const RUN_MARKER = '__WMS665_MAC_RUN__';
   const DEFAULT_MAX_POLLS = 120;
 
@@ -20,7 +20,7 @@
 
   function isTargetUrl(value) {
     if (typeof value !== 'string') return false;
-    return /^https:\/\/sellerfocus\.pro\/seller\/honest-sign\/withdrawals\/?(?:[?#].*)?$/.test(value);
+    return /^https:\/\/wms\.sellerfocus\.pro\/seller\/honest-sign\/withdrawals\/?(?:[?#].*)?$/.test(value);
   }
 
   function sanitizedState(value) {
@@ -84,7 +84,7 @@
         return JSON.stringify({ status: 'error', signed: false, sent: false });
       }
       const page = globalThis.location;
-      if (!page || page.origin !== 'https://sellerfocus.pro' ||
+      if (!page || page.origin !== 'https://wms.sellerfocus.pro' ||
           (page.pathname !== '/seller/honest-sign/withdrawals' && page.pathname !== '/seller/honest-sign/withdrawals/')) {
         globalThis[marker] = { status: 'error', signed: false, sent: false };
         return JSON.stringify({ status: 'error', signed: false, sent: false });

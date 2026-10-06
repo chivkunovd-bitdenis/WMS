@@ -5,7 +5,7 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   if (root) root.AvpackKizHelper = api;
 })(typeof globalThis === 'undefined' ? this : globalThis, function buildAvpackKizHelper(root) {
-  const EXPECTED_ORIGIN = 'https://sellerfocus.pro';
+  const EXPECTED_ORIGIN = 'https://wms.sellerfocus.pro';
   const EXPECTED_PATH = '/seller/honest-sign/withdrawals';
   const EXPECTED_TENANT = 'd6e1ad21-8afa-4acf-8d0b-907b9f2adcfe';
   const EXPECTED_SELLER = '0b8da5d8-f43a-42f5-a2ec-43173ea844bd';
