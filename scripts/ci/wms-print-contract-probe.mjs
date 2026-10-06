@@ -19,12 +19,30 @@ if (!process.argv.includes('--render673')) {
     browser.newContext = async (...contextArgs) => {
       const context = await newContext(...contextArgs);
       const id = ++fixture;
+      const captures = [];
+      const captureDir = resolve(process.env.WMS672_EVIDENCE_DIR, `fixture-${id}`);
+      await context.exposeBinding('__wms672CaptureDecodeSource', (_source, data) => {
+        const capture = (async () => {
+          await mkdir(captureDir, { recursive: true });
+          const key = data.barcode?.replace(/[^a-zA-Z0-9_-]/g, '_') || 'unknown';
+          await writeFile(resolve(captureDir, `${key}.decode.json`), JSON.stringify({ ...data, src: undefined }, null, 2));
+          if (data.src.startsWith('data:image/png;base64,')) {
+            await writeFile(resolve(captureDir, `${key}.png`), Buffer.from(data.src.split(',')[1], 'base64'));
+          }
+        })();
+        captures.push(capture);
+        return capture;
+      });
       // Observe native decode failures before product cleanup destroys the frame.
       // No substitution of native results, frozen faults, expectations or timeouts.
       await context.addInitScript(() => {
         const decode = HTMLImageElement.prototype.decode;
         HTMLImageElement.prototype.decode = function (...args) {
+          const barcode = this.closest('.label')?.getAttribute('data-barcode');
+          const source = () => ({ barcode, src: this.src, width: this.naturalWidth, height: this.naturalHeight });
+          if (barcode === 'INB-000000000226') void window.__wms672CaptureDecodeSource(source());
           return decode.apply(this, args).catch(error => {
+            void window.__wms672CaptureDecodeSource({ ...source(), error: { name: error.name, message: error.message, code: error.code } });
             console.error('WMS672 native decode failure', JSON.stringify({
               name: error.name, message: error.message, code: error.code,
               srcLength: this.src.length, complete: this.complete,
@@ -47,6 +65,7 @@ if (!process.argv.includes('--render673')) {
       const close = context.close.bind(context);
       context.close = async (...closeArgs) => {
         const dir = resolve(process.env.WMS672_EVIDENCE_DIR, `fixture-${id}`);
+        await Promise.allSettled(captures);
         await mkdir(dir, { recursive: true });
         await writeFile(resolve(dir, 'requests.json'), JSON.stringify(requests, null, 2));
         await writeFile(resolve(dir, 'events.json'), JSON.stringify(events, null, 2));

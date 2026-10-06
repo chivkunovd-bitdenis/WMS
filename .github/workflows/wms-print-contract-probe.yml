@@ -17,13 +17,13 @@ concurrency:
 jobs:
   print-contract:
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
+    timeout-minutes: 12
     env:
       WMS672_TEST_URL: http://127.0.0.1:16724
       # Bounded postfix probe: changed 672 only; preserve the 673 contract.
       WMS_PRINT_PROBE_SCOPE: '672'
       WMS672_TEST_NAME_PATTERN: 'inbound 300|C5 decode|C7/C8|C8 mark'
-      WMS_PRINT_SOURCE_SHA: '163259d412d2ef5ba2d49b831cd5c7da284245d9'
+      WMS_PRINT_SOURCE_SHA: '0e6a7fbc3eb11f951febf972b35c6e117c42678a'
     steps:
       - uses: actions/checkout@v4
       - name: Verify immutable product source and frozen contracts
@@ -78,6 +78,12 @@ jobs:
             timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern="$WMS672_TEST_NAME_PATTERN" tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
             result672=${PIPESTATUS[0]}
           fi
+          result672delta=skipped
+          if [ "$WMS_PRINT_PROBE_SCOPE" = 672 ]; then
+            # Separate frozen scheduling failures from the focused transfer/recovery result.
+            WMS672_EVIDENCE_DIR="$RUNNER_TEMP/print-contract/672-delta" timeout 180s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 --test-name-pattern='return 300|C4 once|C6 fast' tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672-delta.log"
+            result672delta=${PIPESTATUS[0]}
+          fi
           renderer=skipped
           result673=skipped
           if [ "$WMS_PRINT_PROBE_SCOPE" != 672 ]; then
@@ -89,8 +95,8 @@ jobs:
             result673=${PIPESTATUS[0]}
           fi
           fi
-          printf '672=%s\n673-renderer=%s\n673=%s\n' "$result672" "$renderer" "$result673" | tee "$RUNNER_TEMP/print-contract/exit-codes.txt"
-          { [ "$result672" = skipped ] || [ "$result672" = 0 ]; } && { [ "$renderer" = skipped ] || [ "$renderer" = 0 ]; } && { [ "$result673" = skipped ] || [ "$result673" = 0 ]; }
+          printf '672=%s\n672-delta=%s\n673-renderer=%s\n673=%s\n' "$result672" "$result672delta" "$renderer" "$result673" | tee "$RUNNER_TEMP/print-contract/exit-codes.txt"
+          { [ "$result672" = skipped ] || [ "$result672" = 0 ]; } && { [ "$result672delta" = skipped ] || [ "$result672delta" = 0 ]; } && { [ "$renderer" = skipped ] || [ "$renderer" = 0 ]; } && { [ "$result673" = skipped ] || [ "$result673" = 0 ]; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:
