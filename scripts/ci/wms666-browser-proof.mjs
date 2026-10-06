@@ -194,13 +194,9 @@ try {
     if (name.startsWith('ozon') || name === 'mixed') {
       const rowId = `${OZ}-order`;
       for (const [action, expr] of [['row', `document.querySelector('[data-order-id="${rowId}"] button[aria-label="Печать ЧЗ и ШК"]')`], ['bulk', `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Печать всего ('))`]]) {
-        // Mixed bulk belongs to both marketplaces; select only the Ozon row first.
-        if (name === 'mixed' && action === 'bulk') {
-          await evaluate(`document.querySelector('[data-order-id="${rowId}"] input[type="checkbox"]').click()`);
-        }
-        const selector = name === 'mixed' && action === 'bulk'
-          ? `[...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('Печать выбранного ('))` : expr;
-        await evaluate(`(${selector}).click()`);
+        // Group UI exposes the existing Ozon supply bulk action above its rows.
+        await until(expr);
+        await evaluate(`(${expr}).click()`);
         await until(`document.querySelector('[data-testid="marking-print-confirm"]')`);
         await capture(`${name}-${action}-print`);
         const before = requestLog.filter(r=>r.path.endsWith('/order-print-tape')).length;
