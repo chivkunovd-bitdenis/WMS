@@ -1,0 +1,41 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-dynamicmac-independent-review
+
+stdout | docs/evidence/WMS-517-mac-review.test.tsx > real React screen preparation with 0ms registry latency
+{"networkDelay":0,"outcome":{"mode":"execute","status":"certificate_dialog_open","targetCount":1,"noSend":true,"signed":false,"sent":false,"message":"Выбраны 1 пригодных КИЗ из свежего реестра WMS. Сертификат и отправку подтверждает Виталий."},"refreshDisabled":false,"certificateLists":1,"registryGets":6}
+
+stdout | docs/evidence/WMS-517-mac-review.test.tsx > real React screen preparation with 700ms registry latency
+{"networkDelay":700,"outcome":{"error":"Штатная кнопка обновления реестра недоступна."},"refreshDisabled":true,"certificateLists":0,"registryGets":4}
+
+ ❯ docs/evidence/WMS-517-mac-review.test.tsx (2 tests | 1 failed) 3632ms
+   ✓ real React screen preparation with 0ms registry latency  1241ms
+   × real React screen preparation with 700ms registry latency 2390ms
+     → expected undefined to be 'certificate_dialog_open' // Object.is equality
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  docs/evidence/WMS-517-mac-review.test.tsx > real React screen preparation with 700ms registry latency
+AssertionError: expected undefined to be 'certificate_dialog_open' // Object.is equality
+
+- Expected: 
+"certificate_dialog_open"
+
++ Received: 
+undefined
+
+ ❯ docs/evidence/WMS-517-mac-review.test.tsx:50:28
+     48|     const outcome = await createHelper({ root:window }).run({ mode:'ex…
+     49|     console.log(JSON.stringify({ networkDelay, outcome, refreshDisable…
+     50|     expect(outcome.status).toBe('certificate_dialog_open')
+       |                            ^
+     51|     expect(certificateLists).toBe(1)
+     52|   } finally {
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed (2)
+   Start at  23:40:53
+   Duration  6.85s (transform 171ms, setup 0ms, collect 2.24s, tests 3.63s, environment 639ms, prepare 123ms)
+
