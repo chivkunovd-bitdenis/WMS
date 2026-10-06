@@ -1,0 +1,33 @@
+{
+  "journal_source_commit": "3348db9c61d62dfb8038be3b432a293f27ce9a1e",
+  "stable_ancestor_commit": "9a33b651c309796707053e1056c7f80dff7194d5",
+  "test_contract_commit": "58eab40495a96b0d67d02ea6b537c044071cbccf",
+  "installer_review_commit": "dfc4c54178063e4ffb3bb24ab3e4d31e1cff51a3",
+  "files": {
+    "wms_print_direct_macos.swift": {
+      "journal_source_sha256": "83acdbc6fdf2f4128b83096f18e1d14a367b6eb7b0e4dba4c98e2673c6e46b32",
+      "candidate_sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+      "byte_identical_to_journal": false
+    },
+    "wms_cups_observe.c": {
+      "journal_source_sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "candidate_sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "byte_identical_to_journal": true
+    },
+    "test_wms_cups_observe.c": {
+      "journal_source_sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26",
+      "candidate_sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26",
+      "byte_identical_to_journal": true
+    },
+    "history.html": {
+      "journal_source_sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "candidate_sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "byte_identical_to_journal": true
+    },
+    "test_macos_native.py": {
+      "journal_source_sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "candidate_sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "byte_identical_to_journal": true
+    }
+  }
+}

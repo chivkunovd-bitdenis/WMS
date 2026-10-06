@@ -29,11 +29,17 @@ def main():
         # embedded Python.framework separately.  Without Developer ID this can
         # still fail after the operator permits the main executable.  Compile
         # one native binary that depends only on macOS system frameworks.
+        cups_object = dist / "wms_cups_observe.o"
+        subprocess.run([
+            "clang", "-c", str(ROOT / "wms_cups_observe.c"), "-o", str(cups_object),
+        ], check=True)
         subprocess.run([
             "swiftc", "-O", "-whole-module-optimization",
             str(ROOT / "wms_print_direct_macos.swift"),
+            "-Xlinker", str(cups_object), "-lcups",
             "-o", str(package / "wms-print"),
         ], check=True)
+        shutil.copyfile(ROOT / "history.html", package / "history.html")
         subprocess.run(["codesign", "--force", "--sign", "-", str(package / "wms-print")], check=True)
         subprocess.run(["codesign", "--verify", "--strict", str(package / "wms-print")], check=True)
     else:

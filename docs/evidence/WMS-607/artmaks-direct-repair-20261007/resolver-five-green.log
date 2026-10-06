@@ -1,0 +1,10 @@
+test_cups_unreachable_is_not_missing_default (test_macos_default_printer.DefaultPrinterTests.test_cups_unreachable_is_not_missing_default) ... ok
+test_error_text_is_not_a_queue_or_uncertain_job (test_macos_default_printer.DefaultPrinterTests.test_error_text_is_not_a_queue_or_uncertain_job) ... ok
+test_localized_default_and_replay (test_macos_default_printer.DefaultPrinterTests.test_localized_default_and_replay) ... ok
+test_stale_default_keeps_same_key_recoverable (test_macos_default_printer.DefaultPrinterTests.test_stale_default_keeps_same_key_recoverable) ... ok
+test_valid_default_with_warning_still_prints (test_macos_default_printer.DefaultPrinterTests.test_valid_default_with_warning_still_prints) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 2.947s
+
+OK
