@@ -109,3 +109,16 @@ Next addressed run retains C18 FAIL, captures the actual scrolled document area
 and continues C16 at 1280 independently. PG job now requires explicit [C10] in
 commit message; its unchanged successful proof is not rerun for UI-only edits.
 No unchanged product reviews or acceptance are repeated.
+
+Second run b244578d896cb2a694a900229f9da271d40d1667:
+https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37439508519
+preserves 1280 PASS/390 FAIL and adds scrolled document screenshots. The narrow
+screenshot confirms text rendered character-by-character and tiny empty input
+shapes. C16 supplemental executed rejected save, correction, GET refresh and
+single PUT after double-click, then stopped on a tester selector defect:
+actual role=tab accessible text is `Состав ✓`, not exact text `Состав`.
+The saved request log contains versions 4/5, corrected number and final GET.
+No product defect is inferred from this helper selector. Correct only the new
+helper with a scoped role=tab query, keeping the navigation expectations intact.
+Next commit [C16] selects only the unfinished functional steps: geometry remains
+FAIL in existing evidence and is not rerun unchanged; PG is not rerun.
