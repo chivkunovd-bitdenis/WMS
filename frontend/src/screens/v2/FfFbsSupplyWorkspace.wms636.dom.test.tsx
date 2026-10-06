@@ -226,12 +226,13 @@ describe('WMS-636 · фильтр «Не принятые WB КИЗ»', () => {
 
   it('R2: клик по треугольнику не забирает фокус у поля скана', async () => {
     await open()
-    const input = q('fbs-kiz-scan-input')!.querySelector('input')!
+    const input = q('fbs-unified-scan')!.querySelector('input[data-packing-scan="true"]')!
     act(() => input.focus())
     const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     act(() => { toggle()!.dispatchEvent(down) })
     expect(down.defaultPrevented).toBe(true)
     expect(toggle()!.tabIndex).toBe(-1)
+    expect(document.activeElement).toBe(input)
   })
 
   // R5 выполняет сценарий дважды (без фильтра и с фильтром) с полным
@@ -312,7 +313,9 @@ describe('WMS-636 · фильтр «Не принятые WB КИЗ»', () => {
     expect(undoBodies[0]).toMatchObject({ order_id: 'order-c' })
     expect(calls.filter((call) => call.includes('/kiz/'))).toEqual([])
     expect(q('fbs-kiz-scan-active')).toBeNull()
-    expect(q('fbs-kiz-scan-message')!.textContent).toContain('Сканируйте QR стикера заказа')
+    const scanInput = q('fbs-unified-scan')!.querySelector<HTMLInputElement>('input[data-packing-scan="true"]')!
+    expect(scanInput.placeholder).toBe('Сканируйте штрихкод товара')
+    expect(scanInput.value).toBe('')
     // R11: хвост снятого КИЗ не висит до следующего опроса.
     expect(tail()).toBe('')
     // Откатывать больше нечего — кнопка неактивна.

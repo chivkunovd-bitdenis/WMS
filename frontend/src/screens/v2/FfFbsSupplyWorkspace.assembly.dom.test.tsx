@@ -425,8 +425,8 @@ describe('WMS-574 · скан в единой поверхности сборк�
   it('WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB', async () => {
     boxes = [{ ...box('box-1', 1, [], false), wb_trbx_id: null }]
     await startFrame()
-    const boxesRoot = document.querySelector(`[data-testid="fbs-assembly-boxes-${SUPPLY_ID}"]`)!
-    const qr = Array.from(boxesRoot.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
+    await showBoxes()
+    const qr = Array.from(boxesRoot()!.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
     await act(async () => qr.click())
     await settle(30)
     expect(document.body.textContent).not.toContain('Проверка перед печатью')
@@ -437,7 +437,8 @@ describe('WMS-574 · скан в единой поверхности сборк�
   it('WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR', async () => {
     boxes = [{ ...box('box-1', 1, [], false), wb_trbx_id: null }]
     await startFrame()
-    const printAll = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Печать всех QR')) as HTMLButtonElement
+    await showBoxes()
+    const printAll = Array.from(boxesRoot()!.querySelectorAll('button')).find((button) => button.textContent?.includes('Печать всех QR')) as HTMLButtonElement
     expect(printAll).toBeTruthy()
     await act(async () => printAll.click())
     await settle(30)

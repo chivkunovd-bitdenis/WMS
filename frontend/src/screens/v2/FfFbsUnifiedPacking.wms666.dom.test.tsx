@@ -247,7 +247,10 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
 
   if (path.includes('/scan-auto-print/') && path.endsWith('/print-claim')) return json({ claimed: true, started: false })
   if (path.includes('/scan-auto-print/') && path.endsWith('/print-started')) return json({ claimed: false, started: true })
-  if (path === '/assets/wms666-wb.png') return new Response(new Blob(['png'], { type: 'image/png' }))
+  if (path === '/assets/wms666-wb.png') {
+    // Keep the browser Blob consumed by jsdom FileReader across Node 20/24.
+    return { ok: true, status: 200, blob: async () => new Blob(['png'], { type: 'image/png' }) } as Response
+  }
   return json({ detail: { code: 'unexpected_test_request', message: `${method} ${path}` } }, 404)
 }
 
