@@ -175,7 +175,39 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], hand
       rejectTransfer?.(new Error('Не удалось загрузить этикетки.'))
       return
     }
-    Promise.all(images.map((image) => image.decode()))
+    const decodeImages = async () => {
+      if (!handoff) {
+        // Preserve the existing scan-to-print path, including its timing.
+        await Promise.all(images.map((image) => image.decode()))
+        return
+      }
+      // decode() temporarily retains decoded image resources through rendering.
+      // Starting the entire inbound tape in one turn can exhaust that budget
+      // even when the PNGs themselves are valid. Keep parallel work small and let a
+      // rendering turn finish before requesting the next group. The parent
+      // window supplies frames: the zero-sized print iframe may be throttled.
+      const groupSize = 32
+      for (let start = 0; start < images.length; start += groupSize) {
+        await Promise.all(images.slice(start, start + groupSize).map((image) => image.decode()))
+        if (start + groupSize < images.length) {
+          await new Promise<void>((resolve) => {
+            // A background tab can suspend animation frames. Still yield a
+            // task there, without leaving preparation waiting indefinitely.
+            let frame = 0
+            const done = () => {
+              window.cancelAnimationFrame(frame)
+              clearTimeout(timer)
+              resolve()
+            }
+            const timer = setTimeout(done, 100)
+            frame = window.requestAnimationFrame(() => {
+              frame = window.requestAnimationFrame(done)
+            })
+          })
+        }
+      }
+    }
+    decodeImages()
       .then(printNow)
       .catch((error) => {
         cleanup('image-error')
