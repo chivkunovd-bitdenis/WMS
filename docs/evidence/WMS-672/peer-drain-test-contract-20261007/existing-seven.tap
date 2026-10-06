@@ -1,0 +1,52 @@
+TAP version 13
+# Subtest: C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+ok 1 - C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+  ---
+  duration_ms: 2014.409208
+  type: 'test'
+  ...
+# Subtest: C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+ok 2 - C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+  ---
+  duration_ms: 995.806125
+  type: 'test'
+  ...
+# Subtest: C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+ok 3 - C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+  ---
+  duration_ms: 588.950459
+  type: 'test'
+  ...
+# Subtest: C5 blank message retains existing generic preparation error and zero external actions
+ok 4 - C5 blank message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 323.229584
+  type: 'test'
+  ...
+# Subtest: C5 nonstring message retains existing generic preparation error and zero external actions
+ok 5 - C5 nonstring message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 393.848083
+  type: 'test'
+  ...
+# Subtest: C5 no message retains existing generic preparation error and zero external actions
+ok 6 - C5 no message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 296.753958
+  type: 'test'
+  ...
+# Subtest: C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+ok 7 - C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+  ---
+  duration_ms: 1411.4885
+  type: 'test'
+  ...
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 10808.753375
