@@ -14,7 +14,7 @@ from typing import Any
 import fitz
 import pytest
 from marking_datamatrix_test_helpers import build_datamatrix_pdf, encode_datamatrix_png
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
@@ -957,6 +957,21 @@ def _rasterized_label_pdf(cis: str, *, article: str) -> bytes:
         source.close()
 
 
+def _framed_label_page(label_pdf: bytes) -> bytes:
+    """Place an unchanged 220x220 label on a larger supplier source page."""
+    label = fitz.open(stream=label_pdf, filetype="pdf")
+    try:
+        document = fitz.open()
+        try:
+            page = document.new_page(width=600, height=800)
+            page.show_pdf_page(fitz.Rect(30, 30, 250, 250), label, 0)
+            return bytes(document.tobytes())
+        finally:
+            document.close()
+    finally:
+        label.close()
+
+
 @pytest.mark.asyncio
 async def test_c22_audit_reports_source_to_saved_label_substitution(
     db_session: AsyncSession,
@@ -1016,3 +1031,65 @@ async def test_c22_audit_reports_raster_final_label_substitution(
     assert report["final_print_payloads"] == [cis]
     assert report["first_divergence"] == "final_print_layout"
     assert "final_print_layout" in report["evidence_gaps"]
+
+
+@pytest.mark.asyncio
+async def test_c22_audit_accepts_unchanged_label_cropped_from_supplier_page(
+    db_session: AsyncSession,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The known source crop is evidence, not a layout substitution."""
+    tenant, seller = await _scope(db_session)
+    product = await _product(db_session, tenant, seller, sku="WMS658-C22-CROP")
+    tenant_id, seller_id, product_sku = tenant.id, seller.id, product.sku_code
+    cis = _full_cis("C22-CROP")
+    source_pdf = _framed_label_page(_label_pdf(cis, article=product_sku))
+
+    result = await marking.auto_import_marking_codes(
+        db_session,
+        tenant_id,
+        seller_id,
+        request_id=uuid.uuid4(),
+        files=[("supplier-page.pdf", source_pdf)],
+        uploaded_by_user_id=None,
+    )
+    code = (await _codes_for_import(db_session, result.import_id))[0]
+    assert code.label_artifact_pdf is not None
+    assert _decoded_values(source_pdf) == [cis]
+    assert _decoded_values(code.label_artifact_pdf) == [cis]
+
+    # The importer can persist the source under the test storage backend.
+    # Keep one metadata row whose bytes are supplied by the controlled external
+    # storage boundary, exactly as an audit of a preserved source would see it.
+    await db_session.execute(
+        delete(MarkingCodeImportFile).where(
+            MarkingCodeImportFile.import_batch_id == result.import_id
+        )
+    )
+    db_session.add(
+        MarkingCodeImportFile(
+            tenant_id=tenant_id,
+            import_batch_id=result.import_id,
+            original_filename="supplier-page.pdf",
+            storage_key=f"wms658/{result.import_id}/supplier-page.pdf",
+            content_type="application/pdf",
+            size_bytes=len(source_pdf),
+            sha256_hex="0" * 64,
+        )
+    )
+    await db_session.commit()
+    final_pdf = await marking.build_import_result_pdf(
+        db_session, tenant_id, result.import_id, code_ids=[code.id], copies=1
+    )
+    audit = importlib.import_module("app.services.marking_import_audit_service")
+    monkeypatch.setattr(audit, "read_source_pdf", lambda *_args, **_kwargs: source_pdf)
+
+    report = await audit.audit_marking_import(
+        db_session, tenant_id, result.import_id, final_print_pdf=final_pdf
+    )
+
+    assert report["source_payloads"] == [cis]
+    assert report["artifact_payloads"] == [cis]
+    assert report["final_print_payloads"] == [cis]
+    assert report["first_divergence"] is None
+    assert report["evidence_gaps"] == []
