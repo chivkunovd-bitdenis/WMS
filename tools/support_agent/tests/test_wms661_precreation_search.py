@@ -28,7 +28,86 @@ SCAN_TITLE = "Показывать причину непризнанного с�
 SCAN_DESCRIPTION = "На экране упаковки FBS после нераспознанного сканирования оператор видит конкретную причину."
 SCAN_REQUEST = "При сборке FBS штрихкод не принимается — надо сразу объяснять оператору, почему этот скан не распознан"
 EXTRA = "Причина должна оставаться видимой после следующего скана."
-LEGACY_DRAFT_FIRST = re.compile(r"сначала\s+вызови\s+`?task_record\s*\(confirm_author=false\)", re.I)
+CREATE = r"(?:task_record|созда\w*|создай|зарегистр\w*|регистрац\w*|завед\w*|заведи)"
+SEARCH = r"(?:поиск\w*|поищи|ищи|найди|найти|проверь|проверить|проверяй)"
+CREATE_FIRST = re.compile(
+    rf"(?:сначала|первым делом|вначале|первым шагом|начни с)\s+"
+    rf"(?:(?:вызови|вызвать|создай|создать|заведи|зарегистрируй)\s+)?"
+    rf"(?:task_record|черновик|новую задачу)|"
+    rf"(?:создай|заведи|вызови)\s+(?:черновик|task_record)[^.;]*"
+    rf"(?:а после|затем|потом)[^.;]*{SEARCH}", re.I,
+)
+
+
+def normalize_instruction(text: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[`*#]", "", text)).strip().lower()
+
+
+def assert_instruction_contract(system: str) -> None:
+    """Validate an explicit normative relation, not model cognition or keywords.
+
+    Bounded document check accepts before/after and first-then formulations.
+    Candidate meaning is still the fixture's verdict. This is never a product
+    runtime gate: only TESTWRITER's inspection of the loaded document.
+    """
+    paragraphs = [normalize_instruction(p) for p in re.split(r"\n\s*\n", system) if p.strip()]
+    normative = []
+    for paragraph in paragraphs:
+        current_tasks = re.search(r"(?:текущ|существующ)\w*.{0,80}задач", paragraph)
+        canonical_backlog = re.search(r"каноническ\w*.{0,60}бэклог", paragraph)
+        # A mention that tools are available does not direct search before creation.
+        before = re.search(
+            rf"(?:до|перед)\s+[^.;]{{0,180}}{CREATE}[^.;]{{0,240}}"
+            rf"(?:обязатель\w*|выполни|выполнить|проведи|проверь|ищи|найди)[^.;]{{0,120}}{SEARCH}", paragraph)
+        first_then = re.search(
+            rf"сначала[^.;]{{0,220}}{SEARCH}[^;]{{0,700}}(?:затем|после этого)[^.;]{{0,180}}{CREATE}", paragraph)
+        only_after = re.search(
+            rf"{CREATE}[^.;]{{0,160}}(?:только|лишь) после[^.;]{{0,240}}{SEARCH}", paragraph)
+        optional = re.search(r"необязател|не обязател|по желанию|можно не (?:искать|проверять)", paragraph)
+        if current_tasks and canonical_backlog and (before or first_then or only_after) and not optional:
+            normative.append(paragraph)
+    assert normative, "loaded instructions lack mandatory current-task AND canonical-backlog search BEFORE creation"
+    assert any(re.search(r"(?:включая|в том числе|также|и для|относится|даже)[^.]*чернов", p)
+               and "task_record" in p and "confirm_author=false" in p for p in normative), (
+        "mandatory precreation search must explicitly include unconfirmed task_record drafts")
+    for paragraph in paragraphs:
+        # An affirmative create-first directive contradicts the positive contract.
+        first = CREATE_FIRST.search(paragraph)
+        if first:
+            prior = paragraph[:first.start()]
+            assert re.search(r"после[^.;]*поиск", prior), "loaded instructions still direct draft creation first"
+    reuse = any(re.search(r"если[^.;]*(?:найден|установлен|существует|есть)[^.;]*(?:дубл|совпад|соответств|задач)", p)
+                and re.search(r"(?:переиспольз|используй существующ|свяж|обнови существующ|ticket_id)", p)
+                for p in paragraphs)
+    new = any(re.search(r"если[^.;]*(?:не найден|не установ|нет соответств|нет совпад|нет дубл)[^.;]*", p)
+              and re.search(r"(?:создай|создать|зарегистр|заведи|новая задача разрешена)", p)
+              for p in paragraphs)
+    assert reuse, "loaded instructions must reuse an established canonical match"
+    assert new, "loaded instructions must allow new registration only after search found no match"
+
+
+COMPLIANT_INSTRUCTION = """
+Перед регистрацией любой новой задачи обязательно выполни поиск по текущим задачам
+и каноническому бэклогу по смыслу, затронутому процессу и объекту. Прочитай содержание
+подходящих кандидатов. Это правило относится также к черновику task_record(confirm_author=false).
+
+Если найден соответствующий канонический дубль, свяжи новый источник с существующей задачей,
+переиспользуй её ticket_id, требования и карточку, обнови существенные сведения без второго комплекта.
+
+Если не найден соответствующий запрос после поиска и чтения кандидатов, создай новую самостоятельную
+задачу обычным путём; сохраняй существующие правила подтверждения автора и согласования владельца.
+"""
+PARAPHRASED_COMPLIANT_INSTRUCTION = """
+Сначала обязательно проведи поиск по текущим задачам и каноническому бэклогу по смыслу,
+процессу и объекту, прочитай описания кандидатов, затем вызывай task_record для регистрации.
+Порядок действует даже для черновика task_record(confirm_author=false).
+
+Если установлен соответствующий дубль, переиспользуй ticket_id и свяжи сообщение с существующей
+канонической задачей без создания второго документа или карточки.
+
+Если не установлено соответствие после поиска и чтения, зарегистрируй новую самостоятельную задачу
+с обычным подтверждением автора, без общего запрета новых тем.
+"""
 
 
 class MemoryStore:
@@ -145,9 +224,15 @@ class ScriptedSemanticLlm:
         new_args = {"chat_id": 900, "source_message_ids": [106], "title": "Новая формулировка",
                     "description": self.request, "topic_key": "new-distinct-source-topic",
                     "is_frontend": False, "confirm_author": False}
-        # Negative control: obey concrete baseline instruction when it exists.
+        # A compliant trace requires an affirmative ordering contract. The only
+        # exception is a deliberately incorrect trace for a known create-first
+        # directive, retained to reproduce the installed defect's effects.
         draft = None
-        if LEGACY_DRAFT_FIRST.search(kwargs["system"]):
+        try:
+            assert_instruction_contract(kwargs["system"])
+        except AssertionError:
+            if not CREATE_FIRST.search(normalize_instruction(kwargs["system"])):
+                raise
             draft = dispatch("task_record", dict(new_args))
         current = dispatch("read_context", {"chat_id": 900})
         assert isinstance(current.get("tasks"), list)
@@ -334,12 +419,7 @@ def test_c6_actual_topic_instructions_require_search_before_even_draft(scenario:
     env.run()
     call = env.llm.calls[0]
     system = call["system"]
-    assert not LEGACY_DRAFT_FIRST.search(system), "loaded instruction still says create draft first"
-    before_record = system[:system.index("task_record")]
-    assert re.search(r"поиск|найти|провер", before_record, re.I), "no mandatory precreation search"
-    assert "бэклог" in before_record.lower() and "задач" in before_record.lower()
-    assert all(word in system.lower() for word in ("смысл", "процесс", "объект", "черновик"))
-    assert re.search(r"существующ|каноническ", system, re.I) and "новую" in system.lower()
+    assert_instruction_contract(system)
     assert "read_context" in {tool["name"] for tool in call["tools"]}
     assert call["include_project_tools"] is True
     assert {"search", "read_file"} <= {tool["name"] for tool in TOOLS}
@@ -352,8 +432,8 @@ def test_contract_positive_control_accepts_compliant_fixture(scenario: Any, monk
                                                              options: dict[str, Any]) -> None:
     """Validate test harness using explicit synthetic fixes, not product edits."""
     env = scenario(**options)
-    env.agent.system = LEGACY_DRAFT_FIRST.sub("после поиска вызови task_record(confirm_author=false)",
-                                               env.agent.system)
+    env.agent.system = COMPLIANT_INSTRUCTION
+    assert_instruction_contract(env.agent.system)
     original = env.agent.tools._tool_read_context
 
     def expose_selected(args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
@@ -377,6 +457,7 @@ def test_contract_positive_control_accepts_compliant_fixture(scenario: Any, monk
 
 def test_c5_negative_control_incomplete_large_source_is_not_absence(scenario: Any, monkeypatch: Any) -> None:
     env = scenario(large=True)
+    env.agent.system = COMPLIANT_INSTRUCTION
     original = env.reader.read_file
 
     def incomplete(path: str, offset: int = 0, max_bytes: int = MAX_READ) -> str:
@@ -388,3 +469,85 @@ def test_c5_negative_control_incomplete_large_source_is_not_absence(scenario: An
     monkeypatch.setattr(env.reader, "read_file", incomplete)
     with pytest.raises(AssertionError, match="backlog candidate was never read"):
         env.run()
+
+
+INSTRUCTION_MUTATIONS = {
+    "word_mentions_only": "Поиск по текущим задачам и каноническому бэклогу доступен. "
+                          "Смысл, процесс, объект и черновик известны. Для новой темы создай новую задачу.",
+    "duty_removed": "Используй task_record(confirm_author=false) для нового черновика. Поиск доступен.",
+    "search_after_creation": "Создай черновик task_record(confirm_author=false), а после этого выполни поиск "
+                             "по текущим задачам и каноническому бэклогу.",
+    "equivalent_draft_first": "Первым делом создай черновик task_record(confirm_author=false). "
+                              "Поиск по текущим задачам и каноническому бэклогу доступен.",
+    "optional_search": "Перед регистрацией новой задачи по желанию выполни поиск по текущим задачам "
+                       "и каноническому бэклогу. Это относится также к черновику task_record(confirm_author=false).",
+}
+CONTRACT_CASES = [test_c1_synonymous_new_source_reuses_canonical_task_before_draft,
+                  test_c2_backlog_only_candidate_is_read_outside_recent_tasks,
+                  test_c3_independent_new_request_creates_one_confirmed_bundle_after_search,
+                  test_c4_shared_supply_object_different_action_can_be_new,
+                  test_c5_large_backlog_candidate_after_first_window_is_reused,
+                  test_c6_actual_topic_instructions_require_search_before_even_draft]
+
+
+@pytest.mark.parametrize("case", CONTRACT_CASES, ids=lambda case: case.__name__.split("_")[1])
+@pytest.mark.parametrize("mutation", [*INSTRUCTION_MUTATIONS, "installed_paraphrase"])
+def test_c6_every_contract_case_rejects_missing_or_reversed_search_duty(
+    scenario: Any, monkeypatch: Any, case: Any, mutation: str,
+) -> None:
+    """Each C1–C6 must fail, even with candidate-tool defect synthetically fixed."""
+    def altered_scenario(**options: Any) -> Any:
+        env = scenario(**options)
+        if mutation == "installed_paraphrase":
+            env.agent.system = env.agent.system.replace("сначала вызови", "первым делом вызови")
+        else:
+            remainder = COMPLIANT_INSTRUCTION.split("\n\n", 1)[1]
+            env.agent.system = INSTRUCTION_MUTATIONS[mutation] + "\n\n" + remainder
+        original = env.agent.tools._tool_read_context
+
+        def expose_selected(args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
+            result = original(args, event, owner)
+            if args.get("ticket_id") == 31:
+                ticket = dict(env.store.ticket(31))
+                ticket["data"] = env.store.data(31)
+                result["selected_task"] = ticket
+            return result
+
+        monkeypatch.setattr(env.agent.tools, "_tool_read_context", expose_selected)
+        return env
+
+    with pytest.raises(AssertionError, match="mandatory|must precede|creation first"):
+        case(altered_scenario)
+
+
+@pytest.mark.parametrize("instruction", [
+    COMPLIANT_INSTRUCTION,
+    COMPLIANT_INSTRUCTION.replace("Перед регистрацией", "До регистрации"),
+    PARAPHRASED_COMPLIANT_INSTRUCTION,
+    COMPLIANT_INSTRUCTION.replace(
+        "Перед регистрацией любой новой задачи обязательно выполни поиск по текущим задачам\nи каноническому бэклогу",
+        "Регистрировать новую задачу через task_record разрешено только после поиска по текущим задачам\nи каноническому бэклогу",
+    ),
+])
+def test_c6_positive_paraphrase_uses_same_loaded_instruction_validator(scenario: Any, instruction: str) -> None:
+    def paraphrased(**options: Any) -> Any:
+        env = scenario(**options)
+        env.agent.system = instruction
+        return env
+
+    # Invoke the exact C6 case, not a weaker validation unique to the control.
+    test_c6_actual_topic_instructions_require_search_before_even_draft(paraphrased)
+
+
+@pytest.mark.parametrize("instruction, expected", [
+    (COMPLIANT_INSTRUCTION + "\n\nПервым делом создай черновик task_record(confirm_author=false), а после выполни поиск.",
+     "creation first"),
+    (COMPLIANT_INSTRUCTION.replace("Это правило относится также к черновику task_record(confirm_author=false).", ""),
+     "explicitly include"),
+    (COMPLIANT_INSTRUCTION.split("\n\nЕсли найден", 1)[0] + "\n\nЕсли не найден дубль после поиска, создай новую задачу.",
+     "must reuse"),
+    (COMPLIANT_INSTRUCTION.split("\n\nЕсли не найден", 1)[0], "allow new registration"),
+])
+def test_c6_normative_contract_rejects_conflict_or_missing_branch(instruction: str, expected: str) -> None:
+    with pytest.raises(AssertionError, match=expected):
+        assert_instruction_contract(instruction)
