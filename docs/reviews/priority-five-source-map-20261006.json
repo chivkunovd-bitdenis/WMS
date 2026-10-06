@@ -147,6 +147,13 @@
       "conflicts": [],
       "red": "2 true live positive cases FAILED;10 negative/received cases PASS by separate test writer",
       "frozen": "backend/tests/test_wms662_live_delivery_substatuses.py"
+    },
+    {
+      "task": "WMS-517 independent helper review and fresh SC13 acceptance",
+      "source": "85c2f5e0e24af84548e7ff74e193b3ac423d3f82",
+      "base": "b4043c0df9fee0419bdfe85167bbd645f820de9c",
+      "mode": "merge four acceptance documents only; runtime untouched",
+      "conflicts": []
     }
   ],
   "local_product_fixes": [

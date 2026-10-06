@@ -170,3 +170,7 @@ statuses, scope/quantities, синхронизации, бухгалтерии �
 parent назначает отдельнуюсессию на точный опубликованныйfixSHA.
 Следующийшаг —517helperreview/SC13docs,scope666reviewedledger иcurrent675docs,
 затемобщиепроверки по поручению ведущего.
+
+## Интеграция 17 — WMS-517 независимое заключение
+
+База `b4043c0df9fee0419bdfe85167bbd645f820de9c`; source `85c2f5e0e24af84548e7ff74e193b3ac423d3f82` включён автоматически,4docs. Отдельныйreviewновогоhelper иSC13приёмкаfreshsoldсохранены; исходныйproductreviewнеповторялся. Новый662fixb4043c0dfпереданparentнаузкоенезависимоеревью. Scope666reviewedledger иcurrent675docsещёожидаются. Дополнительное675поручение: прочитать штатныеstockpublicationsideeffects восстановления, безновыхsuppressрежимов/monkeypatch.
