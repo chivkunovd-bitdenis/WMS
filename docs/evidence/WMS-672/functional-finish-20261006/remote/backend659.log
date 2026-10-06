@@ -1,0 +1,22 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/WMS/WMS/backend
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, xdist-3.8.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+created: 4/4 workers
+4 workers [11 items]
+
+....s......                                                              [100%]warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+
+=============================== warnings summary ===============================
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+================== 10 passed, 1 skipped, 5 warnings in 10.41s ==================
