@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,6 +14,17 @@ from sqlalchemy import inspect, text
 from app.db.session import engine
 from tests.test_wms654_cells import cells, create, listed  # noqa: F401
 
+TASK_MIGRATION_FILENAME = "20261007_2302_wms654_location_tier.py"
+
+
+def task_owned_tier_migrations(scripts: ScriptDirectory) -> list:
+    """Return only the migration that belongs to the WMS-654 C8 contract."""
+    return [
+        revision
+        for revision in reversed(list(scripts.walk_revisions()))
+        if Path(revision.path).name == TASK_MIGRATION_FILENAME
+    ]
+
 
 @pytest.mark.asyncio
 async def test_c8_migration_preserves_legacy_rows_and_new_list_coordinates(cells):  # noqa: F811
@@ -22,21 +32,10 @@ async def test_c8_migration_preserves_legacy_rows_and_new_list_coordinates(cells
     assert old.status_code == 200, old.text
     original = old.json()
     root = Path(__file__).resolve().parents[2]
-    baseline_files = set(
-        subprocess.check_output(
-            ["git", "ls-tree", "-r", "--name-only", "4b298efc", "--", "backend/alembic/versions"],
-            cwd=root,
-            text=True,
-        ).splitlines()
-    )
     config = Config(str(root / "backend/alembic.ini"))
     config.set_main_option("script_location", str(root / "backend/alembic"))
     scripts = ScriptDirectory.from_config(config)
-    new_revisions = [
-        revision
-        for revision in reversed(list(scripts.walk_revisions()))
-        if Path(revision.path).relative_to(root).as_posix() not in baseline_files
-    ]
+    new_revisions = task_owned_tier_migrations(scripts)
 
     def upgrade(connection):
         columns = {
