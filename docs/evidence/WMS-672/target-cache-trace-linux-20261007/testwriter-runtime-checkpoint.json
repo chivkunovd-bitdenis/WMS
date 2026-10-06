@@ -5,7 +5,7 @@
   "reasoning_effort": "high",
   "cli_version": "0.153.4",
   "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract",
-  "base_sha": "ea001a776",
+  "base_sha": "ea001a77653053624cc73acc00e622c155447292",
   "branch": "codex/wms672-raster-resource-contract-20261007",
   "cli_session_id": "01a1136d-34ba-7941-8e0b-3a3b6194f4f9",
   "exit_code": 1,
@@ -16,5 +16,15 @@
   "collaboration_interrupt_previous_status": "pending_init",
   "subsequent_collaboration_status": "pending_init",
   "independent_writer_checkout": true,
-  "official_model_id_source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol"
+  "official_model_id_source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+  "recovery": {
+    "checked_at_utc": "2026-10-06T23:00:13.401926+00:00",
+    "runtime": "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+    "cli_version": "0.160.1",
+    "model": "gpt-6.1-sol",
+    "reasoning_effort": "high",
+    "cli_session_id": "01a11370-eea3-7533-a616-2943d59a7bca",
+    "status": "accepted; independent testwriter response observed; contract authoring in progress",
+    "model_or_auth_configuration_changed": false
+  }
 }
