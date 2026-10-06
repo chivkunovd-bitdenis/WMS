@@ -6,5 +6,8 @@
     "state": "active"
   },
   "run_list_public": true,
-  "stdlib_local_probe": "unverified: default Python TLS local issuer certificate missing; no TLS bypass used"
+  "stdlib_local_probe": "unverified: default Python TLS local issuer certificate missing; no TLS bypass used",
+  "public_sample_run_id": 37511672771,
+  "artifact_list_public": true,
+  "public_sample_artifact_count": 2
 }
