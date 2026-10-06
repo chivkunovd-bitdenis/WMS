@@ -26,6 +26,23 @@ def test_deploy_requires_verified_backup_before_migration(
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source / relative, target)
     commands = tmp_path / "commands.jsonl"
+    # Synthetic external CI boundary; the real shell must still invoke it before
+    # any Docker action. Rejection states are exercised by the separate contract.
+    server_ci = repo / "scripts/ci/verify_server_process_ci.py"
+    server_ci.parent.mkdir(parents=True)
+    server_ci.write_text('''
+import json, os, sys
+with open(os.environ["TEST_COMMANDS"], "a") as out:
+    out.write(json.dumps(["server-ci", *sys.argv[1:]]) + "\\n")
+state = os.environ.get("WMS_TEST_SERVER_CI_RESULT", "accepted")
+expected_sha = os.environ.get("WMS_TEST_SERVER_CI_SHA", "a" * 40)
+reason = state if state in {"failed", "unavailable"} else (
+    "wrong-sha" if sys.argv[1:] != ["--sha", expected_sha] else ""
+)
+if reason:
+    print("synthetic server CI refused: " + reason, file=sys.stderr)
+    sys.exit(3 if reason == "unavailable" else 2)
+''')
     binaries = tmp_path / "bin"
     binaries.mkdir()
     stub = binaries / "stub"
