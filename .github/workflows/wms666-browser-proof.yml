@@ -1,0 +1,53 @@
+name: WMS666 synthetic browser proof
+on:
+  push:
+    branches: [codex/wms666-remote-browser-proof-20261006]
+    paths:
+      - .github/workflows/wms666-browser-proof.yml
+      - scripts/ci/wms666-browser-proof.mjs
+      - frontend/tests-e2e/wms666-proof/**
+permissions:
+  contents: read
+concurrency:
+  group: wms666-browser-proof-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  browser-proof:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Prepare existing frontend dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/wms666-proof"
+          git rev-parse HEAD > "$RUNNER_TEMP/wms666-proof/probe-sha.txt"
+          git diff --exit-code 9a73432accdd5c2ef7b48d08cc8abdef5942c258 HEAD -- frontend/src frontend/package.json frontend/package-lock.json
+          git ls-tree -r 9a73432accdd5c2ef7b48d08cc8abdef5942c258 frontend/src frontend/package.json frontend/package-lock.json > "$RUNNER_TEMP/wms666-proof/product-manifest.txt"
+          sha256sum "$RUNNER_TEMP/wms666-proof/product-manifest.txt" > "$RUNNER_TEMP/wms666-proof/product-manifest.sha256"
+          npm ci --prefix frontend > "$RUNNER_TEMP/wms666-proof/npm-ci.log" 2>&1
+          google-chrome --version | tee "$RUNNER_TEMP/wms666-proof/chromium-version.txt"
+      - name: Actual UI with synthetic API and native print interception
+        env:
+          WMS666_EVIDENCE: ${{ runner.temp }}/wms666-proof
+        run: |
+          node frontend/node_modules/vite/bin/vite.js --config frontend/tests-e2e/wms666-proof/vite.config.ts > "$RUNNER_TEMP/wms666-proof/vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:16666/app/ff/fbs >/dev/null; then break; fi
+            sleep 1
+          done
+          timeout 240s node scripts/ci/wms666-browser-proof.mjs 2>&1 | tee "$RUNNER_TEMP/wms666-proof/probe.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms666-browser-proof-${{ github.sha }}
+          path: ${{ runner.temp }}/wms666-proof
+          retention-days: 14
+          include-hidden-files: false
+          if-no-files-found: error
