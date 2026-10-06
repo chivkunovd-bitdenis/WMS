@@ -52,8 +52,6 @@ export function FbsStockDialogContainer({
   embedded = false,
   footerSlotEl = null,
   onBusyChange,
-  refreshVersion = 0,
-  active = true,
 }: {
   token: string
   sellerId: string
@@ -82,9 +80,6 @@ export function FbsStockDialogContainer({
   footerSlotEl?: HTMLElement | null
   /** Идёт ли запись — embedded-хозяин запрещает переключать вкладки, пока не завершится. */
   onBusyChange?: (busy: boolean) => void
-  /** External stock change in an already mounted product card. */
-  refreshVersion?: number
-  active?: boolean
 }) {
   const [data, setData] = useState<FbsStockDialogData | null>(null)
   // Незавершённые запросы. Окно заперто, пока не завершены все: конец одного
@@ -97,8 +92,6 @@ export function FbsStockDialogContainer({
   // Прошлое перечитывание после сбоя не удалось: окно может держать не тот
   // склад, что на сервере. Перед следующим действием читаем заново.
   const staleRef = useRef(false)
-  const appliedRefreshVersion = useRef(refreshVersion)
-  const writeEpoch = useRef(0)
   const ownSession = useMemo(
     () => createStockDialogSession({ headers: { Authorization: `Bearer ${token}` }, sellerId }),
     [sellerId, token],
@@ -140,26 +133,6 @@ export function FbsStockDialogContainer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [session, chosenKey])
 
-  // A different card tab changed stock. Refresh server facts in place: the
-  // form owns touched drafts and must stay mounted while totals are replaced.
-  useEffect(() => {
-    if (!embedded || !active || busy || !data || refreshVersion === appliedRefreshVersion.current) return
-    let alive = true
-    const epoch = writeEpoch.current
-    void session.reread().then((fresh) => {
-      if (!alive || epoch !== writeEpoch.current) return
-      if (fresh) {
-        setData(fresh)
-        appliedRefreshVersion.current = refreshVersion
-        setActionError(null)
-        staleRef.current = false
-      } else {
-        setActionError('Не удалось обновить остаток. Повторите открытие вкладки.')
-      }
-    })
-    return () => { alive = false }
-  }, [embedded, active, busy, data, refreshVersion, session])
-
   // Пока идёт запись, хозяин встроенной вкладки не даёт переключиться на
   // другую вкладку карточки — иначе контейнер размонтируется посреди запроса
   // (R16, R17: «конец одного не должен разблокировать ввод, пока идёт другой»
@@ -192,7 +165,6 @@ export function FbsStockDialogContainer({
   }
 
   function begin() {
-    writeEpoch.current += 1
     setPending((count) => count + 1)
     setActionError(null)
   }

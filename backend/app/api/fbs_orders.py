@@ -37,7 +37,6 @@ from app.services.marketplace_provider import (
     MarketplaceProviderError,
     provider_error_message,
 )
-from app.services.operation_fact_service import normalize_marketplace
 from app.services.ozon_fbs_sync_service import sync_ozon_order_statuses, sync_ozon_orders
 from app.services.ozon_provider_factory import build_ozon_provider, ozon_live_api_enabled
 from app.services.wb_marketplace_orders_service import list_orders
@@ -452,10 +451,14 @@ class FbsOrderOut(BaseModel):
 
 
 def _order_out(order: FbsOrder) -> FbsOrderOut:
-    # Legacy records use wildberries; normalize the response without changing stored rows.
+    # WMS-363: FbsOrder.marketplace хранится строкой (СУБД-агностично, гоняем
+    # тот же код на sqlite/pg), но семантически всегда "wb" или "ozon" —
+    # инвариант enforce'ится импортом и sync-сервисами. cast говорит только
+    # mypy, что мы согласны с сужением; Pydantic отбракует посторонние
+    # значения на границе ответа.
     return FbsOrderOut(
         id=str(order.id),
-        marketplace=cast(Literal["wb", "ozon"], normalize_marketplace(order.marketplace)),
+        marketplace=cast(Literal["wb", "ozon"], order.marketplace),
         external_order_id=order.external_order_id,
         seller_id=str(order.seller_id),
         warehouse_id=str(order.warehouse_id) if order.warehouse_id is not None else None,

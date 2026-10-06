@@ -11,8 +11,7 @@ import zxingcpp
 from httpx import AsyncClient
 from marking_datamatrix_test_helpers import encode_datamatrix_png
 from sqlalchemy import select
-from test_packaging_tasks import _inventory_at_location, _register_admin
-from test_staff_users import _create_ff_staff
+from test_packaging_tasks import _register_admin
 
 from app.db.session import SessionLocal
 from app.models.marking_code import MarkingCode
@@ -293,76 +292,6 @@ async def test_pdf_import_stores_label_artifact_per_cis(
     row = codes.json()[0]
     assert row["has_label_artifact"] is True
     code_id = row["id"]
-
-    fbs_headers, _ = await _create_ff_staff(
-        async_client, h, uuid.uuid4().hex[:8], "artifact-fbs", {"fbs": True}
-    )
-    artifact_path = f"/operations/marking-codes/codes/{code_id}/label-artifact?format=pdf"
-    history_path = f"/operations/marking-codes/codes/{code_id}/history"
-    tape_path = "/operations/marking-codes/label-artifact-tape"
-    assert (await async_client.get(history_path, headers=fbs_headers)).status_code == 403
-    assert (await async_client.get(artifact_path, headers=fbs_headers)).status_code == 403
-    unassigned_tape = await async_client.post(
-        tape_path, headers=fbs_headers, json={"code_ids": [code_id]}
-    )
-    assert unassigned_tape.status_code == 403, unassigned_tape.text
-
-    honest_sign_headers, _ = await _create_ff_staff(
-        async_client, h, uuid.uuid4().hex[:8], "artifact-cz", {"honest_sign": True}
-    )
-    assert (await async_client.get(history_path, headers=honest_sign_headers)).status_code == 200
-    assert (await async_client.get(artifact_path, headers=honest_sign_headers)).status_code == 200
-    honest_sign_tape = await async_client.post(
-        tape_path, headers=honest_sign_headers, json={"code_ids": [code_id]}
-    )
-    assert honest_sign_tape.status_code == 200, honest_sign_tape.text
-
-    warehouse = await async_client.post(
-        "/warehouses",
-        headers=h,
-        json={"name": "Artifact W", "code": f"artifact-{uuid.uuid4().hex[:6]}"},
-    )
-    assert warehouse.status_code == 200, warehouse.text
-    location_id = await _inventory_at_location(
-        async_client,
-        h,
-        warehouse_id=warehouse.json()["id"],
-        product_id=product_id,
-        qty=1,
-        location_code="artifact-a1",
-    )
-    marking_required = await async_client.patch(
-        f"/products/{product_id}/packaging-instructions",
-        headers=h,
-        json={"requires_honest_sign": True},
-    )
-    assert marking_required.status_code == 200, marking_required.text
-    task = await async_client.post(
-        "/operations/packaging-tasks",
-        headers=h,
-        json={
-            "warehouse_id": warehouse.json()["id"],
-            "lines": [
-                {"product_id": product_id, "storage_location_id": location_id, "quantity": 1}
-            ],
-        },
-    )
-    assert task.status_code == 201, task.text
-    line_id = task.json()["lines"][0]["id"]
-    printed = await async_client.post(
-        f"/operations/marking-codes/packaging-lines/{line_id}/print",
-        headers=fbs_headers,
-        json={},
-    )
-    assert printed.status_code == 200, printed.text
-    assert printed.json()["quantity"] == 1
-    assert (await async_client.get(history_path, headers=fbs_headers)).status_code == 403
-    assigned_artifact = await async_client.get(artifact_path, headers=fbs_headers)
-    assert assigned_artifact.status_code == 200, assigned_artifact.text
-    assigned_tape = await async_client.post(
-        tape_path, headers=fbs_headers, json={"code_ids": [code_id]}
-    )
-    assert assigned_tape.status_code == 200, assigned_tape.text
 
     png = await async_client.get(
         f"/operations/marking-codes/codes/{code_id}/label-artifact?format=png",
@@ -1089,7 +1018,7 @@ async def test_png_artifact_retrieval_repairs_distortion_without_mutating_storag
 
     response = await api.get_marking_code_label_artifact(
         uuid.uuid4(),
-        SimpleNamespace(tenant_id=tenant_id, role="fulfillment_admin"),  # type: ignore[arg-type]
+        SimpleNamespace(tenant_id=tenant_id),  # type: ignore[arg-type]
         FakeSession(),  # type: ignore[arg-type]
         format="png",
     )

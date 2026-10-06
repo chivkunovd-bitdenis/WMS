@@ -15,17 +15,10 @@ import {
 import { alpha } from '@mui/material/styles'
 
 import { DeveloperRequests, type DeveloperRequestsProps } from '../components/developer-requests/DeveloperRequests'
-import type { HelpButtonCorner } from '../components/developer-requests/useHelpButtonBottom'
 import { WmsBrandMark } from '../components/WmsBrandMark'
 import { NotificationBell } from '../components/NotificationBell'
-import { AssistantPanel } from '../components/assistant/AssistantPanel'
 import type { FfPermissions } from '../utils/ffPermissions'
 import { canAccessFfBlock, isFulfillmentAdminRole } from '../utils/ffPermissions'
-
-// Кнопка помощника WMS-433 стоит в правом нижнем углу: 24 px от краёв, высота 40
-// (EDGE_GAP и BUTTON_HEIGHT в AssistantPanel). Когда она есть, кнопка «?» встаёт
-// над ней в той же колонке с зазором 12 px, а не под неё.
-const HELP_ABOVE_ASSISTANT: HelpButtonCorner = { right: 24, bottom: 24 + 40 + 12 }
 
 type Props = {
   children: ReactNode
@@ -40,12 +33,6 @@ type Props = {
   meRole?: string
   ffPermissions?: FfPermissions | null
   addressStorageEnabled?: boolean
-  // WMS-433/R23: снимок профиля из /auth/me. Панель есть только при
-  // assistant_enabled === true; без профиля (превью, сцены базы знаний) или у
-  // выключенного тенанта помощника в каркасе нет вовсе. Передаётся сам объект,
-  // а не булево: каждая перезагрузка профиля даёт новый объект, и панель по
-  // нему снимает свой отказ после 403 (см. AssistantPanel).
-  assistantProfile?: { assistant_enabled?: boolean } | null
 }
 
 export function AuthedAppLayout({
@@ -59,10 +46,8 @@ export function AuthedAppLayout({
   meRole = '',
   ffPermissions = null,
   addressStorageEnabled = true,
-  assistantProfile = null,
 }: Props) {
   const base = portal === 'seller' ? '/app/seller' : '/app/ff'
-  const assistantShown = assistantProfile?.assistant_enabled === true
   if (portal === 'seller') {
     const drawerWidth = 240
     return (
@@ -165,7 +150,7 @@ export function AuthedAppLayout({
   const canMpShipments = isAdmin || can('mp_shipments')
   const canPackaging = isAdmin || can('packaging')
   const canCatalogCells = isAdmin || can('cells') || can('inventory')
-  const canStorage = isAdmin || can('storage')
+  const canStorage = isAdmin || can('inventory')
   return (
     <Box sx={{ display: 'flex', minHeight: '100vh' }} data-testid="app-frame">
       <CssBaseline />
@@ -245,7 +230,7 @@ export function AuthedAppLayout({
                 </ListItemButton>
               </>
             ) : null}
-            {can('fbs') ? (
+            {canPackaging ? (
               <ListItemButton component={NavLink} to={`${base}/fbs`} data-testid="nav-ff-fbs" data-task-id="NAV-01">
                 <ListItemText primary="FBS" />
               </ListItemButton>
@@ -278,7 +263,7 @@ export function AuthedAppLayout({
             {/* Инвентаризация — документ, и его надо где-то заводить и искать.
                 Пересчёт по одной строке склада запускается значком на карте, а
                 список документов и создание по фильтрам живут здесь. */}
-            {can('inventory') ? (
+            {canStorage ? (
               <ListItemButton component={NavLink} to={`${base}/stocktaking`} data-testid="nav-ff-stocktaking" data-task-id="NAV-01">
                 <ListItemText primary="Инвентаризация" />
               </ListItemButton>
@@ -293,12 +278,12 @@ export function AuthedAppLayout({
                 <ListItemText primary="Каталог" />
               </ListItemButton>
             ) : null}
-            {can('billing') ? (
+            {isAdmin ? (
               <ListItemButton component={NavLink} to={`${base}/billing`} data-testid="nav-ff-billing" data-task-id="NAV-01">
                 <ListItemText primary="Расчёты" />
               </ListItemButton>
             ) : null}
-            {can('honest_sign') ? (
+            {isAdmin ? (
               <ListItemButton
                 component={NavLink}
                 to={`${base}/honest-sign`}
@@ -354,10 +339,7 @@ export function AuthedAppLayout({
         sx={(theme) => ({
           flexGrow: 1,
           p: 3,
-          // WMS-433: снизу запас под кнопку помощника в углу — при прокрутке до
-          // конца последняя строка таблицы остаётся над ней (R1). Если над
-          // помощником стоит ещё и «?», запас покрывает обе кнопки.
-          pb: assistantShown && developerRequests ? 16 : assistantShown || developerRequests ? 10 : 3,
+          pb: developerRequests ? 10 : 3,
           background: `linear-gradient(165deg, ${alpha(theme.palette.primary.main, 0.07)} 0%, ${theme.palette.background.default} 32%, ${theme.palette.background.default} 100%)`,
         })}
         data-testid="app-content"
@@ -365,20 +347,7 @@ export function AuthedAppLayout({
         <Toolbar />
         {children}
       </Box>
-      {/* WMS-433: помощник доступен всем сотрудникам ФФ, как «База знаний» (R20),
-          но только у тенанта, включённого на сервере (R23): для выключенного
-          панель не монтируется — ни кнопки, ни окна в DOM, ни опроса переписки,
-          что бы ни лежало в localStorage. Селлерский каркас выше его не
-          получает — это второй срез. */}
-      {assistantProfile?.assistant_enabled === true ? (
-        <AssistantPanel profile={assistantProfile} />
-      ) : null}
-      {developerRequests && (
-        <DeveloperRequests
-          {...developerRequests}
-          corner={assistantShown ? HELP_ABOVE_ASSISTANT : undefined}
-        />
-      )}
+      {developerRequests && <DeveloperRequests {...developerRequests} />}
     </Box>
   )
 }

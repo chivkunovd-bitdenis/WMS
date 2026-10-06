@@ -27,9 +27,5 @@ class FfStaffPermissions(Base):
     can_inventory: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_packaging: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     can_shift_lead: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    can_billing: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    can_storage: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    can_fbs: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
-    can_honest_sign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     user: Mapped[User] = relationship("User", back_populates="ff_staff_permissions")

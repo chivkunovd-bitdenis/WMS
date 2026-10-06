@@ -24,10 +24,6 @@ const ALL_PERMISSIONS = {
   inventory: true,
   packaging: true,
   shift_lead: true,
-  billing: true,
-  storage: true,
-  fbs: true,
-  honest_sign: true,
 } as const
 
 export const SCENE_USER_LABEL = 'sklad@korob-vms.ru'

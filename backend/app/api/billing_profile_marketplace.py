@@ -14,7 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import require_billing_access
+from app.api.deps import require_fulfillment_admin
 from app.db.session import get_db
 from app.models.user import User
 from app.services.billing_configuration_service import (
@@ -52,7 +52,7 @@ class MarketplaceRequisitesOut(BaseModel):
 async def get_seller_marketplace_requisites(
     seller_id: uuid.UUID,
     marketplace: Literal["wb", "ozon"],
-    user: Annotated[User, Depends(require_billing_access)],
+    user: Annotated[User, Depends(require_fulfillment_admin)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> MarketplaceRequisitesOut:
     """Сведения о продавце по API площадки — только для подстановки в форму."""

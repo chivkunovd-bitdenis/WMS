@@ -4918,57 +4918,6 @@
         }
       }
     },
-    "/operations/fbs-supplies/{supply_id}/tracking-status": {
-      "post": {
-        "tags": [
-          "operations"
-        ],
-        "summary": "Sync Fbs Supply Tracking Status",
-        "description": "Refresh only one WB supply and its order statuses for an open card.",
-        "operationId": "sync_fbs_supply_tracking_status_operations_fbs_supplies__supply_id__tracking_status_post",
-        "security": [
-          {
-            "HTTPBearer": []
-          }
-        ],
-        "parameters": [
-          {
-            "name": "supply_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid",
-              "title": "Supply Id"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "additionalProperties": true,
-                  "title": "Response Sync Fbs Supply Tracking Status Operations Fbs Supplies  Supply Id  Tracking Status Post"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/operations/fbs-supplies/{supply_id}/markings/sync": {
       "post": {
         "tags": [
@@ -5858,337 +5807,6 @@
           "assigned_keys"
         ],
         "title": "AssignMarkingCodesOut"
-      },
-      "AssistantConversationOut": {
-        "properties": {
-          "messages": {
-            "items": {
-              "$ref": "#/components/schemas/AssistantMessageOut"
-            },
-            "type": "array",
-            "title": "Messages"
-          }
-        },
-        "type": "object",
-        "required": [
-          "messages"
-        ],
-        "title": "AssistantConversationOut"
-      },
-      "AssistantExecutorHistoryItemOut": {
-        "properties": {
-          "message_text": {
-            "type": "string",
-            "title": "Message Text"
-          },
-          "screen_title": {
-            "type": "string",
-            "title": "Screen Title"
-          },
-          "answer_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Answer Text"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "backlog_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backlog Number"
-          }
-        },
-        "type": "object",
-        "required": [
-          "message_text",
-          "screen_title",
-          "answer_text",
-          "created_at",
-          "backlog_number"
-        ],
-        "title": "AssistantExecutorHistoryItemOut"
-      },
-      "AssistantExecutorNextOut": {
-        "properties": {
-          "request": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/AssistantExecutorRequestOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "request"
-        ],
-        "title": "AssistantExecutorNextOut"
-      },
-      "AssistantExecutorRequestOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "tenant_id": {
-            "type": "string",
-            "title": "Tenant Id"
-          },
-          "tenant_name": {
-            "type": "string",
-            "title": "Tenant Name"
-          },
-          "user_email": {
-            "type": "string",
-            "title": "User Email"
-          },
-          "user_role": {
-            "type": "string",
-            "title": "User Role"
-          },
-          "message_text": {
-            "type": "string",
-            "title": "Message Text"
-          },
-          "screen_path": {
-            "type": "string",
-            "title": "Screen Path"
-          },
-          "screen_title": {
-            "type": "string",
-            "title": "Screen Title"
-          },
-          "screen_text": {
-            "type": "string",
-            "title": "Screen Text"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "history": {
-            "items": {
-              "$ref": "#/components/schemas/AssistantExecutorHistoryItemOut"
-            },
-            "type": "array",
-            "title": "History"
-          },
-          "code_version": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code Version"
-          },
-          "executor_attempts": {
-            "type": "integer",
-            "title": "Executor Attempts"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "tenant_id",
-          "tenant_name",
-          "user_email",
-          "user_role",
-          "message_text",
-          "screen_path",
-          "screen_title",
-          "screen_text",
-          "created_at",
-          "history",
-          "code_version",
-          "executor_attempts"
-        ],
-        "title": "AssistantExecutorRequestOut"
-      },
-      "AssistantExecutorResultBody": {
-        "properties": {
-          "answer_text": {
-            "type": "string",
-            "maxLength": 8000,
-            "minLength": 1,
-            "title": "Answer Text"
-          },
-          "backlog_number": {
-            "anyOf": [
-              {
-                "type": "string",
-                "maxLength": 16
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backlog Number"
-          }
-        },
-        "type": "object",
-        "required": [
-          "answer_text"
-        ],
-        "title": "AssistantExecutorResultBody"
-      },
-      "AssistantExecutorResultOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "answer_text": {
-            "type": "string",
-            "title": "Answer Text"
-          },
-          "backlog_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backlog Number"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "answer_text",
-          "backlog_number"
-        ],
-        "title": "AssistantExecutorResultOut"
-      },
-      "AssistantMessageCreateBody": {
-        "properties": {
-          "client_message_id": {
-            "type": "string",
-            "maxLength": 128,
-            "minLength": 1,
-            "title": "Client Message Id"
-          },
-          "message_text": {
-            "type": "string",
-            "maxLength": 8000,
-            "minLength": 1,
-            "title": "Message Text"
-          },
-          "screen_path": {
-            "type": "string",
-            "maxLength": 512,
-            "title": "Screen Path",
-            "default": ""
-          },
-          "screen_title": {
-            "type": "string",
-            "maxLength": 256,
-            "title": "Screen Title",
-            "default": ""
-          },
-          "screen_text": {
-            "type": "string",
-            "maxLength": 500000,
-            "title": "Screen Text",
-            "default": ""
-          }
-        },
-        "type": "object",
-        "required": [
-          "client_message_id",
-          "message_text"
-        ],
-        "title": "AssistantMessageCreateBody"
-      },
-      "AssistantMessageOut": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "message_text": {
-            "type": "string",
-            "title": "Message Text"
-          },
-          "screen_title": {
-            "type": "string",
-            "title": "Screen Title"
-          },
-          "created_at": {
-            "type": "string",
-            "title": "Created At"
-          },
-          "answer_text": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Answer Text"
-          },
-          "answered_at": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Answered At"
-          },
-          "backlog_number": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Backlog Number"
-          },
-          "waiting": {
-            "type": "boolean",
-            "title": "Waiting"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "message_text",
-          "screen_title",
-          "created_at",
-          "answer_text",
-          "answered_at",
-          "backlog_number",
-          "waiting"
-        ],
-        "title": "AssistantMessageOut"
       },
       "AuthSignature": {
         "properties": {
@@ -8258,95 +7876,6 @@
           "documents"
         ],
         "title": "DocumentSignatures"
-      },
-      "FboProductLabelOut": {
-        "properties": {
-          "product_name": {
-            "type": "string",
-            "title": "Product Name"
-          },
-          "sku_code": {
-            "type": "string",
-            "title": "Sku Code"
-          },
-          "barcode": {
-            "type": "string",
-            "title": "Barcode"
-          },
-          "wb_vendor_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wb Vendor Code"
-          },
-          "wb_size": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wb Size"
-          },
-          "wb_color": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wb Color"
-          },
-          "wb_brand": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wb Brand"
-          },
-          "wb_composition": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Wb Composition"
-          },
-          "seller_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Seller Name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "product_name",
-          "sku_code",
-          "barcode"
-        ],
-        "title": "FboProductLabelOut"
       },
       "FbsAssemblyTaskAuthorOut": {
         "properties": {
@@ -16687,17 +16216,6 @@
               }
             ],
             "title": "Wb Primary Barcode"
-          },
-          "product_primary_barcode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Primary Barcode"
           },
           "wb_size": {
             "anyOf": [
@@ -26179,116 +25697,6 @@
         ],
         "title": "PrintAllMarkingOut"
       },
-      "PrintFboBulkIn": {
-        "properties": {
-          "layout_json": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/PrintLayoutOut"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          },
-          "allow_partial": {
-            "type": "boolean",
-            "title": "Allow Partial",
-            "default": false
-          },
-          "issue_marking_codes": {
-            "type": "boolean",
-            "title": "Issue Marking Codes",
-            "default": true
-          }
-        },
-        "type": "object",
-        "title": "PrintFboBulkIn"
-      },
-      "PrintFboBulkLineOut": {
-        "properties": {
-          "packaging_task_line_id": {
-            "type": "string",
-            "title": "Packaging Task Line Id"
-          },
-          "product_id": {
-            "type": "string",
-            "title": "Product Id"
-          },
-          "sku_code": {
-            "type": "string",
-            "title": "Sku Code"
-          },
-          "product_name": {
-            "type": "string",
-            "title": "Product Name"
-          },
-          "requires_honest_sign": {
-            "type": "boolean",
-            "title": "Requires Honest Sign"
-          },
-          "quantity": {
-            "type": "integer",
-            "title": "Quantity"
-          },
-          "shortage": {
-            "type": "integer",
-            "title": "Shortage"
-          },
-          "product_label": {
-            "$ref": "#/components/schemas/FboProductLabelOut"
-          },
-          "printed_codes": {
-            "items": {
-              "$ref": "#/components/schemas/PrintedCodeOut"
-            },
-            "type": "array",
-            "title": "Printed Codes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "packaging_task_line_id",
-          "product_id",
-          "sku_code",
-          "product_name",
-          "requires_honest_sign",
-          "quantity",
-          "shortage",
-          "product_label"
-        ],
-        "title": "PrintFboBulkLineOut"
-      },
-      "PrintFboBulkOut": {
-        "properties": {
-          "packaging_task_id": {
-            "type": "string",
-            "title": "Packaging Task Id"
-          },
-          "layout": {
-            "$ref": "#/components/schemas/PrintLayoutOut"
-          },
-          "lines": {
-            "items": {
-              "$ref": "#/components/schemas/PrintFboBulkLineOut"
-            },
-            "type": "array",
-            "title": "Lines"
-          },
-          "shortage": {
-            "type": "integer",
-            "title": "Shortage"
-          }
-        },
-        "type": "object",
-        "required": [
-          "packaging_task_id",
-          "layout",
-          "lines",
-          "shortage"
-        ],
-        "title": "PrintFboBulkOut"
-      },
       "PrintLabelOptionsOut": {
         "properties": {
           "include_size": {
@@ -26812,17 +26220,6 @@
               }
             ],
             "title": "Wb Primary Barcode"
-          },
-          "product_primary_barcode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Primary Barcode"
           },
           "wb_size": {
             "anyOf": [
@@ -28475,22 +27872,6 @@
         "additionalProperties": false,
         "type": "object",
         "title": "ProductOzonLinkPatch"
-      },
-      "ProductPrimaryBarcodePatch": {
-        "properties": {
-          "barcode": {
-            "type": "string",
-            "maxLength": 64,
-            "minLength": 1,
-            "title": "Barcode"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "barcode"
-        ],
-        "title": "ProductPrimaryBarcodePatch"
       },
       "ProductTzImportApplyOut": {
         "properties": {
@@ -32153,17 +31534,6 @@
             ],
             "title": "Wb Primary Barcode"
           },
-          "product_primary_barcode": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Product Primary Barcode"
-          },
           "wb_size": {
             "anyOf": [
               {
@@ -33207,26 +32577,6 @@
             "type": "boolean",
             "title": "Shift Lead",
             "default": false
-          },
-          "billing": {
-            "type": "boolean",
-            "title": "Billing",
-            "default": false
-          },
-          "storage": {
-            "type": "boolean",
-            "title": "Storage",
-            "default": false
-          },
-          "fbs": {
-            "type": "boolean",
-            "title": "Fbs",
-            "default": false
-          },
-          "honest_sign": {
-            "type": "boolean",
-            "title": "Honest Sign",
-            "default": false
           }
         },
         "type": "object",
@@ -33261,22 +32611,6 @@
           "shift_lead": {
             "type": "boolean",
             "title": "Shift Lead"
-          },
-          "billing": {
-            "type": "boolean",
-            "title": "Billing"
-          },
-          "storage": {
-            "type": "boolean",
-            "title": "Storage"
-          },
-          "fbs": {
-            "type": "boolean",
-            "title": "Fbs"
-          },
-          "honest_sign": {
-            "type": "boolean",
-            "title": "Honest Sign"
           }
         },
         "type": "object",
@@ -33287,11 +32621,7 @@
           "cells",
           "inventory",
           "packaging",
-          "shift_lead",
-          "billing",
-          "storage",
-          "fbs",
-          "honest_sign"
+          "shift_lead"
         ],
         "title": "StaffPermissionsOut"
       },
@@ -34807,11 +34137,6 @@
               }
             ],
             "title": "Fbs Shipment Cutoff Time"
-          },
-          "assistant_enabled": {
-            "type": "boolean",
-            "title": "Assistant Enabled",
-            "default": false
           }
         },
         "type": "object",

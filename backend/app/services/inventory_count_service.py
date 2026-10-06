@@ -41,10 +41,6 @@ from app.services import (
 from app.services.catalog_service import list_ozon_product_links, load_ozon_primary_image_urls
 from app.services.defect_warehouse_service import DEFECT_LOCATION_CODE, defect_service_write
 from app.services.inventory_container_service import ContainerKind
-from app.services.product_barcode_service import (
-    load_barcodes_by_product,
-    primary_product_barcode,
-)
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     get_or_create_sorting_location,
@@ -555,16 +551,17 @@ async def get_count(
 
 
 def _print_sheet_barcode(
-    product: Product,
-    ozon_link: ProductMarketplaceLink | None,
-    wb_barcodes: tuple[str, ...] = (),
+    product: Product, ozon_link: ProductMarketplaceLink | None
 ) -> str | None:
-    """The current product-label choice, including Ozon-only products."""
-    return primary_product_barcode(
-        product,
-        wb_barcodes=wb_barcodes,
-        ozon_barcodes=tuple(ozon_link.external_barcodes or []) if ozon_link else (),
-    )
+    """WMS-497 R7: ШК WB, иначе первый ШК Ozon из привязки, иначе нет значения."""
+
+    if product.wb_barcode:
+        return product.wb_barcode
+    if ozon_link is not None and ozon_link.external_barcodes:
+        first = ozon_link.external_barcodes[0]
+        if isinstance(first, str) and first.strip():
+            return first.strip()
+    return None
 
 
 def _print_sheet_article(
@@ -620,7 +617,6 @@ async def print_sheet_data(
 
     all_product_ids = set(lines_products) | set(selected_products)
     ozon_links = await list_ozon_product_links(session, tenant_id, all_product_ids)
-    aliases = await load_barcodes_by_product(session, tenant_id, all_product_ids)
 
     totals = await fbs_stock_availability_service.organization_stock_totals_by_product(
         session, tenant_id, list(lines_products)
@@ -629,7 +625,7 @@ async def print_sheet_data(
     rows = [
         PrintSheetRow(
             product_id=pid,
-            barcode=_print_sheet_barcode(product, ozon_links.get(pid), aliases.get(pid, ())),
+            barcode=_print_sheet_barcode(product, ozon_links.get(pid)),
             article=_print_sheet_article(product, ozon_links.get(pid)),
             name=product.name,
             total=totals[pid].on_hand if pid in totals else 0,
@@ -1492,25 +1488,10 @@ async def record_found(
         )
         if existing is None:
             raise InventoryCountError("line_not_found")
-        product_id = existing.product_id
-        aliases = await load_barcodes_by_product(session, tenant_id, {product_id})
-        ozon_links = await list_ozon_product_links(session, tenant_id, {product_id})
-        wb_barcodes = aliases.get(product_id, ())
-        ozon_link = ozon_links.get(product_id)
-        ozon_barcodes = tuple(ozon_link.external_barcodes or []) if ozon_link else ()
-        primary_barcode = primary_product_barcode(
-            existing.product, wb_barcodes=wb_barcodes, ozon_barcodes=ozon_barcodes
-        )
         line_codes = {
-            value.strip().lower()
-            for value in (
-                existing.product.wb_barcode,
-                existing.product.sku_code,
-                primary_barcode,
-                *wb_barcodes,
-                *ozon_barcodes,
-            )
-            if isinstance(value, str) and value.strip()
+            value.lower()
+            for value in (existing.product.wb_barcode, existing.product.sku_code)
+            if value
         }
         if line_codes.isdisjoint(lowered):
             # Экран прислал не тот код для этой строки — довериться голому

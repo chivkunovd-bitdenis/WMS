@@ -14,7 +14,7 @@ from app.api.deps import (
     get_current_user,
     get_effective_seller_id,
 )
-from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
 from app.db.session import get_db
 from app.models.user import User
 from app.services.catalog_service import get_product
@@ -24,7 +24,6 @@ from app.services.fbs_stock_rule_service import (
 )
 from app.services.seller_shop_service import user_can_manage_seller_shops
 from app.services.seller_staff_permissions_service import PERM_PRODUCTS
-from app.services.staff_permissions_service import PERM_FBS, get_staff_permissions
 
 router = APIRouter(prefix="/products", tags=["products"])
 
@@ -46,10 +45,6 @@ async def _assert_reset_access(
     effective_seller_id: uuid.UUID | None,
 ) -> None:
     await assert_seller_permission(session, user, PERM_PRODUCTS)
-    if user.role == FULFILLMENT_STAFF and not (await get_staff_permissions(session, user)).has(
-        PERM_FBS
-    ):
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     product = await get_product(session, user.tenant_id, product_id)
     if product is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="product_not_found")
@@ -59,7 +54,7 @@ async def _assert_reset_access(
             owner_id = effective_seller_id
         if owner_id is None or product.seller_id != owner_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
+    elif user.role != FULFILLMENT_ADMIN:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 

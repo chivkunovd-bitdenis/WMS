@@ -472,45 +472,6 @@ async def test_print_sheet_ozon_only_product_uses_link_barcode_and_offer_id(
 
 
 @pytest.mark.asyncio
-async def test_print_sheet_uses_new_primary_for_existing_count(
-    async_client: AsyncClient,
-) -> None:
-    setup = await _tenant(async_client, "PrintPrimary")
-    seller = await _seller(async_client, setup, "Primary")
-    product = await _product_full(
-        async_client,
-        setup,
-        name="Товар с двумя ШК",
-        seller_id=seller,
-        wb_barcode="WB-PRIMARY-OLD",
-    )
-    await _ozon_link(
-        setup, product, seller, offer_id="W593-OZ", barcodes=["OZN-PRIMARY-NEW"]
-    )
-    await _balance(setup, product, 4)
-    count = await _create(
-        async_client,
-        setup,
-        {"source": "planned", "filters": {"warehouse_id": str(setup.warehouse_id)}},
-    )
-    before = await _print_sheet(async_client, setup, count["id"])
-    assert next(r for r in before["rows"] if r["product_id"] == str(product))[
-        "barcode"
-    ] == "WB-PRIMARY-OLD"
-
-    selected = await async_client.patch(
-        f"/products/{product}/primary-barcode",
-        headers=setup.headers,
-        json={"barcode": "OZN-PRIMARY-NEW"},
-    )
-    assert selected.status_code == 200, selected.text
-    after = await _print_sheet(async_client, setup, count["id"])
-    assert next(r for r in after["rows"] if r["product_id"] == str(product))[
-        "barcode"
-    ] == "OZN-PRIMARY-NEW"
-
-
-@pytest.mark.asyncio
 async def test_print_sheet_product_without_any_article_falls_back_to_sku(
     async_client: AsyncClient,
 ) -> None:

@@ -26,10 +26,6 @@ PERM_CELLS = "cells"
 PERM_INVENTORY = "inventory"
 PERM_PACKAGING = "packaging"
 PERM_SHIFT_LEAD = "shift_lead"
-PERM_BILLING = "billing"
-PERM_STORAGE = "storage"
-PERM_FBS = "fbs"
-PERM_HONEST_SIGN = "honest_sign"
 
 ALL_PERMISSIONS = (
     PERM_SETTINGS,
@@ -39,10 +35,6 @@ ALL_PERMISSIONS = (
     PERM_INVENTORY,
     PERM_PACKAGING,
     PERM_SHIFT_LEAD,
-    PERM_BILLING,
-    PERM_STORAGE,
-    PERM_FBS,
-    PERM_HONEST_SIGN,
 )
 
 
@@ -55,10 +47,6 @@ class StaffPermissionsSnapshot:
     inventory: bool = False
     packaging: bool = False
     shift_lead: bool = False
-    billing: bool = False
-    storage: bool = False
-    fbs: bool = False
-    honest_sign: bool = False
 
     def as_dict(self) -> dict[str, bool]:
         return {
@@ -69,10 +57,6 @@ class StaffPermissionsSnapshot:
             PERM_INVENTORY: self.inventory,
             PERM_PACKAGING: self.packaging,
             PERM_SHIFT_LEAD: self.shift_lead,
-            PERM_BILLING: self.billing,
-            PERM_STORAGE: self.storage,
-            PERM_FBS: self.fbs,
-            PERM_HONEST_SIGN: self.honest_sign,
         }
 
     def has(self, permission: str) -> bool:
@@ -87,10 +71,6 @@ ADMIN_ALL = StaffPermissionsSnapshot(
     inventory=True,
     packaging=True,
     shift_lead=True,
-    billing=True,
-    storage=True,
-    fbs=True,
-    honest_sign=True,
 )
 
 
@@ -105,10 +85,6 @@ def _from_row(row: FfStaffPermissions | None) -> StaffPermissionsSnapshot:
         inventory=row.can_inventory,
         packaging=row.can_packaging,
         shift_lead=row.can_shift_lead,
-        billing=row.can_billing,
-        storage=row.can_storage,
-        fbs=row.can_fbs,
-        honest_sign=row.can_honest_sign,
     )
 
 
@@ -185,10 +161,6 @@ async def update_staff_permissions(
     row.can_inventory = permissions.inventory
     row.can_packaging = permissions.packaging
     row.can_shift_lead = permissions.shift_lead
-    row.can_billing = permissions.billing
-    row.can_storage = permissions.storage
-    row.can_fbs = permissions.fbs
-    row.can_honest_sign = permissions.honest_sign
     after = permissions.as_dict()
     # WMS-325: append-only факт смены прав в существующем document_event; acting_user
     # — тот, кто нажал кнопку, target — тот, кому меняют права. Пишем ДО commit,

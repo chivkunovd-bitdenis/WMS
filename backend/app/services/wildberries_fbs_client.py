@@ -54,8 +54,6 @@ class MarketplaceSupplyDetails:
     supply_id: str
     name: str | None
     done: bool
-    closed_at: datetime | None = None
-    scan_at: datetime | None = None
     order_ids: tuple[int, ...] = ()
     trbx_ids: tuple[str, ...] = ()
 
@@ -454,8 +452,6 @@ def _parse_supply_details(data: Any) -> MarketplaceSupplyDetails:
         supply_id=str(supply_id_raw),
         name=name,
         done=done,
-        closed_at=_parse_supply_created_at(data.get("closedAt")),
-        scan_at=_parse_supply_created_at(data.get("scanDt")),
         order_ids=tuple(order_ids),
         trbx_ids=tuple(trbx_ids),
     )

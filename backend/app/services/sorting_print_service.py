@@ -23,10 +23,6 @@ from app.services.fbs_print_asset_storage import (
     sha256_checksum,
 )
 from app.services.fbs_print_job_service import lock_print_intent
-from app.services.product_barcode_service import (
-    load_barcodes_by_product,
-    primary_product_barcode,
-)
 
 
 def label_pdf(barcode: str, title: str, subtitle: str) -> bytes:
@@ -106,16 +102,14 @@ async def resolve_label(
             ProductMarketplaceLink.tenant_id == tenant_id,
             ProductMarketplaceLink.product_id == product.id,
             ProductMarketplaceLink.seller_id == product.seller_id,
-            ProductMarketplaceLink.marketplace == "ozon",
+            ProductMarketplaceLink.marketplace == provider,
             ProductMarketplaceLink.is_active.is_(True),
         )
     )
-    aliases = await load_barcodes_by_product(session, tenant_id, {product.id})
-    barcode = primary_product_barcode(
-        product,
-        wb_barcodes=aliases.get(product.id, ()),
-        ozon_barcodes=tuple(link.external_barcodes or []) if link else (),
-    ) or ""
+    if provider == "ozon":
+        barcode = next((str(x).strip() for x in (link.external_barcodes if link else []) if x), "")
+    else:
+        barcode = (product.wb_barcode or "").strip()
     return request, barcode, product.name, f"{provider.upper()} · {product.sku_code}"
 
 

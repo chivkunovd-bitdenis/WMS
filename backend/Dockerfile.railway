@@ -18,8 +18,4 @@ COPY app /app/app
 COPY alembic.ini /app/alembic.ini
 COPY alembic /app/alembic
 
-# Staging has no Redis/worker/beat topology. Keep the API on the established
-# fallback path: migrate first, then run FastAPI with background work handled
-# by the existing in-process fallback. Withdrawal access remains fail-closed
-# through the empty allowlist and disabled production-submit flag above.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["python", "-m", "app.railway_entrypoint"]

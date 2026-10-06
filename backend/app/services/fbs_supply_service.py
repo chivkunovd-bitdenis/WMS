@@ -98,7 +98,6 @@ from app.services.marketplace_scope import (
     wrong_marketplace_message,
 )
 from app.services.marketplace_seller_lock_service import marketplace_seller_lock
-from app.services.operation_fact_service import normalize_marketplace
 from app.services.wildberries_client import (
     WildberriesClientError,
     add_order_to_marketplace_supply,
@@ -1399,10 +1398,7 @@ async def list_supply_worklist(
     if seller_id is not None:
         stmt = stmt.where(FbsSupply.seller_id == seller_id)
     if marketplace is not None:
-        # Legacy imports can store the long WB name. Filtering and serialization
-        # must use the same canonical identity without rewriting stored rows.
-        marketplace_values = ("wb", "wildberries") if marketplace == "wb" else (marketplace,)
-        stmt = stmt.where(func.lower(func.trim(FbsSupply.marketplace)).in_(marketplace_values))
+        stmt = stmt.where(FbsSupply.marketplace == marketplace)
     total = None
     if search and search.strip():
         term = search.strip()
@@ -1462,7 +1458,6 @@ async def list_supply_worklist(
 
     items: list[dict[str, Any]] = []
     for supply in supplies:
-        supply_marketplace = normalize_marketplace(supply.marketplace)
         orders = list(supply.orders)
         first_order = orders[0] if orders else None
         wb_id = (
@@ -1470,7 +1465,7 @@ async def list_supply_worklist(
         )
         units_count = (
             sum(position.quantity for order in orders for position in order.product_positions)
-            if supply_marketplace == "ozon"
+            if supply.marketplace == "ozon"
             else len(orders)
         )
         picked_units_count = (
@@ -1479,13 +1474,13 @@ async def list_supply_worklist(
                 for order in orders
                 for position in order.product_positions
             )
-            if supply_marketplace == "ozon"
+            if supply.marketplace == "ozon"
             else sum(order.pick_status == PICK_STATUS_PICKED for order in orders)
         )
         items.append(
             {
                 "id": str(supply.id),
-                "marketplace": supply_marketplace,
+                "marketplace": supply.marketplace,
                 "wb_supply_id": supply.wb_supply_id,
                 "name": supply.display_number or supply.name,
                 "delivery_type": supply.delivery_type,
@@ -1525,7 +1520,7 @@ async def list_supply_worklist(
                         FBS_SUPPLY_STATUS_ASSEMBLING,
                         FBS_SUPPLY_STATUS_PACKED,
                     }
-                    if supply_marketplace == "wb"
+                    if supply.marketplace == "wb"
                     else {FBS_SUPPLY_STATUS_DRAFT, FBS_SUPPLY_STATUS_ASSEMBLING}
                 ),
             }
