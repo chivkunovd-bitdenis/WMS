@@ -12,7 +12,7 @@ import re
 import subprocess
 import sys
 import zipfile
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
 
 POLICY_PATH = 'guards/PROCESS_CONTRACTS.json'
@@ -109,6 +109,54 @@ def tree(get, root, ref):
     return result
 
 
+def bootstrap_pin(data):
+    if not isinstance(data, dict) or set(data) != {'base_sha', 'source_sha'}:
+        raise ValueError('Bootstrap requires exactly owner-approved base/source SHAs')
+    base, source = sha(data['base_sha']), sha(data['source_sha'])
+    if base == source:
+        raise ValueError('Bootstrap source must be a separate reviewed commit')
+    return {'base_sha': base, 'source_sha': source}
+
+
+def load_approved_bootstrap():
+    # This sibling belongs to the trusted-main checkout. No event/candidate/env
+    # input can select a config file or approve the source commit.
+    path = Path(__file__).resolve().with_name('process_bootstrap.json')
+    if path.is_symlink():
+        raise ValueError('Trusted bootstrap config must not be a symlink')
+    try:
+        with path.open('rb') as stream:
+            raw = stream.read(MAX_METADATA + 1)
+    except FileNotFoundError:
+        return None
+    if len(raw) > MAX_METADATA:
+        raise ValueError('Trusted bootstrap config too large')
+    return bootstrap_pin(json_object(raw))
+
+
+def baseline_policy(get, root, base, approved_bootstrap):
+    if approved_bootstrap is None:
+        # Preserve the default refusal if baseline contents are unavailable.
+        data, _ = policy(get, root, base)
+        return data, tree(get, root, base), None
+    baseline_tree = tree(get, root, base)
+    ref, source = base, None
+    if POLICY_PATH not in baseline_tree:
+        pin = bootstrap_pin(approved_bootstrap)
+        if pin['base_sha'] != base:
+            raise ValueError('Bootstrap is not approved for this exact PR base')
+        ref = source = pin['source_sha']
+        baseline_tree = tree(get, root, ref)
+    row = baseline_tree.get(POLICY_PATH)
+    if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
+        raise ValueError('Baseline policy must exist as a regular Git blob')
+    sha(row['sha'])
+    # Existing BASE policy always wins. Its corruption/API error never selects
+    # the seed: fallback requires prior absence in the full BASE tree above.
+    data, _ = policy(get, root, ref)
+    return data, baseline_tree, source
+
+
 def pages(get, path, key, query=None):
     rows, seen, expected = [], set(), None
     for page in range(1, 102):
@@ -149,18 +197,18 @@ def pr_identity(pr, repository, number):
     return (*pr_scope(pr, repository, number), sha(pr['merge_commit_sha']))
 
 
-def verify_pr(get, repository, number, *, download=None):
+def verify_pr(get, repository, number, *, download=None, approved_bootstrap=None):
     """Read-only metadata helper; evidence_complete=False cannot authorize a check.
 
     The optional callback retains the pre-code metadata contract while the CLI
     always uses verify_pr_evidence, which requires a bound artifact.
     """
     if download is not None:
-        return verify_pr_evidence(get, download, repository, number)
+        return verify_pr_evidence(get, download, repository, number, approved_bootstrap=approved_bootstrap)
     identity(repository, number)
     root = f'repos/{repository}'
     head, base, merge = pr_identity(get(f'{root}/pulls/{number}'), repository, number)
-    baseline, _ = policy(get, root, base)
+    baseline, baseline_tree, source = baseline_policy(get, root, base, approved_bootstrap)
     candidate, candidate_raw = policy(get, root, head)
     merged, merged_raw = policy(get, root, merge)
     if candidate_raw != merged_raw or candidate != merged:
@@ -173,7 +221,7 @@ def verify_pr(get, repository, number, *, download=None):
         if (current is None or any(current[key] != suite[key] for key in ('report', 'format', 'exact')) or
                 not set(suite['cases']).issubset(current['cases'])):
             raise ValueError('Candidate removed or changed a protected execution contract')
-    trees = [tree(get, root, ref) for ref in (base, head, merge)]
+    trees = [baseline_tree, tree(get, root, head), tree(get, root, merge)]
     for name in baseline['files']:
         rows = [data.get(name) for data in trees]
         if any(row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'} for row in rows):
@@ -221,15 +269,16 @@ def verify_pr(get, repository, number, *, download=None):
     current = latest()
     if any(current[key] != run[key] for key in ('id', 'run_attempt', 'status', 'conclusion', 'pull_requests')):
         raise ValueError('Latest CI changed during verification')
-    return {'head_sha': head, 'base_sha': base, 'merge_sha': merge, 'run_id': run['id'],
+    return {**({'bootstrap_source_sha': source} if source else {}),
+            'head_sha': head, 'base_sha': base, 'merge_sha': merge, 'run_id': run['id'],
             'run_attempt': run['run_attempt'], 'policy_sha256': hashlib.sha256(candidate_raw).hexdigest(),
             'evidence_complete': False}
 
 
-def verify_pr_evidence(get, download, repository, number):
+def verify_pr_evidence(get, download, repository, number, *, approved_bootstrap=None):
     """Strict entrypoint: verify frozen pipeline plus exact current proof metadata."""
     try:
-        result = verify_pr(get, repository, number)
+        result = verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap)
         root = f'repos/{repository}'
         name = f"process-proof-{result['merge_sha']}-{result['run_id']}-{result['run_attempt']}"
         artifacts = pages(get, f"{root}/actions/runs/{result['run_id']}/artifacts", 'artifacts')
@@ -264,7 +313,7 @@ def verify_pr_evidence(get, download, repository, number):
                         'run_attempt': result['run_attempt'], 'policy_sha256': result['policy_sha256']}
             if any(type(metadata.get(key)) is not type(value) or metadata.get(key) != value for key, value in expected.items()):
                 raise ValueError('Proof does not belong to this exact merge/head/base/run/attempt/policy')
-        if verify_pr(get, repository, number) != result:
+        if verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap) != result:
             raise ValueError('PR or latest CI changed during artifact verification')
         return {**result, 'artifact_id': artifact['id'], 'evidence_complete': True}
     except ValueError:
@@ -360,7 +409,8 @@ def main():
             head = None
             try:
                 head = pr_scope(api_get(f'repos/{args.repository}/pulls/{number}'), args.repository, number)[0]
-                result = verify_pr_evidence(api_get, download_artifact, args.repository, number)
+                result = verify_pr_evidence(api_get, download_artifact, args.repository, number,
+                                            approved_bootstrap=load_approved_bootstrap())
                 if result['evidence_complete'] is not True or result['head_sha'] != head:
                     raise ValueError('Exact strict proof required before publishing')
                 if args.publish:

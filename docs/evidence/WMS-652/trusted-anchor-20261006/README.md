@@ -114,3 +114,11 @@ https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-t
 это максимум 100 pending, не неограниченная очередь. При заполнении GitHub
 отменяет новый запуск, поэтому безграничная гарантия отзыва старого check не
 заявляется. Workflow остаётся только подготовленным.
+
+Подготовлен также явный owner-reviewed вход для первого BASE без policy:
+[bootstrap-preparation.md](bootstrap-preparation.md). Additive контракт
+`f4e6d2526` до кода, текущий общий результат **39 PASS**. Default без файла
+разрешения остаётся refuse; новый source применяется только к exact original
+BASE после доказанной отсутствия policy в полном tree. Конкретный source pin
+заполняет ведущий после review. Конфигурация/активный workflow в main этим
+исполнителем не установлены.

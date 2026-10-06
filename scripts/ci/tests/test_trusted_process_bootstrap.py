@@ -12,7 +12,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from scripts.ci.tests.test_trusted_process_artifact import ArtifactFixture
-from scripts.ci.tests.test_trusted_process_check import B, H, M, REPO
+from scripts.ci.tests.test_trusted_process_check import REPO, B, H, M
 
 S = 'd' * 40
 PIN = {'base_sha': B, 'source_sha': S}
