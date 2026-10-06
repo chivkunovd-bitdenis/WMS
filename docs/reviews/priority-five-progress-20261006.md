@@ -130,3 +130,7 @@ helper/proof517 и read-only proof/план675; новыйruntime662 в675 не 
 
 Обновлённая статическая карта на7cf8de343 сохраняет13sourceancestries,
 132sourcepaths и66untouchedetalons; unexpecteddrift отсутствует.
+
+## Интеграция 15 — независимое ревью общего product
+
+База `5f1ec9a26e1f453e1e894184f6442330e9a3d9bd`; независимыйreport `8e301ddaf542d4823bcc14363e318f409fdc0935` включён без конфликтов. PASS относится кproduct08e0d33dd и сохранённым тогда cases. Новые реальные подстатусы662/675отдельно открыты; они будут закрыты контрактомдоfix и узким новымreview. Runtimeнеизменён. Общие тесты/CI ещё не выполнялись.
