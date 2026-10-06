@@ -1,0 +1,19 @@
+{
+  "product_sha": "b6e14f56692cf0561955e48af0a30e1415ccea36",
+  "frozen_contract_sha": "f78024793bcb2dae769254f5a5b1249c56eca083",
+  "previous_review_sha": "ed482516be9119bc21261df4ab472bbff1662af7",
+  "branch": "codex/night1007-684-586",
+  "product_changed_files": [
+    ".agent-runs/developer-handoff.md",
+    "backend/app/services/inbound_acceptance_act_service.py"
+  ],
+  "frontend_tree_source": "9b512784bcba78d30498d64dfb65d80208c56ba0",
+  "frontend_tree_previous_f2_f4_pass": "9b512784bcba78d30498d64dfb65d80208c56ba0",
+  "rules_match_etalon": true,
+  "libraries_and_rules_unchanged_since_prior_review": true,
+  "frozen_tests_requirements_frontend_unchanged_by_product_fix": true,
+  "probe_sha256": {
+    "pagination_api_probe.py": "3177cdbb2ee8963b0ad47f2c2b5da36bb5c16c586d63fb6dd200fd2dc4d819a1",
+    "boundary_probe.py": "c4bba42021b247bb0327cadc035c9594b632f05347236fba4bbe7c9e7238ef58"
+  }
+}
