@@ -10,7 +10,7 @@ on:
 permissions:
   contents: read
 jobs:
-  c5-cache-clock-trace:
+  c5-cache-debug-trace:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -36,6 +36,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wms672-c5-cache-clock-trace-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/c5-cache-clock-trace
+          name: wms672-c5-cache-debug-trace-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/c5-cache-debug-trace
           if-no-files-found: error

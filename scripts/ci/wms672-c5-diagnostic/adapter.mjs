@@ -14,7 +14,7 @@ chromium.launch = async (options = {}) => {
   const traceDir = resolve(process.env.WMS672_EVIDENCE_DIR, 'engine');
   await mkdir(traceDir, { recursive: true });
   const cdp = await browser.newBrowserCDPSession();
-  const includedCategories = ['cc', 'disabled-by-default-cc.debug', 'disabled-by-default-memory-infra', '__metadata'];
+  const includedCategories = ['disabled-by-default-cc.debug', 'disabled-by-default-memory-infra', '__metadata'];
   const categories = await cdp.send('Tracing.getCategories');
   const absent = includedCategories.filter(category => !categories.categories.includes(category));
   await writeFile(resolve(traceDir, 'categories.json'), JSON.stringify({ includedCategories, absent, available: categories.categories }, null, 2));
