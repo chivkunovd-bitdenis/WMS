@@ -292,6 +292,19 @@ class SortingPlaceIn(BaseModel):
     qty: int | None = Field(default=None, gt=0)
 
 
+class SortingUndoIn(BaseModel):
+    """WMS-650 «назад»: отменить подтверждённое действие раскладки документа."""
+
+    inbound_request_id: uuid.UUID
+    operation_id: uuid.UUID
+    target_operation_id: uuid.UUID
+
+
+class SortingUndoOut(BaseModel):
+    id: str
+    target_operation_id: str
+
+
 class SortingScanIn(BaseModel):
     inbound_request_id: uuid.UUID
     operation_id: uuid.UUID
@@ -308,10 +321,13 @@ def _map_error(exc: WarehouseMapError) -> HTTPException:
         "cell_not_found",
         "pallet_not_found",
         "inbound_request_not_found",
+        "undo_target_not_found",
     }:
         return HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=exc.code)
     if exc.code in {
         "address_storage_disabled",
+        "undo_target_moved",
+        "undo_document_posted",
         "container_cycle",
         "container_stock_missing",
         "invalid_container_destination",
@@ -559,6 +575,31 @@ async def place_sorting_object_route(
         await session.rollback()
         raise _map_error(exc) from None
     return WarehouseMapMoveOut.model_validate(result)
+
+
+@router.post("/{warehouse_id}/sorting-objects/undo", response_model=SortingUndoOut)
+async def undo_sorting_action_route(
+    warehouse_id: uuid.UUID,
+    body: SortingUndoIn,
+    user: Annotated[User, Depends(require_cells_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> SortingUndoOut:
+    from app.services.sorting_undo_service import undo_sorting_action
+
+    try:
+        result = await undo_sorting_action(
+            session,
+            tenant_id=user.tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=user.id,
+            inbound_request_id=body.inbound_request_id,
+            operation_id=body.operation_id,
+            target_operation_id=body.target_operation_id,
+        )
+    except WarehouseMapError as exc:
+        await session.rollback()
+        raise _map_error(exc) from None
+    return SortingUndoOut.model_validate(result)
 
 
 @router.post("/{warehouse_id}/sorting-objects/scan", response_model=SortingScanOut)

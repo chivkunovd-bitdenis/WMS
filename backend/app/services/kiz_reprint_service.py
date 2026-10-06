@@ -6,11 +6,12 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.kiz_reprint import KizReprint
+from app.models.marking_code import MarkingCode
 from app.services.fbs_kiz_service import is_probably_cis, normalize_scanned_cis
 from app.services.inbound_intake_service import InboundIntakeError
 from app.services.inbound_marking_service import normalize_scanned_code
@@ -32,6 +33,25 @@ class KizReprintCreateResult:
 class KizReprintPrintClaimResult:
     row: KizReprint
     claimed: bool
+
+
+async def reprint_label_metadata(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    kiz: str,
+) -> tuple[str | None, bool]:
+    """Find the existing label for this exact KIZ within its seller's scope."""
+    row = (
+        await session.execute(
+            select(MarkingCode.id, func.length(MarkingCode.label_artifact_pdf) > 0).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.cis_code == kiz,
+            )
+        )
+    ).one_or_none()
+    return (str(row[0]), bool(row[1])) if row is not None else (None, False)
 
 
 def normalize_reprint_kiz(raw_kiz: str) -> str:

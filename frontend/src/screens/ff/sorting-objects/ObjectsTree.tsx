@@ -61,7 +61,7 @@ export function ObjectsTree({
   onPrint,
   onPickCell,
   compact = false,
-  activeObjectId,
+  highlight = null,
 }: {
   rows: ObjectRow[]
   objects: WarehouseObject[]
@@ -82,7 +82,11 @@ export function ObjectsTree({
    * там» — не подсказка, а шум, и она же съедала всю ширину у названия.
    */
   compact?: boolean
-  activeObjectId?: string | null
+  /**
+   * WMS-650 R11: подсвеченная строка (тара или товар) и почему: открытая
+   * сканом тара или строка, которой коснулось последнее действие или «назад».
+   */
+  highlight?: { key: string; kind: 'open' | 'touched' } | null
   testId: string
   empty: { title: string; hint?: string }
 }) {
@@ -163,6 +167,7 @@ export function ObjectsTree({
         <Stack
           direction="row"
           spacing={0.5}
+          data-highlight={highlight?.key === row.key ? highlight.kind : undefined}
           sx={{
             alignItems: 'center',
             minHeight: ROW_HEIGHT,
@@ -358,7 +363,8 @@ export function ObjectsTree({
       columns={columns}
       rows={rows}
       getRowKey={(row) => row.key}
-      highlightedKey={activeObjectId ? `o-${activeObjectId}` : null}
+      highlightedKey={highlight?.kind === 'open' ? highlight.key : null}
+      isComplete={(row) => highlight?.kind === 'touched' && highlight.key === row.key}
       fixedLayout={compact}
       drag={{
         active: carried !== null,

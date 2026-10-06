@@ -9,7 +9,7 @@ import sys
 from pathlib import Path
 
 from .config import load_config
-from .runner import build_agent
+from .runner import build_agent, install_logging
 
 
 def check_config(path: str | None) -> int:
@@ -59,6 +59,7 @@ def check_bots(path: str | None) -> int:
     from .telegram import TelegramClient
 
     cfg = load_config(path)
+    install_logging(cfg)
     http = httpx.Client()
     bots = {"intake": cfg.telegram.intake_token}
     if not cfg.telegram.single_bot:

@@ -64,6 +64,28 @@ def test_roles_use_cheap_and_strong_models_without_api_keys(tmp_path: Path) -> N
     assert "Edit" in script.calls[2][script.calls[2].index("--disallowedTools"):]  # аналитик не пишет
 
 
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+@pytest.mark.parametrize("role", ["filter", "routine", "analyst", "review", "frontend", "mockup"])
+def test_every_role_receives_common_wms_policy_on_new_and_resumed_turns(
+    tmp_path: Path, cli: str, role: str,
+) -> None:
+    from support_agent import prompts
+
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    for _ in range(2):
+        llm.ask(role, "поручение", cli_only=cli, session_key="policy-test", system="Правила роли")
+        if cli == "claude":
+            delivered = script.calls[-1][script.calls[-1].index("--system-prompt") + 1]
+        else:
+            delivered = script.stdin[-1] or ""
+        assert delivered.startswith(prompts.WMS_SYSTEM_POLICY + "\n\nПравила роли")
+        assert "Сохраняй существующие идентификаторы, дизайн и действия" in delivered
+        assert "Не придумывай лимиты, блокировки, новые идентификаторы или сущности" in delivered
+        assert "Догадки и предложения модели не являются обязательными требованиями" in delivered
+        assert "обычную форму или расположение действия выбирай сам" in delivered
+
+
 def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
@@ -85,6 +107,40 @@ def test_limit_switches_to_codex_and_remembers_then_both_down_then_recovers(tmp_
     assert llm.ask("analyst", "back", mode="readonly").cli == "claude"
 
 
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+def test_owner_session_without_fake_ticket_is_saved_and_resumed_after_router_restart(
+    tmp_path: Path, cli: str,
+) -> None:
+    from support_agent import prompts
+
+    script = ExecScript()
+    llm, store = router(tmp_path, script)
+    rules = prompts.OWNER_CHAT_SYSTEM
+    policy = prompts.WMS_SYSTEM_POLICY
+    first = llm.ask("routine", "первый ход: обращение №1 в разборе", session_key="owner_conversation",
+                    cli_only=cli, system=rules)
+    assert first.session_id and store.rows("SELECT * FROM tickets") == []
+    saved = store.kv_get("llm_sessions:owner_conversation")
+    assert saved == ({cli: first.session_id} if cli == "claude" else None)
+    restarted = LlmRouter(llm.cfg, store, exec_fn=script)
+    current = "История: первый ход. Теперь обращение №1 закрыто; новое обращение №2 в разборе."
+    updated_rules = rules + "\nИспользуй актуальный снимок обращений в каждом ходе."
+    restarted.ask("routine", current, session_key="owner_conversation", cli_only=cli, system=updated_rules)
+    if cli == "claude":
+        assert script.calls[-1][script.calls[-1].index("--resume") + 1] == first.session_id
+        for argv, expected in zip(script.calls, (rules, updated_rules), strict=True):
+            assert argv[argv.index("--system-prompt") + 1] == f"{policy}\n\n{expected}"
+        assert script.stdin[-1] == current
+    else:
+        assert script.calls[-1][:3] == ["codex", "exec", "--ephemeral"]
+        assert "первый ход: обращение №1 в разборе" in (script.stdin[-1] or "")
+        assert script.stdin[0] == f"{policy}\n\n{rules}\n\nпервый ход: обращение №1 в разборе"
+        assert (script.stdin[-1] or "").startswith(f"{policy}\n\n{updated_rules}\n\n")
+        assert (script.stdin[-1] or "").endswith(current)
+    assert store.kv_get("llm_sessions:owner_conversation") == saved
+    assert store.rows("SELECT * FROM tickets") == []
+
+
 def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
@@ -98,11 +154,11 @@ def test_astra_effort_is_always_explicit_and_never_above_high(tmp_path: Path) ->
             check_effort("gpt-6-astra", bad)
     for good in ("low", "medium", "high"):
         assert check_effort("gpt-6-astra", good) == good
-    llm.cfg.llm.codex_effort = "xhigh"  # даже ошибка в настройках не даст запустить
+    llm.cfg.llm.codex_effort = "xhigh"  # ревью явно ограничено high
     calls = len(script.calls)
-    with pytest.raises(ValueError):
-        llm.ask("review", "x", mode="readonly")
-    assert len(script.calls) == calls
+    llm.ask("review", "x", mode="readonly")
+    assert len(script.calls) == calls + 1
+    assert 'model_reasoning_effort="high"' in script.calls[-1]
 
 
 def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
@@ -114,15 +170,17 @@ def test_cross_check_excludes_the_analyst_family(tmp_path: Path) -> None:
     assert script.calls[-1][0] == "claude"
 
 
-def test_interface_analysis_and_dev_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
+def test_allowed_roles_fall_back_to_sol_automatically_never_astra(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
-    store.kv_set("cooldown:claude", time.time() + 999)  # Opus и Sonnet недоступны
+    store.kv_set("cooldown:claude", time.time() + 999)  # Claude недоступен
     for role in ("frontend", "mockup", "analyst", "routine", "filter"):
         llm.ask(role, "x", mode="write" if role in ("frontend", "mockup", "routine") else "text",
                 cwd=str(tmp_path))
     models = [c[c.index("-m") + 1] for c in script.calls]
     assert models == ["gpt-5.6-sol"] * 5  # без вопроса владельцу и без Astra
+    assert llm.cfg.llm.models["claude"]["frontend"] == "sonnet"
+    assert llm.cfg.llm.models["claude"]["mockup"] == "sonnet"
     assert llm.cfg.llm.models["codex"]["review"] == "gpt-6-astra"
     assert {r for r, m in ((r, llm.model_for("codex", r)) for r in ("filter", "routine", "analyst",
             "frontend", "mockup", "review")) if m and "astra" in m} == {"review"}
@@ -134,6 +192,21 @@ def test_astra_configured_for_a_non_review_role_is_refused(tmp_path: Path) -> No
     llm.cfg.llm.models["codex"]["analyst"] = "gpt-6-astra"
     with pytest.raises(ValueError, match="reviewer-only"):
         llm.model_for("codex", "analyst")
+
+
+def test_frontend_models_and_astra_review_are_fixed(tmp_path: Path) -> None:
+    script = ExecScript()
+    llm, _ = router(tmp_path, script)
+    assert llm.model_for("claude", "frontend") == "sonnet"
+    assert llm.model_for("codex", "frontend") == "gpt-5.6-sol"
+    llm.cfg.llm.cli_order = ["codex", "claude"]
+    assert llm.candidates("frontend", None, None) == [
+        ("claude", "sonnet"), ("codex", "gpt-5.6-sol")]
+    llm.cfg.llm.codex_effort = "xhigh"
+    assert llm.effort_for("codex", "review") == "high"
+    llm.cfg.llm.models["codex"]["review"] = "gpt-5.6-sol"
+    with pytest.raises(ValueError, match="gpt-6-astra"):
+        llm.model_for("codex", "review")
 
 
 def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
@@ -158,8 +231,8 @@ def test_dev_session_has_minimal_rights_not_bypass(tmp_path: Path) -> None:
         assert blocked in denied
 
 
-def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path) -> None:
-    """F2: у Sol-разработчика отключены shell и прочие инструменты; он только правит файлы worktree."""
+def test_codex_dev_has_readonly_project_reader_and_only_file_edits(tmp_path: Path) -> None:
+    """Sol читает worktree через изолированный MCP, а меняет только файлы через apply_patch."""
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
@@ -173,10 +246,13 @@ def test_codex_dev_has_no_shell_only_file_edits_in_native_sandbox(tmp_path: Path
     assert "--ignore-user-config" in argv and "--ignore-rules" in argv
     assert argv[argv.index("-s") + 1] == "workspace-write" and "danger-full-access" not in argv
     assert "sandbox_workspace_write.network_access=false" in argv
+    assert 'mcp_servers.wms.default_tools_approval_mode="approve"' in argv
+    assert any(a.startswith("mcp_servers.wms.args=") for a in argv)
     llm.ask("routine", "y", mode="write", cwd=wt, ticket_id=tid, session_key="dev")  # resume
     resume = script.full[-1]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"] and "shell_tool" in resume
-    assert 'sandbox_mode="workspace-write"' in resume and "--ignore-user-config" in resume
+    assert resume[:3] == ["codex", "exec", "--ephemeral"] and "shell_tool" in resume
+    assert resume[resume.index("-s") + 1] == "workspace-write" and "--ignore-user-config" in resume
+    assert any(a.startswith("mcp_servers.wms.args=") for a in resume)
 
 
 def test_codex_text_has_no_shell_but_analyst_keeps_read_only_shell(tmp_path: Path) -> None:
@@ -240,9 +316,9 @@ def test_codex_analyst_resume_keeps_mcp_and_disabled_tools(tmp_path: Path) -> No
     for text in ("a", "b"):
         llm.ask("analyst", text, mode="readonly", cwd=str(tmp_path), ticket_id=tid, session_key="analyst")
     resume = script.full[-1]
-    assert resume[:4] == ["codex", "exec", "resume", "T-1"]
+    assert resume[:3] == ["codex", "exec", "--ephemeral"]
     assert "shell_tool" in resume and any(a.startswith("mcp_servers.wms.args=") for a in resume)
-    assert 'sandbox_mode="read-only"' in resume
+    assert resume[resume.index("-s") + 1] == "read-only"
 
 
 def test_no_codex_home_copy_or_auth_sync_code_exists() -> None:
@@ -308,26 +384,53 @@ def test_real_codex_json_stream_gives_session_id() -> None:
     assert _codex_session_id(live) == "01a0fd43-39f6-70c3-9213-907ea87ac473"
 
 
-def test_session_is_created_then_resumed_and_context_only_for_new(tmp_path: Path) -> None:
+@pytest.mark.parametrize("cli", ["claude", "codex"])
+def test_resumed_analyst_receives_current_rules_history_and_state_after_restart(
+    tmp_path: Path, cli: str,
+) -> None:
+    from support_agent import prompts
+
     script = ExecScript()
     llm, store = router(tmp_path, script)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
-    llm.ask("analyst", "вопрос 1", ticket_id=tid, session_key="analyst", context="КОНТЕКСТ", mode="readonly")
-    llm.ask("analyst", "вопрос 2", ticket_id=tid, session_key="analyst", context="КОНТЕКСТ", mode="readonly")
+    first_result = llm.ask("analyst", "разбери", ticket_id=tid, session_key="analyst",
+                           context="Старые правила. Клиент: короб не сканируется.",
+                           mode="readonly", cli_only=cli)
+    current = prompts.analysis_context(
+        "Клиент: короб не сканируется.\nКлиент: код уже присылал.\n"
+        "Состояние: вопрос клиенту уже отправлен. Владелец запретил новые вопросы.", "",
+    )
+    note = "Перечитай всю переписку и проверь код сам без вопросов клиенту."
+    restarted = LlmRouter(llm.cfg, store, exec_fn=script)
+    restarted.ask("analyst", note, ticket_id=tid, session_key="analyst", context=current,
+                  mode="readonly", cli_only=cli)
     first, second = script.calls
-    assert "--session-id" in first and "--resume" in second
-    assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
-    assert script.stdin[0].startswith("КОНТЕКСТ") and script.stdin[1] == "вопрос 2"
+    if cli == "claude":
+        assert "--session-id" in first and "--resume" in second
+        assert first[first.index("--session-id") + 1] == second[second.index("--resume") + 1]
+    else:
+        assert second[:3] == ["codex", "exec", "--ephemeral"]
+        assert "Старые правила. Клиент: короб не сканируется." in (script.stdin[-1] or "")
+    policy = f"{prompts.WMS_SYSTEM_POLICY}\n\n" if cli == "codex" else ""
+    assert script.stdin[0] == policy + "Старые правила. Клиент: короб не сканируется.\n\nразбери"
+    assert (script.stdin[1] or "").startswith(policy)
+    assert (script.stdin[1] or "").endswith(f"{current}\n\n{note}")
+    if cli == "claude":
+        assert store.data(tid)["sessions"]["analyst"][cli] == first_result.session_id
+    else:
+        assert "sessions" not in store.data(tid)
 
 
-def test_codex_session_id_is_saved_and_resumed(tmp_path: Path) -> None:
+def test_codex_context_is_saved_without_persistent_session(tmp_path: Path) -> None:
     script = ExecScript()
     llm, store = router(tmp_path, script)
     store.kv_set("cooldown:claude", time.time() + 999)
     tid = store.add_ticket(kind="chat", source="t", chat_id=1, seller="s", stage="analysis")
     llm.ask("analyst", "a", ticket_id=tid, session_key="analyst", mode="readonly")
     llm.ask("analyst", "b", ticket_id=tid, session_key="analyst", mode="readonly")
-    assert script.calls[1][:4] == ["codex", "exec", "resume", "T-1"]
+    assert script.calls[1][:3] == ["codex", "exec", "--ephemeral"]
+    assert '"prompt": "a"' in (script.stdin[1] or "")
+    assert "sessions" not in store.data(tid)
 
 
 def test_ask_json_retries_once_and_calls_are_logged(tmp_path: Path) -> None:

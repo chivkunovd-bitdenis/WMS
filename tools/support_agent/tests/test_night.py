@@ -1,0 +1,1095 @@
+"""WMS-652: fixed overnight stage; every model/git/gh call is a fake."""
+
+from __future__ import annotations
+
+import json
+import os
+import subprocess
+import threading
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from support_agent.hotfix import HotfixRunner
+from support_agent.llm import ExecResult, LlmError, LlmUnavailable
+from support_agent.night import NightRunner
+from support_agent.pipeline import ThreadPool
+
+from .conftest import ok
+
+
+class FakeHotfix:
+    def __init__(self, *, etalon: str = "green") -> None:
+        self.etalon = etalon
+        self.calls: list[tuple[str, list[str]]] = []
+        self.release_calls: list[str] = []
+        self.p: Any = None
+
+    def git(self, *args: str, cwd: str | Path | None = None) -> str:
+        self.calls.append(("git", list(args)))
+        if args[:2] == ("rev-parse", "origin/etalon"):
+            return "a" * 40
+        if args[:2] == ("rev-parse", "HEAD"):
+            return "b" * 40
+        if args[:2] == ("status", "--porcelain"):
+            return ""
+        return ""
+
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        return ok()
+
+    def run_gh(self, argv: list[str], cwd: str | Path | None = None,
+               timeout: int = 300) -> ExecResult:
+        self.calls.append(("gh", argv))
+        if argv[:4] == ["gh", "run", "list", "--workflow"]:
+            return ok(out=json.dumps([{"databaseId": 1, "headSha": "a" * 40,
+                                       "status": "completed",
+                                       "conclusion": "success" if self.etalon == "green" else "failure",
+                                       "displayTitle": "backend"}]))
+        if argv[:4] == ["gh", "run", "view", "1"]:
+            return ok(out=json.dumps({"jobs": [
+                {"name": name, "conclusion": "success"}
+                for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")
+            ]}))
+        if argv[:3] == ["gh", "pr", "checks"]:
+            return ok(out=json.dumps([{"name": "backend", "bucket": "fail"}]))
+        return ok(out="[]")
+
+    def run(self, argv: list[str], cwd: str | Path | None = None,
+            timeout: int = 300) -> ExecResult:
+        self.calls.append(("run", argv))
+        return ok()
+
+    def fetch(self) -> None:
+        self.calls.append(("git", ["fetch"]))
+
+    def deployed_sha(self) -> str:
+        return "a" * 40
+
+    def ensure_worktree(self, branch: str, path: str | Path,
+                        base: str = "origin/etalon") -> Path:
+        self.calls.append(("git", ["worktree", branch, str(path), base]))
+        return Path(path)
+
+    def push_branch(self, branch: str) -> None:
+        self.calls.append(("git", ["push", branch]))
+
+    def link_node_modules(self, path: str) -> None:
+        self.calls.append(("node_modules", [path]))
+
+    def ensure_pr(self, branch: str, *, base: str, title: str, body: str) -> dict[str, Any]:
+        self.calls.append(("gh", ["pr", branch, base, title, body]))
+        return {"number": 9, "url": "https://example.test/pr/9"}
+
+    def pr_checks(self, pr: int | str) -> list[dict[str, Any]]:
+        self.calls.append(("gh", ["checks", str(pr)]))
+        return [{"name": "backend", "bucket": "fail"}]
+
+    def guard_gitdir(self, path: str | Path) -> None:
+        return None
+
+    def run_untrusted(self, argv: list[str], worktree: str | Path,
+                      cwd: str | Path, timeout: int = 900) -> ExecResult:
+        self.calls.append(("test", argv))
+        return ok()
+
+    def _s_merge(self, tid: int, state: dict[str, Any]) -> None:
+        self.release_calls.append("merge")
+        self.p.store.patch_data(tid, hotfix={**state, "step": "deploy", "merge_sha": "c" * 40})
+
+    def _s_deploy(self, tid: int, state: dict[str, Any]) -> None:
+        self.release_calls.append("deploy")
+        self.p.store.patch_data(tid, hotfix={**state, "step": "verify", "merge_sha": "c" * 40})
+
+    def _s_verify(self, tid: int, state: dict[str, Any]) -> None:
+        self.release_calls.append("verify")
+        self.p.store.patch_data(tid, hotfix={**state, "step": "report", "merge_sha": "c" * 40})
+
+
+class RealGitHotfix(FakeHotfix):
+    def git(self, *args: str, cwd: str | Path | None = None) -> str:
+        self.calls.append(("git", list(args)))
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, env={**os.environ, "LC_ALL": "C"},
+            check=True, capture_output=True, text=True,
+        )
+        return result.stdout
+
+    def run(self, argv: list[str], cwd: str | Path | None = None,
+            timeout: int = 300) -> ExecResult:
+        self.calls.append(("run", argv))
+        result = subprocess.run(
+            argv, cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
+            check=False, capture_output=True, text=True,
+        )
+        return ExecResult(result.returncode, result.stdout, result.stderr)
+
+    def git_result(self, *args: str, cwd: str | Path | None = None,
+                   timeout: int = 300) -> ExecResult:
+        self.calls.append(("git_result", list(args)))
+        result = subprocess.run(
+            ["git", *args], cwd=cwd, env={**os.environ, "LC_ALL": "C"}, timeout=timeout,
+            check=False, capture_output=True, text=True,
+        )
+        return ExecResult(result.returncode, result.stdout, result.stderr)
+
+
+def make_night(env: Any, *, etalon: str = "green", release: bool = True) -> tuple[NightRunner, int]:
+    task = env.store.add_ticket(kind="agent_task", source="telegram", chat_id=-100,
+                                seller="seller", stage="agent_discussion",
+                                data={"agent": {"wms_number": 700}})
+    env.store.kv_set("agent_job:job1", {
+        "id": "job1", "task_ids": ["WMS-700"], "release_authorized": release,
+        "deadline_at": None, "status": "queued",
+        "task_snapshot": {"WMS-700": {"ticket_id": task, "is_frontend": False}},
+    })
+    fake = FakeHotfix(etalon=etalon)
+    fake.p = env.pipe
+    runner = NightRunner(env.pipe, fake)  # type: ignore[arg-type]
+    env.pipe.night = runner
+    return runner, runner.ensure_job("job1")
+
+
+def test_night_stages_are_registered_and_job_is_durable(env: Any) -> None:
+    runner, tid = make_night(env)
+    assert {"development", "release", "report"} <= set(env.pipe.stages)
+    assert runner.ensure_job("job1") == tid
+    assert env.store.kv_get("agent_job:job1")["night_ticket_id"] == tid
+    assert env.store.ticket(tid)["stage"] == "development"
+
+
+def test_task_backlog_entry_is_copied_without_stale_neighbour_sections() -> None:
+    current = "# Backlog\n\n## WMS-699 · old\n\nKeep old.\n\n## WMS-701 · neighbour\n\nKeep neighbour.\n"
+    approved = (
+        "# Backlog\n\n## WMS-700 · approved\n\nUse this exact entry.\n\n"
+        "## WMS-701 · stale neighbour\n\nMust not be copied.\n"
+    )
+    merged = NightRunner._replace_backlog_section(current, approved, "WMS-700")
+    assert "## WMS-700 · approved" in merged
+    assert "Use this exact entry." in merged
+    assert "## WMS-701 · neighbour" in merged
+    assert "stale neighbour" not in merged
+
+
+def test_task_backlog_entry_replaces_previous_wording() -> None:
+    current = "## WMS-700 · old\n\nOld text.\n\n## WMS-701 · next\n\nNext text.\n"
+    approved = "## WMS-700 · new\n\nNew text.\n"
+    merged = NightRunner._replace_backlog_section(current, approved, "WMS-700")
+    assert "## WMS-700 · new" in merged
+    assert "New text." in merged
+    assert "old" not in merged
+    assert "## WMS-701 · next" in merged
+
+
+def test_red_etalon_stops_before_any_task_or_model_call(env: Any) -> None:
+    runner, tid = make_night(env, etalon="red")
+    runner.development(tid)
+    state = env.store.data(tid)["night"]
+    assert state["tasks"]["WMS-700"]["status"] == "stopped"
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert env.store.outbox_by_key("night_etalon_red:job1:" + "a" * 40) is not None
+    assert env.llm.calls == []
+
+
+def test_developer_contradiction_waits_for_owner_without_commit(env: Any, tmp_path: Path) -> None:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    root.mkdir()
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="developer", path=str(root))
+    env.store.patch_data(tid, night=state)
+    env.llm.on("routine", "Ты разработчик WMS-700",
+               {"summary": "", "contradiction": "C3 противоречит R2"})
+    runner.development(tid)
+    task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
+    assert task["status"] == "waiting_owner"
+    assert "C3" in task["reason"]
+    assert not [call for call in runner.hotfix.calls if call[0] == "git" and "commit" in call[1]]
+
+
+def test_same_failure_without_new_commit_stops_task(env: Any, tmp_path: Path) -> None:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    root.mkdir()
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="developer", path=str(root),
+                                              feedback="CI красный: backend")
+    env.store.patch_data(tid, night=state)
+    env.llm.on("routine", "Ты разработчик WMS-700",
+               {"summary": "нечего менять", "contradiction": ""})
+    runner.development(tid)
+    task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
+    assert task["status"] == "stopped"
+    assert "без изменения кода" in task["reason"]
+
+
+def test_analyst_document_and_tester_contract_are_separate_commits(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    doc = root / "docs" / "requirements" / "WMS-700.md"
+    test_file = root / "backend" / "tests" / "test_wms_700_contract.py"
+    doc.parent.mkdir(parents=True)
+    test_file.parent.mkdir(parents=True)
+    doc.write_text("# WMS-700\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "commit", "-qm", "baseline"], cwd=root, check=True,
+    )
+    hotfix = RealGitHotfix()
+    hotfix.p = env.pipe
+    runner.hotfix = hotfix  # type: ignore[assignment]
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="analyst", path=str(root))
+    env.store.patch_data(tid, night=state)
+
+    def analyst(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
+        return {"summary": "проверки добавлены", "checks": ["C1"]}
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        test_file.write_text("def test_contract():\n    assert True\n", encoding="utf-8")
+        doc.write_text(doc.read_text() + "| навсегда | backend/tests/test_wms_700_contract.py::test_contract |\n")
+        return {"summary": "контракт добавлен", "tests": [
+            "backend/tests/test_wms_700_contract.py",
+        ]}
+
+    env.llm.on("analyst", "Ты аналитик WMS-700", analyst)
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    runner.development(tid)
+
+    analyst_files = subprocess.run(
+        ["git", "show", "--format=", "--name-only", "HEAD^"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    contract_files = subprocess.run(
+        ["git", "show", "--format=", "--name-only", "HEAD"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines()
+    assert analyst_files == ["docs/requirements/WMS-700.md"]
+    assert contract_files == ["backend/tests/test_wms_700_contract.py", "docs/requirements/WMS-700.md"]
+    assert subprocess.run(
+        ["git", "log", "-2", "--format=%s"], cwd=root,
+        check=True, capture_output=True, text=True,
+    ).stdout.splitlines() == [
+        "WMS-700: контракт тестов", "WMS-700: проверки аналитика",
+    ]
+
+
+def test_deadline_stops_unfinished_work_and_releases_only_ready_subset(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = env.store.data(tid)["night"]
+    state.update(step="tasks", deadline_at=env.clock.now)
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    state["tasks"]["WMS-701"] = {"id": "WMS-701", "status": "working", "step": "developer"}
+    env.store.patch_data(tid, night=state)
+    runner.development(tid)
+    saved = env.store.data(tid)["night"]
+    assert env.store.ticket(tid)["stage"] == "release"
+    assert saved["tasks"]["WMS-701"]["status"] == "stopped"
+    assert saved["tasks"]["WMS-700"]["status"] == "ready"
+
+
+def test_second_candidate_failure_goes_to_report_without_rerun(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = env.store.data(tid)["night"]
+    state.update(step="candidate_ci", candidate_attempt=2,
+                 candidate={"pr": 9, "started": env.clock.now, "included": ["WMS-700"]})
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    env.store.set_stage(tid, "release", night=state)
+    runner.release(tid)
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert "ожидалось: pass" in env.store.data(tid)["night"]["release_error"]
+
+
+def test_required_ci_rejects_missing_or_skipped_jobs() -> None:
+    good = [{"name": name, "bucket": "pass"}
+            for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")]
+    assert NightRunner._required_ci_passed(good)
+    assert not NightRunner._required_ci_passed(good[:-1])
+    assert not NightRunner._required_ci_passed([{**row, "bucket": "skipping"}
+                                                 if row["name"] == "backend" else row
+                                                 for row in good])
+
+
+def test_prepare_release_builds_candidate_without_publication_permission(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="tasks", prepare_release=True)
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    env.store.patch_data(tid, night=state)
+    runner.development(tid)
+    assert env.store.ticket(tid)["stage"] == "release"
+    assert runner._state(tid)["step"] == "candidate"
+    assert runner._state(tid)["release_authorized"] is False
+    assert runner.hotfix.release_calls == []
+
+
+def test_green_candidate_waits_for_owner_and_rechecks_after_approval(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="candidate_ci", candidate={
+        "pr": 9, "head": "b" * 40, "base": "a" * 40,
+        "path": "/fake", "started": env.clock.now,
+    })
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.pr_checks = lambda _: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")
+    ]
+    views: list[int] = []
+
+    def view(pr: int) -> dict[str, str]:
+        views.append(pr)
+        return {"headRefOid": "b" * 40, "baseRefOid": "a" * 40}
+
+    runner._pr_view = view  # type: ignore[method-assign]
+    runner.release(tid)
+    assert runner._state(tid)["step"] == "awaiting_release"
+    assert runner.hotfix.release_calls == []
+    state = runner._state(tid)
+    state.update(release_authorized=True, next_poll=0)
+    env.store.patch_data(tid, night=state)
+    runner.release(tid)
+    assert views == [9, 9]
+    assert runner._state(tid)["step"] == "merge"
+    assert runner.hotfix.release_calls == []
+
+
+@pytest.mark.parametrize("step", ["merge", "deploy", "promote"])
+def test_revoked_permission_blocks_mutating_release_steps(env: Any, step: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step})
+    runner.release(tid)
+    assert runner.hotfix.release_calls == []
+    assert runner._state(tid)["step"] == step
+    assert runner._state(tid)["release_authorized"] is False
+
+
+def test_stale_save_cannot_restore_release_authorization(env: Any) -> None:
+    runner, tid = make_night(env)
+    stale = runner._state(tid)
+    env.store.patch_data(tid, night={**stale, "release_authorized": False,
+                                    "release_hold_reason": "owner hold"})
+    runner._save(tid, stale, next_poll=0)
+    assert runner._state(tid)["release_authorized"] is False
+    assert runner._state(tid)["release_hold_reason"] == "owner hold"
+
+
+def test_prepare_release_at_deadline_still_prepares_candidate(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = runner._state(tid)
+    state.update(step="tasks", prepare_release=True, deadline_at=env.clock.now)
+    state["tasks"]["WMS-700"].update(status="ready", step="ready")
+    env.store.patch_data(tid, night=state)
+    runner.development(tid)
+    assert runner._state(tid)["step"] == "candidate"
+    assert env.store.ticket(tid)["stage"] == "release"
+
+
+@pytest.mark.parametrize("intent", ["merge_intent", "deploy_intent"])
+def test_real_dispatch_claim_rejects_revocation_during_preflight(env: Any, intent: str) -> None:
+    runner, tid = make_night(env)
+    old_hotfix: dict[str, Any] = {"step": "merge"}
+    env.store.patch_data(tid, hotfix=old_hotfix)
+    env.store.patch_data(tid, night={**runner._state(tid), "release_authorized": False})
+    hotfix = HotfixRunner(env.pipe)
+    assert hotfix._claim_intent(tid, old_hotfix, **{intent: True}) is False
+    assert intent not in env.store.data(tid)["hotfix"]
+
+
+def test_guard_merge_rechecks_permission_after_network_read(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state.update(step="promote_ci", promotion={
+        "pr": 9, "head": "b" * 40, "started": env.clock.now,
+    })
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.pr_checks = lambda _: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")
+    ]
+    calls: list[list[str]] = []
+
+    def network(argv: list[str], *args: Any, **kwargs: Any) -> ExecResult:
+        calls.append(argv)
+        env.store.patch_data(tid, night={**runner._state(tid), "release_authorized": False})
+        return ok(out=json.dumps({"state": "OPEN", "headRefOid": "b" * 40}))
+
+    runner.hotfix.run_gh = network  # type: ignore[method-assign]
+    runner.release(tid)
+    assert not any(call[:3] == ["gh", "pr", "merge"] for call in calls)
+    assert not runner._state(tid)["promotion"].get("merge_intent")
+    assert runner._state(tid)["release_authorized"] is False
+
+
+@pytest.mark.parametrize("step", ["merge", "deploy"])
+def test_hold_allows_reconciliation_of_already_claimed_dispatch(env: Any, step: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step},
+                        hotfix={"step": step, f"{step}_intent": True})
+    reconciled: list[str] = []
+    runner._release_hotfix_step = lambda t, s, x: reconciled.append(x)  # type: ignore[method-assign]
+    runner.release(tid)
+    assert reconciled == [step]
+
+
+@pytest.mark.parametrize("step,recheck", [("merge", "candidate_ci"), ("deploy", "merged_ci")])
+def test_resume_after_late_hold_rechecks_ci_before_dispatch(env: Any, step: str, recheck: str) -> None:
+    runner, tid = make_night(env, release=False)
+    env.store.set_stage(tid, "release", night={**runner._state(tid), "step": step})
+    runner.release(tid)
+    state = runner._state(tid)
+    assert state["release_recheck"] == recheck
+    state.update(release_authorized=True, next_poll=0)
+    env.store.patch_data(tid, night=state)
+    runner.release(tid)
+    assert runner._state(tid)["step"] == recheck
+    assert runner.hotfix.release_calls == []
+
+
+def test_release_calls_existing_hotfix_merge_deploy_verify(env: Any) -> None:
+    runner, tid = make_night(env)
+    env.store.set_stage(tid, "release", night={**env.store.data(tid)["night"], "step": "merge",
+                                              "candidate": {"included": ["WMS-700"]}},
+                        hotfix={"step": "merge", "pr": 9, "path": "/fake"})
+    runner.release(tid)
+    assert runner._state(tid)["step"] == "merged_ci"
+    runner.hotfix.run_gh = lambda *args, **kwargs: ok(out=json.dumps([{
+        "databaseId": 1, "headSha": "c" * 40, "status": "completed", "conclusion": "success",
+    }]))  # type: ignore[method-assign]
+    runner._failed_run_check = lambda run: ""  # type: ignore[method-assign]
+    runner.release(tid)
+    runner.release(tid)
+    runner.release(tid)
+    assert runner.hotfix.release_calls == ["merge", "deploy", "verify"]
+    assert env.store.data(tid)["night"]["step"] == "promote"
+
+
+def test_owner_cancellation_stops_before_any_model_or_release(env: Any) -> None:
+    runner, tid = make_night(env)
+    job = env.store.kv_get("agent_job:job1")
+    env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+    runner.development(tid)
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert not env.llm.calls and not runner.hotfix.release_calls
+
+
+def test_red_exact_merge_ci_never_dispatches_deploy(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state.update(step="merged_ci", release_sha="c" * 40, merged_ci_started=env.clock.now,
+                 candidate={"included": ["WMS-700"]})
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.run_gh = lambda *args, **kwargs: ok(out=json.dumps([{
+        "databaseId": 1, "headSha": "c" * 40, "status": "completed", "conclusion": "failure",
+    }]))  # type: ignore[method-assign]
+    runner.release(tid)
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert not runner.hotfix.release_calls
+
+
+def test_control_plane_cannot_be_changed_to_make_tests_green(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    workflow = root / ".github/workflows/ci.yml"
+    workflow.parent.mkdir(parents=True)
+    workflow.write_text("run: pytest\n")
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={})
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+    workflow.write_text("run: echo success\n")
+    runner.development(tid)
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
+    assert not env.llm.calls
+
+
+def test_helper_only_contract_is_not_a_test(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(*args: Any) -> dict[str, Any]:
+        (root / "backend/tests/conftest.py").write_text("SEED = 1\n")
+        return {"tests": ["backend/tests/conftest.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    assert "исполняемых тестов нет" in runner._state(tid)["tasks"]["WMS-700"]["reason"]
+
+
+def test_frontend_developer_allows_sonnet_to_sol_fallback(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="developer", frontend=True, tests=[], contract_hashes={})
+    runner._save(tid, state)
+    env.llm.on("frontend", "Ты разработчик WMS-700", {"summary": "ok", "contradiction": ""})
+    runner.development(tid)
+    assert env.llm.calls[-1].get("cli_only") is None
+
+
+@pytest.mark.parametrize("failure", [LlmUnavailable, LlmError])
+def test_unavailable_frontend_models_wait_and_preserve_developer_step(
+    env: Any, tmp_path: Path, failure: type[Exception],
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    state["deadline_at"] = None
+    task = state["tasks"]["WMS-700"]
+    task.update(step="developer", frontend=True, tests=[], contract_hashes={})
+    runner._save(tid, state)
+
+    def unavailable(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        raise failure("explicit Claude model unavailable or turn failed")
+
+    task["feedback"] = "исправь повторное списание"
+    runner._save(tid, state)
+    env.llm.on("frontend", "Ты разработчик WMS-700", unavailable)
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]
+    assert saved["WMS-700"]["status"] == "working"
+    assert saved["WMS-700"]["step"] == "developer"
+    assert "ожидает доступности Sonnet или Sol 5.6" in saved["WMS-700"]["reason"]
+    assert saved["WMS-700"]["feedback"] == "исправь повторное списание"
+    assert env.llm.calls[-1].get("cli_only") is None
+    calls = len(env.llm.calls)
+    runner.development(tid)
+    assert len(env.llm.calls) == calls
+    for _ in range(4):
+        env.clock.now += 61
+        env.pipe.process_ticket(tid)
+        assert env.store.ticket(tid)["stage"] == "development"
+        assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "developer"
+    env.clock.now += 61
+
+    def fixed(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        target = root / "backend" / "app" / "fixed.py"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("fixed = True\n", encoding="utf-8")
+        return {"summary": "ok", "contradiction": ""}
+
+    env.llm.on("frontend", "Ты разработчик WMS-700", fixed)
+    runner.development(tid)
+    resumed = runner._state(tid)["tasks"]["WMS-700"]
+    assert resumed["step"] == "checks"
+    assert "reason" not in resumed
+    assert "исправь повторное списание" in env.llm.calls[-1]["prompt"]
+
+
+def test_production_hotfix_outside_base_blocks_candidate(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "candidate"
+    state["tasks"]["WMS-700"]["status"] = "ready"
+    env.store.set_stage(tid, "release", night=state)
+    runner.hotfix.run = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")
+    runner.release(tid)
+    assert "потерял бы хотфикс" in runner._state(tid)["release_error"]
+    assert not any(call[0] == "gh" for call in runner.hotfix.calls)
+    assert not runner.hotfix.release_calls
+
+
+def test_legacy_provider_stop_resumes_without_reopening_safety_failure(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(
+        status="stopped", step="stopped", path="/existing",
+        reason="frontend-разработчики Sonnet и Sol 5.6 недоступны: codex_error",
+        feedback="исправь кнопку")
+    state["tasks"]["WMS-701"] = {
+        "id": "WMS-701", "status": "stopped", "step": "stopped", "reason": "контракт изменён",
+    }
+    runner._save(tid, state)
+
+    def unavailable(*args: Any, **kwargs: Any) -> Any:
+        raise LlmUnavailable("at capacity")
+
+    runner._task_developer = unavailable
+    runner.development(tid)
+    tasks = runner._state(tid)["tasks"]
+    assert tasks["WMS-700"]["status"] == "working"
+    assert tasks["WMS-700"]["path"] == "/existing"
+    assert "исправь кнопку" in tasks["WMS-700"]["feedback"]
+    assert "уже написанный код" in tasks["WMS-700"]["feedback"]
+    assert tasks["WMS-701"]["status"] == "stopped"
+
+
+def test_five_lanes_start_together_and_do_not_overwrite_siblings(env: Any) -> None:
+    runner, tid = make_night(env)
+    runner.task_pool = ThreadPool(5)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"] = {f"WMS-{i}": {"id": f"WMS-{i}", "status": "working", "step": "developer"}
+                      for i in range(700, 705)}
+    runner._save(tid, state)
+    started = threading.Barrier(6)
+    finish = threading.Event()
+    seen: list[str] = []
+
+    def developer(ticket: int, snapshot: dict[str, Any], task: dict[str, Any]) -> None:
+        seen.append(task["id"])
+        started.wait(timeout=5)
+        assert finish.wait(timeout=5)
+        task.update(step="checks", summary=task["id"])
+        runner._save(ticket, snapshot)
+
+    runner._task_developer = developer
+    try:
+        runner.development(tid)
+        started.wait(timeout=5)  # impossible if workers run sequentially
+        runner.development(tid)  # repeated tick must not duplicate any lane
+        assert len(seen) == 5
+        assert env.store.ticket(tid)["stage"] == "development"
+    finally:
+        finish.set()
+        runner.task_pool.executor.shutdown(wait=True)
+    tasks = runner._state(tid)["tasks"]
+    assert all(task["step"] == "checks" and task["summary"] == task_id
+               for task_id, task in tasks.items())
+    assert "_active_task_id" not in runner._state(tid)
+
+
+def test_lane_retry_does_not_block_sibling_or_resurrect_cancelled_task(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="developer", frontend=True)
+    state["tasks"]["WMS-701"] = {"id": "WMS-701", "status": "working", "step": "developer"}
+    runner._save(tid, state)
+
+    def developer(ticket: int, snapshot: dict[str, Any], task: dict[str, Any]) -> None:
+        if task["id"] == "WMS-700":
+            raise LlmUnavailable("at capacity")
+        task["step"] = "checks"
+        runner._save(ticket, snapshot)
+
+    runner._task_developer = developer
+    runner.development(tid)
+    saved = runner._state(tid)
+    assert saved.get("next_poll", 0) == 0
+    assert saved["tasks"]["WMS-700"]["next_poll"] == env.clock.now + 60
+    assert saved["tasks"]["WMS-701"]["step"] == "checks"
+    saved["_active_task_id"] = "WMS-701"
+    job = env.store.kv_get("agent_job:job1")
+    env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+    runner.development(tid)
+    saved["tasks"]["WMS-701"].update(status="ready", step="ready")
+    runner._save(tid, saved)
+    assert runner._state(tid)["tasks"]["WMS-701"]["status"] == "stopped"
+
+
+def test_commit_ignores_node_modules_symlink(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    (root / ".gitignore").write_text("frontend/node_modules\n", encoding="utf-8")
+    (root / "frontend").mkdir()
+    deps = tmp_path / "dependencies"
+    deps.mkdir()
+    (root / "frontend" / "node_modules").symlink_to(deps, target_is_directory=True)
+    (root / "backend" / "app" / "svc.py").write_text("X = 2\n", encoding="utf-8")
+    assert runner._commit(task, "WMS-700: реализация")
+    tracked = runner.hotfix.git("ls-files", cwd=root).splitlines()
+    assert "frontend/node_modules" not in tracked
+    assert runner.hotfix.git("status", "--porcelain", cwd=root) == ""
+
+
+def test_etalon_network_does_not_lock_store_and_respects_cancel(env: Any) -> None:
+    runner, tid = make_night(env)
+    entered = threading.Event()
+    finish = threading.Event()
+
+    def fetch() -> None:
+        entered.set()
+        assert finish.wait(timeout=5)
+
+    runner.hotfix.fetch = fetch
+    thread = threading.Thread(target=runner.development, args=(tid,))
+    thread.start()
+    try:
+        assert entered.wait(timeout=5)
+        assert env.store.lock.acquire(timeout=1)
+        try:
+            job = env.store.kv_get("agent_job:job1")
+            env.store.kv_set("agent_job:job1", {**job, "cancel_requested": True})
+        finally:
+            env.store.lock.release()
+    finally:
+        finish.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive()
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "stopped"
+
+
+@pytest.mark.parametrize("with_chromium", [True, False])
+def test_frontend_checks_use_readonly_config_loader_and_preserve_all_filters(
+    env: Any, tmp_path: Path, with_chromium: bool,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task["tests"] = ["frontend/src/example.test.ts"]
+    (root / "frontend" / "src" / "guards").mkdir(parents=True)
+    if with_chromium:
+        binary = tmp_path / "chrome-headless-shell"
+        binary.write_text("fixture", encoding="utf-8")
+        env.cfg.hotfix.frontend_chromium = str(binary)
+    assert runner._run_contract(task) == []
+    command = [args for kind, args in runner.hotfix.calls if kind == "test"][-1]
+    assert command[command.index("npx"):] == [
+        "npx", "vitest", "run", "--configLoader", "runner", "src/example.test.ts", "src/guards",
+    ]
+    if with_chromium:
+        assert command[:2] == ["/usr/bin/env", f"WMS_PRINT_CHROMIUM={binary}"]
+    else:
+        assert command[0] == "npx"
+
+
+def test_check_logs_preserve_full_failure_and_stay_out_of_git(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    task["tests"] = ["backend/tests/test_contract.py"]
+    output = "ROOT_CAUSE_MissingGreenlet\n" + "details\n" * 1000 + "FAILED summary"
+    runner.hotfix.run_untrusted = lambda *a, **kw: ExecResult(1, output, "stderr-marker")  # type: ignore[method-assign]
+    assert runner._run_contract(task)
+    report = (root / task["check_logs"]["backend"]).read_text()
+    assert "ROOT_CAUSE_MissingGreenlet" in report and "stderr-marker" in report
+    assert "Exit: 1" in report and runner._head(task) in report
+    assert runner._changed_outside(task, []) == []
+
+
+def test_check_log_rejects_directory_escape(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    (root / ".agent-runs").symlink_to(tmp_path, target_is_directory=True)
+    with pytest.raises(Exception, match="вне рабочей копии"):
+        runner._save_check_log(runner._state(tid)["tasks"]["WMS-700"], "backend", 1, "failure")
+
+
+def test_interrupted_promote_is_not_repeated(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = env.store.data(tid)["night"]
+    state.update(step="promote", release_sha="c" * 40,
+                 candidate={"path": "/fake", "included": ["WMS-700"]})
+    state["tasks"]["WMS-700"].update(status="ready", promote_intent=True)
+    env.store.set_stage(tid, "release", night=state)
+    runner.release(tid)
+    assert "перенос в охрану прерван" in env.store.data(tid)["night"]["tasks"]["WMS-700"]["promote"]
+    assert not [call for call in runner.hotfix.calls if call[0] == "run"]
+
+
+def test_report_has_required_per_task_lines_and_is_idempotent(env: Any) -> None:
+    runner, tid = make_night(env, release=False)
+    state = env.store.data(tid)["night"]
+    state["tasks"]["WMS-700"].update(status="waiting_owner",
+                                              reason="C1 противоречит R2",
+                                              contract_changed=True)
+    env.store.set_stage(tid, "report", night={**state, "step": "morning_report"})
+    runner.report(tid)
+    runner.report(tid)
+    rows = env.store.rows("SELECT * FROM outbox WHERE purpose='night_report'")
+    assert len(rows) == 1
+    assert "ждёт твоего решения" in rows[0]["text"]
+    assert "контракт тестов менялся: да" in rows[0]["text"]
+
+
+def _tester_repo(env: Any, tmp_path: Path) -> tuple[Any, int, Path]:
+    runner, tid = make_night(env)
+    root = tmp_path / "task"
+    doc = root / "docs" / "requirements" / "WMS-700.md"
+    doc.parent.mkdir(parents=True)
+    (root / "backend" / "app").mkdir(parents=True)
+    (root / "backend" / "tests").mkdir(parents=True)
+    (root / "backend" / "app" / "svc.py").write_text("X = 1\n", encoding="utf-8")
+    (root / ".gitignore").write_text(".agent-runs/\n", encoding="utf-8")
+    doc.write_text("# WMS-700\n\n| Класс | Тест |\n|---|---|\n", encoding="utf-8")
+    subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+    subprocess.run(["git", "add", "-A"], cwd=root, check=True)
+    subprocess.run(["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+                    "commit", "-qm", "baseline"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/etalon", "HEAD"], cwd=root, check=True,
+    )
+    hotfix = RealGitHotfix()
+    hotfix.p = env.pipe
+    runner.hotfix = hotfix  # type: ignore[assignment]
+    state = env.store.data(tid)["night"]
+    state["step"] = "tasks"
+    state["tasks"]["WMS-700"].update(step="tester", path=str(root))
+    env.store.patch_data(tid, night=state)
+    return runner, tid, root
+
+
+def test_tester_helper_files_join_contract(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        (root / "backend" / "tests" / "test_wms_700.py").write_text("def test_c():\n    pass\n")
+        (root / "backend" / "tests" / "conftest.py").write_text("SEED = 1\n")
+        return {"summary": "ok", "tests": ["backend/tests/test_wms_700.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    files = subprocess.run(["git", "show", "--format=", "--name-only", "HEAD"], cwd=root,
+                           check=True, capture_output=True, text=True).stdout.splitlines()
+    assert sorted(files) == ["backend/tests/conftest.py", "backend/tests/test_wms_700.py"]
+    assert env.store.data(tid)["night"]["tasks"]["WMS-700"]["step"] == "developer"
+
+
+def test_tester_touching_product_code_stops_task(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+
+    def tester(_: str, __: dict[str, Any]) -> dict[str, Any]:
+        (root / "backend" / "tests" / "test_wms_700.py").write_text("def test_c():\n    pass\n")
+        (root / "backend" / "app" / "svc.py").write_text("X = 2\n")
+        return {"summary": "ok", "tests": ["backend/tests/test_wms_700.py"]}
+
+    env.llm.on("routine", "Ты тестировщик WMS-700", tester)
+    runner.development(tid)
+    task = env.store.data(tid)["night"]["tasks"]["WMS-700"]
+    assert task["status"] == "stopped"
+    assert "backend/app/svc.py" in task["reason"]
+
+
+def test_modified_contract_stops_before_tests_review_or_publication(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    test = root / "backend/tests/test_frozen.py"
+    test.write_text("def test_rule(): assert 2 == 2\n")
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=["backend/tests/test_frozen.py"])
+    task["contract_hashes"] = runner._hashes(task, task["tests"])
+    test.write_text("def test_rule(): assert True\n")
+    runner._save(tid, state)
+    runner.development(tid)
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["status"] == "stopped" and saved["contract_changed"] is True
+    assert "контракт" in saved["reason"] and not env.llm.calls
+
+
+def test_review_acceptance_document_then_ci_on_exact_commit(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", branch="task", tests=[], contract_hashes={},
+                dev_cli="codex", dev_model="gpt-5.6-sol",
+                feedback="C7 вручную проверен в системном предпросмотре дважды")
+    runner._save(tid, state)
+    doc = root / "docs/requirements/WMS-700.md"
+
+    def accept(prompt: str, kwargs: dict[str, Any]) -> dict[str, Any]:
+        assert kwargs["mode"] == "write"
+        assert kwargs["session_key"] == "night:job1:WMS-700:analyst"
+        assert "Дополнительные материалы приёмки от ведущего" in prompt
+        assert "C7 вручную проверен в системном предпросмотре дважды" in prompt
+        assert "Перекрёстное ревью: модель" in prompt
+        assert "дефектов нет" in prompt
+        doc.write_text(doc.read_text() + "\n## Заключение\nПроверки подтверждены.\n")
+        return {"accepted": True, "summary": "принято"}
+
+    env.llm.on("review", "Проверь реализацию", {"accepted": True, "summary": "дефектов нет"})
+    env.llm.on("analyst", "Проведи приёмку", accept)
+    runner.development(tid)  # local checks
+    assert runner._state(tid)["tasks"]["WMS-700"]["step"] == "review"
+    runner.development(tid)  # review
+    assert env.llm.calls[-1]["exclude_cli"] is None  # Astra can review Sol in the same provider
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["review_summary"] == "дефектов нет"
+    runner.development(tid)  # acceptance saved before PR/CI
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["step"] == "pr" and task["status"] == "working"
+    assert runner.hotfix.git("log", "-1", "--format=%s", cwd=root).strip() == "WMS-700: приёмка"
+    runner.development(tid)  # publish
+    runner.hotfix.pr_checks = lambda pr: [  # type: ignore[method-assign]
+        {"name": name, "bucket": "pass"}
+        for name in ("baseline", "backlog", "backend", "frontend-build", "охрана")]
+    runner.development(tid)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["status"] == "ready" and task["head_sha"] == task["accepted_sha"] == task["ci_head"]
+
+
+def test_checks_merge_fresh_etalon_before_review_and_refresh_control_hashes(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
+    backlog = root / "docs/KANONICHESKIY_BACKLOG.md"
+    backlog.write_text("# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
+    task_branch = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-qb", "etalon-fixture", baseline], cwd=root, check=True)
+    (root / "AGENTS.md").write_text("trusted etalon rules\n", encoding="utf-8")
+    backlog.write_text("# Backlog\n\n## WMS-699 · etalon\n\nKeep etalon.\n", encoding="utf-8")
+    subprocess.run(
+        ["git", "add", "AGENTS.md", "docs/KANONICHESKIY_BACKLOG.md"], cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-699: trusted etalon advance"], cwd=root, check=True)
+    etalon = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/etalon", etalon], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+    runner.hotfix.fetch = lambda: None  # type: ignore[method-assign]
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={})
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["base_sha"] == etalon
+    assert (root / "AGENTS.md").read_text(encoding="utf-8") == "trusted etalon rules\n"
+    merged_backlog = backlog.read_text(encoding="utf-8")
+    assert "## WMS-699 · etalon" in merged_backlog and "## WMS-700 · task" in merged_backlog
+    assert saved["control_hashes"] == runner._control_hashes(saved)
+    assert subprocess.run(
+        ["git", "merge-base", "--is-ancestor", etalon, "HEAD"], cwd=root,
+    ).returncode == 0
+
+
+def test_checks_recover_saved_etalon_merge_intent_after_interruption(
+    env: Any, tmp_path: Path,
+) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    baseline = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    (root / "backend/app/svc.py").write_text("X = 2\n", encoding="utf-8")
+    (root / "docs/KANONICHESKIY_BACKLOG.md").write_text(
+        "# Backlog\n\n## WMS-700 · task\n\nKeep task.\n", encoding="utf-8",
+    )
+    subprocess.run(
+        ["git", "add", "backend/app/svc.py", "docs/KANONICHESKIY_BACKLOG.md"],
+        cwd=root, check=True,
+    )
+    subprocess.run(["git", "commit", "-qm", "WMS-700: реализация"], cwd=root, check=True)
+    task_branch = subprocess.run(
+        ["git", "branch", "--show-current"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "checkout", "-qb", "etalon-interrupted", baseline], cwd=root, check=True)
+    (root / "AGENTS.md").write_text("new trusted rules\n", encoding="utf-8")
+    subprocess.run(["git", "add", "AGENTS.md"], cwd=root, check=True)
+    subprocess.run(["git", "commit", "-qm", "WMS-699: etalon advance"], cwd=root, check=True)
+    etalon = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(["git", "update-ref", "refs/remotes/origin/etalon", etalon], cwd=root, check=True)
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+    runner.hotfix.fetch = lambda: None  # type: ignore[method-assign]
+    state = runner._state(tid)
+    task = state["tasks"]["WMS-700"]
+    task.update(step="checks", tests=[], contract_hashes={}, base_sync_intent=etalon)
+    task["control_hashes"] = runner._control_hashes(task)
+    runner._save(tid, state)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "merge", "--no-ff", "--no-edit", etalon], cwd=root, check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", "etalon-interrupted"], cwd=root, check=True)
+    subprocess.run(
+        ["git", "-c", "user.name=test", "-c", "user.email=test@example.test",
+         "commit", "--allow-empty", "-qm", "WMS-699: etalon advances again"],
+        cwd=root, check=True,
+    )
+    etalon_next = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=root, check=True, capture_output=True, text=True,
+    ).stdout.strip()
+    subprocess.run(
+        ["git", "update-ref", "refs/remotes/origin/etalon", etalon_next], cwd=root, check=True,
+    )
+    subprocess.run(["git", "checkout", "-q", task_branch], cwd=root, check=True)
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "review" and saved["base_sha"] == etalon_next
+    assert "base_sync_intent" not in saved
+    assert saved["control_hashes"] == runner._control_hashes(saved)
+
+
+def test_pr_rechecks_base_and_returns_stale_acceptance_to_checks(env: Any) -> None:
+    runner, tid = make_night(env)
+    state = runner._state(tid)
+    state["step"] = "tasks"
+    task = state["tasks"]["WMS-700"]
+    task.update(
+        step="pr", status="working", path="/fake", branch="night/wms-700", reviewed_sha="r" * 40,
+        review_by="gpt-6-astra", review_summary="PASS", accepted="принято",
+        accepted_sha="b" * 40,
+    )
+    runner._save(tid, state)
+    runner.hotfix.git_result = lambda *args, **kwargs: ExecResult(1, "", "not ancestor")  # type: ignore[method-assign]
+
+    runner.development(tid)
+
+    saved = runner._state(tid)["tasks"]["WMS-700"]
+    assert saved["step"] == "checks" and saved["status"] == "working"
+    assert "reviewed_sha" not in saved and "accepted_sha" not in saved
+    assert not [call for call in runner.hotfix.calls if call[0] == "git" and call[1][:1] == ["push"]]
+
+
+def test_review_defect_returns_to_developer(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    state["tasks"]["WMS-700"].update(step="review", frontend=True,
+                                     dev_cli="claude", dev_model="sonnet")
+    runner._save(tid, state)
+    env.llm.on("review", "Проверь реализацию", {"accepted": False, "summary": "C1: повтор списывает дважды"})
+    runner.development(tid)
+    task = runner._state(tid)["tasks"]["WMS-700"]
+    assert task["step"] == "developer" and "C1" in task["feedback"]
+    assert env.llm.calls[-1]["cli_only"] == "codex"
+    assert env.llm.calls[-1]["exclude_cli"] is None
+
+
+def test_promotion_commits_and_publishes_before_claiming_protection(env: Any, tmp_path: Path) -> None:
+    runner, tid, root = _tester_repo(env, tmp_path)
+    state = runner._state(tid)
+    state.update(step="promote", release_sha=runner._head({"path": str(root)}),
+                 candidate={"included": ["WMS-700"]},
+                 promotion={"branch": "guards", "path": str(root)})
+    state["tasks"]["WMS-700"].update(status="released")
+    env.store.set_stage(tid, "release", night=state)
+
+    def promote(argv: list[str], cwd: Any = None, timeout: int = 300) -> ExecResult:
+        target = root / "backend/tests/guards/test_saved.py"
+        target.parent.mkdir(parents=True)
+        target.write_text("def test_permanent(): assert 1 == 1\n")
+        return ok()
+
+    runner.hotfix.run = promote  # type: ignore[method-assign]
+    runner.release(tid)
+    assert "WMS-700: постоянные проверки" in runner.hotfix.git("log", "-1", "--format=%s", cwd=root)
+    runner.release(tid)
+    state = runner._state(tid)
+    assert state["step"] == "promote_ci"
+    assert state["promotion"]["pr"] == 9
+    assert ("git", ["push", "guards"]) in runner.hotfix.calls
+    assert "ожидает CI" in state["tasks"]["WMS-700"]["promote"]
+    runner.release(tid)  # fake CI is red
+    assert env.store.ticket(tid)["stage"] == "report"
+    assert runner._state(tid)["tasks"]["WMS-700"]["status"] == "released"
+    assert "не завершено" in runner._state(tid)["tasks"]["WMS-700"]["promote"]

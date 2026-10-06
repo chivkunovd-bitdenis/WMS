@@ -1,0 +1,27 @@
+{
+  "baseline": "c96dbb4821e59aa74f1e5a6e982f7acd7ca2f8f3",
+  "full_suite_started_at_commit": "ee384b03db33d430e9c7f1c42121935151eed541",
+  "full_suite": {
+    "passed": 581,
+    "failed": 1,
+    "duration_seconds": 30.56,
+    "failure": "tests/test_deploy_files.py::test_workflow_server_part_refuses_foreign_or_malformed_sha_before_running_anything",
+    "failure_classification": "pre-existing uppercase SHA expectation; tested workflow and script unchanged",
+    "baseline_evidence": "deploy-test-baseline-2026-10-03.json"
+  },
+  "static": {
+    "ruff": "passed",
+    "mypy": "passed: 28 source files",
+    "task_documents": "passed",
+    "git_diff_check": "passed"
+  },
+  "subsequent_targeted": {
+    "476d63d1cb697180597fe0d44535a30a04d40db3": {
+      "runtime_tests_passed": 9
+    },
+    "73932014e12313e69bb2c9928f16934e9fa8d417": {
+      "dispatcher_and_coordinator_tests_passed": 14
+    }
+  },
+  "external_actions": "None during tests. External boundaries mocked; true model behavior separately recorded."
+}

@@ -9,12 +9,13 @@ import { renderBarcodeDataUrl } from '../../../utils/renderBarcodeDataUrl'
 import { printBarcodeLabel } from '../../../utils/printBarcodeLabel'
 import type { LabelSize } from '../../../utils/labelSize'
 import { EmptyState, ErrorNotice } from '../../../ui-kit'
-import { SortingObjectsScreen } from './SortingObjectsScreen'
+import { SortingObjectsScreen, type ProductScanOutcome } from './SortingObjectsScreen'
 import type { Cell, GoodsLine, ObjKind, Product, WarehouseObject } from './objectsStub'
 import { pendingScan, rememberScan, sendScan, type ScanBody } from './pendingScan'
 import { RejectedScan, type ScanContext } from './sortingScan'
 import { applyScanResult, type ScanResult } from './scanResult'
 import { objectQty } from './objectsStub'
+import { RejectedUndo, readSortingFailure } from './sortingUndo'
 
 // Раскладка по объектам, подключённая к серверу.
 //
@@ -26,7 +27,6 @@ function headers(token: string): Record<string, string> {
 }
 
 type ApiSorting = {
-  remainingQty?: number
   objects: WarehouseObject[]
   lines: GoodsLine[]
   products: Product[]
@@ -81,6 +81,10 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
   const scanKey = embedded && inboundRequestId && warehouseId
     ? placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/scan`), inboundRequestId)
     : null
+  // WMS-650 Д1: история «назад» — документ + сотрудник, в этой вкладке.
+  const undoKey = embedded && inboundRequestId && warehouseId
+    ? placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/undo`), inboundRequestId)
+    : undefined
 
   const sendProductScan = useCallback(async (body: ScanBody, key: string) => {
     if (activeContext.current !== context) throw new Error('Открыт другой документ или сотрудник')
@@ -153,9 +157,11 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
     qty: number
     sourceHolder: string | null
     operationId?: string
-  }) {
+  }): Promise<string> {
     if (!warehouseId) throw new Error('Склад не выбран')
+    // Плашка прошлой неудачи («состав не обновлён») не должна висеть после нового действия.
     setError(null)
+    let operationId = payload.operationId ?? randomId()
     try {
       const body = {
         kind: payload.kind, id: payload.id, cell_id: payload.cellId, to_id: payload.toId, qty: payload.qty,
@@ -167,30 +173,61 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       const key = embedded && inboundRequestId && canRememberSortingPlacement(payload)
         ? placementStorageKey(token, apiUrl(`/warehouses/${warehouseId}/sorting-objects/place`), inboundRequestId)
         : null
-      const confirmed = key ? rememberPlacement(localStorage, key, body) : { ...body, operation_id: payload.operationId ?? randomId() }
+      const confirmed = key ? rememberPlacement(localStorage, key, body, operationId) : { ...body, operation_id: operationId }
+      operationId = confirmed.operation_id
       const res = await send(confirmed, key)
       if (!res.ok) {
-        const message = await readApiErrorMessage(res)
+        const { message } = await readSortingFailure(res)
         throw [400, 404, 409, 422].includes(res.status) ? new RejectedScan(message) : new Error(message)
       }
-      const current = dataRef.current
-      if (payload.operationId && payload.kind !== 'product' && payload.cellId && current && objectQty(payload.id, current.objects, current.lines) === 0) {
-        updateData({ ...current, objects: current.objects.map((one) => one.id === payload.id ? { ...one, holder: `cell:${payload.cellId}` } : one) })
-        return
-      }
-      await onPlacedRef.current?.()
-      if (!await load(false)) throw new Error('Размещение сохранено, но состав не обновлён. Обновите документ для проверки результата.')
     } catch (err) {
-      // Экран уже переставил строку у себя. Показываем отказ и перечитываем
-      // склад: иначе на экране будет одно, а в системе другое, и оператор
-      // узнает об этом на инвентаризации.
-      setError(`${placementFailureMessage(err)} Обновите документ, чтобы проверить результат размещения.`)
+      // Экран уже переставил строку у себя. Отказ он покажет у поля сканера
+      // с названием объекта (WMS-650 R16), а состав перечитываем: иначе на
+      // экране будет одно, а в системе другое.
       if (!await load(false)) setData(null)
-      throw err
+      throw err instanceof RejectedScan ? err : new Error(placementFailureMessage(err))
+    }
+    const current = dataRef.current
+    if (payload.operationId && payload.kind !== 'product' && payload.cellId && current && objectQty(payload.id, current.objects, current.lines) === 0) {
+      updateData({ ...current, objects: current.objects.map((one) => one.id === payload.id ? { ...one, holder: `cell:${payload.cellId}` } : one) })
+      return operationId
+    }
+    await onPlacedRef.current?.()
+    if (!await load(false)) {
+      setError('Размещение сохранено, но состав не обновлён. Обновите документ для проверки результата.')
+    }
+    return operationId
+  }
+
+  async function undo(targetOperationId: string, undoOperationId: string) {
+    if (!warehouseId || !inboundRequestId) throw new Error('Откройте документ приёмки')
+    setError(null)
+    const res = await fetch(apiUrl(`/warehouses/${warehouseId}/sorting-objects/undo`), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', ...headers(token) },
+      body: JSON.stringify({
+        inbound_request_id: inboundRequestId,
+        operation_id: undoOperationId,
+        target_operation_id: targetOperationId,
+      }),
+    })
+    if (!res.ok) {
+      const { detail, message } = await readSortingFailure(res)
+      if ([400, 404, 409, 422].includes(res.status)) {
+        // Отменить нельзя, потому что склад уже другой (например, тару
+        // переставили): показываем, где всё стоит сейчас.
+        await load(false)
+        throw new RejectedUndo(detail, message)
+      }
+      throw new Error(message)
+    }
+    await onPlacedRef.current?.()
+    if (!await load(false)) {
+      setError('Отмена сохранена, но состав не обновлён. Обновите документ для проверки результата.')
     }
   }
 
-  async function scanProduct(barcode: string, selected: ScanContext, operationId: string) {
+  async function scanProduct(barcode: string, selected: ScanContext, operationId: string): Promise<ProductScanOutcome | string> {
     if (!scanKey || !inboundRequestId || !selected.cellId) throw new Error('Откройте документ приёмки и отсканируйте ячейку')
     setError(null)
     if (parentRefresh.current) clearTimeout(parentRefresh.current)
@@ -210,12 +247,24 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
       }
       const result = await response.json() as ScanResult
       const current = dataRef.current
+      const sourceLine = current?.lines.find((line) => line.id === result.source_id) ?? null
       const lines = current ? applyScanResult(current.lines, result) : null
-      if (current && lines) updateData({ ...current, lines, remainingQty: result.remaining_qty ?? undefined })
+      if (current && lines) updateData({ ...current, lines })
       else if (!await load(false)) throw new Error('Скан сохранён, но состав не обновлён. Повторите проверку ответа.')
+      const productId = result.product_id ?? sourceLine?.productId ?? null
+      const known = dataRef.current?.lines ?? []
+      return {
+        productId,
+        targetLineId: lines ? result.target_id : null,
+        sourceLineId: sourceLine?.id ?? null,
+        looseLeft: known
+          .filter((line) => line.holder === null && line.productId === productId)
+          .reduce((sum, line) => sum + line.qty, 0),
+      }
     } catch (err) {
+      // Отказ виден под полем сканера; здесь — только неизвестный итог запроса.
       const message = placementFailureMessage(err)
-      setError(message)
+      if (!(err instanceof RejectedScan)) setError(message)
       throw err instanceof RejectedScan ? err : new Error(message)
     }
   }
@@ -321,7 +370,8 @@ export function FfSortingObjectsPage({ token, warehouses, embedded, inboundReque
           onPlace={place}
           onProductScan={scanProduct}
           onScanIdle={scanIdle}
-          remainingQty={data.remainingQty}
+          onUndo={embedded && inboundRequestId ? undo : undefined}
+          undoStorageKey={undoKey}
           scanStorageKey={scanKey ? `${scanKey}:context` : undefined}
           purpose={
             embedded

@@ -34,6 +34,8 @@
     "batch_wait_sec": 45,
     "urgency_wait_sec": 900,
     "data_wait_sec": 7200,
+    "ask_client_urgency": false,
+    "max_client_asks": 1,
     "context_window_min": 30,
     "downtime_notice_sec": 600,
     "ci_timeout_sec": 2400,
@@ -45,11 +47,19 @@
     "claude_bin": "claude",
     "codex_bin": "codex",
     "models": {
-      "claude": {"filter": "haiku", "routine": "sonnet", "analyst": "opus", "review": "opus", "mockup": "opus", "frontend": "opus"},
+      "claude": {"filter": "haiku", "routine": "sonnet", "analyst": "opus", "review": "opus", "mockup": "sonnet", "frontend": "sonnet"},
       "codex": {"filter": "gpt-5.6-sol", "routine": "gpt-5.6-sol", "analyst": "gpt-5.6-sol", "frontend": "gpt-5.6-sol", "mockup": "gpt-5.6-sol", "review": "gpt-6-astra"}
     },
     "codex_effort": "high",
     "analyst_data_hint": ""
+  },
+  "agent": {
+    "enabled": false,
+    "owner_model": "gpt-5.6-sol",
+    "owner_provider": "codex",
+    "context_limit_tokens": 120000,
+    "hourly_interval_sec": 3600,
+    "timezone": "Asia/Tbilisi"
   },
   "openai": {
     "api_key": ""
@@ -62,6 +72,7 @@
   },
   "hotfix": {
     "backend_bin": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin",
+    "frontend_chromium": "",
     "merge_method": "merge",
     "deployed_sha_cmd": "ssh root@sellerfocus.pro git -C /opt/wms rev-parse HEAD",
     "preflight_cmd": "",

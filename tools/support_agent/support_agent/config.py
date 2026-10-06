@@ -72,6 +72,12 @@ class LimitsCfg:
     batch_wait_sec: int = 45
     urgency_wait_sec: int = 900
     data_wait_sec: int = 7200
+    # Отдельный вопрос клиенту «мешает ли работе прямо сейчас» перед разбором бага. По умолчанию
+    # выключен: срочность аналитик оценивает сам, клиента лишним вопросом не дёргаем.
+    ask_client_urgency: bool = False
+    # Сколько раз за обращение можно попросить у клиента данные. Каждая просьба — только после
+    # самостоятельного разбора и только если без ответа нельзя принять решение.
+    max_client_asks: int = 1
     context_window_min: int = 30
     downtime_notice_sec: int = 600
     ci_timeout_sec: int = 2400
@@ -91,11 +97,11 @@ class LlmCfg:
                 "routine": "sonnet",
                 "analyst": "opus",
                 "review": "opus",
-                "mockup": "opus",
-                "frontend": "opus",
+                "mockup": "sonnet",
+                "frontend": "sonnet",
             },
-            # Sol 5.6 — рабочая модель Codex и запасная при недоступности Claude (разбор, хотфикс,
-            # интерфейс, макеты); Astra — только ревью и перекрёстная проверка.
+            # Sol 5.6 — рабочая модель Codex и запасная для ролей, где подмена разрешена.
+            # Интерфейс и макеты: Sonnet, затем Sol 5.6; Astra — только ревью и перекрёстная проверка.
             "codex": {
                 "filter": "gpt-5.6-sol",
                 "routine": "gpt-5.6-sol",
@@ -108,6 +114,18 @@ class LlmCfg:
     )
     codex_effort: str = "high"
     analyst_data_hint: str = ""
+
+
+@dataclass
+class AgentCfg:
+    """The conversational agent is opt-in while the legacy pipeline remains available."""
+
+    enabled: bool = False
+    owner_model: str = "gpt-5.6-sol"
+    owner_provider: str = "codex"
+    context_limit_tokens: int = 120_000
+    hourly_interval_sec: int = 3600
+    timezone: str = "Asia/Tbilisi"
 
 
 @dataclass
@@ -148,6 +166,7 @@ class SandboxCfg:
 @dataclass
 class HotfixCfg:
     backend_bin: str = ""
+    frontend_chromium: str = ""
     merge_method: str = "merge"
     deployed_sha_cmd: str = ""
     preflight_cmd: str = ""
@@ -170,6 +189,7 @@ class Config:
     wms: WmsCfg = field(default_factory=WmsCfg)
     limits: LimitsCfg = field(default_factory=LimitsCfg)
     llm: LlmCfg = field(default_factory=LlmCfg)
+    agent: AgentCfg = field(default_factory=AgentCfg)
     openai: OpenAiCfg = field(default_factory=OpenAiCfg)
     transcribe: TranscribeCfg = field(default_factory=TranscribeCfg)
     hotfix: HotfixCfg = field(default_factory=HotfixCfg)
@@ -236,6 +256,7 @@ def config_from_dict(data: dict[str, Any]) -> Config:
     cfg.wms = _build(WmsCfg, data.get("wms", {}))
     cfg.limits = _build(LimitsCfg, data.get("limits", {}))
     cfg.llm = _build(LlmCfg, data.get("llm", {}))
+    cfg.agent = _build(AgentCfg, data.get("agent", {}))
     cfg.openai = _build(OpenAiCfg, data.get("openai", {}))
     cfg.transcribe = _build(TranscribeCfg, data.get("transcribe", {}))
     cfg.hotfix = _build(HotfixCfg, data.get("hotfix", {}))

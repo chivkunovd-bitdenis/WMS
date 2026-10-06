@@ -1283,6 +1283,7 @@ export function FfProductsCatalogScreen({
                       >
                         <ProductBarcodeCell
                           barcode={barcode || null}
+                          barcodes={displayMeta.wb_barcodes}
                           wb_size={null}
                           wb_composition={null}
                           testId={`ff-catalog-barcode-${p.id}`}

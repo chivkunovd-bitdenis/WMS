@@ -87,6 +87,7 @@ async def putaway_pending_container(
     container_id: uuid.UUID,
     destination_location_id: uuid.UUID,
     destination_is_cell: bool,
+    transfer_group_id: uuid.UUID | None = None,
 ) -> int | None:
     """Move an inbound box through its canonical putaway path, without committing."""
     state = await _pending_container_state(
@@ -123,6 +124,7 @@ async def putaway_pending_container(
             storage_location_id=destination_location_id,
             performer_id=actor_user_id,
             commit=False,
+            transfer_group_id=transfer_group_id,
         )
     except InboundIntakeError as exc:
         code = "nothing_to_move" if exc.code == "nothing_to_putaway" else exc.code

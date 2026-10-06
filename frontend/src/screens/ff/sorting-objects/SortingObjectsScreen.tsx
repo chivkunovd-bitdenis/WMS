@@ -1,7 +1,7 @@
-import { Box, Paper, Stack, Typography } from '@mui/material'
-import { alpha, useTheme } from '@mui/material/styles'
+import { Box, IconButton, LinearProgress, Paper, Stack, Tooltip, Typography } from '@mui/material'
+import UndoOutlinedIcon from '@mui/icons-material/UndoOutlined'
 import { useEffect, useRef, useState } from 'react'
-import { createSortingScanner, emptyScanContext, type ScanContext } from './sortingScan'
+import { RejectedScan, createSortingScanner, emptyScanContext, type ScanContext, type UndoOutcome } from './sortingScan'
 import {
   ActionGroup,
   AppDialog,
@@ -15,8 +15,9 @@ import {
 import { CreateCellDialog } from '../warehouse-map/WarehouseMapToolbar'
 import type { LabelSize } from '../../../utils/labelSize'
 import { BoxLabelPrintDialog } from '../../../components/BoxLabelPrintDialog'
-import { LinearProgress } from '@mui/material'
+import { randomId } from '../../../utils/randomId'
 import { ObjectsTree } from './ObjectsTree'
+import { PlacedByCells } from './PlacedByCells'
 import {
   CELLS,
   INITIAL_LINES,
@@ -24,6 +25,7 @@ import {
   PRODUCTS,
   KIND_TITLE,
   cellRef,
+  objRef,
   productById,
   type Cell,
   type GoodsLine,
@@ -35,12 +37,14 @@ import {
 } from './objectsStub'
 import {
   canPut,
-  allRows,
   destinationsFor,
   objectTitle,
+  unplacedRows,
   type Carried,
   type ObjectRow,
 } from './objectsRows'
+import { placementFailureMessage } from './pendingPlacement'
+import { RejectedUndo, readUndoHistory, undoRefusalText, writeUndoHistory, type UndoEntry } from './sortingUndo'
 
 // Раскладка объектами.
 //
@@ -49,9 +53,22 @@ import {
 // отдельно не хранится: это вычисляется по цепочке держателей, поэтому «что в
 // коробе» и «где короб» не могут разъехаться. Это одно знание.
 //
-// Список один. Короба, палеты и грузоместа стоят в нём как агрегаты со своим
-// содержимым внутри, товар россыпью — такими же строками верхнего уровня, а
-// разница между «ещё не поставлено» и «стоит на полке» видна колонкой «Где».
+// WMS-650 (утверждённый макет): в основном списке слева только неразложенное —
+// поставленное из него уходит; справа, в панели «Ячейки склада», под каждой
+// ячейкой видно, что на ней стоит. Рядом с полем сканера — стрелка «назад»,
+// отменяющая последнее подтверждённое действие раскладки. Открытая ячейка,
+// открытая тара и строка последнего действия подсвечены.
+
+/** Что сервер ответил на скан товара — экран пишет итог и подсвечивает строку. */
+export type ProductScanOutcome = {
+  productId: string | null
+  /** Строка, куда легла штука. */
+  targetLineId: string | null
+  /** Строка, откуда её взяли: вернётся после «назад». */
+  sourceLineId: string | null
+  /** Сколько этого товара осталось россыпью в документе. */
+  looseLeft: number
+}
 
 /**
  * Экран работает и от сервера, и от заглушки.
@@ -87,10 +104,12 @@ type SortingScreenProps = {
    */
   savedImmediately?: boolean
   scanStorageKey?: string
-  onProductScan?: (barcode: string, context: ScanContext, operationId: string) => Promise<string | void>
+  onProductScan?: (barcode: string, context: ScanContext, operationId: string) => Promise<ProductScanOutcome | string | void>
   onScanIdle?: () => void
-  remainingQty?: number
-  /** Поставить объект или товар на ячейку. Без него экран двигает только себя. */
+  /**
+   * Поставить объект или товар. Без него экран двигает только себя.
+   * Отдаёт operation_id, с которым сервер подтвердил действие.
+   */
   onPlace?: (payload: {
     kind: ObjKind | 'product'
     id: string
@@ -100,7 +119,42 @@ type SortingScreenProps = {
     /** Holder before the move; only loose stock may be replayed after a lost reply. */
     sourceHolder: Holder
     operationId?: string
-  }) => void | Promise<void>
+  }) => Promise<string | void>
+  /** «Назад»: отменить подтверждённое действие. Без него стрелка не активна. */
+  onUndo?: (targetOperationId: string, undoOperationId: string) => Promise<void>
+  /** Где вкладка хранит историю «назад» (документ + сотрудник, решение Д1). */
+  undoStorageKey?: string
+}
+
+/** Цепочка тар от строки вверх — чтобы раскрыть путь к ней. */
+function chainTo(holder: Holder, objects: WarehouseObject[]): string[] {
+  const ids: string[] = []
+  let cursor = holder
+  for (let step = 0; cursor && cursor.startsWith('obj:') && step < 20; step += 1) {
+    const id = cursor.slice(4)
+    ids.push(id)
+    cursor = objects.find((one) => one.id === id)?.holder ?? null
+  }
+  return ids
+}
+
+/** Строка товара по месту: после перечитывания склада у неё другой id. */
+const goodsFocus = (productId: string, holder: Holder) => `g:${productId}|${holder ?? ''}`
+
+function resolveFocus(focus: string | null, lines: GoodsLine[]): string | null {
+  if (!focus || !focus.startsWith('g:')) return focus
+  const [productId, holder] = focus.slice(2).split('|')
+  const line = lines.find((one) => one.productId === productId && (one.holder ?? '') === holder)
+  return line ? `l-${line.id}` : null
+}
+
+/** Род для подписи: «Короб положен», «Палета положена», «Грузоместо положено». */
+function verb(kind: ObjKind, masculine: string, feminine: string, neuter: string): string {
+  return kind === 'pallet' ? feminine : kind === 'cargo_place' ? neuter : masculine
+}
+
+function errorText(error: unknown): string {
+  return error instanceof Error ? error.message : placementFailureMessage(error)
 }
 
 export function SortingObjectsScreen({
@@ -120,13 +174,14 @@ export function SortingObjectsScreen({
   scanStorageKey,
   onProductScan,
   onScanIdle,
-  remainingQty,
+  onUndo,
+  undoStorageKey,
 }: SortingScreenProps) {
-  const theme = useTheme()
   const products = productsProp ?? PRODUCTS
   const [objects, setObjects] = useState<WarehouseObject[]>(initialObjects ?? INITIAL_OBJECTS)
   const [lines, setLines] = useState<GoodsLine[]>(initialLines ?? INITIAL_LINES)
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set())
+  const [placedOpen, setPlacedOpen] = useState<Set<string>>(new Set())
   const [carried, setCarried] = useState<Carried | null>(null)
   const [scanContext, setScanContext] = useState<ScanContext>(() => {
     try {
@@ -144,8 +199,16 @@ export function SortingObjectsScreen({
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
   const [pendingScans, setPendingScans] = useState({ count: 0, paused: false })
-  const mainList = useRef<HTMLDivElement>(null)
-  const activeCellTile = useRef<HTMLDivElement>(null)
+  const [history, setHistory] = useState<UndoEntry[]>(() => readUndoHistory(undoStorageKey))
+  const [focus, setFocus] = useState<string | null>(null)
+  const [inflightCount, setInflightCount] = useState(0)
+  const [undoing, setUndoing] = useState(false)
+  /** Каждый новый отказ — повод вернуть поле сканера в окно, даже с тем же текстом. */
+  const [errorTick, setErrorTick] = useState(0)
+  const root = useRef<HTMLDivElement>(null)
+  const field = useRef<HTMLDivElement>(null)
+  const panelScroll = useRef<HTMLDivElement>(null)
+  const dialogWasOpen = useRef(false)
   const [asking, setAsking] = useState<Carried | null>(null)
   const [askTarget, setAskTarget] = useState('')
   const [askQty, setAskQty] = useState<number | null>(null)
@@ -161,59 +224,342 @@ export function SortingObjectsScreen({
   const activeObject = objects.find((one) => one.id === scanContext.objectId) ?? null
   useEffect(() => { if (initialObjects) setObjects(initialObjects) }, [initialObjects])
   useEffect(() => { if (initialLines) setLines(initialLines) }, [initialLines])
-  const scanDependencies = useRef({ cells, objects, onPlace, onProductScan, onScanIdle })
-  scanDependencies.current = { cells, objects, onPlace, onProductScan, onScanIdle }
+
+  // Сканер и действия экрана читают одни и те же свежие данные: следующий скан
+  // из очереди может прийти раньше, чем React перерисует подтверждённую постановку.
+  const live = useRef({ objects, lines, cells, products, onPlace, onProductScan, onScanIdle, onUndo })
+  live.current = { objects, lines, cells, products, onPlace, onProductScan, onScanIdle, onUndo }
+  const ctxRef = useRef<ScanContext>(scanContext)
+  const historyRef = useRef<UndoEntry[]>(history)
+  /** Действия «+»/перетаскивания, ещё не подтверждённые сервером. */
+  const inflight = useRef(new Set<Promise<unknown>>())
+  /** Строки, по которым запрос уже ушёл: двойной клик не шлёт второй (R17). */
+  const busy = useRef(new Set<string>())
+  const undoBusy = useRef(false)
+  const confirming = useRef(false)
+
+  function saveHistory(next: UndoEntry[]) {
+    historyRef.current = next
+    setHistory(next)
+    writeUndoHistory(undoStorageKey, next)
+  }
+  function remember(entry: UndoEntry) {
+    saveHistory([...historyRef.current, entry].slice(-200))
+  }
+  function forget(operationId: string) {
+    saveHistory(historyRef.current.filter((one) => one.operationId !== operationId))
+  }
+
+  function placeLabel(target: Holder): string {
+    if (!target) return 'россыпь'
+    if (target.startsWith('cell:')) {
+      const cell = live.current.cells.find((one) => cellRef(one.id) === target)
+      return cell ? `ячейку ${cell.code}` : 'ячейку'
+    }
+    const object = live.current.objects.find((one) => objRef(one.id) === target)
+    return object ? objectTitle(object) : 'объект'
+  }
+
+  async function undoLast(): Promise<UndoOutcome | null> {
+    try {
+      // «Назад» не обгоняет «+», ушедший раньше него: сначала его ответ.
+      await Promise.allSettled([...inflight.current])
+      let entry = historyRef.current[historyRef.current.length - 1]
+      const send = live.current.onUndo
+      if (!entry || !send) return null
+      if (!entry.undoOperationId) {
+        entry = { ...entry, undoOperationId: randomId() }
+        saveHistory([...historyRef.current.slice(0, -1), entry])
+      }
+      try {
+        await send(entry.operationId, entry.undoOperationId!)
+      } catch (error) {
+        if (error instanceof RejectedUndo) {
+          // Отменить это уже нельзя: причина под полем, шаг снят (Д4).
+          forget(entry.operationId)
+          setFocus(null)
+          throw new RejectedScan(undoRefusalText(entry, error.detail, error.message))
+        }
+        // Сбой сети или сервера: шаг остаётся, повтор пойдёт с тем же id.
+        throw new RejectedScan(`Отменить не удалось: ${errorText(error)} Нажмите «назад» ещё раз.`)
+      }
+      forget(entry.operationId)
+      setFocus(entry.focus)
+      return { context: entry.before, notice: `Отменено: ${entry.label}` }
+    } finally {
+      undoBusy.current = false
+      setUndoing(false)
+    }
+  }
+
   const scannerRef = useRef<ReturnType<typeof createSortingScanner> | null>(null)
   if (!scannerRef.current) {
     scannerRef.current = createSortingScanner(scanContext, {
-      data: () => scanDependencies.current,
+      data: () => live.current,
       storage: scanStorageKey ? { storage: localStorage, key: `${scanStorageKey}:queue` } : undefined,
       pending: (count, paused) => setPendingScans({ count, paused }),
-      idle: () => scanDependencies.current.onScanIdle?.(),
-      place: async (object, cellId, operationId) => {
-        if (scanDependencies.current.onPlace) {
-          await scanDependencies.current.onPlace({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null, operationId })
+      idle: () => live.current.onScanIdle?.(),
+      place: async (object, cellId, operationId, before) => {
+        const title = objectTitle(object)
+        const from = whereIs(object.holder, live.current.objects, live.current.cells).cell
+        const to = live.current.cells.find((one) => one.id === cellId)
+        const send = live.current.onPlace
+        if (send) {
+          try {
+            await send({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, cellId, toId: null, operationId })
+          } catch (error) {
+            // Отказ — под полем с названием тары; строка остаётся на месте и подсвечена.
+            setFocus(`o-${object.id}`)
+            const message = `${title}: ${errorText(error)}`
+            throw error instanceof RejectedScan ? new RejectedScan(message) : new Error(message)
+          }
         }
-        const placed = scanDependencies.current.objects.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one)
+        const placed = live.current.objects.map((one) => one.id === object.id ? { ...one, holder: cellRef(cellId) } : one)
         // The next queued scan can run before React renders the confirmed move.
-        scanDependencies.current.objects = placed
+        live.current = { ...live.current, objects: placed }
         setObjects(placed)
+        const label = from
+          ? `${title} ${verb(object.kind, 'перенесён', 'перенесена', 'перенесено')} с ${from.code} на ${to?.code ?? ''}`
+          : `${title} ${verb(object.kind, 'положен', 'положена', 'положено')} на ячейку ${to?.code ?? ''}`
+        if (send) remember({ operationId, label, subject: title, before, focus: `o-${object.id}` })
+        setFocus(null)
+        return label
       },
       product: async (barcode, context, operationId) => {
-        if (!scanDependencies.current.onProductScan) throw new Error('Скан товара доступен в документе приёмки')
-        return scanDependencies.current.onProductScan(barcode, context, operationId)
+        const send = live.current.onProductScan
+        if (!send) throw new Error('Скан товара доступен в документе приёмки')
+        const outcome = await send(barcode, context, operationId)
+        if (!outcome || typeof outcome === 'string') return outcome
+        const { cells: knownCells, objects: knownObjects, products: knownProducts } = live.current
+        const product = knownProducts.find((one) => one.id === outcome.productId)
+          ?? knownProducts.find((one) => one.barcode && one.barcode.toLowerCase() === barcode.toLowerCase())
+        const name = product?.name ?? 'Товар'
+        const tara = context.objectId ? knownObjects.find((one) => one.id === context.objectId) : undefined
+        const where = tara ? objectTitle(tara) : `ячейку ${knownCells.find((one) => one.id === context.cellId)?.code ?? ''}`
+        remember({
+          operationId,
+          label: `${name}, 1 шт → ${where}`,
+          subject: name,
+          before: context,
+          focus: outcome.sourceLineId ? `l-${outcome.sourceLineId}` : product ? goodsFocus(product.id, null) : null,
+        })
+        setFocus(outcome.targetLineId ? `l-${outcome.targetLineId}` : null)
+        return `${name}: +1 шт → ${where}. Россыпью осталось ${outcome.looseLeft}`
       },
+      undo: undoLast,
       changed: (next) => {
+        ctxRef.current = next
         setScanContext(next)
         try { if (scanStorageKey) sessionStorage.setItem(scanStorageKey, JSON.stringify(next)) } catch { /* Optional UI context. */ }
       },
       notice: (message) => { setScanError(null); setScanNotice(message) },
-      error: (error) => { setScanNotice(null); setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.') },
+      error: (error) => {
+        setScanNotice(null)
+        setScanError(error instanceof Error ? error.message : 'Не удалось получить ответ от сервера. Обновите документ для проверки результата.')
+        setErrorTick((tick) => tick + 1)
+      },
     })
   }
   useEffect(() => { void scannerRef.current?.resume() }, [])
+
+  const focusKey = resolveFocus(focus, lines)
+  const openKey = scanContext.objectId ? `o-${scanContext.objectId}` : null
   useEffect(() => {
-    const row = scanContext.objectId ? mainList.current?.querySelector(`[data-row-key="o-${scanContext.objectId}"]`) : null
-    ;(row ?? activeCellTile.current)?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
-  }, [scanContext.cellId, scanContext.objectId])
-  const visibleCollapsed = new Set(collapsed)
-  let openObject = activeObject
-  while (openObject) {
-    visibleCollapsed.delete(openObject.id)
-    const parentId: string | undefined = openObject.holder?.startsWith('obj:') ? openObject.holder.slice(4) : undefined
-    openObject = objects.find((one) => one.id === parentId) ?? null
+    const key = openKey ?? focusKey
+    if (!key) return
+    // Строка основного списка — прокручиваем страницу к ней. Строка панели
+    // ячеек — только саму панель: она прилипает к верху экрана, и прокрутка
+    // страницы к ней уводила оператора с места действия к началу списка.
+    const inMain = root.current?.querySelector(`[data-testid="objects-tree"] [data-row-key="${key}"]`)
+    if (inMain) {
+      inMain.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+      return
+    }
+    const box = panelScroll.current
+    const inPanel = box?.querySelector<HTMLElement>(`[data-row-key="${key}"]`)
+    if (!box || !inPanel) return
+    const row = inPanel.getBoundingClientRect()
+    const frame = box.getBoundingClientRect()
+    if (row.top < frame.top || row.bottom > frame.bottom) {
+      box.scrollTop += row.top - frame.top - (box.clientHeight - row.height) / 2
+    }
+  }, [openKey, focusKey])
+  // Отказ и любой результат пишутся под полем сканера (R16): на длинном списке
+  // поле должно оказаться в окне, иначе «нажал — ничего не произошло».
+  useEffect(() => {
+    if (errorTick) field.current?.scrollIntoView({ block: 'nearest', behavior: 'instant' })
+  }, [errorTick])
+  // После окна «Куда положить» сканер снова слушает: фокус — в поле сканера.
+  // Ждём, пока окно закроется и вернёт фокус кнопке, которой его открыли.
+  useEffect(() => {
+    if (asking !== null || !dialogWasOpen.current) return
+    dialogWasOpen.current = false
+    const timer = setTimeout(() => {
+      const input = field.current?.querySelector<HTMLInputElement>('input')
+      if (!input) return
+      // Не забираем фокус, если за это время открылось другое окно или
+      // оператор уже печатает в другом поле.
+      // «Другое окно» — не то, внутри которого стоит сам экран (окно документа
+      // приёмки), и не закрывающееся «Куда положить».
+      const ours = (element: Element) =>
+        element.contains(input) || Boolean(element.closest('[data-testid="objects-qty-dialog"]'))
+      const otherDialog = Array.from(document.querySelectorAll('[role="dialog"]'))
+        .some((dialog) => !ours(dialog))
+      if (otherDialog) return
+      const active = document.activeElement as HTMLElement | null
+      const typing = active && active !== input && !ours(active)
+        && (active.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName))
+      if (typing) return
+      input.focus({ preventScroll: true })
+    }, 350)
+    return () => clearTimeout(timer)
+  }, [asking])
+
+  /** Выполнить действие «+»/перетаскивания/снятия: экран двигает сразу, сервер подтверждает. */
+  function run(key: string, action: () => Promise<void>) {
+    busy.current.add(key)
+    const done = action().finally(() => {
+      busy.current.delete(key)
+      inflight.current.delete(done)
+      setInflightCount(inflight.current.size)
+    })
+    inflight.current.add(done)
+    setInflightCount(inflight.current.size)
   }
-  const setActiveCellId = (id: string) => { void scannerRef.current?.selectCell(id) }
+
+  function targetParts(target: Holder): { cellId: string | null; toId: string | null } {
+    if (!target) return { cellId: null, toId: null }
+    if (target.startsWith('cell:')) return { cellId: target.slice(5), toId: null }
+    return { cellId: null, toId: target.slice(4) }
+  }
+
+  function moveGoods(line: GoodsLine, qty: number, target: Holder) {
+    const key = `l-${line.id}`
+    if (busy.current.has(key)) return
+    // Серверу уходит `line.id` — идентификатор СТРОКИ ОСТАТКА, а не товара:
+    // один и тот же товар лежит в разных местах разными строками.
+    const name = productById(live.current.products, line.productId).name
+    const label = `${name}, ${qty} шт → ${placeLabel(target)}`
+    const before = ctxRef.current
+    const snapshot = live.current.lines
+    const rest = snapshot.filter((one) => one.id !== line.id)
+    const left = line.qty - qty
+    const twin = rest.find((one) => one.productId === line.productId && one.holder === target)
+    const withTarget = twin
+      ? rest.map((one) => (one === twin ? { ...one, qty: one.qty + qty } : one))
+      : [...rest, { id: `l-${Date.now()}-${line.id}`, productId: line.productId, qty, holder: target }]
+    const next = left > 0 ? [...withTarget, { ...line, qty: left }] : withTarget
+    live.current = { ...live.current, lines: next }
+    setLines(next)
+    setFocus(goodsFocus(line.productId, target))
+    setScanError(null)
+    const send = live.current.onPlace
+    if (!send) {
+      setScanNotice(label)
+      return
+    }
+    run(key, async () => {
+      try {
+        const operationId = await send({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })
+        if (operationId) remember({ operationId, label, subject: name, before, focus: `l-${line.id}` })
+        setScanNotice(label)
+      } catch (error) {
+        if (inflight.current.size <= 1) {
+          live.current = { ...live.current, lines: snapshot }
+          setLines(snapshot)
+        }
+        setFocus(`l-${line.id}`)
+        setScanNotice(null)
+        setScanError(`${name}: ${errorText(error)}`)
+        setErrorTick((tick) => tick + 1)
+      }
+    })
+  }
+
+  function moveObject(object: WarehouseObject, target: Holder) {
+    const key = `o-${object.id}`
+    if (busy.current.has(key)) return
+    const title = objectTitle(object)
+    const label = `${title} → ${placeLabel(target)}`
+    const before = ctxRef.current
+    const next = live.current.objects.map((one) => (one.id === object.id ? { ...one, holder: target } : one))
+    live.current = { ...live.current, objects: next }
+    setObjects(next)
+    setFocus(key)
+    setScanError(null)
+    onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${placeLabel(target)}`)
+    const send = live.current.onPlace
+    if (!send) {
+      setScanNotice(label)
+      return
+    }
+    run(key, async () => {
+      try {
+        const operationId = await send({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })
+        if (operationId) remember({ operationId, label, subject: title, before, focus: key })
+        setScanNotice(label)
+      } catch (error) {
+        // Строка возвращается туда, где была, и подсвечена; отказ — под полем (R16).
+        const restored = live.current.objects.map((one) => (one.id === object.id ? { ...one, holder: object.holder } : one))
+        live.current = { ...live.current, objects: restored }
+        setObjects(restored)
+        setFocus(key)
+        setScanNotice(null)
+        setScanError(`${title}: ${errorText(error)}`)
+        setErrorTick((tick) => tick + 1)
+      }
+    })
+  }
+
+  // Поставленное по умолчанию свёрнуто: короб на ячейке — одна строка, а не десять.
+  // Раскрыто то, что открыл сам оператор, плюс открытая сканом тара и путь к строке,
+  // которой коснулось последнее действие.
+  const focusLine = focusKey ? lines.find((one) => `l-${one.id}` === focusKey) : undefined
+  const focusObject = focusKey ? objects.find((one) => `o-${one.id}` === focusKey) : undefined
+  const forcedOpen = new Set<string>([
+    ...(activeObject ? [activeObject.id, ...chainTo(activeObject.holder, objects)] : []),
+    ...(focusLine ? chainTo(focusLine.holder, objects) : []),
+    ...(focusObject ? chainTo(focusObject.holder, objects) : []),
+  ])
+  const placedCollapsed = new Set(
+    objects.filter((one) => !placedOpen.has(one.id) && !forcedOpen.has(one.id)).map((one) => one.id),
+  )
+  const visibleCollapsed = new Set([...collapsed].filter((id) => !forcedOpen.has(id)))
+  const mainRows = unplacedRows(objects, lines, products, visibleCollapsed)
+  const mainKeys = new Set(mainRows.map((row) => row.key))
+  const mainHighlight = openKey && mainKeys.has(openKey)
+    ? { key: openKey, kind: 'open' as const }
+    : focusKey && mainKeys.has(focusKey)
+      ? { key: focusKey, kind: 'touched' as const }
+      : null
+
+  const selectCell = (id: string) => { void scannerRef.current?.selectCell(id) }
   const loose = lines.filter((line) => line.holder === null)
   const unplaced = objects.filter((one) => one.holder === null)
   const totalQty = lines.reduce((sum, line) => sum + line.qty, 0)
-  const leftQty = remainingQty ?? lines
+  const leftQty = lines
     .filter((line) => !whereIs(line.holder, objects, cells).cell)
     .reduce((sum, line) => sum + line.qty, 0)
   const quantitiesByCell = new Map<string, number>()
   for (const line of lines) {
     const id = whereIs(line.holder, objects, cells).cell?.id
     if (id) quantitiesByCell.set(id, (quantitiesByCell.get(id) ?? 0) + line.qty)
+  }
+
+  const lastStep = history[history.length - 1]
+  const waiting = pendingScans.count > 0 || inflightCount > 0
+  const canUndo = Boolean(onUndo) && !undoing && (history.length > 0 || waiting)
+  const undoHint = lastStep
+    ? `Отменить: ${lastStep.label}`
+    : waiting && onUndo
+      ? 'Отменить: действие, которое ещё подтверждается'
+      : 'Отменять нечего'
+
+  function undo() {
+    if (undoBusy.current || !canUndo) return
+    undoBusy.current = true
+    setUndoing(true)
+    void scannerRef.current?.undo()
   }
 
   function toggle(objectId: string) {
@@ -225,50 +571,13 @@ export function SortingObjectsScreen({
     })
   }
 
-  /** Куда именно поставили: ячейка или другой объект. Сервер различает их. */
-  function targetParts(target: Holder): { cellId: string | null; toId: string | null } {
-    if (!target) return { cellId: null, toId: null }
-    if (target.startsWith('cell:')) return { cellId: target.slice(5), toId: null }
-    return { cellId: null, toId: target.slice(4) }
-  }
-
-  function moveGoods(line: GoodsLine, qty: number, target: Holder) {
-    // Экран двигает у себя сразу, не дожидаясь сервера: оператор ставит короба
-    // подряд, и пауза на каждый ответ превращает раскладку в ожидание.
-    //
-    // Серверу уходит `line.id` — идентификатор СТРОКИ ОСТАТКА, а не товара.
-    // Сервер ищет по нему запись «столько-то штук вот в этом месте»
-    // (`InventoryBalance.id == object_id`), потому что один и тот же товар
-    // лежит в разных местах разными строками. Здесь стоял `line.productId`, и
-    // любая раскладка россыпи — и в ячейку, и в короб — отвечала 404
-    // `object_not_found`: экран откатывал перенос и перечитывал склад, а
-    // оператор видел, что строка «сбрасывается».
-    void Promise.resolve(onPlace?.({ kind: 'product', id: line.id, qty, sourceHolder: line.holder, ...targetParts(target) })).catch(() => undefined)
-    setLines((current) => {
-      const rest = current.filter((one) => one.id !== line.id)
-      const left = line.qty - qty
-      const twin = rest.find((one) => one.productId === line.productId && one.holder === target)
-      const withTarget = twin
-        ? rest.map((one) => (one === twin ? { ...one, qty: one.qty + qty } : one))
-        : [...rest, { id: `l-${Date.now()}-${line.id}`, productId: line.productId, qty, holder: target }]
-      return left > 0 ? [...withTarget, { ...line, qty: left }] : withTarget
+  function togglePlaced(objectId: string) {
+    setPlacedOpen((current) => {
+      const next = new Set(current)
+      if (next.has(objectId)) next.delete(objectId)
+      else next.add(objectId)
+      return next
     })
-  }
-
-  function moveObject(object: WarehouseObject, target: Holder, label: string) {
-    void Promise.resolve(onPlace?.({ kind: object.kind, id: object.id, qty: 1, sourceHolder: object.holder, ...targetParts(target) })).catch(() => undefined)
-    setObjects((current) => current.map((one) => (one.id === object.id ? { ...one, holder: target } : one)))
-    onNote(`${KIND_TITLE[object.kind]} ${object.code} → ${label}`)
-  }
-
-  function labelOf(target: Holder): string {
-    if (!target) return 'россыпь'
-    if (target.startsWith('cell:')) {
-      const cell = cells.find((one) => cellRef(one.id) === target)
-      return cell ? `ячейку ${cell.code}` : 'ячейку'
-    }
-    const object = objects.find((one) => `obj:${one.id}` === target)
-    return object ? objectTitle(object) : 'объект'
   }
 
   /** Перетащили: контейнер едет целиком, у товара спрашиваем количество. */
@@ -279,7 +588,7 @@ export function SortingObjectsScreen({
       return
     }
     if (carried.kind === 'object') {
-      moveObject(carried.object, target, labelOf(target))
+      moveObject(carried.object, target)
     } else {
       openDialog(carried, target)
     }
@@ -292,11 +601,7 @@ export function SortingObjectsScreen({
       moveGoods(row.line, row.line.qty, null)
       return
     }
-    // Снятие — это то же перемещение, только цель пустая: сервер понимает
-    // пустую цель как «Без ячеек». Раньше здесь менялось только состояние
-    // вкладки: экран говорил «снят», а после обновления страницы тара
-    // возвращалась в старую ячейку, потому что на сервер ничего не уходило.
-    moveObject(row.object, null, 'россыпь')
+    moveObject(row.object, null)
   }
 
   /** Вынуть наружу: то же окно, но место уже выбрано — россыпь. */
@@ -309,16 +614,20 @@ export function SortingObjectsScreen({
 
   /** Нажали плюс: то же самое, только место выбирается в диалоге. */
   function openDialog(what: Carried, target?: Holder) {
+    confirming.current = false
+    dialogWasOpen.current = true
     setAsking(what)
     setAskTarget(target === undefined ? (activeCell ? cellRef(activeCell.id) : '') : (target ?? 'none'))
     setAskQty(what.kind === 'goods' ? what.line.qty : null)
   }
 
   function confirmDialog() {
-    if (!asking) return
+    // Двойной клик «Положить» — одно действие (R17).
+    if (!asking || confirming.current) return
+    confirming.current = true
     const target: Holder = askTarget === 'none' || askTarget === '' ? null : askTarget
     if (asking.kind === 'object') {
-      moveObject(asking.object, target, labelOf(target))
+      moveObject(asking.object, target)
     } else if (askQty && askQty > 0) {
       moveGoods(asking.line, Math.min(askQty, asking.line.qty), target)
     }
@@ -349,13 +658,15 @@ export function SortingObjectsScreen({
   }
 
   function handleScan(code: string) {
+    // Подсветка последнего действия гаснет со следующим.
+    setFocus(null)
     void scannerRef.current?.scan(code)
   }
 
   const destinations = asking ? destinationsFor(asking, objects, cells) : []
 
   return (
-    <Box data-testid="sorting-objects-screen">
+    <Box ref={root} data-testid="sorting-objects-screen">
       <ScreenHeader
         title="Раскладка по ячейкам"
         purpose={
@@ -365,23 +676,39 @@ export function SortingObjectsScreen({
       />
 
       <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-        <Stack spacing={1.5}>
-          <ScannerField
-            onScan={handleScan}
-            expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
-            error={scanError}
-            notice={pendingScans.count && !pendingScans.paused ? `${scanNotice ?? ''} · Ожидают подтверждения: ${pendingScans.count}` : scanNotice}
-            testId="objects-scan"
-          />
+        {/* Стрелка «назад» — как «Отменить последний скан» упаковки FBS: значок
+            с подсказкой рядом с полем сканирования, без окна подтверждения. */}
+        <Stack direction="row" spacing={1} sx={{ alignItems: 'flex-start' }}>
+          <Box ref={field} sx={{ flexGrow: 1, minWidth: 0 }}>
+            <ScannerField
+              onScan={handleScan}
+              expects={activeCell ? activeObject ? `товар в ${activeObject.code} · ячейка ${activeCell.code}` : `тару или товар · ячейка ${activeCell.code}` : 'ячейку с полки'}
+              error={scanError}
+              notice={pendingScans.count && !pendingScans.paused ? `${scanNotice ?? ''} · Ожидают подтверждения: ${pendingScans.count}` : scanNotice}
+              testId="objects-scan"
+            />
+          </Box>
+          <Tooltip title={undoHint}>
+            <span style={{ marginTop: 50 }}>
+              <IconButton
+                size="small"
+                aria-label="Отменить последнее действие"
+                disabled={!canUndo}
+                // Не уводим фокус из поля сканера: следующий пик должен попасть в него.
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={undo}
+                data-testid="objects-undo"
+              >
+                <UndoOutlinedIcon fontSize="small" />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Stack>
       </Paper>
 
       <Stack direction={{ xs: 'column', lg: 'row' }} spacing={2} sx={{ alignItems: 'flex-start' }}>
-        <Box ref={mainList} sx={{
-            // Таблица занимает всю оставшуюся ширину, а не «по содержимому».
-            // По содержимому она схлопывалась на коротких кодах коробов, и
-            // полэкрана уходило в пустоту — а в согласованном макете таблица
-            // занимает основную часть строки, справа узкая колонка ячеек.
+        <Box sx={{
+            // Таблица занимает всю оставшуюся ширину, справа узкая колонка ячеек.
             flexGrow: 1,
             flexShrink: 1,
             minWidth: 0,
@@ -425,11 +752,11 @@ export function SortingObjectsScreen({
             </SecondaryAction>
           </Stack>
           <ObjectsTree
-            rows={allRows(objects, lines, products, cells, visibleCollapsed)}
+            rows={mainRows}
             objects={objects}
             carried={carried}
             testId="objects-tree"
-            activeObjectId={scanContext.objectId}
+            highlight={mainHighlight}
             empty={{
               title: 'Всё расставлено по ячейкам',
               hint: 'Ни товара россыпью, ни собранных объектов не осталось.',
@@ -456,7 +783,7 @@ export function SortingObjectsScreen({
                   : { title: row.name, barcode: row.barcode },
               )
             }
-            onPickCell={setActiveCellId}
+            onPickCell={selectCell}
           />
         </Box>
 
@@ -468,58 +795,40 @@ export function SortingObjectsScreen({
             flexShrink: 0,
             minWidth: 0,
             width: { xs: '100%', lg: 320 },
+            position: { lg: 'sticky' },
+            top: { lg: 16 },
           }}
         >
-          <Paper variant="outlined" sx={{ p: 2 }} data-testid="objects-cells">
-            <Typography variant="subtitle1" sx={{ mb: 1.5 }}>
-              Ячейки склада
-            </Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', gap: 1 }}>
-              {cells.map((cell) => {
-                const active = activeCellId === cell.id
-                const qty = quantitiesByCell.get(cell.id) ?? 0
-                const target = Boolean(carried && canPut(carried, cellRef(cell.id), objects))
-                return (
-                  <Box
-                    key={cell.id}
-                    ref={active ? activeCellTile : undefined}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setActiveCellId(cell.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') setActiveCellId(cell.id)
-                    }}
-                    onDragOver={(event) => {
-                      if (target) event.preventDefault()
-                    }}
-                    onDrop={() => {
-                      setActiveCellId(cell.id)
-                      drop(cellRef(cell.id))
-                    }}
-                    data-testid={`objects-cell-${cell.id}`}
-                    sx={{
-                      px: 1.25,
-                      py: 0.6,
-                      borderRadius: 1.5,
-                      cursor: 'pointer',
-                      border: '1px solid',
-                      borderColor: active ? 'primary.main' : 'divider',
-                      outline: target && !active ? `1px dashed ${alpha(theme.palette.primary.main, 0.45)}` : 'none',
-                      outlineOffset: '-3px',
-                    }}
-                  >
-                    <Typography variant="body2" sx={{ fontWeight: 600, whiteSpace: 'nowrap' }}>
-                      {cell.code}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {qty === 0 ? 'пусто' : `${qty} шт`}
-                    </Typography>
-                  </Box>
-                )
-              })}
+          <Paper variant="outlined" data-testid="objects-cells">
+            <Stack
+              direction="row"
+              sx={{ alignItems: 'baseline', justifyContent: 'space-between', gap: 1, px: 2, pt: 2, pb: 1 }}
+            >
+              <Typography variant="subtitle1" sx={{ whiteSpace: 'nowrap' }}>Ячейки склада</Typography>
+              <Typography variant="caption" color="text.secondary" data-testid="objects-placed-qty" sx={{ whiteSpace: 'nowrap' }}>
+                размещено {(totalQty - leftQty).toLocaleString('ru-RU')} шт
+              </Typography>
             </Stack>
+            <Box ref={panelScroll} sx={{ maxHeight: 'calc(100vh - 140px)', overflowY: 'auto', borderTop: '1px solid', borderColor: 'divider' }}>
+              <PlacedByCells
+                cells={cells}
+                objects={objects}
+                lines={lines}
+                products={products}
+                collapsed={placedCollapsed}
+                quantities={quantitiesByCell}
+                activeCellId={activeCellId}
+                openObjectId={scanContext.objectId}
+                focusKey={focusKey}
+                carried={carried}
+                onPickCell={selectCell}
+                onDropOnCell={(cellId) => drop(cellRef(cellId))}
+                onToggle={togglePlaced}
+                onTakeOff={takeOffCell}
+                onTakeOut={takeOut}
+              />
+            </Box>
           </Paper>
-
         </Stack>
       </Stack>
 
@@ -572,9 +881,7 @@ export function SortingObjectsScreen({
           setPrinting(null)
           if (!target) return
           if (onPrint) {
-            // Штрихкод приходит из самой строки: печатаем ровно то, что в ней
-            // стоит. Раньше его искали среди тары и ячеек, поэтому у товара он
-            // не находился и печать ШК товара из сортировки была недоступна.
+            // Штрихкод приходит из самой строки: печатаем ровно то, что в ней стоит.
             if (!target.barcode) {
               onNote(`У «${target.title}» нет штрихкода — печатать нечего.`)
               return

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from support_agent.pipeline import InlinePool, Pipeline
 from support_agent.trello import ensure_card
 
@@ -54,6 +56,60 @@ def test_draft_goes_to_author_and_only_author_can_confirm(env: Any) -> None:
     assert env.store.ticket(1)["stage"] == "done" and env.trello.creates == 1
 
 
+@pytest.mark.parametrize(("field", "invented"), [
+    ("title", "Создание коробов с лимитом 999"),
+    ("essence", "Создавать до 999 коробов"),
+    ("expected", "Максимум разумно ограничен (например 999) валидацией на фронте"),
+    ("notes", "Нужно ограничение на максимальное значение для защиты"),
+    ("notes", "Использовать механизм WMS-564 и WMS-546"),
+])
+def test_ungrounded_partner_draft_falls_back_to_verbatim_request_without_retry(
+    env: Any, field: str, invented: str,
+) -> None:
+    script_partner(env)
+    raw = "Trello: в приёмке и возврате создавать сразу 200 коробов с существующими кодами."
+    draft: dict[str, Any] = {"title": "Короба", "essence": "Создать короба", "expected": "Создать 200 коробов",
+                             "notes": [], "is_ui": False}
+    draft[field] = [invented] if field == "notes" else invented
+    # Пересказ фильтра тоже не должен подменять дословное поручение автора.
+    env.llm.on("filter", "Сообщение из партнёрского чата",
+               {"is_task_request": True, "task": "Добавить лимит 999 по WMS-564"})
+    env.llm.on("routine", "Составь короткое структурное описание", draft)
+    ask_task(env, raw)
+    env.flush()
+    data = env.store.data(1)
+    assert data["raw"] == raw and data["draft"]["expected"] == raw
+    assert "999" not in str(data["draft"]) and "WMS-564" not in str(data["draft"])
+    assert "200" in env.tg.to(PARTNER_CHAT)[0] and invented not in env.tg.to(PARTNER_CHAT)[0]
+    assert len([c for c in env.llm.calls if c["role"] == "routine"]) == 1
+    env.say(PARTNER_CHAT, "да", user=AUTHOR)
+    env.pipe.tick()
+    card = next(iter(env.trello.cards.values()))
+    assert raw in card["desc"] and "999" not in card["desc"] and "WMS-564" not in card["desc"]
+
+
+def test_explicit_author_limit_is_preserved_in_safe_fallback(env: Any) -> None:
+    script_partner(env)
+    raw = "Trello: создавать 200 коробов за раз, не более 500; сохранить код WMS-546."
+    env.llm.on("routine", "Составь короткое структурное описание", {
+        "title": "Короба", "essence": "Короба", "expected": "Максимум 999 коробов",
+        "notes": [], "is_ui": False,
+    })
+    ask_task(env, raw)
+    assert env.store.data(1)["draft"]["expected"] == raw
+    assert "500" in env.store.data(1)["draft"]["expected"]
+    assert "WMS-546" in env.store.data(1)["draft"]["expected"]
+
+
+def test_partner_edits_use_authors_words_instead_of_filter_inventions(env: Any) -> None:
+    script_partner(env)
+    ask_task(env)
+    env.llm.on("filter", "Описание задачи отправлено автору",
+               {"intent": "edit", "edit": "Добавить лимит 999"})
+    env.say(PARTNER_CHAT, "Добавьте фильтр по складу", user=AUTHOR)
+    assert env.store.data(1)["edits"] == ["Добавьте фильтр по складу"]
+
+
 def test_edit_makes_new_version_then_confirm_creates_single_card(env: Any) -> None:
     script_partner(env)
     ask_task(env)
@@ -63,7 +119,7 @@ def test_edit_makes_new_version_then_confirm_creates_single_card(env: Any) -> No
     env.flush()
     drafts = [t for c, t, _ in env.tg.sent if "Правильно ли я понял" in t]
     assert len(drafts) == 2
-    assert "добавить фильтр" in [c["prompt"] for c in env.llm.calls if "структурное описание" in c["prompt"]][-1]
+    assert "добавьте фильтр по складу" in [c["prompt"] for c in env.llm.calls if "структурное описание" in c["prompt"]][-1]
     env.llm.on("filter", "Описание задачи отправлено автору", {"intent": "confirm", "edit": ""})
     env.say(PARTNER_CHAT, "да", user=AUTHOR)
     env.pipe.tick()

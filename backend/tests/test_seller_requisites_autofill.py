@@ -25,7 +25,11 @@ from app.models.billing import BillingProfile
 from app.models.document_event import DOCUMENT_TYPE_BILLING_PROFILE, DocumentEvent
 from app.services import seller_marketplace_requisites_service as svc
 from app.services.marketplace_provider import FakeMarketplaceTransport, MarketplaceProviderError
-from app.services.wildberries_credentials_service import SKIP, patch_seller_tokens
+from app.services.wildberries_credentials_service import (
+    SKIP,
+    get_public_token_status,
+    patch_seller_tokens,
+)
 from tests.test_seller_marketplace_requisites import (
     OZON_VALID_INN,
     WB_VALID_INN,
@@ -292,15 +296,10 @@ _EXPECTED_MOCK_CARDS_SAVE_RESPONSE: dict[str, Any] = {
     "ok": True,
     "validation_ok": True,
     "validation_error": None,
-    # e2e_mock_wb_cards отдаёт один и тот же тестовый снимок из одной карточки
-    # (см. app/services/wildberries_client.py, fetch_cards_list) — этот ответ
-    # определяется мок-флагом, а не seller-info, и одинаков во всех сценариях
-    # C7 независимо от того, чем ответил (или не ответил) seller-info.
-    # products_created=0: по новому порядку WMS-548 сохранение ключа только
-    # обновляет снимок карточек, товары фулфилмента создаются позже — после
-    # того как селлер выберет их в окне выбора («Добавить к фулфилменту»).
-    "cards_received": 1,
-    "cards_saved": 1,
+    # WMS-615: saving the key queues a durable catalog import. The response
+    # reports zero imported cards; the job endpoint reports the completed import.
+    "cards_received": 0,
+    "cards_saved": 0,
     "products_created": 0,
     "products_updated": 0,
     "products_skipped": 0,
@@ -349,7 +348,23 @@ async def test_c7_wb_seller_info_failure_does_not_affect_key_save_response(
         json={"content_api_token": f"wms547-c7-{kind}-key"},
     )
     assert saved.status_code == 200, saved.text
-    assert saved.json() == _EXPECTED_MOCK_CARDS_SAVE_RESPONSE
+    body = saved.json()
+    catalog_job = body.pop("catalog_job")
+    assert body == _EXPECTED_MOCK_CARDS_SAVE_RESPONSE
+    assert catalog_job["state"] == "queued"
+    assert catalog_job["marketplace"] == "wildberries"
+    job = await async_client.get(
+        f"/operations/background-jobs/{catalog_job['id']}", headers=seller_headers
+    )
+    assert job.status_code == 200, job.text
+    assert job.json()["state"] == "succeeded"
+    assert job.json()["result_json"]["cards_received"] == 1
+    assert job.json()["result_json"]["cards_saved"] == 1
+    async with SessionLocal() as session:
+        token_status = await get_public_token_status(session, tenant_id, seller_id)
+        assert token_status is not None
+        assert token_status[0] is True
+
 
     profile = await _profile_or_none(tenant_id, seller_id)
     assert profile is None

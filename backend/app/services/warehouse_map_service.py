@@ -38,6 +38,7 @@ from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind, validate_container
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
+    SORTING_LOCATION_LABEL,
     UNASSIGNED_LABEL,
     get_or_create_sorting_location,
 )
@@ -1315,6 +1316,7 @@ async def move_object(
     inbound_request_id: uuid.UUID | None = None,
     transfer_group_id: uuid.UUID | None = None,
     event_id: uuid.UUID | None = None,
+    from_label: str | None = None,
 ) -> dict[str, Any]:
     await _assert_warehouse(session, tenant_id, warehouse_id)
     await _lock_object_intakes(
@@ -1356,7 +1358,7 @@ async def move_object(
             raise WarehouseMapError("insufficient_stock")
         product = await session.get(Product, balance.product_id)
         assert product is not None
-        from_label = await _location_label(session, balance.storage_location_id)
+        source_label = await _location_label(session, balance.storage_location_id)
         if balance.container_kind and balance.container_id:
             code = await _container_code(
                 session,
@@ -1365,7 +1367,7 @@ async def move_object(
                 cast(ContainerKind, balance.container_kind),
                 balance.container_id,
             )
-            from_label = _container_title(balance.container_kind, code)
+            source_label = _container_title(balance.container_kind, code)
         await _transfer_balance(
             session,
             tenant_id=tenant_id,
@@ -1391,7 +1393,7 @@ async def move_object(
         source_location_id = await _container_location_id(
             session, tenant_id, warehouse_id, container_kind, object_id
         )
-        from_label = await _location_label(session, source_location_id)
+        source_label = await _location_label(session, source_location_id)
         balances = await _container_balances(
             session, tenant_id, warehouse_id, container_kind, object_id
         )
@@ -1414,6 +1416,7 @@ async def move_object(
                     container_id=object_id,
                     destination_location_id=destination_location_id,
                     destination_is_cell=to_kind == "cell",
+                    transfer_group_id=transfer_group_id,
                 )
             )
         except inbound_container_putaway_service.InboundContainerPutawayError as exc:
@@ -1459,7 +1462,7 @@ async def move_object(
         actor_user_id=actor_user_id,
         subject=subject,
         quantity=moved_quantity,
-        from_label=from_label,
+        from_label=from_label or source_label,
         to_label=to_label,
     )
     session.add(event)
@@ -1984,6 +1987,610 @@ async def _pending_sorting_cargo_quantity(
     return sum(int(line.quantity) - int(line.posted_qty) for line in lines)
 
 
+# ── WMS-650: раскладка внутри документа приёмки ─────────────────────────────
+#
+# Каждое действие экрана раскладки пишет квитанции в уже существующие записи
+# (решение Д2): движения остатка с transfer_group_id = operation_id экрана и
+# строку журнала карты склада с id = operation_id. По ним сервер узнаёт повтор
+# того же запроса (R17) и по ним же «назад» восстанавливает состояние до
+# действия (sorting_undo_service). Новых таблиц и статусов нет.
+
+
+async def container_pallet_id(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> uuid.UUID | None:
+    """Палета, на которой стоит короб или грузоместо (у палеты — никогда)."""
+    if kind == "pallet":
+        return None
+    generic = await session.get(WarehouseBox, container_id)
+    if (
+        generic is not None
+        and generic.tenant_id == tenant_id
+        and generic.warehouse_id == warehouse_id
+        and generic.container_kind == kind
+    ):
+        return generic.pallet_id
+    if kind == "box":
+        inbound = await session.get(InboundIntakeBox, container_id)
+        if inbound is not None and inbound.tenant_id == tenant_id:
+            return inbound.pallet_id
+        return None
+    cargo = await session.get(InboundIntakeCargoPlace, container_id)
+    if cargo is not None and cargo.tenant_id == tenant_id:
+        return cargo.pallet_id
+    return None
+
+
+async def sorting_holder_label(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ContainerKind,
+    container_id: uuid.UUID,
+) -> str:
+    """Где стоит тара: палета («Палета П-…») или место («Ячейка …», «Без ячеек»).
+
+    Подпись «откуда» в журнале — квитанция действия: по ней «назад» вернёт тару
+    на ту же палету или в то же место (WMS-650 Д2). Для тары не на палете она
+    совпадает с прежней подписью места.
+    """
+    pallet_id = await container_pallet_id(session, tenant_id, warehouse_id, kind, container_id)
+    if pallet_id is not None:
+        pallet = await session.get(Pallet, pallet_id)
+        if pallet is not None and pallet.disbanded_at is None:
+            return _container_title("pallet", pallet.code)
+    location_id = await _container_location_id(
+        session, tenant_id, warehouse_id, kind, container_id
+    )
+    return await _location_label(session, location_id)
+
+
+async def sorting_document_containers(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    request_id: uuid.UUID,
+) -> set[tuple[str, uuid.UUID]]:
+    """Тара документа приёмки — та же, что экран показывает в его составе.
+
+    Ручки экрана раскладки двигают только её (R18): чужой короб, даже того же
+    селлера, ручкой документа A не сдвинуть.
+    """
+    owned: set[tuple[str, uuid.UUID]] = set()
+    pallets: set[uuid.UUID] = set()
+    for container_id, pallet_id in (
+        await session.execute(
+            select(InboundIntakeBox.id, InboundIntakeBox.pallet_id).where(
+                InboundIntakeBox.tenant_id == tenant_id,
+                InboundIntakeBox.request_id == request_id,
+            )
+        )
+    ).all():
+        owned.add(("box", container_id))
+        if pallet_id is not None:
+            pallets.add(pallet_id)
+    for container_id, pallet_id in (
+        await session.execute(
+            select(InboundIntakeCargoPlace.id, InboundIntakeCargoPlace.pallet_id).where(
+                InboundIntakeCargoPlace.tenant_id == tenant_id,
+                InboundIntakeCargoPlace.request_id == request_id,
+            )
+        )
+    ).all():
+        owned.add(("cargo_place", container_id))
+        if pallet_id is not None:
+            pallets.add(pallet_id)
+    for container_id, container_kind, pallet_id in (
+        await session.execute(
+            select(WarehouseBox.id, WarehouseBox.container_kind, WarehouseBox.pallet_id).where(
+                WarehouseBox.tenant_id == tenant_id,
+                WarehouseBox.warehouse_id == warehouse_id,
+                WarehouseBox.inbound_request_id == request_id,
+            )
+        )
+    ).all():
+        owned.add((container_kind, container_id))
+        if pallet_id is not None:
+            pallets.add(pallet_id)
+    pallets.update(
+        (
+            await session.scalars(
+                select(Pallet.id).where(
+                    Pallet.tenant_id == tenant_id,
+                    Pallet.warehouse_id == warehouse_id,
+                    Pallet.inbound_request_id == request_id,
+                )
+            )
+        ).all()
+    )
+    owned.update(("pallet", pallet_id) for pallet_id in pallets)
+    return owned
+
+
+async def _expected_destination_labels(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    destination_kind: DestinationKind,
+    destination_id: uuid.UUID | None,
+) -> set[str] | None:
+    """Подписи «куда», которыми могло записаться это действие; None — не узнать."""
+    if destination_kind in {"unassigned", "sorting"}:
+        return {UNASSIGNED_LABEL, SORTING_LOCATION_LABEL}
+    if destination_id is None:
+        return None
+    if destination_kind == "cell":
+        location = await session.get(StorageLocation, destination_id)
+        if location is None or location.tenant_id != tenant_id:
+            return None
+        # Россыпь, разложенная по документу, пишет в журнал голый код ячейки.
+        return {f"Ячейка {location.code}", location.code}
+    try:
+        code = await _container_code(
+            session, tenant_id, warehouse_id, cast(ContainerKind, destination_kind), destination_id
+        )
+    except WarehouseMapError:
+        return None
+    return {_container_title(destination_kind, code)}
+
+
+async def _replayed_sorting_action(
+    session: AsyncSession,
+    *,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    operation_id: uuid.UUID,
+    kind: ObjectKind,
+    object_id: uuid.UUID,
+    destination_kind: DestinationKind,
+    destination_id: uuid.UUID | None,
+) -> dict[str, Any] | None:
+    """Повтор того же действия (потерян ответ, очередь после обновления): ответ без изменений.
+
+    Повтор — это тот же объект в то же место. Тот же operation_id для другого
+    объекта или другого места — ошибка клиента: ``operation_conflict``.
+    """
+    event = await session.get(WarehouseMapEvent, operation_id)
+    if event is None:
+        return None
+    if event.tenant_id != tenant_id or event.warehouse_id != warehouse_id:
+        raise WarehouseMapError("operation_conflict")
+    if event.subject != await _sorting_subject(session, tenant_id, warehouse_id, kind, object_id):
+        raise WarehouseMapError("operation_conflict")
+    expected = await _expected_destination_labels(
+        session, tenant_id, warehouse_id, destination_kind, destination_id
+    )
+    if expected is not None and event.to_label not in expected:
+        raise WarehouseMapError("operation_conflict")
+    return {"id": str(operation_id), "moved_qty": event.quantity}
+
+
+async def _sorting_subject(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    kind: ObjectKind,
+    object_id: uuid.UUID,
+) -> str | None:
+    """Как журнал называет объект действия: товар — по названию, тара — по номеру."""
+    if kind == "product":
+        balance = await session.get(InventoryBalance, object_id)
+        if balance is None or balance.tenant_id != tenant_id:
+            return None
+        product = await session.get(Product, balance.product_id)
+        return product.name if product is not None else None
+    try:
+        code = await _container_code(session, tenant_id, warehouse_id, kind, object_id)
+    except WarehouseMapError:
+        return None
+    return _container_title(kind, code)
+
+
+async def linked_location_quantity(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    inbound_line_id: uuid.UUID,
+    location_id: uuid.UUID,
+    container_kind: str | None,
+    container_id: uuid.UUID | None,
+) -> int:
+    """Сколько штук строки документа лежит именно здесь (место + тара) по его движениям.
+
+    Считается по месту и таре вместе: россыпь другого документа на той же
+    ячейке и чужой короб на палете документа сюда не попадают (R18).
+    """
+    from app.models.inventory_movement import InventoryMovement
+
+    return int(
+        await session.scalar(
+            select(func.coalesce(func.sum(InventoryMovement.quantity_delta), 0)).where(
+                InventoryMovement.tenant_id == tenant_id,
+                InventoryMovement.inbound_intake_line_id == inbound_line_id,
+                InventoryMovement.storage_location_id == location_id,
+                InventoryMovement.container_kind.is_(None)
+                if container_kind is None
+                else InventoryMovement.container_kind == container_kind,
+                InventoryMovement.container_id.is_(None)
+                if container_id is None
+                else InventoryMovement.container_id == container_id,
+            )
+        )
+        or 0
+    )
+
+
+async def release_distribution(
+    session: AsyncSession,
+    *,
+    request_id: uuid.UUID,
+    product_id: uuid.UUID,
+    quantity: int,
+    box_id: uuid.UUID | None,
+    prefer_location_id: uuid.UUID | None = None,
+    prefer_id: uuid.UUID | None = None,
+) -> int:
+    """Уменьшить строки распределения документа на снятое; вернуть, сколько не нашлось.
+
+    Строка распределения помнит, откуда штука пришла (короб приёмки или «без
+    короба»), и место, куда её положили впервые. Снимаем по порядку:
+    квитанция самого действия (``prefer_id``), строки этого короба, строки без
+    короба (товар, доложенный в короб сканом), и только затем строки других
+    коробов. Место после переноса может отличаться от текущего, поэтому оно
+    задаёт порядок, а не отбор.
+    """
+    from app.models.inbound_intake import InboundIntakeDistributionLine
+
+    rows = list(
+        (
+            await session.scalars(
+                select(InboundIntakeDistributionLine)
+                .where(
+                    InboundIntakeDistributionLine.request_id == request_id,
+                    InboundIntakeDistributionLine.product_id == product_id,
+                )
+                .order_by(
+                    InboundIntakeDistributionLine.created_at.desc(),
+                    InboundIntakeDistributionLine.id.desc(),
+                )
+            )
+        ).all()
+    )
+    rows.sort(
+        key=lambda row: (
+            row.id != prefer_id,
+            0 if row.box_id == box_id else 1 if row.box_id is None else 2,
+            row.storage_location_id != prefer_location_id,
+        )
+    )
+    left = quantity
+    for row in rows:
+        if left <= 0:
+            break
+        taken = min(left, int(row.quantity))
+        left -= taken
+        if taken == row.quantity:
+            await session.delete(row)
+        else:
+            row.quantity -= taken
+    return left
+
+
+async def rebalance_distribution(
+    session: AsyncSession, request: InboundIntakeRequest
+) -> None:
+    """Строки распределения по наборам — ровно как «разложено» (WMS-650).
+
+    «Распределить по ячейкам» делит строки на наборы: каждый короб приёмки и
+    россыпь. Строки набора считаются проведёнными, пока их не больше
+    «разложено» этого набора: короба — его собственное, россыпи — документа
+    минус короба. Действия раскладки двигают штуки между наборами: вынутое из
+    короба и разложенное россыпью, доложенное сканом в короб и снятое вместе с
+    ним. После каждого такого действия и после «назад» излишек одного набора
+    переносится в недостающий набор с тем же местом строки, лишнее
+    снимается. Тогда ни одна строка не будет проведена второй раз, а проверка
+    завершения распределения не откажет на перекосе наборов.
+
+    Строки-квитанции (id строки — идентификатор операции, по нему записаны
+    движения) трогаются в последнюю очередь: по ним узнаются повторы действия.
+    Все строки документа читаются одним запросом.
+    """
+    from app.models.inbound_intake import InboundIntakeDistributionLine
+    from app.models.inventory_movement import InventoryMovement
+
+    await session.flush()
+    all_rows = list(
+        (
+            await session.scalars(
+                select(InboundIntakeDistributionLine)
+                .where(InboundIntakeDistributionLine.request_id == request.id)
+                .order_by(
+                    InboundIntakeDistributionLine.created_at.desc(),
+                    InboundIntakeDistributionLine.id.desc(),
+                )
+            )
+        ).all()
+    )
+    by_product: dict[uuid.UUID, list[Any]] = defaultdict(list)
+    for row in all_rows:
+        by_product[row.product_id].append(row)
+    receipts: set[uuid.UUID] = set()
+    if all_rows:
+        receipts = {
+            group_id
+            for group_id in (
+                await session.scalars(
+                    select(InventoryMovement.transfer_group_id)
+                    .where(
+                        InventoryMovement.tenant_id == request.tenant_id,
+                        InventoryMovement.transfer_group_id.in_([row.id for row in all_rows]),
+                    )
+                    .distinct()
+                )
+            ).all()
+            if group_id is not None
+        }
+    for line in request.lines:
+        box_targets: dict[uuid.UUID | None, int] = {
+            box.id: int(content.posted_qty)
+            for box in request.boxes
+            for content in box.lines
+            if content.product_id == line.product_id
+        }
+        targets: dict[uuid.UUID | None, int] = {
+            **box_targets,
+            None: max(0, int(line.posted_qty) - sum(box_targets.values())),
+        }
+        rows = by_product.get(line.product_id, [])
+        totals: dict[uuid.UUID | None, int] = defaultdict(int)
+        for row in rows:
+            totals[row.box_id] += int(row.quantity)
+        if all(totals.get(pool, 0) == target for pool, target in targets.items()) and all(
+            pool in targets for pool in totals
+        ):
+            continue
+        # Излишек наборов: сначала с обычных строк (самых новых), квитанции — последними.
+        surplus: list[tuple[uuid.UUID, int]] = []
+        deleted: set[int] = set()
+        for row in sorted(rows, key=lambda one: one.id in receipts):
+            excess = totals[row.box_id] - targets.get(row.box_id, 0)
+            if excess <= 0:
+                continue
+            taken = min(excess, int(row.quantity))
+            totals[row.box_id] -= taken
+            surplus.append((row.storage_location_id, taken))
+            if taken == row.quantity:
+                deleted.add(id(row))
+                await session.delete(row)
+            else:
+                row.quantity -= taken
+        # Недостача наборов: то же количество, на то же место.
+        for pool, target in targets.items():
+            deficit = target - totals.get(pool, 0)
+            while deficit > 0 and surplus:
+                location_id, available = surplus[0]
+                moved = min(deficit, available)
+                deficit -= moved
+                if moved == available:
+                    surplus.pop(0)
+                else:
+                    surplus[0] = (location_id, available - moved)
+                same = next(
+                    (
+                        row for row in rows
+                        if row.box_id == pool
+                        and row.storage_location_id == location_id
+                        and id(row) not in deleted
+                    ),
+                    None,
+                )
+                if same is not None:
+                    same.quantity += moved
+                    continue
+                created = InboundIntakeDistributionLine(
+                    request_id=request.id,
+                    product_id=line.product_id,
+                    storage_location_id=location_id,
+                    quantity=moved,
+                    box_id=pool,
+                )
+                session.add(created)
+                rows.append(created)
+    await session.flush()
+
+
+async def _return_balance_to_sorting(
+    session: AsyncSession,
+    *,
+    request: InboundIntakeRequest,
+    balance: InventoryBalance,
+    quantity: int,
+    sorting_location_id: uuid.UUID,
+    destination_kind: ContainerKind | None,
+    destination_id: uuid.UUID | None,
+    group_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    release_container_line: bool,
+    only_document_units: bool = False,
+) -> None:
+    """Вернуть штуки документа с ячейки в «Сортировку» (R15).
+
+    Возвращается только расположение и прогресс раскладки этого документа:
+    остаток не меняется — это пара перемещений внутри фулфилмента (R14).
+    «Разложено» уменьшается ровно на штуки, которые этот документ туда
+    положил (связанные движения в этом месте и в этой таре), поэтому повторная
+    постановка снова пройдёт и увеличит его ровно на возвращённое.
+
+    ``only_document_units`` — товар снимают сам по себе (не вместе с тарой):
+    тогда снять можно только штуки, положенные этим документом. Чужую россыпь
+    на той же ячейке (другой документ, другой селлер) ручка документа не
+    трогает — отказ ``qty_exceeds_accepted``, как до WMS-650 (R18).
+    """
+    line = next((row for row in request.lines if row.product_id == balance.product_id), None)
+    source_kind = cast(ContainerKind | None, balance.container_kind)
+    source_id = balance.container_id
+    location_id = balance.storage_location_id
+    linked = 0
+    if line is not None:
+        proven = await linked_location_quantity(
+            session, request.tenant_id, line.id, location_id, source_kind, source_id
+        )
+        linked = max(0, min(quantity, proven, int(line.posted_qty)))
+    if only_document_units and (line is None or linked != quantity):
+        raise WarehouseMapError("qty_exceeds_accepted")
+    for part, line_id in ((linked, line.id if line else None), (quantity - linked, None)):
+        if part <= 0:
+            continue
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=request.tenant_id,
+            product_id=balance.product_id,
+            storage_location_id=location_id,
+            quantity_delta=-part,
+            _exact_source=True,
+            movement_type=MOVEMENT_TYPE_WAREHOUSE_MAP,
+            transfer_group_id=group_id,
+            inbound_intake_line_id=line_id,
+            container_kind=source_kind,
+            container_id=source_id,
+            actor_user_id=actor_user_id,
+        )
+        await inventory_service.record_movement_and_adjust_balance(
+            session,
+            tenant_id=request.tenant_id,
+            product_id=balance.product_id,
+            storage_location_id=sorting_location_id,
+            quantity_delta=part,
+            movement_type=MOVEMENT_TYPE_WAREHOUSE_MAP,
+            transfer_group_id=group_id,
+            inbound_intake_line_id=line_id,
+            container_kind=destination_kind,
+            container_id=destination_id,
+            actor_user_id=actor_user_id,
+        )
+    if not linked or line is None:
+        return
+    line.posted_qty -= linked
+    request.distribution_completed_at = None
+    if release_container_line and source_kind in {"box", "cargo_place"}:
+        containers: list[InboundIntakeBox | InboundIntakeCargoPlace] = [
+            *request.boxes,
+            *request.cargo_places,
+        ]
+        content = next(
+            (
+                row
+                for container in containers
+                if container.id == source_id
+                for row in container.lines
+                if row.product_id == balance.product_id
+            ),
+            None,
+        )
+        if content is not None:
+            content.posted_qty -= min(linked, int(content.posted_qty))
+    await release_distribution(
+        session,
+        request_id=request.id,
+        product_id=balance.product_id,
+        quantity=linked,
+        # Тара снята целиком — строки её короба; товар вынут из короба —
+        # «разложено» короба не меняется, поэтому сначала строки россыпи.
+        box_id=(
+            distribution_box_id(request, source_kind, source_id)
+            if release_container_line
+            else None
+        ),
+        prefer_location_id=location_id,
+    )
+
+
+def distribution_box_id(
+    request: InboundIntakeRequest, kind: str | None, container_id: uuid.UUID | None
+) -> uuid.UUID | None:
+    """Короб приёмки, к которому относится строка распределения, иначе None."""
+    if kind == "box" and any(box.id == container_id for box in request.boxes):
+        return container_id
+    return None
+
+
+async def _relocate_sorting_container(
+    session: AsyncSession,
+    *,
+    request: InboundIntakeRequest,
+    tenant_id: uuid.UUID,
+    warehouse_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+    kind: ContainerKind,
+    object_id: uuid.UUID,
+    to_kind: DestinationKind,
+    to_id: uuid.UUID | None,
+    destination_location_id: uuid.UUID,
+    sorting_location_id: uuid.UUID,
+    group_id: uuid.UUID,
+    is_return: bool,
+) -> int:
+    """Тара едет целиком с содержимым: на палету, в «Сортировку», снятие с ячейки."""
+    if to_kind in {"box", "cargo_place"} or (kind == "pallet" and to_kind == "pallet"):
+        raise WarehouseMapError("invalid_container_destination")
+    if to_kind == "pallet" and to_id == object_id:
+        raise WarehouseMapError("container_cycle")
+    current_pallet = await container_pallet_id(session, tenant_id, warehouse_id, kind, object_id)
+    source_location_id = await _container_location_id(
+        session, tenant_id, warehouse_id, kind, object_id
+    )
+    target_pallet = to_id if to_kind == "pallet" else None
+    if source_location_id == destination_location_id and current_pallet == target_pallet:
+        raise WarehouseMapError("nothing_to_move")
+    balances = await _container_balances(session, tenant_id, warehouse_id, kind, object_id)
+    total = 0
+    for balance in balances:
+        quantity = int(balance.quantity)
+        if quantity <= 0:
+            continue
+        total += quantity
+        if balance.storage_location_id == destination_location_id:
+            continue
+        balance_kind = cast(ContainerKind | None, balance.container_kind)
+        if is_return:
+            await _return_balance_to_sorting(
+                session,
+                request=request,
+                balance=balance,
+                quantity=quantity,
+                sorting_location_id=sorting_location_id,
+                destination_kind=balance_kind,
+                destination_id=balance.container_id,
+                group_id=group_id,
+                actor_user_id=actor_user_id,
+                release_container_line=True,
+            )
+            continue
+        await _transfer_balance(
+            session,
+            tenant_id=tenant_id,
+            balance=balance,
+            quantity=quantity,
+            destination_location_id=destination_location_id,
+            destination_container_kind=balance_kind,
+            destination_container_id=balance.container_id,
+            transfer_group_id=group_id,
+            actor_user_id=actor_user_id,
+            # Вне статуса сортировки (или из ячейки в «Сортировку» без возврата
+            # прогресса) это простое перемещение, не связанное с документом.
+            inbound_request_id=(
+                None if destination_location_id == sorting_location_id else request.id
+            ),
+        )
+    await _place_container(
+        session, tenant_id, warehouse_id, kind, object_id, to_kind, to_id, destination_location_id
+    )
+    return total
+
+
 async def place_sorting_object(
     session: AsyncSession,
     *,
@@ -2014,20 +2621,28 @@ async def place_sorting_object(
     else:
         destination_kind = "unassigned"
         destination_id = None
-    if inbound_request_id is not None:
-        from app.services import inbound_intake_service as intake
-        from app.services.inbound_sorting_service import apply_loose_putaway
-
-        request = await intake.get_request(
-            session, tenant_id, inbound_request_id, for_update=True
+    if inbound_request_id is None:
+        # Склад целиком, без документа: как до WMS-650 — обычный перенос.
+        return await move_object(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=actor_user_id,
+            kind=kind,
+            object_id=object_id,
+            to_kind=destination_kind,
+            to_id=destination_id,
+            quantity=quantity,
         )
-        if request is None or request.warehouse_id != warehouse_id:
-            raise WarehouseMapError("inbound_request_not_found")
-        if (
-            kind == "cargo_place"
-            and cell_id is not None
-            and operation_id is not None
-        ):
+
+    from app.services import inbound_intake_service as intake
+    from app.services.inbound_sorting_service import apply_loose_putaway
+
+    request = await intake.get_request(session, tenant_id, inbound_request_id, for_update=True)
+    if request is None or request.warehouse_id != warehouse_id:
+        raise WarehouseMapError("inbound_request_not_found")
+    if operation_id is not None:
+        if kind == "cargo_place" and cell_id is not None:
             replayed = await _replayed_sorting_cargo_putaway(
                 session,
                 tenant_id=tenant_id,
@@ -2038,53 +2653,134 @@ async def place_sorting_object(
             )
             if replayed is not None:
                 return {"id": str(operation_id), "moved_qty": replayed}
-            if await _pending_sorting_cargo_quantity(
+        replay = await _replayed_sorting_action(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            operation_id=operation_id,
+            kind=kind,
+            object_id=object_id,
+            destination_kind=destination_kind,
+            destination_id=destination_id,
+        )
+        if replay is not None:
+            return replay
+    op_id = operation_id or uuid.uuid4()
+    owned = await sorting_document_containers(session, tenant_id, warehouse_id, inbound_request_id)
+    if destination_kind not in {"cell", "unassigned"} and (
+        (destination_kind, destination_id) not in owned
+    ):
+        raise WarehouseMapError("destination_not_found")
+    destination_location_id, _kind, _id, to_label = await _destination(
+        session, tenant_id, warehouse_id, destination_kind, destination_id
+    )
+    sorting = await get_or_create_sorting_location(session, tenant_id, warehouse_id)
+    into_sorting = destination_location_id == sorting.id
+    returns_progress = request.status == intake.STATUS_SORTING
+
+    if kind == "product":
+        balance = await session.get(InventoryBalance, object_id)
+        if balance is None or balance.tenant_id != tenant_id:
+            raise WarehouseMapError("object_not_found")
+        if balance.container_kind is not None and balance.container_id is not None and (
+            (balance.container_kind, balance.container_id) not in owned
+        ):
+            raise WarehouseMapError("object_not_found")
+        source = await session.get(StorageLocation, balance.storage_location_id)
+        if source is None or source.warehouse_id != warehouse_id:
+            raise WarehouseMapError("object_not_found")
+        from_sorting = source.code == SORTING_LOCATION_CODE
+        if into_sorting and not from_sorting and returns_progress:
+            return await _return_product_to_sorting(
                 session,
-                tenant_id=tenant_id,
-                inbound_request_id=inbound_request_id,
-                cargo_place_id=object_id,
-            ) <= 0:
-                # This request still carries sorting context, so it is a stale
-                # placement intent rather than a new general warehouse move.
-                raise WarehouseMapError("nothing_to_move")
-            result = await move_object(
-                session,
-                tenant_id=tenant_id,
-                warehouse_id=warehouse_id,
-                actor_user_id=actor_user_id,
-                kind=kind,
-                object_id=object_id,
-                to_kind=destination_kind,
-                to_id=destination_id,
+                request=request,
+                balance=balance,
                 quantity=quantity,
-                inbound_request_id=inbound_request_id,
-                transfer_group_id=operation_id,
-                event_id=operation_id,
+                sorting_location_id=sorting.id,
+                destination_kind=_kind,
+                destination_id=_id,
+                to_label=to_label,
+                op_id=op_id,
+                actor_user_id=actor_user_id,
             )
-            return {"id": str(operation_id), "moved_qty": result["moved_qty"]}
-        if kind == "product" and cell_id is not None:
-            balance = await session.get(InventoryBalance, object_id)
-            if balance is None or balance.tenant_id != tenant_id:
-                raise WarehouseMapError("object_not_found")
-            source = await session.get(StorageLocation, balance.storage_location_id)
-            if source is None or source.warehouse_id != warehouse_id:
-                raise WarehouseMapError("object_not_found")
-            if source.code == SORTING_LOCATION_CODE and balance.container_id is None:
-                if quantity is None:
-                    raise WarehouseMapError("quantity_must_be_positive")
-                op_id = operation_id or uuid.uuid4()
-                try:
-                    await apply_loose_putaway(
-                        session, tenant_id, inbound_request_id,
-                        operation_id=op_id, product_id=balance.product_id,
-                        storage_location_id=cell_id, quantity=quantity,
-                        performer_id=actor_user_id,
-                    )
-                except intake.InboundIntakeError as exc:
-                    raise WarehouseMapError(exc.code) from exc
-                return {"id": str(op_id), "moved_qty": quantity}
-    return await move_object(
+        if cell_id is not None and from_sorting and balance.container_id is None:
+            if quantity is None:
+                raise WarehouseMapError("quantity_must_be_positive")
+            try:
+                await apply_loose_putaway(
+                    session, tenant_id, inbound_request_id,
+                    operation_id=op_id, product_id=balance.product_id,
+                    storage_location_id=cell_id, quantity=quantity,
+                    performer_id=actor_user_id, commit=False,
+                )
+            except intake.InboundIntakeError as exc:
+                raise WarehouseMapError(exc.code) from exc
+            await rebalance_distribution(session, request)
+            await session.commit()
+            return {"id": str(op_id), "moved_qty": quantity}
+        result = await move_object(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=actor_user_id,
+            kind=kind,
+            object_id=object_id,
+            to_kind=destination_kind,
+            to_id=destination_id,
+            quantity=quantity,
+            inbound_request_id=inbound_request_id,
+            transfer_group_id=op_id,
+            event_id=op_id,
+            commit=False,
+        )
+        await rebalance_distribution(session, request)
+        await session.commit()
+        return {"id": str(op_id), "moved_qty": result["moved_qty"]}
+
+    if (kind, object_id) not in owned:
+        raise WarehouseMapError("object_not_found")
+    try:
+        holder_label = await sorting_holder_label(
+            session, tenant_id, warehouse_id, kind, object_id
+        )
+        source_location_id = await _container_location_id(
+            session, tenant_id, warehouse_id, kind, object_id
+        )
+    except ValueError as exc:
+        raise WarehouseMapError("object_not_found") from exc
+    from_sorting = source_location_id == sorting.id
+    if destination_kind == "cell":
+        if kind == "cargo_place" and from_sorting and await _pending_sorting_cargo_quantity(
+            session,
+            tenant_id=tenant_id,
+            inbound_request_id=inbound_request_id,
+            cargo_place_id=object_id,
+        ) <= 0:
+            # Грузоместо в «Сортировке» без неразложенного: устаревшее намерение
+            # постановки, а не новый перенос по складу.
+            raise WarehouseMapError("nothing_to_move")
+        result = await move_object(
+            session,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=actor_user_id,
+            kind=kind,
+            object_id=object_id,
+            to_kind=destination_kind,
+            to_id=destination_id,
+            quantity=quantity,
+            inbound_request_id=inbound_request_id,
+            transfer_group_id=op_id,
+            event_id=op_id,
+            from_label=holder_label,
+            commit=False,
+        )
+        await rebalance_distribution(session, request)
+        await session.commit()
+        return {"id": str(op_id), "moved_qty": result["moved_qty"]}
+    moved = await _relocate_sorting_container(
         session,
+        request=request,
         tenant_id=tenant_id,
         warehouse_id=warehouse_id,
         actor_user_id=actor_user_id,
@@ -2092,6 +2788,92 @@ async def place_sorting_object(
         object_id=object_id,
         to_kind=destination_kind,
         to_id=destination_id,
-        quantity=quantity,
-        inbound_request_id=inbound_request_id,
+        destination_location_id=destination_location_id,
+        sorting_location_id=sorting.id,
+        group_id=op_id,
+        is_return=into_sorting and not from_sorting and returns_progress,
     )
+    code = await _container_code(session, tenant_id, warehouse_id, kind, object_id)
+    session.add(
+        WarehouseMapEvent(
+            id=op_id,
+            tenant_id=tenant_id,
+            warehouse_id=warehouse_id,
+            actor_user_id=actor_user_id,
+            subject=_container_title(kind, code),
+            quantity=moved or None,
+            from_label=holder_label,
+            to_label=to_label,
+        )
+    )
+    await rebalance_distribution(session, request)
+    await session.commit()
+    return {"id": str(op_id), "moved_qty": moved or None}
+
+
+async def _return_product_to_sorting(
+    session: AsyncSession,
+    *,
+    request: InboundIntakeRequest,
+    balance: InventoryBalance,
+    quantity: int | None,
+    sorting_location_id: uuid.UUID,
+    destination_kind: ContainerKind | None,
+    destination_id: uuid.UUID | None,
+    to_label: str,
+    op_id: uuid.UUID,
+    actor_user_id: uuid.UUID,
+) -> dict[str, Any]:
+    """«Снять с ячейки» товар или «Вынуть из …» тары на ячейке — в «осталось»."""
+    if quantity is None or quantity <= 0:
+        raise WarehouseMapError("quantity_must_be_positive")
+    await inventory_service.lock_stock_product(session, request.tenant_id, balance.product_id)
+    locked = await session.scalar(
+        select(InventoryBalance)
+        .where(InventoryBalance.id == balance.id, InventoryBalance.quantity > 0)
+        .with_for_update()
+    )
+    if locked is None:
+        raise WarehouseMapError("object_not_found")
+    if quantity > locked.quantity:
+        raise WarehouseMapError("insufficient_stock")
+    product = await session.get(Product, locked.product_id)
+    assert product is not None
+    from_label = await _location_label(session, locked.storage_location_id)
+    if locked.container_kind and locked.container_id:
+        code = await _container_code(
+            session,
+            request.tenant_id,
+            request.warehouse_id,
+            cast(ContainerKind, locked.container_kind),
+            locked.container_id,
+        )
+        from_label = _container_title(locked.container_kind, code)
+    await _return_balance_to_sorting(
+        session,
+        request=request,
+        balance=locked,
+        quantity=quantity,
+        sorting_location_id=sorting_location_id,
+        destination_kind=destination_kind,
+        destination_id=destination_id,
+        group_id=op_id,
+        actor_user_id=actor_user_id,
+        release_container_line=False,
+        only_document_units=True,
+    )
+    session.add(
+        WarehouseMapEvent(
+            id=op_id,
+            tenant_id=request.tenant_id,
+            warehouse_id=request.warehouse_id,
+            actor_user_id=actor_user_id,
+            subject=product.name,
+            quantity=quantity,
+            from_label=from_label,
+            to_label=to_label,
+        )
+    )
+    await rebalance_distribution(session, request)
+    await session.commit()
+    return {"id": str(op_id), "moved_qty": quantity}
