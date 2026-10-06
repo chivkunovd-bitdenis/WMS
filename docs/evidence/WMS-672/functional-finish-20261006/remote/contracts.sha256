@@ -1,0 +1,3 @@
+36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd  frontend/tests-e2e/wms672-remaining.test.mjs
+57c907c0afc20b84943ad5771d5f0d375b9b5e162ea9126a1478c89cb359d5aa  frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx
+1cd1da084b70547d68a4de9e1540c6deecd30457a4be32bac4ee06ed7938b281  backend/tests/test_wms659_bulk_inbound_boxes.py
