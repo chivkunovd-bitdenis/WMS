@@ -71,6 +71,9 @@ export function OzonExemplarDocuments({ orderId, token, authHeaders }: {
     }
   }
   const pending = data && ['preparing', 'checking', 'unknown'].includes(data.state)
+  // Current cabinet checks can outlive a completed write; the server decides
+  // whether another explicit action is allowed. Keep the legacy mock fallback.
+  const writeBlocked = data?.editable === false || (Boolean(pending) && data?.editable !== true)
   useEffect(() => {
     if (!expanded || !pending) return
     const timer = window.setInterval(() => { void request('GET') }, 5000)
@@ -92,7 +95,7 @@ export function OzonExemplarDocuments({ orderId, token, authHeaders }: {
         {data?.errors?.length ? <Typography color="error" variant="caption">{data.errors.join('; ')}</Typography> : null}
         {data?.products.length === 0 || (!data && error) ? <>
           <Typography variant="caption">Ozon ещё не вернул экземпляры.</Typography>
-          <Button disabled={busy || Boolean(pending)} onClick={() => void request('POST', undefined, '/prepare')}>Получить экземпляры</Button>
+          <Button disabled={busy || writeBlocked} onClick={() => void request('POST', undefined, '/prepare')}>Получить экземпляры</Button>
         </> : null}
         {data?.products.map((product) => <Stack key={product.product_id} spacing={1}>
           <Typography variant="body2" sx={{ overflowWrap: 'anywhere' }}>{product.name} · SKU {product.sku}</Typography>
@@ -100,7 +103,7 @@ export function OzonExemplarDocuments({ orderId, token, authHeaders }: {
             if (!exemplar.gtd_required && !exemplar.rnpt_required) return null
             const key = `${product.product_id}:${exemplar.exemplar_id}`
             const choice = drafts[key] ?? { gtd: exemplar.gtd ?? '', rnpt: exemplar.rnpt ?? '', is_gtd_absent: exemplar.is_gtd_absent === true, is_rnpt_absent: exemplar.is_rnpt_absent === true }
-            const disabled = busy || Boolean(pending) || data.editable === false
+            const disabled = busy || writeBlocked
             return <Stack key={exemplar.exemplar_id} spacing={0.5} sx={{ pl: 1, borderLeft: 1, borderColor: 'divider' }}>
               <Typography variant="caption">Экземпляр {exemplar.ordinal}</Typography>
               {(['gtd', 'rnpt'] as const).map((doc) => {

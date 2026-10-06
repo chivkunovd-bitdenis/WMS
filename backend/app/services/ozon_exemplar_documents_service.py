@@ -221,6 +221,39 @@ def apply_saved_documents(products: list[dict[str, Any]], data: dict[str, Any]) 
                 exemplar.update(saved)
 
 
+def status_exemplars(raw: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    return {
+        f"{product['product_id']}:{exemplar['exemplar_id']}": exemplar
+        for product in raw.get("products", []) or []
+        for exemplar in product.get("exemplars", []) or []
+    }
+
+
+def exemplar_document_errors(exemplar: dict[str, Any]) -> list[str]:
+    return [code for doc in ("gtd", "rnpt") for code in exemplar.get(f"{doc}_error_codes") or []]
+
+
+def current_document_state(
+    status: str | None, exemplars: list[dict[str, Any]], errors: list[str]
+) -> str:
+    """Describe current readback, independently of a completed writer's intent."""
+    if status == "validation_in_process":
+        return "checking"
+    if errors:
+        return "rejected" if status == "ship_not_available" else "unknown"
+    if any(
+        exemplar.get(f"{doc}_check_status")
+        for exemplar in exemplars
+        for doc in ("gtd", "rnpt")
+    ):
+        return "unknown"
+    if status == "ship_available" and exemplars:
+        return "accepted"
+    if status in {"update_available", "update_not_available"}:
+        return "editable"
+    return "unknown"
+
+
 async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any]:
     data = document_data(order)
     positions = list(
@@ -234,6 +267,21 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
     products = copy.deepcopy(data.get("snapshot", {}).get("products", []))
     apply_saved_documents(products, data)
     errors = data.get("document_errors", {})
+    completed = data.get("state") == "accepted"
+    remote = status_exemplars(data.get("last_status", {}))
+    document_error_codes = {code for codes in errors.values() for code in codes}
+    read_errors = [error for error in data.get("errors", []) if error not in document_error_codes]
+    view_errors = data.get("errors", [])
+    state = data.get("state", "editable")
+    if completed:
+        errors = {
+            key: codes for key, exemplar in remote.items()
+            if (codes := exemplar_document_errors(exemplar))
+        }
+        view_errors = read_errors + [code for codes in errors.values() for code in codes]
+        state = "unknown" if read_errors else current_document_state(
+            data.get("status"), list(remote.values()), view_errors
+        )
     for product in products:
         position = by_sku.get(product["product_id"])
         product.update(
@@ -241,22 +289,29 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
             sku=str(product["product_id"]),
         )
         for index, exemplar in enumerate(product.get("exemplars", []) or []):
+            key = f"{product['product_id']}:{exemplar['exemplar_id']}"
+            exemplar_state = state
+            if completed and not read_errors:
+                current = remote.get(key)
+                exemplar_state = current_document_state(
+                    data.get("status"), [current] if current else [], errors.get(key, [])
+                )
             exemplar.update(
                 ordinal=index + 1,
                 gtd_required=bool(product.get("is_gtd_needed")),
                 rnpt_required=bool(product.get("is_rnpt_needed")),
-                state=data.get("state", "editable"),
-                errors=errors.get(f"{product['product_id']}:{exemplar['exemplar_id']}", []),
+                state=exemplar_state,
+                errors=errors.get(key, []),
             )
     return {
         "posting_number": order.external_order_id,
         "version": data.get("version", 0),
-        "state": data.get("state", "editable"),
+        "state": state,
         "status": data.get("status"),
         "editable": data.get("state") not in PENDING_STATES
         and data.get("status") != "update_not_available",
         "products": products,
-        "errors": data.get("errors", []),
+        "errors": view_errors,
     }
 
 
@@ -333,71 +388,70 @@ async def get_exemplar_documents(
 
 def classify_document_status(data: dict[str, Any], raw: dict[str, Any]) -> None:
     status = raw.get("status")
-    if data.get("state") == "accepted":
-        # Acceptance completes this intent. Later cabinet changes describe the
-        # posting, not an unresolved write of the historical choice. Keep that
-        # history without making it an overlay or a target for matching again.
-        data.update(status=status, errors=[], document_errors={}, last_status=raw)
-        return
-    data.update(status=status, state="unknown", errors=[], document_errors={}, last_status=raw)
-    targets = data.get("choices", {}) if data.get("kind") == "documents" else {}
-    remote = {
-        f"{product['product_id']}:{exemplar['exemplar_id']}": exemplar
-        for product in raw.get("products", []) or []
-        for exemplar in product.get("exemplars", []) or []
-    }
+    completed = data.get("state") == "accepted"
+    data.update(
+        status=status, state="accepted" if completed else "unknown",
+        errors=[], document_errors={}, last_status=raw,
+    )
+    # Completed choices are history. Inspect all fresh documents for display,
+    # while unresolved writes still require strict matching of their own targets.
+    targets = data.get("choices", {}) if data.get("kind") == "documents" and not completed else {}
+    remote = status_exemplars(raw)
     matches = bool(targets)
     known = True
-    for key, choice in targets.items():
+    for key in remote if completed else targets:
         exemplar = remote.get(key)
         if exemplar is None:
             matches = False
             continue
-        errors: list[str] = []
+        choice = targets.get(key, {})
+        errors = exemplar_document_errors(exemplar)
         for doc in ("gtd", "rnpt"):
             # Blank never means absence. Its false flag must also match readback.
-            if (exemplar.get(doc) or "") != (choice.get(doc) or "") or bool(
-                exemplar.get(f"is_{doc}_absent")
-            ) != bool(choice.get(f"is_{doc}_absent")):
+            if not completed and (
+                (exemplar.get(doc) or "") != (choice.get(doc) or "") or bool(
+                    exemplar.get(f"is_{doc}_absent")
+                ) != bool(choice.get(f"is_{doc}_absent"))
+            ):
                 matches = False
-            errors.extend(exemplar.get(f"{doc}_error_codes") or [])
             if exemplar.get(f"{doc}_check_status"):
                 known = False
         if errors:
             data["document_errors"][key] = errors
             data["errors"].extend(errors)
-    if status == "validation_in_process":
-        data["state"] = "checking"
-    elif status == "ship_not_available" and data["errors"] and matches:
-        data["state"] = "rejected"
-    elif status == "update_available" and (data.get("set_acknowledged") or matches):
-        data["state"] = "editable"
-    elif status == "ship_available" and matches and known and not data["errors"]:
-        data["state"] = "accepted"
-    if not targets and data.get("kind") != "marking" and status in {
-        "ship_available", "update_available", "update_not_available"
-    }:
-        data["state"] = "editable"
-    # The legacy marking result is independent; documents always use strict matching.
-    if data.get("kind") == "marking" and not targets:
-        data["state"] = {
-            "ship_available": "accepted",
-            "ship_not_available": "rejected",
-            "validation_in_process": "checking",
-            "update_available": "editable",
-        }.get(str(status), "unknown")
-    if data.get("kind") == "marking" and not data.get("set_acknowledged"):
-        choice = data.get("choice", {})
-        exemplar = remote.get(f"{choice.get('product_id')}:{choice.get('exemplar_id')}", {})
-        confirmed = any(
-            mark.get("mark") == choice.get("mark")
-            and mark.get("mark_type") == choice.get("mark_type")
-            and mark.get("check_status") in {None, "", "passed"}
-            and not mark.get("error_codes")
-            for mark in exemplar.get("marks", []) or []
-        )
-        if not confirmed and status != "validation_in_process":
-            data["state"] = "unknown"
+    if not completed:
+        if status == "validation_in_process":
+            data["state"] = "checking"
+        elif status == "ship_not_available" and data["errors"] and matches:
+            data["state"] = "rejected"
+        elif status == "update_available" and (data.get("set_acknowledged") or matches):
+            data["state"] = "editable"
+        elif status == "ship_available" and matches and known and not data["errors"]:
+            data["state"] = "accepted"
+        if not targets and data.get("kind") != "marking" and status in {
+            "ship_available", "update_available", "update_not_available"
+        }:
+            data["state"] = "editable"
+        # The legacy marking result is independent; documents always use strict matching.
+        if data.get("kind") == "marking" and not targets:
+            data["state"] = {
+                "ship_available": "accepted",
+                "ship_not_available": "rejected",
+                "validation_in_process": "checking",
+                "update_available": "editable",
+            }.get(str(status), "unknown")
+        if data.get("kind") == "marking" and not data.get("set_acknowledged"):
+            choice = data.get("choice", {})
+            exemplar = remote.get(f"{choice.get('product_id')}:{choice.get('exemplar_id')}", {})
+            confirmed = any(
+                mark.get("mark") == choice.get("mark")
+                and mark.get("mark_type") == choice.get("mark_type")
+                and mark.get("check_status") in {None, "", "passed"}
+                and not mark.get("error_codes")
+                for mark in exemplar.get("marks", []) or []
+            )
+            if not confirmed and status != "validation_in_process":
+                data["state"] = "unknown"
 
 
 async def resume_exemplar_document_check(
