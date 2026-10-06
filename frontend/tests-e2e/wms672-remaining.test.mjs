@@ -27,6 +27,7 @@ function detail(n, operation = 'inbound') {
 
 async function fixture(n, operation = 'inbound', fault = {}) {
   const context = await browser.newContext({ viewport: {width: 1440, height: 1050}, deviceScaleFactor: 1 });
+  await context.route('**/*', route => new URL(route.request().url()).origin === base ? route.continue() : route.abort());
   const page = await context.newPage();
   const errors = new Set();
   page.on('pageerror', e => { if (!errors.has(e.message)) { errors.add(e.message); console.error('WMS672 browser error:', e.stack); } });

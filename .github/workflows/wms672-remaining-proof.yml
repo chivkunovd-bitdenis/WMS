@@ -40,6 +40,7 @@ jobs:
           # Only import location adapts to test-only location. Expectations are byte-identical.
           sed -i "s|from './FfInboundRequestView'|from '../src/screens/ff/FfInboundRequestView'|" frontend/tests-e2e/wms659-frozen.dom.test.tsx
           sed "s|from '../src/screens/ff/FfInboundRequestView'|from './FfInboundRequestView'|" frontend/tests-e2e/wms659-frozen.dom.test.tsx > "$RUNNER_TEMP/proof/659-roundtrip.tsx"
+          printf "import {defineConfig} from 'vitest/config'; export default defineConfig({test:{include:['tests-e2e/wms659-frozen.dom.test.tsx']}});\n" > frontend/tests-e2e/wms659-remaining.config.ts
           cmp "$RUNNER_TEMP/proof/frozen659.test.tsx" "$RUNNER_TEMP/proof/659-roundtrip.tsx"
           git diff --exit-code "$PRODUCT" -- frontend/src backend frontend/tests-e2e/wms672-harness.tsx
           sha256sum frontend/tests-e2e/wms672-remaining.test.mjs "$RUNNER_TEMP/proof/frozen659.test.tsx" "$RUNNER_TEMP/proof/frozen659-backend.py" frontend/tests-e2e/wms672-harness.tsx > "$RUNNER_TEMP/proof/hashes.txt"
@@ -64,7 +65,7 @@ jobs:
           for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
           timeout 150s node --test --test-concurrency=1 tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining.log"
           browser=${PIPESTATUS[0]}
-          timeout 150s node node_modules/vitest/vitest.mjs run tests-e2e/wms659-frozen.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/integration659.log"
+          timeout 150s node node_modules/vitest/vitest.mjs run --config tests-e2e/wms659-remaining.config.ts tests-e2e/wms659-frozen.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/integration659.log"
           integration=${PIPESTATUS[0]}
           printf 'browser=%s\nintegration659=%s\n' "$browser" "$integration" > "$RUNNER_TEMP/proof/exits.txt"
           git diff --exit-code "$PRODUCT" -- src ../backend tests-e2e/wms672-harness.tsx || exit 2
