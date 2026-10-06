@@ -329,6 +329,14 @@
       "proof": "d4a8d0fa3b1fdb94c0acba6c5f273e40768b4966",
       "mode": "originaltest-onlyancestrymerge;exactdoc-onlyvalidationcherry-pick",
       "facts": "full992225+generic tscPASS14.11s/buildPASS16.35s;transpiledJSbyte-identical;assertions/runtime unchanged"
+    },
+    {
+      "task": "WMS-653 exact shared integration metadata scope correction",
+      "source": "04e0d9b954a43210061597f9631ce6c26291dbc4",
+      "correction": "d177e57c1f38705da747b807cec16904717b349f",
+      "review": "6b1aaf66b1fab7322b20782eead4dc7bb3f43ad9",
+      "mode": "mergeoriginaltestcorrection+actualindependentreview+cumulativeledger",
+      "facts": "actualCI3REDreproduced;only2exactsharedproofpathsallowed;34authorPASS/5newindependentPASS;oldfunctionsASTidentical;adjacentforeignmanifest/guards/ledgerreject"
     }
   ],
   "local_product_fixes": [

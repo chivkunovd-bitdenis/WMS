@@ -343,3 +343,11 @@ Do not pushuntilbackendCI3finishes: retainitsresult and groupanynewfindings into
 Run37465305907 onpublished992225 completed13:04:47UTC, attempt1, no timeout/restart. Backendjoblimit45minutes. Fullpytest4407PASS/1FAIL/196SKIP/1XFAIL in1187.83s (19m47). The soleFAIL is653scopeattribution of sharedintegrationmetadata paths priority-five-progress and priority-five-source-map fromaggregatecommit8bb2e906a; no new runtime/product failure. All prior13backendFAIL and2SQLitecollectionerrors are gone. MandatoryPGsteps didnotexecute because precedingpytestfailed; they remain required inCI4.
 
 FrontTypecheck hadoneerased636genericerror; exact833fix+fulltsc/buildproof alreadylocal. Docs/backlog/guardsSUCCESS. Original653scopeauthor receives exactaggregate-metadata case for narrow correction preserving negativeproduct/guard/ledger controls. No blindrerun. Nextsnapshotgroups correctedscope653 with validatedtype-only636 andactualproofs; production/main/675apply remainforbidden.
+
+## Final CI4 preparation and shared-HEAD checks · 06.10.2026
+
+653 cumulative source `04e0d9b954a43210061597f9631ce6c26291dbc4` now integrated: actuald177correction for exactly2sharedmetadata paths, actualindependentreview6b1aaf/a7c359, originalfunctionsASTunchanged, canonicalledger/requirements truthful.34authorPASS and5newindependentPASS with adjacentnegativecontrols preserved. Validatederased636generic833+fulltsc/buildproof alsoincluded. No productruntime change.
+
+SafeCIorder correctionfb4cda1 moves all5unchangedmandatoryPGsteps beforefullSQLite. ExactYAMLproof preserves eachstepobject/command/env/condition/timeout/service. Eachprocess has step-localDBenv;662batch/steady/general675/migrationdatabases independent. CompleteSQLitecommand retained, nothing skipped or optionalized.
+
+Next immediate boundary on finalcommittedHEAD: actualscope653 andscope666 in THIS releasecheckout, then docs/backlog/diff/clean checks. OnlyafterPASS onepush/CI4. Sourcecheckoutnegativecontrols do not substitute for testing commonGit history. Commandlogs saved under permanentignored .agent-runs/priority-five-20261006/scopes-final/<SHA>/ and exactresult reported toparent/653author; CI retains finalSHAproof. Production/main/675apply forbidden untilownernewcommand.
