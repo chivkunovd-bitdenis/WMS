@@ -1,0 +1,137 @@
+test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit (review_red_docs.GitTests.test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit) ... FAIL
+test_wms658_published_exact_chain_with_own_test_links_is_accepted (review_red_docs.GitTests.test_wms658_published_exact_chain_with_own_test_links_is_accepted)
+658 has one reviewed requirements-Test-links companion, no broad companion rule. ... FAIL
+test_wms681_published_two_by_two_exact_chain_is_accepted (review_red_docs.GitTests.test_wms681_published_two_by_two_exact_chain_is_accepted)
+Both frozen 681 files change in each of its two approved corrections. ... FAIL
+test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case (review_red_docs.GitTests.test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case) ... FAIL
+test_protected_wms687_expanded_return_reference_uses_exact_receipt_case (review_red_docs.GitTests.test_protected_wms687_expanded_return_reference_uses_exact_receipt_case) ... FAIL
+test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly (review_red_docs.GitTests.test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly)
+Run the real gate over every published 680 contract, including f2de. ... FAIL
+test_protected_wms687_each_uses_the_two_exact_executed_case_ids (review_red_promote.PromoteGuardsTests.test_protected_wms687_each_uses_the_two_exact_executed_case_ids) ... ERROR
+
+======================================================================
+ERROR: test_protected_wms687_each_uses_the_two_exact_executed_case_ids (review_red_promote.PromoteGuardsTests.test_protected_wms687_each_uses_the_two_exact_executed_case_ids)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/tests/test_promote_guards.py", line 391, in test_protected_wms687_each_uses_the_two_exact_executed_case_ids
+    promoter.promote(self.root, "WMS-687")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/promote_guards.py", line 230, in promote
+    if not references:
+            ^^^^^^^^^^
+ValueError: В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer
+
+======================================================================
+FAIL: test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit (review_red_docs.GitTests.test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1435, in test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit
+    self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['WMS-654: коммит коррекции должен менять ровно перечисленные файлы'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'WMS-654: коммит коррекции должен менять ровно перечисленные файлы'
+
+- ['WMS-654: коммит коррекции должен менять ровно перечисленные файлы']
++ []
+
+======================================================================
+FAIL: test_wms658_published_exact_chain_with_own_test_links_is_accepted (review_red_docs.GitTests.test_wms658_published_exact_chain_with_own_test_links_is_accepted)
+658 has one reviewed requirements-Test-links companion, no broad companion rule.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1279, in test_wms658_published_exact_chain_with_own_test_links_is_accepted
+    self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['WMS-658: fixture-only: неподдерживаемое [44 chars]ons'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'WMS-658: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+
++ []
+- ['WMS-658: fixture-only: неподдерживаемое преобразование или изменены frozen '
+-  'expectations']
+
+======================================================================
+FAIL: test_wms681_published_two_by_two_exact_chain_is_accepted (review_red_docs.GitTests.test_wms681_published_two_by_two_exact_chain_is_accepted)
+Both frozen 681 files change in each of its two approved corrections.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1284, in test_wms681_published_two_by_two_exact_chain_is_accepted
+    self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['WMS-681: fixture-only: неподдерживаемое [44 chars]ons'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'WMS-681: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+
++ []
+- ['WMS-681: fixture-only: неподдерживаемое преобразование или изменены frozen '
+-  'expectations']
+
+======================================================================
+FAIL: test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case (review_red_docs.GitTests.test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1066, in test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case
+    self.assertEqual(errors, [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: Lists differ: ['В frontend/src/screens/ff/FfInboundReque[130 chars]er.'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста inbound selects only document products and opens the catalog FbsStockDialogContainer.'
+
++ []
+- ['В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не '
+-  'найдено имя теста inbound selects only document products and opens the '
+-  'catalog FbsStockDialogContainer.']
+
+======================================================================
+FAIL: test_protected_wms687_expanded_return_reference_uses_exact_receipt_case (review_red_docs.GitTests.test_protected_wms687_expanded_return_reference_uses_exact_receipt_case)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1071, in test_protected_wms687_expanded_return_reference_uses_exact_receipt_case
+    self.assertEqual(errors, [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: Lists differ: ['В frontend/src/screens/ff/FfInboundReque[129 chars]er.'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не найдено имя теста return selects only document products and opens the catalog FbsStockDialogContainer.'
+
++ []
+- ['В frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx не '
+-  'найдено имя теста return selects only document products and opens the '
+-  'catalog FbsStockDialogContainer.']
+
+======================================================================
+FAIL: test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly (review_red_docs.GitTests.test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly)
+Run the real gate over every published 680 contract, including f2de.
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-fixes-review-20261007/.review-fixture-ef154/scripts/ci/test_check_task_documents.py", line 1355, in test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly
+    self.assertEqual([error for error in errors if "WMS-680" in error], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['WMS-680: owner-supersession: нужна одна [361 chars]ись'] != []
+
+First list contains 6 additional elements.
+First extra element 0:
+'WMS-680: owner-supersession: нужна одна точно разрешённая запись'
+
++ []
+- ['WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+-  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+-  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+-  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+-  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+-  'WMS-680: owner-supersession: нужна одна точно разрешённая запись']
+
+----------------------------------------------------------------------
+Ran 7 tests in 5.517s
+
+FAILED (failures=6, errors=1)
