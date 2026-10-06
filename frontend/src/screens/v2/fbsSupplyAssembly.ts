@@ -332,6 +332,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
             key: position.product_id ?? `unmapped-${order.id}-${position.id ?? positionIndex}`,
             name: position.name,
             size: position.size ?? null,
+            color: position.color?.trim() || null,
             imageUrl: position.image_url ?? null,
             identifiers: [
               position.seller_article,
@@ -345,6 +346,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
             key: order.product.id ?? `unmapped-${order.id}`,
             name: order.product.name,
             size: order.product.size,
+            color: order.product.color?.trim() || null,
             imageUrl: order.product.image_url,
             identifiers: [
               order.product.seller_article,
@@ -366,6 +368,7 @@ export function fbsAssemblyPickingRows(workspaces: FbsWorkspace[]): Array<FbsPic
         }
         current.required += row.required
         current.picked += row.picked
+        if (!current.color) current.color = row.color
         // Field name is historical; for Ozon it contains the posting number.
         current.wbOrders.push(order.marketplace === 'ozon'
           ? (order.external_order_id ?? String(order.wb_order_id))

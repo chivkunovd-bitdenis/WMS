@@ -294,6 +294,7 @@ export function metadataKindLabel(kind: string) {
 export type FbsPickingListPrintRow = {
   name: string
   size: string | null
+  color?: string | null
   imageUrl: string | null
   identifiers: string[]
   locations: string[]
@@ -365,6 +366,7 @@ export function fbsBuildPickingRows(
         key: position.product_id ?? position.id ?? `unmapped-${order.id}`,
         name: position.name,
         size: null,
+        color: position.color?.trim() || null,
         imageUrl: position.image_url ?? null,
         identifiers: [
           position.seller_article,
@@ -378,6 +380,7 @@ export function fbsBuildPickingRows(
         key: order.product.id ?? `unmapped-${order.id}`,
         name: order.product.name,
         size: order.product.size,
+        color: order.product.color?.trim() || null,
         imageUrl: order.product.image_url,
         identifiers: [
           order.product.seller_article,
@@ -400,7 +403,10 @@ export function fbsBuildPickingRows(
       }
       current.required += row.required
       current.picked += row.picked
-      current.wbOrders.push(order.wb_order_id)
+      if (!current.color) current.color = row.color
+      current.wbOrders.push(isOzonSupply
+        ? (order.external_order_id ?? String(order.wb_order_id))
+        : order.wb_order_id)
       current.stickerCodes.push(order.sticker.code)
       const locations = order.inventory.locations
         .filter((location) => location.available_unpacked > 0)
@@ -504,6 +510,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
           <div class="muted">${row.identifiers.length ? row.identifiers.map(escapePrintHtml).join(' · ') : 'Идентификаторы не указаны'}</div>
         </td>
         <td class="size">${row.size ? escapePrintHtml(row.size) : '—'}</td>
+        <td class="color">${escapePrintHtml(row.color?.trim() || '—')}</td>
         <td>${row.locations.length ? row.locations.map(escapePrintHtml).join('<br />') : 'Нет свободного остатка'}</td>
         <td>${row.wbOrders.map((id) => `№${escapePrintHtml(id)}`).join('<br />')}</td>
         <td class="sticker">${stickerCodes}</td>
@@ -535,8 +542,9 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .number { width: 28px; text-align: center; }
       .image { width: 54px; text-align: center; }
       .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
-      .size { width: 78px; text-align: center; white-space: nowrap; }
+      .size { width: 78px; text-align: center; }
       td.size { font-size: 20px; font-weight: 700; }
+      .color { width: 78px; }
       .quantity { width: 62px; text-align: center; font-weight: 700; }
       .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
@@ -553,8 +561,8 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       <div><span>Сдать до</span><strong>${escapePrintHtml(input.deadlineLabel)}</strong></div>
     </div>
     <table>
-      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
-      <tbody>${rows || `<tr><td colspan="10">В поставке нет товаров для подбора.</td></tr>`}</tbody>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th class="color">Цвет</th><th>Ячейка / тара</th><th>Заказы ${marketplaceLabel}</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>${rows || `<tr><td colspan="11">В поставке нет товаров для подбора.</td></tr>`}</tbody>
     </table>
     <div class="footer">Сформировано WMS: ${escapePrintHtml(input.printedAtLabel)} · Актуальное серверное состояние на момент печати.</div>
     <script>
