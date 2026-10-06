@@ -16,3 +16,8 @@ candidate. В workflow нет нового placeholder, environment lookup ил�
 внести фактический lowercase 40-hex SHA в `final_reviewed_source`, добавить его в
 `accepted_reviewed_sources` и заменить literal pin той же командой workflow.
 До этого момента SHA намеренно не подставляется и не угадывается.
+
+Автоматический controlled fixture отдельно моделирует уже принятый и frozen
+SOURCE: он допускает только его exact pin, требует отличную запись независимой
+приёмки и отвергает даже прежний `d618…` как mismatch. Это проверка механизма
+перехода, а не заявление, что controlled SHA является следующим реальным SOURCE.

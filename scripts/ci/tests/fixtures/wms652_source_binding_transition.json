@@ -11,5 +11,20 @@
     "${GITHUB_SHA}"
   ],
   "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc",
+  "controlled_accepted_final_binding": {
+    "status": "independently-accepted-final-freeze",
+    "final_reviewed_source": "0d054a2256322428e815ed78fc8d149b0c140aa6",
+    "accepted_reviewed_sources": [
+      "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+      "0d054a2256322428e815ed78fc8d149b0c140aa6"
+    ],
+    "independent_acceptance_record": "4350a0e09ec79606d2db3746361cebf8af5f1aed",
+    "frozen_source": "0d054a2256322428e815ed78fc8d149b0c140aa6",
+    "self_selecting_references": [
+      "HEAD",
+      "${GITHUB_SHA}"
+    ],
+    "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc"
+  },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate."
 }
