@@ -1,0 +1,12 @@
+{
+  "ticket_id": 36,
+  "wms_number": 685,
+  "version": "678a2d213441f71bd636",
+  "title": "Выбор нескольких категорий в фильтре существующего каталога",
+  "source_ids": [
+    512,
+    518
+  ],
+  "author_confirmed": false,
+  "scope": "registration_only"
+}
