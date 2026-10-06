@@ -138,7 +138,7 @@ async function scan(code) {
   await cdp.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
 }
 const chromePath=process.env.WMS652_CHROME||(process.platform==='darwin'?'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome':'google-chrome');
-const chrome=spawn(chromePath,['--headless=new','--no-sandbox','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update',
+const chrome=spawn(chromePath,['--headless=new','--mute-audio','--no-sandbox','--disable-gpu','--no-first-run','--disable-background-networking','--disable-component-update',
  '--remote-debugging-port=16687',`--user-data-dir=${mkdtempSync(`${tmpdir()}/wms652-critical-chrome-`)}`,'about:blank'],{stdio:['ignore','pipe','pipe']});
 let chromeLog='';chrome.stderr.on('data',d=>{chromeLog+=d});chrome.stdout.on('data',d=>{chromeLog+=d});chrome.on('error',e=>{chromeLog+=String(e)});
 try {
