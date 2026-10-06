@@ -1,0 +1,118 @@
+- complementary:
+  - button "Проверить тестовый ШК"
+  - strong: "C5 synthetic combined05da8547: actual components; mock API; no production/physical print"
+  - text: — return, администратор
+  - button "Продолжить тестовую загрузку"
+  - generic: "ACT GET xlsx ACT GET pdf BULK {\"product_ids\":[\"product-a\",\"product-b\"]} TEST-SAFE STICKER PREVIEW Короб INB-C5-DEMO-687 Короб № 1 Селлер WMS-687 Приёмка 687 от 07.10.2026 INB-C5-DEMO-687 TEST-ONLY MARK /api/operations/inbound-intake-requests/request-687-return/boxes/box-687/mark-label-printed"
+  - iframe:
+    - generic: Короб INB-C5-DEMO-687
+    - generic: Короб № 1
+    - generic: Селлер WMS-687
+    - generic: Приёмка 687 от 07.10.2026
+    - img "barcode"
+    - generic: INB-C5-DEMO-687
+- heading "Приёмка" [level=6]
+- heading "687" [level=5]
+- paragraph:
+  - text: "Тип:"
+  - strong: Возврат
+- paragraph:
+  - text: "Селлер:"
+  - strong: Селлер WMS-687
+- paragraph:
+  - text: "Принято:"
+  - strong: 0 из 5
+- paragraph:
+  - text: "Короба:"
+  - strong: "1"
+- paragraph:
+  - text: "Литраж:"
+  - strong: 0.00 л
+- paragraph:
+  - text: "Вес:"
+  - strong: не указан
+- generic: Оприходовано
+- button "Перепечатать ЧЗ"
+- button "Печать накладной":
+  - text: Печать накладной
+- button "Акт приёмки · Excel":
+  - text: Акт приёмки · Excel
+- button "PDF":
+  - text: PDF
+- button "Задать остаток": Задать остаток
+- button "Сохранить"
+- button "Закрыть"
+- table:
+  - rowgroup:
+    - row "Выбрать все товары Товар Габариты План Принято Брак":
+      - columnheader "Выбрать все товары Товар":
+        - checkbox "Выбрать все товары" [checked]
+        - generic: Товар
+      - columnheader "Габариты"
+      - columnheader "План"
+      - columnheader "Принято"
+      - columnheader "Брак"
+  - rowgroup:
+    - 'row "Выбрать Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL SKU SKU-A ШК — Печать ЧЗ и ШК ВБ — Габариты 3 0 Недостача 3"':
+      - 'cell "Выбрать Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL SKU SKU-A ШК — Печать ЧЗ и ШК ВБ"':
+        - 'checkbox "Выбрать Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL" [checked]'
+        - paragraph: "Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL"
+        - generic "SKU-A": SKU SKU-A
+        - generic: ШК —
+        - generic "Печать ЧЗ и ШК ВБ":
+          - button "Печать ШК товара":
+      - cell "— Габариты":
+        - generic "—"
+        - generic "Габариты":
+          - button "Габариты":
+      - cell "3":
+        - paragraph: "3"
+      - cell "0 Недостача 3":
+        - paragraph: "0"
+        - generic: Недостача 3
+      - cell:
+        - spinbutton [disabled]
+    - row "Выбрать Товар Б — упаковка комплектующих с длинным названием для проверки читаемости Товар Б — упаковка комплектующих с длинным названием для проверки читаемости SKU SKU-B ШК — Печать ЧЗ и ШК ВБ — Габариты 2 0 Недостача 2":
+      - cell "Выбрать Товар Б — упаковка комплектующих с длинным названием для проверки читаемости Товар Б — упаковка комплектующих с длинным названием для проверки читаемости SKU SKU-B ШК — Печать ЧЗ и ШК ВБ":
+        - checkbox "Выбрать Товар Б — упаковка комплектующих с длинным названием для проверки читаемости" [checked]
+        - paragraph: Товар Б — упаковка комплектующих с длинным названием для проверки читаемости
+        - generic "SKU-B": SKU SKU-B
+        - generic: ШК —
+        - generic "Печать ЧЗ и ШК ВБ":
+          - button "Печать ШК товара":
+      - cell "— Габариты":
+        - generic "—"
+        - generic "Габариты":
+          - button "Габариты":
+      - cell "2":
+        - paragraph: "2"
+      - cell "0 Недостача 2":
+        - paragraph: "0"
+        - generic: Недостача 2
+      - cell:
+        - spinbutton [disabled]
+- 'heading "Короба и грузоместа Короба: 1 Грузоместа: 0 Палеты: 0" [level=3]':
+  - 'button "Короба и грузоместа Короба: 1 Грузоместа: 0 Палеты: 0" [expanded]':
+    - heading "Короба и грузоместа" [level=6]
+    - generic: "Короба: 1"
+    - generic: "Грузоместа: 0"
+    - generic: "Палеты: 0"
+- region:
+  - button "Создать короба" [disabled]
+  - button "Создать грузоместа" [disabled]
+  - button "Печать коробов"
+  - button "Печать грузомест" [disabled]
+  - generic "Приёмка уже завершена":
+    - button "Собрать палету" [disabled]
+  - paragraph: Короба
+  - checkbox "Выбрать короб INB-C5-DEMO-687" [disabled]
+  - paragraph:
+    - text: Короб
+    - code: INB-C5-DEMO-687
+  - checkbox "Короб пришёл повреждённым"
+  - generic: Короб пришёл повреждённым
+  - button "Наполнить" [disabled]
+  - button "Удалить" [disabled]
+  - button "Печать": Печать
+  - paragraph: Пока нет товаров
+  - paragraph: Грузоместа

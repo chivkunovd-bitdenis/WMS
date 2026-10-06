@@ -1,0 +1,91 @@
+import React,{useState,useEffect} from 'react'
+import {renderBarcodeDataUrl} from '../../src/utils/renderBarcodeDataUrl'
+import {createRoot} from 'react-dom/client'
+import {ThemeProvider,CssBaseline} from '@mui/material'
+import {MemoryRouter} from 'react-router-dom'
+import {muiTheme} from '../../src/mui/theme'
+import {FfInboundRequestView} from '../../src/screens/ff/FfInboundRequestView'
+import {FfProductsCatalogScreen} from '../../src/screens/v2/FfProductsCatalogScreen'
+import '../../src/index.css'
+import '../../src/ui/ui.css'
+type OperationType='inbound'|'return'
+function documentDetail(operationType: OperationType) {
+  return {
+    id: `request-687-${operationType}`,
+    document_number: `WMS-687-${operationType}`,
+    display_number: '687',
+    waybill_number: null,
+    warehouse_id: 'warehouse-687',
+    status: 'done',
+    operation_type: operationType,
+    marketplace: null,
+    marketplace_warning: null,
+    planned_delivery_date: null,
+    planned_box_count: null,
+    actual_box_count: null,
+    boxes_discrepancy: false,
+    has_discrepancy: false,
+    seller_id: 'seller-687',
+    seller_name: 'Селлер WMS-687',
+    created_by_seller_id: 'seller-687',
+    created_at: '2026-10-07T00:00:00Z',
+    distribution_completed_at: null,
+    sorting_remaining_qty: 0,
+    boxes: [{id:"box-687",box_number:1,internal_barcode:"INB-C5-DEMO-687",label_printed_at:null,is_damaged:false,pallet_id:null,lines:[]}],
+    cargo_places: [],
+    lines: [
+      {
+        id: 'line-a', product_id: 'product-a', sku_code: 'SKU-A', product_name: 'Товар А',
+        wb_barcode: null, requires_honest_sign: false, length_mm: null, width_mm: null,
+        height_mm: null, weight_g: null, volume_liters: null, added_by_fulfillment: false,
+        expected_qty: 3, actual_qty: 0, posted_qty: 0,
+        storage_location_id: null, storage_location_code: null,
+      },
+      {
+        id: 'line-b', product_id: 'product-b', sku_code: 'SKU-B', product_name: 'Товар Б',
+        wb_barcode: null, requires_honest_sign: false, length_mm: null, width_mm: null,
+        height_mm: null, weight_g: null, volume_liters: null, added_by_fulfillment: false,
+        expected_qty: 2, actual_qty: 0, posted_qty: 0,
+        storage_location_id: null, storage_location_code: null,
+      },
+    ],
+  }
+}
+
+const fakeToken='synthetic.'+btoa(JSON.stringify({tenant_id:'synthetic-c5-tenant',sub:'synthetic-c5-user'}))+'.not-a-credential';const query=new URLSearchParams(location.search),operationType=(query.get('operation')??'inbound') as OperationType
+const operator=query.get('role')==='operator', catalog=query.get('view')==='catalog', current=documentDetail(operationType)
+current.lines[0].product_name='Длинное название товара: футболка хлопковая унисекс с длинным рукавом, тёмно-синий цвет, размер XL'
+current.lines[1].product_name='Товар Б — упаковка комплектующих с длинным названием для проверки читаемости'
+const nativeFetch=window.fetch.bind(window);let capturedPrint='';const createNode=document.createElement.bind(document);document.createElement=((...args:any[])=>{const el=createNode(...args as [any]);if(args[0]==='iframe')el.addEventListener('load',()=>{const w=(el as HTMLIFrameElement).contentWindow;if(w)w.print=()=>{capturedPrint=w.document.documentElement.outerHTML;traces.push('TEST-SAFE STICKER PREVIEW '+w.document.body.innerText);changed();w.dispatchEvent(new Event('afterprint'))}});return el}) as any;let delayBulk=query.get('delay')==='1',release:(()=>void)|undefined,traces:string[]=[]
+const waiting=new Promise<void>(resolve=>{release=()=>{delayBulk=false;resolve()}})
+const changed=()=>window.dispatchEvent(new Event('qa-trace'))
+function json(body:unknown){return new Response(JSON.stringify(body),{headers:{'Content-Type':'application/json'}})}
+const binding={id:'binding-wb',wb_warehouse_id:501001,external_warehouse_id:'501001',marketplace:'wb',wms_warehouse_id:'warehouse-687',wms_warehouse_name:'Основной',is_active:true,served:true,editable:true}
+const savedRule={publish:true,mode:'units',value:7,units_configured:true,marketplace:'wb',external_warehouse_id:'501001',wms_warehouse_id:'warehouse-687',served:true,applicable:true,on_hand:11,reserved:0,free_stock:11,published_now:7}
+const products=current.lines.map(line=>({id:line.product_id,seller_id:'seller-687',seller_name:current.seller_name,name:line.product_name,sku_code:line.sku_code,wb_nm_id:12345,wb_vendor_code:line.sku_code,ozon_sku:null,ozon_offer_id:null,marketplaces:['wb'],wb_subject_name:'Товары',wb_primary_image_url:null,wb_barcodes:['12345'],wb_primary_barcode:'12345',wb_size:'XL',wb_color:'Тёмно-синий',wb_brand:null,wb_composition:null,packaging_instructions:null,country_of_origin_iso_code:null,requires_honest_sign:false,has_packaging_instructions:false,marking_available_count:0}))
+window.fetch=async(input,init)=>{
+ const url=String(input),method=init?.method??'GET'
+ if(url.includes('/acceptance-act.')){const format=url.endsWith('.pdf')?'pdf':'xlsx';traces.push('ACT GET '+format);changed();const res=await nativeFetch('./normal-act.'+format);return new Response(await res.arrayBuffer(),{headers:{'content-type':format==='pdf'?'application/pdf':'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','content-disposition':"attachment;filename*=UTF-8''"+encodeURIComponent('QA акт687.'+format)}})}
+ if(url.endsWith('/mark-label-printed')){traces.push('TEST-ONLY MARK '+url);changed();current.boxes[0].label_printed_at='2026-10-07T00:00:00Z' as any;return json({})}
+ if(url.endsWith(`/operations/inbound-intake-requests/${current.id}`))return json(current)
+ if(url.includes('/products/linked-wb-catalog'))return json([])
+ if(url.endsWith('/marking-codes'))return json({items:[],checking:false})
+ if(url.includes('/locations?exclude_sorting_zone=true'))return json([])
+ if(url.endsWith('/warehouses')&&!url.includes('fbs-sellers'))return json([{id:'warehouse-687',name:'Основной',code:'MAIN'}])
+ if(url.endsWith('/products/fbs-rule/bulk')){
+   const body=JSON.parse(String(init?.body??'{}'));traces.push('BULK '+JSON.stringify(body));changed();if(delayBulk)await waiting
+   const ids=body.product_ids??current.lines.map(l=>l.product_id)
+   return json({items:ids.map((id:string)=>({product_id:id,by_binding:{'binding-wb':savedRule}}))})
+ }
+ if(url.endsWith('/operations/fbs-sellers/seller-687/warehouses'))return json([{wb_warehouse_id:501001,name:'Склад WB',wms_warehouse_id:'warehouse-687',served:true}])
+ if(url.endsWith('/operations/fbs-sellers/seller-687/warehouse-bindings'))return json([binding])
+ if(url.endsWith('/operations/fbs-sellers/seller-687/ozon-warehouses'))return json([])
+ if(url.endsWith(`/operations/inbound-intake-requests/${current.id}/receiving/scan`)){traces.push('SCAN POST '+String(init?.body));current.lines[0].actual_qty+=1;changed();return json({...current.lines[0]})}
+ if(url.endsWith('/products/fbs-rule')&&method==='PUT'){traces.push('RULE PUT '+String(init?.body));changed();return json({items:[]})}
+ if(url.includes('/products/ff-catalog-page'))return json({items:products,total:2,scope_total:2,limit:100,offset:0,categories:[]})
+ if(url.includes('/operations/inventory-balances/summary'))return json([])
+ if(url.endsWith('/sellers'))return json([{id:'seller-687',name:current.seller_name}])
+ traces.push('UNEXPECTED '+method+' '+url);changed();throw Error('Fixture rejects unknown route: '+url)
+}
+function QaTrace(){const[,tick]=useState(0);useEffect(()=>{const f=()=>tick(x=>x+1);window.addEventListener('qa-trace',f);return()=>window.removeEventListener('qa-trace',f)},[]);return <aside style={{padding:8,fontSize:12,border:'1px dashed #888'}}><button data-testid="qa-barcode" onClick={()=>{try{renderBarcodeDataUrl("INB-C5-DEMO-687",{variant:"internalBox"});traces.push("QA BARCODE HELPER OK")}catch(e){traces.push("QA BARCODE STACK "+String((e as Error).stack))}changed()}}>Проверить тестовый ШК</button><strong>C5 synthetic combined05da8547: actual components; mock API; no production/physical print</strong> — {operationType}, {operator?'сотрудник приёмки':'администратор'}<button data-testid="qa-release" onClick={()=>release?.()}>Продолжить тестовую загрузку</button><pre data-testid="qa-trace" style={{whiteSpace:'pre-wrap',maxHeight:80,overflow:'auto'}}>{traces.join('\n')||'Нет изменяющих запросов'}</pre>{capturedPrint?<iframe title="QA sticker preview" srcDoc={capturedPrint} style={{width:440,height:320}}/>:null}</aside>}
+createRoot(document.getElementById('root')!).render(<ThemeProvider theme={muiTheme}><CssBaseline/><MemoryRouter><QaTrace/><div style={{padding:16}}>{catalog?<FfProductsCatalogScreen token={fakeToken} authHeaders={()=>({Authorization:'Bearer fixture-only'})} sellers={[{id:'seller-687',name:current.seller_name}]} warehouses={[{id:'warehouse-687',name:'Основной',code:'MAIN'}]} canManageCatalog addressStorageEnabled/>:<FfInboundRequestView token={fakeToken} requestId={current.id} isFulfillmentAdmin={!operator} canReceptionOps canManageCatalog={!operator} workspace="reception" onClose={()=>undefined}/>}</div></MemoryRouter></ThemeProvider>)

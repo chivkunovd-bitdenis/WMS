@@ -1,0 +1,10 @@
+{
+  "tested_provisional_sha": "05da854733eb35584c096b9995b52ae8aafe6877",
+  "product_blobs": {
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "b751d50ad372e620e2a6c4d6afb92c1602949b0e",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialogContainer.tsx": "9f84b7fd870df02c5eff8410cab144ece72bd7b9",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx": "af5dde42bf3420276ca0bc2b9df26c464b0c884e",
+    "frontend/src/utils/printBarcodeLabel.ts": "1e99374e596c6d536596379b03a3db71b9a9fe6b",
+    "frontend/src/screens/ff/inboundDraftPersistence.ts": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45"
+  }
+}
