@@ -39,7 +39,7 @@
 
 ## Собственные намеренные поломки
 
-Все итоговые backend-прогоны ниже исполнялись с [runtime plugin](fbs_mutation_plugin.py). Он меняет только функцию в памяти отдельного pytest-процесса; исходные product/test файлы остаются нетронутыми. Для итоговых опытов plugin запрещает `socket.connect/connect_ex`, так что внешняя сеть недоступна. SQLite test DB/data синтетические и изолированные. **Baseline4PASS** с тем же сетевым запретом — [лог](fbs-mutation-baseline.txt). Затем по одному mutant/одному node; все четыре exit1 именно на целевых assertions, а не import/setup/type error:
+В сохранённых текстовых логах удалены только конечные пробелы и лишние пустые строки в конце; ответы, assertions и результаты не изменены. Все итоговые backend-прогоны ниже исполнялись с [runtime plugin](fbs_mutation_plugin.py). Он меняет только функцию в памяти отдельного pytest-процесса; исходные product/test файлы остаются нетронутыми. Для итоговых опытов plugin запрещает `socket.connect/connect_ex`, так что внешняя сеть недоступна. SQLite test DB/data синтетические и изолированные. **Baseline4PASS** с тем же сетевым запретом — [лог](fbs-mutation-baseline.txt). Затем по одному mutant/одному node; все четыре exit1 именно на целевых assertions, а не import/setup/type error:
 
 | Mutation | Сломанное действие → actual RED | Доказательство |
 |---|---|---|
