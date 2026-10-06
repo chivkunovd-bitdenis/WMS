@@ -213,11 +213,11 @@ test('a hung helper times out with bounded polling and no automatic retry', asyn
   assert.equal(f.sandbox.__executions.length, 1);
 });
 
-for (const patch of [
+for (const [scenarioIndex, patch] of [
   { status: 'ready' }, { targetCount: 0 }, { targetCount: -1 }, { targetCount: 1.5 }, { targetCount: '84' }, { targetCount: null }, { targetCount: undefined }, { targetCount: Infinity },
   { noSend: false }, { noSend: undefined }, { signed: true }, { sent: true }, { signed: undefined }, { sent: undefined },
-]) {
-  test(`does not accept unsafe or incomplete helper result ${JSON.stringify(patch)}`, async () => {
+].entries()) {
+  test(`does not accept unsafe or incomplete helper result scenario ${scenarioIndex}: ${JSON.stringify(patch)}`, async () => {
     const f = fixture({ result: { ...READY, ...patch } });
     await rejectsSafely(f);
     assert.equal(f.sandbox.__executions.length, 1);
