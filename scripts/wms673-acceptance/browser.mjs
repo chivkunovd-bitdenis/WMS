@@ -78,13 +78,18 @@ try {
         if (await evaluatePreview(previewReady)) { ready = true; break }
         await new Promise(resolve => setTimeout(resolve, 500))
       }
+      await new Promise(resolve => setTimeout(resolve, 1000))
       execFileSync('import', ['-window', 'root', `${out}/${kind}-${repeat}-native-preview.png`])
       const previewState = await evaluatePreview(() => {
         const app = document.querySelector('print-preview-app')
         const area = app.shadowRoot.querySelector('print-preview-preview-area')
         const deepText = root => [...root.children].map(e => e.shadowRoot ? deepText(e.shadowRoot) : e.children.length ? deepText(e) : e.textContent).join(' ')
         return { title: document.title, url: location.href, previewState: area.previewState,
-          layout: app.getSettingValue?.('layout'), mediaSize: app.getSettingValue?.('mediaSize'), text: deepText(app.shadowRoot) }
+          layout: app.getSettingValue?.('layout'), mediaSize: app.getSettingValue?.('mediaSize'),
+          documentInfo: app.documentInfo_ ?? app.documentInfo,
+          previewDocumentInfo: area.documentInfo_ ?? area.documentInfo,
+          infoKeys: Object.keys(app).filter(k => /document|page|layout/i.test(k)),
+          text: deepText(app.shadowRoot) }
       })
       writeFileSync(`${out}/${kind}-${repeat}-preview.json`, JSON.stringify(previewState, null, 2))
       assert(ready, `Native print preview failed to become ready: ${JSON.stringify(previewState)}`)
