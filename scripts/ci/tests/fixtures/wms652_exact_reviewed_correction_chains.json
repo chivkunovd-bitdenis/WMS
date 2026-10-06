@@ -40,7 +40,19 @@
       "steps": [
         {"transform": "wms681-independent-assignments", "source": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d", "correction": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385", "files": {"backend/tests/test_fbs_packing_box.py": ["7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3", "bf92738de529c1ca4882240a0b617df5db82dedd"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4", "c809482c9eb151425e9031e33b06246cb1e6039a"]}},
         {"transform": "wms681-partial-qr-readback", "source": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4", "correction": "0e39bf4ed8f444f5b00e1287aa27f1161596a101", "files": {"backend/tests/test_fbs_packing_box.py": ["bf92738de529c1ca4882240a0b617df5db82dedd", "1cca9c86a4e50842919d0ca4aec4c57607c0fe7a"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c809482c9eb151425e9031e33b06246cb1e6039a", "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3"]}}
-      ]
+      ],
+      "integration_fixture": {
+        "transform": "wms681-integration-assembly-qr-recovery",
+        "source_commit": "1eb2c30726c501a41b661a1b144864c94491a2c5",
+        "correction_commit": "879588d0ad7fe5fe579f16dcc4726c31f03fdb1d",
+        "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+        "before_blob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+        "after_blob": "12358c8953c842819db9a1b277ce51cbd83b9915",
+        "publication_commit": "b97d3665233dfb1bcb5a7a7044e1bb54abce91ba",
+        "original_independent_review_commit": "5133a36d6d849b3dd0340b72c3bffdf0ad96ab78",
+        "report_path": "docs/reviews/WMS-681-independent-assembly-fixture-correction-review-20261007.md",
+        "report_blob": "9f099b2fdec20e9e55c43c79f03eb267778ce94a"
+      }
     },
     "WMS-680": {
       "reviewed_source_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
