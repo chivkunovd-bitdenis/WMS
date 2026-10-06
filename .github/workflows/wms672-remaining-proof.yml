@@ -63,14 +63,13 @@ jobs:
           node node_modules/vite/bin/vite.js --config tests-e2e/wms672-vite.config.ts --host 127.0.0.1 --port 16724 --strictPort > "$RUNNER_TEMP/proof/vite.log" 2>&1 &
           trap 'kill $! 2>/dev/null || true' EXIT
           for i in {1..40}; do curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null && break; sleep 1; done
-          # C7/C11 passed in 37444701579; repeat only failed C10 runner.
-          browser=skipped
-          printf "C7/C11 reuse run 37444701579; not rerun\n" > "$RUNNER_TEMP/proof/remaining.log"
-          timeout 150s node node_modules/vitest/vitest.mjs run --config tests-e2e/wms659-remaining.config.ts tests-e2e/wms659-frozen.dom.test.tsx --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/proof/integration659.log"
-          integration=${PIPESTATUS[0]}
+          # C7 is accepted; capture C11 only after real MUI transitions finish.
+          timeout 150s node --test --test-concurrency=1 --test-name-pattern='C11' tests-e2e/wms672-remaining.test.mjs 2>&1 | tee "$RUNNER_TEMP/proof/remaining.log"
+          browser=${PIPESTATUS[0]}
+          integration=skipped
           printf 'browser=%s\nintegration659=%s\n' "$browser" "$integration" > "$RUNNER_TEMP/proof/exits.txt"
           git diff --exit-code "$PRODUCT" -- src ../backend tests-e2e/wms672-harness.tsx || exit 2
-          test "$integration" = 0
+          test "$browser" = 0
       - uses: actions/upload-artifact@v4
         if: always()
         with:

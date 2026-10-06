@@ -120,6 +120,8 @@ async function install(page, fault = {}) {
 }
 
 async function capture(f, name) {
+  // Finish real MUI transitions before taking visual evidence; do not alter UI.
+  await f.page.evaluate(async()=>{await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));await Promise.allSettled(document.getAnimations().map(a=>a.finished));});
   await f.page.screenshot({path: resolve(evidence, name+'.png'), fullPage:true});
   await writeFile(resolve(evidence,name+'.json'),JSON.stringify({calls:f.calls, state:await f.page.evaluate(()=>({local:Object.entries(localStorage), alerts:[...document.querySelectorAll('[role=alert]')].map(a=>a.textContent), transfers:window.__wms672Transfers?.length}))},null,2));
 }
