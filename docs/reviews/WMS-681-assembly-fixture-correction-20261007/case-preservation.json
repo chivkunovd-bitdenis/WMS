@@ -1,0 +1,310 @@
+{
+  "sharedCurrentScannerStartupByteIdentical": true,
+  "acceptedBulkClickHelperByteIdentical": true,
+  "baseBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+  "incomingBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+  "combinedBlob": "12358c8953c842819db9a1b277ce51cbd83b9915",
+  "priorCases": 20,
+  "acceptedQrCases": 11,
+  "combinedCases": 31,
+  "priorAssertionStatements": 65,
+  "acceptedQrAssertionStatements": 47,
+  "priorByteIdenticalBodies": 19,
+  "explicitlySupersededPriorCases": 1,
+  "allOtherPriorBodiesByteIdentical": true,
+  "currentPriorAssertionStatements": 68,
+  "semanticSupersessions": [
+    {
+      "caseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "authorityCommit": "c7f755ce3a6c0ebce9a37567ae423aaa54565f51",
+      "authorityBlob": "6aa0a1c46b086c523cfa6351d111a8e6d60e36ce",
+      "authorityPath": "docs/reviews/WMS-681-integration-qr-expectation-clarification.md",
+      "replacedAssertions": [
+        "[\"expect\",\"(\",\"document\",\".\",\"body\",\".\",\"textContent\",\")\",\".\",\"toContain\",\"(\",\"'Грузоместо WB для короба не создано'\",\")\"]",
+        "[\"expect\",\"(\",\"calls\",\".\",\"filter\",\"(\",\"(\",\"call\",\")\",\"=>\",\"call\",\".\",\"path\",\".\",\"endsWith\",\"(\",\"'/retry-qr'\",\")\",\")\",\")\",\".\",\"toHaveLength\",\"(\",\"0\",\")\"]"
+      ],
+      "replacementAndAddedAssertions": [
+        "[\"expect\",\"(\",\"document\",\".\",\"body\",\".\",\"textContent\",\")\",\".\",\"toContain\",\"(\",\"'WB не ответил при получении QR.'\",\")\"]",
+        "[\"expect\",\"(\",\"calls\",\".\",\"filter\",\"(\",\"(\",\"call\",\")\",\"=>\",\"call\",\".\",\"path\",\".\",\"endsWith\",\"(\",\"'/retry-qr'\",\")\",\")\",\")\",\".\",\"toEqual\",\"(\",\"[\",\"{\",\"method\",\":\",\"'POST'\",\",\",\"path\",\":\",\"`/operations/fbs-supplies/${\",\"SUPPLY_ID\",\"}\",\"/\",\"boxes\",\"/\",\"box\",\"-\",\"1\",\"/\",\"retry\",\"-\",\"qr\",\"`, body: null },\\n    ])\"]",
+        "[\"expect\",\"(\",\"boxes\",\")\",\".\",\"toEqual\",\"(\",\"originalBoxes\",\")\"]",
+        "[\"expect\",\"(\",\"calls\",\".\",\"some\",\"(\",\"(\",\"call\",\")\",\"=>\",\"call\",\".\",\"method\",\"===\",\"'POST'\",\"&&\",\"call\",\".\",\"path\",\"===\",\"`/operations/fbs-supplies/${\",\"SUPPLY_ID\",\"}\",\"/\",\"boxes\",\"`)).toBe(false)\"]",
+        "[\"expect\",\"(\",\"calls\",\".\",\"some\",\"(\",\"(\",\"call\",\")\",\"=>\",\"call\",\".\",\"path\",\".\",\"startsWith\",\"(\",\"'/qr/'\",\")\",\")\",\")\",\".\",\"toBe\",\"(\",\"false\",\")\"]"
+      ],
+      "unchangedNoPreviewAssertion": "[\"expect\",\"(\",\"document\",\".\",\"body\",\".\",\"textContent\",\")\",\".\",\"not\",\".\",\"toContain\",\"(\",\"'Проверка перед печатью'\",\")\"]"
+    }
+  ],
+  "allAcceptedQrAssertionsTokenIdentical": true,
+  "noSkipOnlyTodo": true,
+  "cases": [
+    {
+      "id": "BASE-01",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > R17/WMS-666: единая поверхность использует последний короб без отдельного старта и без start-work",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > R17/WMS-666: единая поверхность использует последний короб без отдельного старта и без start-work",
+      "unchangedBodySha256": "02ae906a3636d6536403447b1cd04eca52fb03d24ba189146f72bb97ba75c322",
+      "assertions": 4,
+      "unchangedAssertionSha256": "5776b792ec44ad11c44a9303aa072db10b96efb8bd652612bb0686f303648ce1"
+    },
+    {
+      "id": "BASE-02",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся",
+      "unchangedBodySha256": "f268bc9c4434d4ddbea106c992440ebe40bca9e06ad1663dc564f6d3397f615d",
+      "assertions": 8,
+      "unchangedAssertionSha256": "214ec2c27af914cb34d0496ad15f5228d18cb1150c032f7f2ee88eb2b22110ac"
+    },
+    {
+      "id": "BASE-03",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый",
+      "unchangedBodySha256": "e89c41ffd19ec318d5e58f1eb6801656f5b06a7cfbcc2ec79080a06bea7691f3",
+      "assertions": 2,
+      "unchangedAssertionSha256": "347f003c8e6f2e260deb081deb1d1561c520f0f3718f7d8a379a5f199f0faab6"
+    },
+    {
+      "id": "BASE-04",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}»",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}»",
+      "unchangedBodySha256": "9fa2b2154a1ffd1de4f08028f3b80aad58fe8b109bc0dcf83b81feeae27967bb",
+      "assertions": 2,
+      "unchangedAssertionSha256": "3d54344c8c165b375143b321c11fc691277953e4c1b8c891176c961bf1f90de0"
+    },
+    {
+      "id": "BASE-05",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > Д11/WMS-666: нет открытого короба — общий скан выполняется без новой блокировки и заказ не кладётся",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > Д11/WMS-666: нет открытого короба — общий скан выполняется без новой блокировки и заказ не кладётся",
+      "unchangedBodySha256": "8813188271882e6402d8a762b485f2c36ff2d14f1562211f1a32b85aca6e3d71",
+      "assertions": 5,
+      "unchangedAssertionSha256": "719a66d6709188c1066879857b8ee3bfa588cf2eae0d963e9441801478322799"
+    },
+    {
+      "id": "BASE-06",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: без коробов общий скан остаётся доступен и не создаёт короб или QR сам",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: без коробов общий скан остаётся доступен и не создаёт короб или QR сам",
+      "unchangedBodySha256": "15e2735c3e0a0728ae6c0069b64b052b74ec2bd9d8dc4793f6d05dc70df98e73",
+      "assertions": 4,
+      "unchangedAssertionSha256": "ceff926814224c6c1298d04a1d7fd0a80e12044258deb8e0548cadd03bc91613"
+    },
+    {
+      "id": "BASE-07",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: новый короб становится открытым, принимает следующий скан и не печатает QR",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: новый короб становится открытым, принимает следующий скан и не печатает QR",
+      "unchangedBodySha256": "cd1a42ce6a4e13f1f69543fd06d807e1bc42f1946a66be23a0c7309a8b6eb066",
+      "assertions": 4,
+      "unchangedAssertionSha256": "ed4b9a74a244212e638c6569c7cc7adb71c971823de3e0ac835ffab85c2cab2d"
+    },
+    {
+      "id": "BASE-08",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: переход между общей упаковкой и коробами не открывает печать и не возвращает рамку",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589/WMS-666: переход между общей упаковкой и коробами не открывает печать и не возвращает рамку",
+      "unchangedBodySha256": "a3289763e673f8ff171cc50a69edb94a8d902d3a2c2830bff79ca8b1828aab09",
+      "assertions": 4,
+      "unchangedAssertionSha256": "06e2d376280301e6437312a574bc57ec6ff1a4c23b5cbd9481c97c9346d08e3c"
+    },
+    {
+      "id": "BASE-09",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати",
+      "unchangedBodySha256": "c3a97364061176b36e6c42edcb8e87fe3dc7a4f0bc1f0d9adbe188e3afe7fbb2",
+      "assertions": 1,
+      "unchangedAssertionSha256": "8ff9a63b007caacd6e2bf8fef2b70c17e913eefc73f4211c3c75487691d4b502"
+    },
+    {
+      "id": "BASE-10",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "oldBodySha256": "641dd24abd61891b32a35c7a5ac444b0bb01d9cde88b6b72c8034aba1ce303ac",
+      "newBodySha256": "ff5d7c7a808b15a3d18e2e89bf2ec00d717fa24d46d69dad35044e4b07bfbba6",
+      "oldAssertions": 3,
+      "assertions": 6,
+      "semanticSupersession": "Exactly two expectations superseded by R4/R6; three additional preservation/fallback guards"
+    },
+    {
+      "id": "BASE-11",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "newCaseId": "WMS-574 · скан в единой поверхности сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "unchangedBodySha256": "70e6a8d0feb86f2161a033ea3c7f525e48fcef55db98175eac66537363929714",
+      "assertions": 3,
+      "unchangedAssertionSha256": "3c3c59ded90b4c1b96c56beb93d9d0ff6b7de650692dc903038615c885a90a3e"
+    },
+    {
+      "id": "BASE-12",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане",
+      "newCaseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане",
+      "unchangedBodySha256": "1cef41d32564416c19bac4b411ee99e3feee5588126020aa135e75887734cf06",
+      "assertions": 4,
+      "unchangedAssertionSha256": "4b9503da0eb29430ebadbda4f23429c10cf98a5efcd162733ad0fd361c842a61"
+    },
+    {
+      "id": "BASE-13",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл вкладку коробов, пока шёл поиск, — заказ ложится в короб, открытый при скане",
+      "newCaseId": "WMS-574 · итоговое ревью > R22 (F1): оператор открыл вкладку коробов, пока шёл поиск, — заказ ложится в короб, открытый при скане",
+      "unchangedBodySha256": "c1c23c2b9e35ba388afe3c0f2be449a4bd2fda90205c5ffc13fb70ecb843848e",
+      "assertions": 2,
+      "unchangedAssertionSha256": "d343014024645ccf21129dd8bbac8ef73da857ab1dd6e24e2df06a0c78858bd0"
+    },
+    {
+      "id": "BASE-14",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода",
+      "newCaseId": "WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода",
+      "unchangedBodySha256": "b0f49045a9811671907b37587d73cb9ae3c19dd93ab52e3f6445d85184d73bb9",
+      "assertions": 4,
+      "unchangedAssertionSha256": "a6946d0a2118cda398c154c6ad65a541e3dea394289db9cbf6514e5c763db4a7"
+    },
+    {
+      "id": "BASE-15",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»",
+      "newCaseId": "WMS-574 · итоговое ревью > Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»",
+      "unchangedBodySha256": "555bfd26fa3dfe8c188889cd079f849902c36d55f0949a6094d40487076720bc",
+      "assertions": 3,
+      "unchangedAssertionSha256": "ad46b50651c09cfe2ff0205196e7ebcbb1a7f0959435abfff56795ac6b10e19e"
+    },
+    {
+      "id": "BASE-16",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки",
+      "newCaseId": "WMS-574 · итоговое ревью > F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки",
+      "unchangedBodySha256": "c4ddbee71fa1f06b394edd09e00daf372aacdd09df25d58f34e6518d39f2641a",
+      "assertions": 2,
+      "unchangedAssertionSha256": "c752501be51f13a523c06a861552d0ef7d66a4f51734d0d2d8017b4ea7dfc438"
+    },
+    {
+      "id": "BASE-17",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574 · итоговое ревью > F4: после передачи без полученного QR — «Получить QR повторно», как в карточке",
+      "newCaseId": "WMS-574 · итоговое ревью > F4: после передачи без полученного QR — «Получить QR повторно», как в карточке",
+      "unchangedBodySha256": "d0b5d7edf800baded490fa965b4ca8858a539b26bc53e0667250e1ca1747d384",
+      "assertions": 2,
+      "unchangedAssertionSha256": "99d0ddc361f33bfa6daba07e2fd97f965e66848d19009c7e7c0a2bdd2544ae96"
+    },
+    {
+      "id": "BASE-18",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > скан стикера в карточке не кладёт заказ в короб и не создаёт legacy-рамку",
+      "newCaseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > скан стикера в карточке не кладёт заказ в короб и не создаёт legacy-рамку",
+      "unchangedBodySha256": "c429819e3eb3bbee534bda252b0068965d4f5891532f997933f71aa2e6362add",
+      "assertions": 6,
+      "unchangedAssertionSha256": "52d04807c1b357c8d380e8df163185d2e86e2307ad54a0bb56fced28aa84fbff"
+    },
+    {
+      "id": "BASE-19",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр",
+      "newCaseId": "WMS-574/WMS-666 · карточка поставки использует ту же единую полосу > WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр",
+      "unchangedBodySha256": "d05912a1ed7f4d3acd794d016058ada8a0fcd717c5199d46238e402d78bbd1b2",
+      "assertions": 1,
+      "unchangedAssertionSha256": "8ff9a63b007caacd6e2bf8fef2b70c17e913eefc73f4211c3c75487691d4b502"
+    },
+    {
+      "id": "BASE-20",
+      "sourceBlob": "a38ce89640e8868b5a10baa705b93dfe22e07225",
+      "oldCaseId": "WMS-575 · ЧЗ в русской раскладке в единой поверхности > «/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер",
+      "newCaseId": "WMS-575 · ЧЗ в русской раскладке в единой поверхности > «/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер",
+      "unchangedBodySha256": "88a677496b90ba8bfd396a1d9e6cb9e6bccb8c7d3f19cd5edc205d2856dd99a6",
+      "assertions": 1,
+      "unchangedAssertionSha256": "7135b2876d40ca6fe4be4cbbb158ff5089ac107ff9b3b82cc2da2e022c442ed9"
+    },
+    {
+      "id": "681-QR-01",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-574 · скан в активной рамке окна сборки > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "newCaseId": "WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB",
+      "assertions": 3,
+      "unchangedAssertionSha256": "d7d95be69ec10f5d0bcff2c80052f00f55c2b46e1cffc5ee8866794294977a4f"
+    },
+    {
+      "id": "681-QR-02",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-574 · скан в активной рамке окна сборки > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "newCaseId": "WMS-681 accepted · отказ восстановления без внутреннего QR > WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR",
+      "assertions": 4,
+      "unchangedAssertionSha256": "e8611d9f40419ad6908fce45a110a89bde307a207a1f722267ae5637c029dd77"
+    },
+    {
+      "id": "681-QR-03",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C5/C9: одиночный QR восстанавливает непривязанный короб и открывает настоящую этикетку",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C5/C9: одиночный QR восстанавливает непривязанный короб и открывает настоящую этикетку",
+      "assertions": 3,
+      "unchangedAssertionSha256": "cbd4dd2ba6d73145fe6dffabf3822deec313bda5269800513d88d030c3059621"
+    },
+    {
+      "id": "681-QR-04",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: массовая печать получает недостающий QR связанного короба и сохраняет уже готовый",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: массовая печать получает недостающий QR связанного короба и сохраняет уже готовый",
+      "assertions": 4,
+      "unchangedAssertionSha256": "bae653fccd4f8c3d0ddf0c3039741d75fc8e916b0201b24e5002b72e783b49ec"
+    },
+    {
+      "id": "681-QR-05",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: восстановленный групповой снимок даёт все пять QR массовой печати",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C9: восстановленный групповой снимок даёт все пять QR массовой печати",
+      "assertions": 3,
+      "unchangedAssertionSha256": "aad63d1afbc2d23528a466f052d11258592e1bb1b6cb54f8a248343ae91c66d5"
+    },
+    {
+      "id": "681-QR-06",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: частичный отказ не теряет готовый QR, показывает причину и число отсутствующих",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: частичный отказ не теряет готовый QR, показывает причину и число отсутствующих",
+      "assertions": 6,
+      "unchangedAssertionSha256": "43c61d583b09a508e3149e6b6a31489c88aab607fa3ab7187b31baf922d625bc"
+    },
+    {
+      "id": "681-QR-07",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10/R6: HTTP-ошибка после сохранённого A1 перечитывает snapshot и печатает готовую часть",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10/R6: HTTP-ошибка после сохранённого A1 перечитывает snapshot и печатает готовую часть",
+      "assertions": 8,
+      "unchangedAssertionSha256": "05c5f4264e80a69b74e01d8195524885537e9544d05071dbcf1d0791b7f6b67b"
+    },
+    {
+      "id": "681-QR-08",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: ноль готовых не открывает окно, повтор после сети получает QR",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C10: ноль готовых не открывает окно, повтор после сети получает QR",
+      "assertions": 4,
+      "unchangedAssertionSha256": "bae2bd1dade9905ab31d121da9185970c7fd6fd767e33f0c2388f21dcd07a169"
+    },
+    {
+      "id": "681-QR-09",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный массовый ответ A не открывает QR после перехода на поставку B",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный массовый ответ A не открывает QR после перехода на поставку B",
+      "assertions": 4,
+      "unchangedAssertionSha256": "d6079886a0b45649845eaa246ff1bc074e7ba3e983f4cf8e415c6a5c0c4e6d27"
+    },
+    {
+      "id": "681-QR-10",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный одиночный ответ A не открывает QR после перехода на поставку B",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: задержанный одиночный ответ A не открывает QR после перехода на поставку B",
+      "assertions": 5,
+      "unchangedAssertionSha256": "d21228bb9d0f136950dbde91a7c1dd741b877adfaaca809ffe1fc22fe0dab2bb"
+    },
+    {
+      "id": "681-QR-11",
+      "sourceBlob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+      "oldCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: готовая этикетка Ozon остаётся в прежнем пути и не вызывает WB recovery",
+      "newCaseId": "WMS-681 recovery · реальные WB QR по свежему снимку > C11: готовая этикетка Ozon остаётся в прежнем пути и не вызывает WB recovery",
+      "assertions": 3,
+      "unchangedAssertionSha256": "c8092542d5363a49493b69c1747b9740fa9da76e35c38e626e33f42986d0754e"
+    }
+  ]
+}
