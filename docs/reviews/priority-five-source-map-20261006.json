@@ -52,6 +52,18 @@
           "resolution": "Preserve all current sections and original accepted WMS-667 section"
         }
       ]
+    },
+    {
+      "task": "WMS-669",
+      "source": "79b842ef692ab794d55be25049f3e181e3515539",
+      "base": "f60a4c0af3cafd04a4d70135ffc9ea0f21eda213",
+      "mode": "merge retaining contract/correction ledger/accepted ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Retain all current sections and insert only accepted WMS-669 section"
+        }
+      ]
     }
   ]
 }
