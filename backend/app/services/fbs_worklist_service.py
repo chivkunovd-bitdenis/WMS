@@ -58,6 +58,11 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.fbs_stock_availability_service import organization_stock_totals_by_product
 from app.services.inventory_service import OUTBOUND_RESERVE_STATUSES
+from app.services.operation_fact_service import normalize_marketplace
+from app.services.product_barcode_service import (
+    load_barcodes_by_product,
+    primary_product_barcode,
+)
 from app.services.wb_card_enrichment import (
     brand_from_card,
     color_from_card,
@@ -544,6 +549,7 @@ async def _load_worklist_context(
         if position.product_id is not None
     )
     products = await _load_products(session, tenant_id, product_ids)
+    product_barcodes = await load_barcodes_by_product(session, tenant_id, product_ids)
     seller_nm_pairs.update(
         (product.seller_id, int(product.wb_nm_id))
         for product in products.values()
@@ -566,6 +572,7 @@ async def _load_worklist_context(
         "warehouses": warehouses,
         "wb_names": wb_names,
         "products": products,
+        "product_barcodes": product_barcodes,
         "marketplace_bindings": marketplace_bindings,
         "positions": positions,
         "packed_positions": packed_positions,
@@ -995,21 +1002,21 @@ def _position_barcode(
 ) -> str | None:
     if position.product_id is None:
         return None
-    if order.marketplace == "ozon":
-        for binding in ctx["marketplace_bindings"].get(position.product_id, []):
-            if binding["marketplace"] != "ozon":
-                continue
-            return next(
-                (
-                    barcode.strip()
-                    for barcode in binding["external_barcodes"]
-                    if isinstance(barcode, str) and barcode.strip()
-                ),
-                None,
-            )
-        return None
     product = ctx["products"].get(position.product_id)
-    return product.wb_barcode if product is not None else None
+    if product is None:
+        return None
+    ozon_codes = tuple(
+        barcode
+        for binding in ctx["marketplace_bindings"].get(position.product_id, [])
+        if binding["marketplace"] == "ozon"
+        for barcode in binding["external_barcodes"]
+        if isinstance(barcode, str)
+    )
+    return primary_product_barcode(
+        product,
+        wb_barcodes=ctx.get("product_barcodes", {}).get(position.product_id, ()),
+        ozon_barcodes=ozon_codes,
+    )
 
 
 def _card_raw_for_product(product: Product | None, ctx: dict[str, Any]) -> dict[str, Any] | None:
@@ -1038,7 +1045,8 @@ def _product_label_metadata(product: Product | None, ctx: dict[str, Any]) -> dic
 
 
 def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> dict[str, Any]:
-    is_ozon = order.marketplace == "ozon"
+    marketplace = normalize_marketplace(order.marketplace)
+    is_ozon = marketplace == "ozon"
     positions = ctx["positions"].get(order.id, [])
     first_position = positions[0] if positions else None
     seller = ctx["sellers"].get(order.seller_id)
@@ -1058,7 +1066,13 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     # От WB на упаковке нужен только QR стикера заказа; штрихкод — всегда наш.
     barcode = (
         _position_barcode(order, first_position, ctx) if first_position else None
-    ) if is_ozon else (product.wb_barcode if product else None) or order.wb_barcode
+    ) if is_ozon else (
+        primary_product_barcode(
+            product,
+            wb_barcodes=ctx.get("product_barcodes", {}).get(product.id, ()),
+        )
+        if product else None
+    ) or order.wb_barcode
     image_url = first_photo_url_from_card(card_raw) if card_raw else None
     # У озоновского товара снапшота карточки WB нет — фото лежит в привязке Ozon.
     if is_ozon:
@@ -1088,7 +1102,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     sticker_asset = ctx["sticker_assets"].get(order.id)
     product_bindings = [
         binding for binding in ctx["marketplace_bindings"].get(order.product_id, [])
-        if binding["marketplace"] == order.marketplace
+        if binding["marketplace"] == marketplace
     ]
     sticker_url = print_asset_content_url(sticker_asset.id) if sticker_asset is not None else None
     applied_at = order.sticker_applied_at or (sticker_asset.applied_at if sticker_asset else None)
@@ -1118,7 +1132,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
     )
     return {
         "id": str(order.id),
-        "marketplace": order.marketplace,
+        "marketplace": marketplace,
         "external_order_id": order.external_order_id,
         "wb_order_id": int(order.wb_order_id),
         "status": order.status,
@@ -1170,7 +1184,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
             {
                 "marketplace_bindings": [
                     binding for binding in ctx["marketplace_bindings"].get(position.product_id, [])
-                    if binding["marketplace"] == order.marketplace
+                    if binding["marketplace"] == marketplace
                 ],
                 "id": str(position.id),
                 "image_url": ctx["ozon_photos"].get(position.product_id),
@@ -1189,7 +1203,7 @@ def _map_order(order: FbsOrder, ctx: dict[str, Any], server_now: datetime) -> di
                 ),
                 "seller_article": (
                     position.offer_id
-                    if order.marketplace == "ozon"
+                    if is_ozon
                     else ctx["products"][position.product_id].wb_vendor_code
                     if position.product_id in ctx["products"]
                     and ctx["products"][position.product_id].wb_vendor_code

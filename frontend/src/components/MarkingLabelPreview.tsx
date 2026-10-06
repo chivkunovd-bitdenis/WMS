@@ -16,6 +16,12 @@ import { plural } from '../utils/plural'
 import type { PrintLayout } from '../utils/printTemplate'
 import type { LabelSize } from '../utils/labelSize'
 import type { ProductLabelPrintOptions } from '../utils/productLabelText'
+import {
+  buildFboBulkPreviewSeparatorStyle,
+  buildFboBulkTapeSections,
+  countFboBulkSections,
+  type FboBulkGroup,
+} from '../utils/fboBulkTape'
 
 const MM_TO_PX = 3.7795275591
 /**
@@ -131,6 +137,19 @@ export type FbsPreviewOrder = {
   productLabels?: Array<{ productLabel: ProductThermalLabelData; copies: number }>
 }
 
+/**
+ * WMS-618 R8: превью общей печати по всей FBO-отгрузке строится точно той же
+ * функцией, что и реальная лента: группы по product_id в заданном порядке,
+ * внутри группы — единицы согласно layout, при включённом «Разделять артикулами»
+ * ровно одна пустая этикетка между соседними непустыми группами. Количество
+ * показанных единиц ограничено MAX_PREVIEW_UNITS, но порядок и состав совпадают
+ * с реальной лентой.
+ */
+export type FboBulkPreview = {
+  groups: FboBulkGroup[]
+  splitArticles: boolean
+}
+
 type FbsOrdersPreviewProps = {
   /**
    * PRN-04: printFbsTape в MarkingPrintDialog.tsx печатает циклом по заказам —
@@ -141,6 +160,11 @@ type FbsOrdersPreviewProps = {
   fbsOrders?: FbsPreviewOrder[]
   /** Сколько копий ШК-only этикетки на единицу товара без ЧЗ — fallbackLabelCopies из printFbsTape. */
   fbsNonHonestLabelCopies?: number
+  /**
+   * WMS-618: группы FBO-отгрузки для общей печати. Включает пустую разделительную
+   * этикетку между непустыми товарными группами, если `splitArticles=true`.
+   */
+  fboBulkPreview?: FboBulkPreview
 }
 
 type TapeVariantProps = {
@@ -222,6 +246,20 @@ export function MarkingLabelPreview(props: Props) {
         )
   const productLabel = props.productLabel ?? null
   const productPrintOptions = props.variant === 'product' ? props.printOptions : undefined
+  const fboBulkPreview = props.fboBulkPreview ?? null
+  const fboBulkKey = fboBulkPreview
+    ? JSON.stringify({
+        s: fboBulkPreview.splitArticles,
+        g: fboBulkPreview.groups.map((group) => ({
+          id: group.productId,
+          l: group.lines.map((line) => ({
+            r: line.requiresHonestSign,
+            q: line.qtyNeedPack,
+            b: line.productLabel?.barcode ?? '',
+          })),
+        })),
+      })
+    : ''
   // В FBS-превью передаётся тот же список отправлений, что и в печать. Для
   // Ozon он нужен даже без QR: одна отправка может содержать несколько позиций.
   const fbsOrdersCapped =
@@ -254,25 +292,38 @@ export function MarkingLabelPreview(props: Props) {
   // QR заказа печатается один раз на заказ (не на единицу) — см. printFbsTape в
   // MarkingPrintDialog.tsx. В режиме fbsOrders (PRN-04) секции считаются по
   // заказам; иначе — старым способом (один общий QR + плоский список единиц).
-  const sectionsCount = fbsOrdersCapped
-    ? fbsOrdersCapped.reduce((sum, order) => {
-        const orderLabel = order.productLabel ?? productLabel
-        const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
-        const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
-        const isHonestTape = props.variant === 'tape' && order.requiresHonestSign
-        const labelSections = isHonestTape
-          ? isOzonPositionPreview
-            ? orderLabels.reduce((total, item) => total + Math.max(1, item.copies) * blocksPerUnit, 0)
-            : blocksPerUnit
-          : orderLabels.reduce(
-              (labelTotal, item) => item.productLabel.barcode?.trim()
-                ? labelTotal + Math.max(1, item.copies) * nonHonestLabelCopies
-                : labelTotal,
-              0,
-            )
-        return sum + (showOrderQr ? 1 : 0) + labelSections
-      }, 0)
-    : shown * blocksPerUnit + (showOrderQr ? 1 : 0)
+  // WMS-618: количество секций и порядок — та же функция, что реально печатает
+  // (`countFboBulkSections` симметрично `buildFboBulkTapeSections`), но
+  // ограничено MAX_PREVIEW_UNITS — обрезанное число групп/единиц уже
+  // перевзвешивается ниже.
+  const fboBulkSectionsCount = fboBulkPreview && props.variant === 'tape'
+    ? countFboBulkSections(
+        props.layout,
+        fboBulkPreview.groups,
+        fboBulkPreview.splitArticles,
+      )
+    : null
+  const sectionsCount = fboBulkSectionsCount !== null
+    ? fboBulkSectionsCount
+    : fbsOrdersCapped
+      ? fbsOrdersCapped.reduce((sum, order) => {
+          const orderLabel = order.productLabel ?? productLabel
+          const orderLabels = order.productLabels ?? (orderLabel ? [{ productLabel: orderLabel, copies: 1 }] : [])
+          const isOzonPositionPreview = order.marketplace === 'ozon' && order.productLabels?.length
+          const isHonestTape = props.variant === 'tape' && order.requiresHonestSign
+          const labelSections = isHonestTape
+            ? isOzonPositionPreview
+              ? orderLabels.reduce((total, item) => total + Math.max(1, item.copies) * blocksPerUnit, 0)
+              : blocksPerUnit
+            : orderLabels.reduce(
+                (labelTotal, item) => item.productLabel.barcode?.trim()
+                  ? labelTotal + Math.max(1, item.copies) * nonHonestLabelCopies
+                  : labelTotal,
+                0,
+              )
+          return sum + (showOrderQr ? 1 : 0) + labelSections
+        }, 0)
+      : shown * blocksPerUnit + (showOrderQr ? 1 : 0)
   const layoutKey = props.variant === 'product' ? 'product' : JSON.stringify(props.layout)
 
   useEffect(() => {
@@ -281,7 +332,26 @@ export function MarkingLabelPreview(props: Props) {
     void (async () => {
       try {
         let nextHtml: string | null
-        if (fbsOrdersCapped) {
+        if (fboBulkPreview && props.variant === 'tape') {
+          /**
+           * WMS-618 R8: превью общей печати — та же функция, что собирает
+           * настоящую ленту (`buildFboBulkTapeSections`). КМ до реального
+           * нажатия «Печать» неизвестны — передаём стабовый `previewCis`,
+           * макет и порядок при этом честные. Количество единиц обрезается
+           * до MAX_PREVIEW_UNITS, но состав блоков и разделители — такие же,
+           * как уйдут на принтер.
+           */
+          const previewSections = await buildFboBulkTapeSections({
+            groups: fboBulkPreview.groups,
+            layout: props.layout,
+            labelSize: size,
+            splitArticles: fboBulkPreview.splitArticles,
+            previewCis,
+            maxUnits: MAX_PREVIEW_UNITS,
+          })
+          nextHtml =
+            previewSections.length > 0 ? buildMarkingTapeDocument(previewSections, size) : null
+        } else if (fbsOrdersCapped) {
           /**
            * PRN-04: тот же порядок, что и в printFbsTape (MarkingPrintDialog.tsx) —
            * цикл `for (const printedOrder of result.orders)`: на каждый заказ
@@ -378,7 +448,19 @@ export function MarkingLabelPreview(props: Props) {
           nextHtml = buildMarkingTapeDocument([...qrSections, ...sections], size)
         }
         if (requestRef.current === myRequest) {
-          setHtml(nextHtml ? injectPreviewSeparators(nextHtml) : null)
+          const finalHtml = nextHtml ? injectPreviewSeparators(nextHtml) : null
+          const withFboStyle = finalHtml && fboBulkPreview
+            ? finalHtml.includes('</head>')
+              ? finalHtml.replace(
+                  '</head>',
+                  `<style>${buildFboBulkPreviewSeparatorStyle(size)}</style></head>`,
+                )
+              : finalHtml.replace(
+                  '</body>',
+                  `<style>${buildFboBulkPreviewSeparatorStyle(size)}</style></body>`,
+                )
+            : finalHtml
+          setHtml(withFboStyle)
         }
       } catch (e) {
         if (requestRef.current === myRequest) {
@@ -405,6 +487,7 @@ export function MarkingLabelPreview(props: Props) {
     showOrderQr,
     fbsOrdersKey,
     nonHonestLabelCopies,
+    fboBulkKey,
   ])
 
   const previewWidthPx = Math.min(
@@ -460,15 +543,19 @@ export function MarkingLabelPreview(props: Props) {
         </Box>
       )}
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-        {fbsOrdersCapped
-          ? fbsOrdersTotal > fbsOrdersCapped.length
-            ? `Показаны первые ${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} из ${fbsOrdersTotal}`
-            : showOrderQr
-              ? `${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} на ленте`
-              : `${sectionsCount} ${plural(sectionsCount, ['копия', 'копии', 'копий'])} на ленте`
-          : total > shown
-            ? `Показаны первые ${shown} из ${total}`
-            : `${total} ${total === 1 ? 'копия' : 'копий'} на ленте`}
+        {fboBulkPreview
+          ? `${fboBulkPreview.groups.length} ${plural(fboBulkPreview.groups.length, ['артикул', 'артикула', 'артикулов'])}${
+              fboBulkPreview.splitArticles ? ' с пустыми разделителями' : ''
+            }${sectionsCount >= MAX_PREVIEW_UNITS ? ' · показан фрагмент ленты' : ''}`
+          : fbsOrdersCapped
+            ? fbsOrdersTotal > fbsOrdersCapped.length
+              ? `Показаны первые ${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} из ${fbsOrdersTotal}`
+              : showOrderQr
+                ? `${fbsOrdersCapped.length} ${plural(fbsOrdersCapped.length, ['заказ', 'заказа', 'заказов'])} на ленте`
+                : `${sectionsCount} ${plural(sectionsCount, ['копия', 'копии', 'копий'])} на ленте`
+            : total > shown
+              ? `Показаны первые ${shown} из ${total}`
+              : `${total} ${total === 1 ? 'копия' : 'копий'} на ленте`}
       </Typography>
     </Box>
   )

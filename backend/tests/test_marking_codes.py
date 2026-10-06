@@ -6,6 +6,7 @@ import uuid
 import pytest
 from httpx import AsyncClient
 from test_packaging_tasks import _inventory_at_location, _register_admin
+from test_staff_users import _create_ff_staff
 
 from app.db.session import SessionLocal
 from app.models.product import Product
@@ -98,9 +99,13 @@ async def test_marking_import_and_packaging_print(async_client: AsyncClient) -> 
     assert task.json()["lines"][0]["requires_honest_sign"] is True
     assert task.json()["lines"][0]["marking_available_count"] == 5
 
+    fbs_headers, _ = await _create_ff_staff(
+        async_client, h, uuid.uuid4().hex[:8], "fbs-marking", {"fbs": True}
+    )
+
     printed = await async_client.post(
         f"/operations/marking-codes/packaging-lines/{line_id}/print",
-        headers=h,
+        headers=fbs_headers,
         json={"duplicate_copies": 2, "reprint": False},
     )
     assert printed.status_code == 200, printed.text

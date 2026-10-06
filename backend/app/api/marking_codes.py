@@ -10,17 +10,21 @@ from typing import Annotated, NoReturn
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, status
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import (
     assert_seller_permission,
     get_current_user,
     get_effective_seller_id,
+    require_marking_artifact_access,
     require_packaging_access,
     require_shift_lead,
 )
-from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER
+from app.core.roles import FULFILLMENT_ADMIN, FULFILLMENT_SELLER, FULFILLMENT_STAFF
 from app.db.session import get_db
+from app.models.marking_code import MarkingCode
+from app.models.packaging_task import PackagingTask, PackagingTaskLine
 from app.models.print_template import USER_LAST_LAYOUT_NAME
 from app.models.product import Product
 from app.models.user import User
@@ -30,6 +34,7 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import get_product
 from app.services.marking_label_artifact_service import pdf_bytes_to_png
 from app.services.seller_staff_permissions_service import PERM_HONEST_SIGN
+from app.services.staff_permissions_service import get_staff_permissions
 
 
 async def require_seller_honest_sign_if_seller(
@@ -37,6 +42,7 @@ async def require_seller_honest_sign_if_seller(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
     await assert_seller_permission(session, user, PERM_HONEST_SIGN)
+
 
 router = APIRouter(
     prefix="/operations/marking-codes",
@@ -275,6 +281,43 @@ class PrintAllMarkingOut(BaseModel):
     layout: PrintLayoutOut
     lines: list[PrintAllLineOut]
     dry_run: bool
+
+
+class PrintFboBulkIn(BaseModel):
+    layout_json: PrintLayoutOut | None = None
+    allow_partial: bool = False
+    issue_marking_codes: bool = True
+
+
+class FboProductLabelOut(BaseModel):
+    product_name: str
+    sku_code: str
+    barcode: str
+    wb_vendor_code: str | None = None
+    wb_size: str | None = None
+    wb_color: str | None = None
+    wb_brand: str | None = None
+    wb_composition: str | None = None
+    seller_name: str | None = None
+
+
+class PrintFboBulkLineOut(BaseModel):
+    packaging_task_line_id: str
+    product_id: str
+    sku_code: str
+    product_name: str
+    requires_honest_sign: bool
+    quantity: int
+    shortage: int
+    product_label: FboProductLabelOut
+    printed_codes: list[PrintedCodeOut] = Field(default_factory=list)
+
+
+class PrintFboBulkOut(BaseModel):
+    packaging_task_id: str
+    layout: PrintLayoutOut
+    lines: list[PrintFboBulkLineOut]
+    shortage: int
 
 
 class PoolProductOut(BaseModel):
@@ -549,8 +592,7 @@ def _pool_products_out(result: mc_svc.PoolProductsResult) -> PoolProductsOut:
     return PoolProductsOut(
         pool_id=str(result.pool_id),
         products=[
-            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name)
-            for p in result.products
+            PoolProductOut(id=str(p.id), sku_code=p.sku_code, name=p.name) for p in result.products
         ],
     )
 
@@ -565,7 +607,7 @@ async def _assert_pool_access(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         if pool_seller_id != effective_seller_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
+    elif user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
@@ -578,7 +620,7 @@ def _resolve_marking_seller_scope(
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         return effective_seller_id
-    if user.role == FULFILLMENT_ADMIN:
+    if user.role in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         return seller_id
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
@@ -603,7 +645,7 @@ async def _assert_product_marking_access(
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         if product.seller_id != effective_seller_id:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
-    elif user.role != FULFILLMENT_ADMIN:
+    elif user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
 
 
@@ -729,7 +771,7 @@ async def preview_marking_import(
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         target_seller_id = effective_seller_id
-    elif user.role == FULFILLMENT_ADMIN:
+    elif user.role in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         if seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -797,7 +839,7 @@ def _target_import_seller(
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         return effective_seller_id
-    if user.role == FULFILLMENT_ADMIN:
+    if user.role in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         if seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -910,7 +952,7 @@ async def import_marking_codes(
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         target_seller_id = effective_seller_id
-    elif user.role == FULFILLMENT_ADMIN:
+    elif user.role in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         if seller_id is None:
             raise HTTPException(
                 status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -1050,9 +1092,7 @@ async def set_marking_pool_threshold(
             low_stock_threshold=body.low_stock_threshold,
             forecast_days_threshold=body.forecast_days_threshold,
         )
-        rows = await mc_svc.list_pools(
-            session, user.tenant_id, seller_id=pool.seller_id
-        )
+        rows = await mc_svc.list_pools(session, user.tenant_id, seller_id=pool.seller_id)
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
     row = next((r for r in rows if r.id == pool_id), None)
@@ -1137,9 +1177,7 @@ async def list_marking_pool_codes(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="pool_not_found")
     await _assert_pool_access(user, pool.seller_id, effective_seller_id)
     try:
-        rows = await mc_svc.list_pool_codes(
-            session, user.tenant_id, pool_id, status=code_status
-        )
+        rows = await mc_svc.list_pool_codes(session, user.tenant_id, pool_id, status=code_status)
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
     return [
@@ -1171,7 +1209,7 @@ async def list_marking_ledger(
     limit: Annotated[int, Query(ge=1, le=200)] = 50,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> LedgerPageOut:
-    if user.role != FULFILLMENT_ADMIN:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     page = await mc_svc.list_ledger(
@@ -1228,7 +1266,7 @@ async def export_marking_ledger(
     date_from: Annotated[datetime | None, Query()] = None,
     date_to: Annotated[datetime | None, Query()] = None,
 ) -> Response:
-    if user.role != FULFILLMENT_ADMIN:
+    if user.role not in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
     scope = _resolve_marking_seller_scope(user, effective_seller_id, seller_id)
     try:
@@ -1334,7 +1372,7 @@ async def get_marking_inventory(
         if effective_seller_id is None:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="seller_not_linked")
         scope_seller: uuid.UUID | None = effective_seller_id
-    elif user.role == FULFILLMENT_ADMIN:
+    elif user.role in (FULFILLMENT_ADMIN, FULFILLMENT_STAFF):
         scope_seller = seller_id
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
@@ -1452,10 +1490,45 @@ async def print_product_marking_codes(
     return _print_marking_codes_out(result)
 
 
+async def _assert_code_artifact_access(
+    session: AsyncSession,
+    user: User,
+    code_ids: list[uuid.UUID],
+) -> None:
+    """A staff member without ЧЗ can print only codes bound to a tenant document."""
+    if user.role != FULFILLMENT_STAFF:
+        return
+    permissions = await get_staff_permissions(session, user)
+    if permissions.honest_sign:
+        return
+    if not (permissions.fbs or permissions.packaging):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+    requested_ids = set(code_ids)
+    assigned_ids = set(
+        (
+            await session.scalars(
+                select(MarkingCode.id)
+                .join(
+                    PackagingTaskLine,
+                    PackagingTaskLine.id == MarkingCode.packaging_task_line_id,
+                )
+                .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+                .where(
+                    MarkingCode.id.in_(requested_ids),
+                    MarkingCode.tenant_id == user.tenant_id,
+                    PackagingTask.tenant_id == user.tenant_id,
+                )
+            )
+        ).all()
+    )
+    if assigned_ids != requested_ids:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="forbidden")
+
+
 @router.get("/codes/{code_id}/label-artifact")
 async def get_marking_code_label_artifact(
     code_id: uuid.UUID,
-    user: Annotated[User, Depends(require_packaging_access)],
+    user: Annotated[User, Depends(require_marking_artifact_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
     format: Annotated[str, Query(pattern="^(pdf|png)$")] = "png",
 ) -> Response:
@@ -1464,6 +1537,7 @@ async def get_marking_code_label_artifact(
     code = await session.get(MarkingCode, code_id)
     if code is None or code.tenant_id != user.tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="code_not_found")
+    await _assert_code_artifact_access(session, user, [code_id])
     pdf_bytes = code.label_artifact_pdf
     if not pdf_bytes or not await asyncio.to_thread(
         mc_svc.is_printable_label_artifact, pdf_bytes, code.cis_code
@@ -1494,9 +1568,10 @@ class LabelArtifactTapeIn(BaseModel):
 @router.post("/label-artifact-tape")
 async def post_label_artifact_tape_pdf(
     body: LabelArtifactTapeIn,
-    user: Annotated[User, Depends(require_packaging_access)],
+    user: Annotated[User, Depends(require_marking_artifact_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> Response:
+    await _assert_code_artifact_access(session, user, body.code_ids)
     try:
         pdf_bytes = await mc_svc.build_label_artifact_tape_pdf(
             session,
@@ -1760,9 +1835,7 @@ async def list_pending_marking(
         limit=limit,
         offset=offset,
     )
-    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
-        session, user.tenant_id
-    )
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
     return PendingMarkingOut(
         total=total,
         rows=[
@@ -1776,9 +1849,7 @@ async def list_pending_marking(
                 product_id=str(row.product_id),
                 sku_code=row.sku_code,
                 product_name=row.product_name,
-                storage_location_code=(
-                    row.storage_location_code if reveal_storage else None
-                ),
+                storage_location_code=(row.storage_location_code if reveal_storage else None),
                 qty_need=row.qty_need,
                 qty_marking_printed=row.qty_marking_printed,
                 qty_remaining=row.qty_remaining,
@@ -1875,6 +1946,78 @@ async def print_all_marking_codes_for_task(
     _raise_marking_endpoint_gone("print-all")
 
 
+@router.post(
+    "/packaging-tasks/{task_id}/print-fbo-bulk",
+    response_model=PrintFboBulkOut,
+    summary=(
+        "WMS-618: idempotent CZ issuance for one FBO shipment. The response is "
+        "the current snapshot of every line (CZ and non-CZ) with the FULL set "
+        "of codes now bound to the line — already-linked plus whatever this "
+        "call issued — so a retry after a lost response gives the same tape."
+    ),
+)
+async def print_fbo_bulk_marking_codes(
+    task_id: uuid.UUID,
+    body: PrintFboBulkIn,
+    user: Annotated[User, Depends(require_packaging_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> PrintFboBulkOut:
+    layout_payload: dict[str, object] | None = None
+    if body.layout_json is not None:
+        layout_payload = _layout_in_to_dict(body.layout_json)
+
+    try:
+        result = await mc_svc.print_fbo_bulk_for_task(
+            session,
+            user.tenant_id,
+            task_id,
+            acting_user_id=user.id,
+            layout=layout_payload,
+            allow_partial=body.allow_partial,
+            issue_marking_codes=body.issue_marking_codes,
+        )
+    except mc_svc.MarkingCodeServiceError as exc:
+        if exc.code == "task_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="task_not_found"
+            ) from exc
+        if exc.code == "not_fbo_shipment":
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail="not_fbo_shipment",
+            ) from exc
+        raise _http_from_mc_error(exc) from exc
+    except pt_svc.PrintTemplateServiceError as exc:
+        raise _http_from_pt_error(exc) from exc
+
+    return PrintFboBulkOut(
+        packaging_task_id=str(result.packaging_task_id),
+        layout=_layout_out(result.layout),
+        lines=[
+            PrintFboBulkLineOut(
+                packaging_task_line_id=str(line.packaging_task_line_id),
+                product_id=str(line.product_id),
+                sku_code=line.sku_code,
+                product_name=line.product_name,
+                requires_honest_sign=line.requires_honest_sign,
+                quantity=line.quantity,
+                shortage=line.shortage,
+                product_label=FboProductLabelOut.model_validate(line.product_label),
+                printed_codes=[
+                    PrintedCodeOut(
+                        id=str(code.id),
+                        cis_code=code.cis_code,
+                        has_label_artifact=code.has_label_artifact,
+                    )
+                    for code in line.printed_codes
+                ],
+            )
+            for line in result.lines
+        ],
+        shortage=result.total_shortage,
+    )
+
+
 class MarkingReprintRequestOut(BaseModel):
     id: str
     code_id: str
@@ -1928,9 +2071,7 @@ async def list_printed_codes_for_line(
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> PrintedMarkingCodesOut:
     try:
-        rows = await mc_svc.list_printed_codes_for_packaging_line(
-            session, user.tenant_id, line_id
-        )
+        rows = await mc_svc.list_printed_codes_for_packaging_line(session, user.tenant_id, line_id)
     except mc_svc.MarkingCodeServiceError as exc:
         raise _http_from_mc_error(exc) from exc
     return PrintedMarkingCodesOut(

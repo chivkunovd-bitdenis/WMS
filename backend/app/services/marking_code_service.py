@@ -374,6 +374,36 @@ class PrintAllMarkingCodesResult:
     dry_run: bool
 
 
+@dataclass(frozen=True)
+class FboBulkPrintLineResult:
+    """One line of an FBO shipment as seen by the client after a bulk-print call.
+
+    Returned for EVERY line in the current task state (including non-CZ lines)
+    so the frontend can build the full tape from one response without a second
+    round trip. ``printed_codes`` is the FULL set currently bound to the line
+    — already-linked plus whatever this call issued — so a retry returns the
+    same codes without re-issuing.
+    """
+
+    packaging_task_line_id: uuid.UUID
+    product_id: uuid.UUID
+    sku_code: str
+    product_name: str
+    requires_honest_sign: bool
+    quantity: int
+    shortage: int
+    product_label: dict[str, str | None]
+    printed_codes: tuple[PrintedCodeInfo, ...] = ()
+
+
+@dataclass(frozen=True)
+class FboBulkPrintResult:
+    packaging_task_id: uuid.UUID
+    layout: PrintLayout
+    lines: list[FboBulkPrintLineResult]
+    total_shortage: int
+
+
 def cz_copies_from_layout(layout: PrintLayout) -> int:
     total = sum(unit.copies for unit in layout.units if unit.block == LAYOUT_BLOCK_CZ)
     return total if total > 0 else 1
@@ -1739,7 +1769,7 @@ async def _auto_import_groups(
             sku=product.sku_code,
             product_name=product.name,
             size=product.wb_size,
-            barcode=product.wb_barcode,
+            barcode=product.primary_print_barcode or product.wb_barcode,
             loaded_count=int(count),
         )
         for product, count in (await session.execute(stmt)).all()
@@ -2040,7 +2070,7 @@ async def assign_import_rows_to_product(
                 sku=product.sku_code,
                 product_name=product.name,
                 size=product.wb_size,
-                barcode=product.wb_barcode,
+                barcode=product.primary_print_barcode or product.wb_barcode,
                 loaded_count=0,
             )
             stored_assigned_keys = metadata.get("assigned_keys")
@@ -2157,7 +2187,7 @@ async def assign_import_rows_to_product(
             sku=product.sku_code,
             product_name=product.name,
             size=product.wb_size,
-            barcode=product.wb_barcode,
+            barcode=product.primary_print_barcode or product.wb_barcode,
             loaded_count=0,
         )
         return AssignMarkingCodesResult(
@@ -3175,6 +3205,212 @@ async def print_all_for_packaging_task(
         lines=line_results,
         dry_run=False,
     )
+
+
+async def _codes_bound_to_line(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    line_id: uuid.UUID,
+) -> list[MarkingCode]:
+    """All CZ codes still bound to a packaging-task line (PRINTED or APPLIED)."""
+    stmt = (
+        select(MarkingCode)
+        .where(
+            MarkingCode.tenant_id == tenant_id,
+            MarkingCode.packaging_task_line_id == line_id,
+            or_(
+                MarkingCode.status == STATUS_PRINTED,
+                (MarkingCode.status == STATUS_APPLIED)
+                & MarkingCode.printed_at.is_not(None),
+            ),
+        )
+        .order_by(MarkingCode.printed_at.asc(), MarkingCode.created_at.asc())
+    )
+    return list((await session.execute(stmt)).scalars().all())
+
+
+async def print_fbo_bulk_for_task(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    packaging_task_id: uuid.UUID,
+    *,
+    acting_user_id: uuid.UUID,
+    layout: PrintLayout | dict[str, object] | None = None,
+    allow_partial: bool = False,
+    issue_marking_codes: bool = True,
+) -> FboBulkPrintResult:
+    """WMS-618: idempotent bulk CZ-issuance for one FBO shipment.
+
+    One response always carries the CURRENT snapshot of every line in the task
+    (CZ and non-CZ), each line's CURRENT quantity, and the FULL set of CZ codes
+    now bound to it (already-linked + newly-issued). A retry after a lost
+    response sees the task's lock, issues only lines whose plan still has a
+    gap, and returns the same codes it would have returned the first time —
+    no silent re-issuance, no "409" when every line was already printed.
+
+    Preflight uses the shared pool budget (same filters as issuance). If some
+    line comes up short and ``allow_partial`` is false, nothing is issued; the
+    response surfaces per-line shortages so the operator can fix the pool and
+    try again without wasting codes on the lines that did fit. Actual issuance
+    is also atomic if another shipment changes the pool after preflight.
+    ``issue_marking_codes=False`` reads the same snapshot without allocating codes.
+    """
+    # FBO tasks have no FbsSupply, so the FBS lock helper does not lock them.
+    # Keep this parent lock until both issuance and the response snapshot finish.
+    await session.execute(
+        select(PackagingTask.id)
+        .where(PackagingTask.id == packaging_task_id, PackagingTask.tenant_id == tenant_id)
+        .with_for_update()
+    )
+    # Per-line printing locks the line itself. Lock all lines before loading the
+    # ORM snapshot, so a concurrent per-line print cannot invalidate remaining_need.
+    await session.execute(
+        select(PackagingTaskLine.id)
+        .join(PackagingTask, PackagingTask.id == PackagingTaskLine.task_id)
+        .where(PackagingTask.id == packaging_task_id, PackagingTask.tenant_id == tenant_id)
+        .order_by(PackagingTaskLine.id)
+        .with_for_update(of=PackagingTaskLine)
+    )
+
+    task_stmt = (
+        select(PackagingTask)
+        .where(
+            PackagingTask.id == packaging_task_id,
+            PackagingTask.tenant_id == tenant_id,
+        )
+        .options(selectinload(PackagingTask.lines).selectinload(PackagingTaskLine.product))
+        .execution_options(populate_existing=True)
+    )
+    task = (await session.execute(task_stmt)).scalar_one_or_none()
+    if task is None:
+        raise MarkingCodeServiceError("task_not_found")
+    if task.marketplace_unload_request_id is None:
+        raise MarkingCodeServiceError("not_fbo_shipment")
+
+    response_layout = resolve_print_layout(layout, duplicate_copies=None)
+
+    cz_lines: list[PackagingTaskLine] = []
+    for line in task.lines:
+        product = line.product
+        if product is None:
+            raise MarkingCodeServiceError("product_not_found")
+        if product.requires_honest_sign:
+            cz_lines.append(line)
+
+    # Preflight shortage against the shared pool budget. We cannot rely on each
+    # line's own pool preview because several lines of this task may draw from
+    # the same pool; without a shared budget, two "line_a has 3 codes" previews
+    # pretend they can both consume the same code.
+    previews = (
+        await _preview_all_lines_print(session, tenant_id, cz_lines, allow_partial=True)
+        if issue_marking_codes else []
+    )
+    shortage_by_line = {p.packaging_task_line_id: int(p.shortage) for p in previews}
+    total_shortage = sum(shortage_by_line.values())
+
+    issue_lines = issue_marking_codes and (allow_partial or total_shortage <= 0)
+    issued_shortage_by_line: dict[uuid.UUID, int] = {}
+
+    if issue_lines:
+        try:
+            # A different shipment can consume the pool after preflight. Stage
+            # the complete batch in a savepoint and undo every allocation/event
+            # if actual availability is short, retaining the outer task/line locks.
+            issuance = await session.begin_nested()
+            for line in cz_lines:
+                remaining = (
+                    _qty_need_pack_line(line)
+                    - int(line.qty_marking_printed)
+                    - int(line.qty_marking_external or 0)
+                )
+                if remaining <= 0:
+                    continue
+                result = await print_codes_for_packaging_line(
+                    session,
+                    tenant_id,
+                    line.id,
+                    acting_user_id=acting_user_id,
+                    layout=layout,
+                    allow_partial=True,
+                    commit=False,
+                )
+                issued_shortage_by_line[line.id] = int(result.shortage or 0)
+            if not allow_partial and any(issued_shortage_by_line.values()):
+                await issuance.rollback()
+            else:
+                await issuance.commit()
+        except Exception:
+            await session.rollback()
+            raise
+
+    # Reload after a possible savepoint rollback, while still holding the locks.
+    task = (await session.execute(task_stmt)).scalar_one_or_none()
+    if task is None:
+        raise MarkingCodeServiceError("task_not_found")
+
+    from app.services.seller_wb_catalog_service import product_labels_for_products
+
+    labels = await product_labels_for_products(
+        session, tenant_id, {line.product_id for line in task.lines}
+    )
+
+    line_outs: list[FboBulkPrintLineResult] = []
+    for line in task.lines:
+        product = line.product
+        if product is None:
+            raise MarkingCodeServiceError("product_not_found")
+        qty_need = _qty_need_pack_line(line)
+        if product.requires_honest_sign:
+            codes = await _codes_bound_to_line(session, tenant_id, line.id)
+            printed_infos = await _printed_code_infos(codes)
+            per_shortage = issued_shortage_by_line.get(
+                line.id, shortage_by_line.get(line.id, 0)
+            )
+            line_outs.append(
+                FboBulkPrintLineResult(
+                    packaging_task_line_id=line.id,
+                    product_id=product.id,
+                    sku_code=product.sku_code,
+                    product_name=product.name,
+                    requires_honest_sign=True,
+                    quantity=qty_need,
+                    shortage=per_shortage,
+                    product_label=labels[product.id],
+                    printed_codes=printed_infos,
+                ),
+            )
+        else:
+            line_outs.append(
+                FboBulkPrintLineResult(
+                    packaging_task_line_id=line.id,
+                    product_id=product.id,
+                    sku_code=product.sku_code,
+                    product_name=product.name,
+                    requires_honest_sign=False,
+                    quantity=qty_need,
+                    shortage=0,
+                    product_label=labels[product.id],
+                    printed_codes=(),
+                ),
+            )
+
+    bulk_result = FboBulkPrintResult(
+        packaging_task_id=packaging_task_id,
+        layout=response_layout,
+        lines=line_outs,
+        total_shortage=total_shortage if not issue_lines else sum(
+            issued_shortage_by_line.values()
+        ),
+    )
+    await session.commit()
+    return bulk_result
+
+
+def _qty_need_pack_line(line: PackagingTaskLine) -> int:
+    """Local wrapper to avoid a package-import cycle at module load time."""
+    from app.services.packaging_task_service import qty_need_pack
+
+    return qty_need_pack(line)
 
 
 async def assert_packaging_line_marking_done(

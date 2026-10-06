@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.product import Product
 from app.models.product_barcode import ProductBarcode
+from app.models.product_marketplace_link import ProductMarketplaceLink
 
 
 @dataclass(frozen=True)
@@ -15,6 +16,54 @@ class BarcodeWriteResult:
     added: int
     existing: int
     conflicts: tuple[tuple[str, uuid.UUID], ...]
+
+
+def primary_product_barcode(
+    product: Product,
+    wb_barcodes: tuple[str, ...] = (),
+    ozon_barcodes: tuple[str, ...] = (),
+) -> str | None:
+    """One product-label source; provider codes remain independent scan aliases."""
+    for raw in (product.primary_print_barcode, product.wb_barcode, *wb_barcodes, *ozon_barcodes):
+        if raw and (barcode := raw.strip()):
+            return barcode
+    return None
+
+
+async def set_primary_product_barcode(
+    session: AsyncSession,
+    product: Product,
+    barcode: str,
+) -> str:
+    """Validate against this product's known codes, then save one override."""
+    candidate = barcode.strip()
+    aliases = await load_barcodes_by_product(session, product.tenant_id, {product.id})
+    links = (
+        await session.execute(
+            select(ProductMarketplaceLink.external_barcodes).where(
+                ProductMarketplaceLink.tenant_id == product.tenant_id,
+                ProductMarketplaceLink.seller_id == product.seller_id,
+                ProductMarketplaceLink.product_id == product.id,
+                ProductMarketplaceLink.marketplace == "ozon",
+                ProductMarketplaceLink.is_active.is_(True),
+            )
+        )
+    ).scalars().all()
+    candidates = (
+        product.wb_barcode,
+        *aliases.get(product.id, ()),
+        *(barcode for link in links for barcode in link),
+    )
+    known = {
+        code.strip()
+        for code in candidates
+        if isinstance(code, str) and code.strip()
+    }
+    if candidate not in known:
+        raise ValueError("product_barcode_not_found")
+    product.primary_print_barcode = candidate
+    await session.commit()
+    return candidate
 
 
 def normalize_barcodes(values: object) -> tuple[str, ...]:

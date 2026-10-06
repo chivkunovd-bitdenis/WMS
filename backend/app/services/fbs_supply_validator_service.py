@@ -23,6 +23,7 @@ from app.services.fbs_worklist_service import (
     NON_BLOCKING_SELECTION_CODES,
     compute_selection_blockers,
 )
+from app.services.operation_fact_service import normalize_marketplace
 
 
 class FbsSupplyValidationError(Exception):
@@ -328,7 +329,7 @@ def preflight_to_dict(
     if result.summary is not None:
         s = result.summary
         summary_out = {
-            "marketplace": s.marketplace,
+            "marketplace": normalize_marketplace(s.marketplace),
             "seller": {"id": str(s.seller_id), "name": s.seller_name},
             "wb_warehouse": {"id": s.wb_warehouse_id, "name": s.wb_warehouse_name},
             "wms_warehouse": {"id": str(s.wms_warehouse_id), "name": s.wms_warehouse_name},

@@ -1,4 +1,3 @@
-import { resolveProductBarcodeOptions } from '../../types/wbProductCatalog'
 import type { FbsOrderMetadata, FbsPickOptionLocation, FbsWorkspace } from './fbsApi'
 
 export type FbsMarketplace = 'wb' | 'ozon'
@@ -328,13 +327,9 @@ export function productBarcodeOptionsForPosition(
   position: FbsWorkspace['orders'][number]['positions'][number],
   marketplace: 'wb' | 'ozon',
 ) {
-  const options = resolveProductBarcodeOptions({
-    wb_primary_barcode: position.barcode,
-    marketplace_bindings: position.marketplace_bindings,
-  })
-  return marketplace === 'ozon'
-    ? options.filter((option) => option.marketplace === 'ozon')
-    : options
+  return position.barcode?.trim()
+    ? [{ marketplace, barcode: position.barcode.trim() }]
+    : []
 }
 
 export type FbsPickingRow = FbsPickingListPrintRow & {

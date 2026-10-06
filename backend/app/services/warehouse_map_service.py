@@ -36,6 +36,7 @@ from app.services import (
 from app.services.box_barcode_service import inbound_box_display_code
 from app.services.catalog_service import load_ozon_primary_image_urls
 from app.services.inventory_container_service import ContainerKind, validate_container
+from app.services.product_barcode_service import primary_product_barcode
 from app.services.sorting_location_service import (
     SORTING_LOCATION_CODE,
     SORTING_LOCATION_LABEL,
@@ -670,7 +671,7 @@ async def get_warehouse_map(
             "name": product.name,
             "seller_name": seller_name,
             "category": category,
-            "barcode": product.wb_barcode,
+            "barcode": primary_product_barcode(product),
             "seller_article": product.wb_vendor_code,
             "photo_url": photo_url,
             "qty": int(balance.quantity),
@@ -723,7 +724,7 @@ async def get_warehouse_map(
                 "name": product.name,
                 "seller_name": seller_name,
                 "category": category,
-                "barcode": product.wb_barcode,
+                "barcode": primary_product_barcode(product),
                 "seller_article": product.wb_vendor_code,
                 "photo_url": photo_url,
                 "qty": pending_quantity,
@@ -1888,7 +1889,7 @@ async def get_sorting_objects(
             "name": product.name,
             "sku": product.sku_code,
             "seller": seller.name if seller is not None else "",
-            "barcode": product.wb_barcode or "",
+            "barcode": primary_product_barcode(product) or "",
             "photo": product_nodes.get(str(product.id), {}).get("photo_url") or "",
             "size": product.wb_size,
             "alreadyAt": [

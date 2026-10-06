@@ -1,6 +1,6 @@
 import { useCallback } from 'react'
 import { apiUrl } from '../api'
-import { resolveProductBarcodeOptions, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
+import { resolveProductPrimaryBarcode, type ProductLineDisplayMeta } from '../types/wbProductCatalog'
 import { displayMetaToProductLabel } from './productBarcodePrint'
 import { readApiErrorMessage } from './readApiErrorMessage'
 import { useMarkingCodePrint } from './useMarkingCodePrint'
@@ -109,10 +109,12 @@ export function useFfProductMarkingPrint(token: string) {
         skuCode: opts.meta.sku_code,
         productName: opts.meta.product_name,
         productLabel: displayMetaToProductLabel(opts.meta),
-        // WB-only остаётся в прежнем режиме; связанная Ozon-карточка добавляет
-        // выбор реального кода в ту же форму, включая случай отсутствующих кодов.
+        // The product card owns the barcode choice. The print dialog receives
+        // only that value, including when both marketplaces have other aliases.
         productBarcodeOptions: opts.meta.marketplace_bindings?.some((binding) => binding.marketplace === 'ozon')
-          ? resolveProductBarcodeOptions(opts.meta)
+          ? resolveProductPrimaryBarcode(opts.meta)
+            ? [{ marketplace: 'ozon', barcode: resolveProductPrimaryBarcode(opts.meta) }]
+            : []
           : undefined,
         packagingInstructions: opts.meta.packaging_instructions,
         unitsInPack: opts.meta.units_in_pack,

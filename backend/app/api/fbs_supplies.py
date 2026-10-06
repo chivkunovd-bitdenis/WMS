@@ -10,6 +10,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, 
 from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import distinct, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import get_effective_seller_id, require_fbs_operator_access
 from app.api.fbs_errors import envelope_from_exc, raise_fbs_http
@@ -42,10 +43,16 @@ from app.services.fbs_print_asset_service import (
     map_print_asset,
     request_supply_print_batch,
 )
-from app.services.fbs_tracking_service import FbsTrackingError, sync_supply_tracking
+from app.services.fbs_tracking_service import (
+    FbsTrackingError,
+    build_tracking_summary,
+    fetch_tracking_provider_snapshot,
+    sync_supply_tracking,
+)
 from app.services.fbs_workspace_service import FbsWorkspaceError, get_supply_workspace
 from app.services.marketplace_account_service import MarketplaceAccountError
 from app.services.marketplace_provider import MarketplaceProviderError, provider_error_message
+from app.services.operation_fact_service import normalize_marketplace
 from app.services.ozon_fbs_errors import OzonFbsProcessError
 from app.services.wildberries_client import short_kiz_write_timeout
 
@@ -857,7 +864,7 @@ def _supply_out(supply: FbsSupply, *, include_orders: bool) -> FbsSupplyOut:
         orders_out = [_order_out(order) for order in supply.orders]
     return FbsSupplyOut(
         id=str(supply.id),
-        marketplace=cast(Literal["wb", "ozon"], supply.marketplace),
+        marketplace=cast(Literal["wb", "ozon"], normalize_marketplace(supply.marketplace)),
         seller_id=str(supply.seller_id),
         warehouse_id=str(supply.warehouse_id),
         wb_supply_id=supply.wb_supply_id,
@@ -3337,6 +3344,46 @@ async def sync_fbs_supply_tracking(
     except FbsWorkspaceError as exc:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
     return FbsWorkspaceOut.model_validate(workspace)
+
+
+@router.post("/{supply_id}/tracking-status")
+async def sync_fbs_supply_tracking_status(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    """Refresh only one WB supply and its order statuses for an open card."""
+    stmt = (
+        select(FbsSupply)
+        .where(FbsSupply.id == supply_id, FbsSupply.tenant_id == user.tenant_id)
+        .options(selectinload(FbsSupply.orders))
+    )
+    supply = (await session.execute(stmt)).scalar_one_or_none()
+    if supply is None or supply.marketplace != "wb":
+        raise_fbs_http(status.HTTP_404_NOT_FOUND, "supply_not_found")
+    async with httpx.AsyncClient() as http_client:
+        try:
+            snapshot = await fetch_tracking_provider_snapshot(
+                session, user.tenant_id, supply, http_client,
+            )
+            result = await sync_supply_tracking(
+                session,
+                user.tenant_id,
+                supply_id,
+                http_client,
+                provider_snapshot=snapshot,
+                actor_user_id=user.id,
+            )
+        except FbsTrackingError as exc:
+            raise_fbs_http(status.HTTP_502_BAD_GATEWAY, exc.code, retryable=True)
+    await session.commit()
+    supply = (await session.execute(stmt)).scalar_one()
+    return {
+        "supply_status": supply.status,
+        "tracking_summary": build_tracking_summary(supply, list(supply.orders)),
+        "wb_closed_at": result.wb_closed_at.isoformat() if result.wb_closed_at else None,
+        "wb_scan_at": result.wb_scan_at.isoformat() if result.wb_scan_at else None,
+    }
 
 
 @router.post("/{supply_id}/markings/sync", response_model=FbsWorkspaceOut)
