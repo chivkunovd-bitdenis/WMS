@@ -53,6 +53,31 @@
         "evidence_commit": "e27c0eab577fd7cc183aeec14c2451e1c7d8b7c2",
         "evidence_blob": "ea2aab84f2b8d48966c74f11abd463ced0837228"
       }
+    },
+    {
+      "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+      "source_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+      "correction_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+      "files": [
+        {
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+          "transform": "wms663-close-accessible-selector",
+          "before_blob": "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
+          "after_blob": "7b41916c43bf144d9fdeb7772d415bdf5535ff05"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+        "correction_commit": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+        "evidence": "docs/reviews/wms663-astra-d9e022697.md",
+        "evidence_commit": "146fe6e3ad92844601c525521d20343c31340456",
+        "evidence_blob": "725f1510d8e7406bfc1077aebb0a0d17356773b7",
+        "scope": "Exact one-line accessible Close selector correction only; 16 expectations unchanged"
+      }
     }
   ]
 }

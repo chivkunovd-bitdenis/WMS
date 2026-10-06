@@ -35,6 +35,11 @@ FIXTURE_BLOB_PAIRS = {
         "21baad5243f664aca69ff817407ea17e66f59155",
         "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
     ),
+    "wms663-close-accessible-selector": (
+        "WMS-663", "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx",
+        "8548a75eb6963edcd5e3b3755e0a618d918f9f94",
+        "7b41916c43bf144d9fdeb7772d415bdf5535ff05",
+    ),
     "wms663-complete-positive-status-fixtures": (
         "WMS-663", "backend/tests/test_wms663_customs_documents_contract.py",
         "4e1aff5a80445fa61b5697d60a26985427dfd28e",
