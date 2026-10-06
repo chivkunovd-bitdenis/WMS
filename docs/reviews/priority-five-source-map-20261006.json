@@ -25,6 +25,14 @@
           "resolution": "Keep all existing sections; insert original accepted WMS-662 section"
         }
       ]
+    },
+    {
+      "task": "WMS-666",
+      "source": "1a1ec824661c8501d79a1c026e74267e24a01d96",
+      "base": "685366ac9e97e44afbb900e698be1b94abdbdad1",
+      "mode": "merge retaining original contracts/correction ledger/evidence ancestry",
+      "conflicts": [],
+      "known_remaining": "Separate test writer must correct fixed historical-base scope test; C11 staging and C12 paper remain open"
     }
   ]
 }
