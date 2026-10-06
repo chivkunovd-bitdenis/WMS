@@ -79,12 +79,24 @@ async def test_c4_wb_self_service_creates_requisites_with_single_call_and_journa
     _stub_wb_card_import(monkeypatch)
 
     seller_info_calls = 0
+    taxonomy_requests: list[httpx.Request] = []
 
     def handler(request: httpx.Request) -> httpx.Response:
         nonlocal seller_info_calls
-        seller_info_calls += 1
-        assert request.url.path == "/api/v1/seller-info"
-        return httpx.Response(200, json={"name": "ИП Тестов А", "tin": WB_VALID_INN})
+        assert request.headers["Authorization"] == "wms547-a-wb-key"
+        if request.url.path == "/api/v1/seller-info":
+            seller_info_calls += 1
+            return httpx.Response(200, json={"name": "ИП Тестов А", "tin": WB_VALID_INN})
+        if request.url.path == "/content/v2/object/parent/all":
+            assert request.method == "GET"
+            taxonomy_requests.append(request)
+            return httpx.Response(200, json={"data": []})
+        if request.url.path == "/content/v2/object/all":
+            assert request.method == "GET"
+            assert dict(request.url.params) == {"limit": "1000", "offset": "0"}
+            taxonomy_requests.append(request)
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB request: {request.method} {request.url}")
 
     monkeypatch.setattr(svc.httpx, "AsyncClient", _wb_client_factory(handler))
 
@@ -95,6 +107,10 @@ async def test_c4_wb_self_service_creates_requisites_with_single_call_and_journa
     )
     assert saved.status_code == 200, saved.text
     assert seller_info_calls == 1
+    assert [request.url.path for request in taxonomy_requests] == [
+        "/content/v2/object/parent/all",
+        "/content/v2/object/all",
+    ]
 
     profile = await _profile_or_none(tenant_id, seller_id)
     assert profile is not None
