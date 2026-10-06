@@ -49,8 +49,10 @@ function labelPageHtml(options: BarcodeLabelPrintOptions, index: number, total: 
  * Массовая печать намеренно собирает все страницы в один iframe: термопринтер
  * получает непрерывную ленту, а не набор отдельных браузерных заданий.
  */
-export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void {
-  if (optionsList.length === 0) return
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff: { beforeTransfer: (html: string) => void }): Promise<void>
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff?: { beforeTransfer: (html: string) => void }): void | Promise<void> {
+  if (optionsList.length === 0) return handoff ? Promise.resolve() : undefined
   const first = optionsList[0]!
   const { labelSize, layout = 'default' } = first
   if (optionsList.some((options) => options.labelSize?.id !== labelSize?.id || (options.layout ?? 'default') !== layout)) {
@@ -101,6 +103,15 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     window.__WMS_LAST_PRINT_HTML__ = html
   }
 
+  // Awaitable only for inbound batches. Existing scan-to-print callers retain
+  // their fire-and-forget contract and do not acquire a new rejected promise.
+  let resolveTransfer: (() => void) | undefined
+  let rejectTransfer: ((error: unknown) => void) | undefined
+  const transferred = handoff ? new Promise<void>((resolve, reject) => {
+    resolveTransfer = resolve
+    rejectTransfer = reject
+  }) : undefined
+
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.position = 'fixed'
@@ -129,6 +140,7 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     const w = iframe.contentWindow
     if (!w) {
       cleanup('image-error')
+      rejectTransfer?.(new Error('Не удалось открыть источник этикеток.'))
       return
     }
     try {
@@ -138,32 +150,40 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     }
     setTimeout(() => {
       // Нельзя удалять iframe сразу после print(): системное окно предпросмотра
-      // ещё читает data URL из этого документа. afterprint — единственный
-      // успешный конец печати; до него источник этикетки обязан оставаться жив.
+      // ещё читает data URL из этого документа. До afterprint источник обязан
+      // оставаться жив; само событие не подтверждает выход этикеток на бумаге.
       w.addEventListener('afterprint', () => cleanup('afterprint'), { once: true })
       try {
+        handoff?.beforeTransfer(html)
         if (window.__WMS_CAPTURE_PRINT_HTML__) {
           window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
         }
         w.print()
-      } catch {
+        resolveTransfer?.()
+      } catch (error) {
         cleanup('image-error')
+        rejectTransfer?.(error)
       }
     }, 100)
   }
 
-  iframe.srcdoc = html
   iframe.onload = () => {
     const doc = iframe.contentDocument
     const images = Array.from(doc?.querySelectorAll<HTMLImageElement>('img.barcode') ?? [])
     if (images.length === 0) {
       cleanup('image-error')
+      rejectTransfer?.(new Error('Не удалось загрузить этикетки.'))
       return
     }
     Promise.all(images.map((image) => image.decode()))
       .then(printNow)
-      .catch(() => cleanup('image-error'))
+      .catch((error) => {
+        cleanup('image-error')
+        rejectTransfer?.(error)
+      })
   }
+  iframe.srcdoc = html
+  return transferred
 }
 
 /** Обратная совместимость для одиночной печати. */

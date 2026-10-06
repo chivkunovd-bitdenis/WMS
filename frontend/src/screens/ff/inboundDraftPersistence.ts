@@ -3,7 +3,15 @@ import { randomId } from '../../utils/randomId'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 export type IntakeMutation = { method: 'POST' | 'PATCH' | 'PUT' | 'DELETE'; path: string; body?: Record<string, unknown> }
+export type InboundLabelAttempt = {
+  id: string
+  printedBefore: Record<string, string | null>
+  html: string
+  paths: string[]
+  state: 'unknown' | 'transferred' | 'complete'
+}
 type SavedIntake = {
+  labelAttempt?: InboundLabelAttempt
   pending?: IntakeMutation[]
   totals?: Record<string, string>
   pickerAttempt?: true
@@ -22,6 +30,10 @@ export function readIntake(token: string, document: string): SavedIntake {
 }
 function writeIntake(token: string, document: string, value: SavedIntake) {
   localStorage.setItem(intakeStorageKey(token, document), JSON.stringify(value))
+}
+/** Retain the exact print source in the existing tenant/user/document recovery record. */
+export function saveInboundLabelAttempt(token: string, document: string, labelAttempt: InboundLabelAttempt) {
+  writeIntake(token, document, { ...readIntake(token, document), labelAttempt })
 }
 export function saveIntakeTotals(token: string, document: string, totals: Record<string, string>) {
   writeIntake(token, document, { ...readIntake(token, document), totals })
