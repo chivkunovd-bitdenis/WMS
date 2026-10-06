@@ -137,3 +137,22 @@ Other touched files: `frontend/src/utils/wms680PrintGeometry.test.ts`.
 
 
 Only this new review report is owned and committed by this reviewer. No tests, product, requirements, checker, policy or ledger edits were made.
+
+## Supplemental R9 contract · 2026-10-07 · PASS
+
+Independent reviewer: actual **gpt-6.1-sol high**. This append approves only the additive test delta below; the preceding review remains unchanged.
+
+- Content source: `739bcadf1be4fe92e24af3d30b42f892f858e598`.
+- Actual parent/prior report: `d300851544c9587d6563462c23a60c3b67d1af12`.
+- Correction/reviewed snapshot: `f2de20008df3b21c1decead0e1051dbda4a4a08a`.
+- Only touched file: `frontend/src/utils/wms680PrintGeometry.test.ts`.
+- Source and parent blob: `34f4ef6ca82d72cf65583d6ba6bdcefb689128a6`.
+- Correction blob: `0c7cc8f9f06fad5df0f7f3bd924dde607179a068`.
+
+The existing six parameterized PDF cases, their form list and assertions are byte-identical. Original rendering, safe filename, header and PDF-geometry helpers are unchanged. capturedWaybill gains an optional allocation argument with exactly its previous default; existing inputs therefore retain their meaning.
+
+Three supplemental cases exercise the lower “Подбор по ячейкам” table for marketplace_unload, operational_outbound and inbound_intake through actual Chrome DOM measurements and rendered PDF. They preserve exact DOM headers, two allocation rows, locations, SKU, order and quantities, and check PDF header order and allocation values. Numeric Qty must be narrower than both text columns; no arbitrary millimetre target or new business constraint is introduced. This adds coverage of existing OWNER R9, rather than altering the earlier semantic supersession or weakening frozen expectations.
+
+Original tester thread `01a112ca-fb4c-70f0-aa05-96df41271327`, in root 680-testwriter/picking-numeric-width-contract-events.jsonl, records **3 meaningful RED, 6 filtered** before the final product fix: Qty 246.34375px versus location 246.328125px. All three failures reached the compactness assertion after PDF creation. The existing independent product review `3c6af57f4eceb8613e7204b06c0868af80a238c5` documents approximately 61.9mm on defective product `e8638be207559fee31a069734026cda1d4fcccb4`. These are attributed evidence, not this reviewer's runs.
+
+No product review or rerun was performed. Developer-owned product edits remain excluded. This PASS approves the additive RED contract and does not close D3 or assert the subsequent product fix passes.
