@@ -16,7 +16,9 @@ permissions:
   checks: write
 
 concurrency:
-  group: process-integrity-${{ github.event.pull_request.number || github.event.workflow_run.id }}
+  # One queue includes all PR-target and workflow-run publishers. A delayed old
+  # success POST cannot complete after a newer publisher's failure POST.
+  group: process-integrity-publishers
   cancel-in-progress: false
 
 jobs:
