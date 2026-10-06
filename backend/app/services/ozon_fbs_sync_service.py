@@ -1031,6 +1031,9 @@ async def sync_ozon_orders(
     if observations:
         await observed.save_observations(session, tenant_id, seller_id, observations)
         await lock_order_batch_packaging_rows(session, tenant_id, list(observations))
+        await observed.lock_handoff_batch_products(
+            session, tenant_id, seller_id, list(observations),
+        )
         for supply_id in sorted({o.supply_id for o in imported_orders if o.supply_id}, key=str):
             supply = await session.scalar(select(FbsSupply).where(FbsSupply.id == supply_id)
                                           .execution_options(populate_existing=True))
@@ -1138,6 +1141,7 @@ async def sync_ozon_order_statuses(
     from app.services.fbs_packaging_integration_service import lock_order_batch_packaging_rows
     order_ids = [o.id for o in orders]
     await lock_order_batch_packaging_rows(session, tenant_id, order_ids)
+    await observed.lock_handoff_batch_products(session, tenant_id, seller_id, order_ids)
     orders = list(await session.scalars(select(FbsOrder).where(
         FbsOrder.id.in_(order_ids), FbsOrder.tenant_id == tenant_id,
         FbsOrder.seller_id == seller_id,

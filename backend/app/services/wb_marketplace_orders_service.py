@@ -1043,6 +1043,7 @@ async def sync_order_statuses(
 
     order_ids = [o.id for o in polled_orders]
     await lock_order_batch_packaging_rows(session, tenant_id, order_ids)
+    await observed.lock_handoff_batch_products(session, tenant_id, seller_id, order_ids)
     orders = list((await session.scalars(select(FbsOrder).where(
         FbsOrder.tenant_id == tenant_id, FbsOrder.seller_id == seller_id,
         FbsOrder.id.in_(order_ids),

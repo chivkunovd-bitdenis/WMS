@@ -25,6 +25,7 @@ from app.models.fbs_order import (
 from app.models.fbs_shipment_reversal_ledger import FbsShipmentReversalLedger as Ledger
 from app.models.fbs_supply import FbsSupply
 from app.models.fbs_wb_operation import FbsWbOperation
+from app.models.product import Product
 
 OBSERVATION_KIND = "observed_handoff"
 NEGATIVE = frozenset(
@@ -698,6 +699,50 @@ def record_cancelled_sources(ledger: Ledger | None, children: dict[str, Any]) ->
             if quantity:
                 recipe.append(dict(original, quantity=quantity))
     ledger.ozon_positions_json = recipe
+
+
+async def lock_handoff_batch_products(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    seller_id: uuid.UUID,
+    order_ids: list[uuid.UUID],
+) -> None:
+    """After parent locks, take the WMS batch's stock locks before any seller fence."""
+    supply_ids = select(FbsOrder.supply_id).join(
+        FbsSupply, FbsSupply.id == FbsOrder.supply_id,
+    ).where(
+        FbsOrder.id.in_(order_ids), FbsOrder.tenant_id == tenant_id,
+        FbsOrder.seller_id == seller_id, FbsSupply.tenant_id == tenant_id,
+        FbsSupply.seller_id == seller_id, FbsSupply.source == "wms",
+    )
+    # conduct_supply also resumes saved evidence for unpolled orders in these
+    # parents. Fence that entire order scope before acquiring its products.
+    orders = list(await session.scalars(select(FbsOrder).where(
+        FbsOrder.supply_id.in_(supply_ids), FbsOrder.tenant_id == tenant_id,
+    ).options(selectinload(FbsOrder.product_positions)).order_by(FbsOrder.id)
+        .with_for_update().execution_options(populate_existing=True)))
+    if not orders:
+        return
+    ids = [order.id for order in orders]
+    product_ids = {order.product_id for order in orders if order.product_id is not None}
+    product_ids.update(position.product_id for order in orders
+                       for position in order.product_positions if position.product_id is not None)
+    # Cancellation/reservation cleanup can still touch the previous mapping.
+    product_ids.update(await session.scalars(select(FbsOrderReservation.product_id).where(
+        FbsOrderReservation.tenant_id == tenant_id,
+        FbsOrderReservation.fbs_order_id.in_(ids),
+    )))
+    product_ids.update(await session.scalars(
+        select(FbsOrderProductReservation.product_id).join(FbsOrderProduct).where(
+            FbsOrderProductReservation.tenant_id == tenant_id,
+            FbsOrderProduct.order_id.in_(ids),
+        )
+    ))
+    # Keep FOR UPDATE, matching ordinary handoff/reservation stock locks. A
+    # weaker lock would allow C to hold P2 while this batch already holds Seller.
+    await session.execute(select(Product.id).where(
+        Product.tenant_id == tenant_id, Product.id.in_(product_ids),
+    ).order_by(Product.id).with_for_update())
 
 
 async def conduct_supply(session: AsyncSession, supply: FbsSupply) -> None:
