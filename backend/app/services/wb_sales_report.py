@@ -11,9 +11,9 @@ import time
 import uuid
 from collections.abc import Awaitable, Callable
 from contextlib import suppress
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, DecimalException, InvalidOperation
 from email.utils import parsedate_to_datetime
 from typing import Any, cast
 from zoneinfo import ZoneInfo
@@ -65,12 +65,22 @@ def sale_cost(row: dict[str, Any]) -> int:
             "invalid_sale_price", "WB: стоимость продажи finishedPrice отсутствует"
         )
     try:
-        amount = Decimal(str(value)) * 100
-    except InvalidOperation:
+        price = Decimal(str(value))
+    except DecimalException:
         raise WbPriceDataError(
             "invalid_sale_price", "WB: стоимость продажи finishedPrice некорректна"
         ) from None
-    if not amount.is_finite() or amount != amount.to_integral_value():
+    if not price.is_finite():
+        raise WbPriceDataError("invalid_sale_price", "WB: стоимость продажи некорректна")
+    if not 0 < price <= Decimal(CRPT_MAX_PRODUCT_COST) / 100:
+        raise WbPriceDataError(
+            "invalid_sale_price", "WB: стоимость продажи вне допустимого диапазона"
+        )
+    # Tuple construction shifts the exponent exactly, independently of Decimal's
+    # default 28-digit arithmetic context. Never round a fractional kopek away.
+    sign, digits, exponent = price.as_tuple()
+    amount = Decimal((sign, digits, cast(int, exponent) + 2))
+    if amount != amount.to_integral_value():
         raise WbPriceDataError("invalid_sale_price", "WB: стоимость продажи требует точных копеек")
     if not 0 < amount <= CRPT_MAX_PRODUCT_COST:
         raise WbPriceDataError(
@@ -113,6 +123,7 @@ class SalesReport:
     pages: int
     row_count: int
     coverage_missing: frozenset[uuid.UUID] = frozenset()
+    excluded_rows: dict[str, list[dict[str, Any]]] = field(default_factory=dict)
 
     def evidence(self, order: FbsOrder) -> dict[str, Any]:
         assert order.wb_rid is not None
@@ -129,6 +140,31 @@ class SalesReport:
             "received_at": self.received_at.isoformat(),
             "complete": True,
             "dateFrom": self.date_from,
+            "pages": self.pages,
+            "row_count": self.row_count,
+        }
+
+    def exclusion_evidence(self, order: FbsOrder) -> dict[str, Any]:
+        rows = self.excluded_rows.get(order.wb_rid or "", [])
+        kinds = [str(row.get("saleID", "")) for row in rows]
+        code = (
+            "wb_sales_returned"
+            if any(kind.startswith("R") for kind in kinds)
+            else "wb_sales_unknown_type"
+            if any(not kind.startswith("S") for kind in kinds)
+            else "wb_sales_conflicting_or_ambiguous"
+            if rows
+            else "wb_sales_sale_not_found"
+        )
+        return {
+            "source": SALES_SOURCE,
+            "order_id": str(order.id),
+            "srid": order.wb_rid,
+            "code": code,
+            "raw_sales": copy.deepcopy(rows),
+            "received_at": self.received_at.isoformat(),
+            "dateFrom": self.date_from,
+            "complete": True,
             "pages": self.pages,
             "row_count": self.row_count,
         }
@@ -274,6 +310,7 @@ async def read_sales_report(
                         saved["pages"],
                         saved["row_count"],
                         frozenset(uuid.UUID(value) for value in saved["coverage_missing"]),
+                        saved.get("excluded_rows", {}),
                     )
                 except (KeyError, TypeError, ValueError):
                     pass
@@ -292,7 +329,7 @@ async def read_sales_report(
                         await _defer(seller_id, redis, response.headers.get("Retry-After"))
                     raise WbSalesError(f"wb_sales_incomplete_http_{response.status_code}")
                 try:
-                    page = json.loads(response.content, parse_float=Decimal)
+                    page = json.loads(response.content, parse_float=Decimal, parse_constant=str)
                 except (ValueError, UnicodeDecodeError):
                     raise WbSalesError("wb_sales_incomplete_json") from None
                 pages += 1
@@ -323,6 +360,11 @@ async def read_sales_report(
             for rid, row in by_rid.items()
             if rid in rid_orders and len(rid_orders[rid]) == 1
         }
+        excluded_rows: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            rid = row["srid"]
+            if rid in rid_orders and rid not in by_rid:
+                excluded_rows.setdefault(rid, []).append(row)
         report = SalesReport(
             by_rid,
             datetime.now(UTC),
@@ -330,6 +372,7 @@ async def read_sales_report(
             pages,
             len(rows),
             coverage_missing,
+            excluded_rows,
         )
         if redis is not None:
             await redis.set(
@@ -342,6 +385,7 @@ async def read_sales_report(
                         "pages": report.pages,
                         "row_count": report.row_count,
                         "coverage_missing": [str(value) for value in report.coverage_missing],
+                        "excluded_rows": report.excluded_rows,
                     }
                 ),
                 ex=300,

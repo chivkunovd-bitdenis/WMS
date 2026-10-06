@@ -171,7 +171,22 @@ async def _rows(
             raise WithdrawalError("withdrawal_sale_binding_changed")
         if sales is not None:
             if order.wb_rid not in sales.by_rid:
-                raise WithdrawalError("withdrawal_sale_no_longer_eligible")
+                rejected = sales.exclusion_evidence(order)
+                item.preflight_evidence = {
+                    **(item.preflight_evidence or {}),
+                    "wb_sale_recheck": rejected,
+                }
+                item.state = "failed"
+                item.error = {
+                    "source": "wb",
+                    "code": rejected["code"],
+                    "message": (
+                        "WB: подтверждён возврат продажи"
+                        if rejected["code"] == "wb_sales_returned"
+                        else "WB: продажа отсутствует или неоднозначна в полном отчёте"
+                    ),
+                }
+                continue
             item.preflight_evidence = {"wb_sale": sales.evidence(order)}
             item.price_snapshot_id = None
             try:
@@ -335,7 +350,11 @@ async def _replace_unsigned(
             WithdrawalItem(
                 **values,
                 attempt=operation.attempt,
-                preflight_evidence={"wb_sale": (item.preflight_evidence or {}).get("wb_sale")},
+                preflight_evidence={
+                    key: value
+                    for key, value in (item.preflight_evidence or {}).items()
+                    if key in {"wb_sale", "wb_sale_recheck"}
+                },
             )
         )
     await session.flush()

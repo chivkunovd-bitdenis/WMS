@@ -155,3 +155,17 @@ Full backend ruff --no-cache . PASS; mypy --cache-dir=/dev/null --no-incremental
 Disk exhaustion affected initial attempts; parent recovered >800MiB old synthetic DBs.
 Fresh production seller scope, sold counts, operator CryptoPro and deployment are not
 proved here. SC13/SC16 references must be real evidence, never fabricated links.
+
+Resume / preservation update, 06.10.2026 06:08 UTC:
+Parent revoked the previous hold and explicitly required an honest partial code
+commit, not a readiness claim. Base saved/pushed as
+5ed26cc4f9466d82fc62ec0ff66982b48a5bfef9. Foreign untracked analyst-result file
+was not staged. Tester full handoff HEAD4ba3e324 read; own frozen18 rerun observed
+4 failed/14 passed in4.35s: mixed return, fractional kopek rounding, giant exponent
+service and giant exponent API500. Fixed exact Decimal scaling via tuple exponent
+(no arithmetic-context rounding); reject nonfinite/range before scaling. Preserved
+original S evidence plus fresh excluded report raw rows/reason for returned item;
+only healthy item proceeds through exact bytes, signature and terminal recovery.
+After fix, all18 passed in15.85s; targeted ruff and diff-check PASS. Full final-code
+regressions are still pending. Reserved-waiter/429 and one caption guards were NOT
+present in published tester contract: no fabricated RED or closed-review claim.
