@@ -131,6 +131,11 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     data.pickAllocations && data.pickAllocations.length > 0
       ? `<h2>Подбор по ячейкам</h2>
         <table>
+          ${printColgroup(186, [
+            { grow: 1 },
+            { grow: 1 },
+            { width: compactPrintWidth('Кол-во', data.pickAllocations.map((p) => p.quantity), 18, 12, 4.5, 12) },
+          ])}
           <thead><tr><th>Ячейка</th><th>SKU</th><th align="right">Кол-во</th></tr></thead>
           <tbody>
             ${data.pickAllocations
