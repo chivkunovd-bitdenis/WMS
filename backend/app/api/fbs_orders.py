@@ -733,3 +733,125 @@ async def sync_fbs_order_statuses(
 # Короткий путь из продуктового контракта добавляется тем же экспортируемым
 # роутером, поэтому менять глобальную сборку приложения не требуется.
 router.routes.extend(contract_router.routes)
+
+
+class OzonExemplarDocumentsBody(BaseModel):
+    product_id: int
+    exemplar_id: int
+    gtd: str | None = None
+    is_gtd_absent: bool = False
+    rnpt: str | None = None
+    is_rnpt_absent: bool = False
+    expected_version: int
+
+
+async def _ozon_document_action(
+    session: AsyncSession,
+    user: User,
+    order_id: uuid.UUID,
+    body: OzonExemplarDocumentsBody | None = None,
+    *,
+    prepare: bool = False,
+) -> dict[str, Any]:
+    from app.services.marketplace_account_service import (
+        MarketplaceAccountError,
+        MarketplaceAccountService,
+    )
+    from app.services.ozon_exemplar_documents_service import (
+        document_data,
+        document_order,
+        document_view,
+        fetch_exemplar_snapshot,
+        get_exemplar_documents,
+        save_exemplar_documents,
+        store_document_data,
+    )
+    from app.services.ozon_fbs_errors import OzonFbsProcessError
+
+    try:
+        order = await document_order(session, user.tenant_id, order_id)
+        client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+            user.tenant_id, order.seller_id
+        )
+        provider = build_ozon_provider()
+        if prepare:
+            if (
+                document_data(order).get("state") in {"preparing", "checking", "unknown"}
+                or document_data(order).get("status") == "update_not_available"
+            ):
+                raise OzonFbsProcessError(
+                    "ozon_exemplar_documents_conflict",
+                    "Предыдущий запрос ещё проверяется.",
+                    status_code=409,
+                )
+            snapshot = await fetch_exemplar_snapshot(
+                provider,
+                posting_number=order.external_order_id or "",
+                client_id=client_id,
+                api_key=api_key,
+            )
+            order = await document_order(session, user.tenant_id, order_id, lock=True)
+            data = document_data(order)
+            if data.get("state") in {"preparing", "checking", "unknown"}:
+                raise OzonFbsProcessError(
+                    "ozon_exemplar_documents_conflict", "Сведения изменились.", status_code=409
+                )
+            data.update(snapshot=snapshot)
+            store_document_data(order, data)
+            await session.commit()
+            return await document_view(session, order)
+        if body is None:
+            return await get_exemplar_documents(
+                session,
+                tenant_id=user.tenant_id,
+                order_id=order_id,
+                provider=provider,
+                client_id=client_id,
+                api_key=api_key,
+            )
+        return await save_exemplar_documents(
+            session,
+            tenant_id=user.tenant_id,
+            order_id=order_id,
+            provider=provider,
+            client_id=client_id,
+            api_key=api_key,
+            **body.model_dump(),
+        )
+    except OzonFbsProcessError as exc:
+        raise HTTPException(
+            status_code=exc.status_code or 502, detail=envelope_from_exc(exc)
+        ) from exc
+    except MarketplaceAccountError as exc:
+        raise HTTPException(status_code=403, detail=envelope_from_exc(exc)) from exc
+    except MarketplaceProviderError as exc:
+        _raise_ozon_provider_http(exc)
+    raise AssertionError("unreachable")
+
+
+@router.get("/{order_id}/ozon-exemplar-documents")
+async def get_ozon_exemplar_documents(
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    return await _ozon_document_action(session, user, order_id)
+
+
+@router.put("/{order_id}/ozon-exemplar-documents")
+async def put_ozon_exemplar_documents(
+    order_id: uuid.UUID,
+    body: OzonExemplarDocumentsBody,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    return await _ozon_document_action(session, user, order_id, body)
+
+
+@router.post("/{order_id}/ozon-exemplar-documents/prepare")
+async def prepare_ozon_exemplar_documents(
+    order_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> dict[str, Any]:
+    return await _ozon_document_action(session, user, order_id, prepare=True)

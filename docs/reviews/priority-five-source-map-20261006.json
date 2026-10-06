@@ -86,6 +86,24 @@
       "mode": "merge frozen scoped test contract before accepted product; no historical checker652 copied",
       "conflicts": [],
       "pending": "Final live-read helper/proof SHA is expected separately"
+    },
+    {
+      "task": "WMS-663",
+      "source": "15d33af129a5608d7c7bf133ac5cfb29cce3a88f",
+      "base": "69299ff9f755f5e00bf94e091544851549da8cd1",
+      "mode": "merge scoped tree with historical ours-merge ancestry preserving original tests/correction/review refs",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Keep all current sections including newer WMS-662 acceptance; insert only exact WMS-663 section"
+        },
+        {
+          "path": "docs/reviews/wms662-663-priority/analysis.md",
+          "resolution": "Incoming file is exact existing file plus one historical access-probe section; retain superset, current operational state belongs to new WMS-675 proof"
+        }
+      ],
+      "scope": "Only WMS-663 product/tests/proofs and needed accepted WMS-652 fixture governance; no historical 662/675 runtime added",
+      "remaining": "C17 public page UNKNOWN403; C19 operator readback remains open; no fabricated live acceptance"
     }
   ]
 }

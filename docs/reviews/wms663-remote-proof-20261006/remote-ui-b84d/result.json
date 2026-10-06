@@ -1,0 +1,39 @@
+{
+  "product": "aa57886772d746d0a08341867d8828bf3ed84d5a",
+  "fixture": "d9e022697e098a2f9c0feee6a5bf03f99cac5945",
+  "probe": "b84d43cb4b7f22f5b791603062dbc95a13dc9b60",
+  "proofScope": "c18",
+  "scope": "Real pinned workspace/theme, synthetic fetch only; no deployed backend, live API, printer or external cycle",
+  "cases": [
+    {
+      "case": "C18",
+      "width": 1280,
+      "status": "PASS",
+      "fixture": {
+        "sku": 2,
+        "units": 3
+      },
+      "windowOverflow": false
+    },
+    {
+      "case": "C18",
+      "width": 390,
+      "status": "PASS",
+      "fixture": {
+        "sku": 2,
+        "units": 3
+      },
+      "windowOverflow": false
+    }
+  ],
+  "browser": {
+    "protocolVersion": "1.3",
+    "product": "Chrome/154.0.8037.57",
+    "revision": "@73c14f6228d7cd537c855007e8f88678969cc0eb",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36",
+    "jsVersion": "15.4.80.11"
+  },
+  "geometryFailures": [],
+  "status": "PASS",
+  "errors": []
+}

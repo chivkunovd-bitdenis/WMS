@@ -1,0 +1,980 @@
+.E.E.E.E.E.E.E...                                                        [100%]/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/_pytest/unraisableexception.py:33: RuntimeWarning: coroutine 'Connection._cancel' was never awaited
+  gc.collect()
+RuntimeWarning: Enable tracemalloc to get the object allocation traceback
+
+==================================== ERRORS ====================================
+_ ERROR at setup of test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart _
+
+self = <Coroutine test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-9' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x11152d400>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+_ ERROR at setup of test_wms663_write_is_tenant_isolated_and_rejects_a_stale_version _
+
+self = <Coroutine test_wms663_write_is_tenant_isolated_and_rejects_a_stale_version>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-23' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x1121faf30>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+__ ERROR at setup of test_wms663_two_sessions_commit_one_posting_version_once __
+
+self = <Coroutine test_wms663_two_sessions_commit_one_posting_version_once>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-37' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x1114387d0>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+_ ERROR at setup of test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload1-accepted] _
+
+self = <Coroutine test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload1-accepted]>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-51' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x11143af30>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+_ ERROR at setup of test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload3-unknown] _
+
+self = <Coroutine test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload3-unknown]>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-65' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x112a5c500>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+_ ERROR at setup of test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload5-editable] _
+
+self = <Coroutine test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload5-editable]>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-79' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x112a5df40>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+_ ERROR at setup of test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload7-unknown] _
+
+self = <Coroutine test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload7-unknown]>
+
+    def setup(self) -> None:
+        runner_fixture_id = f"_{self._loop_scope}_scoped_runner"
+        if runner_fixture_id not in self.fixturenames:
+            self.fixturenames.append(runner_fixture_id)
+        # When loop factories are configured, resolve the loop factory
+        # fixture early so that a factory variant change cascades cache
+        # invalidation before any async fixture checks its cache.
+        hook_caller = self.config.hook.pytest_asyncio_loop_factories
+        if hook_caller.get_hookimpls():
+            _ = self._request.getfixturevalue(_asyncio_loop_factory.__name__)
+>       return super().setup()
+               ^^^^^^^^^^^^^^^
+
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:558:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:944: in pytest_fixture_setup
+    hook_result = yield
+                  ^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:407: in _asyncgen_fixture_wrapper
+    result = runner.run(setup(), context=context)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/runners.py:127: in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403: in setup
+    res = await gen_obj.__anext__()
+          ^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/conftest.py:108: in db_session
+    await _reset_database()
+tests/conftest.py:73: in _reset_database
+    async with engine.begin() as conn:
+               ^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/contextlib.py:214: in __aenter__
+    return await anext(self.gen)
+           ^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:1068: in begin
+    async with conn:
+               ^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/base.py:121: in __aenter__
+    return await self.start(is_ctxmanager=True)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/engine.py:275: in start
+    await greenlet_spawn(self.sync_engine.connect)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:201: in greenlet_spawn
+    result = context.throw(*sys.exc_info())
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3295: in connect
+    return self._connection_cls(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:144: in __init__
+    self._dbapi_connection = engine.raw_connection()
+                             ^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:3319: in raw_connection
+    return self.pool.connect()
+           ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:448: in connect
+    return _ConnectionFairy._checkout(self)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1371: in _checkout
+    with util.safe_reraise():
+         ^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/langhelpers.py:122: in __exit__
+    raise exc_value.with_traceback(exc_tb)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py:1309: in _checkout
+    result = pool._dialect._do_ping_w_event(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:729: in _do_ping_w_event
+    return self.do_ping(dbapi_connection)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:1164: in do_ping
+    dbapi_connection.ping()
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:818: in ping
+    self._handle_exception(error)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:799: in _handle_exception
+    raise error
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:816: in ping
+    _ = self.await_(self._async_ping())
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:132: in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:196: in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:825: in _async_ping
+    await tr.start()
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/transaction.py:146: in start
+    await self._connection.execute(query)
+../../../backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py:354: in execute
+    result = await self._protocol.query(query, timeout)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+>   return await waiter
+E   RuntimeError: Task <Task pending name='Task-93' coro=<_wrap_asyncgen_fixture.<locals>._asyncgen_fixture_wrapper.<locals>.setup() running at /Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.py:403> cb=[_run_until_complete_cb() at /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:181]> got Future <Future pending cb=[BaseProtocol._on_waiter_completed()]> attached to a different loop
+
+asyncpg/protocol/protocol.pyx:369: RuntimeError
+------------------------------ Captured log setup ------------------------------
+ERROR    sqlalchemy.pool.impl.AsyncAdaptedQueuePool:base.py:377 Exception terminating connection <AdaptedConnection <asyncpg.connection.Connection object at 0x112a5ea80>>
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/pool/base.py", line 373, in _close_connection
+    self._dialect.do_terminate(connection)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 1131, in do_terminate
+    dbapi_connection.terminate()
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/connectors/asyncio.py", line 402, in terminate
+    self.await_(asyncio.shield(self._terminate_graceful_close()))  # type: ignore[attr-defined] # noqa: E501
+    ~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 132, in await_only
+    return current.parent.switch(awaitable)  # type: ignore[no-any-return,attr-defined] # noqa: E501
+           ~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py", line 196, in greenlet_spawn
+    value = await result
+            ^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py", line 912, in _terminate_graceful_close
+    await self._connection.close(timeout=2)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1513, in close
+    await self._protocol.close(timeout)
+  File "asyncpg/protocol/protocol.pyx", line 617, in close
+    self._request_cancel()
+  File "asyncpg/protocol/protocol.pyx", line 650, in asyncpg.protocol.protocol.BaseProtocol._request_cancel
+    con._cancel_current_command(self.cancel_sent_waiter)
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/asyncpg/connection.py", line 1682, in _cancel_current_command
+    self._cancellations.add(self._loop.create_task(self._cancel(waiter)))
+                            ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 466, in create_task
+    self._check_closed()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py", line 550, in _check_closed
+    raise RuntimeError('Event loop is closed')
+RuntimeError: Event loop is closed
+=========================== short test summary info ============================
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_write_is_tenant_isolated_and_rejects_a_stale_version
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_two_sessions_commit_one_posting_version_once
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload1-accepted]
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload3-unknown]
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload5-editable]
+ERROR tests/test_wms663_customs_documents_contract.py::test_wms663_status_accepts_only_matching_and_keeps_other_results_nonaccepted[status_payload7-unknown]
+10 passed, 6 warnings, 7 errors in 9.50s
+<sys>:0: DeprecationWarning: builtin type swigvarlink has no __module__ attribute

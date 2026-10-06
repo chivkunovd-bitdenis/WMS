@@ -1,0 +1,104 @@
+name: WMS663 bounded synthetic proof
+on:
+  push:
+    branches: [codex/wms662-663-priority]
+    paths:
+      - .github/workflows/wms663-remote-proof.yml
+      - scripts/ci/wms663-proof/**
+permissions:
+  contents: read
+concurrency:
+  group: wms663-remote-proof-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  c10-postgres:
+    # Explicit opt-in only: unchanged PG proof already PASS in run 37439193822.
+    if: contains(github.event.head_commit.message, '[C10]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wms_test_663
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d wms_test_663"
+          --health-interval 5s --health-timeout 3s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Product identity and existing backend dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/wms663-pg"
+          git rev-parse HEAD > "$RUNNER_TEMP/wms663-pg/probe-sha.txt"
+          git diff --exit-code 1fd2d92dc30eb376c1d8a8e27238e52d963a196e HEAD -- backend/app
+          pip install -e './backend[dev]' > "$RUNNER_TEMP/wms663-pg/install.log" 2>&1
+          cp scripts/ci/wms663-proof/c10_mixed.py backend/tests/test_wms663_remote_c10.py
+      - name: C10 two real sessions and mixed writer with FakeTransport, no SKIP
+        working-directory: backend
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_663
+        run: |
+          set -o pipefail
+          timeout 120s python -m pytest -n 0 -v -s --tb=short --junitxml="$RUNNER_TEMP/wms663-pg/result.xml" tests/test_wms663_customs_documents_contract.py::test_wms663_two_sessions_commit_one_posting_version_once tests/test_wms663_remote_c10.py 2>&1 | tee "$RUNNER_TEMP/wms663-pg/probe.log"
+          python -c "import xml.etree.ElementTree as E; r=E.parse('$RUNNER_TEMP/wms663-pg/result.xml'); assert not r.findall('.//skipped'), 'C10 SKIP is not proof'"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms663-pg-${{ github.sha }}
+          path: ${{ runner.temp }}/wms663-pg
+          retention-days: 14
+  c16-c18-ui:
+    env:
+      WMS663_PRODUCT_SOURCE: aa57886772d746d0a08341867d8828bf3ed84d5a
+      WMS663_PROOF_SCOPE: ${{ contains(github.event.head_commit.message, '[C18]') && 'c18' || contains(github.event.head_commit.message, '[C16]') && 'c16' || 'all' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Exact product identity and existing frontend dependencies
+        run: |
+          mkdir -p "$RUNNER_TEMP/wms663-ui"
+          git rev-parse HEAD > "$RUNNER_TEMP/wms663-ui/probe-sha.txt"
+          git cat-file -e "$WMS663_PRODUCT_SOURCE^{commit}"
+          printf '%s\n' "$WMS663_PRODUCT_SOURCE" > "$RUNNER_TEMP/wms663-ui/product-source-sha.txt"
+          git ls-tree -r "$WMS663_PRODUCT_SOURCE" backend/app frontend > "$RUNNER_TEMP/wms663-ui/product-manifest.txt"
+          # Compile the immutable product tree, not concurrent branch changes.
+          git restore --source="$WMS663_PRODUCT_SOURCE" --worktree -- frontend
+          npm ci --prefix frontend > "$RUNNER_TEMP/wms663-ui/npm-ci.log" 2>&1
+          google-chrome --version > "$RUNNER_TEMP/wms663-ui/chrome-version.txt"
+      - name: Build unchanged real workspace with synthetic fixture
+        run: |
+          node scripts/ci/wms663-proof/prepare-ui.mjs
+          timeout 120s node frontend/node_modules/vite/bin/vite.js build --config frontend/.wms663-proof/vite.config.mjs > "$RUNNER_TEMP/wms663-ui/build.log" 2>&1
+      - name: C18 geometry and C16 refresh on runner Chromium, no live endpoints
+        env:
+          WMS663_EVIDENCE: ${{ runner.temp }}/wms663-ui
+        run: |
+          set -euo pipefail
+          node frontend/node_modules/vite/bin/vite.js preview --config frontend/.wms663-proof/vite.config.mjs --host 127.0.0.1 --port 16663 > "$RUNNER_TEMP/wms663-ui/vite.log" 2>&1 &
+          vite_pid=$!
+          trap 'kill "$vite_pid" 2>/dev/null || true' EXIT
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:16663/ >/dev/null; then break; fi
+            sleep 1
+          done
+          timeout 180s node scripts/ci/wms663-proof/browser.mjs 2>&1 | tee "$RUNNER_TEMP/wms663-ui/probe.log"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms663-ui-${{ github.sha }}
+          path: ${{ runner.temp }}/wms663-ui
+          retention-days: 14

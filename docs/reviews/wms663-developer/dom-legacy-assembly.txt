@@ -1,0 +1,73 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms662-663-priority/frontend
+
+ × src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx > WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется 641ms
+   → expected [ { method: 'GET', …(2) }, …(1) ] to deep equally contain { method: 'PUT', …(2) }
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > R17: «Начать работу» открывает последний короб без создания нового и без start-work 387ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д8, Д9: стикер заказа без ЧЗ — заказ в открытом коробе, ожидание ЧЗ снято; с ЧЗ — ожидание остаётся 507ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д8: заказ, уже лежащий в коробе, не перекладывается в открытый 386ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > R16: код не из этой поставки — «Этого товара нет в поставке {номер WB}» 432ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > Д11: нет открытого короба — скан выполняется, заказ не кладётся, подсказка «Откройте или создайте короб.» 352ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: «Начать работу» без коробов создаёт и открывает один короб, но не запрашивает и не печатает QR 263ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: «Создать короб» создаёт и открывает короб без печати QR 490ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: завершение работы и переключатель рамки не открывают печать 216ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · скан в активной рамке окна сборки > WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати 349ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор открыл другой короб, пока шёл поиск стикера, — заказ ложится в короб, открытый при скане 756ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22 (F1): оператор завершил работу с поставкой, пока шёл поиск стикера, — заказ всё равно ложится в короб, открытый при скане 689ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > R22: три одинаковых ШК подряд, короб переключён между вторым и третьим, — короба 2, 2, 1 по порядку прихода 1997ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…» 758ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки 78ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · итоговое ревью > F4: после передачи без полученного QR — «Получить QR повторно», как в карточке 70ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · обычная карточка поставки не меняется > скан стикера в карточке не кладёт заказ в короб и не снимает ожидание ЧЗ 353ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-574 · обычная карточка поставки не меняется > WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр 210ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx > WMS-575 · ЧЗ в русской раскладке в активной рамке > «/», «?», «&» уходят на validate сырыми, как из поля скана, — их чинит сервер 470ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx > WMS-663 · явный ГТД/РНПТ у экземпляра Ozon > C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется
+AssertionError: expected [ { method: 'GET', …(2) }, …(1) ] to deep equally contain { method: 'PUT', …(2) }
+
+- Expected:
+{
+  "body": {
+    "exemplar_id": 81,
+    "expected_version": 4,
+    "gtd": "001/ABC-09",
+    "is_gtd_absent": false,
+    "is_rnpt_absent": false,
+    "product_id": 663001,
+    "rnpt": null,
+  },
+  "method": "PUT",
+  "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+}
+
++ Received:
+[
+  {
+    "body": null,
+    "method": "GET",
+    "path": "/operations/packaging-tasks/task-wms663",
+  },
+  {
+    "body": null,
+    "method": "GET",
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+  },
+]
+
+ ❯ src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx:279:22
+    277|     await settle()
+    278|
+    279|     expect(requests).toContainEqual({
+       |                      ^
+    280|       method: 'PUT',
+    281|       path: DOCUMENTS_PATH,
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 18 passed (19)
+   Start at  01:26:52
+   Duration  197.83s (transform 1.06s, setup 0ms, collect 374.56s, tests 9.41s, environment 989ms, prepare 158ms)
