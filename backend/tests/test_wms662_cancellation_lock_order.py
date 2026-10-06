@@ -2,10 +2,11 @@
 
 Run serially against the dedicated loopback wms_test_662_f6 database. Only
 marketplace I/O is fake. SQLAlchemy events pause *after* an actual row lock,
-then release cancellation when handoff attempts that same resource.
+then release cancellation when PostgreSQL confirms handoff waits for it.
 Unlike a two-party barrier after both first locks, this schedule also works
 after either consistent lock order is implemented: the second worker waits
-in PostgreSQL while the first commits. No sleeps decide the interleaving.
+in PostgreSQL while the first commits. Polling observes a real database wait;
+elapsed time never releases a worker.
 """
 
 from __future__ import annotations
@@ -51,7 +52,7 @@ async def dedicated_pg(db_session):
     # from the other tester/developer databases; never run it with xdist.
     assert engine.url.host == "127.0.0.1"
     assert engine.url.database == "wms_test_662_f6"
-    assert engine.url.port == 55466
+    assert engine.url.port in {55466, 55467}
     import os
 
     assert not os.environ.get("PYTEST_XDIST_WORKER")
@@ -64,7 +65,7 @@ async def dedicated_pg(db_session):
                 )
             )
         ).one()
-        assert tuple(identity) == ("wms_test_662_f6", "wms_test", "127.0.0.1/32", 55466)
+        assert tuple(identity) == ("wms_test_662_f6", "wms_test", "127.0.0.1/32", engine.url.port)
     yield
     await db_session.close()
     await engine.dispose()
@@ -105,16 +106,40 @@ class LockSchedule:
 
     def before(self, conn, clause, multiparams, params, options):
         role, table = worker_role.get(), resource(clause)
-        if role is None or table is None:
+        if role is None:
             return
-        self.pids[role] = conn.connection.driver_connection.get_server_pid()
-        self.trace.append((role, "attempt", table, self.pids[role]))
-        if role == "handoff" and table == self.first_resource:
-            # On c36 handoff already holds product and now requests seller.
-            # With consistent order it requests the resource held by cancellation
-            # first, allowing ordinary PostgreSQL serialization instead.
-            self.contended = True
-            self.release.set()
+        # Identify the writer before ANY locking/DML query. An INSERT may wait
+        # on Product KEY SHARE through its FK before an explicit Product SELECT.
+        if getattr(clause, "_for_update_arg", None) is not None or any(
+            getattr(clause, flag, False) for flag in ("is_insert", "is_update", "is_delete")
+        ):
+            self.pids[role] = conn.connection.driver_connection.get_server_pid()
+        if table is not None:
+            self.trace.append((role, "attempt", table, self.pids[role]))
+
+    async def wait_for_contention(self):
+        async with SessionLocal() as observer:
+            async with asyncio.timeout(5):
+                while not self.release.is_set():
+                    if set(self.pids) == {"handoff", "cancel"}:
+                        blocked = await observer.scalar(
+                            text("select :cancel_pid = ANY(pg_blocking_pids(:handoff_pid))"),
+                            {
+                                "cancel_pid": self.pids["cancel"],
+                                "handoff_pid": self.pids["handoff"],
+                            },
+                        )
+                        if blocked:
+                            self.contended = True
+                            self.trace.append(
+                                (
+                                    "handoff", "blocked_by_cancel",
+                                    self.first_resource, self.pids["handoff"],
+                                )
+                            )
+                            self.release.set()
+                            return
+                    await asyncio.sleep(0.01)
 
     def after(self, conn, clause, multiparams, params, options, result):
         role, table = worker_role.get(), resource(clause)
@@ -332,6 +357,7 @@ async def test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_dupli
             held_wait.cancel()
             await asyncio.gather(held_wait, return_exceptions=True)
         tasks.append(asyncio.create_task(worker("handoff", handoff)))
+        tasks.append(asyncio.create_task(schedule.wait_for_contention()))
         try:
             results = await asyncio.wait_for(
                 asyncio.gather(*tasks, return_exceptions=True),
@@ -360,7 +386,9 @@ async def test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_dupli
         f"B_status={final.orders[cancelled.id].status}; balances={balances}"
     )
     assert not schedule.barrier_errors, f"HARNESS swallowed barrier timeout: {diagnostics}"
-    assert schedule.contended, f"HARNESS: handoff never requested the held resource; {diagnostics}"
+    assert schedule.contended, (
+        f"HARNESS: PostgreSQL never confirmed handoff blocked by cancellation; {diagnostics}"
+    )
     assert set(schedule.pids) == {"handoff", "cancel"}
     assert len(set(schedule.pids.values())) == 2, "must use independent PostgreSQL backends"
     assert not [code for _, code in schedule.errors if code in {"57014", "55P03"}], (
