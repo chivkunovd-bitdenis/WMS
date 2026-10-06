@@ -1681,7 +1681,11 @@ export function FfInboundRequestView({
       await loadDetail()
       saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Не удалось напечатать этикетки.')
+      // Native decode errors belong to the print iframe's realm and need not
+      // be instances of this window's Error constructor.
+      const message = typeof e === 'object' && e !== null && 'message' in e
+        && typeof e.message === 'string' ? e.message : ''
+      setError(message.trim() ? message : 'Не удалось напечатать этикетки.')
     } finally {
       inboundLabelPrinting.current = false
       setBusy(false)

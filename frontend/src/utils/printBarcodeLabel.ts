@@ -186,7 +186,9 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], hand
       // even when the PNGs themselves are valid. Keep parallel work small and let a
       // rendering turn finish before requesting the next group. The parent
       // window supplies frames: the zero-sized print iframe may be throttled.
-      const groupSize = 32
+      // Chromium retains completed decode locks briefly, too. Smaller groups
+      // reduce that retained-image pressure across rendering turns.
+      const groupSize = 8
       for (let start = 0; start < images.length; start += groupSize) {
         await Promise.all(images.slice(start, start + groupSize).map((image) => image.decode()))
         if (start + groupSize < images.length) {
