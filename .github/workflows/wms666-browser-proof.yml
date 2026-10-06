@@ -35,6 +35,8 @@ jobs:
         env:
           WMS666_EVIDENCE: ${{ runner.temp }}/wms666-proof
         run: |
+          set -euo pipefail
+          command -v google-chrome | tee "$RUNNER_TEMP/wms666-proof/chrome-path.txt"
           node frontend/node_modules/vite/bin/vite.js --config frontend/tests-e2e/wms666-proof/vite.config.ts > "$RUNNER_TEMP/wms666-proof/vite.log" 2>&1 &
           vite_pid=$!
           trap 'kill "$vite_pid" 2>/dev/null || true' EXIT

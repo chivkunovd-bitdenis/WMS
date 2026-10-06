@@ -110,12 +110,15 @@ async function scan(code) {
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
 }
-const chrome = spawn('google-chrome', ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--remote-debugging-port=16667', `--user-data-dir=${process.env.RUNNER_TEMP}/wms666-chrome-profile`, 'about:blank'], { stdio: ['ignore', 'ignore', 'pipe'] });
+const chrome = spawn('google-chrome', ['--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run', '--disable-background-networking', '--disable-component-update', '--remote-debugging-port=16667', `--user-data-dir=${process.env.RUNNER_TEMP}/wms666-chrome-profile`, 'about:blank'], { stdio: ['ignore', 'pipe', 'pipe'] });
 let chromeLog = ''; chrome.stderr.on('data', d => { chromeLog += d; });
+chrome.stdout.on('data', d => { chromeLog += d; });
+chrome.on('error', e => { chromeLog += String(e); });
+chrome.on('exit', (code, signal) => { chromeLog += `\nChrome exit code=${code} signal=${signal}\n`; });
 try {
   let tabs;
-  for (let i = 0; i < 50; i++) { try { tabs = await (await fetch('http://127.0.0.1:16667/json/list')).json(); break; } catch { await sleep(100); } }
-  assert(tabs?.length, 'Chromium did not start');
+  for (let i = 0; i < 200; i++) { try { tabs = await (await fetch('http://127.0.0.1:16667/json/list')).json(); break; } catch { await sleep(100); } }
+  assert(tabs?.length, `Chromium did not start: ${chromeLog}`);
   cdp = new CDP(tabs.find(t => t.type === 'page').webSocketDebuggerUrl);
   cdp.on('Fetch.requestPaused', intercept);
   cdp.on('Runtime.exceptionThrown', e => errors.push(e.exceptionDetails));
