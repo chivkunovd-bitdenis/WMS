@@ -321,6 +321,14 @@
       "review": "a094164c5b260dca4b265e7fd28758758a59f86c",
       "mode": "ancestry test/proof merge, exactreport-onlycherry-pick;existingPGCIstep executesexactcase",
       "facts": "original1FAIL zeroPATCH;corrected1PASS on isolatedPG16.14;200/409,onePATCH,oneasset;95assertionsunchanged;actualindependentSolPASS"
+    },
+    {
+      "task": "WMS-636 erased TypeScript scanner annotation",
+      "source": "83393272775a5a87d6301e95c2716948022b9a6d",
+      "integration": "66d4965346dfde8b2aa44f4fee17dc5a30cb74be",
+      "proof": "d4a8d0fa3b1fdb94c0acba6c5f273e40768b4966",
+      "mode": "originaltest-onlyancestrymerge;exactdoc-onlyvalidationcherry-pick",
+      "facts": "full992225+generic tscPASS14.11s/buildPASS16.35s;transpiledJSbyte-identical;assertions/runtime unchanged"
     }
   ],
   "local_product_fixes": [

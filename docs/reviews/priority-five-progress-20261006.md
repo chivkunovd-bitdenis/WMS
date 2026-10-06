@@ -331,3 +331,9 @@ All known CI2 findings closed by their assigned authors/reviewers. Exact input `
 Fresh fetch confirms etalon4b298efc95be7b4b6b7fe5665be9f3671f1fe747 and staging727575a0fd47dec56f34b38b987925686626c2b9 unchanged. Candidate descends both andhotfix6838f11. Product backend/app/frontend/src(runtime excludingtests) stillexactb4043c0df reviewed product plus narrow662fix. Current source map retains everycorrection/report/proof; no unfinished658/674/671/654/systemic681added. New read-only663 observations do not delay thisCI.
 
 Next boundary: finaldocs/backlog/diff/clean checks, onepublishednoflagcommit and commonPR387fullCI exactSHA. Staging/production not deployed; stock/documents/printer/signature mutations not performed. AftergreenCI leadingagent prepares ordinaryexistingstagingdeployment and verifiesexactSHA beforeproduction.
+
+## CI3 exact status and erased typing correction · 06.10.2026
+
+Published9922250590c527a06f37bd8122e18cec10d6d1ed / PR387 / CI37465305907. Docs/backlog/guardsSUCCESS;backendRuff/MypySUCCESS/fullPyteststillrunning. FrontTypecheck found exactlyoneTS2339: existing636scanner Element lacks focus(). Separatetestwriter original83393272775a5a87d6301e95c2716948022b9a6d adds only HTMLInputElement generic. Localintegration66d496534, originaltestassertions/runtime unchanged; transpiledJSbyte-identical. Actualfull992225+generic TypeScriptPASS14.11s andbuildPASS16.35s saved in d4a8d0fa3b1fdb94c0acba6c5f273e40768b4966, report-onlyincluded.
+
+Do not pushuntilbackendCI3finishes: retainitsresult and groupanynewfindings intooneCI4snapshot. Extra663readonlyproof3a703110f342d53524114a25a41d90a40d8987ef stays separatelypublished, not in992225andnotadelay. Owner explicitly forbidsproductiondeploy/mainmerge/675apply untilnewcommand; commonCIandstagingverificationcontinue.
