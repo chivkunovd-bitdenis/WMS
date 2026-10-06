@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "d03e10a7f3a4ba4cee11d4514bc7893ff0d5fa4ade81529483cc7a2290bde90e",
+    ".github/workflows/ci.yml": "92644b0d610d22ee1728d312bb1a20b8c8c7a630ced4fd1b301cd161dbf45742",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -228,7 +228,8 @@
     "scripts/ops/tests/wms517-replay-historical-mac-tests.cjs": "db4540b2397222137c7c4576e344d21bb3872962c1688a9dedfa3cb58bebd39f",
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
-    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747"
+    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79"
   },
   "suites": {
     "backend-fbs": {
@@ -1539,6 +1540,16 @@
       "cases": [
         "C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness",
         "C5 synchronous decode throw drains held active peers before cleanup and retry readiness"
+      ]
+    },
+    "print-672-raster-resource": {
+      "report": "print/672-raster-resource.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
+        "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
+        "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
       ]
     }
   }
