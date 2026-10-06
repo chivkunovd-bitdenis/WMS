@@ -273,7 +273,21 @@ def _pdf_row_fragment(
     # last in this page's reading order and first on its continuation page.
     for _, shape in sorted(shapes, key=lambda item: item[0]):
         shape.commit()
-    return tuple(remaining_fields), max(15.0, used_height)
+    # Textbox spare space measures line layout, not the actual glyph descent.
+    # Reserve the rendered glyph bottom as well, before drawing the separator
+    # or starting the next product. This also covers the CJK fallback font.
+    glyph_bottom = max(
+        (
+            char["bbox"][3]
+            for block in page.get_text("rawdict")["blocks"]
+            for line in block.get("lines", [])
+            for span in line["spans"]
+            for char in span["chars"]
+            if not char["c"].isspace()
+        ),
+        default=y,
+    )
+    return tuple(remaining_fields), max(15.0, used_height, glyph_bottom - y + 3.0)
 
 
 async def build_acceptance_act_pdf(
@@ -370,6 +384,10 @@ async def build_acceptance_act_pdf(
                         page, columns, y, page_height - bottom - y,
                         remaining_fields, difference,
                     )
+                    # Whitespace at a page break has no visible content. Consume
+                    # it here so runs of blank lines cannot create empty pages;
+                    # every non-whitespace character remains in its original cell.
+                    remaining_fields = tuple(value.lstrip() for value in remaining_fields)
                     if not any(remaining_fields):
                         row_height = fragment_height
                         break
