@@ -44,6 +44,9 @@ async def test_waiting_reader_rechecks_shared_retry_after_before_http(monkeypatc
             milliseconds = round(now * 1000)
             if script == wb_sales_report._DEFER:
                 slots[key] = max(slots.get(key, 0), milliseconds + int(args[0]))
+                # Mirror the optional atomic generation SET, not the caller's outcome.
+                if len(args) > 1:
+                    slots[key + ":defer"] = args[1]
                 return 1
             if script == wb_sales_report._RESERVE:
                 slot = max(milliseconds, slots.get(key, 0))
