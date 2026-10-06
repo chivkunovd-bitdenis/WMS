@@ -258,6 +258,24 @@ def current_document_state(
     return "unknown"
 
 
+def requirements_snapshot_complete(
+    positions: list[FbsOrderProduct], products: list[dict[str, Any]]
+) -> bool:
+    by_sku = {product.get("product_id"): product for product in products}
+    if not positions or len(by_sku) != len(products) or by_sku.keys() != {
+        position.ozon_sku for position in positions
+    }:
+        return False
+    for position in positions:
+        exemplars = by_sku[position.ozon_sku].get("exemplars") or []
+        ids = [exemplar.get("exemplar_id") for exemplar in exemplars]
+        if len(exemplars) != position.quantity or not all(
+            isinstance(value, int) and value > 0 for value in ids
+        ) or len(set(ids)) != len(ids):
+            return False
+    return True
+
+
 def absent_documents_selected(data: dict[str, Any]) -> bool:
     # The durable choice map survives a later marking claim, unlike its current
     # operation marker. A claim still preparing expresses an explicit new intent.
@@ -333,6 +351,7 @@ async def document_view(session: AsyncSession, order: FbsOrder) -> dict[str, Any
         "state": state,
         "status": data.get("status"),
         "absence_selected": absent_documents_selected(data),
+        "requirements_complete": requirements_snapshot_complete(positions, products),
         "editable": data.get("state") not in PENDING_STATES
         and data.get("status") != "update_not_available",
         "products": products,
