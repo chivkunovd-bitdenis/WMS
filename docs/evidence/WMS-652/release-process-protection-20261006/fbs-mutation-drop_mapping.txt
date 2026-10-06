@@ -5,7 +5,7 @@ _______ test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id _______
 tests/test_fbs_orders_intake.py:448: in test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id
     assert str(order.product_id) == product_b.json()["id"]
 E   AssertionError: assert 'None' == '3fddae9e-045...-d2030f40eba6'
-E     
+E
 E     - 3fddae9e-045c-4292-98a0-d2030f40eba6
 E     + None
 ------------------------------ Captured log call -------------------------------
