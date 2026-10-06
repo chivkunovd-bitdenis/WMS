@@ -159,7 +159,7 @@
     "frontend/src/screens/v2/sellerKizWithdrawalState.test.ts": "c5ac1fc8d7dba86e2349648e8ab19b0d35fbfdcfa8f8ad409146aaa33a0b40b2",
     "frontend/src/screens/v2/wms673MarketplaceProjection.json": "3857d4589b28acbd5a9c537cbdfd1a0cf6bcf00f3e7cc24564d1b0abe9095c53",
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
-    "frontend/src/utils/printBarcodeLabel.ts": "269694705aabed0a7c44d9cb9ce68fcebe8d01de1b6769b36f5bab99032264be",
+    "frontend/src/utils/printBarcodeLabel.ts": "c4b1d5f835ada6073c1b471553fed8b98f6196692e002f5eca6c073271b0f9f5",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
     "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
