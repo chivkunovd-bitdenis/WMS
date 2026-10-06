@@ -1,0 +1,245 @@
+RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms672-673-analyst-20261006/frontend
+
+ ↓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 digital print controls > C7 control: externally rendered actual PDF is as A4 landscape before color implementation
+ ↓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7: real renderer keeps size657 fixed geometry and complete color within eleven columns
+ ↓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 business RED PDF contract > C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary
+ ✓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 PDF input contract without browser execution > C7 print input preserves A4 landscape, 10mm margins, fixed size657 widths/font 23ms
+ × src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 PDF input contract without browser execution > C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required 20ms
+   → expected [ 'Размер', 'Ячейка / тара', …(1) ] to deeply equal [ 'Размер', 'Цвет', 'Ячейка / тара' ]
+stderr | src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C1 WB single: separate adjacent column carries both exact product colors
+React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C1 WB single: separate adjacent column carries both exact product colors 629ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C2 Ozon single: each position owns its color, barcode and posting identity 244ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C3 mixed assembly: repeat ID aggregates; same names at distinct seller IDs stay separate 181ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 single: group filled color survives partial empty and input reversal 12ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 group: group filled color survives partial empty and input reversal 11ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 single: missing/null/empty/whitespace colors all print dash 292ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 group: missing/null/empty/whitespace colors all print dash 139ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C5 single: ampersands, markup and scripts remain text in exact color cell 357ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C5 group: ampersands, markup and scripts remain text in exact color cell 107ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C6 empty print colspan agrees with all eleven headers 141ms
+   → expected <th class="number"></th>
+…(9) to have a length of 11 but got 10
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C9 single: option failure preserves color, fallback and explicit repeat 659ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ × src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C9 group: option failure preserves color, fallback and explicit repeat 231ms
+   → missing business column Цвет: expected -1 to be 4 // Object.is equality
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C6/C10 single: print reads only, keeps fixtures and old cell semantics including fresh options 260ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C6/C10 group: print reads only, keeps fixtures and old cell semantics including fresh options 117ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C9 single: blocked popup fetches no print options and allows explicit repeat 463ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C9 group: blocked popup fetches no print options and allows explicit repeat 137ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C9 single: closed popup during request prevents document write; repeat works 292ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C9 group: closed popup during request prevents document write; repeat works 93ms
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C11 WMS610: common print stays available on composition/picking/packing/boxes, old screen quantity headers 923ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 13 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C1 WB single: separate adjacent column carries both exact product colors
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:93:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C2 Ozon single: each position owns its color, barcode and posting identity
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:98:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C3 mixed assembly: repeat ID aggregates; same names at distinct seller IDs stay separate
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:110:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 single: group filled color survives partial empty and input reversal
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 group: group filled color survives partial empty and input reversal
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:121:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 single: missing/null/empty/whitespace colors all print dash
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C4 group: missing/null/empty/whitespace colors all print dash
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:128:45
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C5 single: ampersands, markup and scripts remain text in exact color cell
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C5 group: ampersands, markup and scripts remain text in exact color cell
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:134:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C6 empty print colspan agrees with all eleven headers
+AssertionError: expected <th class="number"></th>
+…(9) to have a length of 11 but got 10
+
+- Expected
++ Received
+
+- 11
++ 10
+
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:139:51
+    137|   it('C6 empty print colspan agrees with all eleven headers', async ()…
+    138|     fixtures = [wms673Workspace('empty', [])]; await open('group'); aw…
+    139|     expect(document.querySelectorAll('thead th')).toHaveLength(11)
+       |                                                   ^
+    140|     expect(document.querySelector('tbody td')?.getAttribute('colspan')…
+    141|   })
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C9 single: option failure preserves color, fallback and explicit repeat
+ FAIL  src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C9 group: option failure preserves color, fallback and explicit repeat
+AssertionError: missing business column Цвет: expected -1 to be 4 // Object.is equality
+
+- Expected
++ Received
+
+- 4
++ -1
+
+ ❯ colorCells src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:77:49
+     75|   const headers = [...document.querySelectorAll('thead th')].map((th) …
+     76|   const index = headers.indexOf('Цвет')
+     77|   expect(index, 'missing business column Цвет').toBe(4)
+       |                                                 ^
+     78|   expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тар…
+     79|   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.chi…
+ ❯ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx:152:12
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/13]⎯
+
+ FAIL  src/screens/v2/fbsPickingColor.wms673.pdf.test.ts > WMS-673 PDF input contract without browser execution > C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required
+AssertionError: expected [ 'Размер', 'Ячейка / тара', …(1) ] to deeply equal [ 'Размер', 'Цвет', 'Ячейка / тара' ]
+
+- Expected
++ Received
+
+  [
+    "Размер",
+-   "Цвет",
+    "Ячейка / тара",
++   "Заказы WB",
+  ]
+
+ ❯ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts:103:33
+    101|     const document = new DOMParser().parseFromString(htmlFor(1), 'text…
+    102|     const headers = [...document.querySelectorAll('thead th')].map(th …
+    103|     expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / т…
+       |                                 ^
+    104|     expect(document.querySelector('tbody tr')!.children[4].textContent…
+    105|     expect(document.querySelector('style')!.textContent).not.toMatch(/…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/13]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  13 failed | 8 passed | 3 skipped (24)
+   Start at  11:30:04
+   Duration  197.64s (transform 1.43s, setup 0ms, collect 190.74s, tests 5.33s, environment 1.02s, prepare 175ms)
