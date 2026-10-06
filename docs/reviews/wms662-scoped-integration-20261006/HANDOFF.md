@@ -138,15 +138,18 @@ pins UI product `7fb13f788a2d98efaa575493856b5b504363f3af`. Original backend rev
 `1cf03cc7ec283ebe5bb034947172902474e617aa` remain historical accepted evidence.
 They are not relabeled as reviews of the new integration SHA.
 
-The next independent reviewer is **Astra, explicit effort high** for the exact
-published branch SHA. Read fresh `AGENTS.md`, accepted requirements, both owner/
+The independent reviewer is **Sol 6.1 in a separate session**, following the owner's current priority instruction. The scoped integration review is now PASS on
+`259a36854462e5dc794c9ee8eefa5a7e3d5acc68`; see
+[independent review](independent-sol61-review-259a3685.md) and
+[independent preservation check](independent-preservation-check.json). Read fresh `AGENTS.md`, accepted requirements, both owner/
 failure case libraries, source reviews, the two exact patches, and the scope
 manifest. Focus on fresh-etalon coexistence, unchanged tests and proofs, retained
 QR/error behavior, and the ordinary-refresh versus proved WMS handoff boundary.
 No re-review of unchanged historical behavior is requested without new grounds.
 
-After independent delta review, the analyst must assess the integration against
-the preserved requirements, then full CI must run on the exact resulting SHA.
+After this completed independent delta review, a separate analyst must assess the integration against
+the preserved requirements, then shared tests and full CI must run on the exact combined integration SHA,
+as instructed by the owner. No separate full CI run is requested for this branch.
 The preserved accepted-source verdicts are provenance, not a fabricated new
 integration acceptance. No new PR or full CI was triggered in this preparation;
 the source PR #386 and all source/other worktrees are preserved. Publish this
