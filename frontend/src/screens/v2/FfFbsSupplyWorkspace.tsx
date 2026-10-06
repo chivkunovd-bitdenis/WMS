@@ -3983,7 +3983,7 @@ export function FfFbsSupplyWorkspace({
                           ) : null}
                         </Stack>
                         <Typography variant="body2" color="text.secondary">
-                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
+                          Напечатано {printedOrdersCount} из {packingOrders.length} · Обработано {workspace.progress.packed} из {workspace.progress.total}
                         </Typography>
                       </Box>
                       <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>

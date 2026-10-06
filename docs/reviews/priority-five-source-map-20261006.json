@@ -33,6 +33,13 @@
       "mode": "merge retaining original contracts/correction ledger/evidence ancestry",
       "conflicts": [],
       "known_remaining": "Separate test writer must correct fixed historical-base scope test; C11 staging and C12 paper remain open"
+    },
+    {
+      "task": "WMS-651",
+      "source": "70bddc65ab39473a4560d791bd96d6b78acb648e",
+      "base": "022b242fd52c4470e217c76fa0d067a005b6b617",
+      "mode": "merge preserving accepted source ancestry",
+      "conflicts": []
     }
   ]
 }
