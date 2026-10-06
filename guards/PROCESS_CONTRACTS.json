@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "84b795f6841ce2f9ff55bbba05c95b58252a478a0c610d7fd56ebd1f169a8ed6",
+    ".github/workflows/ci.yml": "5f3e99496f6701c8b55a21750b8036d9f0f672f0ebee9eb1258abde26cfe5144",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -147,6 +147,7 @@
     "frontend/src/guards/scan-print/fbsSequentialPacking.recovery.test.ts": "a3bc47ada2a5b53efa6a5eb9a92dbd59fc4e18e0305855d4c78a4457c0228774",
     "frontend/src/guards/scan-print/fbsSequentialPacking.test.ts": "d6fd589bc08ab13bd4c2543e43dfbfe259f9903281a8f1343e88a968a79d6786",
     "frontend/src/hooks/useScanIntake.test.tsx": "9d3a54d58c573350e50ab933dc7be168d835836dcffc1d66b2e2fe9d9604ba5a",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "b549cda5add9fa01a75ada7528382042c42604610273d67f00549e1a56930504",
     "frontend/src/screens/v2/FfFbsSupplyAssembly.scanners.dom.test.tsx": "0f0121dd264ff0dbc0be673b94fcc7ba57f2b1af36c30d874b38a6641e7ef76e",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": "9f0cea521152d34f81c307a8efd0ad45e1899832af116056965de6d9d36fe956",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts": "aee4f6a82da75772c4d5bd1062d4e1f674f4a29551f134cdb0af1b54900d6a0a",
@@ -158,6 +159,7 @@
     "frontend/src/screens/v2/sellerKizWithdrawalState.test.ts": "c5ac1fc8d7dba86e2349648e8ab19b0d35fbfdcfa8f8ad409146aaa33a0b40b2",
     "frontend/src/screens/v2/wms673MarketplaceProjection.json": "3857d4589b28acbd5a9c537cbdfd1a0cf6bcf00f3e7cc24564d1b0abe9095c53",
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
+    "frontend/src/utils/printBarcodeLabel.ts": "2438d01e8a7a7df6ba73e83cbbdfce3bc4123832c3524682e129dd2176032f74",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
     "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
@@ -176,6 +178,7 @@
     "frontend/tests-e2e/wms672-dom.test.tsx": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
     "frontend/tests-e2e/wms672-harness.html": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
     "frontend/tests-e2e/wms672-harness.tsx": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
     "frontend/tests-e2e/wms672-remaining.test.mjs": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
     "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
     "frontend/vite.config.ts": "edce832d16a60020d4ee3c99214f80ee83297aa5e6a7945d8b74331a3c91f560",
@@ -1512,6 +1515,20 @@
         "SC17 missing seller token \"\" rejects before any GET or UI",
         "SC17 identity GET HTTP 401 refuses preparation",
         "SC17 identity GET HTTP 403 refuses preparation"
+      ]
+    },
+    "print-672-native-errors": {
+      "report": "print/672-native-errors.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
+        "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
+        "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
+        "C5 blank message retains existing generic preparation error and zero external actions",
+        "C5 nonstring message retains existing generic preparation error and zero external actions",
+        "C5 no message retains existing generic preparation error and zero external actions",
+        "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks"
       ]
     }
   }
