@@ -1,0 +1,91 @@
+{
+  "events": 88108,
+  "category_counts": {
+    "__metadata": 57,
+    "disabled-by-default-cc.debug": 13157,
+    "cc": 59453,
+    "cc,benchmark": 6647,
+    "cc,disabled-by-default-devtools.timeline": 842,
+    "cc,raf_investigation": 18,
+    "disabled-by-default-memory-infra": 2133,
+    "disabled-by-default-cc.debug,disabled-by-default-viz.quads,disabled-by-default-devtools.timeline.layers": 176,
+    "cc,benchmark,disabled-by-default-devtools.timeline.frame": 5228,
+    "cc,benchmark,input,input.scrolling": 397
+  },
+  "top_event_names": [
+    [
+      "LocalFrameView::ScheduleAnimation",
+      36608
+    ],
+    [
+      "Not activating sync tree due to no pending tree",
+      2508
+    ],
+    [
+      "LayerTreeHostImpl::NotifyTileStateChanged",
+      1858
+    ],
+    [
+      "TileManager::CreateRasterTask",
+      1710
+    ],
+    [
+      "auto cc::(anonymous namespace)::InsertNodeForTask(TaskGraph *, TileTask *, uint16_t, uint16_t, size_t, bool)::(anonymous class)::operator()()::(anonymous class)::operator()(uint32_t) const",
+      1511
+    ],
+    [
+      "MemoryDumpManager::InvokeOnMemoryDump",
+      1470
+    ],
+    [
+      "DisplayItemList::Raster",
+      1122
+    ],
+    [
+      "BeginImplFrameToSendBeginMainFrame",
+      1000
+    ],
+    [
+      "PipelineReporter",
+      994
+    ],
+    [
+      "RasterSource::PerformSolidColorAnalysis",
+      948
+    ],
+    [
+      "cc::Tile",
+      929
+    ],
+    [
+      "SolidColorAnalyzer::CheckIfSolidShape",
+      869
+    ],
+    [
+      "RasterizerTaskImpl::RunOnWorkerThread",
+      842
+    ],
+    [
+      "RasterTask",
+      842
+    ],
+    [
+      "ZeroCopyRasterBuffer::Playback",
+      842
+    ]
+  ],
+  "dataLossOccurred": true,
+  "maxBufferUsage": 0.996608555316925,
+  "clock_sync_expected": 6,
+  "clock_sync_retained": 2,
+  "image_snapshots": 4,
+  "critical_event_categories": {
+    "SoftwareImageDecodeCache::GetTaskForImageAndRefInternal": "disabled-by-default-cc.debug",
+    "SoftwareImageDecodeCache::AddBudgetForImage": "disabled-by-default-cc.debug",
+    "SoftwareImageDecodeCache::RemoveBudgetForImage": "disabled-by-default-cc.debug",
+    "SoftwareImageDecodeCache::UnrefImage": "disabled-by-default-cc.debug",
+    "SoftwareImageDecodeCache::DecodeImageIfNecessary": "disabled-by-default-cc.debug",
+    "SoftwareImageDecodeCacheUtils::DoDecodeImage - decode": "disabled-by-default-cc.debug"
+  },
+  "result": "INCONCLUSIVE for later refusal; prefix accounting is not a budget exhaustion verdict"
+}

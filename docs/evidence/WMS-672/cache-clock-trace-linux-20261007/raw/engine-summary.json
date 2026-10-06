@@ -1,0 +1,431 @@
+{
+  "events": 88108,
+  "cacheEvents": 3438,
+  "markers": 2,
+  "imageMemorySnapshots": 4,
+  "completion": {
+    "dataLossOccurred": true,
+    "stream": "1",
+    "traceFormat": "json",
+    "streamCompression": "gzip",
+    "usage": [
+      {
+        "percentFull": 0.2084544599056244,
+        "eventCount": 0,
+        "value": 0.2084544599056244
+      },
+      {
+        "percentFull": 0.21935561299324036,
+        "eventCount": 0,
+        "value": 0.21935561299324036
+      },
+      {
+        "percentFull": 0.28984981775283813,
+        "eventCount": 0,
+        "value": 0.28984981775283813
+      },
+      {
+        "percentFull": 0.3310319781303406,
+        "eventCount": 0,
+        "value": 0.3310319781303406
+      },
+      {
+        "percentFull": 0.38844478130340576,
+        "eventCount": 0,
+        "value": 0.38844478130340576
+      },
+      {
+        "percentFull": 0.48352712392807007,
+        "eventCount": 0,
+        "value": 0.48352712392807007
+      },
+      {
+        "percentFull": 0.7039728760719299,
+        "eventCount": 0,
+        "value": 0.7039728760719299
+      },
+      {
+        "percentFull": 0.9133962988853455,
+        "eventCount": 0,
+        "value": 0.9133962988853455
+      },
+      {
+        "percentFull": 0.9953972697257996,
+        "eventCount": 0,
+        "value": 0.9953972697257996
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      },
+      {
+        "percentFull": 0.996608555316925,
+        "eventCount": 0,
+        "value": 0.996608555316925
+      }
+    ]
+  },
+  "relevantEventCounts": {
+    "SoftwareImageDecodeCache::GetTaskForImageAndRefInternal": 181,
+    "SoftwareImageDecodeCache::ReduceCacheUsageUntilWithinLimit": 376,
+    "CheckerImageTracker::ScheduleImageDecodeQueue": 215,
+    "CheckerImageTracker::ScheduleNextImageDecode": 447,
+    "LayerTreeHost::QueueImageDecode": 159,
+    "ProxyMain::QueueImageDecode": 159,
+    "LayerTreeHostImpl::QueueImageDecode": 159,
+    "DecodedImageTracker::QueueImageDecode": 159,
+    "SoftwareImageDecodeCache::AddBudgetForImage": 159,
+    "ImageController::ProcessNextImageDecodeOnWorkerThread": 158,
+    "SoftwareImageDecodeTaskImpl::RunOnWorkerThread": 158,
+    "SoftwareImageDecodeCache::DecodeImageInTask": 158,
+    "SoftwareImageDecodeCache::DecodeImageIfNecessary": 157,
+    "SoftwareImageDecodeCacheUtils::DoDecodeImage - decode": 157,
+    "DecodedImageTracker::ImageDecodeFinished": 159,
+    "LayerTreeHostImpl::ImageDecodeFinished": 159,
+    "SoftwareImageDecodeCache::UnrefImage": 159,
+    "SoftwareImageDecodeCache::RemoveBudgetForImage": 159,
+    "TileManager::AssignGpuMemory tile violates memory policy": 14,
+    "clock_sync": 2
+  }
+}
