@@ -1,0 +1,9 @@
+# Retained positive original→scaled→release→next-cohort sequence
+
+The retained first cohort consists of sixteen actual original native images, contentIDs300–315, in one renderer/frame. Native callback metadata reports16fulfilled/0pending; all299 first-phase native indices match engine contentID299+index. Two retained CDP clocks bound correlation in a2ms interval; raw per-frame performance.now values are never compared. The JSON preserves all299 native/queue mappings and full keyed records.
+
+For each of the first16images, the actual trace records native original836x356 reservation, raster GetTask for the SAME content identity with SubrectAndScale1x1/ordinary filtering, original full-key Unref and Remove, then the next cohort begins with nativeQueue content316. All sixteen original removals occur BEFORE that later native request, by6.790–10.001ms; no missing-event argument is needed for this positive sequence. Source141 explains the render-consumption path; its private callback itself is not directly emitted.
+
+Separately, the complete bounded first299preparation plus1s has299original pairs and299scaled pairs, zero remaining tracked entries, peak55original reservations and224original removals within1ms of scaledGet. The other75arelater releases, including timer paths; do not generalize the firstcohort sequence into immediate release of every image/group. The whole64MiB trace overflowed and lost the late/end portion, so no whole-run peak/absence/clock-completeness claim is made. Present positive events remain evidence.
+
+Actual unchanged entire C5 nevertheless PASS, including both explicit corrected300retries, independent renderTape and all marks;12Nodecases PASS. No extra capture/run is required merely to remove the honest late-overflow qualification. The deferred debug collector draft is locally stashed, was not published/dispatched or integrated into product.
