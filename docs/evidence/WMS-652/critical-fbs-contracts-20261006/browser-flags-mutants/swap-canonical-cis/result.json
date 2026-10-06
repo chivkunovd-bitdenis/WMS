@@ -1,0 +1,152 @@
+{
+  "sha": "2994b446effcc3296bfebfa173f801c2054a134c",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copy must encode full canonical CIS of this order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copy must encode full canonical CIS of this order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copy must encode full canonical CIS of this order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: native copies encode full canonical CIS per order\n+ actual - expected\n\n+ '010460000000000221SERIAL-B\\x1D91EFGH\\x1D92signed-B'\n- '010460000000000121SERIAL-A\\x1D91ABCD\\x1D92signed-A'\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:214:3"
+}

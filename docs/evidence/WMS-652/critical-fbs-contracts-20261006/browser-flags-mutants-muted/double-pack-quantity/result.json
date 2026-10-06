@@ -1,0 +1,173 @@
+{
+  "sha": "a41637173c48ec6e2732572aa5ebc8615e8f1272",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    {\n      idempotency_key: 'scan-wb-a-order:packed',\n      order_id: 'wb-a-order',\n+     quantity: 2\n-     quantity: 1\n    },\n    {\n      idempotency_key: 'scan-wb-next-order:packed',\n      order_id: 'wb-next-order',\n+     quantity: 2\n-     quantity: 1\n    }\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    {\n      idempotency_key: 'scan-wb-a-order:packed',\n      order_id: 'wb-a-order',\n+     quantity: 2\n-     quantity: 1\n    },\n    {\n      idempotency_key: 'scan-wb-next-order:packed',\n      order_id: 'wb-next-order',\n+     quantity: 2\n-     quantity: 1\n    }\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    {\n      idempotency_key: 'scan-wb-a-order:packed',\n      order_id: 'wb-a-order',\n+     quantity: 2\n-     quantity: 1\n    },\n    {\n      idempotency_key: 'scan-wb-next-order:packed',\n      order_id: 'wb-next-order',\n+     quantity: 2\n-     quantity: 1\n    }\n  ]\n"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:\n+ actual - expected\n\n  [\n    [\n      '/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',\n+     2,\n-     1,\n      'wb-a-order'\n    ],\n    [\n      '/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack',\n+     2,\n-     1,\n      'wb-next-order'\n    ]\n  ]\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+  "stack": "AssertionError [ERR_ASSERTION]: one or more real-screen cases failed\n    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:214:3"
+}

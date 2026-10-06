@@ -116,3 +116,100 @@ FfFbsOrdersScreen. Evidence-only mutation script не collected baseline case.
 
 Расширение шести комбинаций флагов и uncertain native receipt/remount — следующий
 checkpoint. Полная C54 карта этим ограниченным набором ещё не закрыта.
+
+## Checkpoint3: шесть флагов, native receipt и полная копия ЧЗ
+
+Замороженный test-source SHA: `2994b446effcc3296bfebfa173f801c2054a134c`;
+отдельная техническая дельта `a41637173c48ec6e2732572aa5ebc8615e8f1272`
+добавила только Chrome `--mute-audio`, не меняя33 ожидания.
+`cases.json` перечисляет **33 точных fullName IDs**, main runner сравнивает с ним
+фактически исполненный порядок и отдельно требует PASS каждого случая. Первые
+шесть IDs выше сохранены; ещё27 имеют форму
+`WMS652.realQrFlags[<variant>;<entry>]`. Каждая пара выполняется самостоятельно:
+
+- entry: `supply_id=A`, `supply_ids=A`, `supply_ids=A,B`;
+- variant: `alloff`, `qr`, `reprint`, `qr+reprint`, `pool`, `qr+pool`,
+  `held-receipt`, `lost-accepted-ack`, `remount-after-lost-ack`.
+
+Шесть флагов — существующие WB-настройки, сохранённые в операторском localStorage:
+все выключены; толькоQR; только точная перепечать ЧЗ; QR+перепечать;
+пулЧЗ; QR+пулЧЗ. Стикер заказа не берёт ЧЗ из пула даже при двух последних
+настройках. Проверяются no pool allocation в explicit select payload, полный
+сканированный CIS в commit, QR/copy print keys/counts и pack в нужную строку.
+`alloff`/`pool` используют существующий локальный selection и local pack key;
+остальные — серверный scan UUID. Входной QR отличается от product barcode.
+
+`held-receipt`: native HTTP принимает задание, но его ответ удержан. Уже отправлены
+следующиеQR/КИЗ; до receipt нет pack первого и lookup следующего. После release
+FIFO завершает оба заказа. `lost-accepted-ack`: native boundary приняла задание,
+ответ оборван, pack не случился; явный повтор первого QR использует **тот же**
+print key, synthetic accepted ledger даёт старую canonical receipt, затем pack
+и следующий QR. Это проверка транспортного reconcile, не физической бумаги.
+`remount-after-lost-ack`: тот же отказ, сохранён unfinished intent; page remount
+с сохранённым localStorage, API сообщает available bound CIS, настоящий экран
+возобновляет старый scan/print key и правильный заказ без второго CIS commit.
+
+Копии ЧЗ больше не подтверждаются только равенством PNG: независимый ZXing
+DataMatrixReader декодирует непосредственно pixels каждой native print PNG и
+сравнивает **полный canonical CIS нужного заказа**, включая GS-separators и
+подписанный хвост. Crop верхних44% отделяет матрицу от текста существующей
+60×80mm этикетки. Renderer/claim/mock controller не используются для expected.
+ZXing уже declared в frontend/package.json; новые packages не устанавливались.
+
+Дополнительный negative-control runner:
+
+```sh
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/browser-flags-mutants python3 frontend/tests-e2e/wms652-critical/flags-mutations.py
+```
+
+Он отдельно нарушает canonical CIS renderer input, actual grouping run на втором
+submit (при неизменном правильном label «Повторить(1)»), pack quantity, устойчивый
+print intent и запрет выдачи pool CIS для explicit sticker. После каждого опыта
+исходные bytes восстанавливаются в finally. Для группировки сохраняется реальный
+HTTP trace с **6 POST вместо4**, successful A/C повторяются именно после retry;
+предыдущий mutant checkpoint2 ловил неправильный count label до retry и не был
+доказательством повторного POST. История обоих опытов сохранена.
+
+Dependency closure дополнена `cases.json`, `flags-mutations.py`; всего8 файлов
+под `frontend/tests-e2e/wms652-critical/`. Все declared внешние libraries берутся
+из existing frontend package lock: bwip-js, pngjs, @zxing/library и browser/Vite.
+Результаты относятся к программным заданиям и synthetic HTTP boundaries.
+Приёмку C54 целиком, независимое ревью/антиослабление/fullCI/deploy ведёт root.
+
+По прямой просьбе владельца слышимый test Chrome остановлен в18:40:23UTC
+(21:40:23Moscow). Только наш test browser далее запускается с --mute-audio;
+системная громкость, пользовательские браузеры и product sounds не менялись.
+Прерванный mutation run не объявляется доказательством полного набора.
+Итоговый повтор всех пяти mutants сохранён в `browser-flags-mutants-muted`.
+
+## Checkpoint4: настоящие нажатия доступных кнопок
+
+Ведущий нашёл ограничение первого helper: DOM `.click()` обходил visibility и
+overlay. Теперь все selection/create/add/popup кнопки получают CDP mouseMoved /
+mousePressed / mouseReleased по видимому центру после проверки размеров,
+computedStyle и elementFromPoint. Checkbox нажимается через **видимый MUI root**:
+встроенный native input у MUI намеренно прозрачный, но занимает тот же control;
+его onChange и checked-состояние проверяются прежними бизнес-ожиданиями.
+Обычная кнопка обязана быть enabled; только специальный negative busy-add click
+допускает видимую disabled кнопку и требует по-прежнему один POST.
+Скрытый/перекрытый элемент не получает программный click.
+
+`button-mutations.py`: display:none на настоящей submit-кнопке → содержательный
+visibilityRED до createPOST, а повтор successful groups только на actualsecond
+mouse-submit → 6POST вместо4. Продукт/дизайн не изменён. Dependency closure теперь
+**9 файлов** в том же `frontend/tests-e2e/wms652-critical/` (добавлен
+button-mutations.py); точные33IDs и бизнес-ожидания сохранены.
+
+```sh
+WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/browser-button-mutants python3 frontend/tests-e2e/wms652-critical/button-mutations.py
+```
+
+Финальный source с mouse-helper: `ef991e636fd924db670f21370ff7280a62bf0279`.
+`browser-button-mutants/mutations.json` на нём подтверждает hide-create visibility
+RED (createPOST=0) и actual second-submit duplicate RED (createPOST=6 вместо4).
+Пять расширенных print/pack mutants ранее подтверждены на `a41637173`; новая
+дельта ef991 меняет только mouse helper selection-действий, не QR/flags assertions.
+Финальный `browser-final-green/result.json` повторяет все33 cases на exactef991
+после byte restoration, с mute-audio и actual mouse input. `browser-click-green`
+сохраняет выявленное при разработке helper ограничение прозрачного MUI nativeinput;
+это не productRED, исправленный helper нажимает видимый checkbox root.

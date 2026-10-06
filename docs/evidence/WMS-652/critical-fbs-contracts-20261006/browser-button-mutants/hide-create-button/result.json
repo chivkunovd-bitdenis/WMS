@@ -1,0 +1,28 @@
+{
+  "sha": "ef991e636fd924db670f21370ff7280a62bf0279",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-create-submit\"]; {\"x\":0,\"y\":0,\"visible\":false,\"reachable\":false,\"disabled\":false}"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "currentCase": "WMS652.selection[single-create]",
+  "status": "FAIL",
+  "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-create-submit\"]; {\"x\":0,\"y\":0,\"visible\":false,\"reachable\":false,\"disabled\":false}",
+  "stack": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-create-submit\"]; {\"x\":0,\"y\":0,\"visible\":false,\"reachable\":false,\"disabled\":false}\n    at clickElement (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:267:3)\n    at async click (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:272:52)\n    at async selectionContracts (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:296:3)\n    at async file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:212:3"
+}
