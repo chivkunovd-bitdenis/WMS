@@ -270,10 +270,12 @@ async def test_box_creation_key_is_idempotent_and_rejects_different_count(
 
 
 @pytest.mark.asyncio
-async def test_box_creation_wb_409_cleans_local_boxes_and_same_key_can_retry(
+@pytest.mark.parametrize("wb_status", [404, 409])
+async def test_box_creation_wb_rejection_cleans_local_boxes_and_same_key_can_retry(
     async_client: AsyncClient,
     enable_wb_marketplace_supplies_mock: None,
     monkeypatch: pytest.MonkeyPatch,
+    wb_status: int,
 ) -> None:
     headers, supply_id, _ = await _packed_supply(async_client)
     original_create = pvz_svc.create_marketplace_supply_trbx
@@ -283,7 +285,7 @@ async def test_box_creation_wb_409_cleans_local_boxes_and_same_key_can_retry(
         nonlocal attempts
         attempts += 1
         if attempts == 1:
-            raise WildberriesClientError("upstream_error", status_code=409)
+            raise WildberriesClientError("upstream_error", status_code=wb_status)
         return await original_create(*args, **kwargs)  # type: ignore[arg-type]
 
     monkeypatch.setattr(pvz_svc, "create_marketplace_supply_trbx", reject_once_then_create)
@@ -319,7 +321,7 @@ async def test_box_creation_wb_409_cleans_local_boxes_and_same_key_can_retry(
             ).all()
         )
         assert [(item.state, item.error_code) for item in failed_operations] == [
-            (WB_OPERATION_STATE_FAILED, "wb_upstream_error_409")
+            (WB_OPERATION_STATE_FAILED, f"wb_upstream_error_{wb_status}")
         ]
 
     retried = await async_client.post(url, headers=headers, json=body)

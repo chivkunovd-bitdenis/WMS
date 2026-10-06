@@ -301,7 +301,7 @@ async def _cargo_operation_key_for_retry(
     seller_id: uuid.UUID,
     operator_key: str,
 ) -> str:
-    """Continue an uncertain retry and advance only past definitive WB 409s."""
+    """Continue uncertain retries; advance past definitive WB 404/409 refusals."""
     candidate = operator_key
     seen: set[str] = set()
     while candidate not in seen:
@@ -311,7 +311,10 @@ async def _cargo_operation_key_for_retry(
             return candidate
         if not (
             operation.state == WB_OPERATION_STATE_FAILED
-            and operation.error_code in {"wb_upstream_error_409", "wb_business_error_409"}
+            and operation.error_code in {
+                "wb_upstream_error_404", "wb_business_error_404",
+                "wb_upstream_error_409", "wb_business_error_409",
+            }
         ):
             # Pending/pending-confirmation must keep its exact key so the cargo
             # service reconciles instead of issuing a blind duplicate WB create.
@@ -788,7 +791,10 @@ async def _link_or_create_cargo_places(
         )
     except pvz_svc.FbsShipmentPvzError as exc:
         await _link_existing_trbxes(session, supply.id, boxes)
-        if exc.code in {"wb_upstream_error_409", "wb_business_error_409"}:
+        if exc.code in {
+            "wb_upstream_error_404", "wb_business_error_404",
+            "wb_upstream_error_409", "wb_business_error_409",
+        }:
             raise FbsPackingBoxError("box_create_rejected_by_wb") from exc
         raise FbsPackingBoxError(exc.code) from exc
     await _link_existing_trbxes(session, supply.id, boxes)
