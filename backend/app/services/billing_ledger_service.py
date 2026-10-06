@@ -3,7 +3,7 @@ from __future__ import annotations
 import inspect
 import uuid
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date, datetime
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 from typing import Any, cast
@@ -12,7 +12,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, case, literal, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import aliased
+from sqlalchemy.orm import aliased, selectinload
 
 from app.models.billing import (
     BillingLedgerEntry,
@@ -246,7 +246,11 @@ async def _active_charge_for_source(
                     else (charge.service_code == service_code,)
                 ),
             )
-            .order_by(charge.occurred_at.desc(), charge.id.desc())
+            .order_by(
+                case((charge.event_kind.like("handover_quantity:%"), charge.event_kind),
+                     else_="").desc(),
+                charge.occurred_at.desc(), charge.id.desc(),
+            )
         ),
     )
 
@@ -349,6 +353,151 @@ async def _resolve_v2_tariff(
     )
 
 
+async def _extend_handover_charge(
+    session: AsyncSession,
+    existing: BillingLedgerEntry,
+    quantity: Decimal,
+    lines: list[OperationalBillingLine],
+    occurred_at: datetime,
+) -> BillingLedgerEntry:
+    """Extend a partial FBS quantity, retaining original dates, identities and tariffs."""
+    if existing.source_type != "fbs_order" or existing.service_code not in {
+        "fbs_order", PACKING_SERVICE_CODE,
+    }:
+        raise BillingLedgerError("invalid_cumulative_handover")
+    charge, reversal = aliased(BillingLedgerEntry), aliased(BillingLedgerEntry)
+    active = list(await session.scalars(
+        select(charge).outerjoin(reversal, reversal.reversal_of_id == charge.id).where(
+            charge.tenant_id == existing.tenant_id,
+            charge.source_type == existing.source_type, charge.source_id == existing.source_id,
+            charge.service_code == existing.service_code,
+            charge.entry_type == "charge", reversal.id.is_(None),
+        ).options(selectinload(charge.lines))
+    ))
+    fulfilled: dict[uuid.UUID | None, Decimal] = {}
+    for entry in active:
+        for billed_line in entry.lines:
+            fulfilled[billed_line.product_id] = fulfilled.get(billed_line.product_id, Decimal(0)) \
+                + billed_line.physical_quantity
+    if lines and all(line.quantity <= fulfilled.get(line.product_id, Decimal(0)) for line in lines):
+        return existing
+    if not lines and quantity <= sum((entry.quantity for entry in active), Decimal(0)):
+        return existing
+    from app.services.billing_invoice_service import invoiced_ledger_ids
+
+    occupied = await invoiced_ledger_ids(
+        session, tenant_id=existing.tenant_id, seller_id=existing.seller_id,
+        entry_ids={existing.id},
+    ) if existing.seller_id is not None else set()
+    if occupied:
+        # Issued sources remain immutable. Only the additional work gets another
+        # existing ledger event, selected by the ordinary invoice source lookup.
+        if existing.unit == "document" and not lines:
+            return existing
+        cumulative = postgres_numeric(quantity, precision=14, scale=4, field="billing_quantity")
+        template = existing
+        existing = BillingLedgerEntry(
+            tenant_id=template.tenant_id, seller_id=template.seller_id,
+            warehouse_id=template.warehouse_id, performer_id=template.performer_id,
+            tariff_version_id=template.tariff_version_id,
+            tariff_version_v2_id=template.tariff_version_v2_id,
+            entry_type="charge", service_code=template.service_code, source=template.source,
+            source_type=template.source_type, source_id=template.source_id,
+            event_kind=f"handover_quantity:{cumulative:015.4f}", unit=template.unit,
+            quantity=Decimal(0), rate=template.rate, amount=0, occurred_at=occurred_at,
+            lines=[BillingLedgerLine(
+                tenant_id=row.tenant_id, product_id=row.product_id,
+                operation_fact_line_id=row.operation_fact_line_id,
+                product_snapshot=row.product_snapshot, physical_quantity=Decimal(0),
+                billing_quantity=Decimal(0), billing_unit=row.billing_unit,
+                tariff_version_v2_id=row.tariff_version_v2_id,
+                tariff_snapshot=row.tariff_snapshot, rate=row.rate, amount=0,
+            ) for row in template.lines
+            if any(line.product_id == row.product_id for line in lines)],
+        )
+        session.add(existing)
+        await session.flush()
+    others = [entry for entry in active if entry.id != existing.id]
+    previous: dict[uuid.UUID | None, Decimal] = {}
+    document_billed: dict[uuid.UUID | None, Decimal] = {}
+    for entry in others:
+        for billed_line in entry.lines:
+            previous[billed_line.product_id] = previous.get(billed_line.product_id, Decimal(0)) \
+                + billed_line.physical_quantity
+            if billed_line.billing_unit == "document":
+                document_billed[billed_line.product_id] = document_billed.get(
+                    billed_line.product_id, Decimal(0),
+                ) + billed_line.billing_quantity
+    lines = [replace(line, quantity=max(Decimal(0), line.quantity - previous.get(
+        line.product_id, Decimal(0),
+    ))) for line in lines]
+    quantity = max(Decimal(0), quantity - sum((entry.quantity for entry in others), Decimal(0)))
+    await session.refresh(existing, with_for_update=True)
+    await session.refresh(existing, attribute_names=["lines"])
+    by_product = {line.product_id: line for line in existing.lines}
+    for incoming in lines:
+        row = by_product.get(incoming.product_id)
+        if row is None:
+            tariff = await _resolve_v2_tariff(
+                session, tenant_id=existing.tenant_id, seller_id=existing.seller_id,
+                product_id=incoming.product_id, service_code=existing.service_code,
+                occurred_at=existing.occurred_at,
+            )
+            legacy = await session.get(BillingTariffVersion, existing.tariff_version_id) \
+                if existing.tariff_version_id else None
+            rate = tariff.rate if tariff is not None else (legacy.amount if legacy else None)
+            unit = tariff.unit if tariff is not None else existing.unit
+            row = BillingLedgerLine(
+                tenant_id=existing.tenant_id, product_id=incoming.product_id,
+                operation_fact_line_id=incoming.operation_fact_line_id,
+                product_snapshot=incoming.source_snapshot,
+                physical_quantity=Decimal(0), billing_quantity=Decimal(0),
+                billing_unit=unit, tariff_version_v2_id=tariff.id if tariff else None,
+                tariff_snapshot={
+                    "service_code": existing.service_code, "source": existing.source,
+                    "legacy_tariff_id": str(existing.tariff_version_id)
+                    if existing.tariff_version_id else None,
+                    "v2_tariff_id": str(tariff.id) if tariff else None,
+                    "scope": {"seller_id": str(existing.seller_id),
+                              "product_id": str(incoming.product_id), "unit": unit},
+                },
+                rate=rate, amount=None,
+            )
+            existing.lines.append(row)
+            by_product[incoming.product_id] = row
+        row.physical_quantity = max(row.physical_quantity, postgres_numeric(
+            incoming.quantity, precision=14, scale=4, field="billing_quantity",
+        ))
+        # V2 units belong to individual lines, not the legacy parent. Keep the
+        # physical delta even when the same document service was already paid:
+        # its zero-money line lets the next invoice select the new work without
+        # selecting (or changing) the issued source again. Item lines in a mixed
+        # tariff retain their ordinary physical-quantity billing.
+        row.billing_quantity = max(row.billing_quantity, max(
+            Decimal(0), Decimal(1) - document_billed.get(row.product_id, Decimal(0)),
+        )) if row.billing_unit == "document" else row.physical_quantity
+        row.amount = None if row.rate is None else postgres_integer(
+            Decimal(row.rate) * row.billing_quantity, field="billing_amount",
+        )
+    existing.quantity = max(existing.quantity, postgres_numeric(
+        max(Decimal(0), Decimal(1) - sum((entry.quantity for entry in others), Decimal(0)))
+        if existing.unit == "document" else quantity,
+        precision=14, scale=4, field="billing_quantity",
+    ))
+    if existing.lines:
+        amounts = [row.amount for row in existing.lines]
+        rates = {row.rate for row in existing.lines}
+        existing.amount = sum(cast(int, amount) for amount in amounts) \
+            if all(amount is not None for amount in amounts) else None
+        existing.rate = next(iter(rates)) if len(rates) == 1 else None
+    else:
+        existing.amount = None if existing.rate is None else postgres_integer(
+            Decimal(existing.rate) * existing.quantity, field="billing_amount",
+        )
+    await session.flush()
+    return existing
+
+
 async def record_operational_charge(
     session: AsyncSession,
     *,
@@ -364,6 +513,7 @@ async def record_operational_charge(
     warehouse_id: uuid.UUID | None = None,
     lines: list[OperationalBillingLine] | None = None,
     respect_billing_start: bool = True,
+    cumulative_handover: bool = False,
 ) -> BillingLedgerEntry | None:
     """Record the first final operational fact, without blocking on a missing tariff."""
     fact_date = occurred_at.astimezone(MOSCOW).date()
@@ -381,6 +531,10 @@ async def record_operational_charge(
         service_code=service_code,
     )
     if existing is not None:
+        if cumulative_handover:
+            return await _extend_handover_charge(
+                session, existing, quantity, list(lines or []), occurred_at,
+            )
         return existing
 
     previous_reversal = await _latest_reversal_for_source(

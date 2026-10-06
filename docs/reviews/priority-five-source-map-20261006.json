@@ -13,6 +13,18 @@
           "resolution": "Preserve current backlog and insert only original WMS-683 section"
         }
       ]
+    },
+    {
+      "task": "WMS-662",
+      "source": "23190047674c1ea3c0ecf1bcaeebc76dea625110",
+      "base": "56dd434676ac9a06e6deb9dcfee5492bfeeb11ab",
+      "mode": "merge retaining contract/code/proof ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Keep all existing sections; insert original accepted WMS-662 section"
+        }
+      ]
     }
   ]
 }

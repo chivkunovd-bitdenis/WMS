@@ -1,0 +1,2245 @@
+{
+  "http": [
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "picking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_supply",
+            "wb_status": "waiting",
+            "supplier_status": "confirm",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 11,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          },
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "server_now": "2026-10-06T09:36:52.956235+00:00"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9",
+      "status": 200,
+      "body": {
+        "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+        "marketplace": "wb",
+        "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+        "warehouse_id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+        "wb_supply_id": "WB-GI-662",
+        "name": "Observed handoff",
+        "status": "assembling",
+        "delivery_type": "warehouse_sc",
+        "cargo_type": null,
+        "wb_office_id": null,
+        "barcode_file": null,
+        "document_number": null,
+        "display_number": null,
+        "planned_shipment_date": null,
+        "packaging_task_id": null,
+        "created_at_wb": null,
+        "delivered_at": null,
+        "created_at": "2026-10-06T09:36:49.138242+00:00",
+        "updated_at": "2026-10-06T09:36:49.138242+00:00",
+        "orders": [
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "wb_order_id": 662001,
+            "status": "in_supply",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          },
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/pick-options",
+      "status": 200,
+      "body": [
+        {
+          "product_id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "product_name": "SKU 0",
+          "seller_article": null,
+          "barcode": null,
+          "planned_qty": 2,
+          "picked_qty": 0,
+          "locations": [
+            {
+              "storage_location_id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+              "location_code": "A-01",
+              "quantity": 11,
+              "reserved": 0,
+              "available": 11,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 11,
+                  "available": 11,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/products/linked-wb-catalog?seller_id=e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+      "status": 200,
+      "body": [
+        {
+          "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+          "seller_name": "WMS662 seller",
+          "name": "SKU 0",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "wb_nm_id": null,
+          "wb_vendor_code": null,
+          "ozon_sku": null,
+          "ozon_offer_id": null,
+          "wb_subject_name": null,
+          "wb_primary_image_url": null,
+          "marketplace_bindings": [],
+          "wb_barcodes": [],
+          "wb_primary_barcode": null,
+          "wb_size": null,
+          "wb_color": null,
+          "wb_brand": null,
+          "wb_composition": null,
+          "packaging_instructions": null,
+          "country_of_origin_iso_code": null,
+          "requires_honest_sign": false,
+          "fbs_stock_sync_enabled": false,
+          "fbs_stock_limit": null,
+          "fbs_published_amount": null,
+          "fbs_sync_status": null,
+          "has_packaging_instructions": false,
+          "marking_available_count": 0,
+          "is_manual": true,
+          "marketplaces": []
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9",
+      "status": 200,
+      "body": {
+        "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+        "marketplace": "wb",
+        "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+        "warehouse_id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+        "wb_supply_id": "WB-GI-662",
+        "name": "Observed handoff",
+        "status": "assembling",
+        "delivery_type": "warehouse_sc",
+        "cargo_type": null,
+        "wb_office_id": null,
+        "barcode_file": null,
+        "document_number": null,
+        "display_number": null,
+        "planned_shipment_date": null,
+        "packaging_task_id": null,
+        "created_at_wb": null,
+        "delivered_at": null,
+        "created_at": "2026-10-06T09:36:49.138242+00:00",
+        "updated_at": "2026-10-06T09:36:49.138242+00:00",
+        "orders": [
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "wb_order_id": 662001,
+            "status": "in_supply",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          },
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/pick-options",
+      "status": 200,
+      "body": [
+        {
+          "product_id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "product_name": "SKU 0",
+          "seller_article": null,
+          "barcode": null,
+          "planned_qty": 2,
+          "picked_qty": 0,
+          "locations": [
+            {
+              "storage_location_id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+              "location_code": "A-01",
+              "quantity": 11,
+              "reserved": 0,
+              "available": 11,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 11,
+                  "available": 11,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/products/linked-wb-catalog?seller_id=e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+      "status": 200,
+      "body": [
+        {
+          "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+          "seller_name": "WMS662 seller",
+          "name": "SKU 0",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "wb_nm_id": null,
+          "wb_vendor_code": null,
+          "ozon_sku": null,
+          "ozon_offer_id": null,
+          "wb_subject_name": null,
+          "wb_primary_image_url": null,
+          "marketplace_bindings": [],
+          "wb_barcodes": [],
+          "wb_primary_barcode": null,
+          "wb_size": null,
+          "wb_color": null,
+          "wb_brand": null,
+          "wb_composition": null,
+          "packaging_instructions": null,
+          "country_of_origin_iso_code": null,
+          "requires_honest_sign": false,
+          "fbs_stock_sync_enabled": false,
+          "fbs_stock_limit": null,
+          "fbs_published_amount": null,
+          "fbs_sync_status": null,
+          "has_packaging_instructions": false,
+          "marking_available_count": 0,
+          "is_manual": true,
+          "marketplaces": []
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/history",
+      "status": 200,
+      "body": {
+        "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+        "supply_number": "WB-GI-662",
+        "status": "assembling",
+        "order_count": 2,
+        "events": [
+          {
+            "at": "2026-10-06T09:36:49.138242+00:00",
+            "kind": "created",
+            "title": "Поставка создана",
+            "actor": null,
+            "details": null,
+            "items": []
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "picking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_supply",
+            "wb_status": "waiting",
+            "supplier_status": "confirm",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 11,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          },
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "server_now": "2026-10-06T09:36:55.506473+00:00"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "picking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_supply",
+            "wb_status": "waiting",
+            "supplier_status": "confirm",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 11,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          },
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 11
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "server_now": "2026-10-06T09:36:57.077100+00:00"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "in_delivery",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "tracking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          },
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": {
+          "status": "accepted",
+          "orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            }
+          ],
+          "last_wb_sync_at": null,
+          "checked_at": "2026-10-06T09:36:58.843851+00:00"
+        },
+        "partial_rejection": {
+          "accepted_orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            }
+          ],
+          "rejected_orders": []
+        },
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": true,
+        "server_now": "2026-10-06T09:36:58.843851+00:00"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9",
+      "status": 200,
+      "body": {
+        "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+        "marketplace": "wb",
+        "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+        "warehouse_id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+        "wb_supply_id": "WB-GI-662",
+        "name": "Observed handoff",
+        "status": "in_delivery",
+        "delivery_type": "warehouse_sc",
+        "cargo_type": null,
+        "wb_office_id": null,
+        "barcode_file": null,
+        "document_number": null,
+        "display_number": null,
+        "planned_shipment_date": null,
+        "packaging_task_id": null,
+        "created_at_wb": null,
+        "delivered_at": "2026-10-06T09:36:50.790349+00:00",
+        "created_at": "2026-10-06T09:36:49.138242+00:00",
+        "updated_at": "2026-10-06T09:36:57.438274+00:00",
+        "orders": [
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          },
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "wb_order_id": 662001,
+            "status": "in_delivery",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "sticker_code": null,
+            "sticker_file": null
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/pick-options",
+      "status": 200,
+      "body": [
+        {
+          "product_id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "product_name": "SKU 0",
+          "seller_article": null,
+          "barcode": null,
+          "planned_qty": 2,
+          "picked_qty": 0,
+          "locations": [
+            {
+              "storage_location_id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+              "location_code": "A-01",
+              "quantity": 10,
+              "reserved": 0,
+              "available": 10,
+              "picked": 0,
+              "sources": [
+                {
+                  "quantity": 10,
+                  "available": 10,
+                  "picked": 0,
+                  "is_loose": true,
+                  "source_label": "Россыпью",
+                  "container_path": []
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/products/linked-wb-catalog?seller_id=e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+      "status": 200,
+      "body": [
+        {
+          "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+          "seller_id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+          "seller_name": "WMS662 seller",
+          "name": "SKU 0",
+          "sku_code": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+          "wb_nm_id": null,
+          "wb_vendor_code": null,
+          "ozon_sku": null,
+          "ozon_offer_id": null,
+          "wb_subject_name": null,
+          "wb_primary_image_url": null,
+          "marketplace_bindings": [],
+          "wb_barcodes": [],
+          "wb_primary_barcode": null,
+          "wb_size": null,
+          "wb_color": null,
+          "wb_brand": null,
+          "wb_composition": null,
+          "packaging_instructions": null,
+          "country_of_origin_iso_code": null,
+          "requires_honest_sign": false,
+          "fbs_stock_sync_enabled": false,
+          "fbs_stock_limit": null,
+          "fbs_published_amount": null,
+          "fbs_sync_status": null,
+          "has_packaging_instructions": false,
+          "marking_available_count": 0,
+          "is_manual": true,
+          "marketplaces": []
+        }
+      ]
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/history",
+      "status": 200,
+      "body": {
+        "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+        "supply_number": "WB-GI-662",
+        "status": "in_delivery",
+        "order_count": 2,
+        "events": [
+          {
+            "at": "2026-10-06T09:36:49.138242+00:00",
+            "kind": "created",
+            "title": "Поставка создана",
+            "actor": null,
+            "details": null,
+            "items": []
+          }
+        ]
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "in_delivery",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "tracking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          },
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": {
+          "status": "accepted",
+          "orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            }
+          ],
+          "last_wb_sync_at": null,
+          "checked_at": "2026-10-06T09:37:01.222846+00:00"
+        },
+        "partial_rejection": {
+          "accepted_orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            }
+          ],
+          "rejected_orders": []
+        },
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": true,
+        "server_now": "2026-10-06T09:37:01.222846+00:00"
+      }
+    },
+    {
+      "url": "http://127.0.0.1:5173/api/operations/fbs-supplies/61dbbd54-4343-486b-aecb-35928036c6a9/workspace",
+      "status": 200,
+      "body": {
+        "supply": {
+          "delivery_route": null,
+          "id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+          "marketplace": "wb",
+          "wb_supply_id": "WB-GI-662",
+          "source": "wms",
+          "name": "Observed handoff",
+          "status": "in_delivery",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+            "name": "WMS662 seller"
+          },
+          "wb_warehouse": {
+            "id": 0,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+            "name": "WMS662 warehouse"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-07T09:36:49.151446+00:00",
+          "packaging_task_id": null,
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "tracking",
+        "progress": {
+          "picked": 0,
+          "packed": 0,
+          "metadata_ready": 2,
+          "stickers_ready": 0,
+          "total": 2
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662000,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0
+          },
+          {
+            "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+            "marketplace": "wb",
+            "external_order_id": null,
+            "wb_order_id": 662001,
+            "status": "in_delivery",
+            "wb_status": "waiting",
+            "supplier_status": "complete",
+            "seller": {
+              "id": "e00f8b39-c248-4019-8efe-6d7b0c12c2e3",
+              "name": "WMS662 seller"
+            },
+            "wb_warehouse": {
+              "id": 0,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "03196ae3-d9a6-4862-9314-238bbfdb4a5d",
+              "name": "WMS662 warehouse"
+            },
+            "product": {
+              "id": "78605a74-7686-451a-a44d-4a79196bdfb2",
+              "name": "SKU 0",
+              "image_url": null,
+              "seller_article": null,
+              "wb_article": 3000,
+              "barcode": null,
+              "sku": "SKU-2eceecb56c7c4e60be79b09902eed64a-0",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false
+            },
+            "positions": [],
+            "inventory": {
+              "available_unpacked": 10,
+              "locations": [
+                {
+                  "id": "01c5b65c-24d3-416b-8632-414c70be4c46",
+                  "code": "A-01",
+                  "available_unpacked": 10
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "unknown",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-06T09:36:49.151446+00:00",
+            "deadline_at": "2026-10-07T09:36:49.151446+00:00",
+            "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+            "selection_blockers": [
+              {
+                "code": "order_external_processing",
+                "message": "Заказ уже ушёл в кабинете WB."
+              },
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": {
+          "status": "accepted",
+          "orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery"
+            }
+          ],
+          "last_wb_sync_at": null,
+          "checked_at": "2026-10-06T09:37:02.916790+00:00"
+        },
+        "partial_rejection": {
+          "accepted_orders": [
+            {
+              "order_id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+              "wb_order_id": 662000,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            },
+            {
+              "order_id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+              "wb_order_id": 662001,
+              "tracking_label": "accepted",
+              "wb_status": "waiting",
+              "local_status": "in_delivery",
+              "reason": null,
+              "remaining_deadline": "2026-10-07T09:36:49.151446+00:00"
+            }
+          ],
+          "rejected_orders": []
+        },
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": true,
+        "server_now": "2026-10-06T09:37:02.916790+00:00"
+      }
+    }
+  ],
+  "errors": [],
+  "screens": [
+    {
+      "name": "partial-composition",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662001\nВ отгрузке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    },
+    {
+      "name": "partial-Подбор",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nПечать листа подбора\n\nСканер активен — место или товар\n\n​\n\nМесто не выбрано. Можно сразу пикнуть товар — экран сам найдёт, где он лежит, и спросит только если мест несколько.\n\n2\n\nштук осталось снять из 2 по плану отгрузки\n\nЯчейка / тара / товар\tШК\tРазмер\t\nОстаток\nв коробе\n\tСобрать\tСобрано\n\n\nA-0111 шт\n\n\t\n\nA-01\n\n\t\t\t\t\n\n\nSKU 0\n\nSKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\t\t11\t2\t\n​\nДалее: Упаковка и маркировка →"
+    },
+    {
+      "name": "partial-Упаковка и маркировка",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nСначала начните работу с поставкой — сервер создаст единственное задание упаковки.\nДалее: Короба →"
+    },
+    {
+      "name": "partial-Короба",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nКороба · Склад / СЦ\n\nРаспределено 0 из 2 шт · осталось 2\n\nПечать всех QR (0)\nБез распределения\nКоробов\nКоробов\nДобавить короба\nПередать в WB"
+    },
+    {
+      "name": "partial-history",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662001\nВ отгрузке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой\nИстория поставки WB-GI-662\n\nЗаказов в поставке: 2\n\n06.10.2026, 12:36\n\nПоставка создана\n\nпоставка\nЗакрыть"
+    },
+    {
+      "name": "partial-reopen",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662001\nВ отгрузке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    },
+    {
+      "name": "partial-refresh",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662001\nВ отгрузке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    },
+    {
+      "name": "full-composition",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662001\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    },
+    {
+      "name": "full-Подбор",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nПодбор завершён. Этот этап доступен только для просмотра.\nПечать листа подбора\n\nСканер активен — место или товар\n\n​\n\nМесто не выбрано. Можно сразу пикнуть товар — экран сам найдёт, где он лежит, и спросит только если мест несколько.\n\n2\n\nштук осталось снять из 2 по плану отгрузки\n\nЯчейка / тара / товар\tШК\tРазмер\t\nОстаток\nв коробе\n\tСобрать\tСобрано\n\n\nA-0110 шт\n\n\t\n\nA-01\n\n\t\t\t\t\n\n\nSKU 0\n\nSKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\t\t10\t2\t\n​\nДалее: Упаковка и маркировка →"
+    },
+    {
+      "name": "full-Упаковка и маркировка",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nПоставка уже передана в WB. Состав менять нельзя, печать этикеток и стикеров доступна.\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2\n\nВыбрать всё\nПечать всего (2)\nВсё упаковано\nСдать без Честного знака\nВнесение КИЗ со стикера — только если Честный знак уже наклеен селлером\n​\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nСканируйте QR стикера заказа — его строка станет активной, затем сканируйте Честный знак.\n\nSKU 0\n\nзаказ 662000\nСтикер\n\n—\n\nЧЗ\n\n—\n\nТЗ\nQR\n\nSKU 0\n\nзаказ 662001\nСтикер\n\n—\n\nЧЗ\n\n—\n\nТЗ\nQR\nДалее: Короба →"
+    },
+    {
+      "name": "full-Короба",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nКороба · Склад / СЦ\n\nРаспределено 0 из 2 шт · осталось 2\n\nПечать всех QR (0)\nБез распределения\nКоробов\nКоробов\nДобавить короба\nПоставка передана, QR получить не удалось\nПолучить QR повторно"
+    },
+    {
+      "name": "full-history",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662001\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой\nИстория поставки WB-GI-662\n\nЗаказов в поставке: 2\n\n06.10.2026, 12:36\n\nПоставка создана\n\nпоставка\nЗакрыть"
+    },
+    {
+      "name": "full-reopen",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662001\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    },
+    {
+      "name": "full-refresh",
+      "text": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662001\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+    }
+  ],
+  "partial": {
+    "phase": "partial",
+    "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+    "supply_status": "assembling",
+    "delivered_at": null,
+    "shipped": 1,
+    "stock": {
+      "78605a74-7686-451a-a44d-4a79196bdfb2": 11
+    },
+    "reserves": {
+      "78605a74-7686-451a-a44d-4a79196bdfb2": 1
+    },
+    "orders": [
+      {
+        "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+        "wb_order_id": 662000,
+        "status": "in_delivery",
+        "movement_id": "4358cd95-2835-468f-903c-667b0fa1e760"
+      },
+      {
+        "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+        "wb_order_id": 662001,
+        "status": "in_supply",
+        "movement_id": null
+      }
+    ],
+    "external_reads": [
+      [
+        "POST",
+        "/api/v3/orders/status"
+      ],
+      [
+        "GET",
+        "/api/marketplace/v3/supplies/WB-GI-662/order-ids"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ]
+    ],
+    "synthetic_external_response": {
+      "662000": {
+        "id": 662000,
+        "supplierStatus": "complete",
+        "wbStatus": "waiting"
+      },
+      "662001": {
+        "id": 662001,
+        "supplierStatus": "confirm",
+        "wbStatus": "waiting"
+      }
+    }
+  },
+  "full": {
+    "phase": "full",
+    "supply_id": "61dbbd54-4343-486b-aecb-35928036c6a9",
+    "supply_status": "in_delivery",
+    "delivered_at": "2026-10-06 09:36:50.790349+00:00",
+    "shipped": 2,
+    "stock": {
+      "78605a74-7686-451a-a44d-4a79196bdfb2": 10
+    },
+    "reserves": {},
+    "orders": [
+      {
+        "id": "5c4e50e6-e37a-4b4f-b408-41c4223e4df0",
+        "wb_order_id": 662000,
+        "status": "in_delivery",
+        "movement_id": "4358cd95-2835-468f-903c-667b0fa1e760"
+      },
+      {
+        "id": "b2daed5f-5523-45dd-902b-1bcfd2b977c1",
+        "wb_order_id": 662001,
+        "status": "in_delivery",
+        "movement_id": "b281643a-8801-4880-bdcd-2c70d741f701"
+      }
+    ],
+    "external_reads": [
+      [
+        "POST",
+        "/api/v3/orders/status"
+      ],
+      [
+        "GET",
+        "/api/marketplace/v3/supplies/WB-GI-662/order-ids"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "POST",
+        "/api/v3/orders/status"
+      ],
+      [
+        "GET",
+        "/api/marketplace/v3/supplies/WB-GI-662/order-ids"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ],
+      [
+        "GET",
+        "/api/v3/supplies"
+      ]
+    ],
+    "synthetic_external_response": {
+      "662000": {
+        "id": 662000,
+        "supplierStatus": "complete",
+        "wbStatus": "waiting"
+      },
+      "662001": {
+        "id": 662001,
+        "supplierStatus": "complete",
+        "wbStatus": "waiting"
+      }
+    }
+  },
+  "lastText": "Открыть поставку\nObserved handoff\n\nWMS662 seller · № WB WB-GI-662\n\nСклад WMS\n\nWMS662 warehouse\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 07.10.2026, 09:36:49\n23 ч\nИстория поставки\nСостав ✓\nПодбор ✓\nУпаковка и маркировка ✓\nКороба\nСостав поставки\n\n2 заказа в поставке\n\nДобавить заказы\nПечать листа подбора\nФото\tЗаказ WB\tТовар и идентификаторы\tКоличество\tМаркировка\tПодбор\n\n\t\n№662000\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\n\n\t\n№662001\nВ доставке\n\t\n\nSKU 0\n\nАртикул: — · SKU: SKU-2eceecb56c7c4e60be79b09902eed64a-0\n\t\n\n1 шт.\n\n\tНе требуется\tОжидает\nНачать работу с поставкой"
+}
