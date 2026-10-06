@@ -1,0 +1,30 @@
+{
+  "task": "WMS-663",
+  "contract_commit": "ae2ebd3d17f4e7364b1b52de4126b8f70937652b",
+  "correction_commit": "76f2162e22f1aa9e33a336b01109882d8a8969c6",
+  "files": [
+    "backend/tests/test_wms663_customs_documents_contract.py",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "scope": "Fixture/DOM target correction content only; not product or checker acceptance",
+    "evidence": "docs/reviews/wms663-astra-7d9e9.md",
+    "evidence_commit": "4306d91b3a1963999780329127c19144e4902cf1",
+    "summary": "Independent review explicitly approved UUID capture before expire_all and the exact exemplar Save button; assertions and permanent protection were not weakened."
+  },
+  "protocol_commit": "8d6cdd80c7e478bda46371d79911a6e3c902d5c9",
+  "protocol_status": "BLOCKED",
+  "blocker": {
+    "code": "CORRECTION_EQUALS_ENTIRE_FROZEN_CONTRACT",
+    "frozen_files": [
+      "backend/tests/test_wms663_customs_documents_contract.py",
+      "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx"
+    ],
+    "reason": "The requirements document is excluded from frozen paths. Both remaining frozen files are changed by the exact reviewed commit, so the strict-subset condition fails in both supported formats.",
+    "checker_acceptance": false,
+    "resolution": "Controller must resolve the unsupported whole-frozen-set correction through the authorized governance process. Do not invent a source SHA, omit a changed file, split historical evidence artificially, or weaken checker/guards."
+  }
+}
