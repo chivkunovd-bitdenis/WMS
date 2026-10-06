@@ -21,7 +21,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import SessionLocal
 from app.models.fbs_binding_stock_pool import FbsBindingStockPool
-from app.models.fbs_stock_sync_item import FbsStockSyncItem
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
 from app.models.inbound_intake import InboundIntakeLine, InboundIntakeRequest
 from app.models.product import Product
