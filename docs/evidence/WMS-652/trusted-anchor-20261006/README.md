@@ -106,3 +106,11 @@ https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-t
 текущий общий результат27 PASS. Валидный trusted event head —failure-only fallback;
 все publishers —одна постоянная non-cancelling очередь. Workflow по-прежнему
 только подготовлен и не установлен в main.
+
+Следующий Astra A review обнаружил вытеснение pending failure третьим событием.
+[queue-fix.md](queue-fix.md) исправляет прежнюю неточную модель очереди и
+фиксирует дополнительный контракт `b6cac70ed` до YAML delta. Текущий результат
+**30 PASS**. Константная группа теперь имеет `queue: max` и false cancel;
+это максимум 100 pending, не неограниченная очередь. При заполнении GitHub
+отменяет новый запуск, поэтому безграничная гарантия отзыва старого check не
+заявляется. Workflow остаётся только подготовленным.
