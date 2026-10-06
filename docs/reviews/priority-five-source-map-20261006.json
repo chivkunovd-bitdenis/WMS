@@ -138,6 +138,15 @@
       "conflicts": [],
       "reviewed_sha": "08e0d33ddb54dfa5f0712a316d879032441206dc",
       "verdict": "PASS for reviewed delta; newly discovered WMS-662 live substatus gap requires separate RED/fix/review"
+    },
+    {
+      "task": "WMS-662 real Ozon substatus test contract before fix",
+      "source": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "base": "8e64e14e8ea39adbe122191e209a329b7513b920",
+      "mode": "merge separate test-only contract ancestry before product fix",
+      "conflicts": [],
+      "red": "2 true live positive cases FAILED;10 negative/received cases PASS by separate test writer",
+      "frozen": "backend/tests/test_wms662_live_delivery_substatuses.py"
     }
   ]
 }
