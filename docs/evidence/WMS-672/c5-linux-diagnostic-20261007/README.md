@@ -26,3 +26,7 @@ justify timeout/message changes. This is diagnostic evidence, never fullCI PASS.
 Dispatch requires coordinator's exact published SHA/workflow scope check; one
 owner only. Raw artifacts, command, run/attempt/environment and conclusion will
 be added after that single authorized run. No product fix in this branch.
+
+Coordinator preparation review caught shallow checkout before dispatch. Checkout
+now fetches history (`fetch-depth: 0`) so exact original merge byte checks can run.
+No diagnostic was dispatched with the earlier prepared SHA.
