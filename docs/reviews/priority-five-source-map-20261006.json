@@ -40,6 +40,18 @@
       "base": "022b242fd52c4470e217c76fa0d067a005b6b617",
       "mode": "merge preserving accepted source ancestry",
       "conflicts": []
+    },
+    {
+      "task": "WMS-667",
+      "source": "9cc133d6a4883e0c76a7147794f4a8e557c29d20",
+      "base": "bd825cf58172abfc4f5ba64046f631afeeb01ed2",
+      "mode": "merge preserving original test/code ancestry",
+      "conflicts": [
+        {
+          "path": "docs/KANONICHESKIY_BACKLOG.md",
+          "resolution": "Preserve all current sections and original accepted WMS-667 section"
+        }
+      ]
     }
   ]
 }

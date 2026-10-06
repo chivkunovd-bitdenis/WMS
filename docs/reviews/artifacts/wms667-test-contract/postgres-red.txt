@@ -1,0 +1,141 @@
+FFFFFFFFFF.FF....                                                        [100%]
+=================================== FAILURES ===================================
+_________________ test_c1_displayed_on_hand_strictly_positive __________________
+tests/test_wms667_catalog_has_stock_contract.py:207: in test_c1_displayed_on_hand_strictly_positive
+    assert_selection(await catalog.page(has_stock=True), [ids[0]])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['5df23568-51...114a9bfa27cb'] == ['5df23568-51...7182943609bf']
+E
+E     Left contains 3 more items, first extra item: 'f66b4247-05c0-4858-8db5-5ef7d6e26dec'
+E     Use -v to get more diff
+________________ test_c2_positive_fully_reserved_is_included[5] ________________
+tests/test_wms667_catalog_has_stock_contract.py:220: in test_c2_positive_fully_reserved_is_included
+    assert_selection(await catalog.page(has_stock=True), [positive])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['87c2c975-9e...536b490cf41b'] == ['87c2c975-9e...d3ee93d63302']
+E
+E     Left contains one more item: 'a12ac881-3a73-4cb7-a95b-536b490cf41b'
+E     Use -v to get more diff
+________________ test_c2_positive_fully_reserved_is_included[7] ________________
+tests/test_wms667_catalog_has_stock_contract.py:220: in test_c2_positive_fully_reserved_is_included
+    assert_selection(await catalog.page(has_stock=True), [positive])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['2fb6ba2f-f2...1e6f34c97fb0'] == ['2fb6ba2f-f2...4058c8c65534']
+E
+E     Left contains one more item: '769b753e-574e-4f4e-8aab-1e6f34c97fb0'
+E     Use -v to get more diff
+__________________ test_c3_filter_before_count_and_pagination __________________
+tests/test_wms667_catalog_has_stock_contract.py:232: in test_c3_filter_before_count_and_pagination
+    assert_selection(page, ids[2:4])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['0392d6be-b8...b7b05a18584b'] == ['ca43bcf7-03...e027e598f7ab']
+E
+E     At index 0 diff: '0392d6be-b877-465a-ab5b-b8608c4dbabe' != 'ca43bcf7-039e-4139-9c1c-70afa293786c'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters0-expected0] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['50084279-32...da77b75848ea'] == ['50084279-32...b53183c1ea84']
+E
+E     Left contains 2 more items, first extra item: '238cee08-90b0-4a98-8f00-d8796f05381a'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters1-expected1] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['96dcd0a1-67...55aede0a4bed'] == ['96dcd0a1-67...6cdbea444269']
+E
+E     Left contains one more item: 'f7998e8a-bc11-4874-be05-55aede0a4bed'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters2-expected2] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['cc9be5a4-62...4af524f0d327'] == ['cc9be5a4-62...4a99ddf3ca91']
+E
+E     Left contains one more item: 'd6318ef4-0504-4f31-b367-4af524f0d327'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters3-expected3] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['d7def33e-29...61a7b3b29a82'] == ['d7def33e-29...a06d13a2bb6c']
+E
+E     Left contains 2 more items, first extra item: 'fa78ace9-f1ac-4c70-aa76-513013883474'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters4-expected4] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['f7743c40-84...cd94c7076e20'] == ['f7743c40-84...21028d3de39f']
+E
+E     Left contains one more item: 'ef5849da-1116-409b-85be-cd94c7076e20'
+E     Use -v to get more diff
+_____ test_c4_stock_filter_intersects_existing_filters[filters5-expected5] _____
+tests/test_wms667_catalog_has_stock_contract.py:270: in test_c4_stock_filter_intersects_existing_filters
+    assert_selection(page, [ids[i] for i in expected])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['c86ec284-96...587e1a1196f7'] == ['c86ec284-96...fc06b49f2ad0']
+E
+E     Left contains one more item: '59287c4e-030c-40ca-85d1-587e1a1196f7'
+E     Use -v to get more diff
+______________ test_c5_publication_limit_and_get_are_independent _______________
+tests/test_wms667_catalog_has_stock_contract.py:297: in test_c5_publication_limit_and_get_are_independent
+    assert_selection(all_stock, [disabled, enabled])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['b34227bd-69...3d08972bb6a3'] == ['b34227bd-69...ee58d50a5f2a']
+E
+E     Left contains one more item: '63ed417a-4d30-4a49-a3a4-3d08972bb6a3'
+E     Use -v to get more diff
+__________ test_c6_locations_container_and_relocation_keep_membership __________
+tests/test_wms667_catalog_has_stock_contract.py:341: in test_c6_locations_container_and_relocation_keep_membership
+    assert_selection(before, [positive])
+tests/test_wms667_catalog_has_stock_contract.py:180: in assert_selection
+    assert [row["id"] for row in page["items"]] == expected
+E   AssertionError: assert ['74951f5b-3c...3509d6e00b55'] == ['74951f5b-3c...eb626fc3049c']
+E
+E     Left contains one more item: '92a4e981-1368-4777-8a95-3509d6e00b55'
+E     Use -v to get more diff
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/support-task-18/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c1_displayed_on_hand_strictly_positive
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c2_positive_fully_reserved_is_included[5]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c2_positive_fully_reserved_is_included[7]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c3_filter_before_count_and_pagination
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters0-expected0]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters1-expected1]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters2-expected2]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters3-expected3]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters4-expected4]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c4_stock_filter_intersects_existing_filters[filters5-expected5]
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c5_publication_limit_and_get_are_independent
+FAILED tests/test_wms667_catalog_has_stock_contract.py::test_c6_locations_container_and_relocation_keep_membership
+12 failed, 5 passed, 6 warnings in 8.02s

@@ -282,6 +282,7 @@ export function FfProductsCatalogScreen({
   const [filterSellerId, setFilterSellerId] = useState('')
   const [filterMarketplace, setFilterMarketplace] = useState<'wildberries' | 'ozon' | ''>('')
   const [filterStockPublication, setFilterStockPublication] = useState('')
+  const [filterHasStock, setFilterHasStock] = useState(false)
   const [filterCategory, setFilterCategory] = useState('')
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(100)
@@ -304,7 +305,7 @@ export function FfProductsCatalogScreen({
 
   useEffect(() => {
     setPage(0)
-  }, [debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterSellerId, rowsPerPage])
+  }, [debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId, rowsPerPage])
 
   // Выбор строк относится к тому, что видно на текущей странице сейчас —
   // при смене страницы или фильтра он теряет смысл и снимается.
@@ -314,7 +315,7 @@ export function FfProductsCatalogScreen({
     // экране и врёт: фильтр уже сузили до одного продавца, а сообщение всё ещё
     // перечисляет пятерых.
     setFbsDialogError(null)
-  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterSellerId])
+  }, [page, rowsPerPage, debouncedSearch, filterCategory, filterMarketplace, filterStockPublication, filterHasStock, filterSellerId])
 
   const load = useCallback(async () => {
     catalogAbortRef.current?.abort()
@@ -332,6 +333,7 @@ export function FfProductsCatalogScreen({
       if (filterCategory) params.set('category', filterCategory)
       if (filterMarketplace) params.set('marketplace', filterMarketplace)
       if (filterStockPublication) params.set('stock_publication', filterStockPublication)
+      if (filterHasStock) params.set('has_stock', 'true')
       const res = await fetch(apiUrl(`/products/ff-catalog-page?${params.toString()}`), {
         headers: { ...authHeaders(token) },
         signal: controller.signal,
@@ -373,6 +375,7 @@ export function FfProductsCatalogScreen({
     filterCategory,
     filterMarketplace,
     filterStockPublication,
+    filterHasStock,
     filterSellerId,
     page,
     rowsPerPage,
@@ -1071,6 +1074,20 @@ export function FfProductsCatalogScreen({
                 ))}
               </Select>
             </FormControl>
+            <FormControlLabel
+              control={
+                <Checkbox
+                  checked={filterHasStock}
+                  onChange={(e) => {
+                    setPage(0)
+                    setFilterHasStock(e.target.checked)
+                  }}
+                  size="small"
+                />
+              }
+              label="С остатком"
+              data-testid="ff-catalog-has-stock-filter"
+            />
             <Typography variant="body2" color="text.secondary" data-testid="ff-catalog-filter-count">
               {busy ? 'Загрузка…' : `Найдено: ${catalogTotal} из ${catalogScopeTotal}`}
             </Typography>
