@@ -1,0 +1,530 @@
+✖ SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog (151.363334ms)
+✖ launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success (25.298375ms)
+✖ accepts the correct production registry URL variant (exact) and ignores unrelated tabs (2.834125ms)
+✖ accepts the correct production registry URL variant / and ignores unrelated tabs (4.330583ms)
+✖ allows query and hash on the exact registry URL and ignores unrelated tabs (3.622083ms)
+✖ accepts the correct production registry URL variant #registry and ignores unrelated tabs (6.291375ms)
+✖ accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs (28.450167ms)
+✖ accepts the correct production registry URL variant /#registry and ignores unrelated tabs (18.657375ms)
+✔ rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection (4.367209ms)
+✔ rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection (1.648708ms)
+✔ rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection (5.761542ms)
+✔ rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection (18.705625ms)
+✔ rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection (1.231334ms)
+✔ rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection (1.233667ms)
+✔ rejects non-target tab not a URL before injection (0.88625ms)
+✔ rejects 0 matching tabs before injection (1.7455ms)
+✔ rejects 2 matching tabs before injection (1.382458ms)
+✔ does not launch Chrome if it is not already running (1.985917ms)
+✔ fails fast and redacts Apple Events or Automation error at failRunning (0.611416ms)
+✔ fails fast and redacts Apple Events or Automation error at failTabs (1.101125ms)
+✔ fails fast and redacts Apple Events or Automation error at failEvaluate (2.984084ms)
+✔ fails fast and redacts Apple Events or Automation error at failProbe (1.567791ms)
+✖ repeated launch after successful preparation does not inject or execute twice (4.429667ms)
+✔ an already running launch is never injected again and polling is bounded (4.048ms)
+✔ helper rejection is redacted, never retried and never reported as success (2.232292ms)
+✔ a hung helper times out with bounded polling and no automatic retry (12.17ms)
+✔ does not accept unsafe or incomplete helper result {"status":"ready"} (4.304959ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":0} (16.82375ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":-1} (5.061333ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":1.5} (7.401416ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":"84"} (1.766ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":null} (1.306292ms)
+✔ does not accept unsafe or incomplete helper result {} (1.853458ms)
+✔ does not accept unsafe or incomplete helper result {"targetCount":null} (7.569542ms)
+✔ does not accept unsafe or incomplete helper result {"noSend":false} (2.348959ms)
+✔ does not accept unsafe or incomplete helper result {} (2.371791ms)
+✔ does not accept unsafe or incomplete helper result {"signed":true} (3.486167ms)
+✔ does not accept unsafe or incomplete helper result {"sent":true} (4.221333ms)
+✔ does not accept unsafe or incomplete helper result {} (3.202333ms)
+✔ does not accept unsafe or incomplete helper result {} (3.835792ms)
+✔ does not accept malformed browser status as readiness (1.76625ms)
+✔ one executable macOS command embeds exact reviewed sources and needs only system JXA (4.024875ms)
+✔ all launch artifacts and the runbook use the correct production URL without the old working link (2.269ms)
+✔ the command generator reproduces the saved executable exactly without writing any real file (8.057833ms)
+✔ redirect after permission probe blocks browser helper loading before any target data is exposed (18.336125ms)
+✔ JXA rechecks current tab URL before execution number 1 (17.336167ms)
+✔ JXA rechecks current tab URL before execution number 2 (6.97725ms)
+✔ JXA rechecks current tab URL before execution number 3 (11.736875ms)
+✖ successful JXA preparation brings the exact target tab and its background window to the front (9.153416ms)
+✔ JXA refuses a replacement matching tab after readiness instead of focusing a different identity (5.512666ms)
+✔ JXA redacts focus setters activation and repeated tab lookup failures without another execute (16.976542ms)
+✖ SC17 launcher accepts fresh positive integer dialog count 1 (8.03425ms)
+✔ SC17 launcher accepts fresh positive integer dialog count 80 (4.889833ms)
+✖ SC17 launcher accepts fresh positive integer dialog count 81 (2.160292ms)
+✖ SC17 launcher accepts fresh positive integer dialog count 84 (1.555417ms)
+✖ SC17 launcher accepts fresh positive integer dialog count 305 (2.436958ms)
+✖ SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80 (106.527375ms)
+✖ SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80 (3.830583ms)
+✔ SC17 dry-run uses all 80 fresh eligible sales-backed rows without fixed80 (6.531959ms)
+✖ SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80 (5.452625ms)
+✖ SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80 (1.837625ms)
+✖ SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80 (3.580292ms)
+✖ SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80 (4.18725ms)
+✖ SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80 (2.179125ms)
+✖ SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80 (18.973083ms)
+✖ SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80 (5.175167ms)
+✖ SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80 (7.089833ms)
+✖ SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80 (6.386167ms)
+✔ SC17 zero rows never claims readiness or opens certificate dialog (dry-run) (2.41925ms)
+✔ SC17 zero rows never claims readiness or opens certificate dialog (execute) (0.547875ms)
+✖ SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs (1.312042ms)
+✖ SC17 return removes former ID and adds a new sold row: selects only current eligible IDs (1.631084ms)
+✖ SC17 active claim on former ID is excluded: selects only current eligible IDs (1.254084ms)
+✖ SC17 already withdrawn former ID is excluded: selects only current eligible IDs (0.808958ms)
+✖ SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs (0.796333ms)
+✔ SC17 newly returned/claimed ID between read and selection cannot survive as stale snapshot (1.54675ms)
+✔ SC17 same count but replacement ID between read and selection cannot be stale success (1.123584ms)
+✔ SC17 duplicate across pages refuses partial or ambiguous preparation before dialog (4.334042ms)
+✔ SC17 empty nonterminal page refuses partial or ambiguous preparation before dialog (3.187375ms)
+✔ SC17 short nonterminal first page refuses partial or ambiguous preparation before dialog (1.807083ms)
+✖ SC17 short terminal page refuses partial or ambiguous preparation before dialog (10.409667ms)
+✔ SC17 changed total on second page refuses partial or ambiguous preparation before dialog (7.898375ms)
+✔ SC17 invalid total refuses partial or ambiguous preparation before dialog (1.32475ms)
+✔ SC17 oversized page refuses partial or ambiguous preparation before dialog (7.065667ms)
+✔ SC17 second-page invalid JSON refuses partial or ambiguous preparation before dialog (5.60125ms)
+✔ SC17 second-page HTTP 401 refuses partial or ambiguous preparation before dialog (5.193667ms)
+✔ SC17 second-page HTTP 403 refuses partial or ambiguous preparation before dialog (11.342584ms)
+✔ SC17 second-page HTTP 429 refuses partial or ambiguous preparation before dialog (4.324833ms)
+✔ SC17 second-page HTTP 503 refuses partial or ambiguous preparation before dialog (3.2935ms)
+✔ SC17 wrong tenant_id rejects before registry or UI (0.593458ms)
+✔ SC17 wrong seller_id rejects before registry or UI (0.263042ms)
+✔ SC17 wrong active_seller_id rejects before registry or UI (0.439209ms)
+✔ SC17 wrong role rejects before registry or UI (0.356959ms)
+✔ SC17 wrong withdrawal_enabled rejects before registry or UI (1.693416ms)
+✔ SC17 exact production origin and route required {"origin":"https://sellerfocus.pro"} (5.640542ms)
+✔ SC17 exact production origin and route required {"origin":"https://foreign.example"} (2.164666ms)
+✔ SC17 exact production origin and route required {"origin":"https://wms.sellerfocus.pro.evil.test"} (0.563417ms)
+✔ SC17 exact production origin and route required {"origin":"http://wms.sellerfocus.pro"} (0.122167ms)
+✔ SC17 exact production origin and route required {"pathname":"/seller/orders"} (0.492042ms)
+✔ SC17 seller session switch refuses preparation {"switchTokenAtOffset":250} (5.157208ms)
+✔ SC17 seller session switch refuses preparation {"changeTokenInUi":true} (5.14875ms)
+✔ SC17 seller session switch refuses preparation {"switchIdentity":true} (2.689459ms)
+✔ SC17 preexisting selection is not silently extended (1.47875ms)
+✔ SC17 incomplete DOM confirmation is never success {"openedCount":83} (1.436417ms)
+✔ SC17 incomplete DOM confirmation is never success {"dialogOpen":false} (4.520459ms)
+✔ SC17 missing seller token null rejects before any GET or UI (0.383166ms)
+✔ SC17 missing seller token "" rejects before any GET or UI (0.129958ms)
+✔ SC17 identity GET HTTP 401 refuses preparation (0.302834ms)
+✔ SC17 identity GET HTTP 403 refuses preparation (0.146209ms)
+ℹ tests 109
+ℹ suites 0
+ℹ pass 78
+ℹ fail 31
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1710.842541
+
+✖ failing tests:
+
+test at scripts/ops/tests/wms517-mac-dom.test.cjs:15:1
+✖ SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog (151.363334ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  80 !== 305
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-dom.test.cjs:80:67)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 80,
+    expected: 305,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:105:1
+✖ launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success (25.298375ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ accepts the correct production registry URL variant (exact) and ignores unrelated tabs (2.834125ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ accepts the correct production registry URL variant / and ignores unrelated tabs (4.330583ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ allows query and hash on the exact registry URL and ignores unrelated tabs (3.622083ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ accepts the correct production registry URL variant #registry and ignores unrelated tabs (6.291375ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs (28.450167ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:128:3
+✖ accepts the correct production registry URL variant /#registry and ignores unrelated tabs (18.657375ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:180:1
+✖ repeated launch after successful preparation does not inject or execute twice (4.429667ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:344:1
+✖ successful JXA preparation brings the exact target tab and its background window to the front (9.153416ms)
+  <anonymous_script>:175
+        if (state?.status === 'error') throw fail('Помощник безопасно остановился. Подпись и отправка не выполнялись.');
+                                       ^
+
+  MacLauncherError: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (eval at <anonymous> (evalmachine.<anonymous>:20:10), <anonymous>:19:29)
+      at Object.launch (eval at <anonymous> (evalmachine.<anonymous>:20:10), <anonymous>:175:44)
+      at evalmachine.<anonymous>:73:25
+      at Script.runInContext (node:vm:149:12)
+      at Object.runInContext (node:vm:301:6)
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:383:6)
+      at Test.runInAsyncScope (node:async_hooks:214:14)
+      at Test.run (node:internal/test_runner/test:1103:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:785:18)
+      at Test.postRun (node:internal/test_runner/test:1232:19)
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3
+✖ SC17 launcher accepts fresh positive integer dialog count 1 (8.03425ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3
+✖ SC17 launcher accepts fresh positive integer dialog count 81 (2.160292ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3
+✖ SC17 launcher accepts fresh positive integer dialog count 84 (1.555417ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-mac-launcher.test.cjs:477:3
+✖ SC17 launcher accepts fresh positive integer dialog count 305 (2.436958ms)
+  Error [MacLauncherError]: Помощник безопасно остановился. Подпись и отправка не выполнялись.
+      at fail (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:19:29)
+      at launch (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-macos-launcher.js:175:44)
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-mac-launcher.test.cjs:83:24
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80 (106.527375ms)
+  Error [SoldKizFilterError]: Строка 0d2b2f9f-799c-476c-b4f8-8090efff5ddb отсутствует или задублирована.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:228:39
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80 (3.830583ms)
+  Error [SoldKizFilterError]: Строка 0d2b2f9f-799c-476c-b4f8-8090efff5ddb отсутствует или задублирована.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:228:39
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80 (5.452625ms)
+  AssertionError [ERR_ASSERTION]: all must clear both handover dates, product and search before UI refresh
+  + actual - expected
+
+  + {
+  +   date_from: '2026-09-18',
+  +   date_to: '2026-09-25',
+  +   product_id: 'old-product',
+  +   search: 'old-search'
+  + }
+  - {}
+
+      at Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { date_from: '2026-09-18', date_to: '2026-09-25', product_id: 'old-product', search: 'old-search' },
+    expected: {},
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80 (1.837625ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  80 !== 81
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 80,
+    expected: 81,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80 (3.580292ms)
+  AssertionError [ERR_ASSERTION]: all must clear both handover dates, product and search before UI refresh
+  + actual - expected
+
+  + {
+  +   date_from: '2026-09-18',
+  +   date_to: '2026-09-25',
+  +   product_id: 'old-product',
+  +   search: 'old-search'
+  + }
+  - {}
+
+      at Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { date_from: '2026-09-18', date_to: '2026-09-25', product_id: 'old-product', search: 'old-search' },
+    expected: {},
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80 (4.18725ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  80 !== 84
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 80,
+    expected: 84,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80 (2.179125ms)
+  AssertionError [ERR_ASSERTION]: all must clear both handover dates, product and search before UI refresh
+  + actual - expected
+
+  + {
+  +   date_from: '2026-09-18',
+  +   date_to: '2026-09-25',
+  +   product_id: 'old-product',
+  +   search: 'old-search'
+  + }
+  - {}
+
+      at Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { date_from: '2026-09-18', date_to: '2026-09-25', product_id: 'old-product', search: 'old-search' },
+    expected: {},
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80 (18.973083ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  80 !== 305
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 80,
+    expected: 305,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80 (5.175167ms)
+  AssertionError [ERR_ASSERTION]: all must clear both handover dates, product and search before UI refresh
+  + actual - expected
+
+  + {
+  +   date_from: '2026-09-18',
+  +   date_to: '2026-09-25',
+  +   product_id: 'old-product',
+  +   search: 'old-search'
+  + }
+  - {}
+
+      at Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { date_from: '2026-09-18', date_to: '2026-09-25', product_id: 'old-product', search: 'old-search' },
+    expected: {},
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80 (7.089833ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  80 !== 501
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:106:14)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 80,
+    expected: 501,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:103:5
+✖ SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80 (6.386167ms)
+  AssertionError [ERR_ASSERTION]: all must clear both handover dates, product and search before UI refresh
+  + actual - expected
+
+  + {
+  +   date_from: '2026-09-18',
+  +   date_to: '2026-09-25',
+  +   product_id: 'old-product',
+  +   search: 'old-search'
+  + }
+  - {}
+
+      at Object.refreshSelectAllAndOpen (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:61:14)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:306:33)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:105:22)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: { date_from: '2026-09-18', date_to: '2026-09-25', product_id: 'old-product', search: 'old-search' },
+    expected: {},
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3
+✖ SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs (1.312042ms)
+  Error [SoldKizFilterError]: Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 отсутствует или задублирована.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:228:39
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3
+✖ SC17 return removes former ID and adds a new sold row: selects only current eligible IDs (1.631084ms)
+  Error [SoldKizFilterError]: Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 отсутствует или задублирована.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:228:39
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3
+✖ SC17 active claim on former ID is excluded: selects only current eligible IDs (1.254084ms)
+  Error [SoldKizFilterError]: Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:231:15
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3
+✖ SC17 already withdrawn former ID is excluded: selects only current eligible IDs (0.808958ms)
+  Error [SoldKizFilterError]: Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:231:15
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:138:3
+✖ SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs (0.796333ms)
+  Error [SoldKizFilterError]: Строка 076e540e-a663-4b4e-acac-c76f1bc32b47 уже выводится, выведена или связана с операцией.
+      at /Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:231:15
+      at Array.map (<anonymous>)
+      at exactTargets (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:226:51)
+      at Object.run (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/avpack-sold-kiz-filter.js:290:23)
+      at async TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:140:20)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+
+test at scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:167:3
+✖ SC17 short terminal page refuses partial or ambiguous preparation before dialog (10.409667ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+
+    assert.ok(!h.events.includes('open'))
+
+      at TestContext.<anonymous> (/Users/deniscivkunov/Projects/WMS/.worktrees/wms517-mac-dynamic-eligible/scripts/ops/tests/wms517-sold-kiz-filter.test.cjs:169:12)
+      at async Test.run (node:internal/test_runner/test:1110:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:785:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
