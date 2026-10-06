@@ -34,16 +34,18 @@ describe.skipIf(!process.env.WMS673_RENDERED_ARTIFACTS_DIR)('WMS-673 business RE
     // Render the actual PDF before asserting the missing business column, so a
     // renderer failure cannot be misreported as a product RED.
     const { pdf, textReport } = await renderPdf(html, 'baseline-long-row')
-    expect(geometry.rowCellCounts, 'missing separate color column').toEqual([11])
+    expect(geometry.rowCellCounts, 'missing separate article/color/size columns').toEqual([12])
     expect(geometry.tableWithinPage).toBe(true)
     expect(geometry.headersAligned).toBe(true)
     expect(geometry.allCellContentFits).toBe(true)
     expect(geometry.neighboringCellsDoNotOverlap).toBe(true)
-    expect(geometry.sizeStyle).toEqual({ width: '78px', fontSize: '20px' })
-    expect(geometry.fixedWidths).toEqual([
-      { className: 'number', width: '28px' }, { className: 'image', width: '54px' },
-      { className: 'sticker', width: '116px' }, { className: 'quantity', width: '62px' }, { className: 'quantity', width: '62px' },
-    ])
+    expect(geometry.columnBounds).toHaveLength(12)
+    expect(geometry.sizeStyle).toMatchObject({ fontSize: '20px' })
+    expect(geometry.sizeStyle?.width).not.toBe('78px')
+    expect(geometry.fixedWidths.map(({ className }) => className)).toEqual(['number', 'image', 'sticker', 'quantity', 'quantity'])
+    expect(geometry.fixedWidths.every(({ width }) => Number.parseFloat(width) > 0)).toBe(true)
+    expect(geometry.fixedWidths.slice(3)).toHaveLength(2)
+    expect(geometry.fixedWidths.slice(3).every(({ className, width }) => className === 'quantity' && width !== '62px' && Number.parseFloat(width) > 0)).toBe(true)
     expect(geometry.sizeCells[0]).toMatchObject({ text: 'Универсальный', linesWithinCell: true })
     expect(geometry.sizeCells[0].lineCount).toBeGreaterThanOrEqual(2)
     expect(geometry.colorCells[0]).toEqual({ text: `${LONG_COLOR} ЦВЕТ000`, linesWithinCell: true })
@@ -51,22 +53,23 @@ describe.skipIf(!process.env.WMS673_RENDERED_ARTIFACTS_DIR)('WMS-673 business RE
     expect(pdf.getPage(0).getHeight()).toBeCloseTo(595.28, 0)
     const table = pdfTable(textReport, geometry); assertPdfTableWithinColumns(table)
     const anchor = pdfText(table, 2, 'ROW-000 Очень длинное название товара с несколькими словами')
-    const identifier = pdfText(table, 2, 'LONG-IDENTIFIER-0-WMS673-ABCDEFGHIJKLMNOPQRST · WB 1673 · WB-CODE-product-0')
+    const identifier = pdfText(table, 2, 'WB 1673 · WB-CODE-product-0')
     assertSamePdfRow([anchor, identifier], [
-      { label: 'размер', match: pdfText(table, 3, 'Универсальный') },
+      { label: 'артикул', match: pdfText(table, 3, 'LONG-IDENTIFIER-0-WMS673-ABCDEFGHIJKLMNOPQRST') },
       { label: 'цвет', match: pdfText(table, 4, `${LONG_COLOR} ЦВЕТ000`) },
-      { label: 'тара', match: pdfText(table, 5, 'Длинная-ячейка-673-0 · Палета P-673 › Короб B-673: 9') },
-      { label: 'заказ', match: pdfText(table, 6, '№673000') },
-      { label: 'стикер', match: pdfText(table, 7, 'S6730000') },
-      { label: 'план', match: pdfWord(table, 8, '1') },
-      { label: 'факт', match: pdfText(table, 9, '0/1') },
+      { label: 'размер', match: pdfText(table, 5, 'Универсальный') },
+      { label: 'тара', match: pdfText(table, 6, 'Длинная-ячейка-673-0 · Палета P-673 › Короб B-673: 9') },
+      { label: 'заказ', match: pdfText(table, 7, '№673000') },
+      { label: 'стикер', match: pdfText(table, 8, 'S6730000') },
+      { label: 'план', match: pdfWord(table, 9, '1') },
+      { label: 'факт', match: pdfText(table, 10, '0/1') },
     ])
   }, 120_000)
   it('C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary', async () => {
     const html = htmlFor(34), geometry = await renderGeometry(html)
     const { pdf, textReport } = await renderPdf(html, 'baseline-multipage')
     expect(pdf.getPageCount()).toBeGreaterThan(1)
-    expect(geometry.rowCellCounts, 'all rows require eleven cells').toEqual(Array(34).fill(11))
+    expect(geometry.rowCellCounts, 'all rows require twelve cells').toEqual(Array(34).fill(12))
     expect(geometry.rowsDoNotOverlap).toBe(true)
     expect(geometry.allCellContentFits).toBe(true)
     const table = pdfTable(textReport, geometry); assertPdfTableWithinColumns(table)
@@ -75,12 +78,13 @@ describe.skipIf(!process.env.WMS673_RENDERED_ARTIFACTS_DIR)('WMS-673 business RE
     }
     for (let i = 0; i < 34; i++) {
       const anchor = pdfText(table, 2, `ROW-${String(i).padStart(3, '0')} Очень длинное название товара с несколькими словами`)
-      const identifier = pdfText(table, 2, `LONG-IDENTIFIER-${i}-WMS673-ABCDEFGHIJKLMNOPQRST · WB 1673 · WB-CODE-product-${i}`)
+      const identifier = pdfText(table, 2, `WB 1673 · WB-CODE-product-${i}`)
       assertSamePdfRow([anchor, identifier], [
+        { label: `артикул ${i}`, match: pdfText(table, 3, `LONG-IDENTIFIER-${i}-WMS673-ABCDEFGHIJKLMNOPQRST`) },
         { label: `цвет ${i}`, match: pdfText(table, 4, i === 2 ? '—' : `${LONG_COLOR} ЦВЕТ${String(i).padStart(3, '0')}`) },
-        { label: `размер ${i}`, match: pdfText(table, 3, i === 1 ? '46' : i === 2 ? '—' : 'Универсальный', i < 3 ? 0 : i - 2) },
-        { label: `заказ ${i}`, match: pdfText(table, 6, `№${673000 + i}`) },
-        { label: `стикер ${i}`, match: pdfText(table, 7, `S673${String(i).padStart(4, '0')}`) },
+        { label: `размер ${i}`, match: pdfText(table, 5, i === 1 ? '46' : i === 2 ? '—' : 'Универсальный', i < 3 ? 0 : i - 2) },
+        { label: `заказ ${i}`, match: pdfText(table, 7, `№${673000 + i}`) },
+        { label: `стикер ${i}`, match: pdfText(table, 8, `S673${String(i).padStart(4, '0')}`) },
       ])
     }
   }, 120_000)
@@ -93,15 +97,27 @@ describe('WMS-673 PDF input contract without browser execution', () => {
     const document = new DOMParser().parseFromString(htmlFor(1), 'text/html')
     const css = document.querySelector('style')!.textContent!
     expect(css).toMatch(/@page\s*\{\s*size:\s*A4 landscape;\s*margin:\s*10mm;/)
-    expect(css).toMatch(/\.size\s*\{[^}]*width:\s*78px;/)
+    expect(css).toMatch(/\.number\s*\{[^}]*width:\s*28px;/)
+    expect(css).toMatch(/\.image\s*\{[^}]*width:\s*54px;/)
+    expect(css).toMatch(/\.sticker\s*\{[^}]*width:\s*116px;/)
     expect(css).toMatch(/td\.size\s*\{[^}]*font-size:\s*20px;/)
+    expect(css).not.toMatch(/\.size\s*\{[^}]*width:\s*78px;/)
+    expect(css).not.toMatch(/\.quantity\s*\{[^}]*width:\s*62px;/)
+    const headers = [...document.querySelectorAll('thead th')].map(th => th.textContent)
+    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    const widths = [...document.querySelectorAll('col')].map((col) => Number.parseFloat(col.getAttribute('style')?.match(/[\d.]+/)?.[0] ?? 'NaN'))
+    expect(widths).toHaveLength(12)
+    for (const index of [3, 4, 5, 7, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[2])
+    for (const index of [3, 4, 5, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[6])
     expect(document.querySelector('td.size')!.textContent).toBe('Универсальный')
   })
   it('C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required', () => {
     const document = new DOMParser().parseFromString(htmlFor(1), 'text/html')
     const headers = [...document.querySelectorAll('thead th')].map(th => th.textContent)
-    expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тара'])
+    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     expect(document.querySelector('tbody tr')!.children[4].textContent).toBe(`${LONG_COLOR} ЦВЕТ000`)
+    expect(document.querySelector('tbody tr')!.children[3].textContent).toBe('LONG-IDENTIFIER-0-WMS673-ABCDEFGHIJKLMNOPQRST')
+    expect(document.querySelector('tbody tr')!.children[5].textContent).toBe('Универсальный')
     expect(document.querySelector('style')!.textContent).not.toMatch(/\.size\s*\{[^}]*white-space:\s*nowrap/)
   })
 })

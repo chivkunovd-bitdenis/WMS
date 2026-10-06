@@ -71,12 +71,25 @@ function doc(html = printed.at(-1)) {
   expect(html, 'real button must generate the production print HTML').toBeTruthy()
   return new DOMParser().parseFromString(html!, 'text/html')
 }
-function colorCells(document: Document) {
+function colorCells(document: Document, marketplaceLabel: 'WB' | 'Ozon' | 'маркетплейса' = 'WB') {
   const headers = [...document.querySelectorAll('thead th')].map((th) => th.textContent)
   const index = headers.indexOf('Цвет')
   expect(index, 'missing business column Цвет').toBe(4)
-  expect(headers.slice(3, 6)).toEqual(['Размер', 'Цвет', 'Ячейка / тара'])
+  expect(headers).toEqual([
+    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+    `Заказы ${marketplaceLabel}`, 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
+  ])
   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[index].textContent)
+}
+function expectCompactPrintColumns(document: Document) {
+  const widths = [...document.querySelectorAll('col')].map((col) => Number.parseFloat(col.getAttribute('style')?.match(/[\d.]+/)?.[0] ?? 'NaN'))
+  expect(widths).toHaveLength(12)
+  expect(widths.every((width) => Number.isFinite(width) && width > 0)).toBe(true)
+  expect(widths.reduce((total, width) => total + width, 0)).toBeCloseTo(100, 2)
+  // R9 keeps the three characteristics and numeric columns compact, leaving
+  // the two existing prose columns the larger share of the printable width.
+  for (const index of [3, 4, 5, 7, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[2])
+  for (const index of [3, 4, 5, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[6])
 }
 function cellsWithoutColor(document: Document) {
   const index = [...document.querySelectorAll('thead th')].findIndex((th) => th.textContent === 'Цвет')
@@ -90,16 +103,17 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
     if (process.env.WMS673_EVIDENCE_DIR) {
       mkdirSync(process.env.WMS673_EVIDENCE_DIR, { recursive: true }); writeFileSync(join(process.env.WMS673_EVIDENCE_DIR, 'single.html'), printed[0])
     }
-    expect(colorCells(doc())).toEqual(['Красный', 'Синий'])
+    const document = doc()
+    expect(colorCells(document)).toEqual(['Красный', 'Синий'])
+    expectCompactPrintColumns(document)
   })
   it('C2 Ozon single: each position owns its color, barcode and posting identity', async () => {
     fixtures = [wms673Workspace('supply-oz', [wms673OzonOrder()], 'ozon')]
     await open('single'); await print(); const document = doc()
-    expect(colorCells(document)).toEqual(['Красный', 'Синий'])
+    expect(colorCells(document, 'Ozon')).toEqual(['Красный', 'Синий'])
     const rows = cellsWithoutColor(document)
     expect(rows.map((row) => row[2])).toEqual([expect.stringContaining('OZ-RED'), expect.stringContaining('OZ-BLUE')])
-    expect(rows.map((row) => row[5])).toEqual(['№OZ-673-POSTING', '№OZ-673-POSTING'])
-    expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toContain('Заказы Ozon')
+    expect(rows.map((row) => row[6])).toEqual(['№OZ-673-POSTING', '№OZ-673-POSTING'])
     expect(document.body.textContent).not.toContain('WB 1673')
   })
   it('C3 mixed assembly: repeat ID aggregates; same names at distinct seller IDs stay separate', async () => {
@@ -107,8 +121,8 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
     const other = wms673Order('other-seller', 'other-id', 'Зелёный', 0); other.product.name = 'Товар red'
     fixtures.push(wms673Workspace('supply-b', [repeated, other]), wms673Workspace('supply-oz', [wms673OzonOrder()], 'ozon'))
     await open('group'); await print(); const document = doc()
-    expect(colorCells(document)).toEqual(['Красный', 'Синий', 'Зелёный', 'Красный', 'Синий'])
-    expect(cellsWithoutColor(document).map((r) => [r[0], r[7], r[8]])).toEqual([
+    expect(colorCells(document, 'маркетплейса')).toEqual(['Красный', 'Синий', 'Зелёный', 'Красный', 'Синий'])
+    expect(cellsWithoutColor(document).map((r) => [r[0], r[8], r[9]])).toEqual([
       ['1–2', '2', '0 / 2'], ['3', '1', '0 / 1'], ['4', '1', '0 / 1'], ['5–7', '3', '1 / 3'], ['8–9', '2', '2 / 2'],
     ])
   })
@@ -132,12 +146,15 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
     fixtures = [wms673Workspace('escape', values.map((value, i) => wms673Order(`o${i}`, `p${i}`, value, i)))]
     await open(kind); await print(); const document = doc()
     expect(colorCells(document)).toEqual(values); expect(document.querySelectorAll('tbody img, tbody script, tbody образец')).toHaveLength(0)
-    expect([...document.querySelectorAll('tbody tr')].map((tr) => tr.children.length)).toEqual([11, 11])
+    expect([...document.querySelectorAll('tbody tr')].map((tr) => tr.children.length)).toEqual([12, 12])
   })
   it('C6 empty print colspan agrees with all eleven headers', async () => {
     fixtures = [wms673Workspace('empty', [])]; await open('group'); await print(); const document = doc()
-    expect(document.querySelectorAll('thead th')).toHaveLength(11)
-    expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('11')
+    expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
+      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+      'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
+    ])
+    expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('12')
   })
   it.each(['single', 'group'] as const)('C9 %s: option failure preserves color, fallback and explicit repeat', async (kind) => {
     pickFailure = true; fixtures[0].orders[1].inventory.locations = []
@@ -164,8 +181,8 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
     expect(cellsWithoutColor(doc())).toEqual([
-      ['1', '—', 'Товар red ART-red · WB 1673 · WB-CODE-red', '46', 'Нет свободного остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
-      ['2', '—', 'Товар blue ART-blue · WB 1673 · WB-CODE-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
+      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет свободного остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
+      ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
     ])
   })
   it.each(['single', 'group'] as const)('C9 %s: blocked popup fetches no print options and allows explicit repeat', async (kind) => {

@@ -90,8 +90,8 @@ function parsePdfTextReport(xml: string): PdfTextReport {
 // Coordinates keep every fragment tied to its actual PDF column and row.
 function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
   const geometryWidth = geometry.tableBounds.right - geometry.tableBounds.left
-  if (geometryWidth <= 0 || geometry.columnBounds.length !== 11) {
-    throw new Error('Браузер не вернул границы одиннадцати колонок таблицы')
+  if (geometryWidth <= 0 || geometry.columnBounds.length !== 12) {
+    throw new Error('Браузер не вернул границы двенадцати колонок таблицы')
   }
   const marginPoints = 10 * 72 / 25.4
   return {
