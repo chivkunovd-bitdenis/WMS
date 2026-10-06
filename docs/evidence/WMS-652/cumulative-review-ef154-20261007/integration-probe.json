@@ -1,0 +1,25 @@
+{
+  "source": "ef154664e365644f4ba002c6e8affc5607fae725",
+  "receipts": [
+    {
+      "scenario": "WB grouped fallback preserves article/size/color/order and input",
+      "passed": true
+    },
+    {
+      "scenario": "Ozon external identifier 000673-POSTING",
+      "passed": true
+    },
+    {
+      "scenario": "Ozon external identifier undefined",
+      "passed": true
+    },
+    {
+      "scenario": "Ozon external identifier null",
+      "passed": true
+    },
+    {
+      "scenario": "assembly WB current.color fallback",
+      "passed": true
+    }
+  ]
+}
