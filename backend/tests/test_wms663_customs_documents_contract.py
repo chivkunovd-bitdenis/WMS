@@ -357,12 +357,13 @@ async def test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart
     assert target["is_rnpt_absent"] is True
     assert _result_value(result, "state") == "checking"
 
+    tenant_id, order_id = order.tenant_id, order.id
     db_session.expire_all()
     resume = _operation("resume_exemplar_document_check", _ResumeDocuments)
     resumed = await resume(
         db_session,
-        tenant_id=order.tenant_id,
-        order_id=order.id,
+        tenant_id=tenant_id,
+        order_id=order_id,
         provider=OzonMarketplaceProvider(transport=transport),
         client_id="client",
         api_key="key",

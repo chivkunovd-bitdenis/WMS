@@ -273,7 +273,7 @@ describe('WMS-663 · явный ГТД/РНПТ у экземпляра Ozon', (
 
     setInput(gtd!, '001/ABC-09')
     expect(absent!.checked).toBe(false)
-    await act(async () => button('Сохранить')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Сохранить ГТД / РНПТ · SKU 663001 · экземпляр 1"]')!.click())
     await settle()
 
     expect(requests).toContainEqual({
@@ -293,7 +293,7 @@ describe('WMS-663 · явный ГТД/РНПТ у экземпляра Ozon', (
     expect(input('Номер ГТД · SKU 663001 · экземпляр 1')!.value).toBe('001/ABC-09')
 
     setInput(input('Номер ГТД · SKU 663001 · экземпляр 1')!, '001/ABC-10')
-    await act(async () => button('Сохранить')!.click())
+    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Сохранить ГТД / РНПТ · SKU 663001 · экземпляр 1"]')!.click())
     await settle()
     expect(requests).toContainEqual({
       method: 'PUT',
