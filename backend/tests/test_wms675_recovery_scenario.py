@@ -151,6 +151,7 @@ async def seed_incident(session):
             supplier_status=source["supplier_status"],
             mapping_status="mapped",
             created_at_wb=datetime.fromisoformat(source["created_at_wb"]),
+            deadline_at=datetime.fromisoformat(card["shipment_date"]),
             meta_details_json={"ozon_requirements": {"kinds": []}},
         )
         session.add(order)
