@@ -298,22 +298,26 @@ def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
         if not store.outbox_delivery_allowed(item, owner_user_id=cfg.telegram.owner_user_id,
                                             owner_chat_id=cfg.telegram.owner_chat_id):
             continue
-        if not store.claim_outbox(item["id"]):
-            continue
         tg = bots.for_chat(item["chat_id"])
+        long_text_path = None
+        if not item["file_path"] and len(item["text"]) > MAX_TEXT:
+            # Prepare local files before the final transactional authorization/claim.
+            folder = cfg.state_path / "outbox-long"
+            folder.mkdir(parents=True, exist_ok=True)
+            long_text_path = folder / f"message-{item['id']}.txt"
+            long_text_path.write_text(item["text"], encoding="utf-8")
+        if not store.claim_outbox(item["id"], owner_user_id=cfg.telegram.owner_user_id,
+                                  owner_chat_id=cfg.telegram.owner_chat_id, expected_item=item):
+            continue
         try:
             if item["file_path"]:
                 message_id = tg.send_document(
                     item["chat_id"], item["file_path"], item["text"], item["reply_to"]
                 )
-            elif len(item["text"]) > MAX_TEXT:
+            elif long_text_path is not None:
                 # Длинное служебное сообщение уходит целиком файлом, а не обрезанным текстом.
-                folder = cfg.state_path / "outbox-long"
-                folder.mkdir(parents=True, exist_ok=True)
-                path = folder / f"message-{item['id']}.txt"
-                path.write_text(item["text"], encoding="utf-8")
                 message_id = tg.send_document(
-                    item["chat_id"], str(path), item["text"][:900] + "…\n(полный текст в файле)",
+                    item["chat_id"], str(long_text_path), item["text"][:900] + "…\n(полный текст в файле)",
                     item["reply_to"],
                 )
             else:

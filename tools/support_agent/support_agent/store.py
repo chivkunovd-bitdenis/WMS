@@ -394,9 +394,9 @@ class Store:
         self.set_ticket(ticket_id, last_activity=now if now is not None else time.time())
 
     # -- outbox --------------------------------------------------------------------
-    def client_reply_pause(self, chat_id: int) -> dict[str, Any]:
+    def client_reply_pause(self, chat_id: int) -> dict[str, Any] | None:
         policy = self.kv_get(f"owner_client_reply_pause:{chat_id}", {})
-        return policy if isinstance(policy, dict) and policy.get("paused") is True else {}
+        return policy if isinstance(policy, dict) and policy.get("paused") is True else None
 
     def pause_client_replies(
         self, *, chat_id: int, ticket_ids: list[int], owner_user_id: int, source_message_id: int
@@ -408,7 +408,7 @@ class Store:
                     or str(source["author_id"]) != str(owner_user_id)
                     or source["chat_id"] != chat_id or not source["text"].strip()):
                 raise ValueError("owner_pause_source_mismatch")
-            previous = self.client_reply_pause(chat_id)
+            previous = self.client_reply_pause(chat_id) or {}
             if source_message_id < int(previous.get("source_message_id", 0)):
                 raise ValueError("stale_owner_pause_source")
             for tid in ticket_ids:
@@ -517,13 +517,27 @@ class Store:
     def outbox_pending(self) -> list[sqlite3.Row]:
         return self.rows("SELECT * FROM outbox WHERE status='pending' ORDER BY id")
 
-    def claim_outbox(self, outbox_id: int) -> bool:
-        """pending -> sending ДО обращения к Telegram: убитый процесс оставит след."""
-        cur = self.execute(
-            "UPDATE outbox SET status='sending', attempts=attempts+1 WHERE id=? AND status='pending'",
-            (outbox_id,),
-        )
-        return cur.rowcount == 1
+    def claim_outbox(
+        self, outbox_id: int, *, owner_user_id: int = 0, owner_chat_id: int = 0,
+        expected_item: Any = None,
+    ) -> bool:
+        """Atomically validate current authorization and claim before the external call."""
+        with self.transaction():
+            item = self.row("SELECT * FROM outbox WHERE id=? AND status='pending'", (outbox_id,))
+            if item is None or not self.outbox_delivery_allowed(
+                item, owner_user_id=owner_user_id, owner_chat_id=owner_chat_id
+            ):
+                return False
+            if expected_item is not None and any(
+                item[field] != expected_item[field]
+                for field in ("key", "chat_id", "ticket_id", "purpose", "text", "file_path", "reply_to")
+            ):
+                return False
+            cur = self.execute(
+                "UPDATE outbox SET status='sending', attempts=attempts+1 WHERE id=? AND status='pending'",
+                (outbox_id,),
+            )
+            return cur.rowcount == 1
 
     def finish_outbox(self, outbox_id: int, status: str, tg_message_id: str | None = None) -> None:
         self.execute(
