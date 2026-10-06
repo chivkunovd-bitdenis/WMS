@@ -81,22 +81,6 @@ function tab(label: string) {
     .find((element) => element.textContent?.startsWith(label))!
 }
 
-function visibleText(element: Element) {
-  const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT)
-  const parts: string[] = []
-  while (walker.nextNode()) {
-    let parent = walker.currentNode.parentElement
-    let visible = true
-    while (parent) {
-      const style = getComputedStyle(parent)
-      if (parent.hidden || parent.getAttribute('aria-hidden') === 'true'
-        || style.display === 'none' || style.visibility === 'hidden') visible = false
-      parent = parent.parentElement
-    }
-    if (visible) parts.push(walker.currentNode.textContent ?? '')
-  }
-  return parts.join(' ')
-}
 
 async function checkComposition(phase: 'partial' | 'full', checkpoint: string) {
   expect(tab('Упаковка и маркировка').getAttribute('aria-selected'), `${checkpoint}: no return to picking`).toBe('true')
@@ -116,11 +100,13 @@ async function checkComposition(phase: 'partial' | 'full', checkpoint: string) {
     const row = rows.find((element) => element.textContent?.includes(`№${orderId}`))!
     expect(row, `${checkpoint}: order ${orderId}`).toBeDefined()
     expect(row.children[pickIndex].textContent, `${checkpoint}: picking stays independent`).toBe('Ожидает')
-    // Existing FbsStatusChip vocabulary; no mandated new column/chip/layout.
-    const expected = phase === 'full' || orderId === 662000 ? 'В доставке' : 'В отгрузке'
-    expect.soft(visibleText(row), `${checkpoint}: order ${orderId} handover visible`).toContain(expected)
-    expect.soft(visibleText(row), `${checkpoint}: no false handover label`)
-      .not.toContain(expected === 'В доставке' ? 'В отгрузке' : 'В доставке')
+    // Direct owner instruction 2026-10-06: undo the added composition chip.
+    // C19 picking/navigation/read-only protections below remain unchanged.
+    expect(row.querySelector('.MuiChip-root'), `${checkpoint}: baseline composition has no added chip`).toBeNull()
+    const link = row.querySelector(`[data-testid="fbs-composition-history-${phase}-${orderId}"]`)
+      ?? [...row.querySelectorAll('button')].find(node => node.textContent === `№${orderId}`)
+    expect(link, `${checkpoint}: existing order history action`).toBeTruthy()
+    expect(link!.parentElement?.tagName, `${checkpoint}: baseline direct cell layout`).toBe('TD')
   }
   // Reuse the real history with its saved creation event, without inventing events.
   await click(document.querySelector<HTMLElement>('[data-testid="fbs-supply-history-open"]')!)

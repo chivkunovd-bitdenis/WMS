@@ -1,7 +1,9 @@
 // @vitest-environment jsdom
+// Owner instruction 2026-10-06 replaces former C16 row forms with one Boxes checkbox.
+// Preservation and restart protections remain in backend contracts.
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import type { FbsWorkspace } from './fbsApi'
 
@@ -20,11 +22,12 @@ const SUPPLY_ID = 'supply-wms663'
 const ORDER_ID = 'order-wms663'
 const DOCUMENTS_PATH = `/operations/fbs-orders/${ORDER_ID}/ozon-exemplar-documents`
 
+let marketplace: 'ozon' | 'wb'
 function workspace(): FbsWorkspace {
   return {
     supply: {
       id: SUPPLY_ID,
-      marketplace: 'ozon',
+      marketplace,
       wb_supply_id: 'OZON-WMS663',
       source: 'wms',
       name: 'Ozon WMS-663',
@@ -44,7 +47,7 @@ function workspace(): FbsWorkspace {
     blockers: [],
     orders: [{
       id: ORDER_ID,
-      marketplace: 'ozon',
+      marketplace,
       external_order_id: '019663-0001-1',
       wb_order_id: -1,
       status: 'assembling',
@@ -155,6 +158,8 @@ const documentState = {
   ],
 }
 
+let cabinet: typeof documentState
+let rejectAbsent: boolean
 const originalFetch = globalThis.fetch
 let requests: Array<{ method: string; path: string; body: unknown }>
 
@@ -170,7 +175,12 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
   requests.push({ method, path, body })
   if (path.startsWith('/operations/packaging-tasks/')) return json(packagingTask)
   if (path === `/operations/fbs-supplies/${SUPPLY_ID}/workspace`) return json(workspace())
-  if (path === DOCUMENTS_PATH && method === 'GET') return json(documentState)
+  if (path === DOCUMENTS_PATH && method === 'GET') return json(cabinet)
+  if (path === DOCUMENTS_PATH + '/absent' && method === 'POST') {
+    if (rejectAbsent) return json({ detail: { code: 'gtd_invalid', message: 'Ozon: gtd_invalid' } }, 409)
+    cabinet = { ...cabinet, state: 'unknown', version: 5, products: cabinet.products.map(product => ({ ...product, exemplars: product.exemplars.map(exemplar => ({ ...exemplar, gtd: exemplar.gtd_required ? '' : exemplar.gtd, rnpt: exemplar.rnpt_required ? '' : exemplar.rnpt, is_gtd_absent: exemplar.gtd_required || exemplar.is_gtd_absent, is_rnpt_absent: exemplar.rnpt_required || exemplar.is_rnpt_absent })) })) }
+    return json(cabinet)
+  }
   if (path === DOCUMENTS_PATH && method === 'PUT') {
     return json({
       ...documentState,
@@ -195,6 +205,9 @@ let root: Root
 
 beforeEach(() => {
   requests = []
+  marketplace = 'ozon'
+  cabinet = JSON.parse(JSON.stringify(documentState))
+  rejectAbsent = false
   window.sessionStorage.clear()
   window.localStorage.clear()
   globalThis.fetch = server as typeof fetch
@@ -237,81 +250,85 @@ function button(name: string) {
     .find((element) => element.textContent?.trim() === name)
 }
 
-function input(label: string) {
-  return document.querySelector<HTMLInputElement>(`input[aria-label="${label}"]`)
+const choice = () => [...document.querySelectorAll('label')]
+  .filter(label => label.textContent?.trim() === 'Без ГТД и РНПТ')
+  .map(label => label.querySelector<HTMLInputElement>('input[type="checkbox"]'))
+const writes = () => requests.filter(call => call.method !== 'GET')
+async function boxes() {
+  const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find(node => node.textContent === 'Короба')
+  expect(tab).toBeTruthy()
+  await act(async () => tab!.click())
+  await settle()
 }
 
-function setInput(element: HTMLInputElement, value: string) {
-  act(() => {
-    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')!.set!.call(element, value)
-    element.dispatchEvent(new Event('input', { bubbles: true }))
-    element.dispatchEvent(new Event('change', { bubbles: true }))
-  })
-}
+it('owner663 A1: packing has no per-row customs form or customs action', async () => {
+  await openWorkspace()
+  expect(document.querySelectorAll('[data-testid^="ozon-documents-"]')).toHaveLength(0)
+  expect(button('ГТД / РНПТ')).toBeUndefined()
+  expect(document.querySelector('input[aria-label^="Номер ГТД"]')).toBeNull()
+  expect(document.querySelector('input[aria-label^="Номер РНПТ"]')).toBeNull()
+  expect(choice()).toHaveLength(0)
+  expect(writes()).toHaveLength(0)
+})
 
-describe('WMS-663 · явный ГТД/РНПТ у экземпляра Ozon', () => {
-  it('C16: выбор по экземпляру сохраняется, ошибка остаётся в строке и навигация не блокируется', async () => {
-    await openWorkspace()
+it('owner663 A2: boxes expose exactly one unchecked Ozon checkbox; opening writes nothing', async () => {
+  await openWorkspace(); await boxes()
+  expect(choice()).toHaveLength(1)
+  expect(choice()[0]?.checked).toBe(false)
+  expect(document.querySelector('[data-testid="fbs-boxes"]')?.contains(choice()[0]!)).toBe(true)
+  expect(button('ГТД / РНПТ')).toBeUndefined()
+  expect([...document.querySelectorAll<HTMLButtonElement>('[data-testid="fbs-boxes"] button')].some(node => node.textContent?.trim() === 'Сохранить')).toBe(false)
+  expect(document.querySelector('input[aria-label^="Номера ГТД нет"]')).toBeNull()
+  expect(document.querySelector('input[aria-label^="Номера РНПТ нет"]')).toBeNull()
+  expect(writes()).toHaveLength(0)
+})
 
-    const open = button('ГТД / РНПТ')
-    expect(open, 'Ozon order must expose the customs-document action in its own row').toBeDefined()
-    await act(async () => open!.click())
-    await settle()
+it('owner663 A3: WB boxes keep their own actions and have no Ozon customs checkbox', async () => {
+  marketplace = 'wb'
+  await openWorkspace(); await boxes()
+  expect(choice()).toHaveLength(0)
+  expect(document.querySelector('[data-testid="fbs-boxes-without-distribution"]')).not.toBeNull()
+  expect(writes()).toHaveLength(0)
+})
 
-    expect(requests).toContainEqual({ method: 'GET', path: DOCUMENTS_PATH, body: null })
-    expect(document.body.textContent).toContain('Очень длинное название импортного товара')
-    expect(document.body.textContent).toContain('Экземпляр 1')
-    expect(document.body.textContent).toContain('Экземпляр 2')
+it('owner663 A4: explicit click posts the current order and version without a save dialog', async () => {
+  await openWorkspace(); await boxes()
+  expect(choice()).toHaveLength(1)
+  await act(async () => choice()[0]!.click()); await settle()
+  expect(writes()).toEqual([{ method: 'POST', path: DOCUMENTS_PATH + '/absent', body: { expected_version: 4 } }])
+  expect(document.querySelectorAll('[data-testid^="ozon-documents-"]')).toHaveLength(0)
+  expect([...document.querySelectorAll<HTMLButtonElement>('[data-testid="fbs-boxes"] button')].some(node => node.textContent?.trim() === 'Сохранить')).toBe(false)
+})
 
-    const gtd = input('Номер ГТД · SKU 663001 · экземпляр 1')
-    const absent = input('Номера ГТД нет · SKU 663001 · экземпляр 1')
-    const rnpt = input('Номер РНПТ · SKU 663002 · экземпляр 1')
-    expect(gtd).not.toBeNull()
-    expect(absent).not.toBeNull()
-    expect(rnpt).not.toBeNull()
-    expect(absent!.checked).toBe(false)
+it('owner663 A5: persisted unknown intent survives reopening; reverse click cannot erase or repeat', async () => {
+  await openWorkspace(); await boxes()
+  expect(choice()).toHaveLength(1)
+  await act(async () => choice()[0]!.click()); await settle()
+  expect(choice()[0]?.checked).toBe(true)
+  expect(document.body.textContent).not.toContain('Принято')
+  await act(async () => root.render(null)); await openWorkspace(); await boxes()
+  expect(choice()[0]?.checked).toBe(true)
+  await act(async () => choice()[0]!.click()); await settle()
+  expect(choice()[0]?.checked).toBe(true)
+  expect(writes()).toEqual([{ method: 'POST', path: DOCUMENTS_PATH + '/absent', body: { expected_version: 4 } }])
+})
 
-    setInput(gtd!, '001/ABC-09')
-    expect(absent!.checked).toBe(false)
-    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Сохранить ГТД / РНПТ · SKU 663001 · экземпляр 1"]')!.click())
-    await settle()
+it('owner663 A6: concrete Ozon failure stays visible next to the shared choice; close remains usable', async () => {
+  rejectAbsent = true
+  await openWorkspace(); await boxes()
+  expect(choice()).toHaveLength(1)
+  await act(async () => choice()[0]!.click()); await settle()
+  expect(document.querySelector('[role="alert"]')?.textContent).toContain('gtd_invalid')
+  expect(choice()[0]?.checked).toBe(false)
+  expect(writes()).toHaveLength(1)
+  expect(document.querySelectorAll('[data-testid^="ozon-documents-"]')).toHaveLength(0)
+  const close = document.querySelector<HTMLButtonElement>('button[aria-label="Закрыть"]')!
+  expect(close.disabled).toBe(false)
+  close.focus(); expect(document.activeElement).toBe(close)
+})
 
-    expect(requests).toContainEqual({
-      method: 'PUT',
-      path: DOCUMENTS_PATH,
-      body: {
-        product_id: 663001,
-        exemplar_id: 81,
-        gtd: '001/ABC-09',
-        is_gtd_absent: false,
-        rnpt: null,
-        is_rnpt_absent: false,
-        expected_version: 4,
-      },
-    })
-    expect(document.body.textContent).toContain('gtd_invalid')
-    expect(input('Номер ГТД · SKU 663001 · экземпляр 1')!.value).toBe('001/ABC-09')
-
-    setInput(input('Номер ГТД · SKU 663001 · экземпляр 1')!, '001/ABC-10')
-    await act(async () => document.querySelector<HTMLButtonElement>('button[aria-label="Сохранить ГТД / РНПТ · SKU 663001 · экземпляр 1"]')!.click())
-    await settle()
-    expect(requests).toContainEqual({
-      method: 'PUT',
-      path: DOCUMENTS_PATH,
-      body: {
-        product_id: 663001,
-        exemplar_id: 81,
-        gtd: '001/ABC-10',
-        is_gtd_absent: false,
-        rnpt: null,
-        is_rnpt_absent: false,
-        expected_version: 5,
-      },
-    })
-
-    const close = document.querySelector<HTMLButtonElement>('button[aria-label="Закрыть"]')
-    expect(close).toBeDefined()
-    close!.focus()
-    expect(document.activeElement).toBe(close)
-  })
+it('owner666 A7: packing keeps the baseline printed/packed wording', async () => {
+  await openWorkspace()
+  expect(document.body.textContent).toMatch(/Напечатано .*· упаковано 0 из 3/)
+  expect(document.body.textContent).not.toContain('Обработано')
 })
