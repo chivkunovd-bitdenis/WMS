@@ -1,0 +1,12 @@
+{
+  "url": "https://web-production-9e7c1.up.railway.app",
+  "fbs_asset": "/assets/FfFbsOrdersScreen-YerD5vEa.js",
+  "asset_sha256": "c1563786f4840d70f1d2bfdb3c9ee27ef17183edf9e34af4501298179a77e7da",
+  "native_print_endpoint_present": true,
+  "source_commit": "1e840d46dee1b2752bdff5ab4e46b17a038a7586",
+  "deployment_id": "54badd17-3529-409f-9099-2371173afbac",
+  "deployment_status": "SUCCESS",
+  "deployed_commit_verified": "1e840d46dee1b2752bdff5ab4e46b17a038a7586",
+  "neighbor_commit_preserved": "d811ae78bd343b89ca828bdf4b739a509f8b4f4e",
+  "live_order_scan_not_performed": true
+}

@@ -4,26 +4,28 @@ import Close from '@mui/icons-material/Close'
 import CheckCircleOutline from '@mui/icons-material/CheckCircleOutlineOutlined'
 import ArrowBack from '@mui/icons-material/ArrowBack'
 import { useHref, useLocation } from 'react-router-dom'
-import { useHelpButtonBottom } from './useHelpButtonBottom'
+import { DEFAULT_HELP_BUTTON_CORNER, useHelpButtonBottom } from './useHelpButtonBottom'
+import type { HelpButtonCorner } from './useHelpButtonBottom'
 import { apiUrl } from '../../api'
 import { AppDialog, PrimaryAction, SecondaryAction, SelectInput, StatusChip, TextInput } from '../../ui-kit'
 import { draftStorageKey, emptyDraft, readDraft, requestPayload, statusLabels, typeLabels, validateDraft } from './draft'
 import type { Draft, RequestIdentity, RequestPayload, RequestRecord, RequestType } from './draft'
 
-export type DeveloperRequestsProps = { me: RequestIdentity; token: string }
+// corner: where the button rests when another fixed corner control (the WMS-433 assistant) owns the default spot.
+export type DeveloperRequestsProps = { me: RequestIdentity; token: string; corner?: HelpButtonCorner }
 
-export function DeveloperRequests({ me, token }: DeveloperRequestsProps) {
+export function DeveloperRequests({ me, token, corner = DEFAULT_HELP_BUTTON_CORNER }: DeveloperRequestsProps) {
   if (!me.id || !me.tenant_id || !token) return null
   const scope = draftStorageKey(me)
   // Reset synchronously on identity changes, so an old draft or response never flashes for a new user/shop.
-  return <ScopedDeveloperRequests key={scope} scope={scope} token={token} />
+  return <ScopedDeveloperRequests key={scope} scope={scope} token={token} corner={corner} />
 }
 
-function ScopedDeveloperRequests({ scope, token }: { scope: string; token: string }) {
+function ScopedDeveloperRequests({ scope, token, corner }: { scope: string; token: string; corner: HelpButtonCorner }) {
   const location = useLocation()
   // Restore the portal basename while keeping query and hash out of the request.
   const pathname = useHref({ pathname: location.pathname })
-  const helpBottom = useHelpButtonBottom()
+  const helpBottom = useHelpButtonBottom(corner)
   const [draft, setDraft] = useState<Draft>(() => { try { return readDraft(scope) } catch { return emptyDraft() } })
   const [storageError, setStorageError] = useState(false)
   const [open, setOpen] = useState(false)
@@ -159,7 +161,7 @@ function ScopedDeveloperRequests({ scope, token }: { scope: string; token: strin
     <Tooltip title="Задача разработчикам">
       <Fab color="primary" size="small" aria-label="Задача разработчикам" onClick={show}
         data-testid="developer-requests-open"
-        sx={{ position: 'fixed', bottom: helpBottom, right: 16, zIndex: (theme) => theme.zIndex.drawer + 1, fontSize: 24, fontWeight: 700 }}>
+        sx={{ position: 'fixed', bottom: helpBottom, right: corner.right, zIndex: (theme) => theme.zIndex.drawer + 1, fontSize: 24, fontWeight: 700 }}>
         ?
       </Fab>
     </Tooltip>

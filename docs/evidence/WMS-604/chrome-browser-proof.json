@@ -1,0 +1,71 @@
+{
+  "browser": "147.0.7727.15",
+  "url": "https://sellerfocus.pro/packing-scan-check/",
+  "headed": true,
+  "chrome_flag": "--kiosk-printing",
+  "extra_print_program": false,
+  "events": [
+    {
+      "barcode": "2900000000001",
+      "scan_to_afterprint_ms": 869.1,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000002",
+      "scan_to_afterprint_ms": 1062.9,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000003",
+      "scan_to_afterprint_ms": 1036.7,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000004",
+      "scan_to_afterprint_ms": 1347.3,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000005",
+      "scan_to_afterprint_ms": 1073.3,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000006",
+      "scan_to_afterprint_ms": 1099.8,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000007",
+      "scan_to_afterprint_ms": 873.4,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000008",
+      "scan_to_afterprint_ms": 1281.7,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000009",
+      "scan_to_afterprint_ms": 962.8,
+      "focus_kept": true
+    },
+    {
+      "barcode": "2900000000010",
+      "scan_to_afterprint_ms": 1174.6,
+      "focus_kept": true
+    }
+  ],
+  "page_errors": [],
+  "unexpected_network_requests": [],
+  "paper_verified": false,
+  "source_commit": "c4e0332b149852fa473785cb83452c16b7f965ca",
+  "transport": "Chrome built-in kiosk printing -> macOS CUPS -> virtual IPP printer; no bridge",
+  "delivered_labels": 10,
+  "pages_each": 1,
+  "page_mm": [
+    40,
+    58
+  ],
+  "note": "Chrome internal print-preview target exists briefly; lack of visible OS overlay not verified because native screen was locked. afterprint is not physical printer receipt."
+}

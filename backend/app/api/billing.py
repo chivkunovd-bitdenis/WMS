@@ -17,7 +17,7 @@ from app.api.billing_seller_report_schemas import (
     SellerReportPhysicalDetailsOut,
     SellerReportPhysicalSummaryOut,
 )
-from app.api.deps import require_fulfillment_admin
+from app.api.deps import require_billing_access
 from app.db.session import get_db
 from app.models.billing import (
     BillingInvoice,
@@ -161,9 +161,7 @@ async def _matrix_products(
     ]
 
 
-async def _matrix_sellers(
-    session: AsyncSession, *, tenant_id: uuid.UUID
-) -> list[dict[str, str]]:
+async def _matrix_sellers(session: AsyncSession, *, tenant_id: uuid.UUID) -> list[dict[str, str]]:
     """Все селлеры арендатора, а не только те, у кого есть товары.
 
     Индивидуальную ставку заводят и селлеру без единой карточки: ставка на
@@ -260,7 +258,7 @@ def _error(exc: BillingConfigurationError) -> HTTPException:
 
 @router.get("/tariff-matrix")
 async def get_tariff_matrix_route(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
@@ -278,7 +276,7 @@ async def get_tariff_matrix_route(
 @router.put("/tariff-matrix")
 async def put_tariff_matrix_route(
     body: TariffMatrixSaveBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
@@ -359,7 +357,7 @@ def _invoice_out(
 @router.put("/profiles/ff", response_model=ProfileOut)
 async def put_ff_profile(
     body: ProfileBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProfileOut:
     try:
@@ -375,7 +373,7 @@ async def put_ff_profile(
 
 @router.get("/profiles/ff", response_model=ProfileOut | None)
 async def get_ff_profile(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> BillingProfile | None:
     return cast(
@@ -393,7 +391,7 @@ async def get_ff_profile(
 async def put_seller_profile(
     seller_id: uuid.UUID,
     body: ProfileBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> ProfileOut:
     try:
@@ -410,7 +408,7 @@ async def put_seller_profile(
 @router.get("/profiles/sellers/{seller_id}", response_model=ProfileOut | None)
 async def get_seller_profile(
     seller_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> BillingProfile | None:
     try:
@@ -431,7 +429,7 @@ async def get_seller_profile(
 @router.post("/tariffs", response_model=TariffOut, status_code=status.HTTP_201_CREATED)
 async def post_tariff(
     body: TariffCreateBody,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> TariffOut:
     try:
@@ -448,7 +446,7 @@ async def post_tariff(
 
 @router.get("/tariffs", response_model=list[TariffOut])
 async def get_tariffs(
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> list[TariffOut]:
     result = await session.scalars(
@@ -470,7 +468,7 @@ async def get_seller_report_summary(
     seller_id: uuid.UUID | None = None,
     search: str | None = None,
     include_finance: bool = False,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerReportFinancialSummaryOut | SellerReportPhysicalSummaryOut:
     """Read-only seller aggregation; finance-off has an intentionally distinct shape."""
@@ -498,7 +496,7 @@ async def get_seller_report_summary(
 async def lookup_profile_by_inn(
     *,
     inn: str,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
 ) -> dict[str, Any]:
     """Реквизиты организации по ИНН — чтобы их не набивали руками с опечатками."""
     _ = user
@@ -520,7 +518,7 @@ async def get_seller_report_storage_total(
     date_from: date,
     date_to: date,
     seller_id: uuid.UUID | None = None,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     """Литро-дни хранения за период — отдельно от сводки, чтобы её не тормозить."""
@@ -548,7 +546,7 @@ async def get_seller_report_details(
     include_finance: bool = False,
     limit: int = 50,
     cursor: str | None = None,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> SellerReportFinancialDetailsOut | SellerReportPhysicalDetailsOut:
     if not 1 <= limit <= 1000:
@@ -582,7 +580,7 @@ async def get_billing_ledger(
     service_code: str | None = None,
     mode: str | None = None,
     document_number: str | None = None,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, list[dict[str, Any]]]:
     del mode  # grouping is intentionally a presentation concern.
@@ -666,7 +664,7 @@ async def get_billing_invoices(
     seller_id: str | None = None,
     status: str | None = None,
     number: str | None = None,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, list[dict[str, Any]]]:
     query = (
@@ -722,7 +720,7 @@ async def get_billing_invoices(
 @router.get("/invoices/{invoice_id}", response_model=None)
 async def get_billing_invoice(
     invoice_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     row = (
@@ -744,7 +742,7 @@ async def get_billing_invoice(
 async def form_billing_invoice(
     seller_id: uuid.UUID,
     period: str,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:
@@ -776,7 +774,7 @@ async def form_billing_invoice(
 @router.post("/invoices/{invoice_id}/cancel")
 async def cancel_billing_invoice(
     invoice_id: uuid.UUID,
-    user: Annotated[User, Depends(require_fulfillment_admin)],
+    user: Annotated[User, Depends(require_billing_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> dict[str, Any]:
     try:

@@ -45,11 +45,14 @@ def main():
             command += ["--collect-all", module]
         command.append(str(ROOT / "wms_print_direct.py"))
         subprocess.run(command, check=True)
-    (package / "build.json").write_text(json.dumps({
+    build = {
         "source_commit": revision, "platform": sys.platform,
         "architecture": platform.machine(), "runtime": "direct", "console": True,
         "physical_print_verified": False,
-    }, indent=2))
+        "default_printer_per_job": True,
+        "label_size_source": "request",
+    }
+    (package / "build.json").write_text(json.dumps(build, indent=2))
     (package / "README.txt").write_text(
         "Распакуйте всю папку. Запустите wms-print (на Windows wms-print.exe).\n"
         "Оставьте окно открытым и сканируйте в WMS через Chrome.\n"
@@ -70,7 +73,21 @@ def main():
         subprocess.run([str(unpacked / "wms-print/wms-print"), "--self-test"], check=True)
         print(archive)
     else:
-        print(shutil.make_archive(str(dist / f"WMS-Print-Console-{target}"), "zip", dist, "wms-print"))
+        archive = Path(shutil.make_archive(
+            str(dist / f"WMS-Print-Console-{target}"), "zip", dist, "wms-print"
+        ))
+        unpacked = ROOT / "build-console" / "archive-check"
+        if unpacked.exists():
+            shutil.rmtree(unpacked)
+        shutil.unpack_archive(archive, unpacked)
+        executable = unpacked / "wms-print" / "wms-print.exe"
+        subprocess.run([str(executable), "--self-test"], check=True)
+        unpacked_build = json.loads(
+            (unpacked / "wms-print" / "build.json").read_text()
+        )
+        if unpacked_build != build:
+            raise SystemExit("Archived Windows build.json differs from the build")
+        print(archive)
 
 
 if __name__ == "__main__":

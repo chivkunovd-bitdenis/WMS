@@ -36,6 +36,7 @@ from app.models.fbs_supply import (
     FBS_SUPPLY_SOURCE_WB,
     FBS_SUPPLY_STATUS_ASSEMBLING,
     FBS_SUPPLY_STATUS_DONE,
+    FBS_SUPPLY_STATUS_IN_DELIVERY,
     FbsSupply,
 )
 from app.models.fbs_warehouse_binding import FbsWarehouseBinding
@@ -798,6 +799,15 @@ async def _apply_wb_status_to_order(
         order.status = FBS_ORDER_STATUS_DEFECT
         await _release_reservation(session, order)
         return
+    if normalized_supplier == "complete":
+        # WB `complete` is the seller handover stage. Preserve any later
+        # WB-derived sorted/sold state rather than moving the order backward.
+        if order.status not in {
+            FBS_ORDER_STATUS_SORTED, FBS_ORDER_STATUS_DONE,
+            FBS_ORDER_STATUS_CANCELLED, FBS_ORDER_STATUS_DEFECT,
+        }:
+            order.status = FBS_ORDER_STATUS_IN_DELIVERY
+        return
     if normalized_supplier is not None and normalized_supplier != FBS_ORDER_STATUS_NEW:
         await _move_new_order_to_external_processing(session, order)
         return
@@ -1057,7 +1067,7 @@ async def _load_unlinked_confirmed_orders(
             FbsOrder.seller_id == seller_id,
             FbsOrder.supply_id.is_(None),
             FbsOrder.wb_supply_id.is_not(None),
-            FbsOrder.supplier_status == "confirm",
+            FbsOrder.supplier_status.in_(("confirm", "complete")),
             FbsOrder.status.not_in(tuple(TERMINAL_FBS_STATUSES)),
         )
         .order_by(FbsOrder.created_at_wb.asc(), FbsOrder.id.asc())
@@ -1143,7 +1153,7 @@ async def _get_or_create_wb_origin_supply(
         if wb_name:
             supply_name = wb_name
         if wb_done:
-            supply_status = FBS_SUPPLY_STATUS_DONE
+            supply_status = FBS_SUPPLY_STATUS_IN_DELIVERY
     elif http_client is not None and api_token is not None:
         # Fall back to individual fetch if not in supplies_dict
         try:
@@ -1155,7 +1165,7 @@ async def _get_or_create_wb_origin_supply(
             if details.name:
                 supply_name = details.name
             if details.done:
-                supply_status = FBS_SUPPLY_STATUS_DONE
+                supply_status = FBS_SUPPLY_STATUS_IN_DELIVERY
         except Exception as exc:
             logger.warning(
                 "wb supply details fetch failed: seller=%s wb_supply_id=%s error=%s",
@@ -1269,7 +1279,7 @@ async def link_confirmed_orders_to_wb_supplies(
         http_client, api_token=api_token, seller_id=seller_id
     )
 
-    # Periodic sync: update non-terminal supplies that are done in WB
+    # WB done means handed to delivery, not completed for the customer.
     # using supplies_dict
     stmt_unfinished = select(FbsSupply).where(
         FbsSupply.tenant_id == tenant_id,
@@ -1284,7 +1294,7 @@ async def link_confirmed_orders_to_wb_supplies(
         if local_supply.wb_supply_id in supplies_dict:
             wb_name, wb_done = supplies_dict[local_supply.wb_supply_id]
             if wb_done:
-                local_supply.status = FBS_SUPPLY_STATUS_DONE
+                local_supply.status = FBS_SUPPLY_STATUS_IN_DELIVERY
                 if wb_name:
                     local_supply.name = wb_name
 
@@ -1368,6 +1378,9 @@ async def link_confirmed_orders_to_wb_supplies(
                     supply,
                     order,
                     existing_orders=current_orders,
+                    allow_closed_wb_membership=(
+                        supply.status == FBS_SUPPLY_STATUS_IN_DELIVERY
+                    ),
                 )
                 if link_result.discrepancy is not None:
                     logger.warning(

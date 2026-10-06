@@ -103,7 +103,7 @@ const TASKS: PackagingTask[] = [
   },
 ]
 
-function stubResponse(url: string, method: string): unknown {
+function stubResponse(url: string, method: string, body: unknown): unknown {
   const idMatch = /\/operations\/packaging-tasks\/([^/?]+)$/.exec(url)
   if (idMatch && method === 'GET') {
     const task = TASKS.find((t) => t.id === idMatch[1])
@@ -115,6 +115,52 @@ function stubResponse(url: string, method: string): unknown {
       status === 'done' ? t.status === 'done' : status === 'cancelled' ? t.status === 'cancelled' : t.status !== 'done' && t.status !== 'cancelled',
     )
     return filtered
+  }
+  // WMS-618 browser evidence: respond with a realistic FBO bulk snapshot so
+  // the «Печать всё» click opens the SAME MarkingPrintDialog and renders the
+  // group/separator preview end-to-end from the stub.
+  const fboBulkMatch = /\/operations\/marking-codes\/packaging-tasks\/([^/?]+)\/print-fbo-bulk$/.exec(url)
+  if (fboBulkMatch && method === 'POST') {
+    const task = TASKS.find((t) => t.id === fboBulkMatch[1])
+    if (!task) return { packaging_task_id: fboBulkMatch[1], layout: {}, lines: [], shortage: 0 }
+    const requestBody = (body && typeof body === 'object' ? body : {}) as {
+      issue_marking_codes?: boolean
+    }
+    const issue = requestBody.issue_marking_codes ?? true
+    const lines = task.lines.map((ln) => ({
+      packaging_task_line_id: ln.id,
+      product_id: ln.product_id,
+      sku_code: ln.sku_code,
+      product_name: ln.product_name,
+      requires_honest_sign: ln.requires_honest_sign,
+      quantity: ln.qty_need_pack,
+      shortage: 0,
+      // product_label is what the real server produces via product_labels_for_products.
+      product_label: {
+        product_name: ln.product_name,
+        sku_code: ln.sku_code,
+        barcode: `460${ln.product_id.replace(/[^0-9]/g, '').padStart(10, '0').slice(0, 10)}`,
+        wb_vendor_code: null,
+        wb_size: null,
+        wb_color: null,
+        wb_brand: null,
+        wb_composition: null,
+        seller_name: task.seller_name ?? null,
+      },
+      printed_codes: issue && ln.requires_honest_sign
+        ? Array.from({ length: ln.qty_need_pack }, (_, i) => ({
+            id: `${ln.id}-code-${i}`,
+            cis_code: `01046000000000${i.toString().padStart(2, '0')}21${ln.sku_code.replace(/[^A-Z0-9]/g, '').padEnd(10, 'X')}${i}`,
+            has_label_artifact: false,
+          }))
+        : [],
+    }))
+    return {
+      packaging_task_id: task.id,
+      layout: { units: [{ block: 'cz', copies: 1 }] },
+      lines,
+      shortage: 0,
+    }
   }
   if (url.includes('/products/linked-wb-catalog')) {
     return []
@@ -134,11 +180,29 @@ function stubResponse(url: string, method: string): unknown {
   return {}
 }
 
+type BulkCallLog = { url: string; method: string; body: unknown }
+
 function installStubServer() {
+  // Browser evidence: record /print-fbo-bulk requests on the window so a
+  // Playwright-driven check can read them even though the stub short-circuits
+  // the network layer. Does not affect production code paths.
+  const log: BulkCallLog[] = []
+  ;(window as typeof window & { __wmsBulkCalls?: BulkCallLog[] }).__wmsBulkCalls = log
   window.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     const method = (init?.method ?? 'GET').toUpperCase()
-    return new Response(JSON.stringify(stubResponse(url, method)), {
+    let body: unknown
+    if (init?.body && typeof init.body === 'string') {
+      try {
+        body = JSON.parse(init.body)
+      } catch {
+        body = init.body
+      }
+    }
+    if (url.includes('/print-fbo-bulk')) {
+      log.push({ url, method, body })
+    }
+    return new Response(JSON.stringify(stubResponse(url, method, body)), {
       status: 200,
       headers: { 'Content-Type': 'application/json' },
     })

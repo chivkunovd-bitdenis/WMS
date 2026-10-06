@@ -11,13 +11,14 @@ from app.models.seller_wildberries_imported_card import SellerWildberriesImporte
 from app.services.fbs_worklist_service import _map_order
 
 
-@pytest.mark.parametrize("marketplace", ["ozon", "wb"])
+@pytest.mark.parametrize("marketplace", ["ozon", "wb", "wildberries", " WB "])
 @pytest.mark.parametrize("ozon_barcode", ["OZON-BARCODE", None])
 def test_worklist_identifiers_stay_with_order_marketplace(marketplace, ozon_barcode):
     now = datetime.now(UTC)
     product = Product(
         id=uuid4(), name="Shared product", wb_vendor_code="WB-ARTICLE",
         wb_barcode="WB-BARCODE", wb_chrt_id=123, sku_code="WB-SKU",
+        primary_print_barcode=ozon_barcode,
     )
     position = FbsOrderProduct(
         id=uuid4(), product_id=product.id, name="Ozon product", offer_id=None,
@@ -46,8 +47,11 @@ def test_worklist_identifiers_stay_with_order_marketplace(marketplace, ozon_barc
         address_storage_enabled=False,
     )
     result = _map_order(order, ctx, now)
+    expected_marketplace = "ozon" if marketplace == "ozon" else "wb"
+    assert result["marketplace"] == expected_marketplace
+    assert order.marketplace == marketplace
     item = result["product"]
-    assert [b["marketplace"] for b in item["marketplace_bindings"]] == [marketplace]
+    assert [b["marketplace"] for b in item["marketplace_bindings"]] == [expected_marketplace]
     warning = next(b["message"] for b in result["selection_blockers"]
                    if b["code"] == "warehouse_unmapped")
     if marketplace == "ozon":
@@ -55,15 +59,15 @@ def test_worklist_identifiers_stay_with_order_marketplace(marketplace, ozon_barc
         assert item["wb_article"] is None
         assert item["chrt_id"] is None
         assert item["sku"] == "5680825729"
-        assert item["barcode"] == ozon_barcode
+        assert item["barcode"] == (ozon_barcode or "WB-BARCODE")
         assert result["positions"][0]["seller_article"] is None
-        assert result["positions"][0]["barcode"] == ozon_barcode
+        assert result["positions"][0]["barcode"] == (ozon_barcode or "WB-BARCODE")
         assert "Ozon" in warning and "WB" not in warning
     else:
         assert item["seller_article"] == "WB-ARTICLE"
         assert item["wb_article"] == 999
         assert item["chrt_id"] == 456
-        assert item["barcode"] == "WB-BARCODE"
+        assert item["barcode"] == (ozon_barcode or "WB-BARCODE")
         assert item["sku"] == "WB-SKU"
         assert "WB" in warning and "Ozon" not in warning
 
@@ -78,6 +82,7 @@ def test_ozon_positions_keep_own_catalog_metadata_and_identity():
         sku_code="WB-FIRST",
         wb_nm_id=101,
         wb_barcode="WB-101",
+        primary_print_barcode="OZN-1001",
         wb_size="S",
     )
     second = Product(
@@ -87,6 +92,7 @@ def test_ozon_positions_keep_own_catalog_metadata_and_identity():
         sku_code="WB-SECOND",
         wb_nm_id=202,
         wb_barcode="WB-202",
+        primary_print_barcode="OZN-2002",
         wb_size="XL",
     )
     first_position = FbsOrderProduct(

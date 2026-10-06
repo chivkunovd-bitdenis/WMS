@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+import uuid
 
 import pytest
 from httpx import AsyncClient
@@ -50,6 +51,159 @@ async def _create_ff_staff(
     )
     assert login.status_code == 200, login.text
     return {"Authorization": f"Bearer {login.json()['access_token']}"}, patched.json()
+
+
+@pytest.mark.asyncio
+async def test_section_permissions_revoke_direct_api_with_existing_token(
+    async_client: AsyncClient,
+) -> None:
+    """A stale bearer token must never retain a revoked section permission."""
+    suffix = str(int(time.time() * 1000))
+    reg = await async_client.post(
+        "/auth/register",
+        json={
+            "organization_name": "Section Access Co",
+            "slug": f"staff-sections-{suffix}",
+            "admin_email": f"admin-sections-{suffix}@example.com",
+            "password": "password123",
+        },
+    )
+    assert reg.status_code == 200, reg.text
+    ah = {"Authorization": f"Bearer {reg.json()['access_token']}"}
+    sh, staff = await _create_ff_staff(
+        async_client,
+        ah,
+        suffix,
+        "sections",
+        {
+            "billing": True,
+            "storage": True,
+            "inventory": True,
+            "fbs": True,
+            "honest_sign": True,
+            "settings": True,
+        },
+    )
+    granted = (await async_client.get("/auth/me", headers=sh)).json()["permissions"]
+    assert all(
+        granted[key]
+        for key in ("billing", "storage", "inventory", "fbs", "honest_sign", "settings")
+    )
+    for path in (
+        "/billing/tariffs",
+        "/operations/storage/report",
+        "/operations/inventory-counts",
+        "/operations/fbs-supplies/worklist",
+        "/operations/marking-codes/pools",
+        "/tenant/settings",
+    ):
+        response = await async_client.get(path, headers=sh)
+        assert response.status_code != 403, (path, response.status_code, response.text)
+
+    revoked = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={
+            **FF_PERMISSION_DEFAULTS,
+            "billing": False,
+            "storage": False,
+            "fbs": False,
+            "honest_sign": False,
+        },
+    )
+    assert revoked.status_code == 200, revoked.text
+    me = await async_client.get("/auth/me", headers=sh)
+    assert me.status_code == 200
+    assert all(
+        me.json()["permissions"][key] is False
+        for key in ("billing", "storage", "inventory", "fbs", "honest_sign", "settings")
+    )
+
+    paths = (
+        "/billing/tariffs",
+        "/operations/storage/report",
+        "/operations/inventory-counts",
+        "/operations/fbs-supplies/worklist",
+        "/operations/marking-codes/pools",
+        "/tenant/settings",
+    )
+    for path in paths:
+        response = await async_client.get(path, headers=sh)
+        assert response.status_code == 403, (path, response.status_code, response.text)
+
+    fbs_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "fbs": True},
+    )
+    assert fbs_only.status_code == 200, fbs_only.text
+    fbs_response = await async_client.get("/operations/fbs-supplies/worklist", headers=sh)
+    assert fbs_response.status_code != 403, fbs_response.text
+    absent_seller_id = uuid.uuid4()
+    bindings_response = await async_client.get(
+        f"/operations/fbs-sellers/{absent_seller_id}/warehouse-bindings", headers=sh
+    )
+    assert bindings_response.status_code != 403, bindings_response.text
+    ozon_warehouses_response = await async_client.get(
+        f"/operations/fbs-sellers/{absent_seller_id}/ozon-warehouses", headers=sh
+    )
+    assert ozon_warehouses_response.status_code != 403, ozon_warehouses_response.text
+    marking_response = await async_client.get("/operations/marking-codes/pools", headers=sh)
+    assert marking_response.status_code == 403, marking_response.text
+
+    seller = await async_client.post(
+        "/sellers",
+        headers=ah,
+        json={"name": "ЧЗ test seller", "email": f"marking-{suffix}@example.com"},
+    )
+    assert seller.status_code == 201, seller.text
+    product = await async_client.post(
+        "/products",
+        headers=ah,
+        json={
+            "name": "ЧЗ test product",
+            "sku_code": f"CZ-{suffix}",
+            "seller_id": seller.json()["id"],
+        },
+    )
+    assert product.status_code == 200, product.text
+    product_id = product.json()["id"]
+    for path in ("marking-overview", "codes"):
+        response = await async_client.get(
+            f"/operations/marking-codes/products/{product_id}/{path}", headers=sh
+        )
+        assert response.status_code == 403, (path, response.status_code, response.text)
+    product_print = await async_client.post(
+        f"/operations/marking-codes/products/{product_id}/print",
+        headers=sh,
+        json={"quantity": 1},
+    )
+    assert product_print.status_code == 403, product_print.text
+
+    honest_sign_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "honest_sign": True},
+    )
+    assert honest_sign_only.status_code == 200, honest_sign_only.text
+    honest_sign_overview = await async_client.get(
+        f"/operations/marking-codes/products/{product_id}/marking-overview", headers=sh
+    )
+    assert honest_sign_overview.status_code == 200, honest_sign_overview.text
+
+    storage_only = await async_client.patch(
+        f"/auth/staff-accounts/{staff['id']}/permissions",
+        headers=ah,
+        json={**FF_PERMISSION_DEFAULTS, "storage": True},
+    )
+    assert storage_only.status_code == 200, storage_only.text
+    assert (await async_client.get("/operations/storage/report", headers=sh)).status_code != 403
+    inventory_report = await async_client.get(
+        "/reports/inventory?date_from=2026-01-01T00:00:00Z&date_to=2026-02-01T00:00:00Z",
+        headers=sh,
+    )
+    assert inventory_report.status_code == 403, inventory_report.text
+    assert (await async_client.get("/operations/inventory-counts", headers=sh)).status_code == 403
 
 
 @pytest.mark.asyncio

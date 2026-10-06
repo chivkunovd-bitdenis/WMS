@@ -48,15 +48,14 @@ async def list_inventory_movements(
     seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
     limit: Annotated[int, Query(ge=1, le=500)] = 100,
 ) -> list[InventoryMovementRowOut]:
+    await assert_inventory_read_access(session, user)
     rows = await inv_svc.list_recent_movements(
         session,
         user.tenant_id,
         limit=limit,
         seller_product_owner_id=seller_scope,
     )
-    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(
-        session, user.tenant_id
-    )
+    reveal_storage = await tenant_settings_svc.is_address_storage_enabled(session, user.tenant_id)
     return [
         InventoryMovementRowOut(
             id=str(m.id),

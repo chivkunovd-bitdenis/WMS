@@ -214,8 +214,18 @@ export async function fetchLabelArtifactDataUrl(
   return blobToDataUrl(await res.blob())
 }
 
+// Единожды кешируем динамический импорт bwip-js. Браузерный Promise cache
+// уже даёт один resolve, но параллельный `Promise.all` над несколькими КМ
+// в тестах vitest видел race между моком и реальным модулем. Один общий
+// promise снимает это и в проде, и в тестах — импорт модуля один на жизнь.
+let _bwipjsPromise: Promise<typeof import('bwip-js')> | null = null
+function loadBwipjs(): Promise<typeof import('bwip-js')> {
+  if (!_bwipjsPromise) _bwipjsPromise = import('bwip-js')
+  return _bwipjsPromise
+}
+
 export async function renderDataMatrixDataUrl(cis: string): Promise<string> {
-  const bwipjs = await import('bwip-js')
+  const bwipjs = await loadBwipjs()
   const canvas = document.createElement('canvas')
   // scale 4 — запас разрешения: на крупных этикетках (60×80, 70×120) матрица
   // растягивается до ~35–45 мм, при scale 2 модули замыливаются. Отдельный
@@ -378,6 +388,21 @@ export function labelOptionsFromLayout(layout: PrintLayout): ProductLabelPrintOp
     includeBrand: saved.include_brand,
     includeComposition: saved.include_composition,
   }
+}
+
+export function buildProductLabelSections(
+  product: ProductThermalLabelData,
+  count: number,
+  size: LabelSize,
+  labelOptions?: ProductLabelPrintOptions,
+): string[] {
+  const barcode = product.barcode?.trim()
+  if (!barcode) throw new Error('У товара нет штрихкода для печати.')
+  const barcodeDataUrl = renderBarcodeDataUrl(barcode, { variant: 'thermal58' })
+  return Array.from({ length: count }, () =>
+    buildProductLabelSectionHtml(product, barcodeDataUrl, labelOptions, size)
+      .replace('data-testid="product-thermal-label"', 'data-testid="product-thermal-label" data-tape-block="label"'),
+  )
 }
 
 export async function buildMarkingTapeSections(
