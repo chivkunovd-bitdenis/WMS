@@ -1,0 +1,5 @@
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-586/docs/reviews/2026-10-07-wms684-586-pagination/boundary_probe.py", line 26, in <module>
+    assert not results[-1]["intersects"], "128-line name overlaps the following row; see retained raster and coordinates"
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 128-line name overlaps the following row; see retained raster and coordinates

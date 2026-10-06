@@ -1,0 +1,10 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-586/frontend
+
+ ✓ src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx (2 tests | 1 skipped) 27889ms
+   ✓ K6 Chromium PDF pages match every selected stock and decode original barcodes in both paths  27888ms
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 1 skipped (2)
+   Start at  01:01:33
+   Duration  32.28s (transform 1.17s, setup 0ms, collect 3.80s, tests 27.89s, environment 397ms, prepare 61ms)

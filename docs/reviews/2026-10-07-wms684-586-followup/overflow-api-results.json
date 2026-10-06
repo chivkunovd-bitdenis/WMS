@@ -1,0 +1,47 @@
+[
+  {
+    "case": "multiline-original",
+    "name": "Худи\nРазмер XL\nЦвет чёрный\nЗимняя коллекция\nУтеплённый хлопок",
+    "name_length": 61,
+    "explicit_lines": 5,
+    "product_model_accepts": true,
+    "initial_row_height": 52.5,
+    "xlsx_status": 200,
+    "xlsx_retains_name": true,
+    "pdf_status": 200,
+    "pdf_content_type": "application/pdf",
+    "pdf_retains_name": true,
+    "page_count": 1,
+    "empty_pages": [],
+    "outside_page_words": []
+  },
+  {
+    "case": "wide-255",
+    "name": "ШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШШТовар",
+    "name_length": 255,
+    "explicit_lines": 1,
+    "product_model_accepts": true,
+    "initial_row_height": 62.0,
+    "xlsx_status": 200,
+    "xlsx_retains_name": true,
+    "pdf_status": 200,
+    "pdf_content_type": "application/pdf",
+    "pdf_retains_name": true,
+    "page_count": 1,
+    "empty_pages": [],
+    "outside_page_words": []
+  },
+  {
+    "case": "multiline-255",
+    "name": "Х00\nХ01\nХ02\nХ03\nХ04\nХ05\nХ06\nХ07\nХ08\nХ09\nХ10\nХ11\nХ12\nХ13\nХ14\nХ15\nХ16\nХ17\nХ18\nХ19\nХ20\nХ21\nХ22\nХ23\nХ24\nХ25\nХ26\nХ27\nХ28\nХ29\nХ30\nХ31\nХ32\nХ33\nХ34\nХ35\nХ36\nХ37\nХ38\nХ39\nХ40\nХ41\nХ42\nХ43\nХ44\nХ45\nХ46\nХ47\nХ48\nХ49\nХ50\nХ51\nХ52\nХ53\nХ54\nХ55\nХ56\nХ57\nХ58\nХ59\nХ60\nХ61\nХ62\nХ63",
+    "name_length": 255,
+    "explicit_lines": 64,
+    "product_model_accepts": true,
+    "initial_row_height": 613.0,
+    "xlsx_status": 200,
+    "xlsx_retains_name": true,
+    "pdf_status": 500,
+    "pdf_content_type": "text/plain; charset=utf-8",
+    "pdf_error_body": "Internal Server Error"
+  }
+]

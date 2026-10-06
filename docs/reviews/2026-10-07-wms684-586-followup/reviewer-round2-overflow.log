@@ -1,0 +1,30 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-586/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+F                                                                        [100%]
+=================================== FAILURES ===================================
+___________ test_pdf_retains_supported_names_when_the_row_overflows ____________
+../docs/reviews/2026-10-07-wms684-586-followup/overflow_api_probe.py:65: in test_pdf_retains_supported_names_when_the_row_overflows
+    assert all(case["pdf_status"] == 200 and case.get("pdf_retains_name") for case in results), results
+E   AssertionError: [{'case': 'multiline-original', 'name': 'Худи
+E     Размер XL
+E     Цвет чёрный
+E     Зимняя коллекция
+E     Утеплённый хлопок', 'name_len...nХ50
+E     Х51
+E     Х52
+E     Х53
+E     Х54
+E     Х55
+E     Х56
+E     Х57
+E     Х58
+E     Х59
+E     Х60
+E     Х61
+E     Х62
+E     Х63', 'name_length': 255, 'explicit_lines': 64, ...}]
+E   assert False
+E    +  where False = all(<generator object test_pdf_retains_supported_names_when_the_row_overflows.<locals>.<genexpr> at 0x110891fc0>)
+=========================== short test summary info ============================
+FAILED ::test_pdf_retains_supported_names_when_the_row_overflows - AssertionE...
+1 failed in 3.16s

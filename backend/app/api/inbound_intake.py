@@ -62,6 +62,8 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_acceptance_act_service import (
     acceptance_act_filename,
+    acceptance_act_filename_for_format,
+    build_acceptance_act_pdf,
     build_acceptance_act_workbook,
 )
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
@@ -959,6 +961,41 @@ async def download_inbound_acceptance_act(
         headers={
             "Content-Disposition": (
                 'attachment; filename="acceptance-act.xlsx"; '
+                f"filename*=UTF-8''{urllib.parse.quote(filename)}"
+            )
+        },
+    )
+
+
+@router.get("/{request_id}/acceptance-act.pdf")
+async def download_inbound_acceptance_act_pdf(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    """WMS-586: PDF той же завершённой приёмки, что и Excel-акт."""
+    try:
+        req, content = await build_acceptance_act_pdf(
+            session, user.tenant_id, request_id, seller_product_owner_id=seller_scope
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="request_not_found"
+            ) from None
+        if exc.code == "reception_not_closed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="reception_not_closed"
+            ) from None
+        raise
+    filename = acceptance_act_filename_for_format(req, "pdf")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="acceptance-act.pdf"; '
                 f"filename*=UTF-8''{urllib.parse.quote(filename)}"
             )
         },

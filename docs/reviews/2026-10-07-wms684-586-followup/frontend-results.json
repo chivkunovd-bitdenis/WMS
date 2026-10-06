@@ -1,0 +1,78 @@
+{
+  "dates": [
+    {
+      "timezone": "UTC",
+      "zoned": "29.09.2026",
+      "naive": "29.09.2026",
+      "explicitOffset": "29.09.2026",
+      "invalid": "—",
+      "absent": "—"
+    },
+    {
+      "timezone": "Europe/Moscow",
+      "zoned": "29.09.2026",
+      "naive": "29.09.2026",
+      "explicitOffset": "29.09.2026",
+      "invalid": "—",
+      "absent": "—"
+    },
+    {
+      "timezone": "Asia/Tbilisi",
+      "zoned": "29.09.2026",
+      "naive": "29.09.2026",
+      "explicitOffset": "29.09.2026",
+      "invalid": "—",
+      "absent": "—"
+    }
+  ],
+  "numberUsesEstablishedFunction": true,
+  "numbers": [
+    {
+      "detail": {
+        "display_number": null,
+        "document_number": "INB-000684"
+      },
+      "result": "№000684"
+    },
+    {
+      "detail": {
+        "display_number": " ",
+        "document_number": "INB-000684"
+      },
+      "result": "№000684"
+    },
+    {
+      "detail": {
+        "display_number": null,
+        "document_number": "broken"
+      },
+      "result": "—"
+    }
+  ],
+  "layouts": [
+    {
+      "size": "58x40",
+      "otherStylesEqualFrozen": true,
+      "otherHtmlEqualIgnoringWhitespace": true,
+      "receiptHtmlEqualPreviousProduct": true
+    },
+    {
+      "size": "60x40",
+      "otherStylesEqualFrozen": true,
+      "otherHtmlEqualIgnoringWhitespace": true,
+      "receiptHtmlEqualPreviousProduct": true
+    },
+    {
+      "size": "60x80",
+      "otherStylesEqualFrozen": true,
+      "otherHtmlEqualIgnoringWhitespace": true,
+      "receiptHtmlEqualPreviousProduct": true
+    },
+    {
+      "size": "70x120",
+      "otherStylesEqualFrozen": true,
+      "otherHtmlEqualIgnoringWhitespace": true,
+      "receiptHtmlEqualPreviousProduct": true
+    }
+  ]
+}

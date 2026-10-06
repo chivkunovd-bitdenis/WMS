@@ -1,0 +1,13 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-586/frontend
+
+ ✓ src/screens/ff/FfInboundRequestView.wms684.review-regression.dom.test.tsx (5 tests) 2597ms
+   ✓ WMS-684 review regression contract > treats a timezone-less receipt timestamp as UTC before formatting its Moscow date  911ms
+   ✓ WMS-684 review regression contract > uses the established human-number fallback for missing display number  633ms
+   ✓ WMS-684 review regression contract > uses the established human-number fallback for blank display number  434ms
+   ✓ WMS-684 review regression contract > uses the established human-number fallback for invalid fallback number  595ms
+
+ Test Files  1 passed (1)
+      Tests  5 passed (5)
+   Start at  01:31:54
+   Duration  6.08s (transform 701ms, setup 0ms, collect 2.89s, tests 2.60s, environment 409ms, prepare 51ms)
