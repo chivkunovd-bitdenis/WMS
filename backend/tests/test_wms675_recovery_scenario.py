@@ -63,7 +63,7 @@ async def incident_db(db_session):
     if engine.dialect.name == "postgresql":
         identity = (
             await db_session.execute(
-                text("select current_database(), inet_server_addr()::text, inet_server_port()")
+                text("select current_database(), host(inet_server_addr()), inet_server_port()")
             )
         ).one()
         assert identity[0].startswith("wms_test")
