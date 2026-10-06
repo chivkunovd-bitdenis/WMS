@@ -8,9 +8,9 @@ not ok 1 - SC17 default DOM adapter clears old filters, selects every page and o
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     80 !== 305
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 305
@@ -529,7 +529,7 @@ not ok 60 - SC17 execute uses all 80 fresh eligible sales-backed rows without fi
   error: |-
     all must clear both handover dates, product and search before UI refresh
     + actual - expected
-    
+
     + {
     +   date_from: '2026-09-18',
     +   date_to: '2026-09-25',
@@ -537,7 +537,7 @@ not ok 60 - SC17 execute uses all 80 fresh eligible sales-backed rows without fi
     +   search: 'old-search'
     + }
     - {}
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -563,9 +563,9 @@ not ok 61 - SC17 dry-run uses all 81 fresh eligible sales-backed rows without fi
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     80 !== 81
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 81
@@ -586,7 +586,7 @@ not ok 62 - SC17 execute uses all 81 fresh eligible sales-backed rows without fi
   error: |-
     all must clear both handover dates, product and search before UI refresh
     + actual - expected
-    
+
     + {
     +   date_from: '2026-09-18',
     +   date_to: '2026-09-25',
@@ -594,7 +594,7 @@ not ok 62 - SC17 execute uses all 81 fresh eligible sales-backed rows without fi
     +   search: 'old-search'
     + }
     - {}
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -620,9 +620,9 @@ not ok 63 - SC17 dry-run uses all 84 fresh eligible sales-backed rows without fi
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     80 !== 84
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 84
@@ -643,7 +643,7 @@ not ok 64 - SC17 execute uses all 84 fresh eligible sales-backed rows without fi
   error: |-
     all must clear both handover dates, product and search before UI refresh
     + actual - expected
-    
+
     + {
     +   date_from: '2026-09-18',
     +   date_to: '2026-09-25',
@@ -651,7 +651,7 @@ not ok 64 - SC17 execute uses all 84 fresh eligible sales-backed rows without fi
     +   search: 'old-search'
     + }
     - {}
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -677,9 +677,9 @@ not ok 65 - SC17 dry-run uses all 305 fresh eligible sales-backed rows without f
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     80 !== 305
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 305
@@ -700,7 +700,7 @@ not ok 66 - SC17 execute uses all 305 fresh eligible sales-backed rows without f
   error: |-
     all must clear both handover dates, product and search before UI refresh
     + actual - expected
-    
+
     + {
     +   date_from: '2026-09-18',
     +   date_to: '2026-09-25',
@@ -708,7 +708,7 @@ not ok 66 - SC17 execute uses all 305 fresh eligible sales-backed rows without f
     +   search: 'old-search'
     + }
     - {}
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -734,9 +734,9 @@ not ok 67 - SC17 dry-run uses all 501 fresh eligible sales-backed rows without f
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     80 !== 501
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 501
@@ -757,7 +757,7 @@ not ok 68 - SC17 execute uses all 501 fresh eligible sales-backed rows without f
   error: |-
     all must clear both handover dates, product and search before UI refresh
     + actual - expected
-    
+
     + {
     +   date_from: '2026-09-18',
     +   date_to: '2026-09-25',
@@ -765,7 +765,7 @@ not ok 68 - SC17 execute uses all 501 fresh eligible sales-backed rows without f
     +   search: 'old-search'
     + }
     - {}
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected:
@@ -928,9 +928,9 @@ not ok 81 - SC17 short terminal page refuses partial or ambiguous preparation be
   failureType: 'testCodeFailure'
   error: |-
     The expression evaluated to a falsy value:
-    
+
       assert.ok(!h.events.includes('open'))
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: true
