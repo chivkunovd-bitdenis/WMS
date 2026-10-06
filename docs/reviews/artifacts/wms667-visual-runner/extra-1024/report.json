@@ -1,0 +1,738 @@
+{
+  "sourceSha": "c4142888f32830c0138cf221987affcbd3f2ac7e",
+  "productSha": "2d139aee43464ff799fe64d1cbf05b043ff88007",
+  "baselineSha": "463b03825dec5fdca43a39c117e7afc4080c0508",
+  "probeSha": "145f64a59584880b24613c05b68fa3fd53e96ac5",
+  "extraDesktop": true,
+  "fixtures": {
+    "sellers": [
+      {
+        "id": "seller-a",
+        "name": "ИП Александрова Екатерина Владиславовна — товары для дома и путешествий"
+      },
+      {
+        "id": "seller-b",
+        "name": "Селлер Б"
+      }
+    ],
+    "totals": {
+      "a-positive": {
+        "quantity": 5,
+        "reserved": 5,
+        "available": 0
+      },
+      "a-zero": {
+        "quantity": 0,
+        "reserved": 0,
+        "available": 0
+      },
+      "b-positive": {
+        "quantity": 7,
+        "reserved": 9,
+        "available": -2
+      }
+    }
+  },
+  "cases": [
+    {
+      "name": "baseline-1024",
+      "width": 1024,
+      "baseline": true,
+      "geometry": {
+        "viewport": {
+          "width": 1024,
+          "height": 1000
+        },
+        "paper": {
+          "x": 0,
+          "y": 157.421875,
+          "width": 716,
+          "height": 222.015625,
+          "right": 716,
+          "bottom": 379.4375
+        },
+        "controls": [
+          {
+            "text": "​",
+            "rect": {
+              "x": 17,
+              "y": 174.421875,
+              "width": 260,
+              "height": 40,
+              "right": 277,
+              "bottom": 214.421875
+            }
+          },
+          {
+            "text": "СеллерИП Александрова Екатерина Владиславовна — товары для дома и путешествийСеллер",
+            "rect": {
+              "x": 33,
+              "y": 230.421875,
+              "width": 666,
+              "height": 40,
+              "right": 699,
+              "bottom": 270.421875
+            }
+          },
+          {
+            "text": "Маркетплейс​Маркетплейс",
+            "rect": {
+              "x": 33,
+              "y": 286.421875,
+              "width": 170,
+              "height": 40,
+              "right": 203,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "Передача остатков​Передача остатков",
+            "rect": {
+              "x": 219,
+              "y": 286.421875,
+              "width": 240,
+              "height": 40,
+              "right": 459,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "Категория​Категория",
+            "rect": {
+              "x": 475,
+              "y": 286.421875,
+              "width": 200,
+              "height": 40,
+              "right": 675,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "Найдено: 2 из 3",
+            "rect": {
+              "x": 33,
+              "y": 342.421875,
+              "width": 119.34375,
+              "height": 20.015625,
+              "right": 152.34375,
+              "bottom": 362.4375
+            }
+          }
+        ],
+        "overlaps": [],
+        "controlsWithinViewport": true,
+        "stockIndex": 8,
+        "rows": [
+          {
+            "text": "Товар a-positive—WildberriesNEEDLE-a-positive——ИП Александрова Екатерина Владиславовна — товары для дома и путешествийОстаток 5Резерв 5Доступно 0не передаётсяТЗРезервы0",
+            "stock": "Остаток 5Резерв 5Доступно 0",
+            "stockRect": {
+              "x": 853,
+              "y": 430.03125,
+              "width": 160,
+              "height": 217.15625,
+              "right": 1013,
+              "bottom": 647.1875
+            },
+            "sellerRect": {
+              "x": 743,
+              "y": 430.03125,
+              "width": 110,
+              "height": 217.15625,
+              "right": 853,
+              "bottom": 647.1875
+            },
+            "cells": [
+              {
+                "x": 1,
+                "y": 430.03125,
+                "width": 44,
+                "height": 217.15625,
+                "right": 45,
+                "bottom": 647.1875
+              },
+              {
+                "x": 45,
+                "y": 430.03125,
+                "width": 56,
+                "height": 217.15625,
+                "right": 101,
+                "bottom": 647.1875
+              },
+              {
+                "x": 101,
+                "y": 430.03125,
+                "width": 160,
+                "height": 217.15625,
+                "right": 261,
+                "bottom": 647.1875
+              },
+              {
+                "x": 261,
+                "y": 430.03125,
+                "width": 170,
+                "height": 217.15625,
+                "right": 431,
+                "bottom": 647.1875
+              },
+              {
+                "x": 431,
+                "y": 430.03125,
+                "width": 118,
+                "height": 217.15625,
+                "right": 549,
+                "bottom": 647.1875
+              },
+              {
+                "x": 549,
+                "y": 430.03125,
+                "width": 130,
+                "height": 217.15625,
+                "right": 679,
+                "bottom": 647.1875
+              },
+              {
+                "x": 679,
+                "y": 430.03125,
+                "width": 64,
+                "height": 217.15625,
+                "right": 743,
+                "bottom": 647.1875
+              },
+              {
+                "x": 743,
+                "y": 430.03125,
+                "width": 110,
+                "height": 217.15625,
+                "right": 853,
+                "bottom": 647.1875
+              },
+              {
+                "x": 853,
+                "y": 430.03125,
+                "width": 160,
+                "height": 217.15625,
+                "right": 1013,
+                "bottom": 647.1875
+              },
+              {
+                "x": 1013,
+                "y": 430.03125,
+                "width": 124,
+                "height": 217.15625,
+                "right": 1137,
+                "bottom": 647.1875
+              },
+              {
+                "x": 1137,
+                "y": 430.03125,
+                "width": 70,
+                "height": 217.15625,
+                "right": 1207,
+                "bottom": 647.1875
+              },
+              {
+                "x": 1207,
+                "y": 430.03125,
+                "width": 110,
+                "height": 217.15625,
+                "right": 1317,
+                "bottom": 647.1875
+              },
+              {
+                "x": 1317,
+                "y": 430.03125,
+                "width": 96,
+                "height": 217.15625,
+                "right": 1413,
+                "bottom": 647.1875
+              },
+              {
+                "x": 1413,
+                "y": 430.03125,
+                "width": 106,
+                "height": 217.15625,
+                "right": 1519,
+                "bottom": 647.1875
+              }
+            ]
+          },
+          {
+            "text": "Товар a-zero—WildberriesNEEDLE-a-zero——ИП Александрова Екатерина Владиславовна — товары для дома и путешествийОстаток 0Резерв 0Доступно 0не передаётсяТЗРезервы0",
+            "stock": "Остаток 0Резерв 0Доступно 0",
+            "stockRect": {
+              "x": 853,
+              "y": 647.1875,
+              "width": 160,
+              "height": 217.15625,
+              "right": 1013,
+              "bottom": 864.34375
+            },
+            "sellerRect": {
+              "x": 743,
+              "y": 647.1875,
+              "width": 110,
+              "height": 217.15625,
+              "right": 853,
+              "bottom": 864.34375
+            },
+            "cells": [
+              {
+                "x": 1,
+                "y": 647.1875,
+                "width": 44,
+                "height": 217.15625,
+                "right": 45,
+                "bottom": 864.34375
+              },
+              {
+                "x": 45,
+                "y": 647.1875,
+                "width": 56,
+                "height": 217.15625,
+                "right": 101,
+                "bottom": 864.34375
+              },
+              {
+                "x": 101,
+                "y": 647.1875,
+                "width": 160,
+                "height": 217.15625,
+                "right": 261,
+                "bottom": 864.34375
+              },
+              {
+                "x": 261,
+                "y": 647.1875,
+                "width": 170,
+                "height": 217.15625,
+                "right": 431,
+                "bottom": 864.34375
+              },
+              {
+                "x": 431,
+                "y": 647.1875,
+                "width": 118,
+                "height": 217.15625,
+                "right": 549,
+                "bottom": 864.34375
+              },
+              {
+                "x": 549,
+                "y": 647.1875,
+                "width": 130,
+                "height": 217.15625,
+                "right": 679,
+                "bottom": 864.34375
+              },
+              {
+                "x": 679,
+                "y": 647.1875,
+                "width": 64,
+                "height": 217.15625,
+                "right": 743,
+                "bottom": 864.34375
+              },
+              {
+                "x": 743,
+                "y": 647.1875,
+                "width": 110,
+                "height": 217.15625,
+                "right": 853,
+                "bottom": 864.34375
+              },
+              {
+                "x": 853,
+                "y": 647.1875,
+                "width": 160,
+                "height": 217.15625,
+                "right": 1013,
+                "bottom": 864.34375
+              },
+              {
+                "x": 1013,
+                "y": 647.1875,
+                "width": 124,
+                "height": 217.15625,
+                "right": 1137,
+                "bottom": 864.34375
+              },
+              {
+                "x": 1137,
+                "y": 647.1875,
+                "width": 70,
+                "height": 217.15625,
+                "right": 1207,
+                "bottom": 864.34375
+              },
+              {
+                "x": 1207,
+                "y": 647.1875,
+                "width": 110,
+                "height": 217.15625,
+                "right": 1317,
+                "bottom": 864.34375
+              },
+              {
+                "x": 1317,
+                "y": 647.1875,
+                "width": 96,
+                "height": 217.15625,
+                "right": 1413,
+                "bottom": 864.34375
+              },
+              {
+                "x": 1413,
+                "y": 647.1875,
+                "width": 106,
+                "height": 217.15625,
+                "right": 1519,
+                "bottom": 864.34375
+              }
+            ]
+          }
+        ]
+      },
+      "pass": true,
+      "pageErrors": []
+    },
+    {
+      "name": "candidate-1024",
+      "width": 1024,
+      "baseline": false,
+      "fullyReserved": {
+        "onHand": 5,
+        "reserved": 5,
+        "available": 0,
+        "included": true
+      },
+      "geometry": {
+        "viewport": {
+          "width": 1024,
+          "height": 1000
+        },
+        "paper": {
+          "x": -2,
+          "y": 157.421875,
+          "width": 716,
+          "height": 240,
+          "right": 714,
+          "bottom": 397.421875
+        },
+        "controls": [
+          {
+            "text": "​",
+            "rect": {
+              "x": 15,
+              "y": 174.421875,
+              "width": 260,
+              "height": 40,
+              "right": 275,
+              "bottom": 214.421875
+            }
+          },
+          {
+            "text": "СеллерИП Александрова Екатерина Владиславовна — товары для дома и путешествийСеллер",
+            "rect": {
+              "x": 31,
+              "y": 230.421875,
+              "width": 666,
+              "height": 40,
+              "right": 697,
+              "bottom": 270.421875
+            }
+          },
+          {
+            "text": "Маркетплейс​Маркетплейс",
+            "rect": {
+              "x": 31,
+              "y": 286.421875,
+              "width": 170,
+              "height": 40,
+              "right": 201,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "Передача остатков​Передача остатков",
+            "rect": {
+              "x": 217,
+              "y": 286.421875,
+              "width": 240,
+              "height": 40,
+              "right": 457,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "Категория​Категория",
+            "rect": {
+              "x": 473,
+              "y": 286.421875,
+              "width": 200,
+              "height": 40,
+              "right": 673,
+              "bottom": 326.421875
+            }
+          },
+          {
+            "text": "С остатком",
+            "rect": {
+              "x": 31,
+              "y": 342.421875,
+              "width": 134.625,
+              "height": 38,
+              "right": 165.625,
+              "bottom": 380.421875
+            }
+          },
+          {
+            "text": "Найдено: 1 из 3",
+            "rect": {
+              "x": 181.625,
+              "y": 351.40625,
+              "width": 119.34375,
+              "height": 20.015625,
+              "right": 300.96875,
+              "bottom": 371.421875
+            }
+          }
+        ],
+        "overlaps": [],
+        "controlsWithinViewport": true,
+        "stockIndex": 8,
+        "rows": [
+          {
+            "text": "Товар a-positive—WildberriesNEEDLE-a-positive——ИП Александрова Екатерина Владиславовна — товары для дома и путешествийОстаток 5Резерв 5Доступно 0не передаётсяТЗРезервы0",
+            "stock": "Остаток 5Резерв 5Доступно 0",
+            "stockRect": {
+              "x": 238,
+              "y": 448.015625,
+              "width": 160,
+              "height": 217.15625,
+              "right": 398,
+              "bottom": 665.171875
+            },
+            "sellerRect": {
+              "x": 128,
+              "y": 448.015625,
+              "width": 110,
+              "height": 217.15625,
+              "right": 238,
+              "bottom": 665.171875
+            },
+            "cells": [
+              {
+                "x": -614,
+                "y": 448.015625,
+                "width": 44,
+                "height": 217.15625,
+                "right": -570,
+                "bottom": 665.171875
+              },
+              {
+                "x": -570,
+                "y": 448.015625,
+                "width": 56,
+                "height": 217.15625,
+                "right": -514,
+                "bottom": 665.171875
+              },
+              {
+                "x": -514,
+                "y": 448.015625,
+                "width": 160,
+                "height": 217.15625,
+                "right": -354,
+                "bottom": 665.171875
+              },
+              {
+                "x": -354,
+                "y": 448.015625,
+                "width": 170,
+                "height": 217.15625,
+                "right": -184,
+                "bottom": 665.171875
+              },
+              {
+                "x": -184,
+                "y": 448.015625,
+                "width": 118,
+                "height": 217.15625,
+                "right": -66,
+                "bottom": 665.171875
+              },
+              {
+                "x": -66,
+                "y": 448.015625,
+                "width": 130,
+                "height": 217.15625,
+                "right": 64,
+                "bottom": 665.171875
+              },
+              {
+                "x": 64,
+                "y": 448.015625,
+                "width": 64,
+                "height": 217.15625,
+                "right": 128,
+                "bottom": 665.171875
+              },
+              {
+                "x": 128,
+                "y": 448.015625,
+                "width": 110,
+                "height": 217.15625,
+                "right": 238,
+                "bottom": 665.171875
+              },
+              {
+                "x": 238,
+                "y": 448.015625,
+                "width": 160,
+                "height": 217.15625,
+                "right": 398,
+                "bottom": 665.171875
+              },
+              {
+                "x": 398,
+                "y": 448.015625,
+                "width": 124,
+                "height": 217.15625,
+                "right": 522,
+                "bottom": 665.171875
+              },
+              {
+                "x": 522,
+                "y": 448.015625,
+                "width": 70,
+                "height": 217.15625,
+                "right": 592,
+                "bottom": 665.171875
+              },
+              {
+                "x": 592,
+                "y": 448.015625,
+                "width": 110,
+                "height": 217.15625,
+                "right": 702,
+                "bottom": 665.171875
+              },
+              {
+                "x": 702,
+                "y": 448.015625,
+                "width": 96,
+                "height": 217.15625,
+                "right": 798,
+                "bottom": 665.171875
+              },
+              {
+                "x": 798,
+                "y": 448.015625,
+                "width": 106,
+                "height": 217.15625,
+                "right": 904,
+                "bottom": 665.171875
+              }
+            ]
+          }
+        ]
+      },
+      "pass": true,
+      "pageErrors": []
+    }
+  ],
+  "requests": [
+    {
+      "name": "baseline-1024",
+      "requests": [
+        {
+          "path": "/api/products/ff-catalog-page",
+          "params": {
+            "limit": "100",
+            "offset": "0"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/operations/inventory-balances/summary",
+          "params": {
+            "product_id": "b-positive"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/products/ff-catalog-page",
+          "params": {
+            "limit": "100",
+            "offset": "0",
+            "seller_id": "seller-a"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/operations/inventory-balances/summary",
+          "params": {
+            "product_id": "a-zero"
+          },
+          "method": "GET"
+        }
+      ]
+    },
+    {
+      "name": "candidate-1024",
+      "requests": [
+        {
+          "path": "/api/products/ff-catalog-page",
+          "params": {
+            "limit": "100",
+            "offset": "0"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/operations/inventory-balances/summary",
+          "params": {
+            "product_id": "b-positive"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/products/ff-catalog-page",
+          "params": {
+            "limit": "100",
+            "offset": "0",
+            "seller_id": "seller-a"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/operations/inventory-balances/summary",
+          "params": {
+            "product_id": "a-zero"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/products/ff-catalog-page",
+          "params": {
+            "limit": "100",
+            "offset": "0",
+            "seller_id": "seller-a",
+            "has_stock": "true"
+          },
+          "method": "GET"
+        },
+        {
+          "path": "/api/operations/inventory-balances/summary",
+          "params": {
+            "product_id": "a-positive"
+          },
+          "method": "GET"
+        }
+      ]
+    }
+  ],
+  "externalBlocked": [],
+  "browser": "141.0.7390.37"
+}
