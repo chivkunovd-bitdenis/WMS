@@ -14657,6 +14657,15 @@ gates остаются без изменений.
 
 <a id="wms-517"></a>
 
+Приоритетное продолжение06.10: scoped integration от4b298efc9 опубликована
+в `codex/wms517-scoped-integration-20261006`, контракт28671d78c/producte93f9efba,
+без переноса старого checker652. Свежий штатный WB GET11:25UTC прочитан целиком
+до[]: все246 текущих кандидатов сопоставлены,84продажи с ценами без claims,
+5возвратов,157без продажи. [JSON/CSV и Mac-сценарий](reviews/wms517-integration-handoff-20261006.md).
+Независимое review/аналитическая приёмка этой интеграции, общий CI и выпуск
+остаются у ведущего; реальная ЭЦП/SC14–15 не подтверждены.
+
+
 **Статус:** `BASE SAVED 82889771/4A5BAD39 · ETALON MERGED 654A73F2 · BC7 DELTA LOCALLY ACCEPTED · AWAITS DELTA COMMIT/PUSH/PR CI · PRODUCTION НЕ ПРИНЯТ · LIVE GATE B2 · PHYSICAL CRYPTOPRO/ГОСТ/RAILWAY НЕ ПРОВЕРЕНЫ` · появилась 23.09.2026 · [требования и проверки](requirements/WMS-517.md).
 
 В кабинете селлера нужен экран «Честный знак → Вывод из оборота»: плоский плотный реестр
