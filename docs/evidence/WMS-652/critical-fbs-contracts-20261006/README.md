@@ -246,3 +246,13 @@ registry/CI остаются ответственностью root.
 WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/remount-selection-key-red python3 frontend/tests-e2e/wms652-critical/remount-selection-mutation.py
 WMS652_EVIDENCE=docs/evidence/WMS-652/critical-fbs-contracts-20261006/remount-selection-key-green node frontend/tests-e2e/wms652-critical/browser.mjs
 ```
+
+## Checkpoint C59/R48: 43 браузерных сценария и геометрия
+
+Последний контракт добавляет десять проверок геометрии к прежним 33 сценариям,
+сохраняя их идентификаторы и ожидания. Точная матрица семи допустимых входов
+упаковки, границы измерений, три намеренные поломки и результат полного
+восстановленного прогона описаны в [geometry-contract.md](geometry-contract.md).
+Защита всего продуктового дерева отдельно зафиксирована тестовым коммитом
+`9bb8b93254a7f79da7d8fd73eedfa75a1cf69b41`; реализация проверяющего модуля
+и обязательное включение этих контрактов в CI принадлежат ведущему.
