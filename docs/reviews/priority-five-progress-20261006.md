@@ -317,3 +317,9 @@ Current `2b5d631376a30b0c83bb8109a39b0176a0fbea4f` includes exact separate475/53
 Current document gate PASS on prior d5da integration; all own changes saved in Git, no intermediate push to cancel CI. WMS-662 isolated PostgreSQL steps pin asyncpg0.31.0 matching tested local driver. The final grouped push waits only for actual475/537review/proof and653scope correction/proof, with current origin/etalon reconfirmed before dispatch. No broad product review rerun or new document-review stage.
 
 Existing touched537 concurrency case `test_concurrent_add_of_the_same_order_to_a_draft_supply` now joins the serial PostgreSQL step on the existing `wms_test_517` CI database, as explicitly requested by leading agent. No new service or test expectation; the prior targetedSQLite skip remains honest and common CI must execute this exact scenario onPostgreSQL.
+
+## Exact remaining tail before CI3 · 06.10.2026
+
+653 source `65872a95d97e649ad67b85cc2afa7824ba4cdd44` included by merge `563d2a2a0`: exact correction2b5a86e, actual Sol high review30bbd, cumulative canonicalledger and requirements.29/29independentPASS plus real3parentoctopusnegative; accepted9migrationblobs unchanged.
+
+475/537 original fixture correctionc38 passed actual independent review `6cd6ee0ab996e6af28c8a96eb0d913675d35f73d`, report-only included.23PASS/1priorPGskip;124assertions preserved. The one remaining mandatory537concurrency case is being reproduced and corrected separately on ownedPostgreSQL25437; its oldskip is not called success. Common workflow already executes that exactcase serially on existingPGservice. Finalpush/CI waits only for its correction+actualproof/review.

@@ -302,7 +302,17 @@
       "integration": "14215d543e2e2ca33be31e6cc70108e302585fc4",
       "mode": "merge test-only correction;hotfix683runtime unchanged",
       "facts": "23PASS1priorPGskip;all124assertionsunchanged",
-      "review": "pending actual separate report"
+      "review": "6cd6ee0ab996e6af28c8a96eb0d913675d35f73d",
+      "verdict": "actual independentSol6.1PASS23tests,priorPGskip remains pending mandatoryPGcase"
+    },
+    {
+      "task": "WMS-653 cumulative reviewed task scope correction",
+      "source": "65872a95d97e649ad67b85cc2afa7824ba4cdd44",
+      "integration": "563d2a2a0",
+      "correction": "2b5a86e4935fdf7dff74fa2b277bd7d18b4d0e0f",
+      "review": "30bbd17d899dfcc5407bce4a60dc923782179bc8",
+      "mode": "merge original separatetestwriter+independentreview+cumulativeledger;9migrationblobs unchanged",
+      "facts": "29localPASS,29independentPASS,actual3-parentoctopusnegative;no runtime changes"
     }
   ],
   "local_product_fixes": [
