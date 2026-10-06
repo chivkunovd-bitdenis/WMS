@@ -121,11 +121,20 @@ function withoutAutomaticPrint(html: string) {
   return html.replace(/\s*<script>[\s\S]*?<\/script>\s*(?=<\/body>)/, '')
 }
 
+function fixtureFileName(label: string) {
+  const slug = label
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}]+/gu, '-')
+    .replace(/^-+|-+$/g, '')
+  return slug || 'wms680-pdf-fixture'
+}
+
 async function renderPdf(html: string, label: string) {
   expect(chrome, 'C680-18 требует уже установленный Chrome/Chromium; зависимости не устанавливаются').toBeTruthy()
   const dir = mkdtempSync(join(tmpdir(), 'wms680-pdf-'))
-  const input = join(dir, `${label}.html`)
-  const output = join(dir, `${label}.pdf`)
+  const fileName = fixtureFileName(label)
+  const input = join(dir, `${fileName}.html`)
+  const output = join(dir, `${fileName}.pdf`)
   writeFileSync(input, withoutAutomaticPrint(html))
   const process = spawn(chrome!, [
     '--headless=new', '--disable-gpu', '--no-sandbox', '--disable-dev-shm-usage', '--no-pdf-header-footer', '--no-first-run',
