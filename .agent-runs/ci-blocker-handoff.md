@@ -110,3 +110,25 @@ fixture: positive exact final pin проходит только при отде�
 в `process-proof.needs` и скачать этот exact artifact в reports. Controlled
 mutations отдельно доказывают отказ при missing TAP, upload, download и required
 job; policy/checker/workflow/product этим тестировщиком не менялись.
+
+## Stage handoff: promote preserves immutable original tests
+
+До изменения `scripts/ci/promote_guards.py` добавлены два meaningful RED в
+`scripts/ci/tests/test_promote_guards.py`. Первый создаёт активный saved
+`PROCESS_CONTRACTS.json`, где original `backend/tests/test_immutable_contract.py`
+уже защищён, и требует, чтобы штатный `promote` оставил original path, старый
+test ID, requirement reference и bytes saved protection нетронутыми; второй
+вызов должен быть idempotent. Текущий скрипт действительно делает `git mv`,
+поэтому RED — original file исчезает.
+
+Второй RED требует полностью разобрать три valid references из одной ячейки
+`Test`, разделённые `<br>` и `;`; current parser склеивает их в один test name.
+После полного разбора он также требует, чтобы штатная неприкрытая move-ветка
+сохранила в переписанной ячейке все три новых target references, а не только
+последнюю.
+Отдельная зелёная проверка сохраняет fail-closed правило: пустая active
+`навсегда` reference вызывает `ValueError`, а не пропускается. Existing
+non-protected move scenario и rejection test outside supported trees повторно
+PASS. Исправление должно только распознать сохранённую active protection и
+регистрацию/check без move для такого original; новую policy migration,
+allow-all или ослабление guards не добавлять.

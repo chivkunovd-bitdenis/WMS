@@ -50,6 +50,27 @@ class PromoteGuardsTests(unittest.TestCase):
             encoding="utf-8",
         )
 
+    def write_saved_process_protection(self, source: str, case: str) -> None:
+        digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        self.write(
+            "guards/PROCESS_CONTRACTS.json",
+            json.dumps(
+                {
+                    "version": 1,
+                    "files": {source: digest},
+                    "suites": {
+                        "protected-fixture": {
+                            "report": "protected-fixture.xml",
+                            "format": "junit",
+                            "exact": True,
+                            "cases": [case],
+                        }
+                    },
+                },
+                indent=2,
+            ) + "\n",
+        )
+
     def fixture(self) -> None:
         self.write(
             "backend/tests/unit/test_stock.py",
@@ -115,6 +136,85 @@ class PromoteGuardsTests(unittest.TestCase):
         self.git("commit", "-qm", "fixture")
         with self.assertRaisesRegex(ValueError, "вне поддерживаемых"):
             promoter.promote(self.root, "WMS-901")
+
+    def test_protected_original_stays_registered_and_second_promotion_is_idempotent(self):
+        source = "backend/tests/test_immutable_contract.py"
+        test_name = "test_frozen_case_id"
+        self.write(source, f"def {test_name}(): pass\n")
+        self.write_saved_process_protection(source, f"tests.test_immutable_contract::{test_name}")
+        self.write_manifest("active")
+        self.write(
+            "docs/requirements/WMS-902.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C902 | навсегда | {source}::{test_name} | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "protected fixture")
+
+        protected_policy = (self.root / "guards/PROCESS_CONTRACTS.json").read_bytes()
+        original_document = (self.root / "docs/requirements/WMS-902.md").read_text()
+        promoter.promote(self.root, "WMS-902")
+
+        self.assertTrue((self.root / source).is_file())
+        self.assertFalse((self.root / "backend/tests/guards/test_immutable_contract.py").exists())
+        self.assertEqual((self.root / "guards/PROCESS_CONTRACTS.json").read_bytes(), protected_policy)
+        self.assertEqual((self.root / "docs/requirements/WMS-902.md").read_text(), original_document)
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+        promoter.promote(self.root, "WMS-902")
+        self.assertEqual(self.git("status", "--porcelain"), "")
+
+    def test_parses_every_br_and_semicolon_separated_permanent_reference(self):
+        source = "backend/tests/test_multiple_immutable_cases.py"
+        self.write(
+            source,
+            "def test_alpha(): pass\ndef test_beta(): pass\ndef test_gamma(): pass\n",
+        )
+        self.write(
+            "docs/requirements/WMS-903.md",
+            f"""| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C903 | навсегда | `{source}::test_alpha`<br>`{source}::test_beta`; `{source}::test_gamma` | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "multiple references fixture")
+
+        references = promoter.permanent_references(
+            (self.root / "docs/requirements/WMS-903.md").read_text().splitlines()
+        )
+
+        self.assertEqual(
+            [(str(path), name) for _, _, path, name in references],
+            [
+                (source, "test_alpha"),
+                (source, "test_beta"),
+                (source, "test_gamma"),
+            ],
+        )
+        promoter.promote(self.root, "WMS-903")
+
+        target = "backend/tests/guards/test_multiple_immutable_cases.py"
+        self.assertFalse((self.root / source).exists())
+        document = (self.root / "docs/requirements/WMS-903.md").read_text()
+        for test_name in ("test_alpha", "test_beta", "test_gamma"):
+            self.assertIn(f"{target}::{test_name}", document)
+
+    def test_empty_active_permanent_reference_still_refuses_promotion(self):
+        self.write(
+            "docs/requirements/WMS-904.md",
+            """| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C904 | навсегда | | принято |
+""",
+        )
+        self.git("add", ".")
+        self.git("commit", "-qm", "empty reference fixture")
+
+        with self.assertRaisesRegex(ValueError, "Некорректная ссылка на тест"):
+            promoter.promote(self.root, "WMS-904")
 
 
 if __name__ == "__main__":
