@@ -1,0 +1,13 @@
+C5 environment {"node":"v24.13.1","platform":"linux","arch":"arm64","browser":"141.0.7390.37"}
+C5 engine trace {"bytes":38,"reason":"native-failure-plus-1s","dataLossOccurred":false,"maxBufferUsage":0}
+{
+  "synthetic": true,
+  "firstFixtureTraceStarts": 0,
+  "secondFixtureTraceStarts": 1,
+  "synthetic299Stops": 0,
+  "genuineFailureStops": 1,
+  "releaseTailMs": 1005,
+  "initialLightDump": 1,
+  "duplicateStop": 0,
+  "originalErrorPreservedIfConsoleThrows": true
+}

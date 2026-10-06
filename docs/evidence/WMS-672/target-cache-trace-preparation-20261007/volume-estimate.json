@@ -1,0 +1,13 @@
+{
+  "source_run": 37538174978,
+  "evidence_sha": "9d47783143a61f37bd1cbb4dcc1ab032fa951f0e",
+  "previous_buffer_bytes": 33554432,
+  "previous_prefix_duration_seconds": 18.339822,
+  "target_open_to_native_failure_seconds": 15.0865,
+  "requested_tail_seconds": 1,
+  "linear_estimated_phase_bytes": 29431767,
+  "selected_buffer_bytes": 67108864,
+  "compressed_stream_cap_bytes": 67108864,
+  "parser_uncompressed_cap_bytes": 268435456,
+  "reason": "Onlyfixture2 +1s native-failure tail;64Mi provides over2x linear estimate, avoidsfirstfixture/renderTape/30s timeouttail. Estimate isnot a guarantee; dataloss is checked before cause."
+}
