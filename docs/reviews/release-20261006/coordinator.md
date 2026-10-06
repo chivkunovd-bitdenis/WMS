@@ -139,3 +139,11 @@ CI и установленная версия. Реальное внешнее �
 [Точный handoff и registry](../../evidence/WMS-652/process-gates-20261006/integration-handoff.md):222files/1146suite IDs, Mac110PASS, geometry43 сохранены, независимые reviews Mac/CI/geometry приняты. Предыдущая строка об ожидании доступности Виталика устарела: владелец требует сначала softwaredeploy, затем личный Mac/подпись. Приёмка новой дельты поручена отдельному замещающему Sol аналитику. Main только checker/workflow045272b51; SOURCEpin/rules/canary/fullCI/deploy ещё не объявлены. Production прежний8f11d912.
 
 19:52UTC: actual71contracts+45subtestsPASS; обязательныеruleset24431521readback9checks/stricttrue/nobypass сохранены вevidence. Источникpin проходит отдельную boundedпроверку последобавлениязащитыcollectionfixture.
+
+## Checkpoint 19:58 UTC: действующая защита перед полным CI
+
+Программная приёмка замещающего аналитика d2eb5c739800efe78b17b24a87ded70db314d7b9 сохранена в общей ветке a223aec02: C59 и SC17 приняты. Ручная подпись и проверка Mac SC18 остаются после деплоя. SOURCE0151a555ac429957d0eee591317cc4326e909dfd отдельно одобрен94aba396:222 защищённых файла и1146 идентификаторов сценариев; все прежние210 файлов и955 сценариев сохранены. Точная пара BASE4b298efc95be7b4b6b7fe5665be9f3671f1fe747 / SOURCE0151 установлена через обычный main PR389, merge SHA4e7b8abf12077e9e100730c6557507dc20a665b2. Единственная дельта main — четыре строки process_bootstrap.json; приложение main не менялось.
+
+[Настоящая отрицательная проба](../../evidence/WMS-652/process-gates-20261006/actual-negative-canary.json): PR390 с head54fdd77296c42e2401c09bd221eafc9a43441141 удалил защищённое утверждение C62 и обновил хеш кандидата. Установленный workflow run37522705204 дал обязательной process-integrity результат FAILURE от GitHub Actions app15368, а PR получил mergeStateBLOCKED. Проверяющий код из установленного main дополнительно прочитал настоящие данные GitHub и подтвердил причину Candidate changed a protected baseline digest. PR закрыт без слияния; повреждённый тест в выпуск не включён. Повторное чтение ruleset24431521 подтвердило active, девять checks, stricttrue и отсутствие обхода правил.
+
+Полный CI точного общего кандидата ещё ожидается. Production8f11d912 не изменён; до20:00UTC выпуск запрещён.
