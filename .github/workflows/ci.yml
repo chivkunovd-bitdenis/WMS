@@ -136,6 +136,8 @@ jobs:
           pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py
           pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe
           pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply
+      - name: Required PostgreSQL handoff cancellation documents and catalog contracts
+        run: bash ../scripts/ci/run_release_postgres.sh
       - name: WMS-675 real incident recovery on isolated PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@postgres:5432/wms_test_675_incident
@@ -162,9 +164,49 @@ jobs:
         # 1431 до, 1431 после, ни один не сменил исход.
         # These two contracts require their own idle PostgreSQL clusters.
         # Both run below unchanged, serially, without skip/xfail.
-        run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py
+        run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py --junitxml="$RUNNER_TEMP/backend-all.xml"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: backend-executed-contracts-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/release-postgres
+            ${{ runner.temp }}/backend-all.xml
+          retention-days: 14
+
+  print-regressions:
+    timeout-minutes: 20
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install isolated browser and PDF tools
+        run: |
+          npm ci --prefix frontend
+          npm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1
+          node "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
+      - name: Required box-label browser contracts and actual picking-list PDFs
+        run: bash scripts/ci/run_release_print.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: release-print-${{ github.sha }}
+          path: ${{ runner.temp }}/release-print
+          retention-days: 14
 
   frontend-build:
+    # The existing required frontend check cannot succeed if browser/PDF coverage fails.
+    needs: print-regressions
     timeout-minutes: 20
     runs-on: ubuntu-latest
     defaults:
