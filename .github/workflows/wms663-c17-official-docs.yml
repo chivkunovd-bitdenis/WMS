@@ -5,12 +5,13 @@ on:
     paths:
       - .github/workflows/wms663-c17-official-docs.yml
       - docs/reviews/wms663-c17-official-20261006/probe.py
+      - docs/reviews/wms663-c17-official-20261006/public-browser.mjs
 permissions:
   contents: read
 jobs:
   official-public-schema:
     runs-on: ubuntu-24.04
-    timeout-minutes: 4
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
         with:
@@ -19,6 +20,13 @@ jobs:
         env:
           C17_OUTPUT: ${{ runner.temp }}/wms663-c17-official
         run: timeout 180s python3 docs/reviews/wms663-c17-official-20261006/probe.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: One public browser navigation through ordinary Ozon JavaScript challenge
+        env:
+          C17_OUTPUT: ${{ runner.temp }}/wms663-c17-official
+        run: timeout 90s node docs/reviews/wms663-c17-official-20261006/public-browser.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
