@@ -1,0 +1,61 @@
+{
+  "WMS-517": {
+    "head": "447dd60ba64e559b573ce8838a0ca6bbf544337e",
+    "base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+    "scope_baselines": {},
+    "scope_errors": [
+      "WMS-517: fixture-only: нет отдельного Astra high PASS точной дельты"
+    ],
+    "committed_ledger_full_checker_errors": [
+      "изменён контракт тестов WMS-517 после его фиксации: backend/tests/test_wms517_sales_contract.py"
+    ],
+    "head_after": "447dd60ba64e559b573ce8838a0ca6bbf544337e",
+    "frozen_HEAD_blobs": {
+      "backend/tests/test_wms517_sales_contract.py": "b5ddcb3b42810902b05da09726222b7e500684cf"
+    },
+    "frozen_HEAD_matches_latest_delta": true,
+    "proposed_ledger_installed": false
+  },
+  "WMS-663": {
+    "head": "9f93170c7e05378cf9b06cab095f7cb88ff0d124",
+    "base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+    "scope_baselines": {
+      "76f2162e22f1aa9e33a336b01109882d8a8969c6": [
+        "backend/tests/test_wms663_customs_documents_contract.py",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx"
+      ]
+    },
+    "scope_errors": [],
+    "committed_ledger_full_checker_errors": [
+      "WMS-662: Нет вердикта у проверки: C1",
+      "WMS-662: Нет вердикта у проверки: C2",
+      "WMS-662: Нет вердикта у проверки: C3",
+      "WMS-662: Нет вердикта у проверки: C4",
+      "WMS-662: Нет вердикта у проверки: C5",
+      "WMS-662: Нет вердикта у проверки: C6",
+      "WMS-662: Нет вердикта у проверки: C7",
+      "WMS-662: Нет вердикта у проверки: C8",
+      "WMS-662: Нет вердикта у проверки: C9",
+      "WMS-662: Нет вердикта у проверки: C10",
+      "WMS-662: Нет вердикта у проверки: C11",
+      "WMS-662: Нет вердикта у проверки: C12",
+      "WMS-662: Нет вердикта у проверки: C13",
+      "WMS-662: Нет вердикта у проверки: C14",
+      "WMS-662: Нет вердикта у проверки: C15",
+      "WMS-662: Нет вердикта у проверки: C16",
+      "WMS-662: Нет вердикта у проверки: C17",
+      "WMS-662: Нет вердикта у проверки: C18",
+      "WMS-662: Нет вердикта у проверки: C19",
+      "WMS-675: В таблице с колонкой «Класс» нет колонки «Тест».",
+      "WMS-663: коррекция должна менять только часть исходного контракта"
+    ],
+    "head_after": "9f93170c7e05378cf9b06cab095f7cb88ff0d124",
+    "frozen_HEAD_blobs": {
+      "backend/tests/test_wms663_customs_documents_contract.py": "4e1aff5a80445fa61b5697d60a26985427dfd28e",
+      "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms663.dom.test.tsx": "8548a75eb6963edcd5e3b3755e0a618d918f9f94"
+    },
+    "frozen_HEAD_matches_latest_delta": true,
+    "proposed_ledger_installed": false
+  },
+  "_checker_blob": "d70ac5873c5467789fc0d35a2420ffb80ce3e989"
+}

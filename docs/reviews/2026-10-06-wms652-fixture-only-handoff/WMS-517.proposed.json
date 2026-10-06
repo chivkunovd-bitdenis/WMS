@@ -1,0 +1,50 @@
+{
+  "task": "WMS-517",
+  "fixture_corrections": [
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-uuid-before-rollback",
+          "before_blob": "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",
+          "after_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6-astra",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+        "correction_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+        "evidence_commit": "445c78a378d04def5483e416b526d3cedc0c4e41",
+        "evidence": "docs/reviews/wms517-astra-096475c.md",
+        "evidence_blob": "e8ed0a702524e0717796846dbeba9e0b13756031"
+      }
+    },
+    {
+      "contract_commit": "f5ca85534198feae8ad720ae2875730ae351229c",
+      "source_commit": "042d9dbac5da202050ba165574a3c471e143af62",
+      "correction_commit": "432516e88d3e5c1f055b1b8f697616fab496a8b8",
+      "files": [
+        {
+          "path": "backend/tests/test_wms517_sales_contract.py",
+          "transform": "wms517-explicit-sales-fixture",
+          "before_blob": "393cb668b7b7fb702f75d949ba41421a46f5676e",
+          "after_blob": "b5ddcb3b42810902b05da09726222b7e500684cf"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "backend/tests/test_withdrawal_ledger.py",
+          "before_blob": "d7f0d01d0f417aea487d0d7f616ba240b133f5a4",
+          "after_blob": "a7ba000fd763b978784d0a5b6f4120df188c3084"
+        }
+      ],
+      "review": null
+    }
+  ]
+}
