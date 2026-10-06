@@ -329,7 +329,8 @@ def exact_fixture_corrections(
             source_matches = source == prior_sha
             if transform == POSITIVE_STATUS_TRANSFORM and not source_matches:
                 source_matches = ancestor(root, prior_sha, source) and not git(
-                    root, "log", "--format=%H", f"{prior_sha}..{source}", "--", path,
+                    root, "log", "--full-history", "--format=%H", f"{prior_sha}..{source}",
+                    "--", path,
                 )
             if (not source_matches or before != prior_blob
                     or git_blob(root, source, path) != before
@@ -350,7 +351,7 @@ def exact_fixture_corrections(
             expected.add(path)
         if POSITIVE_STATUS_TRANSFORM in transforms:
             handoff_path, handoff_blob = POSITIVE_STATUS_HANDOFF
-            if (git_blob(root, parent, handoff_path) is not None
+            if (git(root, "ls-tree", "-z", "--full-tree", parent, "--", handoff_path)
                     or git_blob(root, correction, handoff_path) != handoff_blob
                     or git_blob(root, head, handoff_path) != handoff_blob):
                 return fail("подменён точный positive STATUS handoff")
