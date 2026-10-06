@@ -1,0 +1,63 @@
+- complementary:
+  - text: "Искусственная QA681 · ozon; WB/production не вызывается. Только preview: системную «Печать» не нажимать."
+  - button: Открыть поставку B
+  - button: Вернуть задержанный ответ A
+  - generic: "[ { \"method\": \"GET\", \"path\": \"/qr/qa-box-1.png\" } ]"
+- dialog:
+  - heading [level=6]: Синтетическая QA681 · ozon
+  - paragraph: ИП Тестовый · № Ozon WB-DEMO-A
+  - text: Склад WMS
+  - paragraph: Основной склад
+  - text: Метод доставки Ozon
+  - paragraph: Метод доставки Ozon не указан
+  - generic: Дата отгрузки
+  - textbox
+  - generic: Дата отгрузки
+  - button [disabled]: Сохранить
+  - progressbar
+  - generic: 0 из 0 подготовлено к отгрузке
+  - generic: Сдать в Ozon до 08.10.2026, 02:10:01
+  - generic: 24 ч
+  - button:
+  - button:
+    - text: История поставки
+  - tablist:
+    - tab: Состав ✓
+    - tab: Подбор ✓
+    - tab: Упаковка и маркировка
+    - tab [selected]: Короба
+  - heading [level=6]: Короба · Ozon
+  - paragraph: Распределено 0 из 0 шт · осталось 0
+  - button:
+    - text: Печать всех этикеток Ozon (1)
+  - button [disabled]: Создать автоматически
+  - generic: Коробов
+  - spinbutton: "1"
+  - generic: Коробов
+  - button: Добавить короба
+  - generic: ▾
+  - paragraph:
+    - text: Короб 1
+    - generic: · 0 шт
+  - button: Собрать и получить этикетку
+  - button: Добавить товары
+  - button:
+  - button: Передать в Ozon
+- dialog "Проверка перед печатью":
+  - heading "Проверка перед печатью" [level=2]
+  - generic: Готово 1
+  - generic: Копий каждого макета
+  - spinbutton "Копий каждого макета": "1"
+  - generic: Копий каждого макета
+  - generic: Размер этикетки
+  - combobox "Размер этикетки 58 × 40 мм": 58 × 40 мм
+  - textbox: 58x40
+  - generic: Размер этикетки
+  - alert:
+    - generic: Этикетки Ozon откроются одной PDF-лентой с исходным размером страниц. Печать — в окне браузера.
+  - heading "Печать этикетки отправления Ozon" [level=6]
+  - iframe
+  - button "Подтвердить нанесение"
+  - button "Закрыть"
+  - button "Печать":
+    - text: Печать

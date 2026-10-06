@@ -1,0 +1,116 @@
+- complementary:
+  - text: "Искусственная QA681 · bulk; WB/production не вызывается. Только preview: системную «Печать» не нажимать."
+  - button: Открыть поставку B
+  - button: Вернуть задержанный ответ A
+  - generic: "[ { \"method\": \"POST\", \"path\": \"/operations/fbs-supplies/sup-574/boxes/qa-box-1/retry-qr\" }, { \"method\": \"GET\", \"path\": \"/qr/qa-box-1.png\" }, { \"method\": \"GET\", \"path\": \"/qr/qa-box-2.png\" }, { \"method\": \"GET\", \"path\": \"/qr/qa-box-3.png\" }, { \"method\": \"GET\", \"path\": \"/qr/qa-box-4.png\" }, { \"method\": \"GET\", \"path\": \"/qr/qa-box-5.png\" } ]"
+- dialog:
+  - heading [level=6]: Синтетическая QA681 · bulk
+  - paragraph: ИП Тестовый · № WB WB-DEMO-A
+  - text: Склад WMS
+  - paragraph: Основной склад
+  - text: Маршрут
+  - paragraph: Склад / СЦ
+  - generic: Дата отгрузки
+  - textbox
+  - generic: Дата отгрузки
+  - button [disabled]: Сохранить
+  - progressbar
+  - generic: 0 из 0 подготовлено к отгрузке
+  - generic: Сдать в Wildberries до 08.10.2026, 02:08:30
+  - generic: 24 ч
+  - button:
+  - button:
+    - text: История поставки
+  - tablist:
+    - tab: Состав ✓
+    - tab: Подбор ✓
+    - tab: Упаковка и маркировка
+    - tab [selected]: Короба
+  - heading [level=6]: Короба · Склад / СЦ
+  - paragraph: Распределено 0 из 0 шт · осталось 0
+  - button:
+    - text: Печать всех QR (5)
+  - checkbox
+  - generic: Без распределения
+  - generic: Коробов
+  - spinbutton: "1"
+  - generic: Коробов
+  - button: Добавить короба
+  - generic: ▾
+  - paragraph:
+    - text: Короб 1
+    - generic: · 0 шт
+  - button: QR
+  - button: Добавить товары
+  - button:
+  - separator
+  - generic: ▸
+  - paragraph:
+    - text: Короб 2
+    - generic: · 0 шт
+  - button: QR
+  - button: Добавить товары
+  - button:
+  - separator
+  - generic: ▸
+  - paragraph:
+    - text: Короб 3
+    - generic: · 0 шт
+  - button: QR
+  - button: Добавить товары
+  - button:
+  - separator
+  - generic: ▸
+  - paragraph:
+    - text: Короб 4
+    - generic: · 0 шт
+  - button: QR
+  - button: Добавить товары
+  - button:
+  - separator
+  - generic: ▸
+  - paragraph:
+    - text: Короб 5
+    - generic: · 0 шт
+  - button: QR
+  - button: Добавить товары
+  - button:
+  - button: Передать в WB
+- dialog "Проверка перед печатью":
+  - heading "Проверка перед печатью" [level=2]
+  - generic: Готово 5
+  - generic: Копий каждого макета
+  - spinbutton "Копий каждого макета": "1"
+  - generic: Копий каждого макета
+  - generic: Размер этикетки
+  - combobox "Размер этикетки 58 × 40 мм": 58 × 40 мм
+  - textbox: 58x40
+  - generic: Размер этикетки
+  - heading "Печать QR грузоместа WB" [level=6]
+  - img "Печать QR грузоместа WB"
+  - button "Печать только этого":
+    - text: Печать только этого
+  - button "Подтвердить нанесение"
+  - heading "Печать QR грузоместа WB" [level=6]
+  - img "Печать QR грузоместа WB"
+  - button "Печать только этого":
+    - text: Печать только этого
+  - button "Подтвердить нанесение"
+  - heading "Печать QR грузоместа WB" [level=6]
+  - img "Печать QR грузоместа WB"
+  - button "Печать только этого":
+    - text: Печать только этого
+  - button "Подтвердить нанесение"
+  - heading "Печать QR грузоместа WB" [level=6]
+  - img "Печать QR грузоместа WB"
+  - button "Печать только этого":
+    - text: Печать только этого
+  - button "Подтвердить нанесение"
+  - heading "Печать QR грузоместа WB" [level=6]
+  - img "Печать QR грузоместа WB"
+  - button "Печать только этого":
+    - text: Печать только этого
+  - button "Подтвердить нанесение"
+  - button "Закрыть"
+  - button "Печать готовых (5)":
+    - text: Печать готовых (5)

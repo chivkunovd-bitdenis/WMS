@@ -1,0 +1,47 @@
+- complementary:
+  - text: "Искусственная QA681 · late; WB/production не вызывается. Только preview: системную «Печать» не нажимать."
+  - button: Открыть поставку B
+  - button: Вернуть задержанный ответ A
+  - generic: "[ { \"method\": \"POST\", \"path\": \"/operations/fbs-supplies/sup-574/boxes/qa-box-1/retry-qr\" }, { \"heldA\": true }, { \"releasedA\": true } ]"
+- dialog:
+  - heading "Синтетическая другая поставка B" [level=6]
+  - paragraph: ИП Тестовый · № WB WB-DEMO-B
+  - text: Склад WMS
+  - paragraph: Основной склад
+  - text: Маршрут
+  - paragraph: Склад / СЦ
+  - generic: Дата отгрузки
+  - textbox "Дата отгрузки"
+  - generic: Дата отгрузки
+  - button "Сохранить" [disabled]
+  - progressbar
+  - generic: 0 из 0 подготовлено к отгрузке
+  - generic: Сдать в Wildberries до 08.10.2026, 02:09:01
+  - 'generic "Отгрузить до 08.10.2026, 02:09:01. Рассчитано WMS: 120 часов с момента создания заказа в WB."':
+    - generic: 24 ч
+  - button "Закрыть":
+  - button "История поставки":
+    - text: История поставки
+  - tablist:
+    - tab "Состав ✓"
+    - tab "Подбор ✓"
+    - tab "Упаковка и маркировка"
+    - tab "Короба" [active] [selected]: Короба
+  - heading "Короба · Склад / СЦ" [level=6]
+  - paragraph: Распределено 0 из 0 шт · осталось 0
+  - button "Печать всех QR (1)":
+    - text: Печать всех QR (1)
+  - checkbox "Без распределения"
+  - generic: Без распределения
+  - generic: Коробов
+  - spinbutton "Коробов": "1"
+  - generic: Коробов
+  - button "Добавить короба"
+  - generic: ▾
+  - paragraph:
+    - text: Короб 1
+    - generic: · 0 шт
+  - button "QR"
+  - button "Добавить товары"
+  - button "Действия короба 1":
+  - button "Передать в WB"

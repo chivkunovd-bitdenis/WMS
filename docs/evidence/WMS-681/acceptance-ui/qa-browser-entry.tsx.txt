@@ -1,0 +1,124 @@
+import React from 'react';
+import {ThemeProvider} from '@mui/material/styles';
+import {muiTheme} from '../src/mui/theme';
+import '../src/index.css';
+import '../src/ui/ui.css';
+import {createRoot} from 'react-dom/client';
+import {FfFbsSupplyWorkspace} from '../src/screens/v2/FfFbsSupplyWorkspace';
+import type {FbsWorkspace} from '../src/screens/v2/fbsApi';
+const SUPPLY_ID = 'sup-574'
+const STICKER_KIZ = '*STICKERA1111'
+const STICKER_PLAIN = '*STICKERC3333'
+const STICKER_FOREIGN = '*FOREIGN9999'
+
+type Box = FbsWorkspace['boxes'][number]
+
+function order(id: string, wbOrderId: number, index: number, productId: string, requiresKiz: boolean) {
+  return {
+    id,
+    marketplace: 'wb',
+    external_order_id: null,
+    wb_order_id: wbOrderId,
+    status: 'assembling',
+    wb_status: 'confirm',
+    supplier_status: 'confirm',
+    seller: { id: 'seller-1', name: 'ИП Тестовый' },
+    wb_warehouse: { id: 507, name: 'Коледино' },
+    wms_warehouse: { id: 'wh-1', name: 'Основной склад' },
+    product: {
+      id: productId, name: `Товар ${index + 1}`, image_url: null, seller_article: 'ART',
+      wb_article: 1001, barcode: '4600000000017', sku: 'ART', chrt_id: 1, category: 'Одежда',
+      color: null, size: null,
+    },
+    positions: [],
+    inventory: { available_unpacked: 5, locations: [] },
+    buyer_type: 'individual',
+    cargo_type: 'mgt',
+    can_pvz: false,
+    metadata: {
+      required: requiresKiz ? ['sgtin'] : [],
+      optional: [],
+      states: requiresKiz ? [{ kind: 'sgtin', status: 'missing', reason: null, source: null, value_tail: null }] : [],
+      delivery_allowed: !requiresKiz,
+      last_checked_at: null,
+    },
+    sticker: { code: `${wbOrderId} 000${index}`, status: 'print_opened', asset_url: null, applied_at: null },
+    pick: { status: 'picked', location_code: 'А-01-01', picked_at: null },
+    pack: { status: 'pending', packed_at: null },
+    created_at_wb: new Date().toISOString(),
+    deadline_at: new Date(Date.now() + 86_400_000).toISOString(),
+    supply_id: SUPPLY_ID,
+    selection_blockers: [],
+    tape_order_index: index,
+  }
+}
+
+function box(id: string, number: number, orderIds: string[], qrReady: boolean): Box {
+  return {
+    id,
+    box_number: number,
+    barcode: `BOX-${number}`,
+    assigned_order_ids: orderIds,
+    trbx_id: null,
+    wb_trbx_id: `TRBX-${number}`,
+    qr_asset: qrReady
+      ? {
+        id: `qr-${id}`, kind: 'cargo_place_qr', status: 'ready', content_type: 'image/png', width_mm: 58,
+        height_mm: 40, preview_url: `/qr/${id}.png`, download_url: null, checksum: null, applied_at: null, error: null,
+      }
+      : null,
+    without_distribution: false,
+  } as Box
+}
+
+let boxes: Box[] = [box('box-a', 1, ['order-a'], false), box('box-b', 2, ['order-c'], false)]
+let delays: Record<string, number>
+// Поставка передана в WB и какой QR всей поставки вернул сервер (F4 итогового ревью).
+let transferred: { assetReady: boolean } | null = null
+// Три одинаковые вещи без ЧЗ (очередь одинаковых кодов) и какой заказ сервер выбирает на каждый скан ШК.
+let sameProductOrders: boolean = false
+let autoPrintOrders: string[]
+
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+function workspace(): FbsWorkspace {
+  return {
+    supply: {
+      id: SUPPLY_ID, marketplace: 'wb', wb_supply_id: 'WB-GI-574', source: 'wms', name: 'FBS 29.09.2026',
+      status: transferred ? 'in_delivery' : 'assembling', delivery_type: 'warehouse_sc', seller: { id: 'seller-1', name: 'ИП Тестовый' },
+      wb_warehouse: { id: 507, name: 'Коледино' }, wms_warehouse: { id: 'wh-1', name: 'Основной склад' },
+      planned_destination: null, planned_shipment_date: null,
+      nearest_deadline_at: new Date(Date.now() + 86_400_000).toISOString(), packaging_task_id: 'pt-574',
+      barcode_asset: transferred?.assetReady
+        ? {
+          id: 'supply-qr', kind: 'supply_qr', status: 'ready', content_type: 'image/png', width_mm: 58, height_mm: 40,
+          preview_url: '/qr/supply.png', download_url: null, checksum: null, applied_at: null, error: null,
+        }
+        : null,
+    },
+    stage: transferred ? 'tracking' : 'packing',
+    progress: { picked: 2, packed: 0, metadata_ready: 0, stickers_ready: 0, total: 2 },
+    blockers: [],
+    orders: sameProductOrders
+      ? [order('order-a', 5001, 0, 'prod-plain', false), order('order-c', 5003, 1, 'prod-plain', false), order('order-d', 5004, 2, 'prod-plain', false)]
+      : [order('order-a', 5001, 0, 'prod-kiz', true), order('order-c', 5003, 1, 'prod-plain', false)],
+    cargo_places: [],
+    boxes: boxes.map((one) => ({ ...one, assigned_order_ids: [...one.assigned_order_ids] })),
+    delivery_preflight: null,
+    last_wb_sync_at: null,
+    server_now: new Date().toISOString(),
+  } as unknown as FbsWorkspace
+}
+
+
+
+const mode=new URLSearchParams(location.search).get('mode')||'single';
+const clone=(x:any)=>JSON.parse(JSON.stringify(x));const seeds:Record<string,FbsWorkspace>={};const first=workspace();first.supply.name='Синтетическая QA681 · '+mode;first.supply.wb_supply_id='WB-DEMO-A';first.supply.packaging_task_id=null;first.orders=[];first.supply.marketplace=mode==='ozon'?'ozon':'wb';first.progress={picked:0,packed:0,metadata_ready:0,stickers_ready:0,total:0};
+first.boxes=Array.from({length:mode==='bulk'?5:mode==='partial'?2:1},(_,i)=>({...box('qa-box-'+(i+1),i+1,[],mode==='ozon'),wb_trbx_id:mode==='single'||mode==='bulk'?null:'TRBX-DEMO-'+i}));seeds[SUPPLY_ID]=first;
+const second=clone(first);second.supply.id='sup-qa-B';second.supply.wb_supply_id='WB-DEMO-B';second.supply.name='Синтетическая другая поставка B';second.boxes=[{...box('other-box',1,[],false),wb_trbx_id:'TRBX-B'}];seeds['sup-qa-B']=second;
+if(mode==='ozon')for(const b of first.boxes){if(b.qr_asset){b.qr_asset.kind='order_sticker' as any;b.qr_asset.content_type='application/pdf'}}
+const nativeFetch=window.fetch.bind(window);const calls:any[]=[];let n=0,release:()=>void=()=>{};const trace=()=>{document.getElementById('qa681-trace')!.textContent=JSON.stringify(calls,null,2)};
+(window as any).fixtureCalls=calls;(window as any).fixtureWorkspace=()=>clone(seeds[SUPPLY_ID]);
+window.fetch=async(input:any,init?:RequestInit)=>{const path=new URL(typeof input==='string'?input:input.url,location.href).pathname.replace(/^\/api/,'');const method=init?.method||'GET';calls.push({method,path});trace();const json=(x:any,status=200)=>new Response(JSON.stringify(x),{status,headers:{'content-type':'application/json'}});if(mode==='ozon'&&path.startsWith('/qr/'))return nativeFetch('/.agent-runs/ozon-fixture.pdf');if(path.startsWith('/qr/'))return new Response('<svg xmlns="http://www.w3.org/2000/svg" width="380" height="260"><rect width="380" height="260" fill="white" stroke="black"/><text x="15" y="65" font-size="22">SYNTHETIC QA681</text><text x="15" y="120" font-size="18">'+path+'</text><text x="15" y="175" font-size="18">NOT A REAL WB LABEL</text></svg>',{headers:{'content-type':'image/svg+xml'}});const id=path.split('/')[3],snapshot=seeds[id];if(path.endsWith('/workspace'))return json(clone(snapshot));if(path.endsWith('/retry-qr')){n++;if(mode==='late'){const captured=clone(snapshot);captured.boxes=captured.boxes.map((b:any)=>({...b,wb_trbx_id:'TRBX-A',qr_asset:box(b.id,b.box_number,[],true).qr_asset}));await new Promise<void>(resolve=>{release=resolve;calls.push({heldA:true});trace()});calls.push({releasedA:true});trace();return json(captured)}if(mode==='partial'){snapshot.boxes[0].qr_asset=box(snapshot.boxes[0].id,1,[],true).qr_asset;calls.push({durable:'qa-box-1',error504:true});trace();return json({detail:'WB не ответил — синтетический 504 после сохранения первой этикетки'},504)}if(mode==='zero'&&n===1)return json({detail:'WB не ответил — синтетический отказ, готовых QR нет'},504);snapshot.boxes=snapshot.boxes.map((b:any)=>({...b,wb_trbx_id:'TRBX-DEMO-'+b.box_number,qr_asset:box(b.id,b.box_number,[],true).qr_asset}));return json(clone(snapshot))}if(method!=='GET')return json({detail:'QA rejects unrelated mutations'},405);return json(null)};
+const ah=()=>({});function App(){const[id,setId]=React.useState(SUPPLY_ID);return <ThemeProvider theme={muiTheme}><aside style={{position:'fixed',top:0,left:0,zIndex:10000,background:'#ffeeba',fontSize:11,maxWidth:520}}>Искусственная QA681 · {mode}; WB/production не вызывается. Только preview: системную «Печать» не нажимать.<button data-testid="qa681-switch" onClick={()=>setId('sup-qa-B')}>Открыть поставку B</button><button data-testid="qa681-release" onClick={()=>release()}>Вернуть задержанный ответ A</button><pre id="qa681-trace" style={{maxHeight:110,overflow:'auto'}}/></aside><FfFbsSupplyWorkspace token="synthetic-fixture" authHeaders={ah} supplyId={id} initialWorkspace={seeds[id]} open onClose={()=>{}}/></ThemeProvider>}
+createRoot(document.getElementById('root')!).render(<App/>);
