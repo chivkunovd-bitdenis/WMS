@@ -1,0 +1,33 @@
+{
+  "base": "ecb1d5721ea823a0ffd861303302c4b8dc731e6d",
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms672-native-errors.test.mjs",
+  "report": "release-print/672-native-errors.tap",
+  "source_closure_sha256": {
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+    "frontend/src/utils/printBarcodeLabel.ts": "2438d01e8a7a7df6ba73e83cbbdfce3bc4123832c3524682e129dd2176032f74",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "b549cda5add9fa01a75ada7528382042c42604610273d67f00549e1a56930504",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+    "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+    "frontend/tests-e2e/wms672-dom.test.tsx": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+    "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd"
+  },
+  "cases": [
+    "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
+    "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
+    "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
+    "C5 blank message retains existing generic preparation error and zero external actions",
+    "C5 nonstring message retains existing generic preparation error and zero external actions",
+    "C5 no message retains existing generic preparation error and zero external actions",
+    "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks"
+  ],
+  "precode": {
+    "passed": 4,
+    "failed": 3,
+    "skipped": 0
+  },
+  "old_browser_suite_11_preserved": true,
+  "old_C5_assertions_and_timeout_unchanged": true,
+  "native_decode_group_number_frozen": false,
+  "actual_linux_resource_hypothesis_proven": false
+}
