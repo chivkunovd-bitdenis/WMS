@@ -374,9 +374,12 @@ async def test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_dupli
     )
     assert not [result for result in results if isinstance(result, BaseException)], diagnostics
     hierarchy = schedule.hierarchy()
-    assert hierarchy["handoff"] and hierarchy["cancel"], diagnostics
+    # hierarchy() records only transactions acquiring BOTH resources. Handoff
+    # must retain its known trace; cancellation may omit Seller entirely.
+    # Reject opposed edges wherever both resources are actually acquired.
+    assert hierarchy["handoff"], diagnostics
     assert len(set(hierarchy["handoff"] + hierarchy["cancel"])) == 1, (
-        f"F6: same product/seller hierarchy required inside outer transactions: {hierarchy}"
+        f"F6: opposed product/seller lock edges inside outer transactions: {hierarchy}"
     )
     product = case.products[0]
     assert shipped(final, product) == 1
