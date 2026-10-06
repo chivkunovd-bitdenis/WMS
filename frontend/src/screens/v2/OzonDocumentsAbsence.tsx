@@ -4,7 +4,7 @@ import { apiUrl } from '../../api'
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 
 type Documents = {
-  version: number; state: string; absence_selected?: boolean; errors?: string[]
+  version: number; state: string; absence_selected?: boolean; requirements_complete?: boolean; errors?: string[]
   products: { exemplars: {
     gtd_required: boolean; rnpt_required: boolean; is_gtd_absent?: boolean; is_rnpt_absent?: boolean
   }[] }[]
@@ -21,7 +21,7 @@ function selected(data: Documents): boolean {
 
 function knownWithoutRequiredDocuments(data: Documents): boolean {
   // Empty or incomplete responses cannot establish the absence of requirements.
-  return data.products.length > 0 && data.products.every(product => product.exemplars.length > 0
+  return data.requirements_complete === true && data.products.length > 0 && data.products.every(product => product.exemplars.length > 0
     && product.exemplars.every(exemplar => exemplar.gtd_required === false && exemplar.rnpt_required === false))
 }
 
