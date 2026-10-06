@@ -36,11 +36,17 @@ WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1
     tests/test_wms669_seller_catalog_once.py::test_c10_postgresql_json_sizes_and_stock \
     tests/test_wms469_stock_dialog_backend.py::test_c24_parallel_complete_saves_never_mix_rules \
     tests/test_wms469_stock_dialog_backend.py::test_c23_parallel_same_binding_create_keeps_one_row \
-    --junitxml="$evidence/663-669-670.xml"
+    tests/test_fbs_supply_from_orders.py::test_parallel_from_orders_one_order_one_supply \
+    --junitxml="$evidence/663-669-670-683.xml"
+WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
+  pytest -n 0 -q tests/test_wms663_release_retry_contract.py \
+    -o asyncio_default_fixture_loop_scope=session \
+    -o asyncio_default_test_loop_scope=session \
+    --junitxml="$evidence/663-release-retry.xml"
 python - "$evidence" <<'PY'
 import pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path(sys.argv[1])
-for name, expected in [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670.xml', 5)]:
+for name, expected in [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5)]:
     tree = ET.parse(root / name)
     cases = tree.findall('.//testcase')
     assert len(cases) == expected, (name, len(cases), expected)

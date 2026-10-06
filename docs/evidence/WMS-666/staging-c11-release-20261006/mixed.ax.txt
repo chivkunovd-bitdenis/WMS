@@ -1,0 +1,98 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=4bb20e78-a638-5723-8c84-09530ae4f489%2C9b3993c3-dffd-5f14-b7b0-2ccf0f495b57".
+0 AXWebArea WMS · Фулфилмент, URL: web-production-9e7c1.up.railway.app/app/ff/fbs?supply_ids=4bb20e78-a638-5723-8c84-09530ae4f489%2C9b3993c3-dffd-5f14-b7b0-2ccf0f495b57
+	1 container
+		2 heading Сборка · 2 поставки, Value: 6
+			3 text Сборка ·  2 поставки
+		4 text WMS617 · Видео селлер 1
+		5 progress indicator 29
+		6 text 2  из  7  подготовлено к отгрузке
+		7 button Печать листа подбора
+		8 button Закрыть
+		9 tab group
+			10 tab (selectable, settable, boolean) Состав, Value: 0
+			11 tab (selectable, settable, boolean) Подбор, Value: 0
+			12 tab (selected, settable, boolean) Упаковка и маркировка, Value: 1
+			13 tab (selectable, settable, boolean) Короба, Value: 0
+		17 text field (settable)
+		18 checkbox (settable, integer) Description: Печатать QR, Value: 1
+		19 text Печатать QR
+		20 checkbox (settable, integer) Description: Печатать ЧЗ, Value: 0
+		21 text Печатать ЧЗ
+		22 checkbox (settable, integer) Description: Перепечатывать ЧЗ, Value: 0
+		23 text Перепечатывать ЧЗ
+		24 container Отменить последний скан
+			25 button (disabled) Отменить последний скан
+		14 text Размер этикетки
+		15 combo box (collapsed) Размер этикетки 58 × 40 мм, Value: 58 × 40 мм, Secondary Actions: Expand
+			16 text 58 × 40 мм
+		26 checkbox (settable, integer) Description: Выбрать заказ 617000005, Value: 0
+		27 text WMS617 · Куртка с ЧЗ
+		28 text WMS617-02 · 2061700002006 · заказ 617000005 Размер
+		29 text M
+		30 text ЧЗ не внесён Доступно ЧЗ
+		31 container
+			32 text 0  · нужно  1
+		33 text Стикер
+		34 container
+			35 text WMS617  0005
+		36 text ЧЗ
+		37 text field (settable) КИЗ заказа 617000005
+		38 button (disabled) ТЗ
+		39 button QR
+		40 button Печать ЧЗ и ШК
+		41 button Перепечатать
+		42 checkbox (settable, integer) Description: Выбрать заказ 617000006, Value: 0
+		43 text WMS617 · WB/Ozon сумка
+		44 text WMS617-06 · 2061700006004 · заказ 617000006 Размер
+		45 text M
+		46 text Стикер
+		47 container
+			48 text WMS617  0006
+		49 text ЧЗ
+		50 text field (settable) КИЗ заказа 617000006
+		51 button (disabled) ТЗ
+		52 button QR
+		53 button Печать ЧЗ и ШК
+		54 button Перепечатать
+		55 button Печать всего (3)
+			56 text Печать всего (
+			57 text 3
+			58 text )
+		59 checkbox (settable, integer) Description: Выбрать заказ WMS617-000012, Value: 0
+		60 text WMS617 · Ozon кружка
+		61 text WMS617-04 · SKU 617104 · 2061700004000 · отправление Ozon WMS617-000012 Размер
+		62 text M
+		63 text Стикер
+		64 container
+			65 text WMS617  0012
+		66 text ЧЗ
+		67 text —
+		68 button (disabled) ТЗ
+		69 button Печать ЧЗ и ШК
+		70 button Перепечатать
+		71 checkbox (settable, integer) Description: Выбрать заказ WMS617-000010, Value: 0
+		72 text WMS617 · Ozon плед с двумя ШК
+		73 text WMS617-05 · SKU 617105 · 2061700005007 · отправление Ozon WMS617-000010 Размер
+		74 text M
+		75 text Стикер
+		76 container
+			77 text WMS617  0010
+		78 text ЧЗ
+		79 text —
+		80 button (disabled) ТЗ
+		81 button Печать ЧЗ и ШК
+		82 button Перепечатать
+		83 checkbox (settable, integer) Description: Выбрать заказ WMS617-000011, Value: 0
+		84 text WMS617 · WB/Ozon сумка
+		85 text WMS617-06 · SKU 617106 · 2061700006004 · отправление Ozon WMS617-000011 Размер
+		86 text M
+		87 text Стикер
+		88 container
+			89 text WMS617  0011
+		90 text ЧЗ
+		91 text —
+		92 button (disabled) ТЗ
+		93 button Печать ЧЗ и ШК
+		94 button Перепечатать
+
+The focused UI element is 12 tab (selected, settable, boolean) Упаковка и маркировка, Value: 1
