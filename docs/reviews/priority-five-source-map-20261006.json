@@ -345,6 +345,14 @@
       "review": "d814f65891b6f7f5d9ca81197689fa3085232611",
       "mode": "merge original test-only correction, actual independent Sol high review and cumulative ledger",
       "facts": "Only exact commit720307d280439e815057ee4fdd78b72134149a39/workflow/before+after blob tuple accepted; 8 author cases PASS, 3 independent new cases PASS and actual shared history PASS; original5 bodies/raw validator unchanged"
+    },
+    {
+      "task": "WMS-675 CI isolated Docker service topology",
+      "base": "323f21f635dbc24363640751a93d2c72876fb3f8",
+      "failed_run": 37473144569,
+      "cause": "Frozen fixture observes server172.18.0.2 behind published runner127.0.0.1; URLhost must be allowed Docker alias postgres",
+      "delta": "CI-only postgres alias bound to127.0.0.1 in runner hosts; exact DNS answer asserted; existing service port5432/private database/testcommand/guard unchanged",
+      "preservation": "Parsed YAML: all other steps, services, commands, environment and conditions identical; frozen675 test and runtime unchanged"
     }
   ],
   "local_product_fixes": [
