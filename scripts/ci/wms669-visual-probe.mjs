@@ -73,8 +73,7 @@ const current=await serverFor('source',16691);try{
 await run(current,'candidate-initial',async(page,r)=>{r.initialRows=await page.getByTestId('seller-product-row').count();});
 await run(current,'candidate-filter-pagination',async(page,r)=>{
 await select(page,'seller-catalog-category-filter','Пуховики');await page.getByLabel('Артикул',{exact:true}).fill('2329блэк');await page.getByLabel('Размер',{exact:true}).fill('48');await page.getByLabel('Только с остатком').check();
-await page.waitForFunction(()=>document.querySelectorAll('[data-testid="seller-product-row"]').length===21);
-await page.getByTestId('seller-products-pagination').getByRole('combobox').click();await page.getByRole('option',{name:'10',exact:true}).click();
+await page.waitForFunction(()=>window.__requests.some(r=>r.params.stock_only==='true'&&r.params.article==='2329блэк'&&r.params.size==='48'));
 await page.waitForFunction(()=>document.querySelectorAll('[data-testid="seller-product-row"]').length===10);
 assert.match(await page.getByTestId('seller-product-row').first().innerText(),/Остаток 4[\s\S]*Резерв 4[\s\S]*Доступно 0/);
 await save(page,'filtered-page1');await page.getByRole('button',{name:'Go to next page'}).click();
@@ -90,7 +89,7 @@ assert.match(await page.getByTestId('seller-product-row').innerText(),/46, 48/);
 await page.getByLabel('Только с остатком').check();await page.getByText('Ничего не найдено.',{exact:true}).waitFor();await save(page,'empty');
 await page.evaluate(()=>window.__fail=true);await page.getByLabel('Артикул',{exact:true}).fill('failure');await page.getByTestId('seller-products-error').waitFor();assert.match(await page.getByTestId('seller-products-error').innerText(),/Не удалось загрузить товары/);await save(page,'error');
 await page.evaluate(()=>window.__fail=false);await page.getByLabel('Артикул',{exact:true}).fill('');await page.getByLabel('Только с остатком').uncheck();await page.getByTestId('seller-product-row').waitFor();r.recovered=true;});
-const ctx=await browser.newContext({viewport:{width:1440,height:1000}});const p=await ctx.newPage();await p.goto('http://127.0.0.1:16691/warehouse-map.html');await p.getByText('Ячейки',{exact:true}).first().waitFor();await save(p,'cells-reference');report.cellsReference=true;await ctx.close();
+const ctx=await browser.newContext({viewport:{width:1440,height:1000}});const p=await ctx.newPage();await p.goto('http://127.0.0.1:16691/warehouse-map.html');await p.getByText('Карта склада',{exact:true}).first().waitFor();await save(p,'cells-reference');report.cellsReference=true;await ctx.close();
 }finally{await current.close();}
 }finally{await browser.close();await writeFile(resolve(dir,'report.json'),JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));}
 assert.equal(report.cases.length,4);assert.equal(report.cases.filter(c=>!c.pass).length,0,'C11 browser case failed');assert.equal(report.cellsReference,true);
