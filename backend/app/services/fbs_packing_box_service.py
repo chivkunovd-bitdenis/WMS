@@ -33,7 +33,10 @@ from app.models.fbs_supply import (
     FbsSupply,
 )
 from app.models.fbs_trbx import FbsTrbx
-from app.models.fbs_wb_operation import WB_OPERATION_STATE_FAILED
+from app.models.fbs_wb_operation import (
+    WB_OPERATION_STATE_FAILED,
+    WB_OPERATION_STATE_PENDING_CONFIRMATION,
+)
 from app.models.warehouse_box import WarehouseBox
 from app.services import fbs_shipment_pvz_service as pvz_svc
 from app.services.document_event_service import record_document_mutation, system_document_events
@@ -179,6 +182,8 @@ async def create_boxes(
     *,
     actor_user_id: uuid.UUID | None,
     without_distribution: bool = False,
+    recover_existing_group: bool = False,
+    recovery_wb_trbx_ids_before: list[str] | None = None,
 ) -> list[FbsPackingBox]:
     if not idempotency_key.strip():
         raise FbsPackingBoxError("missing_idempotency_key")
@@ -265,6 +270,8 @@ async def create_boxes(
             wb_operation_key,
             http_client,
             actor_user_id=actor_user_id,
+            recover_existing_group=recover_existing_group,
+            recovery_wb_trbx_ids_before=recovery_wb_trbx_ids_before,
         )
     except FbsPackingBoxError as exc:
         if exc.code == "box_create_rejected_by_wb" and created_box_ids:
@@ -699,11 +706,62 @@ async def retry_box_qr(
     supply_id: uuid.UUID,
     box_id: uuid.UUID,
     http_client: httpx.AsyncClient,
+    *,
+    actor_user_id: uuid.UUID | None,
 ) -> None:
     box = await _get_box(session, tenant_id, supply_id, box_id)
-    await _get_supply(session, tenant_id, supply_id)
+    supply = await _get_supply(session, tenant_id, supply_id, for_update=True)
     if box.trbx is None:
-        raise FbsPackingBoxError("box_cargo_place_unresolved")
+        # These are physical boxes from a completed operator action whose WB
+        # create was rejected or lost after the local transaction.  Do not
+        # invent a second group: create_boxes finds the original boxes by
+        # their durable operator key and asks the cargo-operation journal to
+        # reconcile an unknown result before it can issue another WB POST.
+        creation_key = box.creation_idempotency_key
+        if not creation_key:
+            raise FbsPackingBoxError("box_cargo_place_unresolved")
+        group = await _boxes_by_creation_key(
+            session,
+            tenant_id,
+            supply_id,
+            supply.seller_id,
+            creation_key,
+        )
+        if not group or any(member.trbx_id is not None for member in group):
+            # A partial link has no unambiguous physical-to-WB mapping.  It
+            # must be resolved from WB, never completed by a guessed create.
+            raise FbsPackingBoxError("box_cargo_place_unresolved")
+        original_operation = await get_cargo_operation_by_idempotency(
+            session, supply.seller_id, creation_key
+        )
+        summary = original_operation.request_summary_json if original_operation else None
+        before_raw = summary.get("wb_trbx_ids_before") if isinstance(summary, dict) else None
+        if (
+            original_operation is None
+            or original_operation.state not in {
+                WB_OPERATION_STATE_FAILED,
+                WB_OPERATION_STATE_PENDING_CONFIRMATION,
+            }
+            or not isinstance(before_raw, list)
+            or not all(isinstance(item, str) for item in before_raw)
+        ):
+            # We cannot prove what was present before the original creation.
+            # Keep the physical group intact and require a readable, explicit
+            # reconciliation instead of guessing that current WB IDs are ours.
+            raise FbsPackingBoxError("wb_pending_confirmation")
+        await create_boxes(
+            session,
+            tenant_id,
+            supply_id,
+            len(group),
+            creation_key,
+            http_client,
+            actor_user_id=actor_user_id,
+            without_distribution=group[0].created_without_distribution,
+            recover_existing_group=True,
+            recovery_wb_trbx_ids_before=before_raw,
+        )
+        return
     try:
         # This service only fetches/caches QR assets for existing WB cargo places.
         await pvz_svc.fetch_trbx_stickers(session, tenant_id, supply_id, http_client)
@@ -758,6 +816,8 @@ async def _link_or_create_cargo_places(
     http_client: httpx.AsyncClient,
     *,
     actor_user_id: uuid.UUID | None,
+    recover_existing_group: bool = False,
+    recovery_wb_trbx_ids_before: list[str] | None = None,
 ) -> None:
     await _link_existing_trbxes(session, supply.id, boxes)
     unresolved = [box for box in boxes if box.trbx_id is None]
@@ -788,6 +848,8 @@ async def _link_or_create_cargo_places(
             http_client,
             actor_user_id=actor_user_id,
             confirmation_source="fbs_physical_box",
+            allow_existing_physical_box_group=recover_existing_group,
+            expected_wb_trbx_ids_before=recovery_wb_trbx_ids_before,
         )
     except pvz_svc.FbsShipmentPvzError as exc:
         await _link_existing_trbxes(session, supply.id, boxes)
