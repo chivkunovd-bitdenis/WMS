@@ -1,0 +1,85 @@
+TAP version 13
+# Subtest: RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+not ok 1 - RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+  ---
+  duration_ms: 128.056958
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:215:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    restore every original inline style exactly
+    + actual - expected
+    
+    + [
+    +   {
+    +     actual: 'image-rendering: auto;',
+    +     expected: null,
+    +     index: 10,
+    +     tag: 'IMG'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      index: 10
+      tag: 'IMG'
+      expected: ~
+      actual: 'image-rendering: auto;'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.assertOriginal (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:184:12)
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:224:41)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+not ok 2 - RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+  ---
+  duration_ms: 68.1585
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:238:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    restore every original inline style exactly
+    + actual - expected
+    
+    + [
+    +   {
+    +     actual: 'image-rendering: auto;',
+    +     expected: null,
+    +     index: 10,
+    +     tag: 'IMG'
+    +   }
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0:
+      index: 10
+      tag: 'IMG'
+      expected: ~
+      actual: 'image-rendering: auto;'
+  operator: 'deepStrictEqual'
+  stack: |-
+    Object.assertOriginal (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:184:12)
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms672-raster-resource.test.mjs:256:7)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# {"held":{"connected":true,"finished":false,"cleanup":0,"started":16},"afterDrain":{"pending":0,"ready":15,"started":16,"saves":0,"transfers":0}}
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 602.405167
