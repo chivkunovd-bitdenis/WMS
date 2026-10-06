@@ -1,0 +1,89 @@
+{
+  "task": "WMS-681",
+  "fixture_corrections": [
+    {
+      "contract_commit": "75b7d074f00ea6ad1b63b1ba229c4d9b2333f8f9",
+      "source_commit": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d",
+      "correction_commit": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385",
+      "files": [
+        {
+          "transform": "wms-681-reviewed-1-test_fbs_packing_box.py",
+          "path": "backend/tests/test_fbs_packing_box.py",
+          "before_blob": "7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3",
+          "after_blob": "bf92738de529c1ca4882240a0b617df5db82dedd"
+        },
+        {
+          "transform": "wms-681-reviewed-1-FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+          "before_blob": "c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4",
+          "after_blob": "c809482c9eb151425e9031e33b06246cb1e6039a"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d",
+        "correction_commit": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385",
+        "evidence": "docs/reviews/WMS-681-frozen-corrections-review-20261007.md",
+        "evidence_commit": "4c3c53bb1a4057da7e003e024680c842c05abdc1",
+        "evidence_blob": "fc539ecf01b0d652920d4f9a26b913e519eacaf9"
+      }
+    },
+    {
+      "contract_commit": "75b7d074f00ea6ad1b63b1ba229c4d9b2333f8f9",
+      "source_commit": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4",
+      "correction_commit": "0e39bf4ed8f444f5b00e1287aa27f1161596a101",
+      "files": [
+        {
+          "transform": "wms-681-reviewed-2-test_fbs_packing_box.py",
+          "path": "backend/tests/test_fbs_packing_box.py",
+          "before_blob": "bf92738de529c1ca4882240a0b617df5db82dedd",
+          "after_blob": "1cca9c86a4e50842919d0ca4aec4c57607c0fe7a"
+        },
+        {
+          "transform": "wms-681-reviewed-2-FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+          "before_blob": "c809482c9eb151425e9031e33b06246cb1e6039a",
+          "after_blob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4",
+        "correction_commit": "0e39bf4ed8f444f5b00e1287aa27f1161596a101",
+        "evidence": "docs/reviews/WMS-681-frozen-corrections-review-20261007.md",
+        "evidence_commit": "4c3c53bb1a4057da7e003e024680c842c05abdc1",
+        "evidence_blob": "fc539ecf01b0d652920d4f9a26b913e519eacaf9"
+      }
+    },
+    {
+      "contract_commit": "75b7d074f00ea6ad1b63b1ba229c4d9b2333f8f9",
+      "source_commit": "1eb2c30726c501a41b661a1b144864c94491a2c5",
+      "correction_commit": "879588d0ad7fe5fe579f16dcc4726c31f03fdb1d",
+      "files": [
+        {
+          "transform": "wms681-integration-assembly-qr-recovery",
+          "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+          "before_blob": "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+          "after_blob": "12358c8953c842819db9a1b277ce51cbd83b9915"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "1eb2c30726c501a41b661a1b144864c94491a2c5",
+        "correction_commit": "879588d0ad7fe5fe579f16dcc4726c31f03fdb1d",
+        "evidence": "docs/reviews/WMS-681-independent-assembly-fixture-correction-review-20261007.md",
+        "evidence_commit": "b97d3665233dfb1bcb5a7a7044e1bb54abce91ba",
+        "evidence_blob": "9f099b2fdec20e9e55c43c79f03eb267778ce94a"
+      }
+    }
+  ]
+}

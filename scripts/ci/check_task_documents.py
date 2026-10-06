@@ -95,6 +95,11 @@ NIGHT_REVIEWED_COMPANIONS = {'wms-658-reviewed-1-test_wms658_marking_import_cont
  'wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py': [{'path': 'docs/requirements/WMS-658.md',
                                                                 'before_blob': '88a79ede1de989790d4cf814d208f3615420740f',
                                                                 'after_blob': 'a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58'}]}
+NIGHT_REVIEWED_FIXTURE_PAIRS["wms681-integration-assembly-qr-recovery"] = (
+    "WMS-681", "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+    "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+    "12358c8953c842819db9a1b277ce51cbd83b9915",
+)
 FIXTURE_BLOB_PAIRS.update(NIGHT_REVIEWED_FIXTURE_PAIRS)
 
 POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"
