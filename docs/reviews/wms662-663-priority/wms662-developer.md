@@ -184,3 +184,34 @@ PostgreSQL/mypy уже завершились успешно, SQLite ожида�
 Затем требуется повторное Astra high ревью опубликованного SHA, приёмка
 исходным аналитиком, CI и отдельная проверка фактически выпущенной версии.
 В этом цикле production, внешняя передача и печать не использовались.
+
+## Результат после публикации 956cd8a35
+
+Product fix сохранён и опубликован как
+`956cd8a35c9b629c00e3b9c07fa0f453bb175bbb`; `git ls-remote` подтвердил exact SHA
+ветки `codex/wms662-prod-handoff`. Независимое повторное ревью относится к этому
+коду. Следующее обновление данного документа не меняет product code или тесты.
+
+После interruption прежний expanded SQLite session 97947 оказался уже не живым:
+PID отсутствует, session сообщает Unknown process, журнал обрывается на 87 точках
+без финального verdict/traceback. Указанный выше pending отражал момент первого
+сохранения, но сейчас заменён статусом **оборван, полного результата нет**.
+Его нельзя считать ни общим PASS, ни доказанным business FAIL.
+
+На опубликованном product SHA заново выполнен компактный контрактный прогон:
+
+`pytest -q -n 2 -p no:cacheprovider tests/test_wms662_observed_handoff.py tests/test_wms662_astra_regressions.py tests/test_wms662_approve_scope_race.py --tb=short`
+
+Результат: **97 passed**, 18 warnings, 37.56 s, exit 0. Это 92 исходных SQLite,
+3 новых Astra-regression cases и 2 normal approve scope cases. Вместе с последним
+отдельным PostgreSQL прогоном 10/10 подтверждены **107 контрактных проверок**.
+Свежие mypy 552/ruff и две WB billing compatibility проверки указаны выше.
+Полный expanded adjacent набор после normal fix не получил итогового результата;
+ранние 188/188 относятся к F1/F2 до изменения normal callback. Эту границу нельзя
+подменять заявлением о свежем общем PASS.
+
+`git diff 5fe999dd392a50228f977db4cabc67c0d16b2813 -- backend/tests guards` пуст;
+исходные два файла также byte-identical original contract 77dc127344ff164417cc13c8d2b218af3ac09266.
+Две чужие CLI-result files сохранены untracked и не включены в commit.
+Независимое Astra high заключение, исходная аналитическая приёмка, CI и выпуск
+этим отчётом не объявляются выполненными.
