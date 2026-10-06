@@ -1,7 +1,7 @@
 test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links (scripts.ci.test_check_task_documents.GitTests.test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links) ... FAIL
 test_wms687_correction_rejects_product_or_other_task_test_companion (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_product_or_other_task_test_companion) ... ok
 test_wms687_correction_rejects_foreign_or_semantic_requirement_change (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_foreign_or_semantic_requirement_change) ... ok
-test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) ... 
+test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) ...
   test_wms687_correction_rejects_undeclared_or_deleted_frozen_test (scripts.ci.test_check_task_documents.GitTests.test_wms687_correction_rejects_undeclared_or_deleted_frozen_test) (mode='deleted') ... FAIL
 
 ======================================================================
