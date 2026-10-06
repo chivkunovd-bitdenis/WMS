@@ -935,6 +935,79 @@ class GitTests(unittest.TestCase):
                     commit("WMS-687 correction ledger")
                     self.assertTrue(checker.contract_change_errors(root, rollout))
 
+    def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
+        rollout = self.rollout()
+        report = "docs/reviews/WMS-654-correction-review.md"
+        frozen = "frontend/src/sections/CatalogSection.wms654.test.tsx"
+        self.write(report, "# Legacy WMS-654 independent PASS report\n")
+        self.commit("WMS-654 independent review report")
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        contract = self.commit("WMS-654: контракт тестов")
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        correction = self.commit("WMS-654 exact reviewed correction")
+        self.write(
+            "docs/reviews/contract-corrections/WMS-654.json",
+            json.dumps(
+                {
+                    "task": "WMS-654",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": [frozen],
+                    "review": {
+                        "model": "gpt-6-astra",
+                        "effort": "high",
+                        "verdict": "PASS",
+                        "report": report,
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-654 correction ledger")
+
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms687_ancillary_correction_with_report_still_requires_report_commit(self):
+        rollout = self.rollout()
+        report = "docs/reviews/WMS-687-correction-review.md"
+        frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        regression = "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+        self.write(report, "# WMS-687 independent PASS report\n")
+        self.commit("WMS-687 independent review report")
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        self.write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+        contract = self.commit("WMS-687: контракт тестов")
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        self.write(regression, "export const regression = 'WMS-687'\n")
+        self.write(
+            "docs/requirements/WMS-687.md",
+            self.wms687_document(f"{frozen}::old<br>{regression}::WMS-687 regression"),
+        )
+        correction = self.commit("WMS-687 reviewed correction with ancillary test")
+        self.write(
+            "docs/reviews/contract-corrections/WMS-687.json",
+            json.dumps(
+                {
+                    "task": "WMS-687",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": [frozen],
+                    "ancillary_files": [
+                        "docs/requirements/WMS-687.md",
+                        regression,
+                    ],
+                    "review": {
+                        "model": "gpt-6.1-sol",
+                        "effort": "high",
+                        "verdict": "PASS",
+                        "report": report,
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-687 correction ledger")
+
+        self.assertTrue(checker.contract_change_errors(self.root, rollout))
+
 
 if __name__ == "__main__":
     unittest.main()
