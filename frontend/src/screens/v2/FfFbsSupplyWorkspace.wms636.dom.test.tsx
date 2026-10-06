@@ -226,7 +226,7 @@ describe('WMS-636 · фильтр «Не принятые WB КИЗ»', () => {
 
   it('R2: клик по треугольнику не забирает фокус у поля скана', async () => {
     await open()
-    const input = q('fbs-unified-scan')!.querySelector('input[data-packing-scan="true"]')!
+    const input = q('fbs-unified-scan')!.querySelector<HTMLInputElement>('input[data-packing-scan="true"]')!
     act(() => input.focus())
     const down = new MouseEvent('mousedown', { bubbles: true, cancelable: true })
     act(() => { toggle()!.dispatchEvent(down) })
