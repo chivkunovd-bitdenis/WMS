@@ -1,0 +1,38 @@
+{
+  "genuine_ci_red": {
+    "run": 37547687095,
+    "head": "f61468b0ce7a799d80c00bf1beba80eaadaa1c2b",
+    "merge_sha": "94b4d9e28937a9dd6e067720ce964bdb8ac9813a",
+    "actual_outcomes": 4777,
+    "both_shards_exit_code": 0,
+    "failure": "exact nine required PG658 cases skipped in SQLite shards"
+  },
+  "new_producer": {
+    "job": "backend-checks",
+    "isolated_database": "wms_test_658_identity",
+    "report": "release-postgres/658.xml",
+    "cases": [
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-auto-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-auto-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-auto]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-auto-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-assign]",
+      "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-auto]"
+    ],
+    "mandatory": "Each of all 9 cases must be present and passed, zero skip; failclosed policy/exact attempt artifact machinery unchanged"
+  },
+  "algorithm_changes": [],
+  "production_data_changes": [],
+  "local_real_pg": {
+    "cases": 9,
+    "passed": 9,
+    "skipped": 0,
+    "junit": "docs/evidence/WMS-652/final-closure-20261007/658-ci-producer-local.xml",
+    "sha256": "c82c30cf57d2ca7b2c689daa06e9d1cc2b606f688bcfb7b4b322e59d8a63c649",
+    "database": "wms_test_658_ci_producer_20261007",
+    "remote_new_producer_status": "PENDING_NEW_FULL_CI"
+  }
+}

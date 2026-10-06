@@ -142,6 +142,12 @@ jobs:
         run: |
           python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_654_combined'); c.close()"
           pytest -n 0 -q tests/test_wms654_migration.py::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner --junitxml="$RUNNER_TEMP/release-postgres/654.xml"
+      - name: WMS-658 nine identity worker races on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_658_identity
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_658_identity'); c.close()"
+          pytest -n 0 -q tests/test_wms658_normalized_identity_regression.py::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants --junitxml="$RUNNER_TEMP/release-postgres/658.xml"
       - name: WMS-681 two-worker QR checkpoint recovery on isolated PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_681_recovery

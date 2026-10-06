@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "7c0a567923b55e3a9c73cc410607e6bb995aac1a236c28a415cc9978fa8727db",
+    ".github/workflows/ci.yml": "973bb06b6c89e5c549760e4538fe8e11b5278e5fdf1c4c51da02d3f9c093698f",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -240,7 +240,7 @@
     "frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx": "efd4433cf6c010db36d4fbda5b81e5b97a4c01dc00c5f19859acb232e16d48fb",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx": "9080aa4f3009c3bfc80619dc0479920f97dd9e2a988e02c07b1bc262a29a15f2",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx": "90a5f72a618d4d41f1f77674c2946f9edeffd2d9dc1c255cca7b4a0880f530d2",
-    "frontend/src/utils/wms680PrintGeometry.test.ts": "5bab36fcf8e04e3aad08cfedb8264f0948b0e08c61f324ebf76490bb8f729eb1",
+    "frontend/src/utils/wms680PrintGeometry.test.ts": "797428aefa56438ab4534a58675bd87118054420db92d62615978fc6b6312ff3",
     "frontend/src/utils/wms680PrintContract.test.ts": "1246504f6f28a8c86b34f6b5b4e14d18b68898b2faf6be56b40c4764d3304525",
     "frontend/src/screens/ff/FfSuppliesShipmentsPage.wms679.dom.test.tsx": "46fce11a1b548e3856b102e6e8c7ea9f7eff70dc8b9efca6051efb2c4d343c81",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts": "08ee3b5f0e4d15cdbf170e6e4c1c73b5c893f8921b50833f36b1408b5554a807",
@@ -925,15 +925,6 @@
         "tests.test_wms658_normalized_identity_regression::test_lookup_fallback_selects_true_identity_among_similar_payloads[nbsp]",
         "tests.test_wms658_normalized_identity_regression::test_lookup_fallback_selects_true_identity_among_similar_payloads[rs]",
         "tests.test_wms658_normalized_identity_regression::test_lookup_fallback_selects_true_identity_among_similar_payloads[tab]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-auto-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-auto-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-auto]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-auto-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-assign]",
-        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-auto]",
         "tests.test_wms658_normalized_identity_regression::test_three_import_paths_reject_normalized_repeat_without_new_pool_or_flag[gs-tab-assign]",
         "tests.test_wms658_normalized_identity_regression::test_three_import_paths_reject_normalized_repeat_without_new_pool_or_flag[gs-tab-auto]",
         "tests.test_wms658_normalized_identity_regression::test_three_import_paths_reject_normalized_repeat_without_new_pool_or_flag[gs-tab-manual]",
@@ -1477,6 +1468,7 @@
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: inbound_intake сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: marketplace_unload сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: operational_outbound сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
+        "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: канарейка не принимает обрезанное название, даже если остальные слова PDF сохранены",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия FBO WB/Ozon/самостоятельная упаковка: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия FBS одиночный/групповой: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
         "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия общая inbound_intake: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
@@ -2068,6 +2060,22 @@
       "exact": true,
       "cases": [
         "tests.test_wms681_postgres_recovery::test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoint"
+      ]
+    },
+    "pg-658-identity": {
+      "format": "junit",
+      "report": "release-postgres/658.xml",
+      "exact": true,
+      "cases": [
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-auto]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-auto]"
       ]
     }
   }
