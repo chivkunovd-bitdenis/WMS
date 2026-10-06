@@ -165,6 +165,9 @@ jobs:
         # These two contracts require their own idle PostgreSQL clusters.
         # Both run below unchanged, serially, without skip/xfail.
         run: pytest -n auto --ignore=tests/test_wms662_batch_handoff_lock_order.py --ignore=tests/test_wms662_batch_handoff_steady_state.py --junitxml="$RUNNER_TEMP/backend-all.xml"
+      - name: Printer receipt persistence and unknown-outcome recovery
+        working-directory: .
+        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py --junitxml="$RUNNER_TEMP/native-print.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -172,6 +175,7 @@ jobs:
           path: |
             ${{ runner.temp }}/release-postgres
             ${{ runner.temp }}/backend-all.xml
+            ${{ runner.temp }}/native-print.xml
           retention-days: 14
 
   print-regressions:
@@ -247,9 +251,15 @@ jobs:
           test -n "$WMS_PRINT_CHROMIUM"
           test -x "$WMS_PRINT_CHROMIUM"
           command -v pdfimages
-          npx vitest run
+          npx vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
       - name: Build
         run: npm run build
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: frontend-executed-contracts-${{ github.sha }}
+          path: ${{ runner.temp }}/frontend-all.json
+          retention-days: 14
 
   guards:
     timeout-minutes: 10
@@ -280,6 +290,18 @@ jobs:
             echo "Bootstrap only: trusted BASE has no checker; no business guard protection claimed."
             python scripts/ci/check_regression_guards.py --base "$BASE_SHA" --allow-bootstrap
           fi
+      - name: Preserve accepted process tests, fixtures and execution commands
+        env:
+          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+        run: |
+          set -euo pipefail
+          if git cat-file -e "$BASE_SHA:guards/PROCESS_CONTRACTS.json" 2>/dev/null; then
+            git show "$BASE_SHA:scripts/ci/process_contracts.py" > "$RUNNER_TEMP/process_contracts.py"
+            python "$RUNNER_TEMP/process_contracts.py" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
+          else
+            echo 'BOOTSTRAP: process protection is being introduced; independent acceptance is still required.'
+            python scripts/ci/process_contracts.py --base "$BASE_SHA" --bootstrap
+          fi
       - name: Install backend guard dependencies
         if: steps.integrity.outputs.backend_tests != '0'
         run: pip install -e './backend[dev]'
@@ -299,3 +321,65 @@ jobs:
         run: |
           npm ci
           npx vitest run src/guards
+
+  printer-windows:
+    timeout-minutes: 10
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: python -m pip install pytest
+      - name: Persist receipt and recover unknown outcome on Windows
+        run: python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py --junitxml=native-print-windows.xml
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: printer-windows-contracts-${{ github.sha }}
+          path: native-print-windows.xml
+          retention-days: 14
+
+  process-proof:
+    # Required by the deployment verifier. Branch enforcement needs a separately
+    # installed trusted anchor; this candidate workflow cannot protect itself.
+    needs: [baseline, backend, frontend-build, guards, print-regressions, printer-windows]
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/download-artifact@v4
+        with:
+          name: backend-executed-contracts-${{ github.sha }}
+          path: ${{ runner.temp }}/process-proof
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-executed-contracts-${{ github.sha }}
+          path: ${{ runner.temp }}/process-proof
+      - uses: actions/download-artifact@v4
+        with:
+          name: printer-windows-contracts-${{ github.sha }}
+          path: ${{ runner.temp }}/process-proof
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-print-${{ github.sha }}
+          path: ${{ runner.temp }}/process-proof/print
+      - name: Verify every required named case and bind evidence to this attempt
+        env:
+          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
+          CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+        run: python scripts/ci/build_process_proof.py --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: process-proof-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/process-proof-final
+          if-no-files-found: error
+          retention-days: 30

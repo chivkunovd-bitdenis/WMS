@@ -43,10 +43,22 @@ WMS_TEST_DATABASE_URL=postgresql+psycopg_async://postgres:fixture-only@127.0.0.1
     -o asyncio_default_fixture_loop_scope=session \
     -o asyncio_default_test_loop_scope=session \
     --junitxml="$evidence/663-release-retry.xml"
+WMS_CI_PG_PORT=5432 WMS_CI_NETWORK_REPORT="$evidence/fbs-network.json" \
+WMS_TEST_DATABASE_URL=postgresql+asyncpg://postgres:fixture-only@127.0.0.1:5432/wms_test_517 \
+  python ../scripts/ci/run_isolated_pytest.py -n 0 -q \
+    tests/test_fbs_supply_assembly.py::test_fbs_supply_add_order_concurrent_race \
+    tests/test_fbs_picking.py::test_fbs_pick_concurrent_same_order_allocation_one_success \
+    tests/test_fbs_picking.py::test_fbs_pick_sorting_last_unit_is_atomic \
+    tests/test_wms514_scan_auto_print.py::test_concurrent_replay_returns_one_scan_selection \
+    tests/test_wms514_scan_auto_print.py::test_concurrent_distinct_scans_select_distinct_units \
+    tests/test_wms514_scan_auto_print.py::test_concurrent_atomic_reprint_recovery_claims_only_once \
+    -o asyncio_default_fixture_loop_scope=session \
+    -o asyncio_default_test_loop_scope=session \
+    --junitxml="$evidence/fbs-concurrency.xml"
 python - "$evidence" <<'PY'
 import pathlib, sys, xml.etree.ElementTree as ET
 root = pathlib.Path(sys.argv[1])
-for name, expected in [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5)]:
+for name, expected in [('662.xml', 10), ('662-f6.xml', 4), ('663-669-670-683.xml', 6), ('663-release-retry.xml', 5), ('fbs-concurrency.xml', 6)]:
     tree = ET.parse(root / name)
     cases = tree.findall('.//testcase')
     assert len(cases) == expected, (name, len(cases), expected)
