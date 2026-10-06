@@ -1,0 +1,646 @@
+TAP version 13
+# Subtest: the exported allowlist contains exactly the four verified full CIS values
+ok 1 - the exported allowlist contains exactly the four verified full CIS values
+  ---
+  duration_ms: 1.1175
+  type: 'test'
+  ...
+# Subtest: the standalone script exposes the browser global without making requests on load
+ok 2 - the standalone script exposes the browser global without making requests on load
+  ---
+  duration_ms: 1.194333
+  type: 'test'
+  ...
+# Subtest: default run is read-only and inspects only the first target, never all four
+ok 3 - default run is read-only and inspects only the first target, never all four
+  ---
+  duration_ms: 14.707209
+  type: 'test'
+  ...
+# Subtest: explicit dry-run for multiple allowed orders never selects or opens anything
+ok 4 - explicit dry-run for multiple allowed orders never selects or opens anything
+  ---
+  duration_ms: 0.911334
+  type: 'test'
+  ...
+# Subtest: identity mismatch in tenant_id fails before reading the registry
+ok 5 - identity mismatch in tenant_id fails before reading the registry
+  ---
+  duration_ms: 0.842291
+  type: 'test'
+  ...
+# Subtest: identity mismatch in seller_id fails before reading the registry
+ok 6 - identity mismatch in seller_id fails before reading the registry
+  ---
+  duration_ms: 0.212208
+  type: 'test'
+  ...
+# Subtest: identity mismatch in active_seller_id fails before reading the registry
+ok 7 - identity mismatch in active_seller_id fails before reading the registry
+  ---
+  duration_ms: 0.152917
+  type: 'test'
+  ...
+# Subtest: identity mismatch in role fails before reading the registry
+ok 8 - identity mismatch in role fails before reading the registry
+  ---
+  duration_ms: 0.149333
+  type: 'test'
+  ...
+# Subtest: identity mismatch in withdrawal_enabled fails before reading the registry
+ok 9 - identity mismatch in withdrawal_enabled fails before reading the registry
+  ---
+  duration_ms: 0.179333
+  type: 'test'
+  ...
+# Subtest: changed cryptographic suffix prevents UI mutation
+ok 10 - changed cryptographic suffix prevents UI mutation
+  ---
+  duration_ms: 0.369042
+  type: 'test'
+  ...
+# Subtest: removed group separator prevents UI mutation
+ok 11 - removed group separator prevents UI mutation
+  ---
+  duration_ms: 0.2015
+  type: 'test'
+  ...
+# Subtest: different row id prevents UI mutation
+ok 12 - different row id prevents UI mutation
+  ---
+  duration_ms: 0.176417
+  type: 'test'
+  ...
+# Subtest: different WB order prevents UI mutation
+ok 13 - different WB order prevents UI mutation
+  ---
+  duration_ms: 0.137625
+  type: 'test'
+  ...
+# Subtest: in-flight status prevents UI mutation
+ok 14 - in-flight status prevents UI mutation
+  ---
+  duration_ms: 0.166958
+  type: 'test'
+  ...
+# Subtest: already withdrawn prevents UI mutation
+ok 15 - already withdrawn prevents UI mutation
+  ---
+  duration_ms: 0.119958
+  type: 'test'
+  ...
+# Subtest: linked operation even with not_withdrawn status prevents UI mutation
+ok 16 - linked operation even with not_withdrawn status prevents UI mutation
+  ---
+  duration_ms: 0.125125
+  type: 'test'
+  ...
+# Subtest: a missing target fails
+ok 17 - a missing target fails
+  ---
+  duration_ms: 0.143917
+  type: 'test'
+  ...
+# Subtest: duplicate matching registry rows fail
+ok 18 - duplicate matching registry rows fail
+  ---
+  duration_ms: 0.15175
+  type: 'test'
+  ...
+# Subtest: an unapproved order fails before any network request
+ok 19 - an unapproved order fails before any network request
+  ---
+  duration_ms: 0.231875
+  type: 'test'
+  ...
+# Subtest: a preexisting selection is never silently cleared or extended
+ok 20 - a preexisting selection is never silently cleared or extended
+  ---
+  duration_ms: 0.317875
+  type: 'test'
+  ...
+# Subtest: a target absent from the visible selectable UI fails dry-run verification
+ok 21 - a target absent from the visible selectable UI fails dry-run verification
+  ---
+  duration_ms: 0.227208
+  type: 'test'
+  ...
+# Subtest: execute selects exactly the requested verified targets and opens only the certificate dialog
+ok 22 - execute selects exactly the requested verified targets and opens only the certificate dialog
+  ---
+  duration_ms: 0.244333
+  type: 'test'
+  ...
+# Subtest: execute stops when the seller session changes before UI mutation
+ok 23 - execute stops when the seller session changes before UI mutation
+  ---
+  duration_ms: 0.178875
+  type: 'test'
+  ...
+# Subtest: execute never selects after a failed UI preflight
+ok 24 - execute never selects after a failed UI preflight
+  ---
+  duration_ms: 0.132291
+  type: 'test'
+  ...
+# Subtest: execute surfaces a dialog-opening failure without retrying or signing
+ok 25 - execute surfaces a dialog-opening failure without retrying or signing
+  ---
+  duration_ms: 0.162875
+  type: 'test'
+  ...
+# Subtest: real DOM execute stops if the seller session changes after checkbox selection
+ok 26 - real DOM execute stops if the seller session changes after checkbox selection
+  ---
+  duration_ms: 0.838958
+  type: 'test'
+  ...
+# Subtest: real DOM execute rejects a same-count replacement with an unapproved checkbox
+ok 27 - real DOM execute rejects a same-count replacement with an unapproved checkbox
+  ---
+  duration_ms: 0.481167
+  type: 'test'
+  ...
+# Subtest: HTTP failure on /api/auth/me reports status without raw response content
+ok 28 - HTTP failure on /api/auth/me reports status without raw response content
+  ---
+  duration_ms: 0.219042
+  type: 'test'
+  ...
+# Subtest: HTTP failure on /api/operations/marking-codes/self/withdrawals reports status without raw response content
+ok 29 - HTTP failure on /api/operations/marking-codes/self/withdrawals reports status without raw response content
+  ---
+  duration_ms: 0.091541
+  type: 'test'
+  ...
+# Subtest: wrong host or route fails before network: {"origin":"https://sellerfocus.pro"}
+ok 30 - wrong host or route fails before network: {"origin":"https://sellerfocus.pro"}
+  ---
+  duration_ms: 0.081541
+  type: 'test'
+  ...
+# Subtest: wrong host or route fails before network: {"origin":"https://wrong.example"}
+ok 31 - wrong host or route fails before network: {"origin":"https://wrong.example"}
+  ---
+  duration_ms: 0.059167
+  type: 'test'
+  ...
+# Subtest: wrong host or route fails before network: {"origin":"https://wms.sellerfocus.pro.evil.test"}
+ok 32 - wrong host or route fails before network: {"origin":"https://wms.sellerfocus.pro.evil.test"}
+  ---
+  duration_ms: 0.05125
+  type: 'test'
+  ...
+# Subtest: wrong host or route fails before network: {"origin":"http://wms.sellerfocus.pro"}
+ok 33 - wrong host or route fails before network: {"origin":"http://wms.sellerfocus.pro"}
+  ---
+  duration_ms: 0.0485
+  type: 'test'
+  ...
+# Subtest: wrong host or route fails before network: {"pathname":"/seller/orders"}
+ok 34 - wrong host or route fails before network: {"pathname":"/seller/orders"}
+  ---
+  duration_ms: 0.047417
+  type: 'test'
+  ...
+# Subtest: pagination finds an allowed target beyond the first 250 rows
+ok 35 - pagination finds an allowed target beyond the first 250 rows
+  ---
+  duration_ms: 1.2485
+  type: 'test'
+  ...
+# Subtest: a duplicate on the second page is detected before opening the dialog
+ok 36 - a duplicate on the second page is detected before opening the dialog
+  ---
+  duration_ms: 0.2955
+  type: 'test'
+  ...
+# Subtest: invalid mode "sign" fails before network
+ok 37 - invalid mode "sign" fails before network
+  ---
+  duration_ms: 0.082
+  type: 'test'
+  ...
+# Subtest: invalid mode "EXECUTE" fails before network
+ok 38 - invalid mode "EXECUTE" fails before network
+  ---
+  duration_ms: 0.049458
+  type: 'test'
+  ...
+# Subtest: invalid mode "" fails before network
+ok 39 - invalid mode "" fails before network
+  ---
+  duration_ms: 0.05275
+  type: 'test'
+  ...
+# Subtest: invalid mode null fails before network
+ok 40 - invalid mode null fails before network
+  ---
+  duration_ms: 0.044833
+  type: 'test'
+  ...
+# Subtest: launches the helper once in execute mode and returns only unsigned unsent 80-dialog success
+ok 41 - launches the helper once in execute mode and returns only unsigned unsent 80-dialog success
+  ---
+  duration_ms: 3.225625
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+ok 42 - accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+  ---
+  duration_ms: 1.31875
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant / and ignores unrelated tabs
+ok 43 - accepts the correct production registry URL variant / and ignores unrelated tabs
+  ---
+  duration_ms: 1.24075
+  type: 'test'
+  ...
+# Subtest: allows query and hash on the exact registry URL and ignores unrelated tabs
+ok 44 - allows query and hash on the exact registry URL and ignores unrelated tabs
+  ---
+  duration_ms: 1.059125
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+ok 45 - accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+  ---
+  duration_ms: 1.894125
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+ok 46 - accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+  ---
+  duration_ms: 0.96
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+ok 47 - accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+  ---
+  duration_ms: 0.970625
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 48 - rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 1.885333
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 49 - rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.408166
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+ok 50 - rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.429958
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 51 - rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.325292
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+ok 52 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+  ---
+  duration_ms: 0.300083
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+ok 53 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+  ---
+  duration_ms: 0.279958
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab not a URL before injection
+ok 54 - rejects non-target tab not a URL before injection
+  ---
+  duration_ms: 0.306625
+  type: 'test'
+  ...
+# Subtest: rejects 0 matching tabs before injection
+ok 55 - rejects 0 matching tabs before injection
+  ---
+  duration_ms: 0.448792
+  type: 'test'
+  ...
+# Subtest: rejects 2 matching tabs before injection
+ok 56 - rejects 2 matching tabs before injection
+  ---
+  duration_ms: 0.36675
+  type: 'test'
+  ...
+# Subtest: does not launch Chrome if it is not already running
+ok 57 - does not launch Chrome if it is not already running
+  ---
+  duration_ms: 0.721958
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failRunning
+ok 58 - fails fast and redacts Apple Events or Automation error at failRunning
+  ---
+  duration_ms: 0.31925
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failTabs
+ok 59 - fails fast and redacts Apple Events or Automation error at failTabs
+  ---
+  duration_ms: 0.285292
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failEvaluate
+ok 60 - fails fast and redacts Apple Events or Automation error at failEvaluate
+  ---
+  duration_ms: 0.311875
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failProbe
+ok 61 - fails fast and redacts Apple Events or Automation error at failProbe
+  ---
+  duration_ms: 0.820459
+  type: 'test'
+  ...
+# Subtest: repeated launch after successful preparation does not inject or execute twice
+ok 62 - repeated launch after successful preparation does not inject or execute twice
+  ---
+  duration_ms: 1.243167
+  type: 'test'
+  ...
+# Subtest: an already running launch is never injected again and polling is bounded
+ok 63 - an already running launch is never injected again and polling is bounded
+  ---
+  duration_ms: 1.235458
+  type: 'test'
+  ...
+# Subtest: helper rejection is redacted, never retried and never reported as success
+ok 64 - helper rejection is redacted, never retried and never reported as success
+  ---
+  duration_ms: 1.254583
+  type: 'test'
+  ...
+# Subtest: a hung helper times out with bounded polling and no automatic retry
+ok 65 - a hung helper times out with bounded polling and no automatic retry
+  ---
+  duration_ms: 1.688
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"status":"ready"}
+ok 66 - does not accept unsafe or incomplete helper result {"status":"ready"}
+  ---
+  duration_ms: 0.720084
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":79}
+ok 67 - does not accept unsafe or incomplete helper result {"targetCount":79}
+  ---
+  duration_ms: 0.596583
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"targetCount":81}
+ok 68 - does not accept unsafe or incomplete helper result {"targetCount":81}
+  ---
+  duration_ms: 1.462167
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"signed":true}
+ok 69 - does not accept unsafe or incomplete helper result {"signed":true}
+  ---
+  duration_ms: 1.205958
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {"sent":true}
+ok 70 - does not accept unsafe or incomplete helper result {"sent":true}
+  ---
+  duration_ms: 1.187333
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 71 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 1.114125
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result {}
+ok 72 - does not accept unsafe or incomplete helper result {}
+  ---
+  duration_ms: 1.902166
+  type: 'test'
+  ...
+# Subtest: does not accept malformed browser status as readiness
+ok 73 - does not accept malformed browser status as readiness
+  ---
+  duration_ms: 1.466167
+  type: 'test'
+  ...
+# Subtest: one executable macOS command embeds exact reviewed sources and needs only system JXA
+ok 74 - one executable macOS command embeds exact reviewed sources and needs only system JXA
+  ---
+  duration_ms: 1.887292
+  type: 'test'
+  ...
+# Subtest: all launch artifacts and the runbook use the correct production URL without the old working link
+ok 75 - all launch artifacts and the runbook use the correct production URL without the old working link
+  ---
+  duration_ms: 2.351209
+  type: 'test'
+  ...
+# Subtest: the command generator reproduces the saved executable exactly without writing any real file
+ok 76 - the command generator reproduces the saved executable exactly without writing any real file
+  ---
+  duration_ms: 2.133333
+  type: 'test'
+  ...
+# Subtest: redirect after permission probe blocks browser helper loading before any target data is exposed
+ok 77 - redirect after permission probe blocks browser helper loading before any target data is exposed
+  ---
+  duration_ms: 1.492417
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 1
+ok 78 - JXA rechecks current tab URL before execution number 1
+  ---
+  duration_ms: 2.830666
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 2
+ok 79 - JXA rechecks current tab URL before execution number 2
+  ---
+  duration_ms: 2.027708
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 3
+ok 80 - JXA rechecks current tab URL before execution number 3
+  ---
+  duration_ms: 1.24125
+  type: 'test'
+  ...
+# Subtest: successful JXA preparation brings the exact target tab and its background window to the front
+ok 81 - successful JXA preparation brings the exact target tab and its background window to the front
+  ---
+  duration_ms: 1.998542
+  type: 'test'
+  ...
+# Subtest: JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+ok 82 - JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+  ---
+  duration_ms: 1.444083
+  type: 'test'
+  ...
+# Subtest: JXA redacts focus setters activation and repeated tab lookup failures without another execute
+ok 83 - JXA redacts focus setters activation and repeated tab lookup failures without another execute
+  ---
+  duration_ms: 3.6215
+  type: 'test'
+  ...
+# Subtest: the frozen production snapshot contains exactly the 80 sold row ids
+ok 84 - the frozen production snapshot contains exactly the 80 sold row ids
+  ---
+  duration_ms: 1.416084
+  type: 'test'
+  ...
+# Subtest: dry-run verifies all pages but does not replace fetch or mutate the UI
+ok 85 - dry-run verifies all pages but does not replace fetch or mutate the UI
+  ---
+  duration_ms: 17.743625
+  type: 'test'
+  ...
+# Subtest: execute exposes only the exact 80 rows to the existing UI and opens its certificate dialog
+ok 86 - execute exposes only the exact 80 rows to the existing UI and opens its certificate dialog
+  ---
+  duration_ms: 2.021625
+  type: 'test'
+  ...
+# Subtest: the temporary filter never intercepts POST or operation URLs
+ok 87 - the temporary filter never intercepts POST or operation URLs
+  ---
+  duration_ms: 1.273541
+  type: 'test'
+  ...
+# Subtest: one sold row is missing aborts before installing the filter
+ok 88 - one sold row is missing aborts before installing the filter
+  ---
+  duration_ms: 1.339042
+  type: 'test'
+  ...
+# Subtest: one sold row is duplicated aborts before installing the filter
+ok 89 - one sold row is duplicated aborts before installing the filter
+  ---
+  duration_ms: 1.372625
+  type: 'test'
+  ...
+# Subtest: one sold row already has an operation aborts before installing the filter
+ok 90 - one sold row already has an operation aborts before installing the filter
+  ---
+  duration_ms: 0.964667
+  type: 'test'
+  ...
+# Subtest: one sold row is already withdrawn aborts before installing the filter
+ok 91 - one sold row is already withdrawn aborts before installing the filter
+  ---
+  duration_ms: 0.844458
+  type: 'test'
+  ...
+# Subtest: preexisting selection aborts before installing the filter
+ok 92 - preexisting selection aborts before installing the filter
+  ---
+  duration_ms: 0.838875
+  type: 'test'
+  ...
+# Subtest: identity mismatch in tenant_id aborts before reading the sold registry
+ok 93 - identity mismatch in tenant_id aborts before reading the sold registry
+  ---
+  duration_ms: 0.279917
+  type: 'test'
+  ...
+# Subtest: identity mismatch in seller_id aborts before reading the sold registry
+ok 94 - identity mismatch in seller_id aborts before reading the sold registry
+  ---
+  duration_ms: 0.509416
+  type: 'test'
+  ...
+# Subtest: identity mismatch in active_seller_id aborts before reading the sold registry
+ok 95 - identity mismatch in active_seller_id aborts before reading the sold registry
+  ---
+  duration_ms: 0.210625
+  type: 'test'
+  ...
+# Subtest: identity mismatch in role aborts before reading the sold registry
+ok 96 - identity mismatch in role aborts before reading the sold registry
+  ---
+  duration_ms: 0.13325
+  type: 'test'
+  ...
+# Subtest: identity mismatch in withdrawal_enabled aborts before reading the sold registry
+ok 97 - identity mismatch in withdrawal_enabled aborts before reading the sold registry
+  ---
+  duration_ms: 0.098458
+  type: 'test'
+  ...
+# Subtest: session change while the UI is being prepared restores original fetch
+ok 98 - session change while the UI is being prepared restores original fetch
+  ---
+  duration_ms: 0.949792
+  type: 'test'
+  ...
+# Subtest: session change after successful preparation restores the original transport
+ok 99 - session change after successful preparation restores the original transport
+  ---
+  duration_ms: 1.400375
+  type: 'test'
+  ...
+# Subtest: logout after successful preparation also restores the original transport
+ok 100 - logout after successful preparation also restores the original transport
+  ---
+  duration_ms: 1.684
+  type: 'test'
+  ...
+# Subtest: a second helper cannot accept the already installed snapshot as backend truth
+ok 101 - a second helper cannot accept the already installed snapshot as backend truth
+  ---
+  duration_ms: 2.735
+  type: 'test'
+  ...
+# Subtest: wrong sold registry origin or route aborts before network or UI: {"origin":"https://sellerfocus.pro"}
+ok 102 - wrong sold registry origin or route aborts before network or UI: {"origin":"https://sellerfocus.pro"}
+  ---
+  duration_ms: 0.170416
+  type: 'test'
+  ...
+# Subtest: wrong sold registry origin or route aborts before network or UI: {"origin":"https://wrong.example"}
+ok 103 - wrong sold registry origin or route aborts before network or UI: {"origin":"https://wrong.example"}
+  ---
+  duration_ms: 0.071667
+  type: 'test'
+  ...
+# Subtest: wrong sold registry origin or route aborts before network or UI: {"origin":"https://wms.sellerfocus.pro.evil.test"}
+ok 104 - wrong sold registry origin or route aborts before network or UI: {"origin":"https://wms.sellerfocus.pro.evil.test"}
+  ---
+  duration_ms: 0.058625
+  type: 'test'
+  ...
+# Subtest: wrong sold registry origin or route aborts before network or UI: {"origin":"http://wms.sellerfocus.pro"}
+ok 105 - wrong sold registry origin or route aborts before network or UI: {"origin":"http://wms.sellerfocus.pro"}
+  ---
+  duration_ms: 0.055292
+  type: 'test'
+  ...
+# Subtest: wrong sold registry origin or route aborts before network or UI: {"pathname":"/seller/orders"}
+ok 106 - wrong sold registry origin or route aborts before network or UI: {"pathname":"/seller/orders"}
+  ---
+  duration_ms: 0.076333
+  type: 'test'
+  ...
+1..106
+# tests 106
+# suites 0
+# pass 106
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 114.216333
