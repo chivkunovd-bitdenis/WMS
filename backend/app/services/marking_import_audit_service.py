@@ -17,6 +17,7 @@ from app.models.marking_code import (
 )
 from app.services.marking_datamatrix_service import decode_datamatrix_codes_on_pdf_page
 from app.services.marking_import_storage_service import read_marking_import_source_pdf
+from app.services.marking_label_artifact_service import extract_label_artifacts_from_pdf
 
 
 def read_source_pdf(storage_key: str) -> bytes:
@@ -128,7 +129,7 @@ async def audit_marking_import(
     )
     evidence_gaps: list[str] = []
     source_payloads: list[str] = []
-    source_layouts: list[str] = []
+    source_layouts: dict[str, list[str]] = {}
     if not source_files:
         evidence_gaps.append("source_pdf")
     else:
@@ -141,7 +142,15 @@ async def audit_marking_import(
                     evidence_gaps.append(f"source_pdf:{source_file.id}")
                     break
                 source_payloads.extend(decoded_source)
-                source_layouts.extend(_layout_signatures(source_pdf))
+                # Use the same evidence-based label boundaries as ingestion.
+                # Whole-sheet coordinates cannot be compared with a cropped
+                # label. Match the extracted region by its full payload, not
+                # by page count or an arbitrary permitted crop.
+                for label in extract_label_artifacts_from_pdf(source_pdf):
+                    if label.code_valid:
+                        source_layouts.setdefault(label.cis, []).extend(
+                            _layout_signatures(label.label_pdf)
+                        )
             except Exception:
                 evidence_gaps.append("source_pdf")
                 evidence_gaps.append(f"source_pdf:{source_file.id}")
@@ -162,6 +171,7 @@ async def audit_marking_import(
     saved_payloads = [code.cis_code for code in codes]
     artifact_payloads: list[str] = []
     artifact_layouts: list[str] = []
+    source_layout_mismatch = False
     code_rows: list[dict[str, object]] = []
     artifact_mismatch = False
     for code in codes:
@@ -169,7 +179,16 @@ async def audit_marking_import(
         if code.label_artifact_pdf:
             try:
                 decoded_artifact = _decode_pdf(code.label_artifact_pdf)
-                artifact_layouts.extend(_layout_signatures(code.label_artifact_pdf))
+                code_layouts = _layout_signatures(code.label_artifact_pdf)
+                artifact_layouts.extend(code_layouts)
+                source_candidates = source_layouts.get(code.cis_code, [])
+                if source_candidates:
+                    if len(code_layouts) != 1 or len(set(source_candidates)) != 1:
+                        evidence_gaps.append("source_to_artifact_layout")
+                    elif code_layouts[0] != source_candidates[0]:
+                        source_layout_mismatch = True
+                elif source_layouts:
+                    evidence_gaps.append("source_to_artifact_layout")
             except Exception:
                 evidence_gaps.append(f"label_artifact_pdf:{code.id}")
                 artifact_mismatch = True
@@ -217,17 +236,7 @@ async def audit_marking_import(
     source_evidence_complete = not any(
         gap == "source_pdf" or gap.startswith("source_pdf:") for gap in evidence_gaps
     )
-    source_to_artifact_layout_complete = (
-        source_evidence_complete
-        and bool(source_layouts)
-        and len(source_layouts) == len(source_payloads)
-        and len(artifact_layouts) == len(saved_payloads)
-        and len(source_layouts) == len(artifact_layouts)
-    )
-    if source_evidence_complete and source_payloads and not source_to_artifact_layout_complete:
-        # A page carrying several labels cannot be matched to one cropped
-        # stored artifact from layout data alone. Do not turn that uncertainty
-        # into a successful source-to-artifact comparison.
+    if source_evidence_complete and source_payloads and not source_layouts:
         evidence_gaps.append("source_to_artifact_layout")
     if (
         source_evidence_complete
@@ -238,7 +247,7 @@ async def audit_marking_import(
         )
     ):
         first_divergence = "saved_cis"
-    elif source_to_artifact_layout_complete and source_layouts != artifact_layouts:
+    elif source_evidence_complete and source_layout_mismatch:
         evidence_gaps.append("label_artifact_pdf")
         first_divergence = "label_artifact_pdf"
     elif artifact_mismatch:
