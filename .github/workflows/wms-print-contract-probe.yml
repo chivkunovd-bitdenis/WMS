@@ -20,11 +20,23 @@ jobs:
     timeout-minutes: 10
     env:
       WMS672_TEST_URL: http://127.0.0.1:16724
-      # 672 baseline completed in run 37431409929. Do not repeat unchanged tests.
-      # Set to 'all' for the next changed 672 implementation/contract.
-      WMS_PRINT_PROBE_SCOPE: '673'
+      # Bounded postfix probe: changed 672 only; preserve the 673 contract.
+      WMS_PRINT_PROBE_SCOPE: '672'
+      WMS_PRINT_SOURCE_SHA: '163259d412d2ef5ba2d49b831cd5c7da284245d9'
     steps:
       - uses: actions/checkout@v4
+      - name: Verify immutable product source and frozen contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/print-contract"
+          git fetch --no-tags origin "$WMS_PRINT_SOURCE_SHA"
+          git ls-tree -r "$WMS_PRINT_SOURCE_SHA" -- frontend/src backend > "$RUNNER_TEMP/print-contract/product-source.manifest"
+          git ls-tree -r HEAD -- frontend/src backend > "$RUNNER_TEMP/print-contract/product-runner.manifest"
+          cmp "$RUNNER_TEMP/print-contract/product-source.manifest" "$RUNNER_TEMP/print-contract/product-runner.manifest"
+          git diff --exit-code "$WMS_PRINT_SOURCE_SHA" HEAD -- frontend/tests-e2e/wms672-box-labels.test.mjs frontend/tests-e2e/wms672-harness.tsx frontend/tests-e2e/wms672-dom.test.tsx
+          printf 'source=%s\nrunner=%s\n' "$WMS_PRINT_SOURCE_SHA" "$(git rev-parse HEAD)" > "$RUNNER_TEMP/print-contract/source-pin.txt"
+          sha256sum "$RUNNER_TEMP/print-contract/"*.manifest frontend/tests-e2e/wms672-box-labels.test.mjs frontend/tests-e2e/wms672-harness.tsx > "$RUNNER_TEMP/print-contract/source-hashes.txt"
       - uses: actions/setup-node@v4
         with:
           node-version: '24'
@@ -57,10 +69,13 @@ jobs:
           done
           curl --fail --silent "$WMS672_TEST_URL/tests-e2e/wms672-harness.html" >/dev/null || exit 2
           result672=skipped
-          if [ "$WMS_PRINT_PROBE_SCOPE" = all ]; then
+          if [ "$WMS_PRINT_PROBE_SCOPE" = all ] || [ "$WMS_PRINT_PROBE_SCOPE" = 672 ]; then
             timeout 300s node --import ../scripts/ci/wms-print-contract-probe.mjs --test --test-concurrency=1 tests-e2e/wms672-box-labels.test.mjs 2>&1 | tee "$RUNNER_TEMP/print-contract/672.log"
             result672=${PIPESTATUS[0]}
           fi
+          renderer=skipped
+          result673=skipped
+          if [ "$WMS_PRINT_PROBE_SCOPE" != 672 ]; then
           timeout 90s node ../scripts/ci/wms-print-contract-probe.mjs --render673 2>&1 | tee "$RUNNER_TEMP/print-contract/673-render.log"
           renderer=${PIPESTATUS[0]}
           result673=2
@@ -68,8 +83,9 @@ jobs:
             timeout 90s node node_modules/vitest/vitest.mjs run src/screens/v2/fbsPickingColor.wms673.pdf.test.ts --maxWorkers=1 --no-file-parallelism --reporter=verbose 2>&1 | tee "$RUNNER_TEMP/print-contract/673.log"
             result673=${PIPESTATUS[0]}
           fi
+          fi
           printf '672=%s\n673-renderer=%s\n673=%s\n' "$result672" "$renderer" "$result673" | tee "$RUNNER_TEMP/print-contract/exit-codes.txt"
-          { [ "$result672" = skipped ] || [ "$result672" = 0 ]; } && test "$renderer" -eq 0 && test "$result673" -eq 0
+          { [ "$result672" = skipped ] || [ "$result672" = 0 ]; } && { [ "$renderer" = skipped ] || [ "$renderer" = 0 ]; } && { [ "$result673" = skipped ] || [ "$result673" = 0 ]; }
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -20,6 +20,11 @@ if (!process.argv.includes('--render673')) {
       const context = await newContext(...contextArgs);
       const id = ++fixture;
       const requests = [];
+      const events = [];
+      context.on('page', page => {
+        page.on('console', message => { if (message.type() === 'error') events.push({ type: 'console', text: message.text() }); });
+        page.on('pageerror', error => events.push({ type: 'pageerror', text: error.stack }));
+      });
       await context.route('**/*', route => new URL(route.request().url()).origin === process.env.WMS672_TEST_URL
         ? route.continue() : route.abort());
       context.on('request', request => requests.push({ method: request.method(), url: request.url() }));
@@ -28,8 +33,16 @@ if (!process.argv.includes('--render673')) {
         const dir = resolve(process.env.WMS672_EVIDENCE_DIR, `fixture-${id}`);
         await mkdir(dir, { recursive: true });
         await writeFile(resolve(dir, 'requests.json'), JSON.stringify(requests, null, 2));
+        await writeFile(resolve(dir, 'events.json'), JSON.stringify(events, null, 2));
         for (const [index, page] of context.pages().entries()) {
           try {
+            await writeFile(resolve(dir, `page-${index}.state.json`), JSON.stringify(await page.evaluate(() => ({
+              decoded: window.__wms672Decoded, decodeStarted: window.__wms672DecodeStarted,
+              transfers: window.__wms672Transfers?.map(t => ({ decoded: t.decoded, htmlLength: t.html.length })),
+              fault: window.__wms672Fault, local: Object.entries(localStorage), session: Object.entries(sessionStorage),
+              frames: [...document.querySelectorAll('iframe')].map(f => ({ images: f.contentDocument?.images.length, complete: [...(f.contentDocument?.images || [])].filter(i => i.complete).length })),
+              alerts: [...document.querySelectorAll('[role=alert]')].map(a => a.textContent),
+            })), null, 2));
             await page.screenshot({ path: resolve(dir, `page-${index}.png`), timeout: 3000 });
             await writeFile(resolve(dir, `page-${index}.html`), await page.content());
             const sources = await page.locator('iframe').evaluateAll(frames => frames.map(f => f.srcdoc));
