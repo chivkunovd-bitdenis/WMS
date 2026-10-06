@@ -341,3 +341,24 @@ Ruff и mypy двух изменённых служб успешны. Свежи
 набор, PostgreSQL и полный mypy ещё не завершены и здесь не заявляются.
 Следующий этап — независимое Astra high ревью нового опубликованного SHA,
 исходная приёмка и CI; это не готовность production.
+
+Product fix опубликован как `c36b8abee120e57b27e50d3358cfdc533cd411eb`,
+remote SHA проверен. Свежий исходный/регрессионный/смежный прогон —
+**131 SQLite passed**, 39.81 s (103 контрактных + 28 handover/generic);
+отдельный изолированный PostgreSQL `wms_test_662` — **10 passed**, 9.68 s.
+Полный mypy — **552 файла**, успешно; ruff всей backend — успешно.
+Дополнительно существующие piece tariff, tariff matrix, FBS cancellation,
+cancelled operations/after pack и invoice shipment/cross-format проверки —
+**42 passed, 7 skipped**, 40.40 s. Пропущенные случаи требуют отдельных
+PostgreSQL matrix/migration параметров или реальных invoice row locks;
+они не объявляются выполненными. PG10 выше — именно исходный WMS-662 набор,
+не новая финансовая concurrency proof.
+
+Смешанная строка document/item дополнительно проверена диагностическим вызовом
+writer на двух реальных ORM объектах с подменённой сессией: issued base 1100
+не меняется, physical delta каждой строки равна 1, document billed delta 0,
+item billed delta 1 по сохранённой ставке 300, новая сумма 300, повтор стабилен.
+Это проверка арифметики без БД/публичного счёта, не независимый frozen тест
+и не доказательство конкуренции. Frozen tests/guards diff от 91c89c553 пуст.
+Первый push кратковременно отклонён GitHub; повтор успешен, remote проверен.
+Независимое ревью, приёмка, CI и production всё ещё не заявляются.
