@@ -1,0 +1,32 @@
+{
+  "syntax": [
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/ci/wms652-abort-diagnostic/cdp-observer.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "node",
+        "--check",
+        "scripts/ci/wms652-abort-diagnostic/probe.mjs"
+      ],
+      "exit": 0
+    },
+    {
+      "command": [
+        "bash",
+        "-n",
+        "scripts/ci/wms652-abort-diagnostic/run.sh"
+      ],
+      "exit": 0
+    }
+  ],
+  "observer_exact_prior_raw": true,
+  "source_basis_hashes": true,
+  "application_frozen_tests_protection_diff_empty": true,
+  "actual_linux_probe_run": false
+}

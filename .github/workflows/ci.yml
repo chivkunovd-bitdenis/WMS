@@ -1,13 +1,13 @@
-# Diagnostic branch only. Never integrate into release or default branches.
+# Pure transport diagnostic branch only. No application or release job.
 name: CI
 on:
   workflow_dispatch:
 permissions:
   contents: read
 jobs:
-  realqr-lifecycle-diagnostic:
+  explicit-client-abort-diagnostic:
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
@@ -16,18 +16,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '24.21.0'
-      - name: Install exact original frontend and Linux Chrome141
+      - name: Install exact Linux Chrome141 transport binary
         run: |
-          npm ci --prefix frontend
           npm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1
           node "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium
           node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
-      - name: Frozen selected remount case and separate native transport controls
-        run: bash scripts/ci/wms652-realqr-diagnostic/run.sh
-      - name: Preserve raw identity and lifecycle observations
+      - name: One known paused GET explicit abort and one unknown ID
+        run: bash scripts/ci/wms652-abort-diagnostic/run.sh
+      - name: Preserve exact native outcomes and identity observations
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wms652-realqr-lifecycle-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/wms652-realqr-lifecycle
+          name: wms652-explicit-abort-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wms652-explicit-abort
           if-no-files-found: error
