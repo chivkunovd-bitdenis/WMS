@@ -1,0 +1,12 @@
+{
+  "original_independent_review": "cbca45cfa6cd2e8854e5b8c651a3302d51e215f9",
+  "accepted_fix": "e2495dfa50767f156e6f54d91889c6067d6d5625",
+  "analyst_acceptance": "02545e06937b7f7ab1abbe4647a50a6b0050b192",
+  "actual_runs": "4isolatedPGPASS0skip+1regressionPASS; ownclusterstopped; no updatedfullCIclaim",
+  "raw": {
+    "docs/evidence/WMS-652/f6-pid-20261007/f6-four-cases.log": "d04381cda74c44380fbbe59ac75590dfafe2516430ce90889f64c5f16df8cffa",
+    "docs/evidence/WMS-652/f6-pid-20261007/f6-four-cases.xml": "2b461fbff0568a1fb8b67fc809d727407a909a1d7cf44a79771f71bfd23d68a3",
+    "docs/evidence/WMS-652/f6-pid-20261007/f6-pid-regression.log": "2c44d003d32fa097d8bdcbe88a039d7914d326edebe881dd2a3d76df980d76bb",
+    "docs/evidence/WMS-652/f6-pid-20261007/f6-pid-regression.xml": "3524cc49ccf48c27b6b71b0da717d30783c475731c5b4184bc37dccb92985b40"
+  }
+}

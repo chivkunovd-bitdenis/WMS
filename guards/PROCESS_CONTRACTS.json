@@ -54,7 +54,7 @@
     "backend/tests/test_wms517_sales_regressions.py": "4955c12fe9cb8079425dfdf39718bdfb138223e73c68a28b77c75dd3372e5700",
     "backend/tests/test_wms517_sales_waiting_rate.py": "5f3140d0856ea748745f36dfc0588aa33ae2c1a99849e0cff2b032181d6d7c52",
     "backend/tests/test_wms588_fbs_assembly_tasks.py": "ce6a8b33252ca4a7ff5ef2b998095095b781ee7b8a0b262a2bf9bd4a120e28b6",
-    "backend/tests/test_wms662_cancellation_lock_order.py": "083f5f84bdfca34cb3ba7336da81dd9596db142a4908b89932e07383812deadc",
+    "backend/tests/test_wms662_cancellation_lock_order.py": "f4cafab14907222013e5b9cdba7c82a44a8f8f05af2c3c0e0abaf2faa4c7239f",
     "backend/tests/test_wms662_observed_handoff.py": "b1955a0fbb1dd7ecc4ecb9f6fb7176ae5947df1ba47c796b027ad6c7adce939d",
     "backend/tests/test_wms662_postgres.py": "94e162d678010f840485dd6a0feede61e33bdc832e753ef6f8f3153b19e89f7c",
     "backend/tests/test_wms663_customs_documents_contract.py": "bf1654d769157c12c48577213a2a28358e96441d12d07a32d0b8abe2225460f8",
@@ -269,7 +269,8 @@
     "frontend/src/utils/printBarcodeLabel.ts": "f8c1206fbb6e1fd4ea12f7aa23ff8c83ea9f4ee0bf70604076e7f8ce11e83c57",
     "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
     "frontend/tests-e2e/wms672-peer-drain.test.mjs": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
-    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79"
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+    "backend/tests/test_wms662_cancellation_lock_order_regression.py": "5035058420e467f3238e4958423e1d5d0067fcdb8aef90daf77a0661b5b8db51"
   },
   "suites": {
     "backend-fbs": {
@@ -962,6 +963,7 @@
         "tests.test_wms658_wb_honest_sign_contract::test_c19_backfill_dry_run_reports_evidence_and_missing_data_without_writes",
         "tests.test_wms658_wb_honest_sign_contract::test_c19_c20_backfill_rejects_raw_nmid_that_does_not_belong_to_product",
         "tests.test_wms658_wb_honest_sign_contract::test_c20_backfill_apply_rejects_stale_plan_and_changes_only_false_to_true",
+        "tests.test_wms662_cancellation_lock_order_regression::test_f6_confirmed_wait_pid_pair_survives_postrelease_pool_reuse",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[full]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[partial]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[reversed]",
