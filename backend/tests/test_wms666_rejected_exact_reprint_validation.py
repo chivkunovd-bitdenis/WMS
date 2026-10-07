@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from httpx import AsyncClient
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from test_fbs_kiz import _register_ff_admin, _setup_seller_warehouse
 
@@ -89,6 +89,8 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
     )
     db_session.add(marking)
     await db_session.commit()
+    order_id, supply_id = order.id, supply.id
+    marking_id, code_id = marking.id, code.id
 
     before_codes = await db_session.scalar(
         select(func.count()).select_from(MarkingCode).where(MarkingCode.tenant_id == tenant_id)
@@ -96,23 +98,23 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
     before_markings = await db_session.scalar(
         select(func.count())
         .select_from(FbsOrderMarking)
-        .where(FbsOrderMarking.order_id == order.id)
+        .where(FbsOrderMarking.order_id == order_id)
     )
     printed = await async_client.post(
-        f"/operations/fbs-supplies/{supply.id}/order-print-tape",
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
         headers=headers,
         json={
-            "order_ids": [str(order.id)],
+            "order_ids": [str(order_id)],
             "include_order_qr": False,
             "reprint": True,
-            "reprint_marking_ids": [str(marking.id)],
+            "reprint_marking_ids": [str(marking_id)],
             "layout_json": {"units": [{"block": "cz", "copies": 1}]},
         },
     )
     assert printed.status_code == 200, printed.text
     result = printed.json()["orders"][0]
     assert result["codes"] == [cis_code]
-    assert [row["marking_id"] for row in result["printed_codes"]] == [str(marking.id)]
+    assert [row["marking_id"] for row in result["printed_codes"]] == [str(marking_id)]
     selected_binding = {
         "order_id": result["order_id"],
         "supply_id": result["printed_codes"][0]["supply_id"],
@@ -125,7 +127,7 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
         headers=headers,
         json={
             "bindings": [selected_binding],
-            "reprint_marking_ids": [str(marking.id)],
+            "reprint_marking_ids": [str(marking_id)],
         },
     )
     assert explicit_validation.status_code == 204, explicit_validation.text
@@ -139,10 +141,10 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
 
     db_session.expire_all()
     stored_code = await db_session.scalar(
-        select(MarkingCode).where(MarkingCode.id == code.id)
+        select(MarkingCode).where(MarkingCode.id == code_id)
     )
     stored_marking = await db_session.scalar(
-        select(FbsOrderMarking).where(FbsOrderMarking.id == marking.id)
+        select(FbsOrderMarking).where(FbsOrderMarking.id == marking_id)
     )
     assert stored_code and stored_code.cis_code == cis_code and stored_code.status == "printed"
     assert stored_marking and stored_marking.meta_status == META_STATUS_REJECTED
@@ -152,18 +154,18 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
     assert await db_session.scalar(
         select(func.count())
         .select_from(FbsOrderMarking)
-        .where(FbsOrderMarking.order_id == order.id)
+        .where(FbsOrderMarking.order_id == order_id)
     ) == before_markings
     assert await db_session.scalar(
         select(func.count()).select_from(MarkingCodeEvent).where(
-            MarkingCodeEvent.code_id == code.id,
+            MarkingCodeEvent.code_id == code_id,
             MarkingCodeEvent.event_type == "reprinted",
         )
     ) == 1
 
     replacement = FbsOrderMarking(
         tenant_id=tenant_id,
-        order_id=order.id,
+        order_id=order_id,
         kind=MARKING_KIND_SGTIN,
         value=f"{cis_code}-replacement",
         source="pool",
@@ -177,21 +179,23 @@ async def test_exact_rejected_wb_inline_reprint_is_validated_without_replacement
         headers=headers,
         json={
             "bindings": [selected_binding],
-            "reprint_marking_ids": [str(marking.id)],
+            "reprint_marking_ids": [str(marking_id)],
         },
     )
     assert superseded_validation.status_code == 409
 
     # Once the old selection is no longer attached to its prepared supply, the
     # explicit reprint context cannot override that changed binding.
-    order.supply_id = None
+    await db_session.execute(
+        update(FbsOrder).where(FbsOrder.id == order_id).values(supply_id=None)
+    )
     await db_session.commit()
     unlinked_validation = await async_client.post(
         "/operations/fbs-orders/print-bindings/validate",
         headers=headers,
         json={
             "bindings": [selected_binding],
-            "reprint_marking_ids": [str(marking.id)],
+            "reprint_marking_ids": [str(marking_id)],
         },
     )
     assert unlinked_validation.status_code == 409
