@@ -349,3 +349,10 @@ PrintrawALLold67211PASS (328.855s),remaining6PASS,new12PASS; frozen43FBS42PASS1F
 Двеужеопубликованные technicalcorrections:883literalaccepted25eb+ab0independentreview3PASS и8e029CryptoPro %j длядвухdistinctparamreportIDs (37targetPASS, строгийduplicateparser/controlREDсохранён). Последнийfileunprotected/случаиunprotected, coverage/array/assertions неизменны. Frontendactual1566assertions/Mac110exactPASS/204mandatoryFBS uniquelyPASS сохранены, ноrawparserсамкорректноFAILduplicate, поэтомуpartialpasses не finalproof.
 
 Всечетырепричины входят в ОДИН следующий acceptedcandidate/SOURCE/полныйCI. ТекущийPRHEAD не менялся/run не отменён. Новаяreference/AST/CDPtesthash миграция ещё не activatingnewmainpin; source9dae/main8df историческиinstalled, приложениеmain/stagingcc8e/production8f11d912 прежние.
+
+
+## Checkpoint 00:14 UTC: first3 cumulative review PASS, one selected CDP lifecycle diagnostic
+
+3850c37895eec94dc391ea46136f416271404845 отдельноtechnicalPASS на4ce длятрёхcompletedinfra corrections:229actualhashes/21suites1173IDs, ONLYliteralaccepted25eb/uniqueCryptoPro%j/full-emptyASTserialization. Строгиеassertions/parsers/23backupasserts/7variants/old43cases сохранены; никакихновыхproductconditions/повторныхsuccessfulcases нет. Полнаяаналитическаядельта/newSOURCE ждётчетвёртуюconfirmedfixturecorrection.
+
+Actualtestedmergeac845 fetched вpersistent refs/wms-evidence/ci-37548248403; EXACTFULLTREE equals eab, родители4b298/eab подтверждены. Scope8754 nineclosureblobs equalactualtestedmerge/APPdiffempty. ИнтеграторdispatchONE37550768806/attempt1 at00:12:51UTC: frozen selectedremountbody/routes/assertions/delays/Chromeargs preserved, Network/CDPметаданныеonly. Отдельныйfreshprocess transportcontrol одинpausedlocalGET→navigate→fulfillOLDobservedID иодинbogusunknownID; nohold/productbehaviorchanges inrealcase. Matchingcancellation/notreproduced границыбудутсохранены, controlsнеретродоказательствоoriginalCIrequest. SameSoldevelopercollectraw; nohandlingcode/fullCIretry/mainpinupgradeдоevidence+frozenboundarycontract/review/аналитики.

@@ -1,0 +1,25 @@
+{
+  "run_id": 37550768806,
+  "run_attempt": 1,
+  "diagnostic_head": "8754c164be9d3c60567dfce0d319f11a4a66db9b",
+  "branch": "codex/wms652-realqr-cdp-lifecycle-diagnostic",
+  "job_id": 112565428747,
+  "event": "workflow_dispatch",
+  "created_at": "2026-10-07T00:12:51Z",
+  "source_failed_merge": "ac845328b27b5be265962695e10766efddef339e",
+  "source_ci_head": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "source_tree_equal": true,
+  "local_preserved_merge_ref": "refs/wms-evidence/ci-37548248403",
+  "all_nine_closure_blobs_equal": true,
+  "target_case": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+  "target_body_and_routes_and_delays_byte_equal": true,
+  "controls_separate_fresh_browser": true,
+  "controls": [
+    "one local paused GET then navigation and fulfillment observed old ID",
+    "one never-observed unknown ID retaining error"
+  ],
+  "release_ci_rerun": false,
+  "candidate_unchanged": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "main_source_pin_still": "9dae4b19f6d4dca554200e08282579414a110848",
+  "staging_and_production_unchanged": true
+}
