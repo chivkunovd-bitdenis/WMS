@@ -227,6 +227,15 @@ async def update_fbs_order_reservation(
         order.reserve_status = RESERVE_STATUS_RESERVED
     else:
         if not reservations:
+            # The reservation rows are authoritative for availability.  A
+            # previous partial recovery can already have removed them while
+            # leaving the per-position projection stale; keep the worklist
+            # and maintenance guards consistent without changing stock.
+            if any(position.reserved_quantity for position in positions):
+                for position in positions:
+                    position.reserved_quantity = 0
+                order.reserve_status = RESERVE_STATUS_RELEASED
+                await session.flush()
             return
         # WMS-338/341: снятие резерва не возвращает ничего в pool.quantity —
         # операторский потолок неизменен по контракту. Само удаление строки
