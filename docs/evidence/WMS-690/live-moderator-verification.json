@@ -55,7 +55,15 @@
   "inventory_mutations_performed": false,
   "limitations": [
     "The client request remains under investigation and the promised list is not yet received.",
-    "Automated short-context rollover at250000tokens has not been observed; fork retains history.",
+    "Automated rollover into a NEW CLEAN autonomous context at250000tokens is not provided by the available callable tools. Fork retains history; a compact-capable connection to the serving desktop runtime is unavailable.",
     "ACTIVE heartbeat configuration and target are verified; the active investigation has not yet yielded a separate idle scheduled turn."
-  ]
+  ],
+  "telegram_location": {
+    "bot_name": "Korob_bot",
+    "bot_username": "wms_korob_bot",
+    "recipient_chat_type": "private",
+    "message_id": "1007",
+    "chat_link": "https://t.me/wms_korob_bot",
+    "verified_by": "Telegram getMe/getChat with the existing owner configuration; no additional send"
+  }
 }
