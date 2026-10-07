@@ -1,0 +1,660 @@
+{
+  "run_id": 37574399962,
+  "attempt": 1,
+  "diagnostic_sha": "bb8528b3127f3375fb29685577b2ab045d607658",
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "run_conclusion": "success",
+  "strict_status": "PASS",
+  "case_counts": {
+    "PASS": 43
+  },
+  "exact43_complete": true,
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[mixed-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-expired;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-cancelled;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[selection;1600x1000-long]",
+      "status": "PASS"
+    }
+  ],
+  "exit_results": {
+    "original_browser_command_exit": 0,
+    "exact43_complete": true,
+    "strict43_pass": true,
+    "source_bytes_unchanged": true,
+    "actual_run": true
+  },
+  "environment": "Linux runnervm8df0l 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\nPRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\nv24.21.0\nChromium 141.0.7390.37 \n1.56.1\nbb8528b3127f3375fb29685577b2ab045d607658\n",
+  "source_bindings": 2546,
+  "source_hashes": 2546,
+  "source_unchanged": true,
+  "reverse_browser_byte_equal": true,
+  "shell_600s_runner_path_only": true,
+  "original_transport_records": 43721,
+  "original_positive_send_count": 11670,
+  "original_positive_reply_count": 11670,
+  "original_pair_ids_equal": true,
+  "original_send_reply_ids_unique": true,
+  "original_timeout_count": 0,
+  "original_pending_command_ids": [],
+  "original_native_error_count": 0,
+  "focused_native_error_count": 0,
+  "focused_records": 23245,
+  "focused_drops": {
+    "events": 0,
+    "bytes": 7364,
+    "finalSize": 0,
+    "observerErrors": 0,
+    "nativeErrors": 0
+  },
+  "auxiliary_summary": {
+    "counts": {
+      "auxSends": 4,
+      "auxReplies": 4,
+      "auxNativeErrors": 4,
+      "ALIVE": 4,
+      "ABSENT": 0,
+      "unexpected": 0,
+      "duplicatePaused": 0,
+      "unownedReplies": 0
+    },
+    "dropped": {
+      "events": 0,
+      "bytes": 0,
+      "finalSize": 0,
+      "observerErrors": 0,
+      "unsent": 0
+    },
+    "pending": [],
+    "estimatedRetainedBytes": 286146
+  },
+  "auxiliary_send_count": 4,
+  "auxiliary_reply_count": 4,
+  "auxiliary_pair_ids_equal": true,
+  "auxiliary_records": 236,
+  "combined_records": 23481,
+  "context_file_bytes": 8728903,
+  "errors": [],
+  "all_exact_aux_pairs": [
+    {
+      "aux_send": {
+        "utcMs": 1791349470181,
+        "currentGeneration": 43,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+        "kind": "aux-lookup-send",
+        "commandId": -1,
+        "method": "Fetch.getResponseBody",
+        "requestId": "interception-job-2207.0",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "generation": 43,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+        "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+        "requestMethod": "GET",
+        "resourceType": "XHR"
+      },
+      "aux_reply": {
+        "utcMs": 1791349470183,
+        "currentGeneration": 43,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+        "kind": "aux-lookup-reply",
+        "commandId": -1,
+        "requestId": "interception-job-2207.0",
+        "sendIndex": 55,
+        "state": "ALIVE",
+        "sendIdentity": {
+          "requestId": "interception-job-2207.0",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "generation": 43,
+          "caseId": "WMS652.realQrFlags[qr;supply_ids=A]"
+        },
+        "nativeError": {
+          "code": -32000,
+          "message": "Can only get response body on HeadersReceived pattern matched requests."
+        },
+        "unexpectedErrorMessageOmitted": false,
+        "unexpectedSuccess": false
+      },
+      "exact_original_commands": [
+        {
+          "send": {
+            "utcMs": 1791349470181,
+            "kind": "command-send",
+            "commandId": 2563,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-2207.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 43,
+            "caseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+            "attempt": 1
+          },
+          "reply": {
+            "utcMs": 1791349470183,
+            "kind": "command-result",
+            "commandId": 2563,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-2207.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 43,
+            "caseId": "WMS652.realQrFlags[qr;supply_ids=A]"
+          }
+        }
+      ],
+      "active_default_frame_contexts_at_aux_send": [
+        {
+          "utcMs": 1791349470180,
+          "currentGeneration": 43,
+          "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+          "kind": "document-context",
+          "method": "Runtime.executionContextCreated",
+          "executionContextId": 12,
+          "executionContextUniqueId": "-7418916477679782871.5476692236260415472",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "isDefault": true,
+          "type": "default"
+        }
+      ],
+      "last_frame_navigation_observed_at_aux_send": {
+        "utcMs": 1791349470172,
+        "currentGeneration": 42,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+        "kind": "document-context",
+        "method": "Page.frameNavigated",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "1640BD782AC770B86AD2AC3C44A6FEED",
+        "type": "Navigation",
+        "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a&flag=qr"
+      },
+      "last_navigate_reply_observed_at_aux_send": {
+        "utcMs": 1791349470167,
+        "currentGeneration": 40,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A]",
+        "kind": "navigate-reply",
+        "commandId": 2559,
+        "sendIdentity": {
+          "generation": 40,
+          "caseId": "WMS652.realQrFlags[qr;supply_ids=A]"
+        },
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "1640BD782AC770B86AD2AC3C44A6FEED"
+      },
+      "request_loader_or_execution_context_binding": "UNKNOWN: paused has frameId but no networkId/loaderId/executionContextId; document state is observation only"
+    },
+    {
+      "aux_send": {
+        "utcMs": 1791349495851,
+        "currentGeneration": 79,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+        "kind": "aux-lookup-send",
+        "commandId": -2,
+        "method": "Fetch.getResponseBody",
+        "requestId": "interception-job-4315.0",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "generation": 79,
+        "caseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+        "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+        "requestMethod": "GET",
+        "resourceType": "XHR"
+      },
+      "aux_reply": {
+        "utcMs": 1791349495854,
+        "currentGeneration": 79,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+        "kind": "aux-lookup-reply",
+        "commandId": -2,
+        "requestId": "interception-job-4315.0",
+        "sendIndex": 102,
+        "state": "ALIVE",
+        "sendIdentity": {
+          "requestId": "interception-job-4315.0",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "generation": 79,
+          "caseId": "WMS652.realQrFlags[pool;supply_ids=A]"
+        },
+        "nativeError": {
+          "code": -32000,
+          "message": "Can only get response body on HeadersReceived pattern matched requests."
+        },
+        "unexpectedErrorMessageOmitted": false,
+        "unexpectedSuccess": false
+      },
+      "exact_original_commands": [
+        {
+          "send": {
+            "utcMs": 1791349495851,
+            "kind": "command-send",
+            "commandId": 4920,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-4315.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 79,
+            "caseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+            "attempt": 1
+          },
+          "reply": {
+            "utcMs": 1791349495855,
+            "kind": "command-result",
+            "commandId": 4920,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-4315.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 79,
+            "caseId": "WMS652.realQrFlags[pool;supply_ids=A]"
+          }
+        }
+      ],
+      "active_default_frame_contexts_at_aux_send": [
+        {
+          "utcMs": 1791349495850,
+          "currentGeneration": 79,
+          "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+          "kind": "document-context",
+          "method": "Runtime.executionContextCreated",
+          "executionContextId": 21,
+          "executionContextUniqueId": "3636912852810300635.6297540700795827368",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "isDefault": true,
+          "type": "default"
+        }
+      ],
+      "last_frame_navigation_observed_at_aux_send": {
+        "utcMs": 1791349495842,
+        "currentGeneration": 78,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+        "kind": "document-context",
+        "method": "Page.frameNavigated",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "7020285DAA7DCEACB7BC28F6425D75EF",
+        "type": "Navigation",
+        "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a&flag=pool"
+      },
+      "last_navigate_reply_observed_at_aux_send": {
+        "utcMs": 1791349495836,
+        "currentGeneration": 76,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A]",
+        "kind": "navigate-reply",
+        "commandId": 4916,
+        "sendIdentity": {
+          "generation": 76,
+          "caseId": "WMS652.realQrFlags[pool;supply_ids=A]"
+        },
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "7020285DAA7DCEACB7BC28F6425D75EF"
+      },
+      "request_loader_or_execution_context_binding": "UNKNOWN: paused has frameId but no networkId/loaderId/executionContextId; document state is observation only"
+    },
+    {
+      "aux_send": {
+        "utcMs": 1791349498331,
+        "currentGeneration": 83,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+        "kind": "aux-lookup-send",
+        "commandId": -3,
+        "method": "Fetch.getResponseBody",
+        "requestId": "interception-job-4534.0",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "generation": 83,
+        "caseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+        "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+        "requestMethod": "GET",
+        "resourceType": "XHR"
+      },
+      "aux_reply": {
+        "utcMs": 1791349498334,
+        "currentGeneration": 83,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+        "kind": "aux-lookup-reply",
+        "commandId": -3,
+        "requestId": "interception-job-4534.0",
+        "sendIndex": 109,
+        "state": "ALIVE",
+        "sendIdentity": {
+          "requestId": "interception-job-4534.0",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "generation": 83,
+          "caseId": "WMS652.realQrFlags[pool;supply_ids=A,B]"
+        },
+        "nativeError": {
+          "code": -32000,
+          "message": "Can only get response body on HeadersReceived pattern matched requests."
+        },
+        "unexpectedErrorMessageOmitted": false,
+        "unexpectedSuccess": false
+      },
+      "exact_original_commands": [
+        {
+          "send": {
+            "utcMs": 1791349498331,
+            "kind": "command-send",
+            "commandId": 5167,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-4534.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 83,
+            "caseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+            "attempt": 1
+          },
+          "reply": {
+            "utcMs": 1791349498334,
+            "kind": "command-result",
+            "commandId": 5167,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-4534.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 83,
+            "caseId": "WMS652.realQrFlags[pool;supply_ids=A,B]"
+          }
+        }
+      ],
+      "active_default_frame_contexts_at_aux_send": [
+        {
+          "utcMs": 1791349498331,
+          "currentGeneration": 83,
+          "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+          "kind": "document-context",
+          "method": "Runtime.executionContextCreated",
+          "executionContextId": 22,
+          "executionContextUniqueId": "-8949580830911239090.-3738580811462073225",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "isDefault": true,
+          "type": "default"
+        }
+      ],
+      "last_frame_navigation_observed_at_aux_send": {
+        "utcMs": 1791349498322,
+        "currentGeneration": 82,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+        "kind": "document-context",
+        "method": "Page.frameNavigated",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "1C50A818726C6488DC14DDCE0C156CA3",
+        "type": "Navigation",
+        "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a,wb-b&flag=pool"
+      },
+      "last_navigate_reply_observed_at_aux_send": {
+        "utcMs": 1791349498267,
+        "currentGeneration": 80,
+        "currentCaseId": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+        "kind": "navigate-reply",
+        "commandId": 5163,
+        "sendIdentity": {
+          "generation": 80,
+          "caseId": "WMS652.realQrFlags[pool;supply_ids=A,B]"
+        },
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "1C50A818726C6488DC14DDCE0C156CA3"
+      },
+      "request_loader_or_execution_context_binding": "UNKNOWN: paused has frameId but no networkId/loaderId/executionContextId; document state is observation only"
+    },
+    {
+      "aux_send": {
+        "utcMs": 1791349506548,
+        "currentGeneration": 95,
+        "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "kind": "aux-lookup-send",
+        "commandId": -4,
+        "method": "Fetch.getResponseBody",
+        "requestId": "interception-job-5221.0",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "generation": 95,
+        "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+        "requestMethod": "GET",
+        "resourceType": "XHR"
+      },
+      "aux_reply": {
+        "utcMs": 1791349506552,
+        "currentGeneration": 95,
+        "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "kind": "aux-lookup-reply",
+        "commandId": -4,
+        "requestId": "interception-job-5221.0",
+        "sendIndex": 126,
+        "state": "ALIVE",
+        "sendIdentity": {
+          "requestId": "interception-job-5221.0",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "generation": 95,
+          "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]"
+        },
+        "nativeError": {
+          "code": -32000,
+          "message": "Can only get response body on HeadersReceived pattern matched requests."
+        },
+        "unexpectedErrorMessageOmitted": false,
+        "unexpectedSuccess": false
+      },
+      "exact_original_commands": [
+        {
+          "send": {
+            "utcMs": 1791349506548,
+            "kind": "command-send",
+            "commandId": 5937,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-5221.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 95,
+            "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+            "attempt": 1
+          },
+          "reply": {
+            "utcMs": 1791349506553,
+            "kind": "command-result",
+            "commandId": 5937,
+            "method": "Fetch.fulfillRequest",
+            "requestId": "interception-job-5221.0",
+            "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+            "generation": 95,
+            "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]"
+          }
+        }
+      ],
+      "active_default_frame_contexts_at_aux_send": [
+        {
+          "utcMs": 1791349506545,
+          "currentGeneration": 95,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "kind": "document-context",
+          "method": "Runtime.executionContextCreated",
+          "executionContextId": 25,
+          "executionContextUniqueId": "-3995933359732149431.7661945673554948263",
+          "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+          "isDefault": true,
+          "type": "default"
+        }
+      ],
+      "last_frame_navigation_observed_at_aux_send": {
+        "utcMs": 1791349506535,
+        "currentGeneration": 94,
+        "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "kind": "document-context",
+        "method": "Page.frameNavigated",
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "ED1EE23951CD5E80273A55A3F01A8FD4",
+        "type": "Navigation",
+        "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a,wb-b&flag=qr%2Bpool"
+      },
+      "last_navigate_reply_observed_at_aux_send": {
+        "utcMs": 1791349506528,
+        "currentGeneration": 92,
+        "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "kind": "navigate-reply",
+        "commandId": 5933,
+        "sendIdentity": {
+          "generation": 92,
+          "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]"
+        },
+        "frameId": "2C34875028E79F5D0F50D4D636F3AFC2",
+        "loaderId": "ED1EE23951CD5E80273A55A3F01A8FD4"
+      },
+      "request_loader_or_execution_context_binding": "UNKNOWN: paused has frameId but no networkId/loaderId/executionContextId; document state is observation only"
+    }
+  ],
+  "historical_etalon_cause": "UNKNOWN",
+  "actual_retirement_reason_or_JS_caller": "UNKNOWN"
+}
