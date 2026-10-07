@@ -142,6 +142,7 @@ type PendingFbsQrAcknowledgement = {
 type PendingFbsQrAcknowledgements = {
   context: FbsTapeContext
   remaining: PendingFbsQrAcknowledgement[]
+  partialMessage: string | null
 }
 
 function createFbsQrAcknowledgementKey(): string {
@@ -996,6 +997,10 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     try {
       await confirmPendingFbsQrAcknowledgements(pending)
       ctx.onPrinted()
+      if (pending.partialMessage) {
+        setError(pending.partialMessage)
+        return
+      }
       pending.context.onCompleted?.()
       onClose()
     } catch (cause) {
@@ -1152,6 +1157,29 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       throwIfAborted(controller.signal)
       const sections = builtOrders.flatMap((order) => order.sections)
       const clientErrors = builtOrders.flatMap((order) => (order.error ? [order.error] : []))
+      const allErrors = [
+        ...result.order_errors.map((item) => ({
+          wbOrderId: item.wb_order_id,
+          message: item.message,
+        })),
+        ...clientErrors,
+      ]
+      const partialMessage = allErrors.length > 0
+        ? (() => {
+          const numbers = allErrors.slice(0, 12).map((item) => item.wbOrderId).join(', ')
+          const tail = allErrors.length > 12 ? ` и ещё ${allErrors.length - 12}` : ''
+          return (
+            `Напечатано заказов: ${result.orders.length - clientErrors.length} из ${result.orders.length + result.order_errors.length}. ` +
+            `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${allErrors[0]!.message}. ` +
+            (result.order_errors.some((item) => item.code === 'order_cancelled')
+              ? 'Отменённые заказы не печатаются.' + (
+                clientErrors.length || result.order_errors.some((item) => item.code !== 'order_cancelled')
+                  ? ' Повторите печать только по остальным ошибкам.' : ''
+              )
+              : 'Повторите печать по этим заказам.')
+          )
+        })()
+        : null
       if (sections.length < 1) {
         setError(clientErrors[0]?.message ?? 'Нет этикеток для печати.')
         return false
@@ -1171,6 +1199,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       await printTapeSections(sections, size, () => validateFbsPrintBindings(ctx.token, bindings))
       const pending = {
         context: ctx.fbsTape,
+        partialMessage,
         remaining: builtOrders.flatMap((order) =>
           order.qrAssetToConfirm
             ? [{ asset: order.qrAssetToConfirm, idempotencyKey: createFbsQrAcknowledgementKey() }]
@@ -1183,27 +1212,8 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         await confirmPendingFbsQrAcknowledgements(pending)
       }
       ctx.onPrinted()
-
-      const allErrors = [
-        ...result.order_errors.map((item) => ({
-          wbOrderId: item.wb_order_id,
-          message: item.message,
-        })),
-        ...clientErrors,
-      ]
-      if (allErrors.length > 0) {
-        const numbers = allErrors.slice(0, 12).map((item) => item.wbOrderId).join(', ')
-        const tail = allErrors.length > 12 ? ` и ещё ${allErrors.length - 12}` : ''
-        setError(
-          `Напечатано заказов: ${result.orders.length - clientErrors.length} из ${result.orders.length + result.order_errors.length}. ` +
-          `Не попали в ленту: ${numbers}${tail}. Причина по первому: ${allErrors[0].message}. ` +
-          (result.order_errors.some((item) => item.code === 'order_cancelled')
-            ? 'Отменённые заказы не печатаются.' + (
-              clientErrors.length || result.order_errors.some((item) => item.code !== 'order_cancelled')
-                ? ' Повторите печать только по остальным ошибкам.' : ''
-            )
-            : 'Повторите печать по этим заказам.'),
-        )
+      if (partialMessage) {
+        setError(partialMessage)
         return false
       }
     } finally {
