@@ -74,6 +74,7 @@ async def test_ozon_quantity_three_accepts_all_current_bindings_and_rejects_repl
     current_bindings = _bindings(order, supply, current)
     assert await print_bindings_current(db_session, order.tenant_id, current_bindings) is True
 
+    position_id = position.id
     replaced = markings[0]
     replaced.meta_status = "replacement_required"
     replacement = FbsOrderMarking(
@@ -88,6 +89,13 @@ async def test_ozon_quantity_three_accepts_all_current_bindings_and_rejects_repl
     db_session.add(replacement)
     await db_session.commit()
 
+    order = await db_session.scalar(
+        select(FbsOrder)
+        .where(FbsOrder.id == order.id)
+        .options(selectinload(FbsOrder.product_positions))
+    )
+    assert order is not None
+    position = next(row for row in order.product_positions if row.id == position_id)
     next_generation = current_markings(order, [*markings, replacement])
     assert len(next_generation) == position.quantity
     assert replacement in next_generation
