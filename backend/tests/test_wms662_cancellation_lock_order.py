@@ -99,8 +99,10 @@ class LockSchedule:
         self.release = asyncio.Event()
         self.first_resource = None
         self.trace = []
+        self.live_pid_trace = []
         self.errors = []
         self.pids = {}
+        self.observed_pids = None
         self.contended = False
         self.barrier_errors = []
 
@@ -113,7 +115,9 @@ class LockSchedule:
         if getattr(clause, "_for_update_arg", None) is not None or any(
             getattr(clause, flag, False) for flag in ("is_insert", "is_update", "is_delete")
         ):
-            self.pids[role] = conn.connection.driver_connection.get_server_pid()
+            pid = conn.connection.driver_connection.get_server_pid()
+            self.pids[role] = pid
+            self.live_pid_trace.append((role, pid))
         if table is not None:
             self.trace.append((role, "attempt", table, self.pids[role]))
 
@@ -122,19 +126,28 @@ class LockSchedule:
             async with asyncio.timeout(5):
                 while not self.release.is_set():
                     if set(self.pids) == {"handoff", "cancel"}:
+                        # A writer can commit and return its connection to the
+                        # pool after this query. Freeze exactly the pair asked
+                        # of PostgreSQL, but retain it only if PostgreSQL
+                        # confirms this particular pair was contended.
+                        queried_pids = {
+                            "handoff": self.pids["handoff"],
+                            "cancel": self.pids["cancel"],
+                        }
                         blocked = await observer.scalar(
                             text("select :cancel_pid = ANY(pg_blocking_pids(:handoff_pid))"),
                             {
-                                "cancel_pid": self.pids["cancel"],
-                                "handoff_pid": self.pids["handoff"],
+                                "cancel_pid": queried_pids["cancel"],
+                                "handoff_pid": queried_pids["handoff"],
                             },
                         )
                         if blocked:
+                            self.observed_pids = queried_pids
                             self.contended = True
                             self.trace.append(
                                 (
                                     "handoff", "blocked_by_cancel",
-                                    self.first_resource, self.pids["handoff"],
+                                    self.first_resource, queried_pids["handoff"],
                                 )
                             )
                             self.release.set()
@@ -380,7 +393,9 @@ async def test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_dupli
         for oid in (handed.id, cancelled.id)
     }
     diagnostics = (
-        f"trace={schedule.trace}; sqlstates={schedule.errors}; results={results}; "
+        f"trace={schedule.trace}; live_pid_trace={schedule.live_pid_trace}; "
+        f"live_pids={schedule.pids}; observed_pids={schedule.observed_pids}; "
+        f"sqlstates={schedule.errors}; results={results}; "
         f"stock={final.stock}; reserves={final.position_reserves}; "
         f"A_status={final.orders[handed.id].status}; "
         f"B_status={final.orders[cancelled.id].status}; balances={balances}"
@@ -389,8 +404,11 @@ async def test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_dupli
     assert schedule.contended, (
         f"HARNESS: PostgreSQL never confirmed handoff blocked by cancellation; {diagnostics}"
     )
-    assert set(schedule.pids) == {"handoff", "cancel"}
-    assert len(set(schedule.pids.values())) == 2, "must use independent PostgreSQL backends"
+    assert schedule.observed_pids is not None, diagnostics
+    assert set(schedule.observed_pids) == {"handoff", "cancel"}
+    assert len(set(schedule.observed_pids.values())) == 2, (
+        f"must use independent PostgreSQL backends at confirmed wait; {diagnostics}"
+    )
     assert not [code for _, code in schedule.errors if code in {"57014", "55P03"}], (
         f"HARNESS statement/lock timeout is not a business deadlock: {diagnostics}"
     )
