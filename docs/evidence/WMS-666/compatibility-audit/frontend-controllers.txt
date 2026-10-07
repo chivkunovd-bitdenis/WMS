@@ -1,0 +1,14 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-compatibility-audit/frontend
+
+ ✓ src/screens/v2/fbsSequentialPacking.test.ts (37 tests) 123ms
+ ✓ src/guards/scan-print/fbsScanAutoPrint.test.ts (12 tests) 9ms
+ ✓ src/screens/v2/fbsSequentialPacking.copies.test.ts (8 tests) 26ms
+ ✓ src/screens/v2/fbsSequentialPacking.binding.test.ts (6 tests) 31ms
+ ✓ src/screens/v2/fbsSequentialPacking.fullLabel.test.ts (6 tests) 9ms
+ ✓ src/screens/v2/fbsSequentialPacking.recovery.test.ts (3 tests) 14ms
+
+ Test Files  6 passed (6)
+      Tests  72 passed (72)
+   Start at  22:59:45
+   Duration  4.68s (transform 598ms, setup 0ms, collect 1.09s, tests 211ms, environment 1.04s, prepare 724ms)
