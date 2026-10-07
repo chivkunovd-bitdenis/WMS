@@ -1,0 +1,30 @@
+{
+  "run": 37680234422,
+  "tested_sha": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+  "outcome": "INCOMPLETE_FAILURE; both jobs reached configured 45 minute timeout, no full-backend receipt",
+  "cancelled_by_agent": false,
+  "backend_tree_identical_to_F": "7d46767f9f82043bc132c2dbf2a309f9f5e09cb7",
+  "shards": {
+    "0": {
+      "job_id": 112994071996,
+      "log_sha256": "4d9cea14dcaa433a656a842b44ebc6a0630e0a5b81f686a9d072c849e9f46f39",
+      "last_progress": "2026-10-07T20:54:30.4948345Z ............................................s.....FF....FEEEE........FF. [ 95%]",
+      "failure_marks_at_least": 13,
+      "error_marks_at_least": 13,
+      "timeout_lines": [
+        "2026-10-07T20:58:15.7693021Z ##[error]The operation was canceled."
+      ]
+    },
+    "1": {
+      "job_id": 112994072119,
+      "log_sha256": "70ee53425e64e2c8767f152263218cdbf163f13d54361d514a97fc23eb35f56e",
+      "last_progress": "2026-10-07T20:34:44.2317604Z .s....................FF...................s.........ss.....s.ssssssssss [ 95%]",
+      "failure_marks_at_least": 10,
+      "error_marks_at_least": 10,
+      "timeout_lines": [
+        "2026-10-07T20:58:34.2284355Z ##[error]The operation was canceled."
+      ]
+    }
+  },
+  "diagnostic_limit": "Quiet progress has failed/error outcomes without individual nodeIDs/tracebacks; exact cause not yet attributed. No change to tests or timeout and no replacement full run."
+}
