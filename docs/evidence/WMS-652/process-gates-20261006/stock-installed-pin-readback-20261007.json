@@ -1,0 +1,84 @@
+{
+  "readback_start": "2026-10-07 02:15:56 UTC",
+  "readback_end": "2026-10-07 02:15:57 UTC",
+  "main_merge": "6bd8dd00daef51eeae4e06e7f249bd9ba9789768",
+  "config": {
+    "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "source_sha": "b815b166fbcd4db9d014ed1a9d961d7c56225130"
+  },
+  "main_change_paths": [
+    "scripts/ci/process_bootstrap.json"
+  ],
+  "application_checker_workflow_unchanged": true,
+  "ruleset": {
+    "id": 24431521,
+    "enforcement": "active",
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/etalon"
+        ]
+      }
+    },
+    "bypass_actors": [],
+    "required": {
+      "strict_required_status_checks_policy": true,
+      "do_not_enforce_on_create": false,
+      "required_status_checks": [
+        {
+          "context": "baseline",
+          "integration_id": 15368
+        },
+        {
+          "context": "backlog",
+          "integration_id": 15368
+        },
+        {
+          "context": "backend",
+          "integration_id": 15368
+        },
+        {
+          "context": "frontend-build",
+          "integration_id": 15368
+        },
+        {
+          "context": "охрана",
+          "integration_id": 15368
+        },
+        {
+          "context": "print-regressions",
+          "integration_id": 15368
+        },
+        {
+          "context": "printer-windows",
+          "integration_id": 15368
+        },
+        {
+          "context": "process-proof",
+          "integration_id": 15368
+        },
+        {
+          "context": "process-integrity",
+          "integration_id": 15368
+        }
+      ]
+    }
+  },
+  "production_environment": {
+    "id": 17342437220,
+    "deployment_branch_policy": {
+      "protected_branches": false,
+      "custom_branch_policies": true
+    },
+    "allowed_branch_policies": [
+      {
+        "id": 62185902,
+        "node_id": "MDE2OkdhdGVCcmFuY2hQb2xpY3k2MjE4NTkwMg==",
+        "name": "etalon",
+        "type": "branch"
+      }
+    ]
+  },
+  "release": "FullCI pending; no deployment"
+}

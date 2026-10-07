@@ -314,6 +314,7 @@ jobs:
           node --test --test-reporter=tap frontend/tests-e2e/wms672-native-errors.test.mjs > "$RUNNER_TEMP/release-print/672-native-errors.tap"
           node --test --test-reporter=tap frontend/tests-e2e/wms672-peer-drain.test.mjs > "$RUNNER_TEMP/release-print/672-peer-drain.tap"
           node --test --test-reporter=tap frontend/tests-e2e/wms672-raster-resource.test.mjs > "$RUNNER_TEMP/release-print/672-raster-resource.tap"
+          node --test --test-reporter=tap frontend/tests-e2e/wms652-cdp-cancellation.test.mjs > "$RUNNER_TEMP/release-print/wms652-cdp-cancellation.tap"
       - name: Required box-label browser contracts and actual picking-list PDFs
         run: bash scripts/ci/run_release_print.sh
       - name: Real QR input, continuous printing and selected-order buttons

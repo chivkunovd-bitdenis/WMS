@@ -1,0 +1,193 @@
+{
+  "base_sha": "61c6c5f09843329dcaebbd098cec6351754cdd76",
+  "new_contract_sha": "40df0d2d17187cc86d63cb5fbe0efef2b5ae47a1",
+  "new_test_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+  "files": [
+    {
+      "path": "frontend/tests-e2e/ff-inbound-pallet-combine.spec.ts",
+      "base_sha256": "248cbecf86f48df2c562521a070d81cf522f7f3069419ce367cf30376e155080",
+      "current_sha256": "248cbecf86f48df2c562521a070d81cf522f7f3069419ce367cf30376e155080",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/inbound-manual-container-total.spec.ts",
+      "base_sha256": "ca9e719dab60f7b8f7c1c907fab6424bd8f2a9e276f995ca8d2ac1f289036eeb",
+      "current_sha256": "ca9e719dab60f7b8f7c1c907fab6424bd8f2a9e276f995ca8d2ac1f289036eeb",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/seller-staff-invites.mjs",
+      "base_sha256": "58b59ab5d67f1e5b3eb23caf926091dcf967585183cc5ef1482e1e0106a542bc",
+      "current_sha256": "58b59ab5d67f1e5b3eb23caf926091dcf967585183cc5ef1482e1e0106a542bc",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms524-native-print.mjs",
+      "base_sha256": "6fb60a8ac9abd84f5576b8dba5be631ff2a1269bd691c5270052bca0aac0d2d1",
+      "current_sha256": "6fb60a8ac9abd84f5576b8dba5be631ff2a1269bd691c5270052bca0aac0d2d1",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "base_sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+      "current_sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/button-mutations.py",
+      "base_sha256": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
+      "current_sha256": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "base_sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+      "current_sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/fixtures.mjs",
+      "base_sha256": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
+      "current_sha256": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/flags-mutations.py",
+      "base_sha256": "18776567b2d52cecfb3dce715c378a457e1732685e0ee165f6057f32e54e2b09",
+      "current_sha256": "18776567b2d52cecfb3dce715c378a457e1732685e0ee165f6057f32e54e2b09",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/geometry-mutations.py",
+      "base_sha256": "7de94d53e1d0330989f15197a96dcc74912aed1f076f2a507d5972d54d4492cd",
+      "current_sha256": "7de94d53e1d0330989f15197a96dcc74912aed1f076f2a507d5972d54d4492cd",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/geometry.mjs",
+      "base_sha256": "eeb4a65d08be78e91726b79e60e5ca5bcc57e6ad4c51e31c073a4188626d87c6",
+      "current_sha256": "eeb4a65d08be78e91726b79e60e5ca5bcc57e6ad4c51e31c073a4188626d87c6",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/index.html",
+      "base_sha256": "eb0a95a73e7fbee51f9c7a3400d74bee877fd5998a07bb0d08131799af2073da",
+      "current_sha256": "eb0a95a73e7fbee51f9c7a3400d74bee877fd5998a07bb0d08131799af2073da",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/main.tsx",
+      "base_sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621",
+      "current_sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/mutations.py",
+      "base_sha256": "f4fde51fc84ce1ac6b3f673605913b630db008467e7c6c3a8bd645a9e177c440",
+      "current_sha256": "f4fde51fc84ce1ac6b3f673605913b630db008467e7c6c3a8bd645a9e177c440",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/remount-selection-mutation.py",
+      "base_sha256": "2d32aa6d45816e53683a775917be5b4339561f89647f68a37dfad7f9e82ebe76",
+      "current_sha256": "2d32aa6d45816e53683a775917be5b4339561f89647f68a37dfad7f9e82ebe76",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/vite.config.ts",
+      "base_sha256": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
+      "current_sha256": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms666-proof/index.html",
+      "base_sha256": "48d1b2495c7d7708db6048142766cabf61ae23f05e711b0d1619c34883baadf3",
+      "current_sha256": "48d1b2495c7d7708db6048142766cabf61ae23f05e711b0d1619c34883baadf3",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms666-proof/main.tsx",
+      "base_sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621",
+      "current_sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms666-proof/vite.config.ts",
+      "base_sha256": "0c55308f2a114991f0fa97b312402a08a84912a2db4e9d287dda1544fd8a248e",
+      "current_sha256": "0c55308f2a114991f0fa97b312402a08a84912a2db4e9d287dda1544fd8a248e",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-box-labels.test.mjs",
+      "base_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+      "current_sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-dom.config.ts",
+      "base_sha256": "dd41131adc4f3dedcd82bf466b52a157fcd320131a4651656415bfa47ad7f0a4",
+      "current_sha256": "dd41131adc4f3dedcd82bf466b52a157fcd320131a4651656415bfa47ad7f0a4",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-dom.test.tsx",
+      "base_sha256": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+      "current_sha256": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-harness.html",
+      "base_sha256": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
+      "current_sha256": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-harness.tsx",
+      "base_sha256": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
+      "current_sha256": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "base_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "current_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "base_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "current_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-remaining.test.mjs",
+      "base_sha256": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
+      "current_sha256": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-vite.config.ts",
+      "base_sha256": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
+      "current_sha256": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package.json",
+      "base_sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "current_sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "base_sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "current_sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/src/utils/printBarcodeLabel.ts",
+      "base_sha256": "c4b1d5f835ada6073c1b471553fed8b98f6196692e002f5eca6c073271b0f9f5",
+      "current_sha256": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
+      "byte_identical": false
+    }
+  ]
+}

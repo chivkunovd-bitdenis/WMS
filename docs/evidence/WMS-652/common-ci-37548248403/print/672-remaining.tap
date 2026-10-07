@@ -1,0 +1,46 @@
+TAP version 13
+# Subtest: C7 remaining inbound: unknown reload, operator clarification then distinct explicit reprint
+ok 1 - C7 remaining inbound: unknown reload, operator clarification then distinct explicit reprint
+  ---
+  duration_ms: 4665.197404
+  type: 'test'
+  ...
+# Subtest: C11 inbound: actual placement dialog long names preview error and neighbors
+ok 2 - C11 inbound: actual placement dialog long names preview error and neighbors
+  ---
+  duration_ms: 4893.843994
+  type: 'test'
+  ...
+# Subtest: C7 remaining return: unknown reload, operator clarification then distinct explicit reprint
+ok 3 - C7 remaining return: unknown reload, operator clarification then distinct explicit reprint
+  ---
+  duration_ms: 4449.333863
+  type: 'test'
+  ...
+# Subtest: C11 return: actual placement dialog long names preview error and neighbors
+ok 4 - C11 return: actual placement dialog long names preview error and neighbors
+  ---
+  duration_ms: 4856.127823
+  type: 'test'
+  ...
+# Subtest: C10 remaining inbound: existing WMS659 bulk creation opens quantity dialog without printing
+ok 5 - C10 remaining inbound: existing WMS659 bulk creation opens quantity dialog without printing
+  ---
+  duration_ms: 1822.72777
+  type: 'test'
+  ...
+# Subtest: C10 remaining return: existing WMS659 bulk creation opens quantity dialog without printing
+ok 6 - C10 remaining return: existing WMS659 bulk creation opens quantity dialog without printing
+  ---
+  duration_ms: 1868.469703
+  type: 'test'
+  ...
+1..6
+# tests 6
+# suites 0
+# pass 6
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 22930.446859

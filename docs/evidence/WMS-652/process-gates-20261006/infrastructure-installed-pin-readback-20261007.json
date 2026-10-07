@@ -1,0 +1,127 @@
+{
+  "main_pr": 395,
+  "main_pr_url": "https://github.com/chivkunovd-bitdenis/WMS/pull/395",
+  "main_merge_sha": "ddb28a5530456f2be6f7772001f72095e53be1e6",
+  "merged_at": "2026-10-07T01:13:27Z",
+  "main_config_commit": "3b036df83700caf7b47de91feb716c25ce4367da",
+  "installed_pair": {
+    "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "source_sha": "321f69385a8783bbf0c2fa65e80829e4c9c32373"
+  },
+  "approved_policy_sha256": "1dced9197f99a8922ca6d10795fab51a02c48ebd821e90fc686ac56860caa2eb",
+  "approval_commit": "df7d68769224e9d0358f4bd2dec2619738f2db25",
+  "changed_main_paths": [
+    "scripts/ci/process_bootstrap.json"
+  ],
+  "unchanged_checker_workflow_reference": "045272b51f28829b6220410856e9216a3054ce33",
+  "unchanged_main_application": true,
+  "ruleset": {
+    "id": 24431521,
+    "name": "WMS-652 etalon: только PR с зелёным CI",
+    "target": "branch",
+    "enforcement": "active",
+    "bypass_actors": [],
+    "conditions": {
+      "ref_name": {
+        "exclude": [],
+        "include": [
+          "refs/heads/etalon"
+        ]
+      }
+    },
+    "rules": [
+      {
+        "type": "deletion"
+      },
+      {
+        "type": "non_fast_forward"
+      },
+      {
+        "type": "pull_request",
+        "parameters": {
+          "required_approving_review_count": 0,
+          "dismiss_stale_reviews_on_push": false,
+          "required_reviewers": [],
+          "require_code_owner_review": false,
+          "require_last_push_approval": false,
+          "required_review_thread_resolution": false,
+          "require_extra_approval_for_unattributed_changes": true,
+          "allowed_merge_methods": [
+            "merge",
+            "squash",
+            "rebase"
+          ]
+        }
+      },
+      {
+        "type": "required_status_checks",
+        "parameters": {
+          "strict_required_status_checks_policy": true,
+          "do_not_enforce_on_create": false,
+          "required_status_checks": [
+            {
+              "context": "baseline",
+              "integration_id": 15368
+            },
+            {
+              "context": "backlog",
+              "integration_id": 15368
+            },
+            {
+              "context": "backend",
+              "integration_id": 15368
+            },
+            {
+              "context": "frontend-build",
+              "integration_id": 15368
+            },
+            {
+              "context": "охрана",
+              "integration_id": 15368
+            },
+            {
+              "context": "print-regressions",
+              "integration_id": 15368
+            },
+            {
+              "context": "printer-windows",
+              "integration_id": 15368
+            },
+            {
+              "context": "process-proof",
+              "integration_id": 15368
+            },
+            {
+              "context": "process-integrity",
+              "integration_id": 15368
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "production_environment": {
+    "id": 17342437220,
+    "deployment_branch_policy": {
+      "protected_branches": false,
+      "custom_branch_policies": true
+    }
+  },
+  "production_branch_policy": {
+    "branch_policies": [
+      {
+        "id": 62185902,
+        "node_id": "MDE2OkdhdGVCcmFuY2hQb2xpY3k2MjE4NTkwMg==",
+        "name": "etalon",
+        "type": "branch"
+      }
+    ]
+  },
+  "limits": [
+    "Configuration identity/protection readback only. Exact full CI and stage/production release still pending.",
+    "No secret metadata or values, configuration/key management, production mutation or arbitrary direct-SSH enforcement inspection."
+  ],
+  "query_clock_lower_bound_utc": "2026-10-07T01:15:56Z",
+  "query_clock_upper_bound_utc": "2026-10-07T01:17:20Z",
+  "query_time_basis": "UTC clock reads before and after metadata calls; exact request timestamps were not captured."
+}

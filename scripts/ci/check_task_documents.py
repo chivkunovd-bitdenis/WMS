@@ -50,6 +50,16 @@ FIXTURE_BLOB_PAIRS = {
         "5a508673b78388e44c903fe503fd76f3e48a7cde",
         "d96fd44965a7f0b8806d87fe3d4f88243cad1f5e",
     ),
+    "wms662-live-delivery-test-format": (
+        "WMS-662", "backend/tests/test_wms662_live_delivery_substatuses.py",
+        "a6fc67e70364b0c84e9d2d41d734cd5af1cd61b4",
+        "cefb7d8ac635c3da443a6f623c2fef4a1ff75850",
+    ),
+    "wms662-batch-first-wait-pid-snapshot": (
+        "WMS-662", "backend/tests/test_wms662_batch_handoff_lock_order.py",
+        "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+        "03d744d54222dc6ee13014d1f378bf07e6eb4e8a",
+    ),
 }
 
 # Published Sol high exact chains: fixed whole-file blobs, no generic exemption.

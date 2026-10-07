@@ -1,0 +1,44 @@
+Current observer parameters=[{'batch': 219, 'ordinary': 209}, {'batch': 219, 'ordinary': 209}]; cycle=False
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_live_cycle_observation_after_pid_change_uses_current_writer_connections _
+
+    @pytest.mark.asyncio
+    async def test_live_cycle_observation_after_pid_change_uses_current_writer_connections():
+        observer = ObserverBoundary()
+        schedule, role = actual_schedule(observer)
+        writer(schedule, role, "batch", 219)
+        writer(schedule, role, "ordinary", 209)
+    
+        def reply():
+            if observer.poll == 0:
+                return [(219, [], "seller lock"), (209, [219], "first INSERT wait")]
+            schedule.finished.set()
+            return [(301, [302], "current batch wait"), (302, [301], "current ordinary wait")]
+    
+        observer.reply = reply
+        task = asyncio.create_task(schedule.observe())
+        try:
+            await await_release(schedule, task)
+            assert schedule.wait_seen and not schedule.cycle_seen
+            writer(schedule, role, "batch", 301, locked_select=True)
+            writer(schedule, role, "ordinary", 302)
+            await task
+            print(f"Current observer parameters={observer.parameters}; cycle={schedule.cycle_seen}")
+>           assert observer.parameters[-1] == {"batch": 301, "ordinary": 302}, (
+                "cycle observation must query live connections, not frozen historical writers"
+            )
+E           AssertionError: cycle observation must query live connections, not frozen historical writers
+E           assert {'batch': 219...rdinary': 209} == {'batch': 301...rdinary': 302}
+E             
+E             Differing items:
+E             {'batch': 219} != {'batch': 301}
+E             {'ordinary': 209} != {'ordinary': 302}
+E             Use -v to get more diff
+
+/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms652-batch-pid-iyuli7bh/tests/test_wms662_batch_pid_snapshot_contract.py:161: AssertionError
+----------------------------- Captured stdout call -----------------------------
+Current observer parameters=[{'batch': 219, 'ordinary': 209}, {'batch': 219, 'ordinary': 209}]; cycle=False
+=========================== short test summary info ============================
+FAILED ../../../../../../../var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms652-batch-pid-iyuli7bh/tests/test_wms662_batch_pid_snapshot_contract.py::test_live_cycle_observation_after_pid_change_uses_current_writer_connections
+1 failed, 1 deselected in 0.44s

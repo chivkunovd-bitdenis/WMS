@@ -1,0 +1,25 @@
+{
+  "implementation_sha": "ab71812c180b4cc842d0ba321bc5e32f7bd562d4",
+  "members": [
+    {
+      "path": "README.md",
+      "bytes": 2655,
+      "sha256": "331cf907ff299ed7ec3565ed84ba76c429a356127b2e930b4c124a572cad759e"
+    },
+    {
+      "path": "precode-red.tap",
+      "bytes": 5000,
+      "sha256": "553aa328316d473016597761a38bb2422edf05fb380ad5d9148ae6be1187507f"
+    },
+    {
+      "path": "preservation.json",
+      "bytes": 599,
+      "sha256": "2f2cd8b33d766597ca29ad51760d7ed2c1b574c63925acd134984e56355242d6"
+    },
+    {
+      "path": "targeted-green.tap",
+      "bytes": 2642,
+      "sha256": "22739733bed5184ebdfbff17360772930b10622a4f54fe57924b6ced7fe9931c"
+    }
+  ]
+}

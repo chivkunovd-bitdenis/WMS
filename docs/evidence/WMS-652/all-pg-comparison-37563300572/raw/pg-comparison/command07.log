@@ -1,0 +1,12 @@
+127.0.0.1 postgres
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+WMS675 isolated database: wms_test_675_incident 172.18.0.2:5432
+WMS675 recovery verified: expense=26 reserve=16->1 facts=11->26 charges=22->52 existing IDs preserved; repeat expense/facts/charges delta=0; SKU deltas=4/8/5/0/2/7
+.
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+1 passed, 1 warning in 5.02s

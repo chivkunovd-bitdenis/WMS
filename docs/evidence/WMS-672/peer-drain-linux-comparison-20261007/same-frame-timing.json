@@ -1,0 +1,450 @@
+[
+  {
+    "fixture": "fixture-1",
+    "page": "page-0.json",
+    "nativePendingAtClose": 0,
+    "nativeFulfilled": 459,
+    "nativeRejected": 0,
+    "frames": [
+      {
+        "frameId": 3,
+        "starts": 159,
+        "firstStart": 1250.3999999999942,
+        "lastStart": 1759.5,
+        "startSpan": 509.1000000000058,
+        "cohortEnds": [
+          {
+            "time": 1298.8999999999942,
+            "index": 16,
+            "nativeFulfilled": 16,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1361.800000000003,
+            "index": 32,
+            "nativeFulfilled": 32,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1418.8999999999942,
+            "index": 48,
+            "nativeFulfilled": 48,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1459.5,
+            "index": 64,
+            "nativeFulfilled": 64,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1519.5,
+            "index": 80,
+            "nativeFulfilled": 80,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1558.3999999999942,
+            "index": 96,
+            "nativeFulfilled": 96,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1620.5,
+            "index": 112,
+            "nativeFulfilled": 112,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1665.6000000000058,
+            "index": 128,
+            "nativeFulfilled": 128,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1725.1000000000058,
+            "index": 144,
+            "nativeFulfilled": 144,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1784.800000000003,
+            "index": 160,
+            "nativeFulfilled": 159,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          }
+        ]
+      },
+      {
+        "frameId": 5,
+        "starts": 300,
+        "firstStart": 1291.1000000000058,
+        "lastStart": 2050.300000000003,
+        "startSpan": 759.1999999999971,
+        "cohortEnds": [
+          {
+            "time": 1297.6000000000058,
+            "index": 176,
+            "nativeFulfilled": 175,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1317.800000000003,
+            "index": 192,
+            "nativeFulfilled": 191,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1350.800000000003,
+            "index": 208,
+            "nativeFulfilled": 207,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1384.1000000000058,
+            "index": 224,
+            "nativeFulfilled": 223,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1417.5,
+            "index": 240,
+            "nativeFulfilled": 239,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1450.7000000000116,
+            "index": 256,
+            "nativeFulfilled": 255,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1484.1000000000058,
+            "index": 272,
+            "nativeFulfilled": 271,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1517.4000000000087,
+            "index": 288,
+            "nativeFulfilled": 287,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1550.800000000003,
+            "index": 304,
+            "nativeFulfilled": 303,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1586.6000000000058,
+            "index": 320,
+            "nativeFulfilled": 319,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1644,
+            "index": 336,
+            "nativeFulfilled": 335,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1693.800000000003,
+            "index": 352,
+            "nativeFulfilled": 351,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1744,
+            "index": 368,
+            "nativeFulfilled": 367,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1793.800000000003,
+            "index": 384,
+            "nativeFulfilled": 383,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1854.9000000000087,
+            "index": 400,
+            "nativeFulfilled": 399,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1919.800000000003,
+            "index": 416,
+            "nativeFulfilled": 415,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1977.7000000000116,
+            "index": 432,
+            "nativeFulfilled": 431,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 2027.300000000003,
+            "index": 448,
+            "nativeFulfilled": 447,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 2076.300000000003,
+            "index": 460,
+            "nativeFulfilled": 459,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "fixture": "fixture-1",
+    "page": "page-1.json",
+    "nativePendingAtClose": 0,
+    "nativeFulfilled": 300,
+    "nativeRejected": 0,
+    "frames": [
+      {
+        "frameId": 1,
+        "starts": 300,
+        "firstStart": 470.5,
+        "lastStart": 1716.3999999999942,
+        "startSpan": 1245.8999999999942,
+        "cohortEnds": [
+          {
+            "time": 552.5999999999913,
+            "index": null,
+            "nativeFulfilled": 32,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 636.3999999999942,
+            "index": null,
+            "nativeFulfilled": 64,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 927.5,
+            "index": null,
+            "nativeFulfilled": 96,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1067.5,
+            "index": null,
+            "nativeFulfilled": 128,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1196.7999999999884,
+            "index": null,
+            "nativeFulfilled": 160,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1287.5,
+            "index": null,
+            "nativeFulfilled": 192,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1404.7999999999884,
+            "index": null,
+            "nativeFulfilled": 224,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1554.7999999999884,
+            "index": null,
+            "nativeFulfilled": 256,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1701.2999999999884,
+            "index": null,
+            "nativeFulfilled": 288,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1774.5999999999913,
+            "index": null,
+            "nativeFulfilled": 300,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "fixture": "fixture-2",
+    "page": "page-0.json",
+    "nativePendingAtClose": 0,
+    "nativeFulfilled": 226,
+    "nativeRejected": 14,
+    "frames": [
+      {
+        "frameId": 3,
+        "starts": 240,
+        "firstStart": 1142.300000000003,
+        "lastStart": 1648.4000000000087,
+        "startSpan": 506.1000000000058,
+        "cohortEnds": [
+          {
+            "time": 1183.300000000003,
+            "index": 16,
+            "nativeFulfilled": 16,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1243,
+            "index": 32,
+            "nativeFulfilled": 32,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1275.1000000000058,
+            "index": 48,
+            "nativeFulfilled": 48,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1308.9000000000087,
+            "index": 64,
+            "nativeFulfilled": 64,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1341.800000000003,
+            "index": 80,
+            "nativeFulfilled": 80,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1379.800000000003,
+            "index": 96,
+            "nativeFulfilled": 96,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1408.6000000000058,
+            "index": 112,
+            "nativeFulfilled": 112,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1441.7000000000116,
+            "index": 128,
+            "nativeFulfilled": 128,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1475.7000000000116,
+            "index": 144,
+            "nativeFulfilled": 144,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1508.5,
+            "index": 160,
+            "nativeFulfilled": 160,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1541.6000000000058,
+            "index": 176,
+            "nativeFulfilled": 176,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1575.1000000000058,
+            "index": 192,
+            "nativeFulfilled": 192,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1608.5,
+            "index": 208,
+            "nativeFulfilled": 208,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1641.7000000000116,
+            "index": 224,
+            "nativeFulfilled": 224,
+            "nativeRejected": 0,
+            "nativeTotalPending": 0
+          },
+          {
+            "time": 1653,
+            "index": 240,
+            "nativeFulfilled": 226,
+            "nativeRejected": 14,
+            "nativeTotalPending": 0
+          }
+        ],
+        "firstReject": {
+          "time": 1652.300000000003,
+          "index": 227,
+          "nativeTotalPending": 13
+        },
+        "firstStartToReject": 510.0,
+        "rejectCount": 14
+      }
+    ]
+  }
+]

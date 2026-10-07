@@ -1,0 +1,17 @@
+{
+  "task": "WMS-652",
+  "corrections": [
+    {
+      "contract_commit": "e70291d40e7d769109e33aa291e70bfa289974a4",
+      "correction_commit": "d40bc41995cb2ad434187734419dd2bfe507b8da",
+      "files": [
+        "backend/tests/test_prod_deploy_backup_gate_boundary.py"
+      ],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS"
+      }
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "run": 37561608930,
+  "attempt": 1,
+  "head": "a09e34fc7ec3dcfbdceeaf4916a8535fcbffc8ed",
+  "tested_merge": "4a118aea00ec3995d98f70d337245260b291ca7f",
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "tree": "fc3e2a129659480df4c653873da4495199e0abba",
+  "conclusion": "failure",
+  "elapsed_seconds": 779.0,
+  "collection_count": 4635,
+  "collection_disjoint_union": true,
+  "xml_case_disjoint_union": true,
+  "xml_statuses": {
+    "passed": 4437,
+    "skipped": 198
+  },
+  "required_fbs": {
+    "passed": 619,
+    "skipped": 0,
+    "failed": 0
+  },
+  "historical_sqlite_case": "passed",
+  "new_stock_native_four": {
+    "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once": "passed",
+    "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches": "passed",
+    "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch": "passed",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit": "passed"
+  },
+  "shards": {
+    "1": {
+      "counts": {
+        "passed": 2218,
+        "skipped": 99
+      },
+      "selected": 2317,
+      "junit_sha256": "b1d0183dbdc80c61dfcb22c6d16fff1f238a9c3165883f38d59839860723dfac",
+      "receipt_sha256": "39bdb0c0a31518ace49c4b96c93620018ae189e65729ec2b0743ab85a1ff21ed"
+    },
+    "0": {
+      "counts": {
+        "passed": 2219,
+        "skipped": 99
+      },
+      "selected": 2318,
+      "junit_sha256": "92b54b54bd6cd14fa091f3cbd0bd38818c5e0ffe1c4892b1737ab778843347e8",
+      "receipt_sha256": "2e6b8c8b465afa0ab5ff9c9ea7af29d7f5a1791cc8f6fdcd66b4532bb6573ad3"
+    }
+  },
+  "mandatory_pg": "batch harness FAIL; remaining steps NOT_EXECUTED",
+  "process_proof": "SKIPPED",
+  "latest_process_integrity": "FAILURE 02:35:04UTC",
+  "limitations": [
+    "198 ordinary XML skips are not mandatory PG passes",
+    "12m59 failed run does not achieve successful timing acceptance",
+    "Historical SQLite owner remains UNKNOWN despite current full test PASS"
+  ]
+}

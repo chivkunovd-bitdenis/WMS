@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="3" time="2.869" timestamp="2026-10-07T06:45:28.020248+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_wrong_task_path_transform_and_blob_pairs_remain_rejected" time="0.880"><failure message="AssertionError: (0, 'path')&#10;assert []">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-111/test_wrong_task_path_transform0')
+
+    def test_wrong_task_path_transform_and_blob_pairs_remain_rejected(tmp_path):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger(PAIRS)
+        for index in (0, 1):
+            for field, value in (("path", "backend/tests/unapproved.py"),
+                                 ("transform", "unlisted-transform"),
+                                 ("before_blob", "f" * 40), ("after_blob", "e" * 40)):
+                changed = copy.deepcopy(ledger)
+                changed["fixture_corrections"][index]["files"][0][field] = value
+&gt;               assert replay.validate(changed)[1], (index, field)
+E               AssertionError: (0, 'path')
+E               assert []
+
+/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms662-exact-pairs-35b1sx6i/backend/tests/test_wms662_exact_fixture_pairs_contract.py:139: AssertionError</failure></testcase><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob" time="0.941"><failure message="AssertionError: candidate hash cannot grant its own permission&#10;assert []">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-111/test_mutated_assertion_or_late0')
+
+    def test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob(tmp_path):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger(PAIRS)
+        for index, entry in enumerate(ledger["fixture_corrections"]):
+            path = entry["files"][0]["path"]
+            original = (tmp_path / path).read_text()
+            altered = original.replace("assert ", "assert True or ", 1)
+            assert altered != original
+            replay.write(path, altered)
+            candidate = replay.commit("unreviewed assertion mutation")
+            changed = copy.deepcopy(ledger)
+            changed["fixture_corrections"][index]["files"][0]["after_blob"] = replay.blob(altered)
+            changed["fixture_corrections"][index]["correction_commit"] = candidate
+&gt;           assert replay.validate(changed)[1], "candidate hash cannot grant its own permission"
+E           AssertionError: candidate hash cannot grant its own permission
+E           assert []
+
+/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms662-exact-pairs-35b1sx6i/backend/tests/test_wms662_exact_fixture_pairs_contract.py:158: AssertionError</failure></testcase><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_missing_changed_review_or_rebound_source_remains_rejected" time="0.875"><failure message="AssertionError: (0, 'model')&#10;assert []">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-111/test_missing_changed_review_or0')
+
+    def test_missing_changed_review_or_rebound_source_remains_rejected(tmp_path):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger(PAIRS)
+        for index in (0, 1):
+            for field, value in (("model", "unknown"), ("verdict", "FAIL"),
+                                 ("evidence_blob", "f" * 40), ("evidence_commit", replay.base),
+                                 ("source_commit", replay.base)):
+                changed = copy.deepcopy(ledger)
+                changed["fixture_corrections"][index]["review"][field] = value
+&gt;               assert replay.validate(changed)[1], (index, field)
+E               AssertionError: (0, 'model')
+E               assert []
+
+/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms662-exact-pairs-35b1sx6i/backend/tests/test_wms662_exact_fixture_pairs_contract.py:173: AssertionError</failure></testcase></testsuite></testsuites>

@@ -1,0 +1,183 @@
+{
+  "actual_raw_report": "docs/evidence/WMS-652/common-ci-37548248403/frontend/frontend-all.json",
+  "read_as_git_blob": "dbeabe2fd1cbb6a1cff996e379d281258bf5f0aa:docs/evidence/WMS-652/common-ci-37548248403/frontend/frontend-all.json",
+  "raw_sha256": "4c7fd80099a6285b2d92512dd0af8bff26843b99a12b809a2f09f174d9778af8",
+  "full_ci_run": 37548248403,
+  "attempt": 1,
+  "merge_sha": "ac845328b27b5be265962695e10766efddef339e",
+  "source_sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "frontend_job": 112557363963,
+  "executed_assertions": 1566,
+  "duplicate_groups": [
+    {
+      "file": "/home/runner/work/WMS/WMS/frontend/src/integrations/cryptoProCades.test.ts",
+      "fullName": "CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline",
+      "count": 2
+    }
+  ],
+  "input_rows": [
+    [
+      {
+        "pluginVersion": "2.0.14999"
+      },
+      "plugin_version_unsupported"
+    ],
+    [
+      {
+        "cspVersion": "5.0.12999"
+      },
+      "csp_version_unsupported"
+    ]
+  ],
+  "module_count": 37,
+  "module_cases": [
+    {
+      "fullName": "CryptoPro CAdES readiness fails closed when the pinned local runtime script is absent",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness reads only About versions and does not open Store or private key",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness reports a runtime initialization timeout without opening Store",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness maps the documented CSP-not-installed error separately",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome 104 on Windows 10/11",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Edge 104 on Windows 10/11",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Firefox 52 on macOS 11",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome on macOS 12",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Firefox on macOS 13",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome on macOS 14",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome on macOS 15 diagnostics",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome on macOS 26.3 diagnostics",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness lets runtime capability checks decide on a recognized OS: Chrome on older macOS diagnostics",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects unsupported runtime: Safari",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects unsupported runtime: old Chrome",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects unsupported runtime: unknown browser",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects unsupported runtime: Windows below supported baseline",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness requires a per-instance tested OS confirmation when the browser cannot identify the OS",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness classifies 0x80090019 internally without exposing a native path, container or thumbprint",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness uses Chrome macOS 26.3 diagnostics and completes both signatures with the default adapter",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness uses the frozen macOS token as diagnostics without inventing evidence when hints are unavailable",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness fails closed on an actual Store capability failure on frozen macOS 26.3",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro CAdES readiness rejects unsupported runtime before Store access or signing",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro certificate access opens CurrentUser/My only after an explicit certificate request and omits no-key certificates",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro certificate access returns only public display fields plus the full operation identifier",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro certificate access reports Store access failure without retrying or pretending the Store was opened",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing passes the original base64 unchanged after ContentEncoding and creates CAdES-BES detached",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing fails before signer creation when certificate chain validation fails",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing does not sign when the selected certificate disappeared",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing does not retry a rejected CSP/PIN signing prompt or read PIN itself",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing rejects malformed payload without opening the plugin or reserializing anything",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing signs the exact raw True API challenge as attached CAdES-BES and verifies it locally",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing fails closed when local VerifyCades rejects the attached signature",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing does not return an attached signature that is not valid base64",
+      "status": "passed"
+    },
+    {
+      "fullName": "CryptoPro exact detached document signing rejects an empty auth challenge before opening the plugin",
+      "status": "passed"
+    }
+  ]
+}

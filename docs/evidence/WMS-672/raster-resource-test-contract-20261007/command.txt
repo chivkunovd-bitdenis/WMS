@@ -1,0 +1,3 @@
+node --test --test-reporter=tap frontend/tests-e2e/wms672-raster-resource.test.mjs > docs/evidence/WMS-672/raster-resource-test-contract-20261007/before.tap 2>&1
+Expected and observed exit: 1 (RR1 RED; RR2/RR3 GREEN)
+Future report: release-print/672-raster-resource.tap (process-proof: print/672-raster-resource.tap); format: node-tap

@@ -1,0 +1,34 @@
+{
+  "prepared": true,
+  "active_main_source": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "preparation_base": "6bc27326180aa11b5d7ea1a71da90f59187bf10b",
+  "policy_sha256": "09ab97c040c9e54ca7c14d2a5f7918f99991748718df1ece01952933eafc36e4",
+  "protected_files": 224,
+  "suite_cases": 1161,
+  "preserved_files": 222,
+  "preserved_suite_cases": 1146,
+  "added_files": [
+    "backend/tests/test_prod_deploy_backup.py",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py"
+  ],
+  "added_actual_cases": [
+    "test_deploy_requires_verified_backup_before_migration[]",
+    "test_deploy_requires_verified_backup_before_migration[dump]",
+    "test_deploy_requires_verified_backup_before_migration[archive]",
+    "test_deploy_requires_verified_backup_before_migration[listing]",
+    "test_deploy_requires_verified_backup_before_migration[empty]",
+    "test_deploy_requires_verified_backup_before_migration[network]",
+    "test_deploy_requires_verified_backup_before_migration[retry]",
+    "test_workflow_bootstrap_checks_git_and_separates_stdin[False]",
+    "test_workflow_bootstrap_checks_git_and_separates_stdin[True]",
+    "test_all_seven_backup_variants_and_original_assertions_are_preserved",
+    "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+    "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+    "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+    "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
+    "test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]"
+  ],
+  "independent_review_source": "68de0bef6d78acf55aa517b16de4e440d68dc3c4",
+  "full_ci_pass": false,
+  "new_source_pin_approved": false
+}

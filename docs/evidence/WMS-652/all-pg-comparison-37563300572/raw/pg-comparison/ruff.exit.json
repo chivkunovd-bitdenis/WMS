@@ -1,0 +1,13 @@
+{
+  "id": "ruff",
+  "name": "Ruff",
+  "command": "ruff check .",
+  "working_directory": "backend",
+  "command_sha256": "a0e3ed3d50f590907493cef09ea66c5b2e93004d9486d41e3d1f4e3531ebcc93",
+  "exit_code": 0,
+  "started_epoch": 1791341037.8173637,
+  "completed_epoch": 1791341038.0947523,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

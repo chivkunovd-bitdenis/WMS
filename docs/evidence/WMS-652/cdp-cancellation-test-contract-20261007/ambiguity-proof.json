@@ -1,0 +1,177 @@
+{
+  "base": "3151a29954138f0b92226ae8965a5b186b26b9f3",
+  "frozen_five_case_contract": "910217fe9323cfaee211b294b01ec7b77daf49d8",
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+  "format": "node-tap",
+  "planned_report": "print/wms652-cdp-cancellation.tap",
+  "raw": "before-ambiguity-seven.tap",
+  "raw_sha256": "82c79eea18f07dea8cfb14347a5c9cc0fae72df76760b4f00cdaec4a07763347",
+  "exit_code": 1,
+  "counts": {
+    "total": 7,
+    "pass": 5,
+    "fail": 2,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP6",
+      "CDP7"
+    ],
+    "green": [
+      "CDP1",
+      "CDP2",
+      "CDP3",
+      "CDP4",
+      "CDP5"
+    ],
+    "raw": "before-ambiguity-seven.tap"
+  },
+  "frozen_prefix_bytes": 11558,
+  "frozen_prefix_sha256": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
+  "new_file_prefix_sha256": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
+  "helpers_CDP1_to_5_negative12_byte_identical": true,
+  "append_only_test_change": true,
+  "new_case_ids": [
+    "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+    "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+  ],
+  "failure_reason": "Both strictFailure assertions expect rejected but actual CDP resolves retired:true after ownership becomes ambiguous while the command is in flight. Native payload preserved and exactly one command recorded in each case; no setup failure.",
+  "controlled_boundary": "Actual extracted CDP class; existing controlled WebSocket ingress/reply. No classifier replacement, Chrome, mutation, or implementation edit.",
+  "closure_sha256": {
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "2701f510c5879f3154beb3af633f8aaee493cc07311d4d2e3686d24f261199da",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "unchanged_frozen_sources": [
+    {
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "sha256": "2701f510c5879f3154beb3af633f8aaee493cc07311d4d2e3686d24f261199da",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/fixtures.mjs",
+      "sha256": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/geometry.mjs",
+      "sha256": "eeb4a65d08be78e91726b79e60e5ca5bcc57e6ad4c51e31c073a4188626d87c6",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/vite.config.ts",
+      "sha256": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+      "sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "scripts/ci/tests/test_product_scope.py",
+      "sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "scripts/ci/product_scope.py",
+      "sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/package.json",
+      "sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "byte_identical_to_base": true
+    }
+  ],
+  "unchanged_historical_evidence_and_five_green_receipts": [
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-developer-20261007/README.md",
+      "sha256": "331cf907ff299ed7ec3565ed84ba76c429a356127b2e930b4c124a572cad759e",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-developer-20261007/manifest.json",
+      "sha256": "0fa0013bd20497b5b52401ccb2e4c7348acc6cd8dae37da13ab1e1b5b0cad00d",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-developer-20261007/precode-red.tap",
+      "sha256": "553aa328316d473016597761a38bb2422edf05fb380ad5d9148ae6be1187507f",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-developer-20261007/preservation.json",
+      "sha256": "2f2cd8b33d766597ca29ad51760d7ed2c1b574c63925acd134984e56355242d6",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-developer-20261007/targeted-green.tap",
+      "sha256": "22739733bed5184ebdfbff17360772930b10622a4f54fe57924b6ced7fe9931c",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/before-five.tap",
+      "sha256": "1addd06d604c9dbc297fe661dd854c7d8e7bee343507d96f07541103762a3ee1",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/before.tap",
+      "sha256": "ca5b0eeb48b35a84b63d1888cc9047e18db2f4f9d4f367253c9a9290b26459ff",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/duplicate-proof.json",
+      "sha256": "78da971cfb702de58eabc1a189ec61b850241851766896f7255765044c6934f8",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/mutation-duplicate.tap",
+      "sha256": "202cddc6ceec198b292e32205cc05c04b455bd71d6fc225d151732d12453fc86",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/mutation-preservation.tap",
+      "sha256": "45ac29c03b14dec554731691fb0fc94369c434da68cd2421f3181206e5304183",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/mutation-proof.py",
+      "sha256": "d75089f33fc0cc7e525f5041a62d70042a8a9b48b49bea7a64351949b1ddef3c",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/mutation-result.json",
+      "sha256": "ce0a7defdfd457681735ac78c35890633ab4bcec0e53897e0f490567b4a22468",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/preservation-proof.json",
+      "sha256": "1dba7a0ef33288988a3f101839685fb975a4c49c2660d675325a60ce81d9af2a",
+      "byte_identical_to_base": true
+    }
+  ],
+  "historical_ci_cause": "UNKNOWN",
+  "review_acceptance_source_approval": false
+}

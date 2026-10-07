@@ -1,0 +1,2909 @@
+{
+  "boundary": "Complete retained first150 prefix only; missing later refuse phase because trace lost events",
+  "source_formula": "software_image_decode_cache_utils.h:88-93 locked_bytes=4*target_width*target_height",
+  "peak_bytes": 188093312,
+  "peak_entries": 158,
+  "add_count": 159,
+  "remove_count": 159,
+  "unknown_identity_events": [],
+  "clock_bands_with_1ms_Date_precision": [
+    {
+      "syncId": "C5-clock-trace-start-0",
+      "ts": 157859656,
+      "epochBeforeMs": 1791323651551,
+      "epochAfterMs": 1791323651552,
+      "offsetLowMs": 1791323493690.344,
+      "offsetHighMs": 1791323493693.344
+    },
+    {
+      "syncId": "C5-clock-fixture-1-opened-1",
+      "ts": 157870942,
+      "epochBeforeMs": 1791323651563,
+      "epochAfterMs": 1791323651563,
+      "offsetLowMs": 1791323493691.058,
+      "offsetHighMs": 1791323493693.058
+    }
+  ],
+  "first_decode_finished_ts": 164380209,
+  "first_unref_ts": 164630307,
+  "first_timer_delay_ms": 250.098,
+  "cleanup_native_pending": 0,
+  "cleanup_removed_frame_pending": 0,
+  "cleanup_wallTime": 1791323658451.1,
+  "cleanup_trace_ts_approx": 164759041.9921875,
+  "account_at_cleanup": {
+    "active_entries": 158,
+    "bytes": 188093312
+  },
+  "all_released_after_cleanup_ms": 374.9410078125,
+  "corrected_retry_starts_after_cleanup_ms": 4190.5,
+  "release_groups_100ms_buckets": {
+    "164600000": 1,
+    "164800000": 96,
+    "165100000": 62
+  },
+  "timeline": [
+    {
+      "ts": 164376116,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 300,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3049734953798547443]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 1,
+      "accounted_bytes": 1190464
+    },
+    {
+      "ts": 164376145,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 301,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[141541103213705791]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 2,
+      "accounted_bytes": 2380928
+    },
+    {
+      "ts": 164376167,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 302,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[851018258632905352]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 3,
+      "accounted_bytes": 3571392
+    },
+    {
+      "ts": 164376189,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 303,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1560495414052104913]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 4,
+      "accounted_bytes": 4761856
+    },
+    {
+      "ts": 164376210,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 304,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2269972569471304474]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 5,
+      "accounted_bytes": 5952320
+    },
+    {
+      "ts": 164376227,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 305,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2979449724890504035]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 6,
+      "accounted_bytes": 7142784
+    },
+    {
+      "ts": 164376246,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 306,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[71255874305662383]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 7,
+      "accounted_bytes": 8333248
+    },
+    {
+      "ts": 164376263,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 307,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[780733029724861944]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 8,
+      "accounted_bytes": 9523712
+    },
+    {
+      "ts": 164376282,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 308,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1490210185144061505]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 9,
+      "accounted_bytes": 10714176
+    },
+    {
+      "ts": 164376300,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 309,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2199687340563261066]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 10,
+      "accounted_bytes": 11904640
+    },
+    {
+      "ts": 164376318,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 310,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2909164495982460627]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 11,
+      "accounted_bytes": 13095104
+    },
+    {
+      "ts": 164376337,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 311,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3618641651401660188]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 12,
+      "accounted_bytes": 14285568
+    },
+    {
+      "ts": 164376355,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 312,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[710447800816818536]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 13,
+      "accounted_bytes": 15476032
+    },
+    {
+      "ts": 164376372,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 313,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1419924956236018097]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 14,
+      "accounted_bytes": 16666496
+    },
+    {
+      "ts": 164376391,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 314,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2129402111655217658]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 15,
+      "accounted_bytes": 17856960
+    },
+    {
+      "ts": 164376409,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 315,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2838879267074417219]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 16,
+      "accounted_bytes": 19047424
+    },
+    {
+      "ts": 164427582,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 316,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3548356422493616780]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 17,
+      "accounted_bytes": 20237888
+    },
+    {
+      "ts": 164427607,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 317,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[640162571908775128]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 18,
+      "accounted_bytes": 21428352
+    },
+    {
+      "ts": 164427630,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 318,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1349639727327974689]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 19,
+      "accounted_bytes": 22618816
+    },
+    {
+      "ts": 164427646,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 319,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2059116882747174250]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 20,
+      "accounted_bytes": 23809280
+    },
+    {
+      "ts": 164427669,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 320,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2768594038166373811]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 21,
+      "accounted_bytes": 24999744
+    },
+    {
+      "ts": 164427687,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 321,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3478071193585573372]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 22,
+      "accounted_bytes": 26190208
+    },
+    {
+      "ts": 164427705,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 322,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[569877343000731720]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 23,
+      "accounted_bytes": 27380672
+    },
+    {
+      "ts": 164427729,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 323,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1279354498419931281]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 24,
+      "accounted_bytes": 28571136
+    },
+    {
+      "ts": 164427751,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 324,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1988831653839130842]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 25,
+      "accounted_bytes": 29761600
+    },
+    {
+      "ts": 164427768,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 325,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2698308809258330403]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 26,
+      "accounted_bytes": 30952064
+    },
+    {
+      "ts": 164427787,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 326,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3407785964677529964]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 27,
+      "accounted_bytes": 32142528
+    },
+    {
+      "ts": 164427804,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 327,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[499592114092688312]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 28,
+      "accounted_bytes": 33332992
+    },
+    {
+      "ts": 164427822,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 328,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1209069269511887873]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 29,
+      "accounted_bytes": 34523456
+    },
+    {
+      "ts": 164427840,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 329,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1918546424931087434]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 30,
+      "accounted_bytes": 35713920
+    },
+    {
+      "ts": 164427858,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 330,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2628023580350286995]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 31,
+      "accounted_bytes": 36904384
+    },
+    {
+      "ts": 164427874,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 331,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3337500735769486556]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 32,
+      "accounted_bytes": 38094848
+    },
+    {
+      "ts": 164460776,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 332,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[429306885184644904]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 33,
+      "accounted_bytes": 39285312
+    },
+    {
+      "ts": 164460793,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 333,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1138784040603844465]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 34,
+      "accounted_bytes": 40475776
+    },
+    {
+      "ts": 164460806,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 334,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1848261196023044026]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 35,
+      "accounted_bytes": 41666240
+    },
+    {
+      "ts": 164460822,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 335,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2557738351442243587]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 36,
+      "accounted_bytes": 42856704
+    },
+    {
+      "ts": 164460857,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 336,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3267215506861443148]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 37,
+      "accounted_bytes": 44047168
+    },
+    {
+      "ts": 164460870,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 337,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[359021656276601496]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 38,
+      "accounted_bytes": 45237632
+    },
+    {
+      "ts": 164460882,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 338,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1068498811695801057]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 39,
+      "accounted_bytes": 46428096
+    },
+    {
+      "ts": 164460893,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 339,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1777975967115000618]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 40,
+      "accounted_bytes": 47618560
+    },
+    {
+      "ts": 164460907,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 340,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2487453122534200179]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 41,
+      "accounted_bytes": 48809024
+    },
+    {
+      "ts": 164460919,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 341,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3196930277953399740]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 42,
+      "accounted_bytes": 49999488
+    },
+    {
+      "ts": 164460933,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 342,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[288736427368558088]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 43,
+      "accounted_bytes": 51189952
+    },
+    {
+      "ts": 164460945,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 343,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[998213582787757649]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 44,
+      "accounted_bytes": 52380416
+    },
+    {
+      "ts": 164460958,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 344,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1707690738206957210]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 45,
+      "accounted_bytes": 53570880
+    },
+    {
+      "ts": 164460970,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 345,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2417167893626156771]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 46,
+      "accounted_bytes": 54761344
+    },
+    {
+      "ts": 164460991,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 346,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3126645049045356332]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 47,
+      "accounted_bytes": 55951808
+    },
+    {
+      "ts": 164461027,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 347,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[218451198460514680]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 48,
+      "accounted_bytes": 57142272
+    },
+    {
+      "ts": 164494140,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 348,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[927928353879714241]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 49,
+      "accounted_bytes": 58332736
+    },
+    {
+      "ts": 164494164,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 349,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1637405509298913802]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 50,
+      "accounted_bytes": 59523200
+    },
+    {
+      "ts": 164494187,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 350,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2346882664718113363]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 51,
+      "accounted_bytes": 60713664
+    },
+    {
+      "ts": 164494204,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 351,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3056359820137312924]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 52,
+      "accounted_bytes": 61904128
+    },
+    {
+      "ts": 164494221,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 352,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[148165969552471272]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 53,
+      "accounted_bytes": 63094592
+    },
+    {
+      "ts": 164494239,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 353,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[857643124971670833]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 54,
+      "accounted_bytes": 64285056
+    },
+    {
+      "ts": 164494256,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 354,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1567120280390870394]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 55,
+      "accounted_bytes": 65475520
+    },
+    {
+      "ts": 164494277,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 355,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2276597435810069955]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 56,
+      "accounted_bytes": 66665984
+    },
+    {
+      "ts": 164494299,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 356,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2986074591229269516]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 57,
+      "accounted_bytes": 67856448
+    },
+    {
+      "ts": 164494316,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 357,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[77880740644427864]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 58,
+      "accounted_bytes": 69046912
+    },
+    {
+      "ts": 164494335,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 358,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[787357896063627425]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 59,
+      "accounted_bytes": 70237376
+    },
+    {
+      "ts": 164494352,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 359,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1496835051482826986]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 60,
+      "accounted_bytes": 71427840
+    },
+    {
+      "ts": 164494371,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 360,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2206312206902026547]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 61,
+      "accounted_bytes": 72618304
+    },
+    {
+      "ts": 164494388,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 361,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2915789362321226108]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 62,
+      "accounted_bytes": 73808768
+    },
+    {
+      "ts": 164494407,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 362,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3625266517740425669]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 63,
+      "accounted_bytes": 74999232
+    },
+    {
+      "ts": 164494425,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 363,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[717072667155584017]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 64,
+      "accounted_bytes": 76189696
+    },
+    {
+      "ts": 164527517,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 364,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1426549822574783578]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 65,
+      "accounted_bytes": 77380160
+    },
+    {
+      "ts": 164527541,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 365,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2136026977993983139]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 66,
+      "accounted_bytes": 78570624
+    },
+    {
+      "ts": 164527557,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 366,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2845504133413182700]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 67,
+      "accounted_bytes": 79761088
+    },
+    {
+      "ts": 164527577,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 367,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3554981288832382261]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 68,
+      "accounted_bytes": 80951552
+    },
+    {
+      "ts": 164527596,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 368,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[646787438247540609]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 69,
+      "accounted_bytes": 82142016
+    },
+    {
+      "ts": 164527615,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 369,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1356264593666740170]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 70,
+      "accounted_bytes": 83332480
+    },
+    {
+      "ts": 164527632,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 370,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2065741749085939731]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 71,
+      "accounted_bytes": 84522944
+    },
+    {
+      "ts": 164527648,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 371,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2775218904505139292]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 72,
+      "accounted_bytes": 85713408
+    },
+    {
+      "ts": 164527666,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 372,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3484696059924338853]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 73,
+      "accounted_bytes": 86903872
+    },
+    {
+      "ts": 164527684,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 373,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[576502209339497201]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 74,
+      "accounted_bytes": 88094336
+    },
+    {
+      "ts": 164527702,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 374,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1285979364758696762]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 75,
+      "accounted_bytes": 89284800
+    },
+    {
+      "ts": 164527720,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 375,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1995456520177896323]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 76,
+      "accounted_bytes": 90475264
+    },
+    {
+      "ts": 164527736,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 376,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2704933675597095884]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 77,
+      "accounted_bytes": 91665728
+    },
+    {
+      "ts": 164527748,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 377,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3414410831016295445]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 78,
+      "accounted_bytes": 92856192
+    },
+    {
+      "ts": 164527761,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 378,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[506216980431453793]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 79,
+      "accounted_bytes": 94046656
+    },
+    {
+      "ts": 164527777,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 379,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1215694135850653354]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 80,
+      "accounted_bytes": 95237120
+    },
+    {
+      "ts": 164560810,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 380,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1925171291269852915]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 81,
+      "accounted_bytes": 96427584
+    },
+    {
+      "ts": 164560840,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 381,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2634648446689052476]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 82,
+      "accounted_bytes": 97618048
+    },
+    {
+      "ts": 164560858,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 382,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3344125602108252037]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 83,
+      "accounted_bytes": 98808512
+    },
+    {
+      "ts": 164560875,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 383,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[435931751523410385]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 84,
+      "accounted_bytes": 99998976
+    },
+    {
+      "ts": 164560893,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 384,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1145408906942609946]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 85,
+      "accounted_bytes": 101189440
+    },
+    {
+      "ts": 164560910,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 385,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1854886062361809507]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 86,
+      "accounted_bytes": 102379904
+    },
+    {
+      "ts": 164560930,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 386,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2564363217781009068]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 87,
+      "accounted_bytes": 103570368
+    },
+    {
+      "ts": 164560946,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 387,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3273840373200208629]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 88,
+      "accounted_bytes": 104760832
+    },
+    {
+      "ts": 164560966,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 388,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[365646522615366977]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 89,
+      "accounted_bytes": 105951296
+    },
+    {
+      "ts": 164560984,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 389,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1075123678034566538]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 90,
+      "accounted_bytes": 107141760
+    },
+    {
+      "ts": 164561016,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 390,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1784600833453766099]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 91,
+      "accounted_bytes": 108332224
+    },
+    {
+      "ts": 164561035,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 391,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2494077988872965660]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 92,
+      "accounted_bytes": 109522688
+    },
+    {
+      "ts": 164561049,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 392,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3203555144292165221]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 93,
+      "accounted_bytes": 110713152
+    },
+    {
+      "ts": 164561073,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 393,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[295361293707323569]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 94,
+      "accounted_bytes": 111903616
+    },
+    {
+      "ts": 164561085,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 394,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1004838449126523130]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 95,
+      "accounted_bytes": 113094080
+    },
+    {
+      "ts": 164561096,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 395,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1714315604545722691]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 96,
+      "accounted_bytes": 114284544
+    },
+    {
+      "ts": 164627556,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 396,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2423792759964922252]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 97,
+      "accounted_bytes": 115475008
+    },
+    {
+      "ts": 164627609,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 397,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3133269915384121813]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 98,
+      "accounted_bytes": 116665472
+    },
+    {
+      "ts": 164627643,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 398,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[225076064799280161]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 99,
+      "accounted_bytes": 117855936
+    },
+    {
+      "ts": 164627662,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 399,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[934553220218479722]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 100,
+      "accounted_bytes": 119046400
+    },
+    {
+      "ts": 164627682,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 400,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1644030375637679283]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 101,
+      "accounted_bytes": 120236864
+    },
+    {
+      "ts": 164627702,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 401,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2353507531056878844]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 102,
+      "accounted_bytes": 121427328
+    },
+    {
+      "ts": 164627723,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 402,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3062984686476078405]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 103,
+      "accounted_bytes": 122617792
+    },
+    {
+      "ts": 164627741,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 403,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[154790835891236753]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 104,
+      "accounted_bytes": 123808256
+    },
+    {
+      "ts": 164627758,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 404,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[864267991310436314]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 105,
+      "accounted_bytes": 124998720
+    },
+    {
+      "ts": 164627774,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 405,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1573745146729635875]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 106,
+      "accounted_bytes": 126189184
+    },
+    {
+      "ts": 164627790,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 406,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2283222302148835436]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 107,
+      "accounted_bytes": 127379648
+    },
+    {
+      "ts": 164627808,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 407,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2992699457568034997]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 108,
+      "accounted_bytes": 128570112
+    },
+    {
+      "ts": 164627821,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 408,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[84505606983193345]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 109,
+      "accounted_bytes": 129760576
+    },
+    {
+      "ts": 164627834,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 409,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[793982762402392906]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 110,
+      "accounted_bytes": 130951040
+    },
+    {
+      "ts": 164627846,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 410,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1503459917821592467]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 111,
+      "accounted_bytes": 132141504
+    },
+    {
+      "ts": 164627860,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 411,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2212937073240792028]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 112,
+      "accounted_bytes": 133331968
+    },
+    {
+      "ts": 164630324,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 300,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3049734953798547443]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 111,
+      "accounted_bytes": 132141504
+    },
+    {
+      "ts": 164660821,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 412,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2922414228659991589]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 112,
+      "accounted_bytes": 133331968
+    },
+    {
+      "ts": 164660852,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 413,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3631891384079191150]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 113,
+      "accounted_bytes": 134522432
+    },
+    {
+      "ts": 164660868,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 414,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[723697533494349498]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 114,
+      "accounted_bytes": 135712896
+    },
+    {
+      "ts": 164660884,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 415,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1433174688913549059]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 115,
+      "accounted_bytes": 136903360
+    },
+    {
+      "ts": 164660903,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 416,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2142651844332748620]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 116,
+      "accounted_bytes": 138093824
+    },
+    {
+      "ts": 164660920,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 417,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2852128999751948181]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 117,
+      "accounted_bytes": 139284288
+    },
+    {
+      "ts": 164660937,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 418,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3561606155171147742]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 118,
+      "accounted_bytes": 140474752
+    },
+    {
+      "ts": 164660955,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 419,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[653412304586306090]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 119,
+      "accounted_bytes": 141665216
+    },
+    {
+      "ts": 164660976,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 420,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1362889460005505651]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 120,
+      "accounted_bytes": 142855680
+    },
+    {
+      "ts": 164660993,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 421,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2072366615424705212]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 121,
+      "accounted_bytes": 144046144
+    },
+    {
+      "ts": 164661024,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 422,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2781843770843904773]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 122,
+      "accounted_bytes": 145236608
+    },
+    {
+      "ts": 164661043,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 423,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3491320926263104334]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 123,
+      "accounted_bytes": 146427072
+    },
+    {
+      "ts": 164661056,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 424,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[583127075678262682]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 124,
+      "accounted_bytes": 147617536
+    },
+    {
+      "ts": 164661072,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 425,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1292604231097462243]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 125,
+      "accounted_bytes": 148808000
+    },
+    {
+      "ts": 164661084,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 426,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2002081386516661804]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 126,
+      "accounted_bytes": 149998464
+    },
+    {
+      "ts": 164661099,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 427,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2711558541935861365]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 127,
+      "accounted_bytes": 151188928
+    },
+    {
+      "ts": 164694133,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 428,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3421035697355060926]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 128,
+      "accounted_bytes": 152379392
+    },
+    {
+      "ts": 164694158,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 429,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[512841846770219274]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 129,
+      "accounted_bytes": 153569856
+    },
+    {
+      "ts": 164694178,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 430,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1222319002189418835]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 130,
+      "accounted_bytes": 154760320
+    },
+    {
+      "ts": 164694194,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 431,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1931796157608618396]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 131,
+      "accounted_bytes": 155950784
+    },
+    {
+      "ts": 164694212,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 432,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2641273313027817957]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 132,
+      "accounted_bytes": 157141248
+    },
+    {
+      "ts": 164694229,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 433,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3350750468447017518]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 133,
+      "accounted_bytes": 158331712
+    },
+    {
+      "ts": 164694246,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 434,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[442556617862175866]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 134,
+      "accounted_bytes": 159522176
+    },
+    {
+      "ts": 164694263,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 435,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1152033773281375427]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 135,
+      "accounted_bytes": 160712640
+    },
+    {
+      "ts": 164694280,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 436,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1861510928700574988]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 136,
+      "accounted_bytes": 161903104
+    },
+    {
+      "ts": 164694300,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 437,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2570988084119774549]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 137,
+      "accounted_bytes": 163093568
+    },
+    {
+      "ts": 164694318,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 438,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3280465239538974110]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 138,
+      "accounted_bytes": 164284032
+    },
+    {
+      "ts": 164694347,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 439,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[372271388954132458]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 139,
+      "accounted_bytes": 165474496
+    },
+    {
+      "ts": 164694360,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 440,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1081748544373332019]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 140,
+      "accounted_bytes": 166664960
+    },
+    {
+      "ts": 164694372,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 441,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1791225699792531580]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 141,
+      "accounted_bytes": 167855424
+    },
+    {
+      "ts": 164694385,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 442,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2500702855211731141]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 142,
+      "accounted_bytes": 169045888
+    },
+    {
+      "ts": 164694397,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 443,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3210180010630930702]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 143,
+      "accounted_bytes": 170236352
+    },
+    {
+      "ts": 164727658,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 444,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[301986160046089050]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 144,
+      "accounted_bytes": 171426816
+    },
+    {
+      "ts": 164727682,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 445,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1011463315465288611]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 145,
+      "accounted_bytes": 172617280
+    },
+    {
+      "ts": 164727705,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 446,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1720940470884488172]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 146,
+      "accounted_bytes": 173807744
+    },
+    {
+      "ts": 164727722,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 447,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2430417626303687733]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 147,
+      "accounted_bytes": 174998208
+    },
+    {
+      "ts": 164727741,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 448,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3139894781722887294]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 148,
+      "accounted_bytes": 176188672
+    },
+    {
+      "ts": 164727759,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 450,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[941178086557245203]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 149,
+      "accounted_bytes": 177379136
+    },
+    {
+      "ts": 164727775,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 451,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1650655241976444764]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 150,
+      "accounted_bytes": 178569600
+    },
+    {
+      "ts": 164727791,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 452,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2360132397395644325]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 151,
+      "accounted_bytes": 179760064
+    },
+    {
+      "ts": 164727810,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 453,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3069609552814843886]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 152,
+      "accounted_bytes": 180950528
+    },
+    {
+      "ts": 164727827,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 454,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[161415702230002234]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 153,
+      "accounted_bytes": 182140992
+    },
+    {
+      "ts": 164727850,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 455,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[870892857649201795]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 154,
+      "accounted_bytes": 183331456
+    },
+    {
+      "ts": 164727867,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 456,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1580370013068401356]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 155,
+      "accounted_bytes": 184521920
+    },
+    {
+      "ts": 164727885,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 457,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2289847168487600917]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 156,
+      "accounted_bytes": 185712384
+    },
+    {
+      "ts": 164727902,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 458,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2999324323906800478]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 157,
+      "accounted_bytes": 186902848
+    },
+    {
+      "ts": 164727921,
+      "pid": 3712,
+      "action": "AddBudgetForImage",
+      "key": "frame_key[content_id: 459,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[91130473321958826]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 158,
+      "accounted_bytes": 188093312
+    },
+    {
+      "ts": 164880868,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 301,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[141541103213705791]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 157,
+      "accounted_bytes": 186902848
+    },
+    {
+      "ts": 164880890,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 302,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[851018258632905352]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 156,
+      "accounted_bytes": 185712384
+    },
+    {
+      "ts": 164880907,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 303,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1560495414052104913]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 155,
+      "accounted_bytes": 184521920
+    },
+    {
+      "ts": 164880924,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 304,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2269972569471304474]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 154,
+      "accounted_bytes": 183331456
+    },
+    {
+      "ts": 164880940,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 305,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2979449724890504035]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 153,
+      "accounted_bytes": 182140992
+    },
+    {
+      "ts": 164880974,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 306,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[71255874305662383]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 152,
+      "accounted_bytes": 180950528
+    },
+    {
+      "ts": 164880990,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 307,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[780733029724861944]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 151,
+      "accounted_bytes": 179760064
+    },
+    {
+      "ts": 164881024,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 308,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1490210185144061505]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 150,
+      "accounted_bytes": 178569600
+    },
+    {
+      "ts": 164881045,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 309,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2199687340563261066]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 149,
+      "accounted_bytes": 177379136
+    },
+    {
+      "ts": 164881061,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 310,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2909164495982460627]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 148,
+      "accounted_bytes": 176188672
+    },
+    {
+      "ts": 164881077,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 311,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3618641651401660188]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 147,
+      "accounted_bytes": 174998208
+    },
+    {
+      "ts": 164881100,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 312,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[710447800816818536]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 146,
+      "accounted_bytes": 173807744
+    },
+    {
+      "ts": 164881116,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 313,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1419924956236018097]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 145,
+      "accounted_bytes": 172617280
+    },
+    {
+      "ts": 164881132,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 314,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2129402111655217658]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 144,
+      "accounted_bytes": 171426816
+    },
+    {
+      "ts": 164881153,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 315,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2838879267074417219]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 143,
+      "accounted_bytes": 170236352
+    },
+    {
+      "ts": 164881169,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 316,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3548356422493616780]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 142,
+      "accounted_bytes": 169045888
+    },
+    {
+      "ts": 164881184,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 317,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[640162571908775128]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 141,
+      "accounted_bytes": 167855424
+    },
+    {
+      "ts": 164881204,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 318,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1349639727327974689]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 140,
+      "accounted_bytes": 166664960
+    },
+    {
+      "ts": 164881219,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 319,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2059116882747174250]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 139,
+      "accounted_bytes": 165474496
+    },
+    {
+      "ts": 164881234,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 320,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2768594038166373811]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 138,
+      "accounted_bytes": 164284032
+    },
+    {
+      "ts": 164881254,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 321,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3478071193585573372]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 137,
+      "accounted_bytes": 163093568
+    },
+    {
+      "ts": 164881270,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 322,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[569877343000731720]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 136,
+      "accounted_bytes": 161903104
+    },
+    {
+      "ts": 164881285,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 323,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1279354498419931281]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 135,
+      "accounted_bytes": 160712640
+    },
+    {
+      "ts": 164881306,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 324,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1988831653839130842]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 134,
+      "accounted_bytes": 159522176
+    },
+    {
+      "ts": 164881321,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 325,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2698308809258330403]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 133,
+      "accounted_bytes": 158331712
+    },
+    {
+      "ts": 164881336,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 326,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3407785964677529964]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 132,
+      "accounted_bytes": 157141248
+    },
+    {
+      "ts": 164881359,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 327,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[499592114092688312]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 131,
+      "accounted_bytes": 155950784
+    },
+    {
+      "ts": 164881374,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 328,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1209069269511887873]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 130,
+      "accounted_bytes": 154760320
+    },
+    {
+      "ts": 164881389,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 329,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1918546424931087434]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 129,
+      "accounted_bytes": 153569856
+    },
+    {
+      "ts": 164881409,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 330,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2628023580350286995]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 128,
+      "accounted_bytes": 152379392
+    },
+    {
+      "ts": 164881424,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 331,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3337500735769486556]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 127,
+      "accounted_bytes": 151188928
+    },
+    {
+      "ts": 164881440,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 332,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[429306885184644904]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 126,
+      "accounted_bytes": 149998464
+    },
+    {
+      "ts": 164881460,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 333,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1138784040603844465]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 125,
+      "accounted_bytes": 148808000
+    },
+    {
+      "ts": 164881475,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 334,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1848261196023044026]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 124,
+      "accounted_bytes": 147617536
+    },
+    {
+      "ts": 164881490,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 335,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2557738351442243587]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 123,
+      "accounted_bytes": 146427072
+    },
+    {
+      "ts": 164881509,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 336,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3267215506861443148]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 122,
+      "accounted_bytes": 145236608
+    },
+    {
+      "ts": 164881525,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 337,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[359021656276601496]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 121,
+      "accounted_bytes": 144046144
+    },
+    {
+      "ts": 164881540,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 338,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1068498811695801057]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 120,
+      "accounted_bytes": 142855680
+    },
+    {
+      "ts": 164881560,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 339,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1777975967115000618]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 119,
+      "accounted_bytes": 141665216
+    },
+    {
+      "ts": 164881576,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 340,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2487453122534200179]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 118,
+      "accounted_bytes": 140474752
+    },
+    {
+      "ts": 164881591,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 341,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3196930277953399740]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 117,
+      "accounted_bytes": 139284288
+    },
+    {
+      "ts": 164881611,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 342,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[288736427368558088]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 116,
+      "accounted_bytes": 138093824
+    },
+    {
+      "ts": 164881626,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 343,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[998213582787757649]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 115,
+      "accounted_bytes": 136903360
+    },
+    {
+      "ts": 164881641,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 344,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1707690738206957210]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 114,
+      "accounted_bytes": 135712896
+    },
+    {
+      "ts": 164881661,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 345,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2417167893626156771]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 113,
+      "accounted_bytes": 134522432
+    },
+    {
+      "ts": 164881676,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 346,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3126645049045356332]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 112,
+      "accounted_bytes": 133331968
+    },
+    {
+      "ts": 164881692,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 347,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[218451198460514680]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 111,
+      "accounted_bytes": 132141504
+    },
+    {
+      "ts": 164881711,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 348,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[927928353879714241]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 110,
+      "accounted_bytes": 130951040
+    },
+    {
+      "ts": 164881726,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 349,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1637405509298913802]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 109,
+      "accounted_bytes": 129760576
+    },
+    {
+      "ts": 164881741,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 350,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2346882664718113363]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 108,
+      "accounted_bytes": 128570112
+    },
+    {
+      "ts": 164881761,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 351,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3056359820137312924]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 107,
+      "accounted_bytes": 127379648
+    },
+    {
+      "ts": 164881778,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 352,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[148165969552471272]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 106,
+      "accounted_bytes": 126189184
+    },
+    {
+      "ts": 164881793,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 353,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[857643124971670833]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 105,
+      "accounted_bytes": 124998720
+    },
+    {
+      "ts": 164881812,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 354,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1567120280390870394]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 104,
+      "accounted_bytes": 123808256
+    },
+    {
+      "ts": 164881826,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 355,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2276597435810069955]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 103,
+      "accounted_bytes": 122617792
+    },
+    {
+      "ts": 164881841,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 356,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2986074591229269516]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 102,
+      "accounted_bytes": 121427328
+    },
+    {
+      "ts": 164881861,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 357,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[77880740644427864]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 101,
+      "accounted_bytes": 120236864
+    },
+    {
+      "ts": 164881876,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 358,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[787357896063627425]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 100,
+      "accounted_bytes": 119046400
+    },
+    {
+      "ts": 164881891,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 359,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1496835051482826986]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 99,
+      "accounted_bytes": 117855936
+    },
+    {
+      "ts": 164881910,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 360,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2206312206902026547]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 98,
+      "accounted_bytes": 116665472
+    },
+    {
+      "ts": 164881924,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 361,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2915789362321226108]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 97,
+      "accounted_bytes": 115475008
+    },
+    {
+      "ts": 164881939,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 362,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3625266517740425669]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 96,
+      "accounted_bytes": 114284544
+    },
+    {
+      "ts": 164881958,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 363,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[717072667155584017]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 95,
+      "accounted_bytes": 113094080
+    },
+    {
+      "ts": 164881973,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 364,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1426549822574783578]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 94,
+      "accounted_bytes": 111903616
+    },
+    {
+      "ts": 164881988,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 365,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2136026977993983139]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 93,
+      "accounted_bytes": 110713152
+    },
+    {
+      "ts": 164882026,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 366,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2845504133413182700]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 92,
+      "accounted_bytes": 109522688
+    },
+    {
+      "ts": 164882041,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 367,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3554981288832382261]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 91,
+      "accounted_bytes": 108332224
+    },
+    {
+      "ts": 164882055,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 368,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[646787438247540609]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 90,
+      "accounted_bytes": 107141760
+    },
+    {
+      "ts": 164882074,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 369,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1356264593666740170]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 89,
+      "accounted_bytes": 105951296
+    },
+    {
+      "ts": 164882088,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 370,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2065741749085939731]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 88,
+      "accounted_bytes": 104760832
+    },
+    {
+      "ts": 164882103,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 371,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2775218904505139292]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 87,
+      "accounted_bytes": 103570368
+    },
+    {
+      "ts": 164882123,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 372,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3484696059924338853]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 86,
+      "accounted_bytes": 102379904
+    },
+    {
+      "ts": 164882137,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 373,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[576502209339497201]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 85,
+      "accounted_bytes": 101189440
+    },
+    {
+      "ts": 164882151,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 374,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1285979364758696762]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 84,
+      "accounted_bytes": 99998976
+    },
+    {
+      "ts": 164882170,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 375,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1995456520177896323]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 83,
+      "accounted_bytes": 98808512
+    },
+    {
+      "ts": 164882184,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 376,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2704933675597095884]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 82,
+      "accounted_bytes": 97618048
+    },
+    {
+      "ts": 164882199,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 377,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3414410831016295445]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 81,
+      "accounted_bytes": 96427584
+    },
+    {
+      "ts": 164882219,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 378,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[506216980431453793]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 80,
+      "accounted_bytes": 95237120
+    },
+    {
+      "ts": 164882233,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 379,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1215694135850653354]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 79,
+      "accounted_bytes": 94046656
+    },
+    {
+      "ts": 164882248,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 380,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1925171291269852915]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 78,
+      "accounted_bytes": 92856192
+    },
+    {
+      "ts": 164882267,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 381,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2634648446689052476]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 77,
+      "accounted_bytes": 91665728
+    },
+    {
+      "ts": 164882280,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 382,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3344125602108252037]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 76,
+      "accounted_bytes": 90475264
+    },
+    {
+      "ts": 164882295,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 383,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[435931751523410385]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 75,
+      "accounted_bytes": 89284800
+    },
+    {
+      "ts": 164882314,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 384,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1145408906942609946]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 74,
+      "accounted_bytes": 88094336
+    },
+    {
+      "ts": 164882328,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 385,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1854886062361809507]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 73,
+      "accounted_bytes": 86903872
+    },
+    {
+      "ts": 164882342,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 386,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2564363217781009068]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 72,
+      "accounted_bytes": 85713408
+    },
+    {
+      "ts": 164882361,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 387,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3273840373200208629]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 71,
+      "accounted_bytes": 84522944
+    },
+    {
+      "ts": 164882376,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 388,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[365646522615366977]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 70,
+      "accounted_bytes": 83332480
+    },
+    {
+      "ts": 164882390,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 389,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1075123678034566538]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 69,
+      "accounted_bytes": 82142016
+    },
+    {
+      "ts": 164882409,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 390,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1784600833453766099]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 68,
+      "accounted_bytes": 80951552
+    },
+    {
+      "ts": 164882424,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 391,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2494077988872965660]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 67,
+      "accounted_bytes": 79761088
+    },
+    {
+      "ts": 164882437,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 392,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3203555144292165221]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 66,
+      "accounted_bytes": 78570624
+    },
+    {
+      "ts": 164882456,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 393,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[295361293707323569]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 65,
+      "accounted_bytes": 77380160
+    },
+    {
+      "ts": 164882470,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 394,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1004838449126523130]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 64,
+      "accounted_bytes": 76189696
+    },
+    {
+      "ts": 164882484,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 395,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1714315604545722691]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 63,
+      "accounted_bytes": 74999232
+    },
+    {
+      "ts": 164882502,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 396,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2423792759964922252]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 62,
+      "accounted_bytes": 73808768
+    },
+    {
+      "ts": 165133299,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 397,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3133269915384121813]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 61,
+      "accounted_bytes": 72618304
+    },
+    {
+      "ts": 165133318,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 398,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[225076064799280161]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 60,
+      "accounted_bytes": 71427840
+    },
+    {
+      "ts": 165133345,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 399,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[934553220218479722]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 59,
+      "accounted_bytes": 70237376
+    },
+    {
+      "ts": 165133360,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 400,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1644030375637679283]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 58,
+      "accounted_bytes": 69046912
+    },
+    {
+      "ts": 165133371,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 401,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2353507531056878844]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 57,
+      "accounted_bytes": 67856448
+    },
+    {
+      "ts": 165133385,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 402,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3062984686476078405]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 56,
+      "accounted_bytes": 66665984
+    },
+    {
+      "ts": 165133395,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 403,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[154790835891236753]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 55,
+      "accounted_bytes": 65475520
+    },
+    {
+      "ts": 165133404,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 404,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[864267991310436314]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 54,
+      "accounted_bytes": 64285056
+    },
+    {
+      "ts": 165133419,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 405,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1573745146729635875]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 53,
+      "accounted_bytes": 63094592
+    },
+    {
+      "ts": 165133428,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 406,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2283222302148835436]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 52,
+      "accounted_bytes": 61904128
+    },
+    {
+      "ts": 165133437,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 407,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2992699457568034997]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 51,
+      "accounted_bytes": 60713664
+    },
+    {
+      "ts": 165133451,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 408,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[84505606983193345]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 50,
+      "accounted_bytes": 59523200
+    },
+    {
+      "ts": 165133460,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 409,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[793982762402392906]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 49,
+      "accounted_bytes": 58332736
+    },
+    {
+      "ts": 165133470,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 410,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1503459917821592467]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 48,
+      "accounted_bytes": 57142272
+    },
+    {
+      "ts": 165133483,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 411,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2212937073240792028]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 47,
+      "accounted_bytes": 55951808
+    },
+    {
+      "ts": 165133492,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 412,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2922414228659991589]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 46,
+      "accounted_bytes": 54761344
+    },
+    {
+      "ts": 165133501,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 413,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3631891384079191150]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 45,
+      "accounted_bytes": 53570880
+    },
+    {
+      "ts": 165133514,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 414,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[723697533494349498]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 44,
+      "accounted_bytes": 52380416
+    },
+    {
+      "ts": 165133540,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 415,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1433174688913549059]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 43,
+      "accounted_bytes": 51189952
+    },
+    {
+      "ts": 165133549,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 416,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2142651844332748620]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 42,
+      "accounted_bytes": 49999488
+    },
+    {
+      "ts": 165133562,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 417,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2852128999751948181]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 41,
+      "accounted_bytes": 48809024
+    },
+    {
+      "ts": 165133573,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 418,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3561606155171147742]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 40,
+      "accounted_bytes": 47618560
+    },
+    {
+      "ts": 165133582,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 419,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[653412304586306090]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 39,
+      "accounted_bytes": 46428096
+    },
+    {
+      "ts": 165133595,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 420,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1362889460005505651]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 38,
+      "accounted_bytes": 45237632
+    },
+    {
+      "ts": 165133604,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 421,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2072366615424705212]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 37,
+      "accounted_bytes": 44047168
+    },
+    {
+      "ts": 165133613,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 422,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2781843770843904773]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 36,
+      "accounted_bytes": 42856704
+    },
+    {
+      "ts": 165133626,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 423,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3491320926263104334]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 35,
+      "accounted_bytes": 41666240
+    },
+    {
+      "ts": 165133636,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 424,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[583127075678262682]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 34,
+      "accounted_bytes": 40475776
+    },
+    {
+      "ts": 165133645,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 425,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1292604231097462243]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 33,
+      "accounted_bytes": 39285312
+    },
+    {
+      "ts": 165133657,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 426,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2002081386516661804]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 32,
+      "accounted_bytes": 38094848
+    },
+    {
+      "ts": 165133666,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 427,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2711558541935861365]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 31,
+      "accounted_bytes": 36904384
+    },
+    {
+      "ts": 165133675,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 428,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3421035697355060926]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 30,
+      "accounted_bytes": 35713920
+    },
+    {
+      "ts": 165133689,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 429,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[512841846770219274]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 29,
+      "accounted_bytes": 34523456
+    },
+    {
+      "ts": 165133698,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 430,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1222319002189418835]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 28,
+      "accounted_bytes": 33332992
+    },
+    {
+      "ts": 165133707,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 431,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1931796157608618396]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 27,
+      "accounted_bytes": 32142528
+    },
+    {
+      "ts": 165133720,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 432,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2641273313027817957]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 26,
+      "accounted_bytes": 30952064
+    },
+    {
+      "ts": 165133729,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 433,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3350750468447017518]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 25,
+      "accounted_bytes": 29761600
+    },
+    {
+      "ts": 165133739,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 434,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[442556617862175866]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 24,
+      "accounted_bytes": 28571136
+    },
+    {
+      "ts": 165133751,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 435,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1152033773281375427]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 23,
+      "accounted_bytes": 27380672
+    },
+    {
+      "ts": 165133760,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 436,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1861510928700574988]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 22,
+      "accounted_bytes": 26190208
+    },
+    {
+      "ts": 165133769,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 437,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2570988084119774549]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 21,
+      "accounted_bytes": 24999744
+    },
+    {
+      "ts": 165133782,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 438,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3280465239538974110]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 20,
+      "accounted_bytes": 23809280
+    },
+    {
+      "ts": 165133792,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 439,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[372271388954132458]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 19,
+      "accounted_bytes": 22618816
+    },
+    {
+      "ts": 165133801,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 440,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1081748544373332019]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 18,
+      "accounted_bytes": 21428352
+    },
+    {
+      "ts": 165133813,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 441,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1791225699792531580]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 17,
+      "accounted_bytes": 20237888
+    },
+    {
+      "ts": 165133822,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 442,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2500702855211731141]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 16,
+      "accounted_bytes": 19047424
+    },
+    {
+      "ts": 165133833,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 443,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3210180010630930702]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 15,
+      "accounted_bytes": 17856960
+    },
+    {
+      "ts": 165133846,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 444,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[301986160046089050]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 14,
+      "accounted_bytes": 16666496
+    },
+    {
+      "ts": 165133855,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 445,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1011463315465288611]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 13,
+      "accounted_bytes": 15476032
+    },
+    {
+      "ts": 165133863,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 446,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1720940470884488172]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 12,
+      "accounted_bytes": 14285568
+    },
+    {
+      "ts": 165133876,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 447,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2430417626303687733]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 11,
+      "accounted_bytes": 13095104
+    },
+    {
+      "ts": 165133885,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 448,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3139894781722887294]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 10,
+      "accounted_bytes": 11904640
+    },
+    {
+      "ts": 165133894,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 450,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[941178086557245203]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 9,
+      "accounted_bytes": 10714176
+    },
+    {
+      "ts": 165133907,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 451,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1650655241976444764]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 8,
+      "accounted_bytes": 9523712
+    },
+    {
+      "ts": 165133915,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 452,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2360132397395644325]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 7,
+      "accounted_bytes": 8333248
+    },
+    {
+      "ts": 165133924,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 453,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[3069609552814843886]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 6,
+      "accounted_bytes": 7142784
+    },
+    {
+      "ts": 165133937,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 454,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[161415702230002234]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 5,
+      "accounted_bytes": 5952320
+    },
+    {
+      "ts": 165133945,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 455,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[870892857649201795]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 4,
+      "accounted_bytes": 4761856
+    },
+    {
+      "ts": 165133953,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 456,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[1580370013068401356]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 3,
+      "accounted_bytes": 3571392
+    },
+    {
+      "ts": 165133966,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 457,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2289847168487600917]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 2,
+      "accounted_bytes": 2380928
+    },
+    {
+      "ts": 165133974,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 458,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[2999324323906800478]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 1,
+      "accounted_bytes": 1190464
+    },
+    {
+      "ts": 165133983,
+      "pid": 3712,
+      "action": "RemoveBudgetForImage",
+      "key": "frame_key[content_id: 459,frame_index: 0]\ntype[Original]\nis_nearest_neightbor[1]\nsrc_rect[0,0 836x356]\ntarget_size[836x356]\ntarget_color_params[color_space: {primaries:BT709, transfer:SRGB, matrix:RGB, range:FULL}hdr_headroom: (deferred)]\nhash[91130473321958826]",
+      "locked_bytes_from_exact141_target": 1190464,
+      "active_entries": 0,
+      "accounted_bytes": 0
+    }
+  ]
+}

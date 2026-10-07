@@ -1,0 +1,53 @@
+.FFFF.                                                                   [100%]
+=================================== FAILURES ===================================
+_ test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted] _
+backend/tests/test_prod_deploy_backup_gate_boundary.py:76: in test_backup_fixture_server_ci_boundary_precedes_every_docker_action
+    assert outcome.returncode == 0, outcome.stderr
+E   AssertionError: /Library/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python: can't open file '/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-43/test_backup_fixture_server_ci_0/repo/scripts/ci/verify_server_process_ci.py': [Errno 2] No such file or directory
+E     
+E   assert 2 == 0
+E    +  where 2 = CompletedProcess(args=['bash', '/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-517-release-acceptance-20261006/sc...3/test_backup_fixture_server_ci_0/repo/scripts/ci/verify_server_process_ci.py': [Errno 2] No such file or directory\n").returncode
+_ test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed] __
+backend/tests/test_prod_deploy_backup_gate_boundary.py:93: in test_backup_fixture_server_ci_boundary_precedes_every_docker_action
+    assert gates == [expected_gate]
+E   AssertionError: assert [] == [['server-ci'...aaaaaaaaaaa']]
+E     
+E     Right contains one more item: ['server-ci', '--sha', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']
+E     Use -v to get more diff
+_ test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable] _
+backend/tests/test_prod_deploy_backup_gate_boundary.py:93: in test_backup_fixture_server_ci_boundary_precedes_every_docker_action
+    assert gates == [expected_gate]
+E   AssertionError: assert [] == [['server-ci'...aaaaaaaaaaa']]
+E     
+E     Right contains one more item: ['server-ci', '--sha', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']
+E     Use -v to get more diff
+_ test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha] _
+backend/tests/test_prod_deploy_backup_gate_boundary.py:93: in test_backup_fixture_server_ci_boundary_precedes_every_docker_action
+    assert gates == [expected_gate]
+E   AssertionError: assert [] == [['server-ci'...aaaaaaaaaaa']]
+E     
+E     Right contains one more item: ['server-ci', '--sha', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa']
+E     Use -v to get more diff
+=============================== warnings summary ===============================
+backend/app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-517-release-acceptance-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]
+FAILED backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]
+FAILED backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]
+FAILED backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]
+4 failed, 2 passed, 6 warnings in 3.43s

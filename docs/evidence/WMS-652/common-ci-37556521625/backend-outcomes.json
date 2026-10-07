@@ -1,0 +1,49 @@
+{
+  "0": {
+    "receipt_keys": [
+      "sha",
+      "run_id",
+      "run_attempt",
+      "version",
+      "count",
+      "index",
+      "collection",
+      "selected",
+      "exit_code"
+    ],
+    "xml_cases": 2316,
+    "statuses": {
+      "passed": 2217,
+      "skipped": 99
+    },
+    "failures": [],
+    "xml_sha256": "fb5da5e08da19287b888ff74d59b5f0e17304c9b4c36a306accc1e785cc3d00d"
+  },
+  "1": {
+    "receipt_keys": [
+      "sha",
+      "run_id",
+      "run_attempt",
+      "version",
+      "count",
+      "index",
+      "collection",
+      "selected",
+      "exit_code"
+    ],
+    "xml_cases": 2315,
+    "statuses": {
+      "passed": 2215,
+      "skipped": 99,
+      "failure": 1
+    },
+    "failures": [
+      {
+        "classname": "tests.test_fbs_operator_flow_handoff",
+        "name": "test_full_flow_warehouse_sc_emulator",
+        "time": "3.311"
+      }
+    ],
+    "xml_sha256": "d074545b887fddbcb9d9bd583ba3cd4460c1a35539d3dd88f18f2d6ab8540f92"
+  }
+}

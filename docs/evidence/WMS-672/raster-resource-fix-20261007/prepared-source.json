@@ -1,0 +1,12 @@
+{
+  "product_sha": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "contract_sha": "40df0d2d17187cc86d63cb5fbe0efef2b5ae47a1",
+  "protected_file_count": 229,
+  "suite_count": 21,
+  "case_count": 1173,
+  "changed_production_digest": "frontend/src/utils/printBarcodeLabel.ts",
+  "previous_sha256": "c4b1d5f835ada6073c1b471553fed8b98f6196692e002f5eca6c073271b0f9f5",
+  "new_sha256": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
+  "policy_sha256": "76e40c01c0130686b83f735ac2a2b6e878e5bb7b1b4a3b4f52c853e4fa16c881",
+  "readiness": "Prepared local12PASS/typecheck/build; actualLinux37545334001 pending; independentreview/acceptance/productref/SOURCEpin not approved"
+}

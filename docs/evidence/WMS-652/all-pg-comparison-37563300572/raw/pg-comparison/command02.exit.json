@@ -1,0 +1,13 @@
+{
+  "id": "command02",
+  "name": "WMS-662 isolated steady-state lock order on real PostgreSQL",
+  "command": "pytest -n 0 -q -s tests/test_wms662_batch_handoff_steady_state.py",
+  "working_directory": "backend",
+  "command_sha256": "a09b03ff778a3dde1dbe1d5ec732156d4c073bbb3719d34f672758c5b1907adb",
+  "exit_code": 0,
+  "started_epoch": 1791341090.139666,
+  "completed_epoch": 1791341099.5367599,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

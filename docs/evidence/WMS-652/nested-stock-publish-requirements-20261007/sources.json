@@ -1,0 +1,50 @@
+{
+  "role": "same distinct replacement analyst Sol6.1/high01a11390; not product/test author",
+  "base": "d6d12a44a54d9388d24dd1ceae30382e60c5641c",
+  "stage": "requirements before separate test contract and implementation",
+  "ids": {
+    "requirement": "R52",
+    "checks": [
+      "C66",
+      "C67",
+      "C68"
+    ]
+  },
+  "accepted_fix": false,
+  "historical_sqlite_lock_owner": "UNKNOWN",
+  "previous_acceptance": "ff6110eebc0ca1d39c1f2308e1141420e5853d79",
+  "read_inputs": [
+    {
+      "ref": "d6d12a44a54d9388d24dd1ceae30382e60c5641c",
+      "path": "backend/app/services/fbs_stock_publish_service.py",
+      "bytes": 14781,
+      "sha256": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996"
+    },
+    {
+      "ref": "d6d12a44a54d9388d24dd1ceae30382e60c5641c",
+      "path": "backend/app/services/fbs_shipment_service.py",
+      "bytes": 130329,
+      "sha256": "1e6d59473204c7511a5b8c57591cc57c22b8a3f03578677e7aeaa36b2e28770a"
+    },
+    {
+      "ref": "d6d12a44a54d9388d24dd1ceae30382e60c5641c",
+      "path": "docs/evidence/WMS-652/common-ci-37556521625/summary.json",
+      "bytes": 862,
+      "sha256": "9f5ed09038fc29d7375591c22be80dec8b11461042e3344a40d187b01012f896"
+    },
+    {
+      "ref": "31cd68fd70791a7433562dc2495a7d67e969d840",
+      "path": "docs/evidence/WMS-652/warehouse-sc-sqlite-lock-diagnosis-20261007/result.md",
+      "bytes": 3252,
+      "sha256": "c6d476f1abf7809faee8ac73f27f8a15dcd9fb158e6e516de4c96d35f009b11f"
+    },
+    {
+      "ref": "31cd68fd70791a7433562dc2495a7d67e969d840",
+      "path": "docs/evidence/WMS-652/warehouse-sc-sqlite-lock-diagnosis-20261007/actual-ledger.json",
+      "bytes": 11872,
+      "sha256": "4d5756edc70a728aa00f855f2e0b07e847cb3e1d2faba2b3aa9725513cd91cd8"
+    }
+  ],
+  "backlog_before_sha256": "9509b2e6ea93ab13cda806eb20fc7e8c6b360fde2bc85b26bdb5ff782a6098aa",
+  "requirements_before_sha256": "9e118247dd232133953112cf9f6193919c63984d4cefac5b94f80bdc1c4be473"
+}

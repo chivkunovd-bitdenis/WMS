@@ -1,0 +1,11 @@
+{
+  "run_id": 37556521625,
+  "run_attempt": 1,
+  "head_sha": "cbd126200788b87d1a006c5853d8e9560148cd36",
+  "tested_merge_sha": "8b8f20715528122a7260d650f018a9a8b4bd29e5",
+  "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "tree_sha": "c139a9f163d754f7f0a2f5788d15c75727732c78",
+  "independently_approved_source": "321f69385a8783bbf0c2fa65e80829e4c9c32373",
+  "policy_sha256": "1dced9197f99a8922ca6d10795fab51a02c48ebd821e90fc686ac56860caa2eb",
+  "status": "in_progress; early backlog and backend-checks failures, preserve all remaining producer outcomes"
+}

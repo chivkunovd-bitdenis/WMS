@@ -1,0 +1,78 @@
+FFF...                                                                   [100%]
+=================================== FAILURES ===================================
+________ test_exact_historical_fixture_pair_is_accepted[legacy-format] _________
+
+tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_exact_historical_fixture_0')
+transform = 'wms662-live-delivery-test-format'
+
+    @pytest.mark.parametrize("transform", tuple(PAIRS), ids=("legacy-format", "batch-pid"))
+    def test_exact_historical_fixture_pair_is_accepted(tmp_path, transform):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger([transform])
+        baselines, errors = replay.validate(ledger)
+>       assert errors == [], f"the exact reviewed full-file pair must be supported: {errors}"
+E       AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E       assert ['WMS-662: fi...expectations'] == []
+E         
+E         Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E         Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:114: AssertionError
+__________ test_exact_historical_fixture_pair_is_accepted[batch-pid] ___________
+
+tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_exact_historical_fixture_1')
+transform = 'wms662-batch-first-wait-pid-snapshot'
+
+    @pytest.mark.parametrize("transform", tuple(PAIRS), ids=("legacy-format", "batch-pid"))
+    def test_exact_historical_fixture_pair_is_accepted(tmp_path, transform):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger([transform])
+        baselines, errors = replay.validate(ledger)
+>       assert errors == [], f"the exact reviewed full-file pair must be supported: {errors}"
+E       AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E       assert ['WMS-662: fi...expectations'] == []
+E         
+E         Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E         Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:114: AssertionError
+__ test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver __
+
+tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_two_exact_original_contra0')
+
+    def test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver(tmp_path):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger(PAIRS)
+        owner_before = copy.deepcopy(ledger["owner_supersessions"])
+        for entry in ledger["fixture_corrections"]:
+            baselines, errors = replay.validate(ledger, entry["contract_commit"])
+>           assert errors == [], f"both exact frontiers must coexist: {errors}"
+E           AssertionError: both exact frontiers must coexist: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E           assert ['WMS-662: fi...expectations'] == []
+E             
+E             Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E             Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:125: AssertionError
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-two-shards/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[legacy-format]
+FAILED tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[batch-pid]
+FAILED tests/test_wms662_exact_fixture_pairs_contract.py::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver
+3 failed, 3 passed, 6 warnings in 10.58s

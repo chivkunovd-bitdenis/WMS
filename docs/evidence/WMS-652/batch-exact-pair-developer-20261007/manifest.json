@@ -1,0 +1,40 @@
+{
+  "implementation_sha": "a4324e5524fb2b8b88fa8a7ffc5f5ce11fb34928",
+  "members": [
+    {
+      "path": "README.md",
+      "bytes": 2816,
+      "sha256": "8d02c0d44086cfab3db0dbae2408ebfc0d01b5fc10b99fdfeda6ba8a72bd38cc"
+    },
+    {
+      "path": "precode-red.log",
+      "bytes": 5308,
+      "sha256": "43fdb6165478a1b2bcef3942d7c0ea77a5e60551298f07c48f44e7acc582346d"
+    },
+    {
+      "path": "precode-red.xml",
+      "bytes": 6086,
+      "sha256": "560d3787c1735bfa9b027bfd7c4817f30701dc273ce37e3a9154838a327b57b2"
+    },
+    {
+      "path": "preservation.json",
+      "bytes": 1210,
+      "sha256": "303ccf8eec345ac924e4015d607204541d82070c3c7f42faffc4e1584d6a231a"
+    },
+    {
+      "path": "ruff-target.log",
+      "bytes": 19,
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "path": "targeted-green.log",
+      "bytes": 1096,
+      "sha256": "bad789c76a03a8d60d7a090d90de033612725b196c3c028168a2b83ac5b61945"
+    },
+    {
+      "path": "targeted-green.xml",
+      "bytes": 1200,
+      "sha256": "2fdf7e735ef61bb902fa817f3d7feca975e11c83873fffd833eabf536f9ca8c1"
+    }
+  ]
+}

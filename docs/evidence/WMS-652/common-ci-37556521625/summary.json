@@ -1,0 +1,26 @@
+{
+  "run_id": 37556521625,
+  "attempt": 1,
+  "head": "cbd126200788b87d1a006c5853d8e9560148cd36",
+  "tested_merge": "8b8f20715528122a7260d650f018a9a8b4bd29e5",
+  "start": "2026-10-07T01:19:34Z",
+  "end": "2026-10-07T01:31:47Z",
+  "duration_seconds": 733,
+  "conclusion": "FAILURE",
+  "backend_collection": 4631,
+  "backend_union_exact": true,
+  "backend_passed": 4432,
+  "backend_xml_skipped": 198,
+  "backend_failed": 1,
+  "mandatory_postgres": "NOT EXECUTED: backend-checks stopped at Ruff",
+  "failures": [
+    "Ruff E501 at backend/tests/test_prod_deploy_backup_gate_boundary.py:31",
+    "backlog frozen-contract correction metadata missing for approved portable AST amendment",
+    "SQLite database locked during inventory movement autoflush in test_full_flow_warehouse_sc_emulator"
+  ],
+  "process_proof": "SKIPPED",
+  "release": "BLOCKED; no deployment",
+  "old_required_backend_fbs_passed": 615,
+  "old_required_backend_fbs_skipped": 0,
+  "new_native_stock_cases": "not present in this historical run; new source full CI pending"
+}

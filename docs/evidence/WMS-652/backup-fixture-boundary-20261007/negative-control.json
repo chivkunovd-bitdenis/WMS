@@ -1,0 +1,29 @@
+{
+  "mutation": "temporary shell copy ignores server CI refusal with || true",
+  "tracked_product_sha256_unchanged": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6",
+  "frozen_contract_sha256": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+  "cases": [
+    {
+      "state": "accepted",
+      "result": "PASS positive control"
+    },
+    {
+      "state": "failed",
+      "result": "targeted RED",
+      "assertion": "assert outcome.returncode != 0",
+      "docker_calls_when_mutant_ignores_refusal": 30
+    },
+    {
+      "state": "unavailable",
+      "result": "targeted RED",
+      "assertion": "assert outcome.returncode != 0",
+      "docker_calls_when_mutant_ignores_refusal": 30
+    },
+    {
+      "state": "wrong-sha",
+      "result": "targeted RED",
+      "assertion": "assert outcome.returncode != 0",
+      "docker_calls_when_mutant_ignores_refusal": 30
+    }
+  ]
+}

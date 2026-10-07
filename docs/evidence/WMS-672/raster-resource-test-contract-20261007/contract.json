@@ -1,0 +1,90 @@
+{
+  "task": "WMS-672",
+  "role": "separate bounded technical testwriter",
+  "class": "навсегда",
+  "base_sha": "ea001a77653053624cc73acc00e622c155447292",
+  "product_sha": "47817f76589701ea36ba1f8b30fca84b6a136208",
+  "rules_origin_etalon_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "rules_sha256": "829e975ebcdfd2574c5e215985f9cf3a5c621b3f35b6686351daae01c1f82ee1",
+  "case_ids": [
+    "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
+    "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
+    "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
+  ],
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms672-raster-resource.test.mjs",
+  "report_format": "node-tap",
+  "future_report": "release-print/672-raster-resource.tap",
+  "process_proof_report": "print/672-raster-resource.tap",
+  "test_closure": [
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+    "frontend/src/utils/printBarcodeLabel.ts",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "closure_sha256": {
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+    "frontend/src/utils/printBarcodeLabel.ts": "c4b1d5f835ada6073c1b471553fed8b98f6196692e002f5eca6c073271b0f9f5",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "requirement_mapping": {
+    "RR1": [
+      "R3",
+      "R4"
+    ],
+    "RR2": [
+      "R4",
+      "R6"
+    ],
+    "RR3": [
+      "R4",
+      "R6"
+    ]
+  },
+  "before": {
+    "report": "before.tap",
+    "exit_code": 1,
+    "total": 3,
+    "pass": 2,
+    "fail": 1,
+    "skipped": 0,
+    "red_case": "RR1",
+    "started": 32,
+    "successful_decodes": 16,
+    "peak_retained": 16,
+    "render_releases": 0,
+    "transfers": 0
+  },
+  "preservation_mutation": {
+    "report": "mutation-style-leak.tap",
+    "reproduce": "mutation-proof.py",
+    "exit_code": 1,
+    "pass": 0,
+    "fail": 2,
+    "skipped": 0,
+    "red_cases": [
+      "RR2",
+      "RR3"
+    ]
+  },
+  "input_identities": {
+    "docs/requirements/WMS-672.md": "c7468466785fdae724ddf116e618a79443f3a5ed85b3d263c8e2a404369ad3ac",
+    "docs/reviews/2026-09-11-analyst-draft/skills/wms-test-writer/SKILL.md": "b0d5b3593416035febd6408284f33d8b8f742d6727c3e264e64c16ce0c4c0fb9",
+    "docs/evidence/WMS-672/target-cache-trace-linux-20261007/comparison-result.md": "c564c430bd934bae9c16239fdd83c15d01e63c92b55f3298f102bae4133853ec",
+    "docs/evidence/WMS-672/target-cache-trace-linux-20261007/accounting-summary.json": "e417aee4c061ecdb1ffa350b50785965850f884de340476c0998be5d8dfce7b5",
+    "docs/evidence/WMS-672/target-cache-trace-linux-20261007/primary-source-identities.json": "bd8251d05eb2054cc7a9c05d93188897122097ae3da58fd3dce481304e4adbed",
+    "docs/evidence/WMS-672/target-cache-trace-linux-20261007/mechanism-source-identities.json": "da625e4dd6d69f65b3dde6a2a52ac357f3f04d15c635b335b70225e9ac290c02",
+    "docs/evidence/WMS-672/target-cache-trace-linux-20261007/mechanism-proposal.md": "8ef7f5b4d34ccc98b4d0781d39ec2b844b96abe5f652a61bb6b7aa6e71a8969a",
+    "docs/evidence/WMS-672/peer-drain-source-review-20261007/causal-checkpoint-review.md": "8056f5d831dfafbda1f890b7f06110c175ffc85cbb8b3ca379ad722e177e3b68"
+  },
+  "boundary": "Actual transpiled utility executes in jsdom. Native decode, raster consumption, layout and parent frame/timer delivery are controlled external boundaries.",
+  "synthetic_capacity": "One observed initial parallel cohort; no Chrome numeric quota, byte budget or retention-time assertion.",
+  "layout_bound": "Declared px/mm/% dimensions, block flow and absolute/fixed positions; not a complete CSS layout engine or a browser paint guarantee.",
+  "asset_bound": "Synthetic PNG bytes are preserved; 836x356 metadata is modeled at the decode boundary. No real asset quality or CODE128/PDF claim.",
+  "limits": [
+    "No screen operation/marks; existing frozen native-errors/peer-drain/browser suites retain those protections.",
+    "No browser/native decoder/cache-unref/PDF/physical-paper proof; unchanged old C5 including independent renderTape300 remains mandatory and RED.",
+    "No timeout relaxation, thumbnail/group-size constraint, browser cache quota, private retention delay, retry or loaded-image success fallback.",
+    "No CI/registry wiring, requirements/backlog edit, independent review, acceptance or deployment."
+  ]
+}

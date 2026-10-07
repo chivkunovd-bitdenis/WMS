@@ -1,0 +1,11 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend
+
+ ✓ src/integrations/cryptoProCades.test.ts (37 tests) 18ms
+
+ Test Files  1 passed (1)
+      Tests  37 passed (37)
+   Start at  03:55:18
+   Duration  370ms (transform 44ms, setup 0ms, collect 47ms, tests 18ms, environment 0ms, prepare 95ms)
+
+JSON report written to /Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/docs/evidence/WMS-652/frontend-report-identities-20261007/after-module.json

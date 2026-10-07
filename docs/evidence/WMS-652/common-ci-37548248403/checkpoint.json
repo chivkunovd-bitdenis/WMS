@@ -1,0 +1,19 @@
+{
+  "utc": "2026-10-06T23:48:03.372056+00:00",
+  "head_sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "tested_merge_sha": "ac845328b27b5be265962695e10766efddef339e",
+  "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "run_id": 37548248403,
+  "run_attempt": 1,
+  "guard_failure": "single immutable product reference test still hardcodes prior d618 although exact25eb approved",
+  "unit_test_total": 131,
+  "unit_test_passed": 130,
+  "unit_test_failed": 1,
+  "guard_failed_before_scope_shard_reports": true,
+  "run_cancelled": false,
+  "rerun_started": false,
+  "remaining_jobs_in_progress": true,
+  "main_source_pin": "9dae4b19f6d4dca554200e08282579414a110848",
+  "staging_unchanged": true,
+  "production_unchanged": true
+}

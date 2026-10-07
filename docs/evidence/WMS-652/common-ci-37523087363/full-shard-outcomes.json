@@ -1,0 +1,63 @@
+{
+  "tested_sha": "2d1707cacdb9bbd2e92eee75115c9749ac969fcc",
+  "head_sha": "f6066d68bd198794602a6e8916612d0d3b32460f",
+  "run_id": 37523087363,
+  "run_attempt": 1,
+  "full_collection": 4625,
+  "exact_union": true,
+  "intersection": 0,
+  "parts": [
+    {
+      "index": 0,
+      "artifact_id": 11441936078,
+      "receipt": {
+        "sha": "2d1707cacdb9bbd2e92eee75115c9749ac969fcc",
+        "run_id": 37523087363,
+        "run_attempt": 1,
+        "version": 1,
+        "count": 2,
+        "index": 0,
+        "exit_code": 1
+      },
+      "counts": {
+        "passed": 2210,
+        "skipped": 99,
+        "failure": 4
+      },
+      "failed": [
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[]",
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[dump]",
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[listing]",
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[retry]"
+      ]
+    },
+    {
+      "index": 1,
+      "artifact_id": 11441397686,
+      "receipt": {
+        "sha": "2d1707cacdb9bbd2e92eee75115c9749ac969fcc",
+        "run_id": 37523087363,
+        "run_attempt": 1,
+        "version": 1,
+        "count": 2,
+        "index": 1,
+        "exit_code": 1
+      },
+      "counts": {
+        "passed": 2210,
+        "skipped": 99,
+        "failure": 3
+      },
+      "failed": [
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[archive]",
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[empty]",
+        "tests/test_prod_deploy_backup.py::test_deploy_requires_verified_backup_before_migration[network]"
+      ]
+    }
+  ],
+  "full_run_conclusion": "failure",
+  "backend_aggregator": "failure",
+  "process_proof": "skipped",
+  "elapsed_sec": 796,
+  "goal_10_to_15_minutes": "not accepted: failed run is not successful CI target proof"
+}

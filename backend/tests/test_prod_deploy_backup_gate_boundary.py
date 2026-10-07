@@ -30,7 +30,8 @@ def test_all_seven_backup_variants_and_original_assertions_are_preserved() -> No
     )
     assertions = [
         ast.dump(node, include_attributes=False, **dump_options)
-        for node in ast.walk(function) if isinstance(node, ast.Assert)
+        for node in ast.walk(function)
+        if isinstance(node, ast.Assert)
     ]
     assert len(assertions) == 23
     assert hashlib.sha256(json.dumps(assertions, ensure_ascii=False).encode()).hexdigest() == (

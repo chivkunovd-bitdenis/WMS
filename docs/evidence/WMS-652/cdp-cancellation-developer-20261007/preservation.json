@@ -1,0 +1,23 @@
+{
+  "base": "fb033a1f30bcea1b80164f6a343aee9cc0e2a3f7",
+  "frozen_test_sha": "910217fe9323cfaee211b294b01ec7b77daf49d8",
+  "frozen_test_sha256": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
+  "outside_class_Network_enable_transport_output_byte_identical": true,
+  "original_listener_catch_strict": true,
+  "precode": {
+    "pass": 2,
+    "fail": 3,
+    "skip": 0,
+    "exit": 1
+  },
+  "final": {
+    "pass": 5,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0
+  },
+  "syntax_exit": 0,
+  "browser43_rerun": false,
+  "full_CI_rerun": false,
+  "original_failed_CI_cause": "UNKNOWN"
+}

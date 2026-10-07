@@ -1,0 +1,32 @@
+{
+  "transferMode": "ReturnAsStream",
+  "streamFormat": "json",
+  "streamCompression": "gzip",
+  "bufferUsageReportingInterval": 1000,
+  "traceConfig": {
+    "recordMode": "recordUntilFull",
+    "traceBufferSizeInKb": 32768,
+    "enableSampling": false,
+    "enableSystrace": false,
+    "includedCategories": [
+      "cc",
+      "disabled-by-default-cc.debug",
+      "disabled-by-default-memory-infra",
+      "blink.user_timing"
+    ],
+    "excludedCategories": [
+      "*"
+    ],
+    "memoryDumpConfig": {
+      "allowed_dump_modes": [
+        "light"
+      ],
+      "triggers": [
+        {
+          "periodic_interval_ms": 250,
+          "mode": "light"
+        }
+      ]
+    }
+  }
+}

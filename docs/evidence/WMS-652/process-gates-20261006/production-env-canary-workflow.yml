@@ -1,0 +1,12 @@
+name: CI
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  production-environment-negative-canary:
+    runs-on: ubuntu-24.04
+    environment: production
+    steps:
+      - name: Harmless marker only
+        run: echo 'WMS652 ENVIRONMENT CANARY NO DEPLOYMENT'

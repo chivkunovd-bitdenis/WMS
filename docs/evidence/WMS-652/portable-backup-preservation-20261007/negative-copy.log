@@ -1,0 +1,15 @@
+Actual preservation function with SOURCE bound only to an untracked mutated copy
+Mutation: assert stop < dump -> assert stop <= dump (23 assertions retained)
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/docs/evidence/WMS-652/portable-backup-preservation-20261007/preservation-proof.py", line 44, in <module>
+    namespace[target.name]()
+    ~~~~~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/backend/tests/test_prod_deploy_backup_gate_boundary.py", line 34, in test_all_seven_backup_variants_and_original_assertions_are_preserved
+    assert hashlib.sha256(json.dumps(assertions, ensure_ascii=False).encode()).hexdigest() == (
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408"
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+AssertionError
+Expected hash assertion FAIL; no setup/count failure; temporary copy removed.

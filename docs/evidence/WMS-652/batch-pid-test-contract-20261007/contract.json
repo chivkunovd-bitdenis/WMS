@@ -1,0 +1,102 @@
+{
+  "task": "WMS-652",
+  "role": "same separate Sol6.1/high TESTWRITER",
+  "base": "a64e45b9a90aa6ab12f4cd942d4a023af72be0d1",
+  "rules_origin_etalon": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "case_ids": [
+    "tests/test_wms662_batch_pid_snapshot_contract.py::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+    "tests/test_wms662_batch_pid_snapshot_contract.py::test_live_cycle_observation_after_pid_change_uses_current_writer_connections"
+  ],
+  "xml_ids": [
+    "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+    "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections"
+  ],
+  "command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B -m pytest --noconftest -c /dev/null --rootdir=backend -q --capture=tee-sys -p no:cacheprovider backend/tests/test_wms662_batch_pid_snapshot_contract.py --junitxml=docs/evidence/WMS-652/batch-pid-test-contract-20261007/before.xml",
+  "raw_before": {
+    "log": "before.log",
+    "xml": "before.xml",
+    "executed": 2,
+    "pass": 1,
+    "fail": 1,
+    "skip": 0,
+    "error": 0,
+    "exit_code": 1,
+    "failure": "Actual class changes exposed first-wait writers from batch219/ordinary209 to batch219/ordinary219 after later native DML PID reuse; first wait prerequisites passed."
+  },
+  "ci_integration": {
+    "suite": "backend-fbs",
+    "report": "backend-all.xml",
+    "format": "junit",
+    "exact": false,
+    "additive_cases": 2,
+    "workflow_changed": false
+  },
+  "source_closure": [
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py",
+    "backend/tests/test_wms662_batch_handoff_lock_order.py",
+    "backend/tests/test_wms662_cancellation_lock_order.py",
+    "backend/tests/conftest.py",
+    "backend/pyproject.toml",
+    "backend/uv.lock"
+  ],
+  "closure_sha256": {
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
+    "backend/tests/test_wms662_batch_handoff_lock_order.py": "a918e28d54367f0f4d0b830463b093fcf46f15de008077263385da397541c0de",
+    "backend/tests/test_wms662_cancellation_lock_order.py": "083f5f84bdfca34cb3ba7336da81dd9596db142a4908b89932e07383812deadc",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "extracted_actual_class_ast_sha256": "1a6ac0c4b8f6543128cf18f251691b2ec6105f2332250b36ee8c4badf647df6b",
+  "unchanged_business_case_ast_sha256": "ccea32452d96ee96dc0c63ea47ccf377fbee161efdba569f0c3b2204d6914a36",
+  "unchanged_business_assert_count": 21,
+  "extraction": "Original AST nodes for actual BatchSchedule plus original resource/sqlstate helpers, with real asyncio/ContextVar/SQLAlchemy statements. No replacement of before/observe or classification algorithm.",
+  "controlled_boundary": "Connection driver get_server_pid and SessionLocal observer reply rows, filtered to queried PIDs. Actual Event.set is wrapped only to record state at its call, then native set executes. No PostgreSQL operation or new native DB evidence.",
+  "first_snapshot_boundary": [
+    "No-wait first poll must not release; current PIDs change before actual matching wait reply.",
+    "Exposed original pids evidence is the exact219/209 pair when release is called.",
+    "Later ordinary DML on recycled219 cannot overwrite that first proven wait snapshot.",
+    "Live observer still queries current301/302 and detects mutual wait; original wait_queries are retained."
+  ],
+  "preservation_control": {
+    "command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B docs/evidence/WMS-652/batch-pid-test-contract-20261007/preservation-control.py",
+    "case": "test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+    "mutation": "Only temporary actual fixture copy: change current writer refresh assignment to setdefault; live observation then queries stale219/209 instead of301/302.",
+    "log": "preservation-control.log",
+    "xml": "preservation-control.xml",
+    "executed": 1,
+    "fail": 1,
+    "pass": 0,
+    "skip": 0,
+    "error": 0,
+    "deselected": 1,
+    "exit_code": 1,
+    "copy_removed": true
+  },
+  "raw_sha256": {
+    "before.xml": "b7de66e15711d8c0569365ca5c109d05a09896e596b5611ad48f2c716358923b",
+    "before.log": "4c545f1de97f84b18f0864e2af64e5cb87cf6568050a7d59cfc8bf8804161a86",
+    "preservation-control.xml": "ce17a13912f2afa162e29c01e6ace7bfe2c0ec6736649fb97a728c8e17b879f8",
+    "preservation-control.log": "4b2a2f903bba6b06165f2f11e70a51367cd303bf74cec9774923732fb5b987d9"
+  },
+  "original_ci": {
+    "run": 37561608930,
+    "tested_merge": "4a118aea00ec3995d98f70d337245260b291ca7f",
+    "raw": "docs/evidence/WMS-652/common-ci-37561608930/jobs/backend-checks.log",
+    "sha256": "0abfadb9af4825d4dc9a527faf5e3b6dbdcb3ff01e606c4d2c820e0c8c916149",
+    "reported_outcome": "HARNESS line346: wait_seen true, final mutable pids219/219; first wait rows ordinary209 blockedby batch219; results[None,None]/issues[] and business accounting correct.",
+    "product_cause_claimed": false
+  },
+  "preservation": {
+    "all_existing_tracked_files_diff": [],
+    "whole_fixture_byte_identical": true,
+    "line346_business_assertions_timeouts_observer_delays_unchanged": true,
+    "targeted_new_test_ruff": "PASS"
+  },
+  "limits": [
+    "No product/old protected fixture/checker/requirements/policy/workflow change.",
+    "No new field/export name specified: existing pids consumed by unchanged line346 remains first-wait evidence; internal live map mechanism is developer-owned.",
+    "No native PG, provider, fullCI, browser, installation or broad-suite run.",
+    "Controlled replies prove harness lifecycle only; independent fixture review and analyst acceptance remain separate."
+  ]
+}

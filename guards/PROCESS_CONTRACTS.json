@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "e4c05711311e3ede42b0bc69fe632913b652dab9af0ced37c15e67bc3103bb27",
+    ".github/workflows/ci.yml": "a954c55d3580f75ae56c5c55d175227eabd8b70579f2d553e6fdd8af55a5780c",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -157,7 +157,7 @@
     "frontend/src/screens/v2/wms673MarketplaceProjection.json": "3857d4589b28acbd5a9c537cbdfd1a0cf6bcf00f3e7cc24564d1b0abe9095c53",
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
-    "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
     "frontend/tests-e2e/wms652-critical/fixtures.mjs": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
@@ -232,7 +232,7 @@
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
     "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
     "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc",
-    "scripts/ci/check_task_documents.py": "45bb3ac38ea6cdfcd393f02f334beb4a0e13132484437eddd96a29252d818c6d",
+    "scripts/ci/check_task_documents.py": "c8693fce22b6631f917d8c00879154eec58130514a7db58e56572a6adc75aa1b",
     "scripts/ci/test_check_task_documents.py": "a09cab8829cd79eb4fcb96a4c993ad92388b4c6df35ad4112c349e66ee081111",
     "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "0c5880a3cb800d50582c42eede5b73a690a95f54538ef057a50940d40f97cdeb",
     "frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx": "3fbd20b458e1f1752b515880f760cf7513df8c0b9eeda7d4f9baf34793cb8a7f",
@@ -264,13 +264,21 @@
     "backend/tests/test_wms681_postgres_recovery.py": "0cce6ab605f902238f497e4b780fcde24987ba46d6ef91767b0ada52aa891189",
     "backend/tests/test_fbs_packing_box.py": "e2af8bd642ea0136236f9b8a5190a52438e27de37d83169f0d9633b024af8e7d",
     "backend/tests/test_prod_deploy_backup.py": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
-    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "7ae27069f65c642fda45ba9c6dca516bc88d9f6a3b4b4d763ba9830f0282babb",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "092a798ffa11db86ea3fca9c7194d6a8727a079301c41690d5c9860314afa13c",
     "frontend/src/screens/ff/FfInboundRequestView.tsx": "9fd014b2b7a32129c2c9ebd5e42eeb0993d07aa2d47b39660392d8162ff856d7",
     "frontend/src/utils/printBarcodeLabel.ts": "f8c1206fbb6e1fd4ea12f7aa23ff8c83ea9f4ee0bf70604076e7f8ce11e83c57",
-    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
-    "frontend/tests-e2e/wms672-peer-drain.test.mjs": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "71376766881ca86d372dc7572002696a10ba71df7c50f8aad105ded1f19f3341",
+    "frontend/tests-e2e/wms672-peer-drain.test.mjs": "a296d88cac214ea5366ba631b686fa0fe147b5eaa4f9ee26b11f8640fa162b7f",
     "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
-    "backend/tests/test_wms662_cancellation_lock_order_regression.py": "5035058420e467f3238e4958423e1d5d0067fcdb8aef90daf77a0661b5b8db51"
+    "backend/tests/test_wms662_cancellation_lock_order_regression.py": "5035058420e467f3238e4958423e1d5d0067fcdb8aef90daf77a0661b5b8db51",
+    "backend/app/services/fbs_stock_publish_service.py": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
+    "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+    "backend/tests/test_wms662_batch_handoff_lock_order.py": "4b0062901cc0df0da3dc4604fcb72c7619f251dee1182954351564c7f1335ac1",
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py": "5f505f389a7b0b38838c69df676882a42509d80932c189475a83caa2e84336b9",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e",
+    "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20"
   },
   "suites": {
     "backend-fbs": {
@@ -481,6 +489,10 @@
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]",
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
+        "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+        "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+        "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
         "tests.test_true_api_withdrawal::test_action_date_uses_moscow_calendar_at_utc_day_boundary",
         "tests.test_true_api_withdrawal::test_actual_document_code_count_boundary[30000]",
         "tests.test_true_api_withdrawal::test_actual_document_code_count_boundary[30001]",
@@ -963,7 +975,15 @@
         "tests.test_wms658_wb_honest_sign_contract::test_c19_backfill_dry_run_reports_evidence_and_missing_data_without_writes",
         "tests.test_wms658_wb_honest_sign_contract::test_c19_c20_backfill_rejects_raw_nmid_that_does_not_belong_to_product",
         "tests.test_wms658_wb_honest_sign_contract::test_c20_backfill_apply_rejects_stale_plan_and_changes_only_false_to_true",
+        "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+        "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
         "tests.test_wms662_cancellation_lock_order_regression::test_f6_confirmed_wait_pid_pair_survives_postrelease_pool_reuse",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_missing_changed_review_or_rebound_source_remains_rejected",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+        "tests.test_wms662_exact_fixture_pairs_contract::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[full]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[partial]",
         "tests.test_wms662_observed_handoff::test_c11_existing_ledger_repair[reversed]",
@@ -2110,13 +2130,13 @@
       "format": "node-tap",
       "exact": true,
       "cases": [
+        "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks",
+        "C5 blank message retains existing generic preparation error and zero external actions",
+        "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
         "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
         "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
-        "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
-        "C5 blank message retains existing generic preparation error and zero external actions",
-        "C5 nonstring message retains existing generic preparation error and zero external actions",
         "C5 no message retains existing generic preparation error and zero external actions",
-        "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks"
+        "C5 nonstring message retains existing generic preparation error and zero external actions"
       ]
     },
     "print-672-peer-drain": {
@@ -2136,6 +2156,20 @@
         "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
         "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
         "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
+      ]
+    },
+    "fbs-cdp-cancellation": {
+      "report": "print/wms652-cdp-cancellation.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+        "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+        "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+        "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+        "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+        "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+        "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
       ]
     }
   }

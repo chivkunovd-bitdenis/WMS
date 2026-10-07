@@ -1,0 +1,53 @@
+{
+  "run_id": 37548248403,
+  "run_attempt": 1,
+  "head_sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "tested_sha": "ac845328b27b5be265962695e10766efddef339e",
+  "status": "completed",
+  "conclusion": "failure",
+  "elapsed_seconds": 743.0,
+  "successful_ci_goal_proven": false,
+  "full_backend_collection": 4631,
+  "exact_union_no_duplicates": true,
+  "shards": [
+    {
+      "shard": 0,
+      "cases": 2316,
+      "counts": {
+        "passed": 2217,
+        "skipped": 99
+      },
+      "failures": []
+    },
+    {
+      "shard": 1,
+      "cases": 2315,
+      "counts": {
+        "passed": 2215,
+        "skipped": 99,
+        "failed": 1
+      },
+      "failures": [
+        "tests.test_prod_deploy_backup_gate_boundary::test_all_seven_backup_variants_and_original_assertions_are_preserved"
+      ]
+    }
+  ],
+  "normal_skips_preserved": true,
+  "pg_aggregator_skipped_after_failed_shard": true,
+  "full672_cases": 11,
+  "full672_passed": true,
+  "remaining672_cases": 6,
+  "remaining672_passed": true,
+  "real_fbs_cases": 43,
+  "real_fbs_pass": 42,
+  "real_fbs_fail": 1,
+  "other_infra_causes": [
+    "old frozen reference literal mismatch",
+    "duplicate unprotected CryptoPro parameterized fullName",
+    "Python3.14 omitted-empty vsPython3.11 full AST dump",
+    "CDP InvalidInterceptionId after remount; exact canceled request correlation pending"
+  ],
+  "rerun_started": false,
+  "production_unchanged": true,
+  "staging_unchanged": true
+}

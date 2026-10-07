@@ -1,0 +1,338 @@
+{
+  "verdict": "PASS measured premature after-SAVEPOINT dispatch and overlapping pending write",
+  "common_source": "31cd68fd70791a7433562dc2495a7d67e969d840",
+  "diagnostic_source": "447ae9216cfb874bd66136a90d68d404ce3ea307",
+  "run": 37558149550,
+  "attempt": 1,
+  "manifest_sha256": "4e3ef35a39791a494ffccad4f6bd0e7a96d60d4ad0a06521437bdddc78430308",
+  "manifest_members_verified": 20,
+  "transactions_sha256": "664704c97088dcadb1b51e157841f827ac48e45f137ebb30a018ebe69a74717c",
+  "coverage": {
+    "exitstatus": 0,
+    "events": 6443,
+    "bytes": 1805572,
+    "dropped": 0,
+    "active_transactions": {}
+  },
+  "kind_counts": {
+    "collector-start": 1,
+    "test-protocol-start": 1,
+    "sqlite-connection-settings": 4,
+    "connection-begin": 183,
+    "sql-start": 2360,
+    "sql-complete": 2360,
+    "connection-commit-start": 141,
+    "pool-checkin": 183,
+    "session-begin": 247,
+    "session-before-flush": 208,
+    "session-transaction-ended": 455,
+    "session-commit-complete": 184,
+    "connection-rollback-start": 42,
+    "service-task-launch": 36,
+    "service-task-settled": 36,
+    "test-protocol-end": 1,
+    "collector-end": 1
+  },
+  "global_sequence_label_duplicates_outside_target": {
+    "2423": 2,
+    "3067": 2,
+    "3796": 2,
+    "4238": 2
+  },
+  "absent_serial_labels_not_proof_of_missing_rows": [
+    2424,
+    3068,
+    3797,
+    4241
+  ],
+  "raw_row_monotonic_times_strictly_increasing": true,
+  "all_27_target_labels_unique": true,
+  "source_closure_identical_at_diagnostic_failed_head_failed_merge_and_common": {
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/tests/test_fbs_operator_flow_handoff.py": "9b9a87703ecd919b2483dbaee457d4f1c6bda8d373adf5f29d1632118efaad95",
+    "backend/tests/fbs_operator_emulator_seed.py": "3ad13927b6287286ef6530e88c17789b586c84d03298b214cafcc139496f8996",
+    "backend/tests/test_fbs_shipment_warehouse_sc.py": "12687435663309104895edd41323f1db9295f0b47ad67df6bb7933bcedc497d9",
+    "backend/app/db/session.py": "a0753dd7edfde807d023f71e88bf27aca1ab52adfa2d64d22c97eb24f612af7e",
+    "backend/app/services/fbs_shipment_service.py": "1e6d59473204c7511a5b8c57591cc57c22b8a3f03578677e7aeaa36b2e28770a",
+    "backend/app/services/inventory_service.py": "ee216eb6eafec03dfb1443c214f7a8a5efbe3b7fb00c3f4ba1dcb35505480825",
+    "backend/app/services/fbs_stock_publish_service.py": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+    "backend/app/services/fbs_stock_sync_service.py": "3bc2f0d82c979e78aa03ba41a0308a130544c08f82135300fd1e1cb223102117"
+  },
+  "WMS_engine_connection_settings": [
+    {
+      "connection": 1,
+      "journal_mode": "delete",
+      "busy_timeout_ms": 5000
+    },
+    {
+      "connection": 4,
+      "journal_mode": "delete",
+      "busy_timeout_ms": 5000
+    },
+    {
+      "connection": 5,
+      "journal_mode": "delete",
+      "busy_timeout_ms": 5000
+    },
+    {
+      "connection": 6,
+      "journal_mode": "delete",
+      "busy_timeout_ms": 5000
+    }
+  ],
+  "foreign_global_session_connections": [
+    2,
+    3
+  ],
+  "27_event_ledger_recomputed_equal_to_producer": true,
+  "events": [
+    {
+      "seq": 5693,
+      "mono_ns": 128080576317,
+      "kind": "connection-begin",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "seq": 5694,
+      "mono_ns": 128080623766,
+      "kind": "session-begin",
+      "task": 60,
+      "session": 100,
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "seq": 5711,
+      "mono_ns": 128089513103,
+      "kind": "sql-start",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "INSERT",
+      "table": "inventory_movements"
+    },
+    {
+      "seq": 5712,
+      "mono_ns": 128090378784,
+      "kind": "sql-complete",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "INSERT",
+      "table": "inventory_movements"
+    },
+    {
+      "seq": 5716,
+      "mono_ns": 128092755976,
+      "kind": "sql-start",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "RELEASE",
+      "table": null
+    },
+    {
+      "seq": 5717,
+      "mono_ns": 128094544184,
+      "kind": "sql-complete",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "RELEASE",
+      "table": null
+    },
+    {
+      "seq": 5718,
+      "mono_ns": 128094603095,
+      "kind": "session-commit-complete",
+      "task": 60,
+      "session": 100
+    },
+    {
+      "seq": 5719,
+      "mono_ns": 128094663979,
+      "kind": "service-task-launch",
+      "task": 60,
+      "launched_task": 76
+    },
+    {
+      "seq": 5720,
+      "mono_ns": 128094719823,
+      "kind": "session-transaction-ended",
+      "task": 60,
+      "session": 100,
+      "nested": true
+    },
+    {
+      "seq": 5722,
+      "mono_ns": 128095641179,
+      "kind": "sql-start",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "UPDATE",
+      "table": "fbs_shipment_reversal_ledger"
+    },
+    {
+      "seq": 5723,
+      "mono_ns": 128095746516,
+      "kind": "service-task-launch",
+      "task": 76,
+      "launched_task": 77
+    },
+    {
+      "seq": 5724,
+      "mono_ns": 128096800630,
+      "kind": "connection-begin",
+      "task": 77,
+      "connection": 5,
+      "transaction": 5724
+    },
+    {
+      "seq": 5742,
+      "mono_ns": 128102644664,
+      "kind": "service-task-launch",
+      "task": 77,
+      "launched_task": 79
+    },
+    {
+      "seq": 5745,
+      "mono_ns": 128104288542,
+      "kind": "connection-begin",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "seq": 5746,
+      "mono_ns": 128104363883,
+      "kind": "session-begin",
+      "task": 79,
+      "session": 106,
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "seq": 5747,
+      "mono_ns": 128104633137,
+      "kind": "sql-start",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "SELECT",
+      "table": "fbs_warehouse_bindings"
+    },
+    {
+      "seq": 5750,
+      "mono_ns": 128106204851,
+      "kind": "sql-complete",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "SELECT",
+      "table": "fbs_warehouse_bindings"
+    },
+    {
+      "seq": 5751,
+      "mono_ns": 128106738119,
+      "kind": "sql-start",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "SELECT",
+      "table": "sellers"
+    },
+    {
+      "seq": 5756,
+      "mono_ns": 128108668013,
+      "kind": "sql-complete",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "SELECT",
+      "table": "sellers"
+    },
+    {
+      "seq": 5757,
+      "mono_ns": 128109346715,
+      "kind": "sql-start",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "UPDATE",
+      "table": "fbs_warehouse_bindings"
+    },
+    {
+      "seq": 5760,
+      "mono_ns": 128111041959,
+      "kind": "sql-start",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "UPDATE",
+      "table": "fbs_orders"
+    },
+    {
+      "seq": 5761,
+      "mono_ns": 128111487784,
+      "kind": "sql-complete",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693,
+      "operation": "UPDATE",
+      "table": "fbs_orders"
+    },
+    {
+      "seq": 5868,
+      "mono_ns": 128180235004,
+      "kind": "connection-commit-start",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "seq": 5870,
+      "mono_ns": 128181940568,
+      "kind": "pool-checkin",
+      "task": 60,
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "seq": 5874,
+      "mono_ns": 128191502925,
+      "kind": "sql-complete",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745,
+      "operation": "UPDATE",
+      "table": "fbs_warehouse_bindings"
+    },
+    {
+      "seq": 5883,
+      "mono_ns": 128193760112,
+      "kind": "connection-commit-start",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "seq": 5885,
+      "mono_ns": 128194826689,
+      "kind": "pool-checkin",
+      "task": 79,
+      "connection": 4,
+      "transaction": 5745
+    }
+  ],
+  "publisher_UPDATE_start_to_complete_ms": 82.15621,
+  "publisher_complete_after_outer_checkin_ms": 9.562357,
+  "native_SQL_errors": 0,
+  "historical_lock_owner": "UNKNOWN",
+  "selected_diagnostic": "PASS12.47s; gw0/-n1, preceding selection excluded",
+  "observation_limits": "logging and create_task wrapping perturb scheduling; SQL intervals are not native busy-wait measurements",
+  "fix_effectiveness_new_SOURCE_or_full_CI_approval": false,
+  "new_target_runs": []
+}

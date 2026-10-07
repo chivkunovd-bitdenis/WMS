@@ -1,0 +1,93 @@
+[
+  {
+    "fixture": "fixture-1",
+    "file": "page-0.json",
+    "started": 416,
+    "decoded": 354,
+    "alert": "Не удалось напечатать этикетки.",
+    "transfers": 0,
+    "iframes": 0,
+    "errors": [
+      {
+        "kind": "promise-catch",
+        "time": 7831,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 150",
+        "localError": true,
+        "parentError": true,
+        "started": 160,
+        "decoded": 128,
+        "decodeAt": 150,
+        "frames": 8
+      },
+      {
+        "kind": "screen-catch",
+        "time": 7832.699999999997,
+        "realm": "parent",
+        "identity": 1,
+        "name": "Error",
+        "message": "WMS672 decode failed at 150",
+        "localError": true,
+        "parentError": true,
+        "started": 160,
+        "decoded": 128,
+        "decodeAt": 150,
+        "frames": 8
+      },
+      {
+        "kind": "native-reject",
+        "time": 1866.7000000000116,
+        "realm": "iframe",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": true,
+        "parentError": false,
+        "started": 416,
+        "decoded": 354,
+        "decodeAt": null,
+        "frames": 50,
+        "index": 387,
+        "complete": true,
+        "width": 836,
+        "height": 356,
+        "png": {
+          "valid": true,
+          "width": 836,
+          "height": 356,
+          "bytes": 7675
+        }
+      },
+      {
+        "kind": "promise-catch",
+        "time": 13335.100000000006,
+        "realm": "parent",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": false,
+        "parentError": false,
+        "started": 416,
+        "decoded": 354,
+        "decodeAt": null,
+        "frames": 50
+      },
+      {
+        "kind": "screen-catch",
+        "time": 13336.699999999997,
+        "realm": "parent",
+        "identity": 2,
+        "name": "EncodingError",
+        "message": "The source image cannot be decoded.",
+        "localError": false,
+        "parentError": false,
+        "started": 416,
+        "decoded": 354,
+        "decodeAt": null,
+        "frames": 50
+      }
+    ]
+  }
+]

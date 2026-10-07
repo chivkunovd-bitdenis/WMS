@@ -1,0 +1,84 @@
+{
+  "dataLossOccurred": false,
+  "stream": "1",
+  "traceFormat": "json",
+  "streamCompression": "gzip",
+  "usage": [
+    {
+      "percentFull": 0.09010213613510132,
+      "eventCount": 0,
+      "value": 0.09010213613510132
+    },
+    {
+      "percentFull": 0.09223005175590515,
+      "eventCount": 0,
+      "value": 0.09223005175590515
+    },
+    {
+      "percentFull": 0.09758025407791138,
+      "eventCount": 0,
+      "value": 0.09758025407791138
+    },
+    {
+      "percentFull": 0.11618433892726898,
+      "eventCount": 0,
+      "value": 0.11618433892726898
+    },
+    {
+      "percentFull": 0.13521400094032288,
+      "eventCount": 0,
+      "value": 0.13521400094032288
+    },
+    {
+      "percentFull": 0.1471911519765854,
+      "eventCount": 0,
+      "value": 0.1471911519765854
+    },
+    {
+      "percentFull": 0.1472519487142563,
+      "eventCount": 0,
+      "value": 0.1472519487142563
+    },
+    {
+      "percentFull": 0.18622325360774994,
+      "eventCount": 0,
+      "value": 0.18622325360774994
+    },
+    {
+      "percentFull": 0.2036113739013672,
+      "eventCount": 0,
+      "value": 0.2036113739013672
+    },
+    {
+      "percentFull": 0.2372324913740158,
+      "eventCount": 0,
+      "value": 0.2372324913740158
+    },
+    {
+      "percentFull": 0.2564445436000824,
+      "eventCount": 0,
+      "value": 0.2564445436000824
+    },
+    {
+      "percentFull": 0.2567485272884369,
+      "eventCount": 0,
+      "value": 0.2567485272884369
+    },
+    {
+      "percentFull": 0.2757174074649811,
+      "eventCount": 0,
+      "value": 0.2757174074649811
+    },
+    {
+      "percentFull": 0.3030763566493988,
+      "eventCount": 0,
+      "value": 0.3030763566493988
+    }
+  ],
+  "reason": "native-failure-plus-1s",
+  "failureNotice": {
+    "text": "__WMS672_NATIVE_REFUSAL__ {\"index\":542,\"nativeFrameId\":5,\"wallTime\":1791325328183.7}",
+    "receivedEpochMs": 1791325328184
+  },
+  "stopRequestedEpochMs": 1791325329184
+}

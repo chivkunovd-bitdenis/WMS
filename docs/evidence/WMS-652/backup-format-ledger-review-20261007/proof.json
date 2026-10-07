@@ -1,0 +1,59 @@
+{
+  "verdict": "PASS finite cumulative portable metadata/format amendment and exact existing ledger",
+  "source": "d40bc41995cb2ad434187734419dd2bfe507b8da",
+  "original_contract": "e70291d40e7d769109e33aa291e70bfa289974a4",
+  "portable_amendment": "ed14e025af0e16931c93ded0851c99da9aaa0e33",
+  "file_sha256": "092a798ffa11db86ea3fca9c7194d6a8727a079301c41690d5c9860314afa13c",
+  "format_before_sha256": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c",
+  "whole_file_AST_equal_before_after_format": true,
+  "canonical_AST_sha256": "83f11a1e9c9b263bbdbcd6078126a77b3b0ae289a9b8c6d7f43a36e729d9d681",
+  "original_23_assertions_and_seven_parameters_byte_preserved": true,
+  "original_five_gate_controls_AST_preserved": true,
+  "fixed_full_field_assertions_sha256": "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408",
+  "legacy_signature_control": "PASS",
+  "original_contract_files": [
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+    "docs/evidence/WMS-652/backup-fixture-boundary-20261007/contract-red.log",
+    "docs/evidence/WMS-652/backup-fixture-boundary-20261007/contract-red.xml",
+    "docs/evidence/WMS-652/backup-fixture-boundary-20261007/test-contract.md"
+  ],
+  "other_three_contract_files_byte_preserved": true,
+  "proposed_exact_ledger": {
+    "task": "WMS-652",
+    "corrections": [
+      {
+        "contract_commit": "e70291d40e7d769109e33aa291e70bfa289974a4",
+        "correction_commit": "d40bc41995cb2ad434187734419dd2bfe507b8da",
+        "files": [
+          "backend/tests/test_prod_deploy_backup_gate_boundary.py"
+        ],
+        "review": {
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "verdict": "PASS"
+        }
+      }
+    ]
+  },
+  "actual_checker_sha256": "144dc11f87c97128d5fef773687fa053d4e26d71c42ba81c690a272e7cdeefc6",
+  "actual_checker_unchanged": true,
+  "ledger_absent_rejection": [
+    "изменён контракт тестов WMS-652 после его фиксации: backend/tests/test_prod_deploy_backup_gate_boundary.py"
+  ],
+  "actual_ledger_baselines": {
+    "d40bc41995cb2ad434187734419dd2bfe507b8da": [
+      "backend/tests/test_prod_deploy_backup_gate_boundary.py"
+    ]
+  },
+  "actual_contract_gate_with_ledger": [],
+  "later_mutation_rejection": [
+    "изменён контракт тестов WMS-652 после его фиксации: backend/tests/test_prod_deploy_backup_gate_boundary.py"
+  ],
+  "scratch_removed": true,
+  "frontend_including_43_CDP7_Node12_and_APP_unchanged_since_prior_pin": true,
+  "product_comparison_only_prior_infrastructure_test_title": [
+    "frontend/src/integrations/cryptoProCades.test.ts"
+  ],
+  "new_SOURCE_pin_approval": false,
+  "full_CI_pass": false
+}

@@ -1,0 +1,30 @@
+{
+  "raw_checkpoint": "796e8be41e3505ca55cf6eedc8914b6a70fd0967",
+  "files": [
+    {
+      "path": "analyze-first-phase.py",
+      "bytes": 4973,
+      "sha256": "998a490b15664fa92eaa281f67b5650e1289bd953229f72213e726640cbbe9bc"
+    },
+    {
+      "path": "first-phase-ledger.json",
+      "bytes": 761913,
+      "sha256": "aa1dfb35da900ee93b2513f0c5d437aefcecf8524c89cb0f9ac592d8cec11c39"
+    },
+    {
+      "path": "first-phase-summary.json",
+      "bytes": 635,
+      "sha256": "19fa14c9c959bd22da82e78eb8280aabda0a49368f4e63cbc5a0804340d1f1a9"
+    },
+    {
+      "path": "first-phase-output.txt",
+      "bytes": 635,
+      "sha256": "19fa14c9c959bd22da82e78eb8280aabda0a49368f4e63cbc5a0804340d1f1a9"
+    },
+    {
+      "path": "first-phase-bound.md",
+      "bytes": 1500,
+      "sha256": "eb4a3b5ec19be64fd0a9e772cc45d64b140e4f3eddf10666dd19434dd70e4005"
+    }
+  ]
+}
