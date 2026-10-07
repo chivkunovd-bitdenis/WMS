@@ -128,6 +128,27 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(tapePrinter).toContain('printTapeSections(sections, options?.labelSize, options?.beforeDispatch)')
   })
 
+  it('WMS-666 prepares a bare WB assembly group before the first scan and uses product KIZ requirements', () => {
+    const preparation = source.slice(
+      source.indexOf('// Both packing entry points have no per-supply Start button.'),
+      source.indexOf('const openAddOrders = async () =>'),
+    )
+    expect(preparation).toContain('assemblyFrame?.visible')
+    expect(preparation).toContain('registerSequentialScanner')
+    expect(preparation).not.toContain('const prepare = !assemblyFrame &&')
+    expect(source).toContain('order.product.requires_honest_sign')
+  })
+
+  it('WMS-666 offers an explicit same-workspace retry after prepare sticker request failure', () => {
+    const preparation = source.slice(
+      source.indexOf('// Both packing entry points have no per-supply Start button.'),
+      source.indexOf('const openAddOrders = async () =>'),
+    )
+    expect(preparation).toContain('fetchFbsPrintBatch(token, authHeaders, workspace.supply.id')
+    expect(preparation).toContain('setRetryAction(() => () =>')
+    expect(preparation).toContain('void run(operation, success, onError, onSuccess)')
+  })
+
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {
     const reset = source.slice(
       source.indexOf('const dropKizScanActive = useCallback'),

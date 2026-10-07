@@ -24,8 +24,8 @@ function context(): MarkingPrintContext {
     },
   }
 }
-async function render(ctx: MarkingPrintContext, busy = false) {
-  await act(async () => root.render(<MarkingPrintDialog open reprint={false} ctx={ctx} busy={busy} onBusyChange={() => {}} onClose={() => {}} />))
+async function render(ctx: MarkingPrintContext, busy = false, onClose = () => {}) {
+  await act(async () => root.render(<MarkingPrintDialog open reprint={false} ctx={ctx} busy={busy} onBusyChange={() => {}} onClose={onClose} />))
 }
 const button = () => document.querySelector<HTMLButtonElement>('[data-testid="marking-print-confirm"]')!
 beforeEach(() => {
@@ -101,6 +101,51 @@ describe('WMS-611 FBS print availability', () => {
       expect(sections[2 * i + 1]).toContain(label.barcode)
       expect(sections[2 * i + 1]).toContain(label.product_name)
     }
+  })
+  it('retries only the unconfirmed QR after a successful tape dispatch', async () => {
+    const ctx = context()
+    const completed = vi.fn()
+    const onPrinted = vi.fn()
+    const close = vi.fn()
+    ctx.onPrinted = onPrinted
+    ctx.fbsTape!.onCompleted = completed
+    ctx.fbsTape!.orders.push({ ...ctx.fbsTape!.orders[0]!, orderId: 'order-612', wbOrderId: 612 })
+    ctx.fbsTape!.print = print
+    const confirmQrApplied = vi.fn()
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new Error('WB QR confirmation returned 503'))
+      .mockResolvedValueOnce(undefined)
+    ctx.fbsTape!.confirmQrApplied = confirmQrApplied
+    print.mockResolvedValue({
+      orders: ctx.fbsTape!.orders.map((order) => ({
+        order_id: order.orderId, wb_order_id: order.wbOrderId, requires_honest_sign: true,
+        printed_codes: [], qr_asset: { id: `qr-${order.orderId}`, preview_url: `/qr/${order.orderId}.png`, applied_at: null },
+      })),
+      order_errors: [], shortage: 0,
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => new Blob(['qr'], { type: 'image/png' }) }))
+    vi.mocked(printTapeSections).mockResolvedValue(undefined)
+    await render(ctx, false, close)
+    await act(async () => button().click())
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+
+    expect(print).toHaveBeenCalledTimes(1)
+    expect(printTapeSections).toHaveBeenCalledTimes(1)
+    expect(confirmQrApplied.mock.calls.map(([asset]) => asset.id)).toEqual(['qr-order-611', 'qr-order-612'])
+    expect(completed).not.toHaveBeenCalled()
+    expect(onPrinted).not.toHaveBeenCalled()
+    expect(close).not.toHaveBeenCalled()
+
+    const retry = document.querySelector<HTMLButtonElement>('[data-testid="marking-print-retry-qr-ack"]')
+    expect(retry, 'an ack-only retry must be available after the tape dispatch is accepted').not.toBeNull()
+    await act(async () => retry!.click())
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)) })
+    expect(print, 'a user retry must not dispatch the already accepted tape again').toHaveBeenCalledTimes(1)
+    expect(printTapeSections).toHaveBeenCalledTimes(1)
+    expect(confirmQrApplied.mock.calls.map(([asset]) => asset.id)).toEqual(['qr-order-611', 'qr-order-612', 'qr-order-612'])
+    expect(completed).toHaveBeenCalledTimes(1)
+    expect(onPrinted).toHaveBeenCalledTimes(1)
+    expect(close).toHaveBeenCalledTimes(1)
   })
   it('allows an assigned-code batch even when no free codes remain', async () => {
     const ctx = context(); ctx.fbsTape!.markingShortage = 0
