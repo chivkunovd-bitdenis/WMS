@@ -605,3 +605,10 @@ Production4c/normalrun37579921135 andfreshstageALL4SUCCESS verified/preserved1c8
 607 actualraw71640d0c1160049f085bc6b524581ff25a804b1c: ARM33PASS/payload181772bytesSHA85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab; IntelUC4TimeoutExpired15s/9PASS1ERROR/no payload, source/harness fixeda04/d0 unchanged. OriginalseparatetestwriterCLI01a11389 nowactuallyactive49882: additiveactualstart_ownedforeign-owner-abort semanticRED+ownedready/warmcontrols, old14/19/15s unchanged. Same developer/reviewer thenMacCI/publiccommand/owner delivery.
 
 Addressed675readonlycollectorCLI01a1147b actuallyactive17053: fresh11exacttenantgatewaySQLSELECTs +existingnormalconfigured31Ozonget sanitizedREAD, exactfiveIDs/seedplan/producer4c; no conduct/observations/publish/roles/flags/keys changes. Old26isNOTcurrentdelta. Mutationsonlyafterfreshboundproof+native lock recheck, normalpublish retained. Existingfinishedworktrees reused, no newcheckout/deps.
+
+
+## Checkpoint 06:34 UTC: STOP revoked; frozen startup contract handed to same developer
+
+Owner explicitly resumed printing work and authorized delivery of verified instructions to the exactly identified ArtMaks chat. Existing sessions checked: testwriter49882 finished with published7b94a8dd0f1d6a772272930df3894d3ccd299686 (actual1RED/2PASS, old33 and15s unchanged); same developer01a114ab immediately resumed12011 on confirmed-foreign-owner startup abort, then same independent reviewer/distinct analyst and ARM+Intel packageCI. No duplicate writer or primary release repeat. Production/staging4c remain verified1c881.
+
+Separate675 read-only collection17053 has31HTTP200 cards/11SELECTs and current26positive/12conducted/missing14; fivecancelled excluded, old22billingIDs/11facts preserved. Reservation cache14 vs native rows0 must be checked under normal locks before any native recovery. Collector has no mutation authority, no repair yet. This lane does not delay607.
