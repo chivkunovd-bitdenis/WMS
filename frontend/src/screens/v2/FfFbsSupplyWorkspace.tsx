@@ -124,6 +124,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
   markFbsScanAutoPrintTargetStarted,
@@ -3096,6 +3097,18 @@ export function FfFbsSupplyWorkspace({
     } catch {
       rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const context = new Map((await getFbsPickingContext(token, authHeaders, workspace.supply.id))
+        .map((item) => [item.product_id, item]))
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     printWindow.document.open()

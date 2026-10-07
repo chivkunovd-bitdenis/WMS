@@ -34,6 +34,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   type FbsPickOptionProduct,
   type FbsWorkspace,
 } from './fbsApi'
@@ -252,6 +253,25 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     } catch {
       rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const lists = await Promise.all(ordered.map((one) => getFbsPickingContext(token, authHeaders, one.supply.id)))
+      const context = new Map<string, { locations: string[]; inbound_supplies: string[] }>()
+      for (const list of lists) for (const item of list) {
+        const previous = context.get(item.product_id)
+        context.set(item.product_id, {
+          locations: [...new Set([...(previous?.locations ?? []), ...item.locations])],
+          inbound_supplies: [...new Set([...(previous?.inbound_supplies ?? []), ...item.inbound_supplies])],
+        })
+      }
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     const distinct = (values: string[]) => [...new Set(values)].join(', ')
