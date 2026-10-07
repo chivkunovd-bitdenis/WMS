@@ -96,7 +96,13 @@ async def add_extended(session, tenant, seller, warehouse, warehouse2, actor_id)
             "positions": [],
             "marketplace": "ozon" if name in OZON else "wb",
         }
-        product_count = 3 if name in {"tree-order-photo", "photo-failure"} else (2 if name == "ozon-group-scan" else 1)
+        product_count = (
+            3
+            if name in {"tree-order-photo", "photo-failure"}
+            else 2
+            if name == "ozon-group-scan"
+            else 1
+        )
         for pi in range(product_count):
             barcode = str(4900000000000 + index * 100 + pi)
             alt = str(5900000000000 + index * 100 + pi)
