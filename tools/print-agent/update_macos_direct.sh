@@ -117,13 +117,14 @@ owned_pid() {
     printf '%s\n' "$pid"
 }
 stop_owned() {
+    # 0: no owner or confirmed stop; 2: foreign owner; 1: owned stop unconfirmed.
     local pid status i
     status=0; pid=$(owned_pid) || status=$?
-    [ "$status" != 2 ] || { printf '%s\n' 'Port 17843 belongs to another executable; it was not stopped.' >&2; return 1; }
+    [ "$status" != 2 ] || { printf '%s\n' 'Port 17843 belongs to another executable; it was not stopped.' >&2; return 2; }
     [ "$status" = 0 ] || return 0
     # Recheck immediately before TERM. No blanket process-name kill or forced kill.
-    process_matches "$pid" || return 1
-    kill -TERM "$pid" || return 1
+    process_matches "$pid" || { printf '%s\n' 'Owned executable stop could not be confirmed; application and recovery intent retained.' >&2; return 1; }
+    kill -TERM "$pid" || { printf '%s\n' 'Owned executable TERM failed; application and recovery intent retained.' >&2; return 1; }
     for ((i=0; i<50; i++)); do
         [ "$(port_pid)" != "$pid" ] && ! kill -0 "$pid" 2>/dev/null && return 0
         sleep 0.05
@@ -213,8 +214,13 @@ clear_transaction() {
 }
 rollback() {
     # Application-only recovery: NEVER copy the archived state over current history.
-    local foreign=0
-    stop_owned || foreign=1
+    local foreign=0 stop_status=0
+    stop_owned || stop_status=$?
+    case "$stop_status" in
+        0) ;;
+        2) foreign=1;;
+        *) return 1;; # Preserve target, previous tree, archives and active intent.
+    esac
     if [ -d "$work/previous" ]; then
         rm -rf "$work/failed-target"
         if [ -d "$app_dir" ]; then mv "$app_dir" "$work/failed-target" || return 1; fi
