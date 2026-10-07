@@ -1,4 +1,3 @@
-import { ensureFbsStickers } from './fbsStickerPrefetch'
 // @vitest-environment jsdom
 // WMS-666: post-release regression guard. Mount real screens with initially missing stickers.
 import { act } from 'react'
@@ -8,6 +7,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import { saveFbsAssemblyStage } from './fbsSupplyAssembly'
 import type { FbsWorkspace } from './fbsApi'
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 
 const { fetchWorkspace, fetchBatch, printQr, printMarking, startWork } = vi.hoisted(() => ({
   fetchWorkspace: vi.fn(), fetchBatch: vi.fn(), printQr: vi.fn(), printMarking: vi.fn(), startWork: vi.fn(),
@@ -207,6 +207,8 @@ it('does not request labels from the composition tab', async () => {
 it('surfaces provider failure and does not loop or pretend the sticker exists', async () => {
   fetchBatch.mockResolvedValue({ requested: 1, ready: 0, missing: 0, failed: 1, assets: [], order_errors: [{ message: 'WB не вернул стикер' }] })
   await render('supply')
+  expect(startWork, 'Sticker errors must not prevent ordinary marking preparation').toHaveBeenCalledTimes(1)
+  expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81')
   expect(document.body.textContent).toContain('WB не вернул стикер')
   expect(document.querySelector('[data-testid="fbs-sticker-code"]')).toBeNull()
   expect(fetchBatch).toHaveBeenCalledTimes(1)

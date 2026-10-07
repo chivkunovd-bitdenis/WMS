@@ -583,6 +583,9 @@ async def _existing_create_for_orders(
     return None
 
 
+CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS = 8.0
+
+
 async def create_supply_from_orders(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -616,7 +619,16 @@ async def create_supply_from_orders(
     await session.commit()
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is not None:
-        await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
+        try:
+            # A slow WB sticker endpoint must not keep creation waiting for its
+            # full HTTP timeout. Roll back only this optional read's local writes.
+            async with session.begin_nested():
+                async with asyncio.timeout(CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS):
+                    await _request_order_stickers_for_picking(
+                        session, tenant_id, supply, http_client
+                    )
+        except TimeoutError:
+            logger.warning("fbs supply sticker prefetch timed out supply %s", supply_id)
         refreshed = await get_supply_workspace(session, tenant_id, supply_id)
         refreshed["partial_rejection"] = workspace.get("partial_rejection")
         workspace = refreshed

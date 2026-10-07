@@ -1200,14 +1200,23 @@ export function FfFbsSupplyWorkspace({
     if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
-    const requested = ensureFbsStickers(token, authHeaders, workspace)
-    void requested.then(async () => {
+    // WB stickers and marking preparation are independent. In particular a
+    // partial sticker response must not remove the ordinary manual-print path.
+    void (async () => {
+      let stickerError: string | null = null
+      try { await ensureFbsStickers(token, authHeaders, workspace) }
+      catch (cause) {
+        stickerError = cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.'
+      }
       if (!write.isCurrent()) return
-      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
-      else void load(true)
-    }).catch((cause: unknown) => {
-      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
-    })
+      const prepared = prepare
+        ? await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
+        : null
+      if (!prepare) void load(true)
+      // Preserve a preparation failure reported by run instead of overwriting
+      // it with a secondary sticker failure.
+      if (write.isCurrent() && stickerError && (!prepare || prepared)) setError(stickerError)
+    })()
   }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {

@@ -1,5 +1,6 @@
 """WMS-666: the packing request reaches WB and persists usable stickers."""
 
+import asyncio
 import base64
 import json
 import uuid
@@ -113,11 +114,11 @@ async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider_fails", [False, True])
+@pytest.mark.parametrize("provider_fails", [False, True, "timeout"])
 async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
-    provider_fails: bool,
+    provider_fails: bool | str,
 ) -> None:
     from app.services.wildberries_client import WildberriesClientError
     from tests.test_fbs_supply_from_orders import (
@@ -149,6 +150,8 @@ async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_fai
 
     async def stickers(client, *, api_token, order_ids, **kwargs):
         calls.append(order_ids)
+        if provider_fails == "timeout":
+            await asyncio.sleep(1)
         if provider_fails:
             raise WildberriesClientError("transport_error")
         return [
@@ -165,6 +168,10 @@ async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_fai
     monkeypatch.setattr(
         "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
     )
+    if provider_fails == "timeout":
+        monkeypatch.setattr(
+            "app.services.fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", 0.01
+        )
     body = {
         "name": "Immediate stickers",
         "order_ids": [str(order_id)],
