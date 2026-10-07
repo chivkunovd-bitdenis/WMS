@@ -305,7 +305,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   }
 
   const pickSupplies = useMemo(
-    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id })),
+    () => ordered.map((one) => ({ id: one.supply.id, sellerId: one.supply.seller.id, marketplace: one.supply.marketplace })),
     [ordered],
   )
 
