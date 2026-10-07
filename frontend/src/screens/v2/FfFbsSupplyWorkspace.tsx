@@ -831,7 +831,11 @@ export function FfFbsSupplyWorkspace({
   const shownKizTarget = kizScanActive ?? (unifiedView?.needsKiz ? unifiedView.target ?? null : null)
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
-  useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
+  const ordinaryPreparationAttempt = useRef(false)
+  useEffect(() => {
+    unifiedStickerAttempts.current.clear()
+    ordinaryPreparationAttempt.current = false
+  }, [open, supplyId])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
@@ -1186,15 +1190,22 @@ export function FfFbsSupplyWorkspace({
     if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
     if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
-    if (!missing.length) return
+    // Manual printing needs the task formerly created by the removed Start button.
+    const prepare = !assemblyFrame && !workspace.supply.packaging_task_id
+      && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
+      && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
+    if (!missing.length && !prepare) return
+    if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
-    void fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+    const requested = missing.length ? fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
       kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
-    }).then((batch) => {
+    }) : Promise.resolve(null)
+    void requested.then(async (batch) => {
       if (!write.isCurrent()) return
-      if (batch.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
-      void load(true)
+      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
+      else void load(true)
+      if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
     }).catch((cause: unknown) => {
       if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     })

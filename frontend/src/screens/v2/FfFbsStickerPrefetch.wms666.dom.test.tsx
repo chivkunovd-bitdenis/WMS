@@ -8,12 +8,12 @@ import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import { saveFbsAssemblyStage } from './fbsSupplyAssembly'
 import type { FbsWorkspace } from './fbsApi'
 
-const { fetchWorkspace, fetchBatch, printQr, printMarking } = vi.hoisted(() => ({
-  fetchWorkspace: vi.fn(), fetchBatch: vi.fn(), printQr: vi.fn(), printMarking: vi.fn(),
+const { fetchWorkspace, fetchBatch, printQr, printMarking, startWork } = vi.hoisted(() => ({
+  fetchWorkspace: vi.fn(), fetchBatch: vi.fn(), printQr: vi.fn(), printMarking: vi.fn(), startWork: vi.fn(),
 }))
 vi.mock('./fbsApi', async (original) => ({
   ...await original<typeof import('./fbsApi')>(),
-  fetchFbsWorkspace: fetchWorkspace, fetchFbsPrintBatch: fetchBatch,
+  fetchFbsWorkspace: fetchWorkspace, fetchFbsPrintBatch: fetchBatch, startFbsSupplyWork: startWork,
 }))
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
 vi.mock('./FfFbsAssemblyPick', () => ({ FfFbsAssemblyPick: () => null }))
@@ -121,9 +121,20 @@ beforeEach(() => {
     }
     return { requested: body.order_ids.length, ready: body.order_ids.length, missing: 0, failed: 0, assets: [], order_errors: [] }
   })
+  startWork.mockReset().mockImplementation(async (_t, _h, id: string) => {
+    state[id]!.supply.packaging_task_id = `task-${id}`
+    state[id]!.supply.status = 'assembling'
+    return clone(state[id]!)
+  })
   printQr.mockReset()
   printMarking.mockReset()
-  globalThis.fetch = vi.fn(async () => new Response(JSON.stringify(null), { headers: { 'Content-Type': 'application/json' } }))
+  globalThis.fetch = vi.fn(async () => new Response(JSON.stringify({
+    id: 'task-a', status: 'in_progress', lines: [{
+      id: 'line-a', product_id: 'a-product-a', product_name: 'Футболка WB',
+      sku_code: 'WB-SKU-A', requires_honest_sign: true, qty_total: 1, qty_need_pack: 1,
+      marking_available_count: 81,
+    }],
+  }), { headers: { 'Content-Type': 'application/json' } }))
   host = document.createElement('div')
   document.body.appendChild(host)
   root = createRoot(host)
@@ -147,14 +158,20 @@ async function render(mode: 'supply' | 'assembly', ids = ['a'], stage = 'packing
   }
   await settle()
 }
-it.each(['supply', 'assembly'] as const)('%s: opening a draft displays fetched WB sticker without scan, start-work or print', async (mode) => {
+it.each(['supply', 'assembly'] as const)('%s: opening a draft displays fetched WB sticker without scan or print', async (mode) => {
   await render(mode)
   expect(fetchBatch).toHaveBeenCalledTimes(1)
   expect(fetchBatch).toHaveBeenCalledWith(TOKEN, authHeaders, 'a', { kind: 'order_sticker', order_ids: ['a-order'], retry_missing: true })
   expect(document.querySelector('[data-order-id="a-order"] [data-testid="fbs-sticker-code"]')?.textContent).toBe('5877994 0283')
-  expect(fetchWorkspace.mock.calls.length).toBeGreaterThanOrEqual(2)
-  expect(state.a!.supply.packaging_task_id).toBeNull()
-  expect(globalThis.fetch).not.toHaveBeenCalled()
+  if (mode === 'supply') {
+    expect(startWork).toHaveBeenCalledTimes(1)
+    expect(state.a!.supply.packaging_task_id).toBe('task-a')
+    expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81')
+  } else {
+    expect(startWork).not.toHaveBeenCalled()
+    expect(state.a!.supply.packaging_task_id).toBeNull()
+    expect(globalThis.fetch).not.toHaveBeenCalled()
+  }
   expect(printQr).not.toHaveBeenCalled()
   expect(printMarking).not.toHaveBeenCalled()
   await settle()
@@ -204,4 +221,27 @@ it('clicking from composition into packing requests WB stickers and replaces emp
   expect(fetchBatch, 'WMS666_REQUIRED_STICKER_REQUEST').toHaveBeenCalledTimes(1)
   expect(document.querySelector('[data-order-id="a-order"] [data-testid="fbs-sticker-code"]')?.textContent).toBe('5877994 0283')
   expect(printQr).not.toHaveBeenCalled()
+})
+
+it('restores CZ quantity and manual print from optional WB metadata without a scan', async () => {
+  state.a!.orders[0]!.metadata.optional = ['sgtin']
+  state.a!.orders[0]!.sticker = { code: '1111111 9999', status: 'ready', asset_url: '/existing.png', applied_at: null }
+  await render('supply')
+  expect(fetchBatch).not.toHaveBeenCalled()
+  expect(startWork).toHaveBeenCalledTimes(1)
+  expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81 · нужно 1')
+  expect(document.body.textContent).toContain('Напечатано 0 из 1')
+  const print = document.querySelector<HTMLButtonElement>('[aria-label="Печать ЧЗ и ШК"]')!
+  await act(async () => print.click())
+  expect(printMarking.mock.calls[0]?.[0]).toMatchObject({
+    lineId: 'line-a', requiresHonestSign: true, markingAvailable: 81, qtyNeedPack: 1,
+  })
+  await settle()
+  expect(startWork).toHaveBeenCalledTimes(1)
+})
+it('does not restart an existing packaging task', async () => {
+  state.a!.supply.packaging_task_id = 'task-a'
+  await render('supply')
+  expect(startWork).not.toHaveBeenCalled()
+  expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81')
 })
