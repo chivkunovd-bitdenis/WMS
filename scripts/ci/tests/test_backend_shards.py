@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 COLLECTION = ROOT / 'docs/evidence/WMS-652/ci-two-shards-20261006/backend-collection.json'
@@ -143,6 +144,137 @@ class BackendShardContracts(unittest.TestCase):
             receipt['exit_code'] = 1
             p.write_text(json.dumps(receipt))
             self.assertFalse(self.m.merge(paths, Path(folder)/'out.xml', IDENTITY)['success'])
+
+    def test_invalid_subprocess_collection_is_rejected_before_execution(self):
+        environment = {'GITHUB_SHA': IDENTITY['sha'], 'GITHUB_RUN_ID': '100',
+            'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_ACTIONS': 'false'}
+        for invalid in ({IDS[0]: 'not a node list'}, [], [IDS[0], IDS[0]]):
+            with self.subTest(collection=invalid), tempfile.TemporaryDirectory() as folder, \
+                    patch.dict(os.environ, environment):
+                calls = []
+
+                def child(command, *, env, check, collected=invalid, invocations=calls):
+                    invocations.append(command)
+                    self.assertIn('--collect-only', command, 'Invalid collection reached execution')
+                    Path(env['WMS_BACKEND_COLLECTION_OUTPUT']).write_text(json.dumps(collected))
+                    return subprocess.CompletedProcess(command, 0)
+
+                output = Path(folder)/'shard'
+                with patch.object(self.m.subprocess, 'run', side_effect=child), self.assertRaises(ValueError):
+                    self.m.run(0, output, ['tests'])
+                self.assertEqual(len(calls), 1)
+                self.assertFalse((output/'receipt.json').exists())
+
+    def test_subprocess_commands_preserve_digest_and_use_execution_only_diagnostics(self):
+        calls = []
+
+        def child(command, *, env, check):
+            calls.append((list(command), dict(env), check))
+            if '--collect-only' in command:
+                Path(env['WMS_BACKEND_COLLECTION_OUTPUT']).write_text(json.dumps(list(reversed(IDS))))
+            return subprocess.CompletedProcess(command, 0)
+
+        environment = {'GITHUB_SHA': IDENTITY['sha'], 'GITHUB_RUN_ID': '100',
+            'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_ACTIONS': 'false',
+            'WMS_BACKEND_SHARD_INDEX': 'old-index', 'WMS_BACKEND_COLLECTION_DIGEST': 'old-digest',
+            'WMS_BACKEND_COLLECTION_OUTPUT': 'old-collector-output'}
+        with tempfile.TemporaryDirectory() as folder, patch.dict(os.environ, environment), \
+                patch.object(self.m.subprocess, 'run', side_effect=child):
+            output = Path(folder)/'shard'
+            self.assertEqual(self.m.run(1, output, ['-n', 'auto', 'tests']), 0)
+            self.assertEqual(len(calls), 2)
+            collection_command, collection_env, collection_check = calls[0]
+            execution_command, execution_env, execution_check = calls[1]
+            for command in (collection_command, execution_command):
+                self.assertEqual(command[:3], [sys.executable, '-m', 'pytest'])
+                self.assertIn('scripts.ci.backend_shards', command)
+            self.assertFalse(collection_check)
+            self.assertFalse(execution_check)
+            self.assertIn('--collect-only', collection_command)
+            self.assertEqual(collection_command[collection_command.index('--collect-only')+1:],
+                             ['-n', '0', '-p', 'scripts.ci.backend_shards'])
+            self.assertNotIn('-vv', collection_command)
+            self.assertNotIn('faulthandler_timeout=120', collection_command)
+            self.assertNotIn('WMS_BACKEND_SHARD_INDEX', collection_env)
+            self.assertNotIn('WMS_BACKEND_COLLECTION_DIGEST', collection_env)
+            self.assertNotIn('--collect-only', execution_command)
+            self.assertIn('-vv', execution_command)
+            self.assertIn('faulthandler_timeout=120', execution_command)
+            self.assertNotIn('WMS_BACKEND_COLLECTION_OUTPUT', execution_env)
+            self.assertEqual(execution_env['WMS_BACKEND_SHARD_INDEX'], '1')
+            self.assertEqual(execution_env['WMS_BACKEND_COLLECTION_DIGEST'], self.m.digest(IDS))
+            self.assertEqual(os.environ['WMS_BACKEND_SHARD_INDEX'], 'old-index')
+            self.assertEqual(os.environ['WMS_BACKEND_COLLECTION_OUTPUT'], 'old-collector-output')
+            receipt = json.loads((output/'receipt.json').read_text())
+            self.assertEqual(receipt['collection'], sorted(IDS))
+            self.assertEqual(receipt['selected'], sorted(IDS)[1::2])
+            self.assertEqual({key: receipt[key] for key in IDENTITY}, IDENTITY)
+
+    def test_collection_and_execution_use_separate_clean_pytest_processes(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            # A process-global marker survives repeated pytest.main calls, so
+            # this catches interpreter reuse even if pytest reloads conftest.
+            (root/'conftest.py').write_text(
+                'import builtins, json, os\n'
+                'def pytest_sessionstart(session):\n'
+                '    count = getattr(builtins, "wms_fixture_sessions", 0) + 1\n'
+                '    builtins.wms_fixture_sessions = count\n'
+                '    with open(os.environ["WMS_SHARD_PROCESS_LOG"], "a") as log:\n'
+                '        log.write(json.dumps({"pid": os.getpid(), "sessions": count}) + "\\n")\n'
+            )
+            (root/'test_clean_process.py').write_text(
+                'import builtins, pytest\n'
+                '@pytest.mark.parametrize("value", [0, 1, 2, 3])\n'
+                'def test_clean(value):\n'
+                '    assert builtins.wms_fixture_sessions == 1\n'
+            )
+            paths = []
+            for index in range(2):
+                log = root/f'process-{index}.jsonl'
+                environment = {**os.environ, 'GITHUB_SHA': IDENTITY['sha'],
+                    'GITHUB_RUN_ID': '100', 'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_ACTIONS': 'false',
+                    'WMS_SHARD_PROCESS_LOG': str(log)}
+                output = root/str(index)
+                result = subprocess.run([sys.executable, str(ROOT/'scripts/ci/backend_shards.py'),
+                    'run', '--index', str(index), '--output', str(output), '--', '-n', '0', '-q',
+                    'test_clean_process.py'], cwd=root, env=environment,
+                    capture_output=True, text=True, check=False, timeout=30)
+                self.assertEqual(result.returncode, 0, result.stdout+result.stderr)
+                sessions = [json.loads(line) for line in log.read_text().splitlines()]
+                self.assertEqual(len(sessions), 2)
+                self.assertEqual(len({session['pid'] for session in sessions}), 2)
+                self.assertEqual([session['sessions'] for session in sessions], [1, 1])
+                receipt = json.loads((output/'receipt.json').read_text())
+                self.assertEqual(receipt['collection'],
+                    [f'test_clean_process.py::test_clean[{value}]' for value in range(4)])
+                self.assertEqual(receipt['selected'], receipt['collection'][index::2])
+                self.assertEqual({key: receipt[key] for key in IDENTITY}, IDENTITY)
+                paths.append(output)
+            merged = self.m.merge(paths, root/'merged.xml', IDENTITY)
+            self.assertEqual(merged['tests'], 4)
+            self.assertTrue(merged['success'])
+
+    def test_failed_subprocess_collection_never_executes_or_emits_a_receipt(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root/'conftest.py').write_text(
+                'from pathlib import Path\n'
+                'def pytest_runtest_call(item):\n'
+                '    Path("body-ran").write_text("ran")\n'
+            )
+            (root/'test_bad_collection.py').write_text('def test_bad(: pass\n')
+            environment = {**os.environ, 'GITHUB_SHA': IDENTITY['sha'],
+                'GITHUB_RUN_ID': '100', 'GITHUB_RUN_ATTEMPT': '2', 'GITHUB_ACTIONS': 'false'}
+            output = root/'shard'
+            result = subprocess.run([sys.executable, str(ROOT/'scripts/ci/backend_shards.py'),
+                'run', '--index', '0', '--output', str(output), '--', '-n', '0', '-q',
+                'test_bad_collection.py'], cwd=root, env=environment,
+                capture_output=True, text=True, check=False, timeout=30)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse((root/'body-ran').exists())
+            self.assertFalse((output/'receipt.json').exists())
+            self.assertFalse((output/'junit.xml').exists())
 
     def test_actual_pytest_xdist_receipts_use_exact_full_collection_and_junit_nodeids(self):
         with tempfile.TemporaryDirectory() as folder:

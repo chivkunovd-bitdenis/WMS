@@ -43,6 +43,14 @@ def pytest_collection_modifyitems(config, items):
     config.hook.pytest_deselected(items=discarded)
 
 
+def pytest_collection_finish(session):
+    """Only the dedicated collector exports the complete, unsharded node IDs."""
+    output = os.environ.get('WMS_BACKEND_COLLECTION_OUTPUT')
+    if output:
+        Path(output).write_text(json.dumps([item.nodeid for item in session.items],
+                                          ensure_ascii=False) + '\n')
+
+
 def attempt_identity():
     result = {'sha': os.environ['GITHUB_SHA'], 'run_id': int(os.environ['GITHUB_RUN_ID']),
               'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT'])}
@@ -61,32 +69,37 @@ def validate_identity(data):
 
 
 def run(index, output, arguments):
-    # xdist freezes sys.path when its plugin is first imported. Establish the
-    # repository import path before importing pytest/collecting, for all workers.
     root = str(Path(__file__).resolve().parents[2])
-    sys.path.insert(0, root)
-    os.environ['PYTHONPATH'] = root + os.pathsep + os.environ.get('PYTHONPATH', '')
-    import pytest
-
-    class Collection:
-        def __init__(self):
-            self.ids = []
-
-        def pytest_collection_finish(self, session):
-            self.ids = [item.nodeid for item in session.items]
-
+    environment = {**os.environ,
+                   'PYTHONPATH': root + os.pathsep + os.environ.get('PYTHONPATH', '')}
+    # Keep collection independent of any inherited shard/collector environment.
+    for key in ('WMS_BACKEND_SHARD_INDEX', 'WMS_BACKEND_COLLECTION_DIGEST',
+                'WMS_BACKEND_COLLECTION_OUTPUT'):
+        environment.pop(key, None)
     identity = attempt_identity()
+    output = output.resolve()
     output.mkdir(parents=True, exist_ok=False)
-    capture = Collection()
-    code = pytest.main([*arguments, '--collect-only', '-n', '0'], plugins=[capture])
-    if code != 0:
+    collection_path = output / 'collection.json'
+    collector_environment = {**environment, 'WMS_BACKEND_COLLECTION_OUTPUT': str(collection_path)}
+    collected = subprocess.run([sys.executable, '-m', 'pytest', *arguments,
+                                '--collect-only', '-n', '0', '-p', 'scripts.ci.backend_shards'],
+                               env=collector_environment, check=False)
+    if collected.returncode != 0:
         raise ValueError('Full backend collection failed; do not execute a partial shard')
-    full = sorted(capture.ids)
-    selected = partition(full, index)
-    os.environ['WMS_BACKEND_SHARD_INDEX'] = str(index)
-    os.environ['WMS_BACKEND_COLLECTION_DIGEST'] = digest(full)
-    code = int(pytest.main([*arguments, '-p', 'scripts.ci.backend_shards',
-                           '--junitxml=' + str(output / 'junit.xml')]))
+    collection = json_read(collection_path)
+    selected = partition(collection, index)
+    full = sorted(collection)
+    environment['WMS_BACKEND_SHARD_INDEX'] = str(index)
+    environment['WMS_BACKEND_COLLECTION_DIGEST'] = digest(full)
+    # Fresh interpreters avoid reusing collection-time plugin/global state.
+    # Verbose node IDs and delayed thread stacks gather hang diagnostics; they
+    # are not a confirmed fix for the CI stall and do not change test selection.
+    executed = subprocess.run([sys.executable, '-m', 'pytest', *arguments,
+                               '-p', 'scripts.ci.backend_shards', '-vv',
+                               '-o', 'faulthandler_timeout=120',
+                               '--junitxml=' + str(output / 'junit.xml')],
+                              env=environment, check=False)
+    code = executed.returncode
     receipt = {**identity, 'version': 1, 'count': 2, 'index': index,
                'collection': full, 'selected': selected, 'exit_code': code}
     (output / 'receipt.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2) + '\n')
