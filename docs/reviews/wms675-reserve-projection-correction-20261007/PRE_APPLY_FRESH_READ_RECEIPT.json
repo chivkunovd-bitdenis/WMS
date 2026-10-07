@@ -1,0 +1,39 @@
+{
+  "captured_at_utc": "2026-10-07T06:43:00+00:00",
+  "method": "production application session; REPEATABLE READ, READ ONLY; rollback; no external calls",
+  "writes": 0,
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "orders": 31
+  },
+  "exact_stale_done_order_ids": [
+    "0d45ad7d-956e-4625-9dc5-f10c2e5b453a",
+    "4c9f0057-d363-4ec3-9c9b-4006c7f50516",
+    "558f8beb-a0b6-489a-a8b6-5dd3a5a494b5",
+    "6444a2d9-23e0-4ddf-aa43-87abd03f27a7",
+    "6c283f46-7f5b-4620-a322-096f37027c8c",
+    "6fc67946-d062-49ba-ad8e-9c061a1177e1",
+    "870e99a1-6435-4291-ac7d-cf0a81ab0572",
+    "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+    "a8e915f1-3a6f-45de-9cfb-f9f5cae5acde",
+    "b7216c03-b13d-49d8-a3e8-a7c99c29bda6",
+    "c2d7a754-f334-431f-89ed-5e47d3e0c7a4",
+    "ccdd5eaf-cd9b-456c-8415-0868a52fa0af",
+    "d46f4e6a-c28c-4ec6-a8b7-3c9734528f53",
+    "e203f00e-db36-46c0-aa1b-192539ab88b8"
+  ],
+  "stale_done_orders": 14,
+  "position_reserved_quantity": 14,
+  "actual_legacy_reservation_rows": 0,
+  "actual_product_reservation_rows": 0,
+  "journal_targets": 26,
+  "ledger_completed": 26,
+  "reversal_count": 0,
+  "missing_delta": 0,
+  "facts": {"count": 26, "ids_sha256": "03e300457d58916fec01411cbe21231977bfdbdcadcc5663802d958931629722"},
+  "charges": {"count": 52, "ids_sha256": "7e3c6ecd173fb6ecd11dcf024ee9c94e76786eec4300fe1da67bed0e0dd2b2f8"},
+  "all_order_rows_sha256": "2b607703cecde3cc276b791850637e5a72e9010d9124e39886dfe16b1b87530c"
+}
