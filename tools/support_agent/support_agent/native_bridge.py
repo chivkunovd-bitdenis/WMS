@@ -69,23 +69,28 @@ class NativeBridge:
 
     def snapshot(self) -> dict[str, Any]:
         self.ingest()
+        topics = [self.store.kv_get(f"agent_topic:{tid}", {})
+                  for tid in self.store.kv_get("agent_topic_index", [])]
+        archive = self.journal.root / "topics-state.json"
+        tmp = archive.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(topics, ensure_ascii=False, default=str), encoding="utf-8")
+        tmp.replace(archive)
+        compact = [{k: value for k, value in topic.items() if k in (
+            "id", "chat_id", "status", "pending", "worker_session_id", "native_agent_id", "task_ids")}
+                   | {"summary": str(topic.get("summary") or "")[:500]}
+                   for topic in topics]
         return {
             "moderator": self.store.kv_get("agent_native_moderator", {}),
             "native_ready": bool(self.store.kv_get("native_ready", False)),
             "heartbeat_id": self.store.kv_get("native_heartbeat_id", ""),
             "history_root": str(self.journal.root),
-            "cases": [
-                self.store.kv_get(f"agent_topic:{tid}", {})
-                for tid in self.store.kv_get("agent_topic_index", [])
-            ],
+            "case_archive": str(archive),
+            "cases": compact,
             "events": self.events(),
-            "claims": [
-                json.loads(row["value"])
-                for row in self.store.rows("SELECT value FROM kv WHERE key LIKE 'agent_native_claim:%'")
-            ],
-            "jobs": [
-                self.store.kv_get(f"agent_job:{jid}", {}) for jid in self.store.kv_get("agent_job_index", [])
-            ],
+            "claims": [json.loads(row["value"]) for row in self.store.rows(
+                "SELECT value FROM kv WHERE key LIKE 'agent_native_claim:%'")],
+            "jobs": [self.store.kv_get(f"agent_job:{jid}", {})
+                     for jid in self.store.kv_get("agent_job_index", [])],
         }
 
     def events(self, limit: int = 50, worker_id: str = "") -> list[dict[str, Any]]:
