@@ -30,4 +30,7 @@ done
 curl --fail --silent "$FBS_MAIN_URL/app/ff/fbs" >/dev/null
 "${compose[@]}" exec -T -e FBS_MAIN_DISPOSABLE=1 api python -m tests.fbs_main_screen_seed > "$FBS_MAIN_EVIDENCE/seed.json"
 export FBS_MAIN_SEED="$FBS_MAIN_EVIDENCE/seed.json"
-node frontend/tests-e2e/fbs-main-screen/browser.mjs
+browser_status=0
+node frontend/tests-e2e/fbs-main-screen/browser.mjs || browser_status=$?
+"${compose[@]}" exec -T -e FBS_MAIN_DISPOSABLE=1 api python -m tests.fbs_main_screen_verify < "$FBS_MAIN_SEED" > "$FBS_MAIN_EVIDENCE/physical-stock.json"
+exit "$browser_status"
