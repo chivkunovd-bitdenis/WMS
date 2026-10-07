@@ -392,6 +392,8 @@ describe('WMS-666 C2: mixed-task group does not gate manual printing on a missin
     bare.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
     state['wb-new'] = bare
     state['wb-b']!.supply.packaging_task_id = 'task-wb-b'
+    state['wb-b']!.orders[0]!.product.requires_honest_sign = true
+    state['wb-b']!.orders[0]!.metadata.required = ['sgtin']
     taskMarkingAvailableBySupply['wb-b'] = 1
     state['wb-b']!.marking_pool = { required: 1, available: 2, shortage: 0, orders_without_code: [] }
     failedStartSupplyIds.add('wb-new')
