@@ -37,6 +37,7 @@ export type ScanIntakeOptions = {
   scanOnlyFieldMinLength?: number
   /** Отдавать обработчику сырую пачку клавиатуры (см. useBarcodeScanner). Дефолт false. */
   emitRaw?: boolean
+  normalizeLayoutPunctuation?: boolean
 }
 
 export type ScanIntake = {
@@ -74,6 +75,7 @@ export function useScanIntake({
   isScanOnlyField,
   scanOnlyFieldMinLength,
   emitRaw = false,
+  normalizeLayoutPunctuation = false,
 }: ScanIntakeOptions): ScanIntake {
   const [node, setNode] = useState<HTMLElement | null>(null)
   const bindRoot = useCallback((next: HTMLElement | null) => setNode(next), [])
@@ -147,6 +149,7 @@ export function useScanIntake({
     isScanOnlyField,
     scanOnlyFieldMinLength,
     emitRaw,
+    normalizeLayoutPunctuation,
   })
 
   return { bindRoot, listening, submit }

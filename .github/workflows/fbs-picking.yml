@@ -1,0 +1,87 @@
+name: FBS picking real stack
+on:
+  push:
+    branches: [codex/fbs-picking-ci]
+  workflow_dispatch:
+    inputs:
+      cases:
+        description: 'Optional comma-separated cases for a targeted diagnostic run; empty runs all'
+        required: false
+        default: ''
+      application_ref:
+        description: 'Application commit for diagnostics; empty tests the current commit'
+        required: false
+        default: ''
+permissions:
+  contents: read
+concurrency:
+  group: fbs-picking-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  browser:
+    name: browser (${{ matrix.suite }})
+    strategy:
+      fail-fast: false
+      matrix:
+        suite: ${{ fromJSON(inputs.cases != '' && '["targeted"]' || '["base", "extended"]') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: test-source
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.application_ref || github.sha }}
+          path: application
+      - name: Overlay only browser checks and record both versions
+        env:
+          TEST_SHA: ${{ github.sha }}
+        run: |
+          mkdir -p application/frontend/tests-e2e application/scripts/ci
+          cp test-source/backend/tests/fbs_picking_browser*.py application/backend/tests/
+          cp -R test-source/frontend/tests-e2e/fbs-picking application/frontend/tests-e2e/
+          cp test-source/scripts/ci/run_fbs_picking_browser.sh application/scripts/ci/
+          printf 'Test commit: %s\n' "$TEST_SHA"
+          git -C application rev-parse HEAD
+          git -C application diff --name-only -- backend/app frontend/src
+          test -z "$(git -C application diff --name-only -- backend/app frontend/src)"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install isolated browser driver
+        timeout-minutes: 3
+        run: |
+          npm install --prefix "$RUNNER_TEMP/fbs-browser" --no-audit --no-fund @playwright/test@1.58.2
+          "$RUNNER_TEMP/fbs-browser/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Real frontend API database and worker
+        timeout-minutes: 16
+        working-directory: application
+        env:
+          WMS_PLAYWRIGHT_MODULE: ${{ runner.temp }}/fbs-browser/node_modules/@playwright/test/index.mjs
+          FBS_PICK_EVIDENCE: ${{ runner.temp }}/fbs-picking
+          FBS_PICK_CASES: ${{ inputs.cases || '' }}
+          FBS_PICK_SUITE: ${{ matrix.suite }}
+          TEST_SHA: ${{ github.sha }}
+        run: bash scripts/ci/run_fbs_picking_browser.sh
+      - name: Upload compact outcome
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fbs-picking-summary-${{ matrix.suite }}-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/fbs-picking/results-summary.json
+            ${{ runner.temp }}/fbs-picking/final-db.json
+            ${{ runner.temp }}/fbs-picking/sha.txt
+            ${{ runner.temp }}/fbs-picking/test-sha.txt
+            ${{ runner.temp }}/fbs-picking/status.json
+            ${{ runner.temp }}/fbs-picking/seed.log
+          retention-days: 14
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fbs-picking-${{ matrix.suite }}-${{ github.sha }}
+          path: ${{ runner.temp }}/fbs-picking
+          retention-days: 7
+          if-no-files-found: error
