@@ -1,0 +1,67 @@
+TAP version 13
+# Subtest: CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry
+ok 1 - CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry
+  ---
+  duration_ms: 6.906803
+  type: 'test'
+  ...
+# Subtest: CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error
+ok 2 - CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error
+  ---
+  duration_ms: 4.099055
+  type: 'test'
+  ...
+# Subtest: CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+ok 3 - CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+  ---
+  duration_ms: 15.599657
+  type: 'test'
+  ...
+# never observed FetchID: strict refusal preserved
+# missing network mapping: strict refusal preserved
+# different network cancellation: strict refusal preserved
+# navigation and context clear alone: strict refusal preserved
+# canceled false even ERR_ABORTED: strict refusal preserved
+# different canceled failure text: strict refusal preserved
+# deliberate ConnectionClosed lost acknowledgment: strict refusal preserved
+# successful completed token cannot retire a duplicate: strict refusal preserved
+# matching abort with other error code: strict refusal preserved
+# matching abort with other error message: strict refusal preserved
+# matching abort for a different terminal method: strict refusal preserved
+# matching abort does not explain timeout: strict refusal preserved
+# Subtest: CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+ok 4 - CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+  ---
+  duration_ms: 2.031118
+  type: 'test'
+  ...
+# Subtest: CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry
+ok 5 - CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry
+  ---
+  duration_ms: 2.052999
+  type: 'test'
+  ...
+# {"firstRetired":true,"duplicateKind":"rejected","nativeDiagnostic":"Error: {\\"code\\":-32602,\\"message\\":\\"Invalid InterceptionId.\\"}\\n{}","commands":2,"callbackErrors":["Error: {\\"code\\":-32602,\\"message\\":\\"Invalid InterceptionId.\\"}"]}
+# Subtest: CDP6 reused observed FetchID after native send and before error reply remains a strict failure
+ok 6 - CDP6 reused observed FetchID after native send and before error reply remains a strict failure
+  ---
+  duration_ms: 1.701854
+  type: 'test'
+  ...
+# {"observedFetchId":"interception-job-3.0","kind":"rejected","nativeDiagnostic":"Error: {\\"code\\":-32602,\\"message\\":\\"Invalid InterceptionId.\\"}\\n{}","commands":1}
+# Subtest: CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure
+ok 7 - CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure
+  ---
+  duration_ms: 1.873965
+  type: 'test'
+  ...
+# {"observedFetchId":"another-observed-interception","kind":"rejected","nativeDiagnostic":"Error: {\\"code\\":-32602,\\"message\\":\\"Invalid InterceptionId.\\"}\\n{}","commands":1}
+1..7
+# tests 7
+# suites 0
+# pass 7
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 329.349247

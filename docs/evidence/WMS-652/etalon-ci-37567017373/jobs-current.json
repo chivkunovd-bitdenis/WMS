@@ -1,0 +1,1312 @@
+{
+  "total_count": 11,
+  "jobs": [
+    {
+      "id": 112616973127,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6jRw",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973127",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973127",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:06Z",
+      "completed_at": "2026-10-07T03:32:52Z",
+      "name": "frontend-build",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:07Z",
+          "completed_at": "2026-10-07T03:30:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:17Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:17Z",
+          "completed_at": "2026-10-07T03:30:22Z"
+        },
+        {
+          "name": "Install deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:22Z",
+          "completed_at": "2026-10-07T03:30:29Z"
+        },
+        {
+          "name": "WMS-517 complete synthetic macOS helper contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:29Z",
+          "completed_at": "2026-10-07T03:30:34Z"
+        },
+        {
+          "name": "Typecheck",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:34Z",
+          "completed_at": "2026-10-07T03:30:48Z"
+        },
+        {
+          "name": "Verify WMS-517 attached CAdES auth profile",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:30:48Z",
+          "completed_at": "2026-10-07T03:30:48Z"
+        },
+        {
+          "name": "Install Poppler and verify real PDF renderer",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:30:48Z",
+          "completed_at": "2026-10-07T03:30:59Z"
+        },
+        {
+          "name": "All frontend tests including WMS-613 PDF pagination",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:30:59Z",
+          "completed_at": "2026-10-07T03:32:35Z"
+        },
+        {
+          "name": "Build",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-07T03:32:35Z",
+          "completed_at": "2026-10-07T03:32:49Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T03:32:49Z",
+          "completed_at": "2026-10-07T03:32:50Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 21,
+          "started_at": "2026-10-07T03:32:50Z",
+          "completed_at": "2026-10-07T03:32:50Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 22,
+          "started_at": "2026-10-07T03:32:50Z",
+          "completed_at": "2026-10-07T03:32:50Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 23,
+          "started_at": "2026-10-07T03:32:50Z",
+          "completed_at": "2026-10-07T03:32:50Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973127",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004372,
+      "runner_name": "GitHub Actions 1000004372",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973307,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6j-w",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973307",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973307",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:30:38Z",
+      "name": "printer-windows",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:09Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:09Z",
+          "completed_at": "2026-10-07T03:30:22Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:22Z",
+          "completed_at": "2026-10-07T03:30:22Z"
+        },
+        {
+          "name": "Run python -m pip install pytest",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:22Z",
+          "completed_at": "2026-10-07T03:30:31Z"
+        },
+        {
+          "name": "Persist receipt and recover unknown outcome on Windows",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:31Z",
+          "completed_at": "2026-10-07T03:30:33Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:33Z",
+          "completed_at": "2026-10-07T03:30:34Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T03:30:34Z",
+          "completed_at": "2026-10-07T03:30:34Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-07T03:30:34Z",
+          "completed_at": "2026-10-07T03:30:36Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-07T03:30:36Z",
+          "completed_at": "2026-10-07T03:30:36Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973307",
+      "labels": [
+        "windows-2022"
+      ],
+      "runner_id": 1000004370,
+      "runner_name": "GitHub Actions 1000004370",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973320,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6kCA",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973320",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973320",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:30:21Z",
+      "name": "baseline",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:07Z",
+          "completed_at": "2026-10-07T03:30:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:18Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:18Z",
+          "completed_at": "2026-10-07T03:30:19Z"
+        },
+        {
+          "name": "Resolve trusted comparison baseline",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:19Z",
+          "completed_at": "2026-10-07T03:30:19Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:30:19Z",
+          "completed_at": "2026-10-07T03:30:19Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:30:19Z",
+          "completed_at": "2026-10-07T03:30:20Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:30:20Z",
+          "completed_at": "2026-10-07T03:30:20Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973320",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004371,
+      "runner_name": "GitHub Actions 1000004371",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973376,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6kQA",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973376",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973376",
+      "status": "completed",
+      "conclusion": "failure",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:39:54Z",
+      "name": "print-regressions",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:07Z",
+          "completed_at": "2026-10-07T03:30:08Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:19Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:19Z",
+          "completed_at": "2026-10-07T03:30:21Z"
+        },
+        {
+          "name": "Install isolated browser and PDF tools",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:21Z",
+          "completed_at": "2026-10-07T03:31:04Z"
+        },
+        {
+          "name": "Native iframe failure reasons and complete tape readiness",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:31:04Z",
+          "completed_at": "2026-10-07T03:31:15Z"
+        },
+        {
+          "name": "Required box-label browser contracts and actual picking-list PDFs",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:31:15Z",
+          "completed_at": "2026-10-07T03:37:18Z"
+        },
+        {
+          "name": "Real QR input, continuous printing and selected-order buttons",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 7,
+          "started_at": "2026-10-07T03:37:18Z",
+          "completed_at": "2026-10-07T03:39:49Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:39:49Z",
+          "completed_at": "2026-10-07T03:39:53Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 15,
+          "started_at": "2026-10-07T03:39:53Z",
+          "completed_at": "2026-10-07T03:39:53Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-10-07T03:39:53Z",
+          "completed_at": "2026-10-07T03:39:53Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-07T03:39:53Z",
+          "completed_at": "2026-10-07T03:39:53Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973376",
+      "labels": [
+        "ubuntu-24.04"
+      ],
+      "runner_id": 1000004376,
+      "runner_name": "GitHub Actions 1000004376",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973425,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6kcQ",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973425",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973425",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:41:12Z",
+      "name": "backend-shard-0",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:09Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:09Z",
+          "completed_at": "2026-10-07T03:30:21Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:21Z",
+          "completed_at": "2026-10-07T03:30:24Z"
+        },
+        {
+          "name": "Install full backend dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:24Z",
+          "completed_at": "2026-10-07T03:30:39Z"
+        },
+        {
+          "name": "Ensure required Redis integration executable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:39Z",
+          "completed_at": "2026-10-07T03:31:04Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:31:04Z",
+          "completed_at": "2026-10-07T03:31:12Z"
+        },
+        {
+          "name": "Install frontend helpers for backend HTTP contract tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:31:12Z",
+          "completed_at": "2026-10-07T03:31:19Z"
+        },
+        {
+          "name": "Full collection and deterministic backend half",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:31:19Z",
+          "completed_at": "2026-10-07T03:41:07Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:41:07Z",
+          "completed_at": "2026-10-07T03:41:09Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-10-07T03:41:09Z",
+          "completed_at": "2026-10-07T03:41:09Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-07T03:41:09Z",
+          "completed_at": "2026-10-07T03:41:09Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-10-07T03:41:09Z",
+          "completed_at": "2026-10-07T03:41:09Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-10-07T03:41:09Z",
+          "completed_at": "2026-10-07T03:41:09Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973425",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004373,
+      "runner_name": "GitHub Actions 1000004373",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973553,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6k8Q",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973553",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973553",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:33:47Z",
+      "name": "backend-checks",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:09Z"
+        },
+        {
+          "name": "Initialize containers",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:09Z",
+          "completed_at": "2026-10-07T03:30:27Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:27Z",
+          "completed_at": "2026-10-07T03:30:37Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:37Z",
+          "completed_at": "2026-10-07T03:30:40Z"
+        },
+        {
+          "name": "Install deps",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:40Z",
+          "completed_at": "2026-10-07T03:30:59Z"
+        },
+        {
+          "name": "Ruff",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:59Z",
+          "completed_at": "2026-10-07T03:30:59Z"
+        },
+        {
+          "name": "Mypy",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:30:59Z",
+          "completed_at": "2026-10-07T03:31:19Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:31:19Z",
+          "completed_at": "2026-10-07T03:31:26Z"
+        },
+        {
+          "name": "Install frontend helpers for backend HTTP contract tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:31:26Z",
+          "completed_at": "2026-10-07T03:31:37Z"
+        },
+        {
+          "name": "WMS-662 isolated batch lock order on real PostgreSQL",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-07T03:31:37Z",
+          "completed_at": "2026-10-07T03:31:47Z"
+        },
+        {
+          "name": "WMS-662 isolated steady-state lock order on real PostgreSQL",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T03:31:47Z",
+          "completed_at": "2026-10-07T03:31:56Z"
+        },
+        {
+          "name": "PostgreSQL locks and immutable migration guards",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-07T03:31:56Z",
+          "completed_at": "2026-10-07T03:32:23Z"
+        },
+        {
+          "name": "Required PostgreSQL handoff cancellation documents and catalog contracts",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-07T03:32:23Z",
+          "completed_at": "2026-10-07T03:33:25Z"
+        },
+        {
+          "name": "WMS-675 real incident recovery on isolated PostgreSQL",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-07T03:33:25Z",
+          "completed_at": "2026-10-07T03:33:35Z"
+        },
+        {
+          "name": "Fresh PostgreSQL migration chain and withdrawal rollback",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-10-07T03:33:35Z",
+          "completed_at": "2026-10-07T03:33:41Z"
+        },
+        {
+          "name": "Printer receipt persistence and unknown-outcome recovery",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-10-07T03:33:41Z",
+          "completed_at": "2026-10-07T03:33:41Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-07T03:33:41Z",
+          "completed_at": "2026-10-07T03:33:43Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31,
+          "started_at": "2026-10-07T03:33:43Z",
+          "completed_at": "2026-10-07T03:33:43Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 32,
+          "started_at": "2026-10-07T03:33:43Z",
+          "completed_at": "2026-10-07T03:33:43Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 33,
+          "started_at": "2026-10-07T03:33:43Z",
+          "completed_at": "2026-10-07T03:33:43Z"
+        },
+        {
+          "name": "Stop containers",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 34,
+          "started_at": "2026-10-07T03:33:43Z",
+          "completed_at": "2026-10-07T03:33:44Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 35,
+          "started_at": "2026-10-07T03:33:44Z",
+          "completed_at": "2026-10-07T03:33:44Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973553",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004375,
+      "runner_name": "GitHub Actions 1000004375",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112616973728,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH6loA",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112616973728",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112616973728",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:03Z",
+      "started_at": "2026-10-07T03:30:07Z",
+      "completed_at": "2026-10-07T03:42:13Z",
+      "name": "backend-shard-1",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:08Z",
+          "completed_at": "2026-10-07T03:30:09Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:09Z",
+          "completed_at": "2026-10-07T03:30:20Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:20Z",
+          "completed_at": "2026-10-07T03:30:21Z"
+        },
+        {
+          "name": "Install full backend dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:21Z",
+          "completed_at": "2026-10-07T03:30:42Z"
+        },
+        {
+          "name": "Ensure required Redis integration executable",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:42Z",
+          "completed_at": "2026-10-07T03:30:57Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:57Z",
+          "completed_at": "2026-10-07T03:31:04Z"
+        },
+        {
+          "name": "Install frontend helpers for backend HTTP contract tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:31:04Z",
+          "completed_at": "2026-10-07T03:31:12Z"
+        },
+        {
+          "name": "Full collection and deterministic backend half",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:31:12Z",
+          "completed_at": "2026-10-07T03:42:05Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:42:05Z",
+          "completed_at": "2026-10-07T03:42:07Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 16,
+          "started_at": "2026-10-07T03:42:07Z",
+          "completed_at": "2026-10-07T03:42:07Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-07T03:42:07Z",
+          "completed_at": "2026-10-07T03:42:10Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-10-07T03:42:10Z",
+          "completed_at": "2026-10-07T03:42:10Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-10-07T03:42:10Z",
+          "completed_at": "2026-10-07T03:42:10Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112616973728",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004374,
+      "runner_name": "GitHub Actions 1000004374",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112617057319,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH_sJw",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112617057319",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112617057319",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:21Z",
+      "started_at": "2026-10-07T03:30:24Z",
+      "completed_at": "2026-10-07T03:31:00Z",
+      "name": "backlog",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:25Z",
+          "completed_at": "2026-10-07T03:30:26Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:26Z",
+          "completed_at": "2026-10-07T03:30:41Z"
+        },
+        {
+          "name": "\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u0441\u0441\u044b\u043b\u043a\u0443 \u043d\u0430 \u0437\u0430\u0434\u0430\u0447\u0443",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:41Z",
+          "completed_at": "2026-10-07T03:30:58Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:58Z",
+          "completed_at": "2026-10-07T03:30:58Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:30:58Z",
+          "completed_at": "2026-10-07T03:30:58Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112617057319",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004378,
+      "runner_name": "GitHub Actions 1000004378",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112617057374,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOH_sXg",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112617057374",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112617057374",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:30:22Z",
+      "started_at": "2026-10-07T03:30:24Z",
+      "completed_at": "2026-10-07T03:31:56Z",
+      "name": "\u043e\u0445\u0440\u0430\u043d\u0430",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:30:25Z",
+          "completed_at": "2026-10-07T03:30:26Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:30:26Z",
+          "completed_at": "2026-10-07T03:30:36Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:30:36Z",
+          "completed_at": "2026-10-07T03:30:37Z"
+        },
+        {
+          "name": "Install infrastructure test dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:30:37Z",
+          "completed_at": "2026-10-07T03:30:40Z"
+        },
+        {
+          "name": "Verify whole candidate against the accepted product reference",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:30:40Z",
+          "completed_at": "2026-10-07T03:30:41Z"
+        },
+        {
+          "name": "Infrastructure tests (not business guards)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:30:41Z",
+          "completed_at": "2026-10-07T03:30:47Z"
+        },
+        {
+          "name": "Execute all product-scope contracts and persist receipt",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:30:47Z",
+          "completed_at": "2026-10-07T03:30:50Z"
+        },
+        {
+          "name": "Persist exact full-backend shard infrastructure cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:30:50Z",
+          "completed_at": "2026-10-07T03:30:51Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:30:51Z",
+          "completed_at": "2026-10-07T03:30:52Z"
+        },
+        {
+          "name": "Verify against the checker and manifest from trusted BASE",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-07T03:30:52Z",
+          "completed_at": "2026-10-07T03:30:52Z"
+        },
+        {
+          "name": "Preserve accepted process tests, fixtures and execution commands",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T03:30:52Z",
+          "completed_at": "2026-10-07T03:30:52Z"
+        },
+        {
+          "name": "Install backend guard dependencies",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-07T03:30:52Z",
+          "completed_at": "2026-10-07T03:31:16Z"
+        },
+        {
+          "name": "Approved backend guards",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-07T03:31:16Z",
+          "completed_at": "2026-10-07T03:31:34Z"
+        },
+        {
+          "name": "Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-07T03:31:34Z",
+          "completed_at": "2026-10-07T03:31:40Z"
+        },
+        {
+          "name": "Approved frontend guards",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 15,
+          "started_at": "2026-10-07T03:31:40Z",
+          "completed_at": "2026-10-07T03:31:54Z"
+        },
+        {
+          "name": "Post Run actions/setup-node@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-10-07T03:31:54Z",
+          "completed_at": "2026-10-07T03:31:54Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-10-07T03:31:54Z",
+          "completed_at": "2026-10-07T03:31:54Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 30,
+          "started_at": "2026-10-07T03:31:54Z",
+          "completed_at": "2026-10-07T03:31:55Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 31,
+          "started_at": "2026-10-07T03:31:55Z",
+          "completed_at": "2026-10-07T03:31:55Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112617057374",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004377,
+      "runner_name": "GitHub Actions 1000004377",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112619958724,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOKwxxA",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112619958724",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112619958724",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T03:42:13Z",
+      "started_at": "2026-10-07T03:42:15Z",
+      "completed_at": "2026-10-07T03:42:26Z",
+      "name": "backend",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T03:42:15Z",
+          "completed_at": "2026-10-07T03:42:16Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T03:42:16Z",
+          "completed_at": "2026-10-07T03:42:22Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T03:42:22Z",
+          "completed_at": "2026-10-07T03:42:22Z"
+        },
+        {
+          "name": "Require every backend producer to succeed",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T03:42:22Z",
+          "completed_at": "2026-10-07T03:42:22Z"
+        },
+        {
+          "name": "Run actions/download-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T03:42:22Z",
+          "completed_at": "2026-10-07T03:42:22Z"
+        },
+        {
+          "name": "Run actions/download-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T03:42:22Z",
+          "completed_at": "2026-10-07T03:42:23Z"
+        },
+        {
+          "name": "Run actions/download-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T03:42:23Z",
+          "completed_at": "2026-10-07T03:42:23Z"
+        },
+        {
+          "name": "Verify full coverage and merge original JUnit outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T03:42:23Z",
+          "completed_at": "2026-10-07T03:42:24Z"
+        },
+        {
+          "name": "Run actions/upload-artifact@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T03:42:24Z",
+          "completed_at": "2026-10-07T03:42:24Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 17,
+          "started_at": "2026-10-07T03:42:24Z",
+          "completed_at": "2026-10-07T03:42:24Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 18,
+          "started_at": "2026-10-07T03:42:24Z",
+          "completed_at": "2026-10-07T03:42:25Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 19,
+          "started_at": "2026-10-07T03:42:25Z",
+          "completed_at": "2026-10-07T03:42:25Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112619958724",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": 1000004381,
+      "runner_name": "GitHub Actions 1000004381",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112620015683,
+      "run_id": 37567017373,
+      "workflow_name": "CI",
+      "head_branch": "etalon",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37567017373",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaOK0QQw",
+      "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112620015683",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37567017373/job/112620015683",
+      "status": "completed",
+      "conclusion": "skipped",
+      "created_at": "2026-10-07T03:42:26Z",
+      "started_at": "2026-10-07T03:42:26Z",
+      "completed_at": "2026-10-07T03:42:26Z",
+      "name": "process-proof",
+      "steps": [],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112620015683",
+      "labels": [
+        "ubuntu-latest"
+      ],
+      "runner_id": null,
+      "runner_name": null,
+      "runner_group_id": null,
+      "runner_group_name": null
+    }
+  ]
+}

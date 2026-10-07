@@ -1,0 +1,101 @@
+{
+  "counts": {
+    "tests": 4643,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 198,
+    "success": true
+  },
+  "suites": {
+    "backend-fbs": {
+      "status": "PASS",
+      "required": 627
+    },
+    "pg-663-retry": {
+      "status": "PASS",
+      "required": 5
+    },
+    "pg-662-f6": {
+      "status": "PASS",
+      "required": 4
+    },
+    "pg-663-669-670-683": {
+      "status": "PASS",
+      "required": 6
+    },
+    "pg-662": {
+      "status": "PASS",
+      "required": 10
+    },
+    "pg-fbs-concurrency": {
+      "status": "PASS",
+      "required": 6
+    },
+    "frontend-fbs": {
+      "status": "PASS",
+      "required": 204
+    },
+    "print-672": {
+      "status": "PASS",
+      "required": 11
+    },
+    "print-672-remaining": {
+      "status": "PASS",
+      "required": 6
+    },
+    "print-673": {
+      "status": "PASS",
+      "required": 5
+    },
+    "native-linux": {
+      "status": "PASS",
+      "required": 30
+    },
+    "native-windows": {
+      "status": "PASS",
+      "required": 29
+    },
+    "real-fbs-browser": {
+      "status": "FAIL",
+      "required": 43,
+      "reason": "Real browser proof did not pass for the tested SHA"
+    },
+    "pg-675": {
+      "status": "PASS",
+      "required": 1
+    },
+    "pg-517-withdrawal": {
+      "status": "PASS",
+      "required": 5
+    },
+    "ci-shards": {
+      "status": "PASS",
+      "required": 20
+    },
+    "product-scope": {
+      "status": "PASS",
+      "required": 51
+    },
+    "mac-517-helper": {
+      "status": "PASS",
+      "required": 110
+    },
+    "print-672-native-errors": {
+      "status": "PASS",
+      "required": 7
+    },
+    "print-672-peer-drain": {
+      "status": "PASS",
+      "required": 2
+    },
+    "print-672-raster-resource": {
+      "status": "PASS",
+      "required": 3
+    },
+    "fbs-cdp-cancellation": {
+      "status": "PASS",
+      "required": 7
+    }
+  },
+  "overall": "FAIL; no process-proof, deployment refused"
+}

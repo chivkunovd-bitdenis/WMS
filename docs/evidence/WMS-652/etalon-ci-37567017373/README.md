@@ -1,0 +1,7 @@
+# Exact etalon push CI 37567017373, attempt 1
+
+Actual etalon commit4c532f0cccfb8f99b34d68d9630a3763038fbc5f after ordinary PR387 merge. OverallFAIL: all full backend4643 cases executed once (4445PASS/198ordinaryskip/no error), all627required backend and37mandatory PostgreSQL PASS withoutskip. Other frontend/Mac/native-print/guard/672/673/CDP suites passed. Exact raw reports and two shard receipts preserved.
+
+Real-browser43 has41PASS and2FAIL: qr;supply_ids=A,B and remount-after-lost-ack;supply_id=A each collect one actual -32602 Invalid InterceptionId. Business flows otherwise finish; strict errors.length assertion is retained. Full transport43443events/no pending commands identifies native fulfill commands2730/7689. Each uses an observed paused FetchID with no NetworkID; no matching cancellation identity can be proven. Existing finite guard correctly refuses to retire these errors. Current recorder lacks request URL/method/resource type; calling them preflight or cancellation would be inference, not an established cause. invalid-id-ledger.json binds the exact records.
+
+process-proof skipped and ordinary exact-SHA deployment verifier refuses. No staging/production push, no fullCI rerun or fallback to successful PR proof. Production remains8f11d91/stagingcc8e; independently saved preflight/readback. Same developer requested bounded current-cause diagnosis; no test/assertion/timeout weakening or blanketCDP error handling.

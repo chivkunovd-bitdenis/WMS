@@ -1,0 +1,89 @@
+[
+  {
+    "command": 2730,
+    "requestId": "interception-job-2350.0",
+    "networkId_present": false,
+    "records": [
+      {
+        "utcMs": 1791344275508,
+        "kind": "request-paused",
+        "requestId": "interception-job-2350.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 46,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "attempts": 0,
+        "disposition": "paused"
+      },
+      {
+        "utcMs": 1791344275508,
+        "kind": "command-send",
+        "commandId": 2730,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-2350.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 46,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "attempt": 1
+      },
+      {
+        "utcMs": 1791344275511,
+        "kind": "command-result",
+        "commandId": 2730,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-2350.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 46,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "nativeError": {
+          "code": -32602,
+          "message": "Invalid InterceptionId."
+        }
+      }
+    ],
+    "interpretation": "Owned paused ID observed, but no Network identity/cancellation proof. Finite existing guard correctly rejected. URL/method/resource type were not recorded; precise request origin remains unknown."
+  },
+  {
+    "command": 7689,
+    "requestId": "interception-job-6767.0",
+    "networkId_present": false,
+    "records": [
+      {
+        "utcMs": 1791344335245,
+        "kind": "request-paused",
+        "requestId": "interception-job-6767.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 122,
+        "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+        "attempts": 0,
+        "disposition": "paused",
+        "ambiguous": true
+      },
+      {
+        "utcMs": 1791344335245,
+        "kind": "command-send",
+        "commandId": 7689,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-6767.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 122,
+        "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+        "attempt": 1
+      },
+      {
+        "utcMs": 1791344335249,
+        "kind": "command-result",
+        "commandId": 7689,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-6767.0",
+        "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+        "generation": 122,
+        "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+        "nativeError": {
+          "code": -32602,
+          "message": "Invalid InterceptionId."
+        }
+      }
+    ],
+    "interpretation": "Owned paused ID observed, but no Network identity/cancellation proof. Finite existing guard correctly rejected. URL/method/resource type were not recorded; precise request origin remains unknown."
+  }
+]

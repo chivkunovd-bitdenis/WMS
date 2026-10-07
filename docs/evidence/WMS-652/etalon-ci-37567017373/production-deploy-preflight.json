@@ -1,0 +1,19 @@
+{
+  "at": "2026-10-07T03:38:03.581111+00:00",
+  "exit_code": 0,
+  "worktree_and_disk": [
+    "?? .deploy-backups/",
+    "?? .deploy-portal-logos-dist.tar.gz",
+    "?? .deploy-portal-logos-dist/",
+    "?? audits/",
+    "?? calibrate_v2.spec.ts",
+    "?? hotfix-backups/",
+    "?? playwright.config.ts",
+    "?? review/",
+    "?? scripts/seed_demo.py",
+    "?? scripts/visual_audit/",
+    "?? seed_demo.py",
+    "Filesystem      Size  Used Avail Use% Mounted on",
+    "/dev/sda1        50G   47G  2.4G  96% /"
+  ]
+}

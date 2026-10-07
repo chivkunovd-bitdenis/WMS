@@ -503,3 +503,12 @@ OrdinaryPRmerge --match-head1e rejectedactualbranchpolicy: initialpull_request_t
 Trustedindependentanchor37565846149 attempt2completedSUCCESS afterexactcommonrawproof. FreshPR387stateCLEAN/head1e/base4b allowedordinary --merge --match-head1e withnoadmin/bypass; actualmerged03:29:46UTC etalon4c532f0cccfb8f99b34d68d9630a3763038fbc5f. Finalcommonactualraw/checkpointpublishedffa3fc57e oncoordinationbranchonly; PRheadwasnotadvanced. Latestcommon12m53successfulgoalreal,1192requiredPASS/4643fullcollectionretained.
 
 RequiredexactetalonPUSH CI37567017373 attempt1 created03:29:56UTC on4c532 isrunning; itwillproduceitsownactualraw/proof, priorPRsyntheticproofdoesnotauthorizeproduction. Fresh03:29productionbefore readback8f11allservicesrunning persisted. All4stagebeforecc8e; no runtimechanges. Main6474config/source907/9strictchecks/environmentetalononly unchanged. Nextnormalstageandproductionafteretalonactualsuccess.
+
+
+## Checkpoint 03:44 UTC: exact etalon push CI blocked by two native transport refusals
+
+Actual37567017373 attempt1/etalon4c532 completedFAIL; allfull4643servercases executedonce4445PASS198ordinaryskips0FAIL/error/all627required0skip, mandatory37PG/migrations/Linux/frontend/Mac/Windows/old67217/new12/6735/CDP7/guard20+51PASS. Realbrowser41/43PASS; qr;supply_ids=A,B andremount-after-lost-ack;supply_id=A strict errors.length1 failswithactual -32602 Invalid InterceptionId. process-proofSKIPPED andordinaryverify_process_ci exact4c refuses; no deploy/rerun/PR-prooffallback.
+
+Complete43443eventtransport/failedtwoJSON/fulljoblog preserved, currentnativecommands2730/7689 send→error3–4ms. BothactualpausedFetchIDs haveNO NetworkID, so finiteknown-cancelhandler correctlycannotretire; no Network.loadingFailed identity available. Oneundefinednetworkmapping markssecondambiguous, but thisisnotcauseproof. RecorderdoesnotretainURL/method/resourceType. Exact requestorigin/currentlifecycle remainsUNKNOWN; no OPTIONS/navigation guess declaredproven. SAMEdeveloperpriority read-only diagnosis requested, collaborationstatuspending_init reportedparent; no ghost/duplicatedwriterstarted. RemainingactualCIreports saved; fullbackend/PG notrepeated.
+
+Freshpreflightserver2.4Gi/noincomingtrackedpathconflict/dependenciesunchanged; untrackedserveraudits/backupsuntouched. Onlyreadonly675accountingadapterpreparedtoexistingSQL/tenantgateway, NOTexecuted; no stock/observations/roles/providerwrites. Stagecc8e/prod8f11 unchanged. Continuecause-backedfinitecontract/correction/review/acceptance, thenordinaryacceptedmerge/pushCI; no newuserpermissionneeded.

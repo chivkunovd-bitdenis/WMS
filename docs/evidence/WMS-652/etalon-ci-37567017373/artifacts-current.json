@@ -1,0 +1,165 @@
+{
+  "total_count": 8,
+  "artifacts": [
+    {
+      "id": 11460041310,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ2MDA0MTMxMA==",
+      "name": "backend-shard-1-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 205634,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11460041310",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11460041310/zip",
+      "expired": false,
+      "digest": "sha256:e3c6512a6b2aaaed588e89c20d2de0a4dbe9dce2bb29a3e853667c8f4d0535e3",
+      "created_at": "2026-10-07T03:42:06Z",
+      "updated_at": "2026-10-07T03:42:06Z",
+      "expires_at": "2026-10-21T03:42:05Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459730195,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTczMDE5NQ==",
+      "name": "guard-executed-contracts-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 2656,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459730195",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459730195/zip",
+      "expired": false,
+      "digest": "sha256:fb9490206cadb82304e4182317b63d1352ee475a8e57059d808d67af6e7126ed",
+      "created_at": "2026-10-07T03:30:52Z",
+      "updated_at": "2026-10-07T03:30:52Z",
+      "expires_at": "2026-10-21T03:30:52Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459671446,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTY3MTQ0Ng==",
+      "name": "backend-executed-contracts-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 165247,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459671446",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459671446/zip",
+      "expired": false,
+      "digest": "sha256:b399a1c9667a4f37c987bd3565ad9360839a239de415afacf26e72c13c30ebb3",
+      "created_at": "2026-10-07T03:42:24Z",
+      "updated_at": "2026-10-07T03:42:24Z",
+      "expires_at": "2026-10-21T03:42:24Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459485703,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTQ4NTcwMw==",
+      "name": "backend-checks-contracts-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 5154,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459485703",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459485703/zip",
+      "expired": false,
+      "digest": "sha256:f2e303ee5d912f69b4feced121e0b4233749715b3d8ec0d4e156542159085f0b",
+      "created_at": "2026-10-07T03:33:43Z",
+      "updated_at": "2026-10-07T03:33:43Z",
+      "expires_at": "2026-10-21T03:33:42Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459431586,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTQzMTU4Ng==",
+      "name": "release-print-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 37687172,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459431586",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459431586/zip",
+      "expired": false,
+      "digest": "sha256:2fa693f285b34eb6fbf8cebfad778e76819afc0f1059aa8537370008698959cf",
+      "created_at": "2026-10-07T03:39:53Z",
+      "updated_at": "2026-10-07T03:39:53Z",
+      "expires_at": "2026-10-21T03:39:50Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459291859,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTI5MTg1OQ==",
+      "name": "backend-shard-0-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 206525,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459291859",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459291859/zip",
+      "expired": false,
+      "digest": "sha256:056e03cc8d2a373a18e2bba0059b243dacea607d4f73683127d5c2a71ae99b05",
+      "created_at": "2026-10-07T03:41:09Z",
+      "updated_at": "2026-10-07T03:41:09Z",
+      "expires_at": "2026-10-21T03:41:08Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459092545,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTA5MjU0NQ==",
+      "name": "frontend-executed-contracts-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 97571,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459092545",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459092545/zip",
+      "expired": false,
+      "digest": "sha256:fabbcde2e020cc4b1eebaf73913415bc926242ce7f41a36de2181e7e29abd637",
+      "created_at": "2026-10-07T03:32:50Z",
+      "updated_at": "2026-10-07T03:32:50Z",
+      "expires_at": "2026-10-21T03:32:49Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    },
+    {
+      "id": 11459017366,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTAxNzM2Ng==",
+      "name": "printer-windows-contracts-4c532f0cccfb8f99b34d68d9630a3763038fbc5f-37567017373-1",
+      "size_in_bytes": 1192,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459017366",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459017366/zip",
+      "expired": false,
+      "digest": "sha256:2a251371a4d992fc5b73a1b82bc94d812462ebb1f3c767f5bd452934bc9beaa7",
+      "created_at": "2026-10-07T03:30:34Z",
+      "updated_at": "2026-10-07T03:30:34Z",
+      "expires_at": "2026-10-21T03:30:33Z",
+      "workflow_run": {
+        "id": 37567017373,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "etalon",
+        "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      }
+    }
+  ]
+}

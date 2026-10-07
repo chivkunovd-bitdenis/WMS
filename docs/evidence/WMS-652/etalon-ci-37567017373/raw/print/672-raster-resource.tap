@@ -1,0 +1,30 @@
+TAP version 13
+# Subtest: RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer
+ok 1 - RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer
+  ---
+  duration_ms: 5011.562963
+  type: 'test'
+  ...
+# {"started":300,"ready":300,"maxPending":16,"peakRetained":16,"releases":288,"firstBoundary":{"ready":16,"retained":16,"eligible":16,"problems":[]},"violations":[],"transfers":1}
+# Subtest: RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+ok 2 - RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+  ---
+  duration_ms: 177.477941
+  type: 'test'
+  ...
+# Subtest: RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+ok 3 - RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+  ---
+  duration_ms: 92.694087
+  type: 'test'
+  ...
+# {"held":{"connected":true,"finished":false,"cleanup":0,"started":16},"afterDrain":{"pending":0,"ready":15,"started":16,"saves":0,"transfers":0}}
+1..3
+# tests 3
+# suites 0
+# pass 3
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 5910.285873
