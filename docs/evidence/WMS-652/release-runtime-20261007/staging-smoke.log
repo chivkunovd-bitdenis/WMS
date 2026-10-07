@@ -1,0 +1,5 @@
+== smoke: https://web-production-9e7c1.up.railway.app ==
+GET / -> HTTP 200
+GET /api/health -> HTTP 200
+SPA shell: ok
+== smoke passed ==

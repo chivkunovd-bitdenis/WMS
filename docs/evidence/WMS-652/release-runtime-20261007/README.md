@@ -1,0 +1,7 @@
+# WMS-652 actual production and staging release
+
+NormalDeployProduction37579921135 attempt1 completedSUCCESS06:12:54UTC fromexactetalon4c532f0cccfb8f99b34d68d9630a3763038fbc5f afterstrictfull375670attempt2/1192 proof. Actualservercheckout4c, api/worker/beat/web RUNNING; Postgres/Redis HEALTHY. RuntimeimageIDs recorded; livebackendtouchedmodule+entryfile bytesmatch4c inallthreebackendservices. PublicrootHTMLhashmatcheslivewebcontainer, root/seller/apihealth allHTTP200. No assumed embedded revision labels.
+
+Registeredrealworker taskwms.withdrawal_poll verifiedreadonly; beat schedule2.0seconds. No manualwithdrawal/signature or task invoked. ImmutablefullSHA517.command publicdownloadSHA2566e60684bbe8318178f0c97d34507f9a93f811c74ed3e2631ae249ac02a8505c9 verified, notexecuted; physicalMacoperator/sign acceptanceaftersoftwaredeployment remainsseparate. Mainapplication unchanged; onlypreviousreviewedchecker/configmain6474 installed.
+
+Stagepush happenedbeforeownerlatestproduction-first clarification; productionwasalreadyrunning, no stageapprovalwait remained. Freshafter-productionmetadata confirmsALL4RailwayservicesSUCCESSexact4c. No redundantstage redeploy/forcepush performed. PriorChromeCDPtransportflake remainsOPEN/NOTFIXED andpreviousfailure retained; fullunchangedattempt2 actuallypassed, notwaived.

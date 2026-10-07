@@ -1,0 +1,37 @@
+{
+  "checked_at": "2026-10-07T06:18:52.800161+00:00",
+  "services": [
+    {
+      "service": "WMS",
+      "environmentId": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "deploymentId": "c9223858-394c-40bd-9058-1814333ba3b1",
+      "status": "SUCCESS",
+      "commitHash": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "branch": "staging"
+    },
+    {
+      "service": "web",
+      "environmentId": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "deploymentId": "4bb4d419-d665-44fd-9af5-a3ad64de5891",
+      "status": "SUCCESS",
+      "commitHash": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "branch": "staging"
+    },
+    {
+      "service": "wms-beat",
+      "environmentId": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "deploymentId": "2f33a63f-6d11-4928-bf70-cd7c93c882db",
+      "status": "SUCCESS",
+      "commitHash": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "branch": "staging"
+    },
+    {
+      "service": "wms-worker",
+      "environmentId": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "deploymentId": "297fad77-97df-4a84-8057-d54caa1de919",
+      "status": "SUCCESS",
+      "commitHash": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "branch": "staging"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "checkedAt": "2026-10-07T06:16:57.701445+00:00",
+  "sourceSha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "backendLiveSourceHashesMatch": true,
+  "publicWebMatchesLiveContainer": true,
+  "http": [
+    {
+      "path": "/",
+      "status": 200,
+      "sha256": "89c8c6c704d961b6dd42756e485cc18538f606b34564dca38f559d9d99a0b6fa"
+    },
+    {
+      "path": "/seller/",
+      "status": 200,
+      "sha256": "14960cda52061fa23aa88884a3cd162060222a6594aa6dd9d22bedd515f0fb62"
+    },
+    {
+      "path": "/api/health",
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288"
+    }
+  ],
+  "mac517ImmutableUrl": "https://raw.githubusercontent.com/chivkunovd-bitdenis/WMS/4c532f0cccfb8f99b34d68d9630a3763038fbc5f/scripts/ops/avpack-sold-kiz.command",
+  "mac517SHA256": "6e60684bbe8318178f0c97d34507f9a93f811c74ed3e2631ae249ac02a8505c9",
+  "mac517Executed": false,
+  "TLSVerification": "system curl; no verification disabled"
+}

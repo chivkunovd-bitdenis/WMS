@@ -1,0 +1,9 @@
+{
+  "registeredTask": "wms.withdrawal_poll",
+  "workerRegistered": true,
+  "beatSchedule": {
+    "task": "wms.withdrawal_poll",
+    "schedule": 2.0
+  },
+  "taskInvoked": false
+}

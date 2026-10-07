@@ -1,0 +1,85 @@
+{
+  "checkedAt": "2026-10-07T06:14:48.981293+00:00",
+  "checkoutSha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "services": [
+    {
+      "Service": "api",
+      "State": "running",
+      "Health": "",
+      "ID": "a99f71e8711f",
+      "Name": "wms_prod-api-1"
+    },
+    {
+      "Service": "celery_beat",
+      "State": "running",
+      "Health": "",
+      "ID": "72e6115abc1f",
+      "Name": "wms_prod-celery_beat-1"
+    },
+    {
+      "Service": "celery_worker",
+      "State": "running",
+      "Health": "",
+      "ID": "552b85735d70",
+      "Name": "wms_prod-celery_worker-1"
+    },
+    {
+      "Service": "db",
+      "State": "running",
+      "Health": "healthy",
+      "ID": "c4a840b26aa9",
+      "Name": "wms_prod-db-1"
+    },
+    {
+      "Service": "redis",
+      "State": "running",
+      "Health": "healthy",
+      "ID": "39d6438d8de1",
+      "Name": "wms_prod-redis-1"
+    },
+    {
+      "Service": "web",
+      "State": "running",
+      "Health": "",
+      "ID": "5231d1168cf6",
+      "Name": "wms_prod-web-1"
+    }
+  ],
+  "runtimeImages": [
+    {
+      "service": "api",
+      "containerId": "a99f71e8711f35517867f223dab53826b776f6018fb2421df94bc97b0ac5c79a",
+      "imageId": "sha256:f9dd6b915e3ef830c2941db97f11b2982eda0d08b5f969bb9324e7f15c529374",
+      "sourceFileHashes": [
+        "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30  /app/app/services/fbs_stock_publish_service.py",
+        "59c714289089382b4b638e1453616e35a2443cb0d838d9e93a437da2a2b628eb  /app/app/main.py"
+      ]
+    },
+    {
+      "service": "celery_worker",
+      "containerId": "552b85735d70519e1fff9095e95b45de7c5a805a3a702efe52252f09bd158df4",
+      "imageId": "sha256:fd0adac32fdd39fa43c0789b633ec1c4bb4815e9d1451e8b9cd758e403369c06",
+      "sourceFileHashes": [
+        "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30  /app/app/services/fbs_stock_publish_service.py",
+        "59c714289089382b4b638e1453616e35a2443cb0d838d9e93a437da2a2b628eb  /app/app/main.py"
+      ]
+    },
+    {
+      "service": "celery_beat",
+      "containerId": "72e6115abc1f967287762b75785655d6f59e0418e6440e20690d71e99152930f",
+      "imageId": "sha256:83ed1c55b4ea3445cc920a0136c9b241ee28d0d40d40b52d58ad21975815a761",
+      "sourceFileHashes": [
+        "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30  /app/app/services/fbs_stock_publish_service.py",
+        "59c714289089382b4b638e1453616e35a2443cb0d838d9e93a437da2a2b628eb  /app/app/main.py"
+      ]
+    },
+    {
+      "service": "web",
+      "containerId": "5231d1168cf67a731ffdcc7f9c6bfdab9d59f310691f0aed7fb755fea93a09cb",
+      "imageId": "sha256:01bbb1d87f2266f27b605fb93c0529f50623a53660ac7502572ff3d17eff866f",
+      "sourceFileHashes": [
+        "89c8c6c704d961b6dd42756e485cc18538f606b34564dca38f559d9d99a0b6fa  /srv/index.html"
+      ]
+    }
+  ]
+}
