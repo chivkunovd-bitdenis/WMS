@@ -1,0 +1,30 @@
+{
+  "captured_at_utc": "2026-10-07T07:04:05.644398+00:00",
+  "method": "new production application session; REPEATABLE READ, READ ONLY; rollback; no external calls",
+  "writes": 0,
+  "scope": {"orders": 31, "positions": 31, "supply_status": "in_delivery"},
+  "projection_sum": 0,
+  "projection_nonzero_positions": 0,
+  "reserve_status_counts": {"released": 31},
+  "actual_legacy_reservation_rows": 0,
+  "actual_product_reservation_rows": 0,
+  "journal": {"orders": 31, "targets": 26, "state": "confirmed", "error_code": null},
+  "ledger": {
+    "rows": 31,
+    "completed": 26,
+    "reversal": 0,
+    "movement_ids_sha256": "adee0571df94e497bd1f1efb7fc74c1e01444f00bc038488c4f5dbf8d847ddfa"
+  },
+  "facts": {"count": 26, "ids_sha256": "03e300457d58916fec01411cbe21231977bfdbdcadcc5663802d958931629722", "same_as_pre_apply": true},
+  "charges": {"count": 52, "ids_sha256": "7e3c6ecd173fb6ecd11dcf024ee9c94e76786eec4300fe1da67bed0e0dd2b2f8", "same_as_pre_apply": true},
+  "stock": {
+    "balance_rows": 6,
+    "balances_sha256": "796f0c98abff1957acf56a3110c88ca39cef46e80dcc08a26ecec1a294efc41f",
+    "ledger_linked_movements": 26,
+    "ledger_linked_movements_sha256": "2d0883f788ec4dcda3ea013bc511cd0585700c56b5a62a2cebb1497a2002a9ca",
+    "movements_created_since_repair_start": 0,
+    "pre_apply_balance_hash": "not_recorded; no balance comparison is claimed"
+  },
+  "missing_delta": 0,
+  "success": true
+}
