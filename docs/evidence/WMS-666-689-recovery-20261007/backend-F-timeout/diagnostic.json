@@ -1,0 +1,38 @@
+{
+  "run": 37678049704,
+  "actual_tested_merge_sha": "b28dbec90a507075d786bf282dbd77b665e4fcc2",
+  "candidate_head": "52caa65e17cf3e19a9040c7439840823b0d622f2",
+  "outcome": "INCOMPLETE_FAILURE; both jobs reached configured 45 minute timeout, no full-backend receipt",
+  "cancelled_by_agent": false,
+  "shards": {
+    "0": {
+      "job_id": 112987027223,
+      "log_sha256": "ad4a64b8b0996791a9f3e33624a906ab93e3512fe392fe49b64d80d51a29b9fa",
+      "last_progress": "2026-10-07T20:19:25.4378417Z .....s............................................s.....FF....FEEEE..... [ 92%]",
+      "failure_marks_at_least": 10,
+      "error_marks_at_least": 6,
+      "timeout_lines": [
+        "2026-10-07T20:41:05.2921561Z ##[error]The operation was canceled."
+      ],
+      "missing_artifact_lines": [
+        "2026-10-07T20:41:05.4457102Z ##[error]No files were found with the provided path: /home/runner/work/_temp/backend-shard. No artifacts will be uploaded."
+      ]
+    },
+    "1": {
+      "job_id": 112987027660,
+      "log_sha256": "9f9360154d8ba4cd60d4a0c8721a10f6643d7e083a7963e6818d4d3ed9f29e3c",
+      "last_progress": "2026-10-07T20:20:15.4904129Z ssF.....................s...............ss.....s.......ss.ssssss........ [ 95%]",
+      "failure_marks_at_least": 11,
+      "error_marks_at_least": 10,
+      "timeout_lines": [
+        "2026-10-07T20:42:01.1184231Z ##[error]The operation was canceled."
+      ],
+      "missing_artifact_lines": [
+        "2026-10-07T20:42:01.3152935Z ##[error]No files were found with the provided path: /home/runner/work/_temp/backend-shard. No artifacts will be uploaded."
+      ]
+    }
+  },
+  "diagnostic_limit": "Quiet pytest progress contains F/E outcomes but no per-case identities or failure traceback before termination. Failures cannot yet be attributed to product changes or baseline.",
+  "artifact_limit": "Output directory is created before tests, but JUnit and receipt.json complete only after pytest.main returns. Timeout left no files to upload.",
+  "code_changed_for_diagnostic": false
+}
