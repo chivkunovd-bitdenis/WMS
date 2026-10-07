@@ -224,6 +224,12 @@ class FbsPickOptionLocationOut(BaseModel):
     sources: list[FbsPickOptionSourceOut]
 
 
+class FbsPickingContextOut(BaseModel):
+    product_id: str
+    inbound_supplies: list[str]
+    locations: list[str]
+
+
 class FbsPickOptionProductOut(BaseModel):
     product_id: str
     sku_code: str | None
@@ -1564,6 +1570,21 @@ async def get_fbs_supplies_worklist(
     except supply_svc.FbsSupplyError as exc:
         _raise_from_service(exc)
     return FbsSupplyWorklistOut.model_validate(payload)
+
+
+@router.get("/{supply_id}/picking-context", response_model=list[FbsPickingContextOut])
+async def get_fbs_picking_context(
+    supply_id: uuid.UUID,
+    user: Annotated[User, Depends(require_fbs_operator_access)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+) -> list[FbsPickingContextOut]:
+    from app.services.fbs_picking_print_service import get_picking_context
+
+    try:
+        items = await get_picking_context(session, user.tenant_id, supply_id)
+    except picking_svc.FbsPickingError as exc:
+        _raise_from_picking(exc)
+    return [FbsPickingContextOut.model_validate(item) for item in items]
 
 
 @router.get("/{supply_id}/pick-options", response_model=list[FbsPickOptionProductOut])
