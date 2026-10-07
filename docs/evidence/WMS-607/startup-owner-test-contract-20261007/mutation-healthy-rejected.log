@@ -1,0 +1,15 @@
+test_owned_healthy_start_succeeds_with_real_health_validation (__main__.StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation) ... FAIL
+
+======================================================================
+FAIL: test_owned_healthy_start_succeeds_with_real_health_validation (__main__.StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_start_owner_contract.py", line 154, in test_owned_healthy_start_succeeds_with_real_health_validation
+    self.assertEqual(actual['native_exit'],0,actual['stderr'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : 
+
+----------------------------------------------------------------------
+Ran 1 test in 0.410s
+
+FAILED (failures=1)

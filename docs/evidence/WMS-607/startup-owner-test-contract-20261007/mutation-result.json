@@ -1,0 +1,34 @@
+{
+  "controls": [
+    {
+      "case": "StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation",
+      "name": "healthy-rejected",
+      "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+      "copy_sha256": "25d3f01ced49ff68dfe559a168ef757fb9c8a558e36a6a91fadb49515ed13234",
+      "replacement": [
+        "        if health_ok \"${1:-target}\"; then return 0; fi\n",
+        "        if health_ok \"${1:-target}\"; then return 1; fi # COPY: reject actual healthy result\n"
+      ],
+      "native_test_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "ERROR": 0,
+      "SKIP": 0
+    },
+    {
+      "case": "StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready",
+      "name": "warming-rejected",
+      "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+      "copy_sha256": "8c6ae8d7623e73fa5ed3c69416e9ac3eacc4fd723be76afb53ba2488be7f2f47",
+      "replacement": [
+        "        sleep 0.05\n    done\n    printf '%s\\n' 'Start/readiness failed.",
+        "        return 1 # COPY: refuse no-owner warmup\n    done\n    printf '%s\\n' 'Start/readiness failed."
+      ],
+      "native_test_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "ERROR": 0,
+      "SKIP": 0
+    }
+  ],
+  "copies_removed": true,
+  "tracked_source_unchanged": true
+}

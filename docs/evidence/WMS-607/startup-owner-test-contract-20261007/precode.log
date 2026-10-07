@@ -1,0 +1,17 @@
+test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll (__main__.StartupOwnerContract.test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll) ... FAIL
+test_no_owner_yet_can_warm_until_owned_ready (__main__.StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready) ... ok
+test_owned_healthy_start_succeeds_with_real_health_validation (__main__.StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation) ... ok
+
+======================================================================
+FAIL: test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll (__main__.StartupOwnerContract.test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_start_owner_contract.py", line 150, in test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll
+    self.assertTrue(all(checks.values()),json.dumps(checks,sort_keys=True))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : {"foreign_cause_reported": false, "no_foreign_health_or_readiness_acceptance": true, "no_later_wait_or_poll": false}
+
+----------------------------------------------------------------------
+Ran 3 tests in 1.479s
+
+FAILED (failures=1)
