@@ -1,0 +1,102 @@
+{
+  "production_source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "evidence_base": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "sorting_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1"
+  },
+  "input_bindings": {
+    "inputs/matrix.json": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/evidence/WMS-675/fresh-20261007/missing-recalculation.json",
+      "sha256": "48876fb7e2bc4172964ddfaa176d81bdd3e9c62711a560fb6f2cd9e3db72e934"
+    },
+    "inputs/billing.csv": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/evidence/WMS-675/fresh-20261007/accounting-20261007T062639Z/billing_entries.csv",
+      "sha256": "eb4ee354b677d05a2c16736c46337b56e5f378c2483033587e1f20a6ff816839"
+    },
+    "inputs/facts.csv": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/evidence/WMS-675/fresh-20261007/accounting-20261007T062639Z/operation_facts.csv",
+      "sha256": "18719c19142fe7d8475d0201e91e4bd89469545cd6d16e3fa2933ec094dd4dcc"
+    },
+    "inputs/collect_ozon_bound.py": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/collect_ozon_bound.py",
+      "sha256": "77f56f1100d27db0f369ff7edb436332c9fd91f295d4065c90bcb51e68e80011"
+    },
+    "inputs/ozon_read_plan.json": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/ozon_read_plan.json",
+      "sha256": "cccfb2d7c024f02309f23424a67473723cfcb6d7d85312f138f1b152e04bc00b"
+    },
+    "inputs/queries/identity.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/identity.sql",
+      "sha256": "b2a7c9119e4600225725d0d9559c891dce90d64bf438196b1cc2107fa8c92401"
+    },
+    "inputs/queries/orders_positions_reserves.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/orders_positions_reserves.sql",
+      "sha256": "a9c989b6a3b4e2bcb984cb30f907309e3e678bc2f1465a29dc9d367a66b4d77e"
+    },
+    "inputs/queries/ledger.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/ledger.sql",
+      "sha256": "fe3eae4ea8b9bb5df40e40e3ad028a2661ab1922c32598371d25c0ced42b1134"
+    },
+    "inputs/queries/balances_locations.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/balances_locations.sql",
+      "sha256": "5f15e48433139306c7f11f3d1409817d6a1529636ad7d7fe9c286f61a97e0150"
+    },
+    "inputs/queries/balances_vs_all_movements.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/balances_vs_all_movements.sql",
+      "sha256": "f0a3f45bbea547b43a7ffff9fd73693d5d9feebe9046f689766ba923236c9e5c"
+    },
+    "inputs/queries/billing_entries.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/billing_entries.sql",
+      "sha256": "65da36492b3a5ebc4c6ec1b7667ddd9c165b490b5636344d121aa45277d1f9b9"
+    },
+    "inputs/queries/operation_facts.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/operation_facts.sql",
+      "sha256": "4392c6d9b7d5460b3ce305edfaaad164590ebc8b4f79c010d9f772180b39deb5"
+    },
+    "inputs/queries/supply_operations.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/supply_operations.sql",
+      "sha256": "96c41636c52086dda4d77032f24def80c086eb1255d0bd0be43a0e8f51d99ba5"
+    },
+    "inputs/queries/unlinked_fbs_movements.sql": {
+      "source_ref": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+      "source_path": "docs/reviews/wms675-evidence-20261006/accounting-refresh-20261006-attempt1/unlinked_fbs_movements.sql",
+      "sha256": "937bd9a92cd79e3ca4a7f1e121247c0a9840f9ebd0f6fe952fc4289a2f8ced2b"
+    }
+  },
+  "installed_native_files": {
+    "app/db/session.py": "a0753dd7edfde807d023f71e88bf27aca1ab52adfa2d64d22c97eb24f612af7e",
+    "app/core/settings.py": "d0e7ea7a5c9673cf829a1fe4c6fe7f102e77985211cb84da313584c428bbbf46",
+    "app/services/fbs_observed_handoff_service.py": "137e9f7484cd5b4122c43f6ae56a40018dc5b755edc7144aaf48a744a1bafb07",
+    "app/services/fbs_packaging_integration_service.py": "7572f0d0d7f80c4917b43a5be16eaaa1edc8cb1421275b27feb6590f644cb8e1",
+    "app/services/fbs_stock_publish_service.py": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
+    "app/services/fbs_ozon_packaging_service.py": "963b39d9dc79190bd84ffd854b3cd828ed6eff8f8057264e2efc0e06c6e72914",
+    "app/services/fbs_order_billing_service.py": "645fa2e600bffded0752fb82818d17d16e8610374fb0cfed4ce670d4ce669844",
+    "app/services/fbs_shipment_source_service.py": "7773d14d6efc722eacdd1260ed6c1b698c06f00cd30174127dd7e20a8dc7dd07",
+    "app/services/fbs_shipment_service.py": "1e6d59473204c7511a5b8c57591cc57c22b8a3f03578677e7aeaa36b2e28770a",
+    "app/services/marketplace_account_service.py": "b709e496296f717e29742e6cb7ca5e5c1cffd39eb4c9e98005b888c73c30db3e",
+    "app/services/ozon_marketplace_transport.py": "89303660b8973c0632d76c927b8e42fe3c7947ee255ac4ab4e2fe4f947e9e045",
+    "app/services/ozon_provider_factory.py": "89b2dd30fcf12e2eb1bcfb223a295fb0da2bf3a334804813cc7e70d41bd28013",
+    "app/models/fbs_order.py": "e0e379f39c6b065b4f5784382e0e6298b173dedc44476eff96f07de362bcae24",
+    "app/models/fbs_supply.py": "4ca6f4c553169169268050a92737ba111eecd10db5737fa02136607721eb942a",
+    "app/models/fbs_shipment_reversal_ledger.py": "7eca4209b0ddcea55e3d230d9a340727073141259ab5d8f7cda7a5b22290a8a8",
+    "app/models/fbs_wb_operation.py": "741989374c8d4c1f03540dbadc596989b38d239a19ad503266cabb0aaf16d0f1",
+    "app/models/product.py": "67be9d8185c608a967f9d45eeff18063b0c38bc723189f520c0cad8c86013df7"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "syntax": "PASS (AST/compile only; module not executed)",
+  "input_byte_bindings_verified": 14,
+  "native_exact4c_bindings_verified": 17,
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "evidence_base": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+  "adapter_sha256": "5d290b28419c72389a85a2f518efcdbf612c43c49d43f62e048dd5c3bf427535",
+  "bindings_sha256": "a4e59a459c92c9fadf93455be1669d8cdd0a7be9028d397fd902766b49885e6d",
+  "app_provider_DB_execution": false,
+  "tests_run": false
+}

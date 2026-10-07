@@ -1,0 +1,421 @@
+{
+  "prepared_at": "2026-10-06T06:55:44.666250+00:00",
+  "execution_status": "NOT_EXECUTED_NO_BOUND_MARKETPLACE_READER",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "transport": "existing build_ozon_provider, require live transport; exact scope stored internally, no secret output",
+  "allowed_endpoint": "/v3/posting/fbs/get",
+  "requests": [
+    {
+      "posting_number": "0113371235-0054-3",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0144953533-0124-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0148656673-0134-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0153677007-0258-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0164033835-0039-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0172663629-0081-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0181745532-0045-3",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0187441457-0073-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0190055173-0461-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0236443586-0012-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0249035122-0351-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "0282817049-0013-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "06383353-1897-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "21052558-0445-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "23388119-0163-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "28508065-0594-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "31853470-0198-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "45035035-0211-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "50261136-0017-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "55322493-0272-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "56845110-0045-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "56907807-0024-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "59814512-0364-3",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "62035277-0532-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "66144885-0156-18",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "80034639-0273-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "81035721-0742-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "83893932-0680-2",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "85257535-0274-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "99185584-1963-5",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    },
+    {
+      "posting_number": "99630148-0017-1",
+      "with": {
+        "analytics_data": false,
+        "barcodes": false,
+        "financial_data": false,
+        "legal_info": false,
+        "product_exemplars": false,
+        "related_postings": true,
+        "translit": false
+      }
+    }
+  ],
+  "children": "Read only numbers returned in related_postings.related_posting_numbers with same bound seller; track graph and deduplicate; unresolved, cycle, missing or contradictory composition stays unknown",
+  "save_fields": [
+    "posting_number",
+    "order_id",
+    "order_number",
+    "status",
+    "substatus",
+    "tpl_integration_type",
+    "products.sku",
+    "products.offer_id",
+    "products.quantity",
+    "related_postings.related_posting_numbers",
+    "related_weight_postings",
+    "cancellation.cancel_reason_id",
+    "cancellation.cancellation_type",
+    "cancellation.cancelled_after_ship",
+    "in_process_at",
+    "shipment_date",
+    "delivering_date"
+  ],
+  "save_request_metadata": [
+    "started_at_utc",
+    "finished_at_utc",
+    "http_status",
+    "server_date_if_available",
+    "response_projection_sha256"
+  ],
+  "excluded_output": [
+    "authentication headers",
+    "credentials",
+    "customer",
+    "addressee",
+    "legal_info",
+    "financial_data",
+    "exemplar marks",
+    "barcode files"
+  ],
+  "retry": "Read only; keep each failed response as unknown, no hidden mutation or sync."
+}
