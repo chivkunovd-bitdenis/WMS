@@ -1182,7 +1182,6 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         setPendingFbsQrAcknowledgementCount(pending.remaining.length)
         await confirmPendingFbsQrAcknowledgements(pending)
       }
-      }
       ctx.onPrinted()
 
       const allErrors = [
