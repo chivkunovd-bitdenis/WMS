@@ -1,11 +1,21 @@
 import assert from 'node:assert/strict';
 import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { createHash } from 'node:crypto';
+import { resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 
-const evidenceRoot = new URL('./run-28a799-final-matrix/preaccept-recovery/', import.meta.url).pathname;
-const seed = JSON.parse(await readFile(new URL('./run-28a799-final-matrix/seed-public.json', import.meta.url), 'utf8'));
+const [seedFileArg, evidenceDirArg, receiptFileArg] = process.argv.slice(2);
+const seedFile = seedFileArg
+  ? resolve(seedFileArg)
+  : new URL('./run-28a799-final-matrix/seed-public.json', import.meta.url).pathname;
+const evidenceRoot = `${evidenceDirArg
+  ? resolve(evidenceDirArg)
+  : new URL('./run-28a799-final-matrix/preaccept-recovery/', import.meta.url).pathname}/`;
+const receiptFile = receiptFileArg
+  ? resolve(receiptFileArg)
+  : new URL('./run-28a799-final-matrix/native/sink-receipts.jsonl', import.meta.url).pathname;
+const seed = JSON.parse(await readFile(seedFile, 'utf8'));
 await mkdir(`${evidenceRoot}native-inputs`, { recursive: true });
 await writeFile(`${evidenceRoot}api-events.jsonl`, '');
 await writeFile(`${evidenceRoot}native-events.jsonl`, '');
@@ -196,7 +206,7 @@ try {
   assert.equal(nativeQr[0].png_sha256, nativeQr[1].png_sha256, 'retry reuses exact rendered PNG bytes');
   const successfulReceiptCount = afterRecovery.native.accepted_png_count;
   assert.equal(successfulReceiptCount, 1, 'only one native job was accepted after the pre-acceptance failure');
-  const sinkReceipts = (await readFile(new URL('./run-28a799-final-matrix/native/sink-receipts.jsonl', import.meta.url), 'utf8'))
+  const sinkReceipts = (await readFile(receiptFile, 'utf8'))
     .trim().split('\n').filter(Boolean).map(JSON.parse);
   assert.equal(sinkReceipts.length, 1, 'the sink contains exactly one accepted receipt');
   assert.equal(sinkReceipts[0].job_key, nativeQr[0].idempotency_key);
