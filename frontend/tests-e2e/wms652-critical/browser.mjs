@@ -44,7 +44,7 @@ class CDP {
           clearTimeout(p.timer);
           this.record({kind:'command-result',commandId:msg.id,method:p.method,...p.identity,nativeError:msg.error});
           if (msg.error) {
-            if (p.retirable && p.token.attempts === 1 && p.token.disposition === 'paused'
+            if (p.retirable && !p.token.ambiguous && p.token.attempts === 1 && p.token.disposition === 'paused'
               && p.token.generation === this.generation && p.token.caseId === this.currentCase()
               && msg.error.code === -32602 && msg.error.message === 'Invalid InterceptionId.') {
               p.token.disposition = 'retired';
