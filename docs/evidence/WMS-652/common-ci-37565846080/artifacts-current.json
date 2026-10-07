@@ -1,0 +1,185 @@
+{
+  "total_count": 9,
+  "artifacts": [
+    {
+      "id": 11459380781,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTM4MDc4MQ==",
+      "name": "backend-executed-contracts-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 165579,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459380781",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459380781/zip",
+      "expired": false,
+      "digest": "sha256:d0b2c42c9abb77e680c4fd759629a5b3fea7d18f7ae7fdc84fdd027a13aeacdd",
+      "created_at": "2026-10-07T03:27:13Z",
+      "updated_at": "2026-10-07T03:27:13Z",
+      "expires_at": "2026-10-21T03:27:12Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11459325486,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTMyNTQ4Ng==",
+      "name": "release-print-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 38070559,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459325486",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459325486/zip",
+      "expired": false,
+      "digest": "sha256:6b84806faa2aadba47e5b5bcf36929035a7c75d13965e112016fee4b91114988",
+      "created_at": "2026-10-07T03:24:35Z",
+      "updated_at": "2026-10-07T03:24:35Z",
+      "expires_at": "2026-10-21T03:24:31Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11459221320,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTIyMTMyMA==",
+      "name": "backend-shard-1-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 205644,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459221320",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459221320/zip",
+      "expired": false,
+      "digest": "sha256:fd66016731439fca8a1868e182d874349898949a77963c77ca902f2961d64c8b",
+      "created_at": "2026-10-07T03:26:54Z",
+      "updated_at": "2026-10-07T03:26:54Z",
+      "expires_at": "2026-10-21T03:26:54Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11459105377,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTEwNTM3Nw==",
+      "name": "frontend-executed-contracts-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 97662,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459105377",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459105377/zip",
+      "expired": false,
+      "digest": "sha256:7c4839e9aff37004c692ba44d8c35520080e0c8893def5ad6c3b6e81104bef55",
+      "created_at": "2026-10-07T03:19:06Z",
+      "updated_at": "2026-10-07T03:19:06Z",
+      "expires_at": "2026-10-21T03:19:06Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11459010664,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1OTAxMDY2NA==",
+      "name": "backend-checks-contracts-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 5154,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459010664",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11459010664/zip",
+      "expired": false,
+      "digest": "sha256:515a697c36eccae186e593faa58e22b6a57c1f7d6ea32fd85bd9ee9c880331c9",
+      "created_at": "2026-10-07T03:18:59Z",
+      "updated_at": "2026-10-07T03:18:59Z",
+      "expires_at": "2026-10-21T03:18:58Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11458872447,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1ODg3MjQ0Nw==",
+      "name": "backend-shard-0-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 206869,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458872447",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458872447/zip",
+      "expired": false,
+      "digest": "sha256:378a9ffac91e3a155f27ff5d29422fbbf87a6bcb244af79cbc0f89781757375c",
+      "created_at": "2026-10-07T03:26:42Z",
+      "updated_at": "2026-10-07T03:26:42Z",
+      "expires_at": "2026-10-21T03:26:41Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11458564239,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1ODU2NDIzOQ==",
+      "name": "guard-executed-contracts-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 2673,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458564239",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458564239/zip",
+      "expired": false,
+      "digest": "sha256:b080ee972dbe95bd648d8954210185398fb120759fc7ede54529cb781ff4a164",
+      "created_at": "2026-10-07T03:15:35Z",
+      "updated_at": "2026-10-07T03:15:35Z",
+      "expires_at": "2026-10-21T03:15:34Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11458449719,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1ODQ0OTcxOQ==",
+      "name": "printer-windows-contracts-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 1188,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458449719",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458449719/zip",
+      "expired": false,
+      "digest": "sha256:1b81c1bcbccf6c1ff2a0bcf57b45a23b88ff8283793b44cdeb14e7ef2b811b96",
+      "created_at": "2026-10-07T03:15:14Z",
+      "updated_at": "2026-10-07T03:15:14Z",
+      "expires_at": "2026-10-21T03:15:13Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    },
+    {
+      "id": 11458234741,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ1ODIzNDc0MQ==",
+      "name": "process-proof-64aef1d0b2316c3d97904c6b507c5df33fcaf463-37565846080-1",
+      "size_in_bytes": 272834,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458234741",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11458234741/zip",
+      "expired": false,
+      "digest": "sha256:49311c735288a1495507d900e82d9aacfab2e473f16c8848bb6354d48c086eda",
+      "created_at": "2026-10-07T03:27:36Z",
+      "updated_at": "2026-10-07T03:27:36Z",
+      "expires_at": "2026-11-06T03:27:36Z",
+      "workflow_run": {
+        "id": 37565846080,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/priority-five-release-20261006",
+        "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b"
+      }
+    }
+  ]
+}

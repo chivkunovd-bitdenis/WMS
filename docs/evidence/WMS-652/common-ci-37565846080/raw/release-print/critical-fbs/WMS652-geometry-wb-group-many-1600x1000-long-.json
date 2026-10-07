@@ -1,0 +1,576 @@
+{
+  "measurements": {
+    "viewport": {
+      "width": 1600,
+      "height": 1000
+    },
+    "rows": [
+      {
+        "id": "wb-a-order",
+        "text": "Футболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nWB-A · 4606660000001 · заказ 666001\nРазмер\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\n666001 0001\n\nЧЗ\n\nТЗ\nQR",
+        "bounds": {
+          "x": 71,
+          "y": 293.796875,
+          "width": 1443,
+          "height": 109.953125,
+          "right": 1514,
+          "bottom": 403.75
+        },
+        "columns": {
+          "size": {
+            "x": 723,
+            "y": 303.796875,
+            "width": 76,
+            "height": 81.046875,
+            "right": 799,
+            "bottom": 384.84375
+          },
+          "marking": {
+            "x": 811,
+            "y": 326.3125,
+            "width": 118,
+            "height": 44.921875,
+            "right": 929,
+            "bottom": 371.234375
+          },
+          "sticker": {
+            "x": 941,
+            "y": 328.828125,
+            "width": 150,
+            "height": 39.890625,
+            "right": 1091,
+            "bottom": 368.71875
+          },
+          "cis": {
+            "x": 1103,
+            "y": 328.234375,
+            "width": 150,
+            "height": 41.0625,
+            "right": 1253,
+            "bottom": 369.296875
+          },
+          "actions": {
+            "x": 1293,
+            "y": 331.96875,
+            "width": 205,
+            "height": 33.59375,
+            "right": 1498,
+            "bottom": 365.5625
+          }
+        },
+        "sizeCells": [
+          {
+            "text": "Размер44/46/48/50/52/54",
+            "bounds": {
+              "x": 723,
+              "y": 303.796875,
+              "width": 76,
+              "height": 81.046875,
+              "right": 799,
+              "bottom": 384.84375
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          }
+        ],
+        "names": [
+          {
+            "text": "Футболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемWB-A · 4606660000001 · заказ 666001",
+            "bounds": {
+              "x": 200,
+              "y": 303.796875,
+              "width": 515,
+              "height": 89.953125,
+              "right": 715,
+              "bottom": 393.75
+            },
+            "scrollWidth": 515,
+            "clientWidth": 515
+          }
+        ],
+        "buttons": [
+          {
+            "text": "ТЗ",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1293,
+              "y": 331.96875,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1357,
+              "bottom": 365.5625
+            }
+          },
+          {
+            "text": "QR",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1361,
+              "y": 331.96875,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1425,
+              "bottom": 365.5625
+            }
+          },
+          {
+            "text": "",
+            "aria": "Печать ЧЗ и ШК",
+            "disabled": false,
+            "bounds": {
+              "x": 1429,
+              "y": 332.515625,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1461.5,
+              "bottom": 365.015625
+            }
+          },
+          {
+            "text": "",
+            "aria": "Перепечатать",
+            "disabled": false,
+            "bounds": {
+              "x": 1465.5,
+              "y": 332.515625,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1498,
+              "bottom": 365.015625
+            }
+          }
+        ]
+      },
+      {
+        "id": "wb-b-order",
+        "text": "Футболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nWB-A · 4606660000001 · заказ 666001\nРазмер\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\n666001 0001\n\nЧЗ\n\nТЗ\nQR",
+        "bounds": {
+          "x": 71,
+          "y": 403.75,
+          "width": 1443,
+          "height": 109.953125,
+          "right": 1514,
+          "bottom": 513.703125
+        },
+        "columns": {
+          "size": {
+            "x": 723,
+            "y": 413.75,
+            "width": 76,
+            "height": 81.046875,
+            "right": 799,
+            "bottom": 494.796875
+          },
+          "marking": {
+            "x": 811,
+            "y": 436.265625,
+            "width": 118,
+            "height": 44.921875,
+            "right": 929,
+            "bottom": 481.1875
+          },
+          "sticker": {
+            "x": 941,
+            "y": 438.78125,
+            "width": 150,
+            "height": 39.890625,
+            "right": 1091,
+            "bottom": 478.671875
+          },
+          "cis": {
+            "x": 1103,
+            "y": 438.1875,
+            "width": 150,
+            "height": 41.0625,
+            "right": 1253,
+            "bottom": 479.25
+          },
+          "actions": {
+            "x": 1293,
+            "y": 441.921875,
+            "width": 205,
+            "height": 33.59375,
+            "right": 1498,
+            "bottom": 475.515625
+          }
+        },
+        "sizeCells": [
+          {
+            "text": "Размер44/46/48/50/52/54",
+            "bounds": {
+              "x": 723,
+              "y": 413.75,
+              "width": 76,
+              "height": 81.046875,
+              "right": 799,
+              "bottom": 494.796875
+            },
+            "scrollWidth": 76,
+            "clientWidth": 76
+          }
+        ],
+        "names": [
+          {
+            "text": "Футболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описаниемWB-A · 4606660000001 · заказ 666001",
+            "bounds": {
+              "x": 200,
+              "y": 413.75,
+              "width": 515,
+              "height": 89.953125,
+              "right": 715,
+              "bottom": 503.703125
+            },
+            "scrollWidth": 515,
+            "clientWidth": 515
+          }
+        ],
+        "buttons": [
+          {
+            "text": "ТЗ",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1293,
+              "y": 441.921875,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1357,
+              "bottom": 475.515625
+            }
+          },
+          {
+            "text": "QR",
+            "aria": null,
+            "disabled": false,
+            "bounds": {
+              "x": 1361,
+              "y": 441.921875,
+              "width": 64,
+              "height": 33.59375,
+              "right": 1425,
+              "bottom": 475.515625
+            }
+          },
+          {
+            "text": "",
+            "aria": "Печать ЧЗ и ШК",
+            "disabled": false,
+            "bounds": {
+              "x": 1429,
+              "y": 442.46875,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1461.5,
+              "bottom": 474.96875
+            }
+          },
+          {
+            "text": "",
+            "aria": "Перепечатать",
+            "disabled": false,
+            "bounds": {
+              "x": 1465.5,
+              "y": 442.46875,
+              "width": 32.5,
+              "height": 32.5,
+              "right": 1498,
+              "bottom": 474.96875
+            }
+          }
+        ]
+      }
+    ],
+    "bar": {
+      "x": 71,
+      "y": 225.921875,
+      "width": 1443,
+      "height": 67.875,
+      "right": 1514,
+      "bottom": 293.796875
+    },
+    "controls": [
+      {
+        "text": "​",
+        "bounds": {
+          "x": 87,
+          "y": 237.921875,
+          "width": 581.546875,
+          "height": 42.875,
+          "right": 668.546875,
+          "bottom": 280.796875
+        },
+        "scrollWidth": 582,
+        "clientWidth": 582
+      },
+      {
+        "text": "Печатать QR",
+        "bounds": {
+          "x": 680.546875,
+          "y": 239.109375,
+          "width": 163.765625,
+          "height": 40.5,
+          "right": 844.3125,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 164,
+        "clientWidth": 164
+      },
+      {
+        "text": "Печатать ЧЗ",
+        "bounds": {
+          "x": 856.3125,
+          "y": 239.109375,
+          "width": 160.96875,
+          "height": 40.5,
+          "right": 1017.28125,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 161,
+        "clientWidth": 161
+      },
+      {
+        "text": "Перепечатывать ЧЗ",
+        "bounds": {
+          "x": 1029.28125,
+          "y": 239.109375,
+          "width": 232.21875,
+          "height": 40.5,
+          "right": 1261.5,
+          "bottom": 279.609375
+        },
+        "scrollWidth": 232,
+        "clientWidth": 232
+      },
+      {
+        "text": "Размер этикетки60 × 80 ммРазмер этикетки",
+        "bounds": {
+          "x": 1318,
+          "y": 237.921875,
+          "width": 180,
+          "height": 42.875,
+          "right": 1498,
+          "bottom": 280.796875
+        },
+        "scrollWidth": 180,
+        "clientWidth": 180
+      },
+      {
+        "text": "",
+        "bounds": {
+          "x": 1273.5,
+          "y": 243.109375,
+          "width": 32.5,
+          "height": 32.5,
+          "right": 1306,
+          "bottom": 275.609375
+        },
+        "scrollWidth": 33,
+        "clientWidth": 33
+      }
+    ],
+    "controlOverlap": false,
+    "rowOverlap": false,
+    "bars": 1,
+    "lists": 1,
+    "qr": {
+      "checked": true,
+      "disabled": false
+    },
+    "text": "Заказы FBS\nОбновлено только что\nОбновить\nЗаказы\n0,0\nчаса\n\nсреднее время сборки: от поступления заказа до нажатия «Отгрузить»\n\nвсе продавцы\n\n0\nотгружено заказов\nНеделя\nМесяц\nСвой период\nПродавец\nВсе продавцы\nПродавец\nНовые\nВ работе\nВ доставке\nПросрочены\nЗавершённые\nОтменённые\nСеллер\nВсе селлеры\nСеллер\nМаркетплейс\nВсе\nМаркетплейс\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\nПоставок в работе нет\n\nСоздайте поставку на вкладке «Новые» или обновите список.\n\nСборка · 2 поставки\n\nСинтетический селлер с очень длинным названием для проверки читаемости и принадлежности\n\n2 из 2 подготовлено к отгрузке\nПечать листа подбора\nСостав\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\n\nФутболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nWB-A · 4606660000001 · заказ 666001\nРазмер\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\n666001 0001\n\nЧЗ\n\nТЗ\nQR\n\nФутболка WB — длинное название товара, коллекция осень, комплект повседневной одежды с подробным описанием\n\nWB-A · 4606660000001 · заказ 666001\nРазмер\n\n44/46/48/50/52/54\n\nДоступно ЧЗ\n\n2 · нужно 1\n\nСтикер\n\n666001 0001\n\nЧЗ\n\nТЗ\nQR"
+  },
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-30T03%3A24%3A02.179Z&to=2026-10-07T03%3A24%3A02.179Z",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/workspace",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-b",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=wb-a-product-a&seller_id=wb-a-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/order-print-tape",
+      "body": {
+        "order_ids": [
+          "wb-a-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-a/print-assets",
+      "body": {
+        "kind": "order_sticker",
+        "order_ids": [
+          "wb-a-order"
+        ],
+        "retry_missing": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=wb-b-product-a&seller_id=wb-b-seller",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-b/order-print-tape",
+      "body": {
+        "order_ids": [
+          "wb-b-order"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ]
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/wb-b/print-assets",
+      "body": {
+        "kind": "order_sticker",
+        "order_ids": [
+          "wb-b-order"
+        ],
+        "retry_missing": false
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-a/pick-options",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/wb-b/pick-options",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/products/linked-wb-catalog?seller_id=wb-a-seller",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/products/linked-wb-catalog?seller_id=wb-b-seller",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-a",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/task-wb-b",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

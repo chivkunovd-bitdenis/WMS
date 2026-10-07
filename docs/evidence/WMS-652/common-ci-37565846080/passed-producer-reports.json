@@ -1,0 +1,93 @@
+{
+  "pg-663-retry": {
+    "report": "release-postgres/663-release-retry.xml",
+    "sha256": "36135355e8226387b44e57f01e2af8f8f010b1ead502ab95965c449f5458f318",
+    "executed": 5,
+    "required_passed": 5,
+    "exact": true
+  },
+  "pg-662-f6": {
+    "report": "release-postgres/662-f6.xml",
+    "sha256": "84416a5f234d73214d7244b97ed767564ca44aa95ea35e11b4e46d0fc21c0e46",
+    "executed": 4,
+    "required_passed": 4,
+    "exact": true
+  },
+  "pg-663-669-670-683": {
+    "report": "release-postgres/663-669-670-683.xml",
+    "sha256": "a7a1ec62fd40fe8a272668f09020593fee3545c3ec0b8b837a0566c116884f17",
+    "executed": 6,
+    "required_passed": 6,
+    "exact": true
+  },
+  "pg-662": {
+    "report": "release-postgres/662.xml",
+    "sha256": "75ce8a33da2eac99a65e74e31f9c1f61b3b510c059020ad1b3792b71b99957cd",
+    "executed": 10,
+    "required_passed": 10,
+    "exact": true
+  },
+  "pg-fbs-concurrency": {
+    "report": "release-postgres/fbs-concurrency.xml",
+    "sha256": "5f39c6d3ed32110958d5b32353ca8377ece3dc8578969f802a90035eb9272de2",
+    "executed": 6,
+    "required_passed": 6,
+    "exact": true
+  },
+  "frontend-fbs": {
+    "report": "frontend-all.json",
+    "sha256": "5e4ca1039f3b4343f2be632f4a374c87ef364de293c841a7b569ac053f55a2ec",
+    "executed": 1566,
+    "required_passed": 204,
+    "exact": false
+  },
+  "native-linux": {
+    "report": "native-print.xml",
+    "sha256": "09b5a5e053a0342545dd7e10d30ac350ac889062a76d7f975cd8150d84a6dc96",
+    "executed": 30,
+    "required_passed": 30,
+    "exact": true
+  },
+  "native-windows": {
+    "report": "native-print-windows.xml",
+    "sha256": "126b5f540fa32f789bd44a8dfc99d787af0317389b8b103a245ad50861ff7000",
+    "executed": 29,
+    "required_passed": 29,
+    "exact": true
+  },
+  "pg-675": {
+    "report": "release-postgres/675.xml",
+    "sha256": "f23c6da621788c8d1daeccc416ad699ac7209f5d4740b45b5a1cf6c86e594589",
+    "executed": 1,
+    "required_passed": 1,
+    "exact": true
+  },
+  "pg-517-withdrawal": {
+    "report": "release-postgres/517-withdrawal.xml",
+    "sha256": "f45876d56df1762859e20b5e4d30fc09e607c55886766d3fdee86220a9ea873f",
+    "executed": 5,
+    "required_passed": 5,
+    "exact": true
+  },
+  "ci-shards": {
+    "report": "ci-shards.xml",
+    "sha256": "266fc95547aa1d41f9bc09752c3fdd34681d727774bfbabec6f035abe8265fb0",
+    "executed": 20,
+    "required_passed": 20,
+    "exact": true
+  },
+  "product-scope": {
+    "report": "product-scope.xml",
+    "sha256": "3d9b15d18e7207029515f354ddb416f5b799cacf944e5c77ccacac105ffe2f91",
+    "executed": 51,
+    "required_passed": 51,
+    "exact": true
+  },
+  "mac-517-helper": {
+    "report": "wms517-mac.tap",
+    "sha256": "d2ba646a20e871932f6747964a12652ccebe7acd642d1dd2b2742f607ca5012c",
+    "executed": 110,
+    "required_passed": 110,
+    "exact": true
+  }
+}

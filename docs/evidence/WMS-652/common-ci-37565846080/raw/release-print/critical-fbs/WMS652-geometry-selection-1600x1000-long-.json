@@ -1,0 +1,83 @@
+{
+  "measurements": {
+    "controls": [
+      {
+        "text": "Выбрано заказов: 2\nСледующий шаг — серверная проверка селлера, складов и состава.",
+        "bounds": {
+          "x": 329,
+          "right": 450.953125,
+          "y": 921.875,
+          "bottom": 969
+        }
+      },
+      {
+        "text": "Показать выбранные",
+        "bounds": {
+          "x": 466.953125,
+          "right": 676.421875,
+          "y": 925.65625,
+          "bottom": 965.21875
+        }
+      },
+      {
+        "text": "Снять выбор",
+        "bounds": {
+          "x": 692.421875,
+          "right": 822.859375,
+          "y": 925.65625,
+          "bottom": 965.21875
+        }
+      },
+      {
+        "text": "Добавить в существующую поставку",
+        "bounds": {
+          "x": 838.859375,
+          "right": 1246.171875,
+          "y": 922.671875,
+          "bottom": 968.203125
+        }
+      },
+      {
+        "text": "Сформировать поставку",
+        "bounds": {
+          "x": 1262.171875,
+          "right": 1544,
+          "y": 922.671875,
+          "bottom": 968.203125
+        }
+      }
+    ]
+  },
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null
+    },
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-09-30T03%3A24%3A29.232Z&to=2026-10-07T03%3A24%3A29.232Z",
+      "body": null
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/preflight",
+      "body": {
+        "order_ids": [
+          "order-a2",
+          "order-a"
+        ],
+        "planned_delivery_type": "warehouse_sc"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&seller_id=seller-a&status_group=active",
+      "body": null
+    }
+  ],
+  "printLog": [],
+  "trace": [],
+  "blocked": [],
+  "errors": []
+}

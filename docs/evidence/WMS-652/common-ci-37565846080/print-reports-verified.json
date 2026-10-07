@@ -1,0 +1,42 @@
+{
+  "print-672": {
+    "required": 11,
+    "actual": 11,
+    "report": "print/672.tap"
+  },
+  "print-672-remaining": {
+    "required": 6,
+    "actual": 6,
+    "report": "print/672-remaining.tap"
+  },
+  "print-673": {
+    "required": 5,
+    "actual": 5,
+    "report": "print/673.json"
+  },
+  "real-fbs-browser": {
+    "required": 43,
+    "actual": 43,
+    "report": "print/critical-fbs/result.json"
+  },
+  "print-672-native-errors": {
+    "required": 7,
+    "actual": 7,
+    "report": "print/672-native-errors.tap"
+  },
+  "print-672-peer-drain": {
+    "required": 2,
+    "actual": 2,
+    "report": "print/672-peer-drain.tap"
+  },
+  "print-672-raster-resource": {
+    "required": 3,
+    "actual": 3,
+    "report": "print/672-raster-resource.tap"
+  },
+  "fbs-cdp-cancellation": {
+    "required": 7,
+    "actual": 7,
+    "report": "print/wms652-cdp-cancellation.tap"
+  }
+}

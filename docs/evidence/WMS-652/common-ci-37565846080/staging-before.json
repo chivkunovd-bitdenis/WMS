@@ -1,0 +1,33 @@
+{
+  "observed_at": "2026-10-07T03:26:50.282194+00:00",
+  "services": [
+    {
+      "service": "WMS",
+      "id": "beeff1c5-a84d-4f17-9e5a-8bf906c98c5e",
+      "status": "SUCCESS",
+      "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+      "branch": "staging"
+    },
+    {
+      "service": "web",
+      "id": "0a8352dd-f44a-42ec-8624-756a84323535",
+      "status": "SUCCESS",
+      "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+      "branch": "staging"
+    },
+    {
+      "service": "wms-beat",
+      "id": "dfde1be2-e17d-4950-aeef-c39b5d6b69bb",
+      "status": "SUCCESS",
+      "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+      "branch": "staging"
+    },
+    {
+      "service": "wms-worker",
+      "id": "29de2696-fa74-4ee7-8750-8f381d3d055f",
+      "status": "SUCCESS",
+      "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+      "branch": "staging"
+    }
+  ]
+}

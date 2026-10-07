@@ -1,0 +1,598 @@
+[
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@vite/client"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html?html-proxy&index=0.js"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@react-refresh"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/vite/dist/client/env.mjs"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react.js?v=a317ceba"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom_client.js?v=a317ceba"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/FfInboundRequestView.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react_jsx-dev-runtime.js?v=a317ceba"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/renderBarcodeDataUrl.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printBarcodeLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/labelSize.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/chunk-BoAXSpZd.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/jsbarcode.js?v=89660a03"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundDraftPersistence.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundDraftMarketplace.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/confirmDiscardChanges.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/hooks/useBarcodeScanner.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_ErrorOutlineOutlined.js?v=2744e7d2"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundMarkingCodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/useInboundMarkingCodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_EditOutlined.js?v=a49bf437"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_CloseOutlined.js?v=96010df0"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_ExpandMoreOutlined.js?v=188bb158"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_PrintOutlined.js?v=7fb7dc4b"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_DownloadOutlined.js?v=55873aeb"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_StraightenOutlined.js?v=89482bf7"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_material.js?v=7b07488d"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_material_styles.js?v=75c87239"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/api.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/FfProductMarkingPrintProvider.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/KizReprintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductBarcodePrintButton.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductPhotoThumb.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WbProductPickerDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WmsDateField.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/OzonReturnDocumentUi.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ozonReturnPickerHelpers.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/index.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/types/wbProductCatalog.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productBarcodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/BoxLabelPrintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printInboundReceivingSheet.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/readApiErrorMessage.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/inboundOperationType.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/FfInboundBoxAddDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/FfSortingObjectsPage.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundScanLookup.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/BoxImportDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundReceivingHelpers.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/suggestNextLocationCode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/resolveProductByBarcode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/randomId.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/documentDisplay.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/useOzonReturnWorkflow.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundReceivingRuntime.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-dom.js?v=a317ceba"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react_jsx-runtime.js?v=a317ceba"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/createSvgIcon-0nXf5NP8.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/styled-DWcxSF1x.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/styles-DNfM__Kl.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/useFfProductMarkingPrint.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/kizReprintApi.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/kizReprintPrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printMarkingCodeLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/dayjs.js?v=8f0575ab"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_x-date-pickers_DatePicker.js?v=957db51e"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/OzonReturnPickerDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_Person.js?v=4f1eb874"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/errors/ErrorBoundary.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/FfProductLineCells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductBarcodeCell.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/StatusChip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/MarketplaceChip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/Actions.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/DataTable.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/States.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/Cells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/FilterBar.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/PercentSlider.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/PeriodPicker.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/ReportMetricStrip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/MovementFlowChart.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/ScannerLine.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/FormFields.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/AppDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/LabelSizeSelect.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productLabelText.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/scanFeedback.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/boxFillDialogLayout.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/react-router-dom.js?v=f1359e84"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/pendingPlacement.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/pendingScan.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/sortingScan.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/scanResult.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/objectsStub.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/sortingUndo.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/DefaultPropsProvider-DsPLvr3h.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/useMediaQuery-ChxqrE1-.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/Typography-D4mAOJ9j.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/plural.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_CloudUploadOutlined.js?v=7b49da52"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printOzonReturnReconciliation.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productBarcodePrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/useMarkingCodePrint.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/markingPrintPresets.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/parseGs1Cis.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printProductThermalLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/extends-Daicd7Hx.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WmsBrandMark.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/errorRecovery.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/clientErrorReport.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_material_Typography.js?v=971fd2a8"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/objectWithoutPropertiesLoose-DwrrYcIJ.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/warning-D2VFiL9f.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/LocalizationProvider-BzlvQQyK.js?v=7a7b0928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_ExpandMore.js?v=ea9254bd"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/v2/fbsUx.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_UndoOutlined.js?v=8df64432"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapToolbar.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/ObjectsTree.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/PlacedByCells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/objectsRows.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/MarkingPrintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_AddOutlined.js?v=c7dd062c"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapRows.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/formatLocationCode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapWarehouseSwitch.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_ArrowUpwardOutlined.js?v=82ae392b"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_RemoveOutlined.js?v=456e6cf6"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_DragIndicator.js?v=ba8d7668"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_Inventory2Outlined.js?v=9ba4f928"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_LayersOutlined.js?v=9503c4ed"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/.vite-wms672/deps/@mui_icons-material_WidgetsOutlined.js?v=8a2b71db"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/PrintQuantityField.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printTemplate.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/separateMarkingPrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/MarkingLabelPreview.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapTypes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/marking-codes"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/marking-codes"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/products/linked-wb-catalog?seller_id=672-seller"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/warehouses/672-warehouse/locations?exclude_sorting_zone=true"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/warehouses"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-1/mark-label-printed"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document"
+  }
+]

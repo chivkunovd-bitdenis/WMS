@@ -1,0 +1,18 @@
+{
+  "tests": 4643,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 198,
+  "success": true,
+  "required_suites": 22,
+  "required_cases": 1192,
+  "execution": {
+    "version": 1,
+    "sha": "64aef1d0b2316c3d97904c6b507c5df33fcaf463",
+    "head_sha": "1e14876e35f0f7202a4e3875082e95201af56b5b",
+    "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "run_id": 37565846080,
+    "run_attempt": 1,
+    "policy_sha256": "58a95dc526e15dff10999925d33f8ed935c2100b6231f0bfb70ab2b7985ed6e8"
+  }
+}
