@@ -1,0 +1,10 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend
+
+·····································
+
+ Test Files  1 passed (1)
+      Tests  37 passed (37)
+   Start at  01:59:47
+   Duration  697ms (transform 63ms, setup 0ms, collect 462ms, tests 115ms, environment 0ms, prepare 39ms)
+
