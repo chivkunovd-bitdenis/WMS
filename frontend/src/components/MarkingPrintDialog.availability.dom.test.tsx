@@ -148,6 +148,7 @@ describe('WMS-611 FBS print availability', () => {
     expect(close).toHaveBeenCalledTimes(1)
   })
   it('keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch', async () => {
+    vi.mocked(printTapeSections).mockClear()
     const ctx = context()
     const completed = vi.fn()
     const onPrinted = vi.fn()
