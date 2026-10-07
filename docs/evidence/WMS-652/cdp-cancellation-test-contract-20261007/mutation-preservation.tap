@@ -1,0 +1,60 @@
+TAP version 13
+# Subtest: CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+not ok 1 - CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+  ---
+  duration_ms: 3.714583
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:130:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    unproven/other transport failures stay rejected
+    + actual - expected
+    
+    + 'resolved'
+    - 'rejected'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'rejected'
+  actual: 'resolved'
+  operator: 'strictEqual'
+  stack: |-
+    strictFailure (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:96:10)
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:158:12)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+not ok 2 - CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+  ---
+  duration_ms: 1.364292
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:167:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    navigation alone does not retire a live interception
+    + actual - expected
+    
+    + '{"retired":true,"nativeResult":{"responseObserved":"native-command-result","marker":652}}'
+    - '{"responseObserved":"native-command-result","marker":652}'
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: '{"responseObserved":"native-command-result","marker":652}'
+  actual: '{"retired":true,"nativeResult":{"responseObserved":"native-command-result","marker":652}}'
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:172:10)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+1..2
+# tests 2
+# suites 0
+# pass 0
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 183.665667

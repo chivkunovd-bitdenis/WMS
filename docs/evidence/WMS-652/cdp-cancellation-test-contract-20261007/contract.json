@@ -1,0 +1,83 @@
+{
+  "task": "WMS-652",
+  "role": "same separate technical testwriter",
+  "base": "b8bd39d95142875f6db232c3ce4b89192a779210",
+  "rules_origin_etalon": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "case_ids": [
+    "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+    "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+    "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+    "CDP4 native fulfillment success after navigation preserves the exact valid response and one command"
+  ],
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+  "format": "node-tap",
+  "planned_report": "print/wms652-cdp-cancellation.tap",
+  "source_closure": [
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+    "frontend/tests-e2e/wms652-critical/browser.mjs",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "closure_sha256": {
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "actual_operation": "AST extraction/evaluation of verbatim CDP class and inert top-level function declarations from browser.mjs.",
+  "controlled_boundary": "WebSocket protocol ingress/replies and manual expiry of the actual command timer; no Chrome/top-level fixture execution.",
+  "observable_disposition": "retired:true on returned result OR rejected typed error; native -32602/Invalid InterceptionId diagnostic remains available. No receipt/accepted/submitted result.",
+  "positive_preconditions": [
+    "Exact observed Fetch.requestPaused requestId with networkId mapping.",
+    "Matching Network.loadingFailed canceled:true and net::ERR_ABORTED.",
+    "No earlier successful response for that token.",
+    "Exact Fetch.fulfillRequest native -32602 Invalid InterceptionId refusal."
+  ],
+  "negative_matrix": [
+    "never observed FetchID",
+    "missing network mapping",
+    "different network cancellation",
+    "navigation and context clear alone",
+    "canceled false even ERR_ABORTED",
+    "different canceled failure text",
+    "deliberate ConnectionClosed lost acknowledgment",
+    "successful completed token cannot retire a duplicate",
+    "matching abort with other error code",
+    "matching abort with other error message",
+    "matching abort for a different terminal method",
+    "matching abort does not explain timeout"
+  ],
+  "before": {
+    "total": 4,
+    "pass": 2,
+    "fail": 2,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP1",
+      "CDP2"
+    ],
+    "green": [
+      "CDP3",
+      "CDP4"
+    ],
+    "raw": "before.tap"
+  },
+  "green_preservation_proof": {
+    "copy_only": true,
+    "raw": "mutation-preservation.tap",
+    "pass": 0,
+    "fail": 2,
+    "skipped": 0,
+    "red": [
+      "CDP3",
+      "CDP4"
+    ],
+    "mutation_result": "mutation-result.json"
+  },
+  "limits": [
+    "No browser/business43/C5/old7+2+3/scope51/fullCI rerun.",
+    "No business assertions, product, original transport, workflow, policy, requirements or secrets changed.",
+    "No independent review, acceptance, implementation or SOURCE approval; developer must wait for this published frozen contract."
+  ]
+}
