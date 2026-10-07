@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+    ".github/workflows/ci.yml": "c21e5fa87d961ffea9e502fd74310386e63b52da15ebce5376dd04bfced7737a",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -161,6 +161,7 @@
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
     "frontend/src/utils/printBarcodeLabel.ts": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
     "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
@@ -180,6 +181,7 @@
     "frontend/tests-e2e/wms672-harness.tsx": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
     "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
     "frontend/tests-e2e/wms672-peer-drain.test.mjs": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
     "frontend/tests-e2e/wms672-remaining.test.mjs": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
     "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
     "frontend/vite.config.ts": "edce832d16a60020d4ee3c99214f80ee83297aa5e6a7945d8b74331a3c91f560",
@@ -228,8 +230,7 @@
     "scripts/ops/tests/wms517-replay-historical-mac-tests.cjs": "db4540b2397222137c7c4576e344d21bb3872962c1688a9dedfa3cb58bebd39f",
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
-    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79"
+    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747"
   },
   "suites": {
     "backend-fbs": {
@@ -1550,6 +1551,18 @@
         "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
         "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
         "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
+      ]
+    },
+    "fbs-cdp-cancellation": {
+      "report": "print/wms652-cdp-cancellation.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+        "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+        "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+        "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+        "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry"
       ]
     }
   }
