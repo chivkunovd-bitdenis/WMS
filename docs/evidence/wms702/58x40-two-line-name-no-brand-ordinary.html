@@ -1,0 +1,129 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Этикетка товара</title>
+    <style>
+  @page { size: 58mm 40mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 58mm;
+    height: 40mm;
+    padding: 1.2mm 1.8mm 0.8mm;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.45mm;
+  }
+  .barcode-wrap img {
+    width: 52mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 12mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.3mm 0 0;
+    font-size: 9pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    --product-label-body-scale: 1;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.39mm;
+    line-height: 1.22;
+    font-size: calc(7.6pt * var(--product-label-body-scale));
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 calc(0.2mm * var(--product-label-body-scale));
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: calc(7.6pt * var(--product-label-body-scale));
+    line-height: 1.22;
+    
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: calc(7.8pt * var(--product-label-body-scale));
+    font-weight: 400;
+    line-height: 1.22;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.22;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.35mm 0 0;
+    font-size: 7.2pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAP4AAAA0CAYAAACq5YWDAAACwklEQVR4AeyTC2rrMBBFTZeQ/a8xW3iPlJ5Sbqy6DpGRRidgLvOR7DmT+/HPnwQksByBj82fBCSwHAGNv9zKHVgC26bx/RdIYEECT8a/3W7b1/OpMCFHjJJPpY7+tU4/mueIX63nOeJU3tPS7Cem/yhu9WWee1DqaOaJ0ezLfKve6st+YpRzqVknTuUc+YzJp7b6yKN5jjjrxGj2kUepo638UZ1zqZxLpY98xpmn/mR8CqoEJFCXgMavu1snk0CTgMZvorEggboEXjV+XSJOJoEFCGj8BZbsiBJIAho/iRhLYAECGn+BJTuiBJJAD+PnO4wlIIHBCGj8wRbi50jgCgIa/wrKvkMCgxHQ+IMtxM+RwBUErjb+FTP5DglI4ICAxj8AZFkCFQlo/IpbdSYJHBDQ+AeALEugIoGRjF+RrzNJYEgCGn/ItfhREuhLQOP35evtEhiSgMYfci1+lAT6EpjF+H0peLsEFiOg8RdbuONK4EFA4z8o+EhgMQIaf7GFO64EHgQqGP8xh48EJHCCgMY/ActWCVQhoPGrbNI5JHCCgMY/ActWCVQhUN34VfbkHBJ4KwGN/1acXiaBOQho/Dn25FdK4K0ENP5bcXqZBOYgsLLx59iQXymBDgQ0fgeoXimB0Qlo/NE35PdJoAMBjd8BqldKYHQCGn9/Q2YlUJqAxi+9XoeTwD4Bjb/PxawEShPQ+KXX63AS2Ceg8fe5/Ja1JoHpCWj86VfoABI4T0Djn2fmCQlMT0DjT79CB5DAeQJPxr/f79vPhyvJEaPkU6mjf63Tj+Y54lfreY44lfe0NPu/4m92RzH3Zl/mqaPU0cwTo9mX+Va91Zf9xCjnUrNOnMo58hmTT231kUfzHHHWidHsI49SR1v5ozrnUjmXSh/5jDNP/cn4FFQJSKAuAY1fd7dOJoEmAY3fRGNBAnUJ/AcAAP//0uIcDQAAAAZJREFUAwD1Y4y8GKrQYgAAAABJRU5ErkJggg==" alt="barcode" />
+    <p class="digits">2057623103586</p>
+  </div>
+  <div class="body" style="--product-label-body-scale: 0.771">
+    <p class="seller" title="ИП Савкина В.А.">ИП Савкина В.А.</p><p class="name" title="Кардиган классический женский шерстяной с пуговицами и длинными рукавами">Кардиган классический женский шерстяной с пуговицами и длинными р…</p><p class="meta">Артикул: 1755834805</p><p class="meta">Размер: S (42-44)</p><p class="meta">Цвет: Коричневый</p><p class="meta meta-composition">Состав: Вискоза — 50%, полиэстер — 30%, нейлон — 20%</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section><section class="label" data-testid="product-thermal-label">
+  <div class="barcode-wrap">
+    <img id="barcode" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAP4AAAA0CAYAAACq5YWDAAACwklEQVR4AeyTC2rrMBBFTZeQ/a8xW3iPlJ5Sbqy6DpGRRidgLvOR7DmT+/HPnwQksByBj82fBCSwHAGNv9zKHVgC26bx/RdIYEECT8a/3W7b1/OpMCFHjJJPpY7+tU4/mueIX63nOeJU3tPS7Cem/yhu9WWee1DqaOaJ0ezLfKve6st+YpRzqVknTuUc+YzJp7b6yKN5jjjrxGj2kUepo638UZ1zqZxLpY98xpmn/mR8CqoEJFCXgMavu1snk0CTgMZvorEggboEXjV+XSJOJoEFCGj8BZbsiBJIAho/iRhLYAECGn+BJTuiBJJAD+PnO4wlIIHBCGj8wRbi50jgCgIa/wrKvkMCgxHQ+IMtxM+RwBUErjb+FTP5DglI4ICAxj8AZFkCFQlo/IpbdSYJHBDQ+AeALEugIoGRjF+RrzNJYEgCGn/ItfhREuhLQOP35evtEhiSgMYfci1+lAT6EpjF+H0peLsEFiOg8RdbuONK4EFA4z8o+EhgMQIaf7GFO64EHgQqGP8xh48EJHCCgMY/ActWCVQhoPGrbNI5JHCCgMY/ActWCVQhUN34VfbkHBJ4KwGN/1acXiaBOQho/Dn25FdK4K0ENP5bcXqZBOYgsLLx59iQXymBDgQ0fgeoXimB0Qlo/NE35PdJoAMBjd8BqldKYHQCGn9/Q2YlUJqAxi+9XoeTwD4Bjb/PxawEShPQ+KXX63AS2Ceg8fe5/Ja1JoHpCWj86VfoABI4T0Djn2fmCQlMT0DjT79CB5DAeQJPxr/f79vPhyvJEaPkU6mjf63Tj+Y54lfreY44lfe0NPu/4m92RzH3Zl/mqaPU0cwTo9mX+Va91Zf9xCjnUrNOnMo58hmTT231kUfzHHHWidHsI49SR1v5ozrnUjmXSh/5jDNP/cn4FFQJSKAuAY1fd7dOJoEmAY3fRGNBAnUJ/AcAAP//0uIcDQAAAAZJREFUAwD1Y4y8GKrQYgAAAABJRU5ErkJggg==" alt="barcode" />
+    <p class="digits">2057623103586</p>
+  </div>
+  <div class="body" style="--product-label-body-scale: 0.771">
+    <p class="seller" title="ИП Савкина В.А.">ИП Савкина В.А.</p><p class="name" title="Кардиган классический женский шерстяной с пуговицами и длинными рукавами">Кардиган классический женский шерстяной с пуговицами и длинными р…</p><p class="meta">Артикул: 1755834805</p><p class="meta">Размер: S (42-44)</p><p class="meta">Цвет: Коричневый</p><p class="meta meta-composition">Состав: Вискоза — 50%, полиэстер — 30%, нейлон — 20%</p>
+  </div>
+  <p class="footer">Пожалуйста оставьте отзыв</p>
+</section></body>
+</html>
