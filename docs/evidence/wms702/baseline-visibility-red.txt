@@ -29,4 +29,3 @@ AssertionError: 58x40/seven-fields/ordinary: Бренд: ASVOYA must fit inside 
     150|             expect(row.font, `${context}: readable compact text`).toBe…
 
 ⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
-
