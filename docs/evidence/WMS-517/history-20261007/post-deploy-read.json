@@ -1,0 +1,14 @@
+{
+  "deployed_sha": "d686e19678f7714f4d552ce281453327efbf3ade",
+  "seller": "ИП Горячкина Т.И. / AVpack",
+  "registry_total": 106,
+  "registry_rows": 106,
+  "statuses": {
+    "not_withdrawn": 106
+  },
+  "operations": 0,
+  "documents": 0,
+  "public_health": "ok",
+  "seller_route_http": 200,
+  "verification": "Actual installed registry function after service restart; live WB GET, no withdrawal mutations"
+}
