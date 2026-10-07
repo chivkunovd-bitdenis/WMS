@@ -1,0 +1,21 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+stderr | src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 preexisting controls (must PASS without product edits) > C9 single: popup exists before delayed pick-options finish; twelve headers arrive after preparation
+React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx (21 tests | 19 skipped) 491ms
+   ✓ WMS-673 preexisting controls (must PASS without product edits) > C9 single: popup exists before delayed pick-options finish; twelve headers arrive after preparation  345ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed | 19 skipped (21)
+   Start at  23:45:35
+   Duration  104.43s (transform 748ms, setup 0ms, collect 103.17s, tests 491ms, environment 436ms, prepare 51ms)
+
