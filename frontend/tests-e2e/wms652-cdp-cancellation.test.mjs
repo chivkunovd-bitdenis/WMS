@@ -190,3 +190,40 @@ test('CDP5 proven canceled retirement is consumed once; the same token duplicate
   assert.ok(f.errors[0].includes('-32602'));
   assert.ok(f.errors[0].includes('Invalid InterceptionId.'));
 });
+
+async function inFlightAmbiguousOwner(context, observedFetchId) {
+  const f = fixture(); f.paused(); f.cancel();
+  const pending = f.cdp.send('Fetch.fulfillRequest', {
+    requestId: fetchId, responseCode: 200, body: 'e30=',
+  }).then(value => ({kind: 'resolved', value}), value => ({kind: 'rejected', value}));
+  await flush();
+  assert.equal(f.commands.length, 1, 'the original command is already on the native wire');
+  const command = f.commands[0];
+  assert.equal(command.method, 'Fetch.fulfillRequest');
+  assert.equal(command.params.requestId, fetchId);
+  f.emit('Fetch.requestPaused', {
+    requestId: observedFetchId, networkId, frameId: 'frame-observed', resourceType: 'Fetch',
+    request: {url: 'http://synthetic.invalid/held', method: 'GET'},
+  });
+  f.cdp.ws.onmessage({data: JSON.stringify({id: command.id, error: nativeError})});
+  const outcome = await pending;
+  await flush();
+  context.diagnostic(JSON.stringify({observedFetchId, kind: outcome.kind,
+    retired: outcome.value?.retired, nativeDiagnostic: diagnostic(outcome.value),
+    commands: f.commands.length}));
+  assert.equal(f.commands.length, 1, 'ambiguous ownership cannot trigger a retry');
+  assert.ok(diagnostic(outcome.value).includes('-32602'), 'original native code is retained');
+  assert.ok(diagnostic(outcome.value).includes('Invalid InterceptionId.'), 'original native message is retained');
+  assert.notEqual(outcome.value?.accepted, true);
+  assert.notEqual(outcome.value?.submitted, true);
+  assert.equal(outcome.value?.receipt, undefined);
+  strictFailure(outcome);
+}
+
+test('CDP6 reused observed FetchID after native send and before error reply remains a strict failure', async context => {
+  await inFlightAmbiguousOwner(context, fetchId);
+});
+
+test('CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure', async context => {
+  await inFlightAmbiguousOwner(context, 'another-observed-interception');
+});
