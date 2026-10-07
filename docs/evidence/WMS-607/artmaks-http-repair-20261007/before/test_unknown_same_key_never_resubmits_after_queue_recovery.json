@@ -1,0 +1,166 @@
+{
+  "case": "__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery",
+  "provenance": {
+    "source_sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+    "transformed_source_sha256": "208cccc54a325e771b169eeea1dedbabf61779be5e0eb271db6a410df7451a33",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "physicalConfirmationSupported": false,
+        "historyUrl": "http://127.0.0.1:52304",
+        "protocolVersion": 2,
+        "app": "WMS Print Direct"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "reprints": [],
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "updatedAt": "2026-10-07T03:32:49Z",
+        "queueObservation": {},
+        "legacy": false,
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "idempotencyKey": "unknown-scan",
+        "observations": [
+          "2026-10-07T03:32:49Z saved",
+          "2026-10-07T03:32:49Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:49Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "paperStatus": "unconfirmed",
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52304",
+        "widthMm": 58,
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "status": "unknown",
+        "imageAvailable": true,
+        "heightMm": 40,
+        "createdAt": "2026-10-07T03:32:49Z"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "reprints": [],
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "updatedAt": "2026-10-07T03:32:49Z",
+        "queueObservation": {},
+        "legacy": false,
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "idempotencyKey": "unknown-scan",
+        "observations": [
+          "2026-10-07T03:32:49Z saved",
+          "2026-10-07T03:32:49Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:49Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "paperStatus": "unconfirmed",
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52304",
+        "widthMm": 58,
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "status": "unknown",
+        "imageAvailable": true,
+        "heightMm": 40,
+        "createdAt": "2026-10-07T03:32:49Z"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "queueObservation": {},
+        "updatedAt": "2026-10-07T03:32:49Z",
+        "createdAt": "2026-10-07T03:32:49Z",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "imageAvailable": true,
+        "legacy": false,
+        "paperStatus": "unconfirmed",
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52304",
+        "status": "unknown",
+        "widthMm": 58,
+        "heightMm": 40,
+        "observations": [
+          "2026-10-07T03:32:49Z saved",
+          "2026-10-07T03:32:49Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:49Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "idempotencyKey": "unknown-scan",
+        "reprints": []
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/662993751d85b5dec6cd6d890495fbc9d50e6a6d55d1da99bda350f489e86314.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "queue": "Label_Printer",
+      "widthMm": 58,
+      "createdAt": "2026-10-07T03:32:49Z",
+      "context": {},
+      "observations": [
+        "2026-10-07T03:32:49Z saved",
+        "2026-10-07T03:32:49Z submitting: Начата передача в системную очередь",
+        "2026-10-07T03:32:49Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      ],
+      "updatedAt": "2026-10-07T03:32:49Z",
+      "legacy": false,
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "heightMm": 40,
+      "idempotencyKey": "unknown-scan",
+      "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "queueObservation": {},
+      "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+      "status": "unknown"
+    }
+  ]
+}

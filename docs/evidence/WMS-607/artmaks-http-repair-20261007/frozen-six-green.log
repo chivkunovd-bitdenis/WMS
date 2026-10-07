@@ -1,0 +1,11 @@
+test_default_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_default_timeout_is_distinct_and_retryable) ... ok
+test_installed_size_aware_receipt_replays_after_upgrade_and_restart (test_macos_artmaks_contract.ArtMaksMacContract.test_installed_size_aware_receipt_replays_after_upgrade_and_restart) ... ok
+test_new_label_passes_58x40_to_actual_lp (test_macos_artmaks_contract.ArtMaksMacContract.test_new_label_passes_58x40_to_actual_lp) ... ok
+test_printer_list_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_printer_list_timeout_is_distinct_and_retryable) ... ok
+test_queue_validation_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_queue_validation_timeout_is_distinct_and_retryable) ... ok
+test_same_png_with_changed_size_is_rejected (test_macos_artmaks_contract.ArtMaksMacContract.test_same_png_with_changed_size_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 18.465s
+
+OK

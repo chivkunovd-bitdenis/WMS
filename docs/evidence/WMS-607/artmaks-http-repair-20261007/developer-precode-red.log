@@ -1,0 +1,28 @@
+test_accepted_receipt_same_key_never_resubmits (__main__.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits) ... ok
+test_legacy_error_preserves_specific_pre_submit_reason (__main__.ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason) ... FAIL
+test_legacy_same_key_recovers_only_after_proven_pre_submit_failure (__main__.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure) ... FAIL
+test_submitting_same_key_has_one_live_external_submission (__main__.ArtMaksHTTPContract.test_submitting_same_key_has_one_live_external_submission) ... ok
+test_unknown_same_key_never_resubmits_after_queue_recovery (__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery) ... ok
+
+======================================================================
+FAIL: test_legacy_error_preserves_specific_pre_submit_reason (__main__.ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_http_contract.py", line 208, in test_legacy_error_preserves_specific_pre_submit_reason
+    self.assertIn(failure["reason"], failure["error"], "Legacy frontend reads error, not reason")
+    ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.' not found in 'Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52286' : Legacy frontend reads error, not reason
+
+======================================================================
+FAIL: test_legacy_same_key_recovers_only_after_proven_pre_submit_failure (__main__.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_http_contract.py", line 193, in test_legacy_same_key_recovers_only_after_proven_pre_submit_failure
+    self.assertEqual(first[0], 200, "Restored queue must recover the original explicit scan/key")
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 409 != 200 : Restored queue must recover the original explicit scan/key
+
+----------------------------------------------------------------------
+Ran 5 tests in 4.458s
+
+FAILED (failures=2)

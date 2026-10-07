@@ -1,0 +1,13 @@
+{
+  "test_contract_commit": "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609",
+  "prior_product_commit": "de9f31a464fc09df26c6a77b488c904ea3ec19e2",
+  "acceptance_commit": "77443e92dba2872993ee358cfb7c4c88279b47c8",
+  "candidate_swift_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+  "unchanged_test_sha256": {
+    "tools/print-agent/test_macos_artmaks_http_contract.py": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+    "tools/print-agent/test_macos_artmaks_contract.py": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+    "tools/print-agent/test_macos_default_printer.py": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+    "tools/print-agent/test_macos_native.py": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+    "tools/print-agent/test_wms_cups_observe.c": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "case": "__main__.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+  "provenance": {
+    "source_sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+    "transformed_source_sha256": "208cccc54a325e771b169eeea1dedbabf61779be5e0eb271db6a410df7451a33",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "protocolVersion": 2,
+        "physicalConfirmationSupported": false,
+        "app": "WMS Print Direct",
+        "historyUrl": "http://127.0.0.1:52290"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "heightMm": 40,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52290",
+        "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "paperStatus": "unconfirmed",
+        "queueObservation": {},
+        "widthMm": 58,
+        "imageAvailable": true,
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "reprints": [],
+        "status": "failed_before_submit",
+        "observations": [
+          "2026-10-07T03:32:48Z saved",
+          "2026-10-07T03:32:48Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+        ],
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "context": {},
+        "physicalConfirmationSupported": false,
+        "legacy": false,
+        "idempotencyKey": "same-scan",
+        "createdAt": "2026-10-07T03:32:48Z"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "status": "accepted",
+        "idempotencyKey": "recovery-control",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "legacy": false,
+        "physicalConfirmationSupported": false,
+        "paperStatus": "unconfirmed",
+        "queue": "Label_Printer",
+        "reprints": [],
+        "observations": [
+          "2026-10-07T03:32:48Z saved",
+          "2026-10-07T03:32:48Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ],
+        "createdAt": "2026-10-07T03:32:48Z",
+        "queueObservation": {},
+        "context": {},
+        "title": "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+        "heightMm": 40,
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "receipt": "Label_Printer-41",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "imageAvailable": true,
+        "widthMm": 58
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "status": "failed_before_submit",
+        "idempotencyKey": "same-scan",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "legacy": false,
+        "physicalConfirmationSupported": false,
+        "paperStatus": "unconfirmed",
+        "reprints": [],
+        "observations": [
+          "2026-10-07T03:32:48Z saved",
+          "2026-10-07T03:32:48Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+        ],
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52290",
+        "createdAt": "2026-10-07T03:32:48Z",
+        "queueObservation": {},
+        "context": {},
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "heightMm": 40,
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "imageAvailable": true,
+        "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "widthMm": 58
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "status": "failed_before_submit",
+        "idempotencyKey": "same-scan",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "legacy": false,
+        "physicalConfirmationSupported": false,
+        "paperStatus": "unconfirmed",
+        "reprints": [],
+        "observations": [
+          "2026-10-07T03:32:48Z saved",
+          "2026-10-07T03:32:48Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+        ],
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52290",
+        "createdAt": "2026-10-07T03:32:48Z",
+        "queueObservation": {},
+        "context": {},
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "heightMm": 40,
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "imageAvailable": true,
+        "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "widthMm": 58
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p"
+    ],
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/3d1cac976bbfd038ac298bf3f30e28bd1fec4058e50decc78c00baa2582e1664.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "observations": [
+        "2026-10-07T03:32:48Z saved",
+        "2026-10-07T03:32:48Z submitting: Начата передача в системную очередь",
+        "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+      ],
+      "updatedAt": "2026-10-07T03:32:48Z",
+      "widthMm": 58,
+      "title": "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+      "queue": "Label_Printer",
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "status": "accepted",
+      "heightMm": 40,
+      "queueObservation": {},
+      "createdAt": "2026-10-07T03:32:48Z",
+      "idempotencyKey": "recovery-control",
+      "context": {},
+      "reason": "Системная очередь приняла задание; бумага не подтверждена",
+      "receipt": "Label_Printer-41",
+      "legacy": false
+    },
+    {
+      "updatedAt": "2026-10-07T03:32:48Z",
+      "widthMm": 58,
+      "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "status": "failed_before_submit",
+      "heightMm": 40,
+      "queueObservation": {},
+      "createdAt": "2026-10-07T03:32:48Z",
+      "idempotencyKey": "same-scan",
+      "context": {},
+      "observations": [
+        "2026-10-07T03:32:48Z saved",
+        "2026-10-07T03:32:48Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+      ],
+      "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+      "legacy": false
+    }
+  ]
+}

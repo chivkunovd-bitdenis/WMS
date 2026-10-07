@@ -335,7 +335,7 @@ private final class Printer {
         guard digest(identity)==job.hash else { throw PrintError.message("Сохранённое изображение повреждено; повтор запрещён") }
         return data
     }
-    func printJob(_ body:[String:Any],parent:String?=nil,scheduleNow:Bool=true) throws -> [String:Any] {
+    func printJob(_ body:[String:Any],parent:String?=nil,scheduleNow:Bool=true,retryFailedBeforeSubmit:Bool=false) throws -> [String:Any] {
         guard let key=body["idempotencyKey"] as? String,(1...200).contains(key.count),let image=body["imageDataUrl"] as? String,image.hasPrefix("data:image/png;base64,"),let data=Data(base64Encoded:String(image.dropFirst(22))),data.count<=4_000_000,data.starts(with:pngPrefix),
               let source=CGImageSourceCreateWithData(data as CFData,nil),
               let properties=CGImageSourceCopyPropertiesAtIndex(source,0,nil) as? [CFString:Any],
@@ -347,6 +347,10 @@ private final class Printer {
         if let old=jobs[key] {
             guard old.hash==hash || (old.legacy && old.hash==digest(data)) else { throw PrintError.message("Содержимое или размер этого задания изменились") }
             guard old.parentKey==parent else { throw PrintError.message("Ключ принадлежит другой операции восстановления") }
+            // The explicit legacy scan may retry only a proven pre-submit failure.
+            // Keep lookup and retry under the same lock so concurrent scans cannot
+            // mistake a job already submitting/accepted for the earlier failure.
+            if retryFailedBeforeSubmit && old.status=="failed_before_submit" { return try retry(key) }
             return try detail(key)!
         }
         guard !jobs.values.contains(where: { ($0.reprintIntentKeys ?? []).contains(key) }) else {
@@ -576,14 +580,18 @@ private func handle(_ descriptor:Int32,printer:Printer) {
             let body=request.body.isEmpty ? [:] : try JSONSerialization.jsonObject(with:request.body) as? [String:Any]
             guard let body else { throw PrintError.message("Некорректное задание") }
             if request.path=="/print" {
-                var result=try printer.printJob(body)
+                var result=try printer.printJob(body,retryFailedBeforeSubmit:body["protocolVersion"] as? Int != 2)
                 if body["protocolVersion"] as? Int == 2 { respond(descriptor,status:202,value:result,origin:origin);return }
                 // Old browsers require a real OS receipt. Their HTTP lifetime does not own the durable worker.
                 let deadline=Date().addingTimeInterval(18)
                 while result["receipt"] == nil, ["saved","submitting"].contains(result["status"] as? String ?? ""),Date()<deadline {
                     Thread.sleep(forTimeInterval:0.1);result=try printer.detail(body["idempotencyKey"] as! String)!
                 }
-                if result["receipt"] == nil || ["held","canceled","aborted","stopped"].contains(result["status"] as? String ?? "") { result["error"]="Задание сохранено, приём очередью не подтверждён. История: \(localOrigin)";respond(descriptor,status:409,value:result,origin:origin) }
+                if result["receipt"] == nil || ["held","canceled","aborted","stopped"].contains(result["status"] as? String ?? "") {
+                    let reason=result["status"] as? String == "failed_before_submit" ? result["reason"] as? String:nil
+                    result["error"]="\(reason ?? "Задание сохранено, приём очередью не подтверждён.") История: \(localOrigin)"
+                    respond(descriptor,status:409,value:result,origin:origin)
+                }
                 else { respond(descriptor,status:200,value:result,origin:origin) };return
             }
             if parts.count==3,parts[0]=="jobs",let key=parts[1].removingPercentEncoding {

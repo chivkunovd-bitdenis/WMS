@@ -1,0 +1,10 @@
+test_accepted_receipt_same_key_never_resubmits (__main__.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits) ... ok
+test_legacy_error_preserves_specific_pre_submit_reason (__main__.ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason) ... ok
+test_legacy_same_key_recovers_only_after_proven_pre_submit_failure (__main__.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure) ... ok
+test_submitting_same_key_has_one_live_external_submission (__main__.ArtMaksHTTPContract.test_submitting_same_key_has_one_live_external_submission) ... ok
+test_unknown_same_key_never_resubmits_after_queue_recovery (__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 3.628s
+
+OK

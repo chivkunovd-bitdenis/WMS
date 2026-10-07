@@ -1,0 +1,167 @@
+{
+  "case": "__main__.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits",
+  "provenance": {
+    "source_sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+    "transformed_source_sha256": "208cccc54a325e771b169eeea1dedbabf61779be5e0eb271db6a410df7451a33",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "physicalConfirmationSupported": false,
+        "app": "WMS Print Direct",
+        "historyUrl": "http://127.0.0.1:52260",
+        "protocolVersion": 2
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "heightMm": 40,
+        "title": "WMS-58fe0d3292ec1ffa3863d6f3ee6d158d8ff3c8db7286614f1503c06d45f3cba5",
+        "widthMm": 58,
+        "queueObservation": {},
+        "createdAt": "2026-10-07T03:32:47Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "legacy": false,
+        "receipt": "Label_Printer-41",
+        "idempotencyKey": "receipt-scan",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "paperStatus": "unconfirmed",
+        "imageAvailable": true,
+        "reprints": [],
+        "status": "accepted",
+        "context": {},
+        "observations": [
+          "2026-10-07T03:32:47Z saved",
+          "2026-10-07T03:32:47Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ]
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "heightMm": 40,
+        "title": "WMS-58fe0d3292ec1ffa3863d6f3ee6d158d8ff3c8db7286614f1503c06d45f3cba5",
+        "widthMm": 58,
+        "queueObservation": {},
+        "createdAt": "2026-10-07T03:32:47Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "legacy": false,
+        "receipt": "Label_Printer-41",
+        "idempotencyKey": "receipt-scan",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "paperStatus": "unconfirmed",
+        "imageAvailable": true,
+        "reprints": [],
+        "status": "accepted",
+        "context": {},
+        "observations": [
+          "2026-10-07T03:32:47Z saved",
+          "2026-10-07T03:32:47Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ]
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "heightMm": 40,
+        "title": "WMS-58fe0d3292ec1ffa3863d6f3ee6d158d8ff3c8db7286614f1503c06d45f3cba5",
+        "widthMm": 58,
+        "queueObservation": {},
+        "createdAt": "2026-10-07T03:32:47Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "updatedAt": "2026-10-07T03:32:48Z",
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "legacy": false,
+        "receipt": "Label_Printer-41",
+        "idempotencyKey": "receipt-scan",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "paperStatus": "unconfirmed",
+        "imageAvailable": true,
+        "reprints": [],
+        "status": "accepted",
+        "context": {},
+        "observations": [
+          "2026-10-07T03:32:47Z saved",
+          "2026-10-07T03:32:47Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ]
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-58fe0d3292ec1ffa3863d6f3ee6d158d8ff3c8db7286614f1503c06d45f3cba5",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/8fe352c1cbb7e4cb1d991ef7069257ba4519b457d1ecdbb635a9617a42a18849.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "legacy": false,
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "updatedAt": "2026-10-07T03:32:48Z",
+      "status": "accepted",
+      "createdAt": "2026-10-07T03:32:47Z",
+      "observations": [
+        "2026-10-07T03:32:47Z saved",
+        "2026-10-07T03:32:47Z submitting: Начата передача в системную очередь",
+        "2026-10-07T03:32:48Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+      ],
+      "widthMm": 58,
+      "title": "WMS-58fe0d3292ec1ffa3863d6f3ee6d158d8ff3c8db7286614f1503c06d45f3cba5",
+      "queueObservation": {},
+      "idempotencyKey": "receipt-scan",
+      "heightMm": 40,
+      "context": {},
+      "reason": "Системная очередь приняла задание; бумага не подтверждена",
+      "queue": "Label_Printer",
+      "receipt": "Label_Printer-41"
+    }
+  ]
+}
