@@ -105,6 +105,27 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(idleScan).toContain('releaseFbsScanAutoPrintTargetClaim(')
   })
 
+  it('WMS-666 P1 revalidates the claimed exact CHZ binding immediately before scan print dispatch', () => {
+    const idleScan = source.slice(
+      source.indexOf('const scanIdleCode = useCallback'),
+      source.indexOf('const scanKizCode = useCallback'),
+    )
+    const chzStart = idleScan.indexOf('if (plan.printChz && !result.requires_honest_sign)')
+    const reprintStart = idleScan.indexOf('if (waitingForReprintKiz)', chzStart)
+    const chzDispatch = idleScan.slice(chzStart, reprintStart)
+    const validate = chzDispatch.indexOf('validateFbsPrintBindings(')
+    const dispatch = chzDispatch.indexOf('printMarkingCodeTape(')
+
+    expect(chzStart).toBeGreaterThan(-1)
+    expect(reprintStart).toBeGreaterThan(chzStart)
+    expect(validate).toBeGreaterThan(-1)
+    expect(validate).toBeLessThan(dispatch)
+    expect(chzDispatch).toContain('order_id: result.order_id')
+    expect(chzDispatch).toContain('supply_id: printed.supply_id')
+    expect(chzDispatch).toContain('marking_id: printed.marking_id')
+    expect(chzDispatch).toContain('cis_code: kiz')
+  })
+
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {
     const reset = source.slice(
       source.indexOf('const dropKizScanActive = useCallback'),
