@@ -1,5 +1,4 @@
 {
-  "observed_at_utc": "2026-10-07T00:58:00Z",
   "read_only": true,
   "checkout": "/opt/wms",
   "checkout_sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
@@ -38,5 +37,11 @@
   "limits": [
     "No image SHA/HTTP application SHA/current availability verification from this preflight.",
     "No production mutation, deploy, secret/configuration or operator data action."
-  ]
+  ],
+  "recorded_at_utc": "2026-10-07T01:00:06Z",
+  "observation_utc_bounds": {
+    "earliest": "2026-10-07T00:57:43Z",
+    "latest": "2026-10-07T01:00:06Z",
+    "basis": "UTC clock read before SSH and UTC clock read after SSH; exact remote-command timestamp was not captured."
+  }
 }
