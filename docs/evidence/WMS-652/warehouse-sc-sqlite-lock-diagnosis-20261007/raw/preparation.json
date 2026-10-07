@@ -1,0 +1,23 @@
+{
+  "base": "cbd126200788b87d1a006c5853d8e9560148cd36",
+  "actual_failed_merge": "8b8f20715528122a7260d650f018a9a8b4bd29e5",
+  "source_closure_exact_failed_merge": {
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/tests/test_fbs_operator_flow_handoff.py": "9b9a87703ecd919b2483dbaee457d4f1c6bda8d373adf5f29d1632118efaad95",
+    "backend/tests/fbs_operator_emulator_seed.py": "3ad13927b6287286ef6530e88c17789b586c84d03298b214cafcc139496f8996",
+    "backend/tests/test_fbs_shipment_warehouse_sc.py": "12687435663309104895edd41323f1db9295f0b47ad67df6bb7933bcedc497d9",
+    "backend/app/db/session.py": "a0753dd7edfde807d023f71e88bf27aca1ab52adfa2d64d22c97eb24f612af7e",
+    "backend/app/services/fbs_shipment_service.py": "1e6d59473204c7511a5b8c57591cc57c22b8a3f03578677e7aeaa36b2e28770a",
+    "backend/app/services/inventory_service.py": "ee216eb6eafec03dfb1443c214f7a8a5efbe3b7fb00c3f4ba1dcb35505480825",
+    "backend/app/services/fbs_stock_publish_service.py": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+    "backend/app/services/fbs_stock_sync_service.py": "3bc2f0d82c979e78aa03ba41a0308a130544c08f82135300fd1e1cb223102117"
+  },
+  "actual_raw_log_sha256": "aa1569540dadbb81480b67a5e853d2711c59d8a522990b47bb85e447b5b494a8",
+  "selected_case": "tests/test_fbs_operator_flow_handoff.py::test_full_flow_warehouse_sc_emulator",
+  "actual_previous_worker": "gw2",
+  "diagnostic_worker": "gw0; -n1; preceding tests excluded",
+  "syntax_static_shape_ruff_pass": true,
+  "no_local_test_run": true,
+  "trace_per_process_limit_bytes": 33554432,
+  "cause": "LOCK_OWNER_NOT_YET_MEASURED"
+}
