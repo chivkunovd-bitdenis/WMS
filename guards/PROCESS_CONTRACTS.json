@@ -230,7 +230,9 @@
     "scripts/ops/tests/wms517-replay-historical-mac-tests.cjs": "db4540b2397222137c7c4576e344d21bb3872962c1688a9dedfa3cb58bebd39f",
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
-    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747"
+    "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
+    "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+    "backend/app/services/fbs_stock_publish_service.py": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996"
   },
   "suites": {
     "backend-fbs": {
@@ -852,7 +854,11 @@
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
         "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
-        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]"
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]",
+        "tests/test_stock_publish_nested_commit_contract.py::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+        "tests/test_stock_publish_nested_commit_contract.py::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+        "tests/test_stock_publish_nested_commit_contract.py::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "tests/test_stock_publish_nested_commit_contract.py::test_c68_native_outer_rollback_after_savepoint_never_dispatches"
       ]
     },
     "pg-663-retry": {
