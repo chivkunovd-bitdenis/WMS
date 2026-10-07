@@ -33,16 +33,78 @@ const report={sha:execFileSync('git',['rev-parse','HEAD'],{encoding:'utf8'}).tri
 class CDP {
   constructor(url) {
     this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();
+    // Ownership lives in this one CDP session. Never infer cancellation from an error string.
+    this.generation = 0; this.paused = new Map(); this.network = new Map(); this.transport = [];
     this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });
     this.ws.onmessage = event => {
       const msg = JSON.parse(event.data);
-      if (msg.id) { const p = this.pending.get(msg.id); this.pending.delete(msg.id); if (p) { clearTimeout(p.timer); msg.error ? p.reject(Error(JSON.stringify(msg.error))) : p.resolve(msg.result); } }
-      else for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => errors.push(String(e)));
+      if (msg.id) {
+        const p = this.pending.get(msg.id); this.pending.delete(msg.id);
+        if (p) {
+          clearTimeout(p.timer);
+          this.record({kind:'command-result',commandId:msg.id,method:p.method,...p.identity,nativeError:msg.error});
+          if (msg.error) {
+            if (p.retirable && p.token.attempts === 1 && p.token.disposition === 'paused'
+              && p.token.generation === this.generation && p.token.caseId === this.currentCase()
+              && msg.error.code === -32602 && msg.error.message === 'Invalid InterceptionId.') {
+              p.token.disposition = 'retired';
+              const value = {retired:true,nativeError:msg.error,commandId:msg.id,method:p.method,...p.identity};
+              this.record({kind:'retired-canceled-request',...value}); p.resolve(value);
+            } else p.reject(Error(JSON.stringify(msg.error)));
+          } else { if (p.token) p.token.disposition = 'completed'; p.resolve(msg.result); }
+        }
+      } else {
+        this.observe(msg.method,msg.params);
+        for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => errors.push(String(e)));
+      }
     };
+  }
+  currentCase() { return typeof report === 'undefined' ? null : report.currentCase ?? null; }
+  record(value) { this.transport.push({utcMs:Date.now(),...value}); }
+  observe(method, params) {
+    if (method === 'Page.frameNavigated' || method === 'Runtime.executionContextsCleared') {
+      this.generation++; this.record({kind:'generation-boundary',method,generation:this.generation,caseId:this.currentCase()});
+    } else if (method === 'Fetch.requestPaused') {
+      const token = {requestId:params.requestId,networkId:params.networkId,frameId:params.frameId,
+        generation:this.generation,caseId:this.currentCase(),attempts:0,disposition:'paused'};
+      // A reused Fetch token or ambiguous Network mapping cannot prove ownership.
+      if (this.paused.has(token.requestId)) this.paused.get(token.requestId).ambiguous = true;
+      else {
+        this.paused.set(token.requestId,token);
+        const owners = this.network.get(token.networkId) ?? new Set(); owners.add(token);
+        this.network.set(token.networkId,owners);
+        if (owners.size > 1) for (const owner of owners) owner.ambiguous = true;
+      }
+      this.record({kind:'request-paused',...token});
+    } else if (method === 'Network.loadingFailed' || method === 'Network.loadingFinished') {
+      for (const token of this.network.get(params.requestId) ?? []) {
+        if (token.generation !== this.generation || token.caseId !== this.currentCase()) continue;
+        if (method === 'Network.loadingFinished') token.disposition = 'network-completed';
+        else token.cancellation = {canceled:params.canceled,errorText:params.errorText,type:params.type};
+      }
+      this.record({kind:'network-terminal',method,networkId:params.requestId,generation:this.generation,caseId:this.currentCase(),canceled:params.canceled,errorText:params.errorText,type:params.type});
+    }
   }
   async send(method, params = {}) {
     await this.ready; const id = ++this.next;
-    return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.pending.delete(id); reject(Error(`CDP timeout ${method}`)); }, 12000); this.pending.set(id, { resolve, reject, timer }); this.ws.send(JSON.stringify({ id, method, params })); });
+    if (method === 'Page.navigate') this.generation++;
+    const token = method.startsWith('Fetch.') && params.requestId ? this.paused.get(params.requestId) : undefined;
+    const identity = {requestId:params.requestId,networkId:token?.networkId,frameId:token?.frameId,
+      generation:this.generation,caseId:this.currentCase(),cancellation:token?.cancellation ? {...token.cancellation} : undefined};
+    const retirable = method === 'Fetch.fulfillRequest' && token && !token.ambiguous && token.networkId && token.frameId
+      && token.generation === this.generation && token.caseId === identity.caseId && token.attempts === 0
+      && token.disposition === 'paused' && token.cancellation?.canceled === true
+      && token.cancellation.errorText === 'net::ERR_ABORTED' && token.cancellation.type === 'Fetch';
+    if (token) token.attempts++;
+    this.record({kind:'command-send',commandId:id,method,...identity,attempt:token?.attempts});
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pending.delete(id); this.record({kind:'command-timeout',commandId:id,method,...identity});
+        reject(Error(`CDP timeout ${method}`));
+      }, 12000);
+      this.pending.set(id, {resolve,reject,timer,method,identity,token,retirable});
+      this.ws.send(JSON.stringify({id,method,params}));
+    });
   }
   on(method, callback) { this.listeners.set(method, [...this.listeners.get(method) ?? [], callback]); }
 }
@@ -158,7 +220,7 @@ try {
   assert(tabs?.length,`Chrome unavailable: ${chromeLog}`);
   cdp=new CDP(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);cdp.on('Fetch.requestPaused',intercept);
   cdp.on('Runtime.exceptionThrown',e=>errors.push(e.exceptionDetails));
-  await cdp.send('Page.enable');await cdp.send('Runtime.enable');
+  await cdp.send('Page.enable');await cdp.send('Runtime.enable');await cdp.send('Network.enable');
   await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});
   await cdp.send('Page.addScriptToEvaluateOnNewDocument',{source:`
     const q=new URLSearchParams(location.search);
@@ -233,6 +295,7 @@ try {
   report.status='PASS';
 }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{
+  await writeFile(`${dir}/cdp-transport.json`,JSON.stringify({events:cdp?.transport ?? [],pendingCommandIds:[...cdp?.pending.keys() ?? []]},null,2));
   await writeFile(`${dir}/result.json`,JSON.stringify(report,null,2));
   await writeFile(`${dir}/last-requests.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
   await writeFile(`${dir}/chrome.log`,chromeLog);cdp?.ws.close();chrome.kill();
