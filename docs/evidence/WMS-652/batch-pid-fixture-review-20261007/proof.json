@@ -1,0 +1,153 @@
+{
+  "fixture_source_verdict": "PASS",
+  "complete_proposed_ledger_verdict": "REJECTED concrete existing-ledger compatibility defect",
+  "SOURCE": "5b9df5acfba055bf94d5b3b21793ce2a233edff6",
+  "reviewed_fixture_correction": "466178698fc47d4eadecc611eeb6039c475da58a",
+  "original_contract": "2006171f0feae5513f887b471125ecae1a96c2ae",
+  "fixture_sha256": "4b0062901cc0df0da3dc4604fcb72c7619f251dee1182954351564c7f1335ac1",
+  "frozen_test_sha256": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
+  "outside_class_bytes_and21_business_assertions_preserved": true,
+  "original13_contract_changed_paths": [
+    "backend/tests/test_wms662_batch_handoff_lock_order.py",
+    "docs/requirements/WMS-662.md",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx"
+  ],
+  "historical_requirements_and_owner_authorized_UI_changes_not_new_fixture_delta": true,
+  "developer_receipts_commit": "f2ad961a13b9853a94ad6290dbd794c39ea9c223",
+  "developer_manifest_verified_members": 8,
+  "saved_receipts": {
+    "testwriter_before": {
+      "sha256": "b7de66e15711d8c0569365ca5c109d05a09896e596b5611ad48f2c716358923b",
+      "counts": {
+        "failure": 1,
+        "pass": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+          "status": "failure"
+        },
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+          "status": "pass"
+        }
+      ]
+    },
+    "preservation_mutation": {
+      "sha256": "ce17a13912f2afa162e29c01e6ace7bfe2c0ec6736649fb97a728c8e17b879f8",
+      "counts": {
+        "failure": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+          "status": "failure"
+        }
+      ]
+    },
+    "developer_before": {
+      "sha256": "a3af1d2e48293f44ec319cd699094724464b3dd51fe30e3cdf9c7cfe3d1048c1",
+      "counts": {
+        "failure": 1,
+        "pass": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+          "status": "failure"
+        },
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+          "status": "pass"
+        }
+      ]
+    },
+    "developer_green": {
+      "sha256": "ed99fd1354051673430a5f481c60c6062647575325bf321e7d626cc9d37159b2",
+      "counts": {
+        "pass": 2
+      },
+      "cases": [
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+          "status": "pass"
+        }
+      ]
+    }
+  },
+  "full_Ruff_Mypy_saved": "PASS/PASS563",
+  "policy_sha256": "7943a8d84d7ecde9ed70a90aa4318a139035a749b202341c428f999caeebfce8",
+  "protected_files": 235,
+  "modes": {
+    "100644": 228,
+    "100755": 7
+  },
+  "suites": 22,
+  "required_IDs": 1186,
+  "old233_files_1184_IDs_retained": true,
+  "backend_fbs_cases": 621,
+  "closure_hashes": {
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
+    "backend/tests/test_wms662_batch_handoff_lock_order.py": "4b0062901cc0df0da3dc4604fcb72c7619f251dee1182954351564c7f1335ac1",
+    "backend/tests/test_wms662_cancellation_lock_order.py": "083f5f84bdfca34cb3ba7336da81dd9596db142a4908b89932e07383812deadc",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "APP_equals_accepted_PRODUCT1cf": true,
+  "exact_new_pair_Git_facts_and_final_byte_binding": "PASS; later mutation rejected",
+  "proposed_entry": {
+    "contract_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+    "correction_commit": "466178698fc47d4eadecc611eeb6039c475da58a",
+    "files": [
+      "backend/tests/test_wms662_batch_handoff_lock_order.py"
+    ],
+    "review": {
+      "model": "gpt-6.1-sol",
+      "effort": "high",
+      "verdict": "PASS"
+    }
+  },
+  "existing_ledger_sha256": "24eb0295fb36cf51e0d6a0559c506ceec3bdd26cbbd16703ebb445a3d381274b",
+  "existing_single_file_legacy_contract": "c466c65b850dd87481be5da88b99bcfaa4087414",
+  "existing_owner_supersessions_must_be_retained": true,
+  "current_without_new_entry_errors": {
+    "resolver_errors": [],
+    "changed_unapproved_or_pinned_final_paths": [
+      "backend/tests/test_wms662_batch_handoff_lock_order.py"
+    ]
+  },
+  "standalone_proposed_JSON_errors": {
+    "2006171f0feae5513f887b471125ecae1a96c2ae": {
+      "resolver_errors": [],
+      "changed_unapproved_or_pinned_final_paths": [
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx"
+      ]
+    },
+    "c466c65b850dd87481be5da88b99bcfaa4087414": {
+      "resolver_errors": [],
+      "changed_unapproved_or_pinned_final_paths": [
+        "backend/tests/test_wms662_live_delivery_substatuses.py"
+      ]
+    }
+  },
+  "later_fixture_mutation_errors": {
+    "resolver_errors": [],
+    "changed_unapproved_or_pinned_final_paths": [
+      "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx"
+    ]
+  },
+  "preserving_existing_legacy_entry_in_array_rejection": [
+    "WMS-662: коррекция должна менять только часть исходного контракта"
+  ],
+  "checker_changed": false,
+  "scratch_removed": true,
+  "native_PG_fullCI_effectiveness": "NOT verified; run375616 remains failed",
+  "new_target_PG_browser_build_or_CI_runs": [],
+  "final_SOURCE_pin_or_release_approval": false
+}
