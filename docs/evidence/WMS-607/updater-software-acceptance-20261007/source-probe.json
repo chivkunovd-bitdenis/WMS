@@ -1,0 +1,148 @@
+{
+  "accepted_software_base": "49da13fd2a0d22f207818248f274cf5ff400e39f",
+  "corrected_product": "bdd5a8eee8606d667a90a3b61da299b4097dc877",
+  "independent_review": "49da13fd2a0d22f207818248f274cf5ff400e39f",
+  "original_updater_contract": "a40bf5b9a2f833a16cb9ff8c941c46c02a0b9d72",
+  "additive_stop_contract": "040e94c956b8cc99d69d04e8cc90499a01e61a95",
+  "source_files": {
+    "tools/print-agent/update_macos_direct.sh": {
+      "sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+      "git_blob": "b1274bf3f01d07e30209a2b9d40c2315a03d6b0c"
+    },
+    "tools/print-agent/build_console.py": {
+      "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e",
+      "git_blob": "ac6f5603f70a230709378fc2220cdacb242e3416"
+    },
+    "tools/print-agent/wms_print_direct_macos.swift": {
+      "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+      "git_blob": "d9e4ec70d0cc07f958ee8a65930a851d7f1f8d6e"
+    }
+  },
+  "frozen_manifests": {
+    "updater-test-contract-20261007": {
+      "manifest_members_verified": 26,
+      "test_sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee"
+    },
+    "updater-stop-test-contract-20261007": {
+      "manifest_members_verified": 18,
+      "test_sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+    }
+  },
+  "reports": {
+    "updater-stop-fix-20261007/precode.xml": {
+      "tests": 4,
+      "pass": 2,
+      "fail": 2,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ],
+      "sha256": "a38bd68596048007e788f4f951b98946a7cb2a275dcc31e81bf606abb31dcc9f"
+    },
+    "updater-stop-fix-20261007/green.xml": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ],
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1"
+    },
+    "updater-stop-fix-20261007/updater.xml": {
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+      ],
+      "sha256": "2448a9c897828a6c77f45a85657386539cb82c85462f7257a3fec5092b5bab03"
+    },
+    "updater-stop-fix-20261007/existing.xml": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+        "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+        "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+        "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+        "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+        "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+        "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+        "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+        "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+      ],
+      "sha256": "c6b63daaeb38da1e21ad702e507235e198f9fc578a4bd963ca754b25e49ec3d8"
+    },
+    "updater-stop-rereview-20261007/updater-stop.xml": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ],
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1"
+    }
+  },
+  "raw_source_bound_records": {
+    "updater-stop-fix-20261007/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json": "c9cecf6ed70cb279e506c3cab904dd5bb79a9ab605a785ffd0a68f898847d09b",
+    "updater-stop-fix-20261007/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json": "3ca525c4e4ffff6dc3c43b7645821fc2e15a33f095aa3d9d06a7e57295e3f18a",
+    "updater-stop-fix-20261007/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json": "7394a3550e00bab6ca8870216b1da16bcf7ed683245e6b51e764c8c3e4a3f47c",
+    "updater-stop-fix-20261007/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json": "6decb115d27760284e5a2c8fbacc64b488389acced8289431d71ba92db181331",
+    "updater-stop-fix-20261007/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json": "bc10f2afe6da723ba4e02b589f0bc384b4f0025145476a3ca6235ebf472bb9d6",
+    "updater-stop-fix-20261007/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json": "98d71bd9890cc2caa3b21ee6c63bef9252f863f1ecb44670a78dc7473a32a8c4",
+    "updater-stop-fix-20261007/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json": "5fb24a6310bb73b15dd708c84668f913f25aa7eff544b99e487555461ebc09fd",
+    "updater-stop-fix-20261007/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json": "cc2682b99464bf137a9a794ba1774ee745a16a5f90cc5fe42055a33524ffaa95",
+    "updater-stop-fix-20261007/updater/test_preservation_actual_public_and_current_journal_replay.json": "faf9b581500bf6b2341e576cd820088ef16ee72e73cfc1af219df123b189a4c2",
+    "updater-stop-fix-20261007/updater/test_preservation_actual_direct_build_metadata.json": "ed9beb61b1aa97ac41aef9a8111bd1471ab1760628ae27567b63036ad8f98123",
+    "updater-stop-fix-20261007/green/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json": "180e494cd365ef4c2acca283ac1287dec9095b39aa3290563f33fd1ab1bcb305",
+    "updater-stop-rereview-20261007/raw/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json": "180e494cd365ef4c2acca283ac1287dec9095b39aa3290563f33fd1ab1bcb305",
+    "updater-stop-fix-20261007/green/test_owned_TERM_error_retains_target_and_recovery.json": "0baa29a99304f298e4c45142f71da7777e073856a8c719c1a0b255dd69934ea6",
+    "updater-stop-rereview-20261007/raw/test_owned_TERM_error_retains_target_and_recovery.json": "0baa29a99304f298e4c45142f71da7777e073856a8c719c1a0b255dd69934ea6",
+    "updater-stop-fix-20261007/green/test_owned_TERM_success_survivor_retains_target_and_recovery.json": "9e1bb97b78ca97d763b4e5b53324a926fc1fc1c0f7b81f225dacca755e665dbe",
+    "updater-stop-rereview-20261007/raw/test_owned_TERM_success_survivor_retains_target_and_recovery.json": "9e1bb97b78ca97d763b4e5b53324a926fc1fc1c0f7b81f225dacca755e665dbe",
+    "updater-stop-fix-20261007/green/test_successful_owned_stop_restores_previous_and_preserves_journal.json": "f13a9f7beb79440f99243997f65841f1b30e1e09bb0084001ef4f424af50fb48",
+    "updater-stop-rereview-20261007/raw/test_successful_owned_stop_restores_previous_and_preserves_journal.json": "f13a9f7beb79440f99243997f65841f1b30e1e09bb0084001ef4f424af50fb48"
+  },
+  "review_preserved_paths_verified": 17,
+  "native_launch_no_submit_saved_receipt_verified": true,
+  "mechanism_acceptance": "PASS U-C1..U-C8; distribution and U-C9/U-C10 pending",
+  "tests_build_browser_install_or_provider_executed_here": false
+}

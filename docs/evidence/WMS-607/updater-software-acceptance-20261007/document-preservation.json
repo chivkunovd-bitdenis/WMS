@@ -1,0 +1,8 @@
+{
+  "base": "49da13fd2a0d22f207818248f274cf5ff400e39f",
+  "R_U1_to_R_U8_byte_preserved_sha256": "c710ea8324c31673fb99c3110d161e85fe2c56bdbb1cf0c3883cf255abd6bacd",
+  "backlog_outside_607_byte_preserved": true,
+  "backlog_prefix_sha256": "ca0b1b91bde684eaac17eae38da8cb656d966e467053616b4cbf466f7042613b",
+  "backlog_suffix_sha256": "fe9ef496341dcdeba3dc3e344fa5c1915bb420917f2bf9a67a6efa0463d1cc2f",
+  "prior_HTTP_acceptance_conclusion_preserved": true
+}

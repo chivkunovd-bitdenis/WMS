@@ -1,0 +1,17 @@
+{
+  "checker_source": "49da13fd2a0d22f207818248f274cf5ff400e39f:scripts/ci/check_task_documents.py",
+  "base": "49da13fd2a0d22f207818248f274cf5ff400e39f",
+  "executed_once": true,
+  "exit": 1,
+  "reported_errors_only": "Referenced test files absent from sparse filesystem; no verdict/conclusion or contract-change error reported",
+  "all_six_missing_paths_exist_in_HEAD_Git": {
+    "tools/print-agent/test_macos_artmaks_contract.py": "1a355be40e4c114a316fe85b18b12df57866eddf",
+    "tools/print-agent/test_macos_default_printer.py": "3fa6656ffcaeaefe200f5d0355417bd8cb01c960",
+    "tools/print-agent/test_macos_native.py": "b170b764d82afc5ed545a4aac6dd5491448fd69e",
+    "docs/evidence/WMS-607/artmaks-program-acceptance-20261007/http-recovery-probe.py": "7db02f968d12c9ae191166e846c6b67df3f9a11d",
+    "tools/print-agent/test_macos_artmaks_http_contract.py": "ef8863ec7e15516ec1681b31a0bdf07a5950b067",
+    "tools/print-agent/test_macos_direct_updater_contract.py": "0abb88f9809cd16295bf71610aaf0db41633e96c"
+  },
+  "full_checkout_checker_result": "NOT_EXECUTED",
+  "software_acceptance": "PASS based on immutable source/raw/independent review; no CI PASS claim"
+}
