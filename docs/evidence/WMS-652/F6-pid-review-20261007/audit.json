@@ -1,0 +1,46 @@
+{
+  "red": "fb05f4dc22a1fb6b62ab0d52be2729ae4b449f3c",
+  "green": "e2495dfa50767f156e6f54d91889c6067d6d5625",
+  "original_frozen_regression": [
+    "RED AttributeError observed_pids",
+    "PASS"
+  ],
+  "parameter_decorators_identical": true,
+  "all_business_assertions_after_SQL_errors_identical": true,
+  "replays": [
+    {
+      "scenario": "mutation-during-await",
+      "accepted": true,
+      "observed": {
+        "handoff": 901,
+        "cancel": 902
+      },
+      "live": {
+        "handoff": 902,
+        "cancel": 902
+      }
+    },
+    {
+      "scenario": "unconfirmed",
+      "accepted": false,
+      "observed": null,
+      "live": {
+        "handoff": 901,
+        "cancel": 902
+      }
+    },
+    {
+      "scenario": "same-pid",
+      "accepted": false,
+      "observed": {
+        "handoff": 902,
+        "cancel": 902
+      },
+      "live": {
+        "handoff": 902,
+        "cancel": 902
+      }
+    }
+  ],
+  "limit": "AST replay exercises actual fixture methods; does not simulate a real PG race or claim product PASS"
+}

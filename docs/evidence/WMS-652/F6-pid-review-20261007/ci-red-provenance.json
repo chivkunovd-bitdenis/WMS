@@ -1,0 +1,7 @@
+{
+  "path": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/backend-checks-419.log",
+  "sha256": "2ab48f67f8fcc0fb709a2f277caac0a286ded83eb2e9625d6519da4be54ef4a3",
+  "run": 37550233864,
+  "candidate": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "outcomes": "3 PASS / 1 FAIL; observed_status-normal; last mutable PIDs 90/90"
+}
