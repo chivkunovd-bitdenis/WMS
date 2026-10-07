@@ -1,0 +1,29 @@
+# WMS-652: ограниченное финальное ревью SOURCE acf
+
+**FAIL для H `acf62b24a39565957f779c63b46cf573f8208d63`: конкретный разрыв нового batch receipt. Data-only activation предложенного H отклонена.** Proposed P — `b2a03ec118f9b4a184edfc4c2973ff92e044fd6c`, BASE — `4c532f0cccfb8f99b34d68d9630a3763038fbc5f`. Это продолжение той же независимой Sol6.1/high сессии; не новая цепочка приёмки. Ранее принятые native1373, fixtures bf31, F6cbca/02545 и неизменённые продуктовые/PDF проверки не повторялись. Правила etalon прочитаны в предыдущем этапе на том же BASE; обе полные библиотеки случаев сохранены, неизменность подтверждена ранее.
+
+## Единственный подтверждённый блокирующий дефект
+
+Новая suite `postgres-wms662-batch` требует **`pg/662-batch.xml`**. Её настоящий backend-checks producer исполняет существующий PostgreSQL тест, но пишет **`$RUNNER_TEMP/release-postgres/662-batch.xml`**. Upload backend-checks-contracts использует release-postgres вместе с native-print.xml; после download в backend-contracts сохраняется release-postgres/662-batch.xml. Backend aggregate объединяет backend-all.xml, не перемещает batch XML. Следующий upload/download в process-proof также не переименовывает файл. В verify_reports нет alias: local_file читает ровно suite.report.
+
+**Воспроизводимый сценарий:** все PG batch assertions проходят, XML содержит ровно требуемый ID, оба backend jobs зелёные. Process-proof всё равно получает `Missing required file: pg/662-batch.xml`. Собственный адресный replay настоящего H parser с контролируемым корректным JUnit под фактическим artifact path подтвердил этот отказ. Только перенос той же тестовой копии на требуемый path делает focused parser проверку PASS. Это controlled wiring probe, не выдуманный production/CI receipt.
+
+Продуктовая тяжесть отдельно: этот дефект не доказывает потерю stock/money или нарушение batch lock order. Он **детерминированно блокирует конечное process-proof и выпуск даже при успешном business test**; fail-closed поведение сохраняется. Нужно согласовать путь нового producer/report и соответствующий защищённый digest. Старые case IDs/семантику и counts менять не требуется. Reviewer исправление не реализовывал.
+
+## Что проверено и сохраняет техническое заключение
+
+Самостоятельный immutable audit проверил все **279 regular Git protected paths и фактические SHA-256**, **29 suites / 1701 IDs**. Все BASE **238/22/1192**, принятые 10c **269/27/1675** и исходные SOURCE0151 **1146 ID/18 report-format-exact bindings** сохранены; удалённых paths/cases или ослабленной exact/format/report семантики старых suites нет. Новый ошибочный report path относится к добавленной batch suite, не к старым 18 bindings.
+
+Merged product scope от принятого 10c состоит ровно из stock publication module и dedicated inbound harness. Stock module побайтно совпадает с уже принятым BASE (конкретный nested-transaction early return); harness побайтно совпадает с принятым мной a026. Остальные product paths unchanged относительно 10c. H не имеет product-path разницы с proposed P b2. Продуктовый код в последнем process upgrade commit не изменён. Старые технические/аналитические заключения сохраняются в своих границах; новая полная feature acceptance не объявляется.
+
+Прочитаны actual handoff и точный reviewed-upgrade contract, реализации anchor/local checker/proof-builder, five frozen tests и YAML commands. Только fixed sibling main config с двумя точными keys base_sha/source_sha выбирает SOURCE при совпадении actual BASE. SOURCE и BASE policies/actual protected bytes проверяются, старые paths/cases/report-format-exact должны сохраняться, candidate затем проверяется против SOURCE. Другой BASE/pin не разрешает candidate self-rehash. CLI не добавляет произвольный source/config path. CI копирует anchor/config из origin/main, checker и builder из выбранного immutable Git ref; builder получает явный **candidate `--root "$GITHUB_WORKSPACE"`**, SHA/run/attempt и mandatory needs, включая wms686-mockup, остаются. Оба run blocks проходят собственный bash -n. Данный анализ не закрывает найденный receipt разрыв.
+
+Новые пять real-Git/API contracts побайтно равны pre-code d4533. **Собственное адресное исполнение пяти frozen tests: PASS, 8.578 s**, включая positive upgrade, refusal candidate/config/env/other source, сохранность paths/cases/semantics и corrupt BASE/SOURCE bytes. Опубликованный H raw targeted XML/log подтверждает отдельные **42 PASS / 84 subtests PASS** автора; пять новых mandatory IDs найдены в XML с passed. Reviewer весь набор42/84 не повторял. Full frontend/backend, native/PDF и дорогой graph не запускались.
+
+## Решение по конкретной активации
+
+Предложение ограничивает активацию `.github/workflows/ci.yml`, существующей source-binding fixture и производными policy hashes: точный P b2, настоящий report publication как unchanged descendant, без изменения cases/counts; main — только exact reviewed anchor blob и fixed BASE/SOURCE config. Такой механизм не даёт кандидатной policy самоподписи, но **для текущего H его активация НЕ разрешена**: template не исправляет неправильный mandatory report path. Этот FAIL нельзя вставлять как genuine PASS independent_acceptance_record. Будущий R/S не выдумывается.
+
+После адресного исправления именно этого wiring достаточно ограниченной проверки нового SHA/пути и точной activation delta с реальным PASS publication; неизменённые принятые функции и полный старый graph повторять оснований нет. Новый main/source pin, полный CI, etalon и deploy здесь не выполнены и не одобрены.
+
+Own evidence: `docs/evidence/WMS-652/final-source-review-acf-20261007/`, включая audit.py/JSON, настоящий new-five-tests.log, author targeted raw XML/log и копии handoff. Все исходники читаются по SHA. Изменены только независимые docs/evidence в собственной именованной ветке; integration/main/etalon не изменялись.

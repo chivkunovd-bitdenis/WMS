@@ -1,0 +1,59 @@
+{
+  "H": "acf62b24a39565957f779c63b46cf573f8208d63",
+  "P": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "BASE": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "counts": [
+    279,
+    29,
+    1701
+  ],
+  "all_protected_git_hashes_modes_valid": true,
+  "retained": [
+    {
+      "label": "BASE",
+      "ref": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+      "counts": [
+        238,
+        22,
+        1192
+      ]
+    },
+    {
+      "label": "accepted10c",
+      "ref": "10c018092ab6f76928a54115eb824a64adc637be",
+      "counts": [
+        269,
+        27,
+        1675
+      ]
+    },
+    {
+      "label": "originalSOURCE0151",
+      "ref": "0151a555ac429957d0eee591317cc4326e909dfd",
+      "counts": [
+        222,
+        18,
+        1146
+      ]
+    }
+  ],
+  "product_delta_from_accepted10c": [
+    "backend/app/services/fbs_stock_publish_service.py",
+    "frontend/src/test-contracts/inbound684586Harness.tsx"
+  ],
+  "stock_matches_accepted_BASE": true,
+  "harness_matches_own_a026_PASS": true,
+  "H_product_diff_from_P": [],
+  "new_five_contracts_byte_identical_to_precode": true,
+  "author_required_five_raw_results": "passed",
+  "workflow_bash_syntax": "PASS guard and proof",
+  "defect": {
+    "suite": "postgres-wms662-batch",
+    "producer": "release-postgres/662-batch.xml",
+    "required": "pg/662-batch.xml",
+    "replay_failure": "Missing required file: pg/662-batch.xml",
+    "correct_path_only_control": "PASS",
+    "product_impact": "No demonstrated business defect; deterministic process-proof blocker even when PG batch passes"
+  },
+  "activation": "REJECTED for H; specified data-only activation cannot correct required report path without an additional explicitly reviewed wiring delta"
+}
