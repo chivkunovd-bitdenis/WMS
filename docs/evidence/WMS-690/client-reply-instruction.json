@@ -1,0 +1,35 @@
+{
+  "at": 1791393305.038542,
+  "moderator_thread_id": "01a1173e-cbaa-7363-9e4c-25b6a9c79aaa",
+  "target_confirmed_by": [
+    "service_config",
+    "moderator/current.json",
+    "heartbeat/wms-4"
+  ],
+  "live_instruction_in_active_turn": true,
+  "active_turn_id": "01a11742-bba6-7792-83db-375435a71057",
+  "live_instruction_item": "fco_01a11759-6698-7ab0-b3f0-945ede1be160",
+  "moderator_following_actions": [
+    {
+      "tool": "collaboration.send_message",
+      "target": "imperiya_actual_boxes",
+      "call_id": "call_5b9714c16a2f47b9b13dd061fb59f3f5"
+    },
+    {
+      "tool": "collaboration.send_message",
+      "target": "partner_fbo_and_process",
+      "call_id": "call_3291db201f5e46b7b58d86babe7d18c8"
+    },
+    {
+      "tool": "collaboration.send_message",
+      "target": "partner_current_chz",
+      "call_id": "call_d5cbe2af964c4fc7b795ee4fc68a4186"
+    }
+  ],
+  "policy": "useful plain-language result, necessary action or indispensable focused question; otherwise silent; no internal technical reporting",
+  "details_when_requested": true,
+  "semantic_not_word_filter": true,
+  "new_runtime_code": false,
+  "client_test_messages": false,
+  "reply_permission_flags_changed": false
+}
