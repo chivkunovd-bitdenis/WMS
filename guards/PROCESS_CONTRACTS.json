@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "16dc7b7915b5caaa87922cf77c9d0ab8a4f64d335e7115a7ad49767ae60c4fa0",
+    ".github/workflows/ci.yml": "f138b1eb98df06212d3701f330e2cceb6f22f2982bcf4ecaeebce49b76600199",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -186,7 +186,7 @@
     "scripts/ci/run_critical_fbs_browser.sh": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
     "scripts/ci/run_isolated_pytest.py": "4315343d6b8a62d9f074d49c663b1e1f8b1f38f18ec7a13e983859b7a98f896a",
     "scripts/ci/run_release_postgres.sh": "99c1036ca8b27132767765ce1b8a772a357d060fe7b67048e3a3f5921d07a9d0",
-    "scripts/ci/run_release_print.sh": "f7bb1499bc36b25c2d7f1efb234392e6cd7dc32c55035567f8829f8a147a6cd7",
+    "scripts/ci/run_release_print.sh": "150cd45d88a8e3fe242ecbac595ad70afe707f929def76dbc85fbe5d548a3ac0",
     "scripts/ci/tests/test_backend_shard_failclosed.py": "aaa8015ab0ff0556443e3284ff89a5f9797fbfdcfe21ef3d3891610752700e1c",
     "scripts/ci/tests/test_backend_shard_redis_setup.py": "756bc9ea158afae5624813781b9191bbc71d9408b4265115cc60b01694768884",
     "scripts/ci/tests/test_backend_shards.py": "dded5d07d5cb4f7203d24eb93f4bd55a8b816c81797ab6c5b7ff968d47dbcb0c",
@@ -223,7 +223,7 @@
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "dcaca934f70a348fb7d16cb663f14d889bcca876a79ed167a1d10b8de24e10e2",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "df003369ed15473eb421a8fa333c7dd013946362e29875a4b52b938c0e1bea8d",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
     "scripts/ci/promote_guards.py": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5",
@@ -282,7 +282,10 @@
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
     "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
-    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969"
+    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969",
+    "frontend/src/utils/printProductThermalLabel.test.ts": "0a3a92e45e1d53edd7af2fa2bcdee0fb5b4f5b71cf2bf416119add4c0d23dfef",
+    "frontend/src/utils/wms702ProductLabelGeometry.test.ts": "aee80cd0e1d350f6a4567cbcaf0b9089f19af432f91b787025b0843f723b3016",
+    "scripts/ci/tests/test_wms702_source_transition.py": "20f61832c305d4a32ec1a8ae35a67f6e7c1e126819416c88c26c4b673d493e23"
   },
   "suites": {
     "backend-fbs": {
@@ -2201,6 +2204,14 @@
       "exact": true,
       "cases": [
         "tests.test_wms662_batch_handoff_lock_order::test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_money"
+      ]
+    },
+    "print-702": {
+      "report": "print/702.json",
+      "format": "vitest",
+      "exact": true,
+      "cases": [
+        "src/utils/wms702ProductLabelGeometry.test.ts::WMS-702 real ordinary WB label geometry keeps every selected field visible, separated and readable in every stock size and both print documents"
       ]
     }
   }
