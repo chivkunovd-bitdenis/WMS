@@ -1,0 +1,482 @@
+{
+  "lifecycle": [
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862604,
+      "nodeUtc": "2026-10-07T00:27:42.604Z",
+      "nodeMonoMs": 431.109388,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 1,
+      "method": "Browser.getVersion"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862622,
+      "nodeUtc": "2026-10-07T00:27:42.622Z",
+      "nodeMonoMs": 449.891253,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 1,
+      "method": "Browser.getVersion",
+      "result": {
+        "protocolVersion": "1.3",
+        "product": "Chrome/141.0.7390.37",
+        "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+        "jsVersion": "14.1.146.11"
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862623,
+      "nodeUtc": "2026-10-07T00:27:42.623Z",
+      "nodeMonoMs": 450.221392,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 2,
+      "method": "Page.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862627,
+      "nodeUtc": "2026-10-07T00:27:42.627Z",
+      "nodeMonoMs": 454.384632,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 2,
+      "method": "Page.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862627,
+      "nodeUtc": "2026-10-07T00:27:42.627Z",
+      "nodeMonoMs": 454.435938,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 3,
+      "method": "Runtime.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862630,
+      "nodeUtc": "2026-10-07T00:27:42.630Z",
+      "nodeMonoMs": 458.006449,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 3,
+      "method": "Runtime.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862630,
+      "nodeUtc": "2026-10-07T00:27:42.630Z",
+      "nodeMonoMs": 458.064645,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 4,
+      "method": "Network.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862631,
+      "nodeUtc": "2026-10-07T00:27:42.631Z",
+      "nodeMonoMs": 458.846614,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 4,
+      "method": "Network.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862631,
+      "nodeUtc": "2026-10-07T00:27:42.631Z",
+      "nodeMonoMs": 458.997257,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 5,
+      "method": "Fetch.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862632,
+      "nodeUtc": "2026-10-07T00:27:42.632Z",
+      "nodeMonoMs": 459.866786,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 5,
+      "method": "Fetch.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862632,
+      "nodeUtc": "2026-10-07T00:27:42.632Z",
+      "nodeMonoMs": 459.922789,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862634,
+      "nodeUtc": "2026-10-07T00:27:42.634Z",
+      "nodeMonoMs": 461.850977,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Page.frameStartedLoading",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862635,
+      "nodeUtc": "2026-10-07T00:27:42.635Z",
+      "nodeMonoMs": 463.00069,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.requestWillBeSent",
+      "requestId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "loaderId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "requestMethod": "GET",
+      "browserTimestamp": 135.429265,
+      "browserWallTime": 1791332862.635324,
+      "type": "Document"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862646,
+      "nodeUtc": "2026-10-07T00:27:42.646Z",
+      "nodeMonoMs": 473.488593,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-1.0",
+      "networkId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862646,
+      "nodeUtc": "2026-10-07T00:27:42.646Z",
+      "nodeMonoMs": 473.895266,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862648,
+      "nodeUtc": "2026-10-07T00:27:42.648Z",
+      "nodeMonoMs": 475.29142,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862649,
+      "nodeUtc": "2026-10-07T00:27:42.649Z",
+      "nodeMonoMs": 476.58693,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862649,
+      "nodeUtc": "2026-10-07T00:27:42.649Z",
+      "nodeMonoMs": 476.633609,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 8,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862653,
+      "nodeUtc": "2026-10-07T00:27:42.653Z",
+      "nodeMonoMs": 481.04002,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862654,
+      "nodeUtc": "2026-10-07T00:27:42.654Z",
+      "nodeMonoMs": 481.812144,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Page.frameNavigated",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "type": "Navigation",
+      "frame": {
+        "id": "1DD331B6465D837EFCBD082834C9E57E",
+        "loaderId": "8BCEEDF14ABB71343B046BE67AAF7646",
+        "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+      }
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862660,
+      "nodeUtc": "2026-10-07T00:27:42.660Z",
+      "nodeMonoMs": 487.323882,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.loadingFinished",
+      "requestId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "browserTimestamp": 135.440973
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862660,
+      "nodeUtc": "2026-10-07T00:27:42.660Z",
+      "nodeMonoMs": 487.876291,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Page.frameStoppedLoading",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862661,
+      "nodeUtc": "2026-10-07T00:27:42.661Z",
+      "nodeMonoMs": 488.858597,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 8,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862662,
+      "nodeUtc": "2026-10-07T00:27:42.662Z",
+      "nodeMonoMs": 489.485225,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 9,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862663,
+      "nodeUtc": "2026-10-07T00:27:42.663Z",
+      "nodeMonoMs": 490.53812,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.requestWillBeSent",
+      "requestId": "3156.2",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "loaderId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "url": "http://127.0.0.1:16686/favicon.ico",
+      "requestMethod": "GET",
+      "browserTimestamp": 135.456624,
+      "browserWallTime": 1791332862.662722,
+      "type": "Other"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862664,
+      "nodeUtc": "2026-10-07T00:27:42.664Z",
+      "nodeMonoMs": 491.753607,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.requestWillBeSent",
+      "requestId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "loaderId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "requestMethod": "GET",
+      "browserTimestamp": 135.457861,
+      "browserWallTime": 1791332862.663931,
+      "type": "Fetch"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862664,
+      "nodeUtc": "2026-10-07T00:27:42.664Z",
+      "nodeMonoMs": 492.016957,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 9,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.361989,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-2.0",
+      "networkId": "3156.2",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/favicon.ico",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.45742,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.745126,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "control-stage",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.878694,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "stage": "explicit-client-abort-with-observed-request-paused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "method": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.907127,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 11,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862666,
+      "nodeUtc": "2026-10-07T00:27:42.666Z",
+      "nodeMonoMs": 493.663101,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862666,
+      "nodeUtc": "2026-10-07T00:27:42.666Z",
+      "nodeMonoMs": 493.990046,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.loadingFinished",
+      "requestId": "3156.2",
+      "browserTimestamp": 135.459507
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.102012,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 11,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.165496,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 12,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.366975,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.loadingFailed",
+      "requestId": "3156.3",
+      "browserTimestamp": 135.460313,
+      "canceled": true,
+      "errorText": "net::ERR_ABORTED",
+      "type": "Fetch"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.636053,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 12,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.666839,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 13,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862673,
+      "nodeUtc": "2026-10-07T00:27:42.673Z",
+      "nodeMonoMs": 500.095044,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 13,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862673,
+      "nodeUtc": "2026-10-07T00:27:42.673Z",
+      "nodeMonoMs": 500.221151,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 14,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.308822,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 14,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.458124,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 15,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.773241,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 15,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    }
+  ],
+  "lifecycleDropped": 0
+}

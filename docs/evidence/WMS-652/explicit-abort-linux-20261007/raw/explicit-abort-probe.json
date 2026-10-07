@@ -1,0 +1,45 @@
+{
+  "synthetic": true,
+  "originalFailureCause": "NOT_PROVEN_BY_THIS_CONTROL",
+  "status": "MEASURED_EXPLICIT_ABORT_CANCELLATION_AND_UNEXPLAINED_UNKNOWN_ID",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "x64",
+    "protocolVersion": "1.3",
+    "product": "Chrome/141.0.7390.37",
+    "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+    "jsVersion": "14.1.146.11"
+  },
+  "observedPaused": {
+    "requestId": "interception-job-3.0",
+    "networkId": "3156.3",
+    "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+    "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+    "method": "GET"
+  },
+  "clientOutcome": {
+    "name": "AbortError",
+    "message": "signal is aborted without reason",
+    "signalAborted": true
+  },
+  "livePageAfterAbort": "http://127.0.0.1:16686/__wms652_transport_document__",
+  "matchingLoadingFailed": {
+    "requestId": "3156.3",
+    "timestamp": 135.460313,
+    "type": "Fetch",
+    "errorText": "net::ERR_ABORTED",
+    "canceled": true
+  },
+  "staleFulfillError": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "unknownIdError": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "unknownIdIsUnexplained": true,
+  "listenerErrors": []
+}
