@@ -1,0 +1,408 @@
+{
+  "verdict": "Existing finite rejection correct; exact retirement cause UNKNOWN; insufficient identity for a handling change",
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "evidence": "896b9a3fee446728c44b62af7c8bf8422d1e5e08",
+  "run": 37567017373,
+  "attempt": 1,
+  "transport_events": 43443,
+  "kinds": {
+    "command-send": 11582,
+    "command-result": 11582,
+    "request-paused": 9946,
+    "generation-boundary": 134,
+    "network-terminal": 10199
+  },
+  "all_native_command_pairs_verified": 11582,
+  "pending": [],
+  "native_error_commands": [
+    2730,
+    7689
+  ],
+  "missing_network_paused_records": [
+    {
+      "command": 2730,
+      "raw_indexes_zero_based": [
+        10271,
+        10272,
+        10278
+      ],
+      "records": [
+        {
+          "utcMs": 1791344275508,
+          "kind": "request-paused",
+          "requestId": "interception-job-2350.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 46,
+          "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+          "attempts": 0,
+          "disposition": "paused"
+        },
+        {
+          "utcMs": 1791344275508,
+          "kind": "command-send",
+          "commandId": 2730,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-2350.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 46,
+          "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344275511,
+          "kind": "command-result",
+          "commandId": 2730,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-2350.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 46,
+          "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+          "nativeError": {
+            "code": -32602,
+            "message": "Invalid InterceptionId."
+          }
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "rejected"
+    },
+    {
+      "command": 3511,
+      "raw_indexes_zero_based": [
+        13238,
+        13239,
+        13240
+      ],
+      "records": [
+        {
+          "utcMs": 1791344284891,
+          "kind": "request-paused",
+          "requestId": "interception-job-3048.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 56,
+          "caseId": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+          "attempts": 0,
+          "disposition": "paused",
+          "ambiguous": true
+        },
+        {
+          "utcMs": 1791344284891,
+          "kind": "command-send",
+          "commandId": 3511,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-3048.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 56,
+          "caseId": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344284891,
+          "kind": "command-result",
+          "commandId": 3511,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-3048.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 56,
+          "caseId": "WMS652.realQrFlags[reprint;supply_ids=A,B]"
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "success"
+    },
+    {
+      "command": 4310,
+      "raw_indexes_zero_based": [
+        16283,
+        16284,
+        16285
+      ],
+      "records": [
+        {
+          "utcMs": 1791344294579,
+          "kind": "request-paused",
+          "requestId": "interception-job-3764.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 68,
+          "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+          "attempts": 0,
+          "disposition": "paused",
+          "ambiguous": true
+        },
+        {
+          "utcMs": 1791344294579,
+          "kind": "command-send",
+          "commandId": 4310,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-3764.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 68,
+          "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344294579,
+          "kind": "command-result",
+          "commandId": 4310,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-3764.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 68,
+          "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]"
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "success"
+    },
+    {
+      "command": 6365,
+      "raw_indexes_zero_based": [
+        24079,
+        24080,
+        24084
+      ],
+      "records": [
+        {
+          "utcMs": 1791344318701,
+          "kind": "request-paused",
+          "requestId": "interception-job-5598.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 102,
+          "caseId": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+          "attempts": 0,
+          "disposition": "paused",
+          "ambiguous": true
+        },
+        {
+          "utcMs": 1791344318701,
+          "kind": "command-send",
+          "commandId": 6365,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-5598.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 102,
+          "caseId": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344318704,
+          "kind": "command-result",
+          "commandId": 6365,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-5598.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 102,
+          "caseId": "WMS652.realQrFlags[held-receipt;supply_ids=A]"
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "success"
+    },
+    {
+      "command": 6887,
+      "raw_indexes_zero_based": [
+        26057,
+        26058,
+        26062
+      ],
+      "records": [
+        {
+          "utcMs": 1791344325274,
+          "kind": "request-paused",
+          "requestId": "interception-job-6064.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 110,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+          "attempts": 0,
+          "disposition": "paused",
+          "ambiguous": true
+        },
+        {
+          "utcMs": 1791344325274,
+          "kind": "command-send",
+          "commandId": 6887,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6064.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 110,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344325276,
+          "kind": "command-result",
+          "commandId": 6887,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6064.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 110,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]"
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "success"
+    },
+    {
+      "command": 7689,
+      "raw_indexes_zero_based": [
+        29076,
+        29077,
+        29083
+      ],
+      "records": [
+        {
+          "utcMs": 1791344335245,
+          "kind": "request-paused",
+          "requestId": "interception-job-6767.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 122,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+          "attempts": 0,
+          "disposition": "paused",
+          "ambiguous": true
+        },
+        {
+          "utcMs": 1791344335245,
+          "kind": "command-send",
+          "commandId": 7689,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6767.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 122,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+          "attempt": 1
+        },
+        {
+          "utcMs": 1791344335249,
+          "kind": "command-result",
+          "commandId": 7689,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6767.0",
+          "frameId": "370498F5CA84CAD273E5820D74B8CBAC",
+          "generation": 122,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+          "nativeError": {
+            "code": -32602,
+            "message": "Invalid InterceptionId."
+          }
+        }
+      ],
+      "one_observation_one_first_fulfill": true,
+      "recorded_generation_case_unchanged_through_reply": true,
+      "native_outcome": "rejected"
+    }
+  ],
+  "failed_case_business_receipts": {
+    "WMS652-realQrFlags-qr-supply_ids-A-B-.json": {
+      "errors": [
+        "Error: {\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
+      ],
+      "blocked": [],
+      "trace": [
+        "product-miss:*DUIkWJJF",
+        "lookup:wb-a-order",
+        "select:wb-a-order",
+        "bind:wb-a-order",
+        "print:scan-wb-a-order",
+        "pack:wb-a-order",
+        "product-miss:*DUIkNEXT",
+        "lookup:wb-next-order",
+        "select:wb-next-order",
+        "bind:wb-next-order",
+        "print:scan-wb-next-order",
+        "pack:wb-next-order"
+      ],
+      "acceptedPrintKeys": [
+        "scan-wb-a-order",
+        "scan-wb-next-order"
+      ],
+      "print_attempts": 2
+    },
+    "WMS652-realQrFlags-remount-after-lost-ack-supply_id-A-.json": {
+      "errors": [
+        "Error: {\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
+      ],
+      "blocked": [],
+      "trace": [
+        "product-miss:*DUIkWJJF",
+        "lookup:wb-a-order",
+        "select:wb-a-order",
+        "bind:wb-a-order",
+        "print:scan-wb-a-order",
+        "select:wb-a-order",
+        "print:scan-wb-a-order",
+        "pack:wb-a-order",
+        "product-miss:*DUIkNEXT",
+        "lookup:wb-next-order",
+        "select:wb-next-order",
+        "bind:wb-next-order",
+        "print:scan-wb-next-order",
+        "pack:wb-next-order"
+      ],
+      "acceptedPrintKeys": [
+        "scan-wb-a-order",
+        "scan-wb-next-order"
+      ],
+      "print_attempts": 3
+    }
+  },
+  "browser_cases": {
+    "PASS": 41,
+    "FAIL": 2
+  },
+  "existing_R1_source_bytes_identical": true,
+  "prior_selected_fullURL_capture": {
+    "run": 37550768806,
+    "paused": 431,
+    "missing_network_pauses": 0
+  },
+  "input_hashes": {
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/run-current.json": {
+      "bytes": 14637,
+      "sha256": "ad903dcc3358d4dafc33ee3991bdda393f70dc26a09f7e4059c4e6d3e16be7f9"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/raw/print/critical-fbs/cdp-transport.json": {
+      "bytes": 13917126,
+      "sha256": "fad4e970d0a14a08e05ebf656bed88a74cfe541a862dde2cf3258005fe682c94"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/invalid-id-ledger.json": {
+      "bytes": 3048,
+      "sha256": "cf9281048991a3a50d919349c5908bc9cfcf1bfd897c9882f5ebf128d3e277fe"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/raw/print/critical-fbs/result.json": {
+      "bytes": 4734,
+      "sha256": "4f2b53b87cd150cc1231216f06d3020c6949792919a01750f83c1865ccfb4a1f"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/raw/print/critical-fbs/WMS652-realQrFlags-qr-supply_ids-A-B-.json": {
+      "bytes": 10628,
+      "sha256": "44c7727e475242584a3c956b5b281f9678568ea187413f85ffbcc4a41e5f1021"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/raw/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_id-A-.json": {
+      "bytes": 13369,
+      "sha256": "448817e461f8b9cb4dd5946932bed4e5c7deea2f071b9ed2caa5a5bdb8dd2eb0"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/etalon-ci-37567017373/jobs/print-regressions.log": {
+      "bytes": 152736,
+      "sha256": "458abe48ea1936f9f7136518cf80cc4f93996feef3a6aadb91e5f43adfc57ed4"
+    },
+    "4c532f0cccfb8f99b34d68d9630a3763038fbc5f:frontend/tests-e2e/wms652-critical/browser.mjs": {
+      "bytes": 42483,
+      "sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6"
+    },
+    "972da18be97cab8c41b14b0aa00a3d30773e4492:frontend/tests-e2e/wms652-critical/browser.mjs": {
+      "bytes": 42483,
+      "sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6"
+    },
+    "896b9a3fee446728c44b62af7c8bf8422d1e5e08:docs/evidence/WMS-652/realqr-cdp-lifecycle-linux-20261007/raw/selected/cdp-lifecycle.json": {
+      "bytes": 912256,
+      "sha256": "2cec68cba3bc3e7390067c425f517d3fa7f81b6a39448bb949785c1063aa9275"
+    }
+  },
+  "new_native_test_CI_browser_runs": [],
+  "fix_or_SOURCE_approval": false
+}
