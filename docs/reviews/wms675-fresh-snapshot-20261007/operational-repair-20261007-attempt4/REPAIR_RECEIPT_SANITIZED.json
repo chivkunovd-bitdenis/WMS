@@ -1,0 +1,49 @@
+{
+  "repair_date_utc": "2026-10-07",
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "marketplace": "ozon",
+    "source": "wms"
+  },
+  "runtime": {
+    "candidate_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "host_checkout_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "container_image_digest": "sha256:f9dd6b915e3ef830c2941db97f11b2982eda0d08b5f969bb9324e7f15c529374",
+    "image_created_utc": "2026-10-07T06:09:20.832212722Z",
+    "container_created_utc": "2026-10-07T06:12:34.185805086Z",
+    "literal_runtime_git_sha": "not_embedded_in_image",
+    "runtime_source_tree_equivalent_commit": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "python_source_files_compared": 347,
+    "candidate_and_runtime_manifest_sha256": "bc18cda617ea6a9420d96da263d33f31bdf711f1da2d155f7b214c921487a97a",
+    "accepted_service_sha256": "137e9f7484cd5b4122c43f6ae56a40018dc5b755edc7144aaf48a744a1bafb07"
+  },
+  "fresh_before": {
+    "captured_at_utc": "2026-10-07T06:24:20.591388+00:00/2026-10-07T06:24:24.699342+00:00",
+    "external": {"calls": 31, "positive": 26, "cancelled": 5, "unknown": 0, "composition_or_child_mismatches": 0, "cards_sha256": "db29d28b432b40a387921ebab8b69cd9890d2a776295d2964eeed6fa38320da7"},
+    "scope": {"orders": 31, "positions": 31, "scope_sha256": "5af202de8ee4e0cf7dab09f4e4aa1ad1fc164df6df43f56bf28418dac54c7cd7"},
+    "journal": {"present": true, "evidence_orders": 12, "targets": 12, "state": "confirmed", "error_code": null},
+    "ledger": {"recipes": 31, "completed": 12, "reversal": 0},
+    "facts": {"count": 26, "ids_sha256": "03e300457d58916fec01411cbe21231977bfdbdcadcc5663802d958931629722"},
+    "charges": {"count": 52, "ids_sha256": "7e3c6ecd173fb6ecd11dcf024ee9c94e76786eec4300fe1da67bed0e0dd2b2f8"},
+    "position_reserved_quantity": 14,
+    "cumulative_missing_delta": 14
+  },
+  "accepted_execution": {
+    "started_at_utc": "2026-10-07T06:27:18.275300+00:00",
+    "finished_at_utc": "2026-10-07T06:27:27.194578+00:00",
+    "external_calls": 31,
+    "external_status_counts": {"delivered": 14, "delivering": 12, "cancelled": 5},
+    "external_cards_sha256": "52ddccb2e9bf9e3aa484fda8d412a05270108f4352065edc06a4dc4e26f56d90",
+    "entrypoint": "ozon_targets -> make_observation -> save_observations -> lock_order_batch_packaging_rows -> lock_handoff_batch_products -> conduct_supply -> commit",
+    "durable_observation": {"orders": 31, "targets": 26, "zero_target_orders": 5, "committed_separately": true},
+    "locked_before_conduct": {"evidence_orders": 31, "targets": 26, "completed": 12, "remaining": 14, "reversal": 0, "rows_sha256": "7696035efa5c9c0b20a0fb99940f1c95d05c6e4b350376c9d35cc7c51ee0ae5c"},
+    "conduct_commit": "attempted_once",
+    "manual_delta": false,
+    "sql_update": false,
+    "marketplace_handoff": false,
+    "seller_wide_sync": false
+  }
+}

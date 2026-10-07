@@ -1,0 +1,24 @@
+{
+  "captured_at_utc": "2026-10-07T06:31:15.761234+00:00",
+  "method": "new application session: REPEATABLE READ, READ ONLY; rollback; separate seller-bound Ozon card reads",
+  "writes": 0,
+  "external": {
+    "endpoint": "/v3/posting/fbs/get",
+    "calls": 31,
+    "positive": 26,
+    "cancelled": 5,
+    "cards_sha256": "0702b25ed85f0c7ed2f5aaf9c27a2059ecc54c7fb1f903da90b847b6777b3530"
+  },
+  "scope": {"orders": 31, "positions": 31, "supply_status": "in_delivery"},
+  "journal": {"present": true, "state": "confirmed", "error_code": null, "evidence_orders": 31, "targets": 26},
+  "ledger": {"recipes": 31, "completed": 26, "reversal": 0, "per_order_sha256": "d9bdc6a5e5b2224cc101429e79598d5e3aedeeb33ad588bcd68a7a84f5cc7b56"},
+  "facts": {"count": 26, "ids_sha256": "03e300457d58916fec01411cbe21231977bfdbdcadcc5663802d958931629722"},
+  "charges": {"count": 52, "ids_sha256": "7e3c6ecd173fb6ecd11dcf024ee9c94e76786eec4300fe1da67bed0e0dd2b2f8"},
+  "position_reserved_quantity": 14,
+  "actual_reservation_rows": 0,
+  "actual_reservation_quantity": 0,
+  "bad_postings_count": 0,
+  "missing_delta": 0,
+  "strict_acceptance_complete": false,
+  "strict_acceptance_blocker": "14 done positions retain stale fbs_order_products.reserved_quantity=1 while both reservation tables have zero rows; accepted reserve=False returns early when rows are absent, so no authorised existing path clears the denormalized field."
+}
