@@ -7,6 +7,7 @@ mkdir -p "$out"
 export WMS652_EVIDENCE="$RUNNER_TEMP/release-print/critical-fbs"
 mkdir -p "$WMS652_EVIDENCE"
 node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/observer.test.mjs > "$out/observer-controls.tap"
+node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/error-context.test.mjs > "$out/error-context-controls.tap"
 python3 scripts/ci/wms652-identity-diagnostic/prepare.py "$out" > "$out/preparation-summary.json"
 node --check frontend/tests-e2e/wms652-critical/browser.identity-diagnostic.untracked.mjs
 node --check frontend/tests-e2e/wms652-critical/identity-observer.untracked.mjs

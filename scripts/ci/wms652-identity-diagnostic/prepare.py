@@ -24,14 +24,10 @@ def sha(data):
 
 INSERTIONS = [
     (b"// WMS652 critical real-screen contracts.",
-     b"import { createObserver } from './identity-observer.untracked.mjs';\nconst identityObserver=createObserver();\n"),
-    (b"      if (msg.id) {", b"      identityObserver.message(this,msg);\n"),
-    (b"        this.pending.delete(id); this.record({kind:'command-timeout'",
-     b"        identityObserver.timedOut(this,id,method);\n"),
-    (b"      this.ws.send(JSON.stringify({id,method,params}));",
-     b"      identityObserver.sent(this,id,method,params);\n"),
+     b"import { createErrorContextObserver } from './identity-observer.untracked.mjs';\nconst errorContext=createErrorContextObserver();\n"),
+    (b"      if (msg.id) {", b"      if (msg.error || msg.method) errorContext.message(this,msg);\n"),
     (b"  await writeFile(`${dir}/cdp-transport.json`",
-     b"  await writeFile(`${dir}/identity-telemetry.json`,JSON.stringify(identityObserver.snapshot(cdp,report)));\n"),
+     b"  await writeFile(`${dir}/error-context.json`,errorContext.serialize(cdp,report));\n"),
 ]
 
 
@@ -91,7 +87,7 @@ def main():
             raise ValueError("Generated copy must be untracked")
         if path.exists():
             raise ValueError(f"Refusing to overwrite generated copy: {path}")
-    observer = (HERE / "observer.mjs").read_bytes()
+    observer = (HERE / "error-context.mjs").read_bytes()
     RUNNER.write_bytes(generated)
     OBSERVER.write_bytes(observer)
     (out / "frozen-browser-source.mjs").write_bytes(original)
@@ -109,7 +105,7 @@ def main():
     shell_path.write_bytes(shell_copy)
     (out / "original-shell.sh").write_bytes(shell_source)
     (out / "generated-shell.sh").write_bytes(shell_copy)
-    receipt = {"source": SOURCE, "diagnostic_head": git("rev-parse", "HEAD").decode().strip(),
+    receipt = {"source": SOURCE, "diagnostic_head": git("rev-parse", "HEAD").decode().strip(), "mode": "focused-error-context",
                "source_git_bindings": bindings, "source_sha256": hashes, "cases": cases, "insertions": len(INSERTIONS),
                "source_browser_sha256": sha(original), "reverse_recovered_sha256": sha(recovered),
                "reverse_byte_equal": recovered == original, "generated_browser_sha256": sha(generated),

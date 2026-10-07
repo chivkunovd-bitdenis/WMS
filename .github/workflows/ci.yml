@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 jobs:
-  etalon-identity-browser43-diagnostic:
+  etalon-low-overhead-error-context-browser43:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -19,7 +19,7 @@ jobs:
           DISPATCH_SHA: ${{ github.sha }}
           DISPATCH_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          test "$DISPATCH_REF" = 'refs/heads/codex/wms652-etalon-invalid-id-identity-diagnostic'
+          test "$DISPATCH_REF" = 'refs/heads/codex/wms652-etalon-low-overhead-error-context'
           test "$DISPATCH_SHA" = "$(git rev-parse HEAD)"
           test "$DISPATCH_ATTEMPT" = '1'
       - uses: actions/setup-node@v4
@@ -37,12 +37,12 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wms652-etalon-identity-browser43-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: wms652-etalon-error-context-browser43-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/wms652-identity-diagnostic
             ${{ runner.temp }}/release-print/critical-fbs/result.json
             ${{ runner.temp }}/release-print/critical-fbs/cdp-transport.json
-            ${{ runner.temp }}/release-print/critical-fbs/identity-telemetry.json
+            ${{ runner.temp }}/release-print/critical-fbs/error-context.json
             ${{ runner.temp }}/release-print/critical-fbs/chrome.log
             ${{ runner.temp }}/release-print/critical-fbs/vite.log
           if-no-files-found: error
