@@ -383,6 +383,10 @@ describe('WMS-575 · «Упаковка и маркировка» принима
     expect(attempts).toBe(2)
 
     const other = workspace({}, OTHER_SUPPLY_ID)
+    other.orders = other.orders.map((item) => ({
+      ...item,
+      product: { ...item.product, name: 'Товар из новой поставки' },
+    }))
     await openPackingTab(other, OTHER_SUPPLY_ID)
     await settle(80)
     expect(document.body.textContent).toContain('Товар из новой поставки')
