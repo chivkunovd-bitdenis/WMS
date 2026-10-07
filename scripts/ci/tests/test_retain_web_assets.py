@@ -89,14 +89,17 @@ def test_deploy_stages_before_traffic_and_cleans_temporary_container(tmp_path, f
     executable = tmp_path / 'bin/docker'
     executable.parent.mkdir()
     executable.write_text('''#!/usr/bin/env python3
-import os,sys,shutil
+import os,sys,shutil,json
 from pathlib import Path
 root=Path(os.environ['ASSET_TEST_ROOT']); args=sys.argv[1:]
 with (root/'docker.log').open('a') as log: log.write(' '.join(args)+'\\n')
 if args[:3]==['compose','ps','-q']: print('previous-web')
 elif args[:2]==['compose','build']: pass
-elif args[0]=='inspect': print('test-web:latest')
-elif args[:2]==['image','inspect']: print('candidate-image')
+elif args[:3]==['compose','config','--images']: print('postgres:16\\nredis:7-alpine\\nintended-web:latest')
+elif args[:3]==['compose','config','--format']: print(json.dumps({'name':'example','services':{'web':{'image':'intended-web:latest'}}}))
+elif args[0]=='inspect': raise SystemExit('Old container tag must never select the new image')
+elif args[:2]==['image','inspect']:
+ assert args[-1]=='intended-web:latest'; print('candidate-image')
 elif args[0]=='create':
  shutil.copytree(root/'candidate',root/'staged'); print('staged-web')
 elif args[0]=='cp':
@@ -106,6 +109,7 @@ elif args[0]=='cp':
   shutil.copytree(root/('previous' if container=='previous-web' else 'staged'),target,dirs_exist_ok=True)
  else: shutil.copytree(source,root/'staged',dirs_exist_ok=True)
 elif args[0]=='commit':
+ assert args[-1]=='intended-web:latest'
  if os.environ['FAIL_ASSET_COMMIT']=='1': sys.exit(33)
  shutil.copytree(root/'staged',root/'published'); print('retained-image')
 elif args[0]=='rm': shutil.rmtree(root/'staged')
@@ -145,3 +149,18 @@ def test_dangling_directory_and_symlinked_seller_parent_fail_closed(tmp_path):
     (tmp_path / 'seller').symlink_to(tmp_path / 'outside')
     with pytest.raises(ValueError, match='Symlink'):
         assets.asset_files(tmp_path)
+
+
+@pytest.mark.parametrize('explicit,project,images,expected', [
+    ('declared:new', 'production', ['postgres:16', 'redis:7-alpine', 'declared:new'], 'declared:new'),
+    (None, 'production', ['production-api', 'production-web'], 'production-web'),
+    (None, 'production', ['production_api', 'production_web'], 'production_web'),
+])
+def test_image_selection_uses_current_compose_service_not_previous_container(explicit, project, images, expected):
+    assert assets.resolve_image_tag({'name': project, 'services': {'web': {'image': explicit}}}, images) == expected
+
+
+@pytest.mark.parametrize('images', [['production-api'], ['production-web', 'production_web']])
+def test_image_selection_refuses_missing_or_ambiguous_build_target(images):
+    with pytest.raises(ValueError, match='exactly one'):
+        assets.resolve_image_tag({'name': 'production', 'services': {'web': {}}}, images)

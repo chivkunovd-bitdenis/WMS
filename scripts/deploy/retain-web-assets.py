@@ -6,6 +6,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 
 
@@ -55,9 +56,20 @@ def verify(candidate: Path, manifest: Path) -> None:
         raise ValueError('Retained image asset checksums differ from previous/candidate union')
 
 
+def resolve_image_tag(config: dict, declared_images: list[str]) -> str:
+    explicit = config['services']['web'].get('image')
+    candidates = [explicit] if explicit else [config['name'] + separator + 'web' for separator in ('-', '_')]
+    matches = [tag for tag in candidates if tag in declared_images]
+    if len(matches) != 1 or not matches[0] or any(char.isspace() for char in matches[0]):
+        raise ValueError('Cannot resolve exactly one intended web build image')
+    return matches[0]
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='action', required=True)
+    image = sub.add_parser('image-tag')
+    image.add_argument('--declared-images', required=True)
     create = sub.add_parser('prepare')
     for name in ('previous', 'candidate', 'delta', 'manifest'):
         create.add_argument('--' + name, type=Path, required=True)
@@ -65,7 +77,9 @@ def main() -> None:
     for name in ('candidate', 'manifest'):
         check.add_argument('--' + name, type=Path, required=True)
     args = parser.parse_args()
-    if args.action == 'prepare':
+    if args.action == 'image-tag':
+        print(resolve_image_tag(json.load(sys.stdin), args.declared_images.splitlines()))
+    elif args.action == 'prepare':
         print(prepare(args.previous, args.candidate, args.delta, args.manifest))
     else:
         verify(args.candidate, args.manifest)

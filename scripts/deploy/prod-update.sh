@@ -105,7 +105,6 @@ cleanup_web_assets() {
 }
 trap cleanup_web_assets EXIT
 
-
 BUILD_SERVICES=(migrations api celery_worker celery_beat web)
 
 echo "==> docker compose prod build (sequential)"
@@ -113,7 +112,11 @@ for service in "${BUILD_SERVICES[@]}"; do
   if [[ "$service" == "web" ]]; then
     WEB_PREVIOUS_CONTAINER="$("${COMPOSE[@]}" ps -q web)"
     if [[ -n "$WEB_PREVIOUS_CONTAINER" ]]; then
-      WEB_IMAGE_TAG="$(docker inspect --format '{{.Config.Image}}' "$WEB_PREVIOUS_CONTAINER")"
+      # Resolve the build output from this exact compose configuration, never
+      # from the old running container (which may use a different image tag).
+      WEB_COMPOSE_IMAGES="$("${COMPOSE[@]}" config --images web)"
+      WEB_IMAGE_TAG="$("${COMPOSE[@]}" config --format json web | \
+        python3 scripts/deploy/retain-web-assets.py image-tag --declared-images "$WEB_COMPOSE_IMAGES")"
       WEB_ASSET_TMP="$(mktemp -d "${TMPDIR:-/tmp}/wms-web-assets.XXXXXX")"
       mkdir "$WEB_ASSET_TMP/previous"
       docker cp "$WEB_PREVIOUS_CONTAINER:/srv/." "$WEB_ASSET_TMP/previous/"

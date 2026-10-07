@@ -211,7 +211,7 @@
     "scripts/ci/verify_server_process_ci.py": "f0f2481151e75dea0a5dc314fba30acca8760452229cade9f9d6927321288ab6",
     "scripts/ci/wms-print-contract-probe.mjs": "775a1f107bb6883aad8fe29d210b0abca6f9313580c479c6c41f1e7ad0ef861d",
     "scripts/ci/wms663-proof/c10_mixed.py": "67f7ebad220346cc049e3061e04baa962659fff901df7e04aa24e969e7d8788e",
-    "scripts/deploy/prod-update.sh": "52752d1220dddc715515a06d6e71a4a3bfd67799d6cd6b6bd2bd830829d67f55",
+    "scripts/deploy/prod-update.sh": "23cca25cb444c8fbe594c56acc4b6f8056672d5fed9362c85545c8a5ec9b75a8",
     "scripts/ops/avpack-macos-launcher.js": "8ff38b74427a5c694c39d1e3bc9f4fe6edb473a40b2de743c04c52b15a030bd6",
     "scripts/ops/avpack-sold-kiz-filter.js": "e6f23c77f8ae00f07896673794c9aa7992229c097c4ea8fe83f48594e807626c",
     "scripts/ops/avpack-sold-kiz.command": "419ac3b5f8cba1eb367d7b1882b26f4ecbd2fc94c4c008af13ceff70c481f3a8",
@@ -280,8 +280,8 @@
     "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
     "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
-    "scripts/deploy/retain-web-assets.py": "e2828dd9bdf508cd0bc91ea2eef703ef879d74aab21e3b4d6a821b1882aca5d5",
-    "scripts/ci/tests/test_retain_web_assets.py": "c6e83eb9ac3bf6a5c07e70e010453fe56c427344269b6fdfaca57b1fcab7d16f",
+    "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
+    "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
     "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "9f5dd562ebaa361cb4b2a36fa536a6884b2383ac222b5a2c125d4deb5f29c31f"
   },
   "suites": {
@@ -1815,7 +1815,12 @@
         "scripts.ci.tests.test_retain_web_assets::test_symlinks_are_rejected_and_empty_previous_is_supported",
         "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[False]",
         "scripts.ci.tests.test_retain_web_assets::test_deploy_stages_before_traffic_and_cleans_temporary_container[True]",
-        "scripts.ci.tests.test_retain_web_assets::test_dangling_directory_and_symlinked_seller_parent_fail_closed"
+        "scripts.ci.tests.test_retain_web_assets::test_dangling_directory_and_symlinked_seller_parent_fail_closed",
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[declared:new-production-images0-declared:new]",
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images1-production-web]",
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_uses_current_compose_service_not_previous_container[None-production-images2-production_web]",
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images0]",
+        "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]"
       ]
     },
     "product-scope": {

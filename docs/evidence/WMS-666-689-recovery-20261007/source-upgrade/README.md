@@ -9,7 +9,7 @@ not select HEAD and does not change the checker or authorize deployment.
 
 The protected registry keeps every previous file, suite, report and case ID.
 It records reviewed inherited production files, precise fixture corrections and
-new asset-retention protection. Nine asset tests are added to the existing exact
+new asset-retention protection. Fourteen asset tests are added to the existing exact
 ci-shards receipt; no previous test is removed.
 
 The existing production script now preserves previous assets before web build,
@@ -20,7 +20,7 @@ traffic starts. A conflicting existing path fails closed. The EXIT trap cleans
 up its temporary container and directory on success or failure. The CI gate and
 first Docker build ordering are unchanged; no gate exception is added.
 
-Local checks: nine retention checks; thirty retention/existing deploy gate checks
+Local checks: fourteen retention checks; thirty-five retention/existing deploy gate checks
 plus 59 subtests; 31 policy tests plus 34 subtests; 67 product-reference checks
 plus nine subtests. Bash syntax passes. The small real Docker probe verified 382
 existing assets plus one synthetic retained file through two unstarted containers
@@ -32,3 +32,10 @@ owner permission to merge that PR. The functional CI of F has two unresolved
 frontend failures (WMS-684 PDF timeout and WMS-657 C5 geometry) at this record's
 creation. Full CI and production readback remain required; this draft is not a
 release PASS.
+
+The web build target is resolved from the current compose configuration, then
+matched against its declared image list (which includes dependencies). The old
+container's Config.Image is never used as the new build target. Explicit image
+names and both compose project-name separators are covered; missing/ambiguous
+targets fail closed. A read-only production probe returned `wms_prod-web`.
+Compose JSON is piped directly to the parser and is neither printed nor saved.
