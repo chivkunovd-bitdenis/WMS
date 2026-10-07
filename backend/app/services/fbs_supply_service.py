@@ -628,6 +628,10 @@ async def create_supply_from_orders(
                         session, tenant_id, supply, http_client
                     )
         except TimeoutError:
+            # Cancellation can interrupt a DB read before the WB HTTP call and
+            # invalidate the connection. Creation was committed above, so close
+            # this optional transaction fully before rebuilding the workspace.
+            await session.rollback()
             logger.warning("fbs supply sticker prefetch timed out supply %s", supply_id)
         refreshed = await get_supply_workspace(session, tenant_id, supply_id)
         refreshed["partial_rejection"] = workspace.get("partial_rejection")

@@ -3102,26 +3102,25 @@ export function FfFbsSupplyWorkspace({
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
     // WMS-528: где брать — ячейки и тара по убыванию остатка, ровно на покрытие подбора.
     // Без ответа сервера лист печатается с прежними ячейками, печать не блокируется.
-    let printableRows = pickingRows
+    let rows: typeof pickingRows = pickingRows
     try {
       const fresh = await ensureFbsStickers(token, authHeaders, workspace)
-      printableRows = fbsBuildPickingRows(fresh.orders, isOzonSupply).rows
+      rows = fbsBuildPickingRows(fresh.orders, isOzonSupply).rows
     } catch (cause) {
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     }
-    let rows: typeof pickingRows = printableRows
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
       const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
         .map((option) => [option.product_id, option]))
-      rows = printableRows.map((row) => {
+      rows = rows.map((row) => {
         const option = options.get(row.key)
         if (!option) return row
         const picked = Math.min(option.picked_qty, row.required)
         return { ...row, picked, locations: fbsPickSourceLabels(option.locations, row.required - picked) }
       })
     } catch {
-      rows = printableRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
+      rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
     }
     try {

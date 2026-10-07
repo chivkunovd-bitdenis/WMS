@@ -1,0 +1,17 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+ ✓ src/integrations/loadCryptoProBrowserPlugin.incident07Oct.test.ts (7 tests) 27ms
+ ✓ src/screens/v2/sellerKizWithdrawalApi.incident07Oct.test.ts (4 tests) 12ms
+ ✓ src/screens/v2/SellerKizWithdrawalScreen.incident07Oct.dom.test.tsx (20 tests) 4936ms
+   ✓ WMS-517 incident registry recovery on the real screen > IC3 ignores cancelled registry Error after filter B completes  382ms
+   ✓ WMS-517 incident registry recovery on the real screen > IC4 ignores old product Error after a debounced search  533ms
+   ✓ WMS-517 incident registry recovery on the real screen > IC4 ignores old product string after a debounced search  605ms
+   ✓ WMS-517 incident registry recovery on the real screen > IC4 ignores old product undefined after a debounced search  645ms
+   ✓ WMS-517 incident registry recovery on the real screen > IC4 ignores old product success after a debounced search  608ms
+
+ Test Files  3 passed (3)
+      Tests  31 passed (31)
+   Start at  23:27:48
+   Duration  7.66s (transform 336ms, setup 0ms, collect 1.89s, tests 4.97s, environment 1.33s, prepare 273ms)
+

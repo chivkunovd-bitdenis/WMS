@@ -1,0 +1,221 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure[db_cancel] _
+
+async_client = <httpx.AsyncClient object at 0x11223e120>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x1122350f0>
+provider_fails = 'db_cancel'
+
+    @pytest.mark.asyncio
+    @pytest.mark.parametrize("provider_fails", [False, True, "timeout", "db_cancel"])
+    async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure(
+        async_client: httpx.AsyncClient,
+        monkeypatch: pytest.MonkeyPatch,
+        provider_fails: bool | str,
+    ) -> None:
+        from app.services.wildberries_client import WildberriesClientError
+        from tests.test_fbs_supply_from_orders import (
+            _create_product,
+            _create_ready_order,
+        )
+        from tests.test_fbs_supply_from_orders import (
+            _register_ff_admin as register,
+        )
+        from tests.test_fbs_supply_from_orders import (
+            _setup_seller_with_token as setup,
+        )
+    
+        monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+        headers, suffix = await register(async_client)
+        me = await async_client.get("/auth/me", headers=headers)
+        tenant = uuid.UUID(me.json()["tenant_id"])
+        seller, warehouse, location = await setup(async_client, headers, suffix)
+        product = await _create_product(async_client, headers, seller, sku=f"sticker-{suffix}")
+        order_id = await _create_ready_order(
+            tenant,
+            uuid.UUID(seller),
+            uuid.UUID(warehouse),
+            uuid.UUID(location),
+            product,
+            order_id=666777002,
+        )
+        calls = []
+    
+        async def stickers(client, *, api_token, order_ids, **kwargs):
+            calls.append(order_ids)
+            if provider_fails == "timeout":
+                await asyncio.sleep(1)
+            if provider_fails:
+                raise WildberriesClientError("transport_error")
+            return [
+                {
+                    "orderId": oid,
+                    "partA": "5877994",
+                    "partB": "0283",
+                    "barcode": "*fixture666",
+                    "file": base64.b64encode(PNG).decode(),
+                }
+                for oid in order_ids
+            ]
+    
+        monkeypatch.setattr(
+            "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
+        )
+        if provider_fails in ("timeout", "db_cancel"):
+            monkeypatch.setattr(
+                "app.services.fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", 0.1
+            )
+        if provider_fails == "db_cancel":
+            async def interrupted_prefetch(session, *args, **kwargs):
+                connection = await session.connection()
+                await connection.invalidate()
+                await asyncio.sleep(1)
+    
+            monkeypatch.setattr(
+                "app.services.fbs_supply_service._request_order_stickers_for_picking",
+                interrupted_prefetch,
+            )
+        body = {
+            "name": "Immediate stickers",
+            "order_ids": [str(order_id)],
+            "planned_delivery_type": "warehouse_sc",
+            "idempotency_key": str(uuid.uuid4()),
+        }
+>       response = await async_client.post(
+            "/operations/fbs-supplies/from-orders", headers=headers, json=body
+        )
+
+backend/tests/test_wms666_packing_sticker_request.py:191: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1859: in post
+    return await self.request(
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1540: in request
+    return await self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1629: in send
+    response = await self._send_handling_auth(
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1657: in _send_handling_auth
+    response = await self._send_handling_redirects(
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1694: in _send_handling_redirects
+    response = await self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/httpx/_client.py:1730: in _send_single_request
+    response = await transport.handle_async_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/httpx/_transports/asgi.py:170: in handle_async_request
+    await self.app(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/applications.py:1163: in __call__
+    await super().__call__(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/applications.py:90: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:186: in __call__
+    raise exc
+../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/errors.py:164: in __call__
+    await self.app(scope, receive, _send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/cors.py:88: in __call__
+    await self.app(scope, receive, send)
+backend/app/services/document_event_service.py:132: in __call__
+    await self.app(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/middleware/exceptions.py:63: in __call__
+    await wrap_app_handling_exceptions(self.app, conn)(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/middleware/asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/routing.py:660: in __call__
+    await self.middleware_stack(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:2734: in app
+    await route.handle(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1780: in handle
+    await self.original_router.handle(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:2789: in handle
+    await included_router._handle_selected(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1800: in _handle_selected
+    await original_route.handle(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:1279: in handle
+    await app(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:158: in app
+    await wrap_app_handling_exceptions(app, request)(scope, receive, send)
+../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:53: in wrapped_app
+    raise exc
+../../backend/.venv/lib/python3.14/site-packages/starlette/_exception_handler.py:42: in wrapped_app
+    await app(scope, receive, sender)
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:144: in app
+    response = await f(request)
+               ^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:706: in app
+    raw_response = await run_endpoint_function(
+../../backend/.venv/lib/python3.14/site-packages/fastapi/routing.py:352: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/app/api/fbs_supplies.py:1402: in create_fbs_supply_from_orders
+    workspace = await supply_svc.create_supply_from_orders(
+backend/app/services/fbs_supply_service.py:635: in create_supply_from_orders
+    refreshed = await get_supply_workspace(session, tenant_id, supply_id)
+                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/app/services/fbs_workspace_service.py:99: in get_supply_workspace
+    supply = await _load_supply_graph(session, tenant_id, supply_id)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/app/services/fbs_workspace_service.py:411: in _load_supply_graph
+    res = await session.execute(stmt)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/ext/asyncio/session.py:448: in execute
+    result = await greenlet_spawn(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:190: in greenlet_spawn
+    result = context.switch(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2373: in execute
+    return self._execute_internal(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2271: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/context.py:306: in orm_execute_statement
+    result = conn.execute(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1815: in _execute_context
+    conn = self._revalidate_connection()
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:674: in _revalidate_connection
+    self._invalid_transaction()
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = <sqlalchemy.engine.base.Connection object at 0x113794c80>
+
+    def _invalid_transaction(self) -> NoReturn:
+>       raise exc.PendingRollbackError(
+            "Can't reconnect until invalid %stransaction is rolled "
+            "back.  Please rollback() fully before proceeding"
+            % ("savepoint " if self._nested_transaction is not None else ""),
+            code="8s2b",
+        )
+E       sqlalchemy.exc.PendingRollbackError: Can't reconnect until invalid transaction is rolled back.  Please rollback() fully before proceeding (Background on this error at: https://sqlalche.me/e/20/8s2b)
+
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:664: PendingRollbackError
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.fbs_supply_service:fbs_supply_service.py:634 fbs supply sticker prefetch timed out supply 4f4d1270-82c6-4380-9736-5d27db08b63e
+=============================== warnings summary ===============================
+backend/app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/test_wms666_packing_sticker_request.py::test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure[db_cancel]
+1 failed, 4 deselected, 6 warnings in 4.34s

@@ -114,7 +114,7 @@ async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider_fails", [False, True, "timeout"])
+@pytest.mark.parametrize("provider_fails", [False, True, "timeout", "db_cancel"])
 async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure(
     async_client: httpx.AsyncClient,
     monkeypatch: pytest.MonkeyPatch,
@@ -168,9 +168,19 @@ async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_fai
     monkeypatch.setattr(
         "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
     )
-    if provider_fails == "timeout":
+    if provider_fails in ("timeout", "db_cancel"):
         monkeypatch.setattr(
-            "app.services.fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", 0.01
+            "app.services.fbs_supply_service.CREATE_STICKER_PREFETCH_TIMEOUT_SECONDS", 0.1
+        )
+    if provider_fails == "db_cancel":
+        async def interrupted_prefetch(session, *args, **kwargs):
+            connection = await session.connection()
+            await connection.invalidate()
+            await asyncio.sleep(1)
+
+        monkeypatch.setattr(
+            "app.services.fbs_supply_service._request_order_stickers_for_picking",
+            interrupted_prefetch,
         )
     body = {
         "name": "Immediate stickers",
@@ -182,7 +192,7 @@ async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_fai
         "/operations/fbs-supplies/from-orders", headers=headers, json=body
     )
     assert response.status_code == 201, response.text
-    assert calls == [[666777002]]
+    assert calls == ([] if provider_fails == "db_cancel" else [[666777002]])
     result = response.json()
     assert result["supply"]["status"] == "draft"
     assert result["supply"]["packaging_task_id"] is None

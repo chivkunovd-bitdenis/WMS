@@ -251,6 +251,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     printWindow.opener = null
     setError(null)
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
+    let rows = fbsAssemblyPickingRows(ordered)
     const printable = await Promise.all(ordered.map(async snapshot => {
       try { return await ensureFbsStickers(token, authHeaders, snapshot) }
       catch (cause) {
@@ -258,7 +259,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
         return snapshot
       }
     }))
-    let rows = fbsAssemblyPickingRows(printable)
+    rows = fbsAssemblyPickingRows(printable)
     try {
       const optionLists = await Promise.all(ordered.map((one) => getFbsPickOptions(token, authHeaders, one.supply.id)))
       const byProduct = new Map<string, FbsPickOptionProduct[]>()
