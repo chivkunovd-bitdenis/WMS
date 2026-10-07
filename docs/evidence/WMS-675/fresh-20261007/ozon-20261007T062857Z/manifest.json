@@ -1,0 +1,200 @@
+{
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "started_at_utc": "2026-10-07T06:29:01.123213+00:00",
+  "execution_status": "READ_COMPLETE_REQUIRES_ACCOUNTING_PLAN",
+  "requests": [
+    {
+      "posting_number": "0113371235-0054-3",
+      "file": "posting-0113371235-0054-3.json",
+      "sha256": "e89ba5cdd1cc1bc09b03c18088ac7d98d43cfbf8a3f7aabf479bd74e75761367",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0144953533-0124-1",
+      "file": "posting-0144953533-0124-1.json",
+      "sha256": "89645788ed9fc4ef661ac65947c2c8bc9477c2fe5da91480b0de758e378bb379",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0148656673-0134-1",
+      "file": "posting-0148656673-0134-1.json",
+      "sha256": "a23615b624d51fab34e8c048d01fec125ae8309dc46c02a1ea38cbc0811434f2",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0153677007-0258-1",
+      "file": "posting-0153677007-0258-1.json",
+      "sha256": "b9fde8934f0102f7fbc68eddb7347b576a069fc96fde43d58c4678eda70497d7",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0164033835-0039-1",
+      "file": "posting-0164033835-0039-1.json",
+      "sha256": "8a3ada5172493442c0a2621d49cec9cf77998762dba3ff75f734ca0b921bc0b4",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0172663629-0081-1",
+      "file": "posting-0172663629-0081-1.json",
+      "sha256": "09bae4185d8f871a14d359b03eac420406454ad73c74daa95a50adb634dc9dce",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0181745532-0045-3",
+      "file": "posting-0181745532-0045-3.json",
+      "sha256": "54c923413c29e0d85ec3a9a9282787c29efb18ee37fe817af0fbabcc1b6eafd7",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0187441457-0073-1",
+      "file": "posting-0187441457-0073-1.json",
+      "sha256": "f886cf7644bebfbd7fb9222abdb0e2ce66eab019b210eda9fcce65f684bb99fb",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0190055173-0461-1",
+      "file": "posting-0190055173-0461-1.json",
+      "sha256": "b95a187f7d0c4a19edd186fba200f1ade1708850022c5a5a4759757dd1de4bcb",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0236443586-0012-1",
+      "file": "posting-0236443586-0012-1.json",
+      "sha256": "bd4da66f467d2a4fa7f51609cf487ff54cd48fe07fc78ee963537044a7256a98",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0249035122-0351-1",
+      "file": "posting-0249035122-0351-1.json",
+      "sha256": "d9c446c0f1c0175ecf5d3e13c8a239f7d3f8230ebd56de9c86b71a5e404cd268",
+      "status": "ok"
+    },
+    {
+      "posting_number": "0282817049-0013-1",
+      "file": "posting-0282817049-0013-1.json",
+      "sha256": "0956387eac7586b3f7da00c7998e9545208bc784b976ff416574a1e7b1e6431e",
+      "status": "ok"
+    },
+    {
+      "posting_number": "06383353-1897-1",
+      "file": "posting-06383353-1897-1.json",
+      "sha256": "ed87e5e28c98fced842cc0ee60641ea3f144a8c5ef7d57af4d6051f8f18840dc",
+      "status": "ok"
+    },
+    {
+      "posting_number": "21052558-0445-1",
+      "file": "posting-21052558-0445-1.json",
+      "sha256": "f87af3a72870a6ab1f3af5622ed8a834304ad35174fb622af71f4ed606ac9540",
+      "status": "ok"
+    },
+    {
+      "posting_number": "23388119-0163-1",
+      "file": "posting-23388119-0163-1.json",
+      "sha256": "4dff30c34c31930b33c37884dd2d593609eb2fb1eb794e289d76db5c3ce15853",
+      "status": "ok"
+    },
+    {
+      "posting_number": "28508065-0594-1",
+      "file": "posting-28508065-0594-1.json",
+      "sha256": "e7b853cacad85a6b74e6d6e87b8fdb7b0b382468b5de2d2548d56653b9353d44",
+      "status": "ok"
+    },
+    {
+      "posting_number": "31853470-0198-1",
+      "file": "posting-31853470-0198-1.json",
+      "sha256": "69e6a8ca26a0c40bbfb3f858722f4c0103da2ffe9b941a7db3c04601593ed4b5",
+      "status": "ok"
+    },
+    {
+      "posting_number": "45035035-0211-1",
+      "file": "posting-45035035-0211-1.json",
+      "sha256": "b7730866ce8534284f52bd02da7a1e7fe5af25ef60c01254e880a85f627b282c",
+      "status": "ok"
+    },
+    {
+      "posting_number": "50261136-0017-1",
+      "file": "posting-50261136-0017-1.json",
+      "sha256": "a100fa1094b48eaa98c364a7baa67dff82f77784b44d8f7738dd90e0ee1b1b2c",
+      "status": "ok"
+    },
+    {
+      "posting_number": "55322493-0272-1",
+      "file": "posting-55322493-0272-1.json",
+      "sha256": "ef696c8140212151bbc30c2ad1ab86a55544fafe2685c6c70c87cf323f158298",
+      "status": "ok"
+    },
+    {
+      "posting_number": "56845110-0045-1",
+      "file": "posting-56845110-0045-1.json",
+      "sha256": "930ac9f9f8be2bff90dc31c1e7d38b368759270315d0756554378e0d20088b90",
+      "status": "ok"
+    },
+    {
+      "posting_number": "56907807-0024-1",
+      "file": "posting-56907807-0024-1.json",
+      "sha256": "05f3a2ef92a85fcd9da33bb03c6f1f0376cfb329796f3756286b3856148cc4d6",
+      "status": "ok"
+    },
+    {
+      "posting_number": "59814512-0364-3",
+      "file": "posting-59814512-0364-3.json",
+      "sha256": "0fc56debc661996fa68b949b4a6c69d6080aa0a73c96463427e9707c471e86a5",
+      "status": "ok"
+    },
+    {
+      "posting_number": "62035277-0532-1",
+      "file": "posting-62035277-0532-1.json",
+      "sha256": "97ccebf089ef3ef96aa2e88d4f5bbf2a4ea56f58c0c7a77d7b9c00996b9f2086",
+      "status": "ok"
+    },
+    {
+      "posting_number": "66144885-0156-18",
+      "file": "posting-66144885-0156-18.json",
+      "sha256": "405cd49f894c4f7dcd1a4d5509389ccf517588f0c03e0be5cbec014ac7a7b4c4",
+      "status": "ok"
+    },
+    {
+      "posting_number": "80034639-0273-1",
+      "file": "posting-80034639-0273-1.json",
+      "sha256": "6af01bbd447a095786efa2b6cd55c7c07ee01dab437f28c5d24a9fd9b4e6fd70",
+      "status": "ok"
+    },
+    {
+      "posting_number": "81035721-0742-1",
+      "file": "posting-81035721-0742-1.json",
+      "sha256": "a393d89b346dbc1428b4739c06a3f118e1c2784fecb3c339ed4bfeaeb479f847",
+      "status": "ok"
+    },
+    {
+      "posting_number": "83893932-0680-2",
+      "file": "posting-83893932-0680-2.json",
+      "sha256": "39f9d67fa43fc5b5a23233298f7d93c7f7b88710d58f39c4be8b28b9e02fc175",
+      "status": "ok"
+    },
+    {
+      "posting_number": "85257535-0274-1",
+      "file": "posting-85257535-0274-1.json",
+      "sha256": "d4035620c09cff378b849b7a952db829abc360c0a91714a30ee01e2f9e3ffd87",
+      "status": "ok"
+    },
+    {
+      "posting_number": "99185584-1963-5",
+      "file": "posting-99185584-1963-5.json",
+      "sha256": "518c1cc36eee9a67947afdff28d9fc406f9a366cf94234154ce177a6d6c47218",
+      "status": "ok"
+    },
+    {
+      "posting_number": "99630148-0017-1",
+      "file": "posting-99630148-0017-1.json",
+      "sha256": "26b1786f010c0ba47938c9a6ea8c45c4b32846484ae5bfd96d0034d3f609a054",
+      "status": "ok"
+    }
+  ],
+  "collector_sha256": "77f56f1100d27db0f369ff7edb436332c9fd91f295d4065c90bcb51e68e80011",
+  "seed_plan_sha256": "cccfb2d7c024f02309f23424a67473723cfcb6d7d85312f138f1b152e04bc00b",
+  "scope_snapshot_sha256": "33d4f272de819e5c765d182ced8d926ac7b2111144ac6cb619b52e404f736640",
+  "unread_postings": [],
+  "finished_at_utc": "2026-10-07T06:29:07.337771+00:00"
+}
