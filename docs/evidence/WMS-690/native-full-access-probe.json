@@ -1,0 +1,33 @@
+{
+  "task": "WMS-690",
+  "date": "2026-10-07",
+  "method": "mcp__codex_app__fork_thread same-directory, followed by one bounded fresh probe turn",
+  "source_thread_id": "01a11631-413c-7a73-9441-71bf6e49f025",
+  "thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+  "thread_title": "Чат разбора №3",
+  "new_turn_id": "01a116a7-9b13-7a80-b2f2-88c6e122469b",
+  "turn_status": "completed",
+  "command": "pwd",
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms690-visible-support-moderator",
+  "exit_code": 0,
+  "escalation_requested": false,
+  "manual_approval_requested": false,
+  "new_turn_context": {
+    "approval_policy": "never",
+    "sandbox_policy_type": "danger-full-access",
+    "permission_profile_type": "disabled",
+    "model": "gpt-6.1-sol"
+  },
+  "sources": ["read_thread of the new probe turn", "targeted read of the matching fresh turn_context in its WMS rollout"],
+  "old_moderator": {
+    "thread_id": "01a11693-d199-7300-8c1e-084d8a88f02a",
+    "archived_via": "mcp__codex_app__set_thread_archived",
+    "turn_status": "interrupted",
+    "pending_approval_approved": false
+  },
+  "limits": [
+    "The fork tool schema does not promise permission inheritance for every future fork.",
+    "The fork retains history; this proves the present restart profile, not a fresh short context rollover at 250000 tokens.",
+    "The read-only pwd probe does not prove live moderation, media analysis, native executor continuation, Telegram sending or heartbeat continuation."
+  ]
+}
