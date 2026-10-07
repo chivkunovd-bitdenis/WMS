@@ -124,7 +124,8 @@ jobs:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55466/wms_test_662_batch
         run: |
           pip install asyncpg==0.31.0
-          pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py
+          mkdir -p "$RUNNER_TEMP/release-postgres"
+          pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py --junitxml="$RUNNER_TEMP/release-postgres/662-batch.xml"
       - name: WMS-662 isolated steady-state lock order on real PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55468/wms_test_662_steady
@@ -451,6 +452,7 @@ jobs:
           scripts/ci/tests/test_backend_shard_redis_setup.py
           scripts/ci/tests/test_promote_guards.py
           scripts/ci/tests/test_process_contracts.py
+          scripts/ci/tests/test_reviewed_process_upgrade.py
           scripts/ci/tests/test_process_deploy_gate.py
           scripts/ci/tests/test_server_process_gate.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
@@ -485,13 +487,23 @@ jobs:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
         run: |
           set -euo pipefail
-          if git cat-file -e "$BASE_SHA:guards/PROCESS_CONTRACTS.json" 2>/dev/null; then
-            git show "$BASE_SHA:scripts/ci/process_contracts.py" > "$RUNNER_TEMP/process_contracts.py"
-            python "$RUNNER_TEMP/process_contracts.py" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
-          else
-            echo 'BOOTSTRAP: process protection is being introduced; independent acceptance is still required.'
-            python scripts/ci/process_contracts.py --base "$BASE_SHA" --bootstrap
-          fi
+          TRUSTED="$RUNNER_TEMP/trusted-process/scripts/ci"
+          mkdir -p "$TRUSTED"
+          git show origin/main:scripts/ci/trusted_process_check.py > "$TRUSTED/trusted_process_check.py"
+          git show origin/main:scripts/ci/process_bootstrap.json > "$TRUSTED/process_bootstrap.json"
+          PROTECTED_REF=$(python - "$TRUSTED/trusted_process_check.py" "$BASE_SHA" <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('trusted_anchor', sys.argv[1])
+          anchor = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(anchor)
+          pin = anchor.load_approved_bootstrap()
+          print(pin['source_sha'] if pin and pin['base_sha'] == sys.argv[2] else sys.argv[2])
+          PY
+          )
+          git show "$PROTECTED_REF:scripts/ci/process_contracts.py" > "$TRUSTED/process_contracts.py"
+          UPGRADE_ARGS=()
+          if [ "$PROTECTED_REF" != "$BASE_SHA" ]; then UPGRADE_ARGS=(--reviewed-upgrade); fi
+          python "$TRUSTED/process_contracts.py" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA" "${UPGRADE_ARGS[@]}"
       - name: Install backend guard dependencies
         if: steps.integrity.outputs.backend_tests != '0'
         run: pip install -e './backend[dev]'
@@ -574,7 +586,26 @@ jobs:
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
           CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python scripts/ci/build_process_proof.py --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA"
+        run: |
+          set -euo pipefail
+          TRUSTED="$RUNNER_TEMP/trusted-process/scripts/ci"
+          mkdir -p "$TRUSTED"
+          git show origin/main:scripts/ci/trusted_process_check.py > "$TRUSTED/trusted_process_check.py"
+          git show origin/main:scripts/ci/process_bootstrap.json > "$TRUSTED/process_bootstrap.json"
+          PROTECTED_REF=$(python - "$TRUSTED/trusted_process_check.py" "$BASE_SHA" <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('trusted_anchor', sys.argv[1])
+          anchor = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(anchor)
+          pin = anchor.load_approved_bootstrap()
+          print(pin['source_sha'] if pin and pin['base_sha'] == sys.argv[2] else sys.argv[2])
+          PY
+          )
+          git show "$PROTECTED_REF:scripts/ci/process_contracts.py" > "$TRUSTED/process_contracts.py"
+          UPGRADE_ARGS=()
+          if [ "$PROTECTED_REF" != "$BASE_SHA" ]; then UPGRADE_ARGS=(--reviewed-upgrade); fi
+          git show "$PROTECTED_REF:scripts/ci/build_process_proof.py" > "$TRUSTED/build_process_proof.py"
+          python "$TRUSTED/build_process_proof.py" --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA" "${UPGRADE_ARGS[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: process-proof-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}

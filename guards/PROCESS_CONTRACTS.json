@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "a954c55d3580f75ae56c5c55d175227eabd8b70579f2d553e6fdd8af55a5780c",
+    ".github/workflows/ci.yml": "4d032f6c3ea5ca76bf106650fefb6cc847bc2ad08acad338606b97d83d36251e",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -179,8 +179,8 @@
     "frontend/vite.config.ts": "edce832d16a60020d4ee3c99214f80ee83297aa5e6a7945d8b74331a3c91f560",
     "frontend/vitest.config.ts": "c5a189e0a84e5bd969515013fb33ecf6c5923f9e551fb9f4c4c5971247b30cda",
     "scripts/ci/backend_shards.py": "5309a03576d017839fb50b51b31867febfc0fe2307494d0ad904122ca0c7e36b",
-    "scripts/ci/build_process_proof.py": "f2e787d41cfdd10b3ca7a2120a65583d28514eb1449c47fd54998274a3daa64d",
-    "scripts/ci/process_contracts.py": "a2143f35d99719b55d9a7e82ba4c3dcbba977d1996810e9905707b3d5df764f3",
+    "scripts/ci/build_process_proof.py": "464f05198b3b896d3ed0def00b34b73195af9e66f64fe4d5b140ced0843203ca",
+    "scripts/ci/process_contracts.py": "209be8fe73f3bc3e0555cbc9e4ef39e446449b8aa236f474fa12d0dd082c2684",
     "scripts/ci/product_scope.py": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
     "scripts/ci/resolve_ci_base.py": "3063a56042f3d196aa6fa0bf6ddc2cdb8d9bdeb33be7883205f3dec259a4e122",
     "scripts/ci/run_critical_fbs_browser.sh": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
@@ -205,7 +205,7 @@
     "scripts/ci/tests/test_trusted_process_publish.py": "a02cb314109f4e9ae2b1b356bd70fe8f0694d26c8e9bf8eb885ac0041c7a8ccc",
     "scripts/ci/tests/test_trusted_process_queue.py": "7749a733d12abbe8625f6c181511f84867521af92287eeb6ecf8b5847a4bf76f",
     "scripts/ci/tests/test_verify_ci.py": "e933e467fddcf67bcf8c1fdee1f2a4f73a5b5f9ae1a6241eced5f4ff5a7570ea",
-    "scripts/ci/trusted_process_check.py": "fda21e4257523bea342690a50d4871bbfee88e56b8f24405997f8cac8a816b4e",
+    "scripts/ci/trusted_process_check.py": "3984c13645487a1de6e10a6346abcb1ef4234d1b3e92953cc6a0721332d77e49",
     "scripts/ci/verify_ci.py": "bba4de74814427d50c24a0117477f829ae9532c9d31669579c7a32d26372fedb",
     "scripts/ci/verify_process_ci.py": "a09e066946723cc0aba79dac162797ee6863d0061f4b241f69742052799c3530",
     "scripts/ci/verify_server_process_ci.py": "f0f2481151e75dea0a5dc314fba30acca8760452229cade9f9d6927321288ab6",
@@ -236,7 +236,7 @@
     "scripts/ci/test_check_task_documents.py": "a09cab8829cd79eb4fcb96a4c993ad92388b4c6df35ad4112c349e66ee081111",
     "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "0c5880a3cb800d50582c42eede5b73a690a95f54538ef057a50940d40f97cdeb",
     "frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx": "3fbd20b458e1f1752b515880f760cf7513df8c0b9eeda7d4f9baf34793cb8a7f",
-    "frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx": "946a70d53055cea17c8038a04d4299f6a49ee971b134e492f7d47db3d2c272d5",
+    "frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx": "2d6b118c3d66c66f1d0603cd38b0640e1eda6f3d60e2215fcf1df0ae64db14c7",
     "frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx": "efd4433cf6c010db36d4fbda5b81e5b97a4c01dc00c5f19859acb232e16d48fb",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx": "9080aa4f3009c3bfc80619dc0479920f97dd9e2a988e02c07b1bc262a29a15f2",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx": "90a5f72a618d4d41f1f77674c2946f9edeffd2d9dc1c255cca7b4a0880f530d2",
@@ -260,7 +260,7 @@
     "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": "e409e97054934846973de6c7a0d6418f0cef3316bcb83d283ad05e3d3188bcd4",
     "frontend/src/utils/printInboundReceivingSheet.test.ts": "842f219638f379de60635d76dc1d326cf06a4bd3a1d22ce0907636efbd107086",
     "frontend/src/utils/printShipmentPackagingSheet.test.ts": "79268fd951523f9ed82d90a33823089faf83377457cb54976099891442bb9df7",
-    "frontend/src/test-contracts/inbound684586Harness.tsx": "8f94973848be0435091ed8496be90fd64e328e3f20bc2682430d93275c85d0fb",
+    "frontend/src/test-contracts/inbound684586Harness.tsx": "a98fd6b3cbfb95d378eb259fc058f0e35bb62da69b2f29dd524397123af34754",
     "backend/tests/test_wms681_postgres_recovery.py": "0cce6ab605f902238f497e4b780fcde24987ba46d6ef91767b0ada52aa891189",
     "backend/tests/test_fbs_packing_box.py": "e2af8bd642ea0136236f9b8a5190a52438e27de37d83169f0d9633b024af8e7d",
     "backend/tests/test_prod_deploy_backup.py": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
@@ -278,7 +278,8 @@
     "backend/tests/test_wms662_exact_fixture_pairs_contract.py": "5f505f389a7b0b38838c69df676882a42509d80932c189475a83caa2e84336b9",
     "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e",
     "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
-    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20"
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+    "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e"
   },
   "suites": {
     "backend-fbs": {
@@ -1787,6 +1788,11 @@
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms687_each_uses_the_two_exact_executed_case_ids",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_rejects_test_outside_supported_trees",
         "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_unprotected_legacy_each_reference_still_requires_a_literal_source_name",
+        "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_corrupt_base_or_source_bytes_never_fall_back_to_candidate_hashes",
+        "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_exact_trusted_pin_upgrades_existing_base_and_checks_source_candidate_and_proof",
+        "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_git_integrity_exact_approved_upgrade_accepts_reviewed_digest_and_additions",
+        "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_reviewed_source_must_keep_every_base_path_case_and_suite_semantics",
+        "scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests::test_unapproved_base_source_or_candidate_config_cannot_authorize_upgrade",
         "scripts.ci.tests.test_server_process_gate.ServerGateTests::test_attempt_changed_after_artifact_refuses",
         "scripts.ci.tests.test_server_process_gate.ServerGateTests::test_cli_uses_verified_repository_not_env_override",
         "scripts.ci.tests.test_server_process_gate.ServerGateTests::test_current_attempt_artifact_missing_expired_duplicate_wrong_sha_run_or_attempt_refuses",
@@ -2170,6 +2176,14 @@
         "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
         "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
         "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+      ]
+    },
+    "postgres-wms662-batch": {
+      "report": "pg/662-batch.xml",
+      "format": "junit",
+      "exact": true,
+      "cases": [
+        "tests.test_wms662_batch_handoff_lock_order::test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_money"
       ]
     }
   }
