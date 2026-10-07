@@ -13,7 +13,11 @@ const project = process.env.FBS_PICK_PROJECT
 assert(project?.startsWith('fbs-picking-'),'Require the runner-owned disposable compose project')
 assert(seed.picking && Object.keys(seed.picking).length>0,'Seed must contain at least one browser case')
 const requestedCases=process.env.FBS_PICK_CASES || ''
-const selected=requestedCases ? requestedCases.split(',').map(name=>name.trim()).filter(Boolean) : null
+const suite=process.env.FBS_PICK_SUITE || 'all'
+assert(['all','base','extended','targeted'].includes(suite),`Unknown suite: ${suite}`)
+assert(suite!=='targeted'||requestedCases,'Targeted suite requires explicit case names')
+const selected=requestedCases ? requestedCases.split(',').map(name=>name.trim()).filter(Boolean) : suite==='all' ? null : seed.case_suites?.[suite]
+assert(suite==='all'||Array.isArray(selected),`Seed lacks suite ${suite}`)
 if(selected) {
   assert(selected.length>0,'Case selection must not be empty')
   assert.equal(new Set(selected).size,selected.length,'Case selection must not contain duplicates')
@@ -22,6 +26,7 @@ if(selected) {
 const browser = await chromium.launch({headless:true})
 const results = []
 let dbSequence = 0
+let currentCheckpoints=[]
 function snapshot() {
   const result = spawnSync('docker',['compose','--project-name',project,'-f','docker-compose.yml','-f','docker-compose.emulator.yml','-f','frontend/tests-e2e/fbs-picking/compose.yml','exec','-T','-e','FBS_PICK_DISPOSABLE=1','api','python','-m','tests.fbs_picking_browser_verify'],{input:JSON.stringify(seed),encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024})
   assert.equal(result.status,0,`DB readback unavailable: ${result.stderr}`)
@@ -44,7 +49,7 @@ async function open(page,f,si=0) {
   await page.getByTestId(f.task?`fbs-assembly-task-${f.task}`:`fbs-18-supply-${f.supplies[si]}`).click()
   const workspace = page.getByTestId(f.task?'fbs-assembly':'fbs-workspace')
   await expect(workspace).toBeVisible()
-  await workspace.getByRole('tab',{name:'Подбор',exact:true}).click()
+  await workspace.getByRole('tab',{name:/^Подбор(?: ✓)?$/}).click()
   await expect(screen(page)).toBeVisible()
   await expect(page.getByTestId('fbs-cell-pick-table')).toBeVisible()
 }
@@ -59,17 +64,20 @@ async function source(page,f,si=0) {
   await expect(page.getByTestId('pick-source')).toContainText(f.sources[si].container_id?f.sources[si].scan:f.sources[si].code)
   await expect(scanner(page)).toBeEnabled()
 }
-async function state(name,f,count,{pi=0,si=0}={}) {
+async function state(name,f,count,{pi=0,si=0,distribution=null}={}) {
+  const checkpoint={name,expected_count:count,product:f.products[pi].id,status:'started'}
+  currentCheckpoints.push(checkpoint)
   let db
-  await expect.poll(()=> { db=snapshot(); return db.picks.filter(p=>p.active&&f.supplies.includes(p.supply)&&p.product===f.products[pi].id).length },{timeout:15000,intervals:[200,500,1000]}).toBe(count)
+  await expect.poll(()=> { db=snapshot(); const actual=db.picks.filter(p=>p.active&&f.supplies.includes(p.supply)&&p.product===f.products[pi].id).length;checkpoint.actual_count=actual;return actual },{timeout:15000,intervals:[200,500,1000]}).toBe(count)
   await writeFile(path.join(evidence,`${name}-db-${++dbSequence}.json`),JSON.stringify(db,null,2))
   assert(db.unchanged,'Picking/undo/print must preserve total physical stock')
   assert(db.balances.every(b=>b.quantity>=0),'No negative physical source')
   const active=db.picks.filter(p=>p.active&&f.supplies.includes(p.supply)&&p.product===f.products[pi].id)
   const s=f.sources[si]
+  const expectedSources=distribution ? Object.entries(distribution).map(([index,quantity])=>({source:f.sources[Number(index)],quantity})) : [{source:s,quantity:count}]
   for(const p of active) {
-    assert.equal(p.location,s.location_id,'Exact source location')
-    assert.equal(p.container,s.container_id,'Exact source container')
+    const expected=expectedSources.find(one=>one.source.location_id===p.location&&one.source.container_id===p.container)
+    assert(expected,'Exact source location and container belong to the expected physical operations')
     if(p.order) assert(f.orders.some(o=>o.id===p.order&&o.product===p.product&&o.supply===p.supply),'Assignment belongs to real planned order')
     if(p.order) assert(db.reserves.some(r=>r.order===p.order&&r.product===p.product&&r.quantity===1),'Order reserve remains')
     if(p.position) {
@@ -90,19 +98,26 @@ async function state(name,f,count,{pi=0,si=0}={}) {
 
   }
   assert.equal(new Set(active.filter(p=>p.order).map(p=>p.order)).size,active.filter(p=>p.order).length,'No double active order assignment')
-  const initial=s.initial[f.products[pi].id]
-  const balance=db.balances.find(b=>b.product===f.products[pi].id&&b.location===s.location_id&&b.container===s.container_id)
-  assert.equal(balance?.quantity??0,initial-count,'Physical source decreased by the actual active picks')
+  for(const {source:expectedSource,quantity:sourceCount} of expectedSources) {
+    assert.equal(active.filter(p=>p.location===expectedSource.location_id&&p.container===expectedSource.container_id).length,sourceCount,'Exact number of assignments from this source')
+    const initial=expectedSource.initial[f.products[pi].id]
+    const balance=db.balances.find(b=>b.product===f.products[pi].id&&b.location===expectedSource.location_id&&b.container===expectedSource.container_id)
+    assert.equal(balance?.quantity??0,expectedSource.sortingAlready ? initial : initial-sourceCount,'Source physical balance: transfer or assignment already on sorting')
+    if(expectedSource.sortingAlready)assert(active.filter(p=>p.location===expectedSource.location_id).every(p=>p.movement===null),'Already-sorting assignment must not invent a physical transfer')
+  }
   if(count) {
     const sorting=active[0].sorting
     const sorted=db.balances.filter(b=>b.product===f.products[pi].id&&b.location===sorting).reduce((n,b)=>n+b.quantity,0)
-    assert.equal(sorted,count,'Exactly the picked units are on sorting')
+    const alreadyOnSorting=s.sortingAlready ? f.sources.filter(source=>source.sortingAlready).reduce((n,source)=>n+(source.initial[f.products[pi].id]||0),0) : 0
+    assert.equal(sorted,alreadyOnSorting||count,'Exactly the physical picked/sorting units remain accounted for')
   }
+  checkpoint.status='verified'
   return db
 }
 async function run(name,test) {
   if(selected?.length&&!selected.includes(name)) return
   const f=seed.picking[name]
+  currentCheckpoints=[]
   const context=await browser.newContext({viewport:{width:1440,height:1050},acceptDownloads:true})
   context.setDefaultTimeout(10000)
   context.setDefaultNavigationTimeout(30000)
@@ -111,37 +126,66 @@ async function run(name,test) {
   const responses=[],errors=[]
   let phase='prepare'
   let caseTimer
+  const cleanups=[]
+  const registerCleanup=callback=>cleanups.push(callback)
+  const releaseGates=()=>{for(const callback of cleanups.splice(0))callback()}
   let testPromise
   let deadlineExceeded=false
   await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:'running',phase,started_at:new Date().toISOString()}))
-  const deadline=new Promise((_,reject)=>{caseTimer=setTimeout(()=>{deadlineExceeded=true;reject(new Error('Case budget exceeded: 60000ms'))},60000)})
-  page.on('pageerror',e=>errors.push(e.message))
-  page.on('response',async r=>{
-    if(!r.url().includes('/api/operations/fbs'))return
-    const body=await r.json().catch(()=>null)
-    const observed={url:r.url(),status:r.status(),method:r.request().method(),request:r.request().postData(),body}
-    responses.push(observed)
-    await appendFile(path.join(evidence,`${name}-api.jsonl`),JSON.stringify(observed)+'\n').catch(()=>{})
-  })
+  const deadline=new Promise((_,reject)=>{caseTimer=setTimeout(()=>{deadlineExceeded=true;releaseGates();reject(new Error('Case budget exceeded: 60000ms'))},60000)})
+  const observe=(observedPage,label='operator1')=>{
+    observedPage.on('pageerror',e=>errors.push(`${label}: ${e.message}`))
+    observedPage.on('requestfailed',request=>{
+      if(request.url().includes('/api/operations/fbs'))responses.push({url:request.url(),method:request.method(),status:'network-failed',request:request.postData(),failure:request.failure(),operator:label})
+    })
+    observedPage.on('response',async r=>{
+      if(!r.url().includes('/api/operations/fbs'))return
+      const raw=await r.json().catch(()=>null)
+      const body=Array.isArray(raw) ? raw.filter(row=>f.products.some(p=>p.id===row.product_id)).map(row=>({product_id:row.product_id,sku_code:row.sku_code,seller_article:row.seller_article,barcode:row.barcode,planned_qty:row.planned_qty,picked_qty:row.picked_qty,locations:row.locations}))
+        : raw?.supply&&raw?.orders ? {supply:{id:raw.supply.id,marketplace:raw.supply.marketplace,status:raw.supply.status,planned_shipment_date:raw.supply.planned_shipment_date},orders:raw.orders.map(order=>({id:order.id,pick:order.pick,positions:order.positions}))}
+        : raw?.items ? {total:raw.total,ids:raw.items.map(item=>item.id)} : raw
+      const observed={url:r.url(),status:r.status(),method:r.request().method(),request:r.request().postData(),body,operator:label}
+      responses.push(observed)
+      await appendFile(path.join(evidence,`${name}-api.jsonl`),JSON.stringify({...observed,body:raw})+'\n').catch(()=>{})
+    })
+  }
+  observe(page)
   try {
     testPromise=(async()=>{
     const token=await login(context)
+    if(['tree-order-photo','photo-failure'].includes(name)) {
+      await page.route('**/fixture-photo.svg',r=>r.fulfill({status:200,contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32" fill="purple"/></svg>'}))
+      await page.route('**/missing-test-photo.png',r=>r.fulfill({status:404,body:''}))
+    }
+    if(name==='scanner-status-audio')await context.addInitScript(()=>{
+      window.__pickToneEvents=[]
+      const prototype=window.AudioContext?.prototype
+      if(!prototype)return
+      const create=prototype.createOscillator
+      prototype.createOscillator=function(...args){const oscillator=create.apply(this,args);const start=oscillator.start;oscillator.start=function(...values){window.__pickToneEvents.push(oscillator.frequency.value);return start.apply(this,values)};return oscillator}
+    })
     const catalogResponse=await context.request.get(`${root}/api/products/linked-wb-catalog`,{headers:{Authorization:`Bearer ${token}`},timeout:10000})
     assert(catalogResponse.ok(),`dependencyblocked: catalog ${catalogResponse.status()}`)
     const catalog=await catalogResponse.json()
     await writeFile(path.join(evidence,`${name}-catalog.json`),JSON.stringify(catalog.filter(row=>f.products.some(p=>p.id===row.id)),null,2))
-    if(!name.startsWith('ozon')) for(const p of f.products){const row=catalog.find(row=>row.id===p.id);assert(row,`Fixture missing from real catalog: ${p.id}`);assert(row.wb_barcodes.includes(p.barcode),'Fixture primary barcode missing from catalog');assert(row.wb_barcodes.includes(p.alt),'Fixture extra barcode missing from catalog')}
+    for(const p of f.products){
+      const row=catalog.find(row=>row.id===p.id);assert(row,`Fixture missing from real catalog: ${p.id}`)
+      if(f.marketplace==='ozon') {
+        const binding=row.marketplace_bindings.find(binding=>binding.marketplace==='ozon')
+        if(!f.allow_null_sku){assert(binding,'Ozon fixture has a genuine marketplace link');assert(binding.external_barcodes.includes(p.barcode),'Ozon primary barcode exists in the actual link');assert.equal(binding.external_offer_id,p.offer)}
+      }else {assert(row.wb_barcodes.includes(p.barcode),'Fixture primary barcode missing from catalog');assert(row.wb_barcodes.includes(p.alt),'Fixture extra barcode missing from catalog')}
+    }
     await open(page,f)
     phase='process'
     await page.screenshot({path:path.join(evidence,`${name}-opened.png`),fullPage:true})
     await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:'running',phase,at:new Date().toISOString()}))
-    await test(page,f,{context,token})
+    await test(page,f,{context,token,observe,registerCleanup})
     assert.deepEqual(errors,[],'Unhandled browser error')
     })()
     await Promise.race([deadline,testPromise])
-    results.push({name,status:'passed',responses})
+    results.push({name,checkpoints:currentCheckpoints,status:'passed',responses})
   } catch(e) {
-    results.push({name,status:phase==='prepare'?'preparefailure':'failed',phase,error:String(e.stack||e),responses,browserErrors:errors})
+    results.push({name,checkpoints:currentCheckpoints,status:phase==='prepare'?'preparefailure':'failed',phase,error:String(e.stack||e),responses,browserErrors:errors})
     if(deadlineExceeded) {
       await context.tracing.stop({path:path.join(evidence,`${name}-trace.zip`)}).catch(()=>{})
       await context.close({reason:'Case deadline exceeded: cancel outstanding browser actions'})
@@ -150,12 +194,14 @@ async function run(name,test) {
     }
   } finally {
     clearTimeout(caseTimer)
-    try { const db=snapshot();await writeFile(path.join(evidence,`${name}-final-db.json`),JSON.stringify(db,null,2));assert(db.unchanged,'Final physical stock changed');assert(db.balances.every(b=>b.quantity>=0),'Final negative source') }catch(e){results.at(-1).dbError=String(e);if(results.at(-1).status==='passed')results.at(-1).status='dependencyblocked'}
+    releaseGates()
+    try { const db=snapshot();results.at(-1).dbSummary={unchanged:db.unchanged,balances:db.balances.filter(b=>f.products.some(p=>p.id===b.product)),picks:db.picks.filter(p=>f.products.some(product=>product.id===p.product)),reserves:db.reserves.filter(r=>f.products.some(p=>p.id===r.product)),positions:db.positions.filter(r=>f.products.some(p=>p.id===r.product)),position_reserves:db.position_reserves.filter(r=>f.products.some(p=>p.id===r.product))};await writeFile(path.join(evidence,`${name}-final-db.json`),JSON.stringify(db,null,2));assert(db.unchanged,'Final physical stock changed');assert(db.balances.every(b=>b.quantity>=0),'Final negative source') }catch(e){results.at(-1).dbError=String(e);if(results.at(-1).status==='passed')results.at(-1).status='dependencyblocked'}
     await page.screenshot({path:path.join(evidence,`${name}.png`),fullPage:true,timeout:10000}).catch(()=>{})
     await context.tracing.stop({path:path.join(evidence,`${name}-trace.zip`)}).catch(error=>{results.at(-1).traceError=String(error)})
     await context.close()
     await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:results.at(-1).status,phase,at:new Date().toISOString()}))
     await writeFile(path.join(evidence,'results.json'),JSON.stringify(results,null,2))
+    await writeFile(path.join(evidence,'results-summary.json'),JSON.stringify({suite,expected_cases:selected||Object.keys(seed.picking),test_sha:process.env.TEST_SHA||null,app_sha:process.env.APP_SHA||null,counts:{executed:results.length,passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,blocked:results.filter(r=>!['passed','failed'].includes(r.status)).length},cases:results.map(r=>({...r,responses:r.responses.filter(response=>response.method==='POST'||response.status!=='network-failed'&&response.status>=400||response.status==='network-failed')}))},null,2))
     console.log(`${name}: ${results.at(-1).status}`)
   }
 }
@@ -447,6 +493,8 @@ await run('focus',async(page,f)=>{
   await expect(page.getByTestId('pick-source')).toContainText(f.sources[0].code)
   await expect(qty(page,f)).toHaveValue('2')
 })
+const {registerExtended}=await import('./extended.mjs')
+await registerExtended({run,expect,assert,screen,scanner,qty,source,scan,state,snapshot,browser,login,open,root,evidence,writeFile,path})
 await browser.close()
 assert.equal(results.length,selected ? selected.length : Object.keys(seed.picking).length,'Every selected/seeded case must produce a result')
 console.log(JSON.stringify({cases:results.length,passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,preparefailure:results.filter(r=>r.status==='preparefailure').length}))

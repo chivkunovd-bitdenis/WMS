@@ -11,6 +11,7 @@ import sys
 import uuid
 from datetime import UTC, datetime, timedelta
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
@@ -34,6 +35,7 @@ from app.models.warehouse_box import WarehouseBox
 from app.services.inventory_service import record_movement_and_adjust_balance
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_browser_e2e_seed import _main as base_seed
+from tests.fbs_picking_browser_extended_seed import add_extended
 from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 CASES = [
@@ -246,6 +248,8 @@ async def main() -> None:
                 2 if name in ("group", "ozon-group", "last-unit", "group-sellers") else 1
             )
             is_ozon = name in ("ozon", "ozon-group", "ozon-null")
+            f["marketplace"] = "ozon" if is_ozon else "wb"
+            f["allow_null_sku"] = name == "ozon-null"
             for si in range(count_supplies):
                 supply_seller = seller2 if name == "group-sellers" and si == 1 else seller
                 supply_warehouse = (
@@ -368,7 +372,28 @@ async def main() -> None:
                     session.add(FbsAssemblyTaskSupply(task_id=task.id, supply_id=uuid.UUID(sid)))
                 f["task"] = str(task.id)
             manifest[name] = f
+        manifest.update(
+            await add_extended(session, tenant, seller, warehouse, warehouse2.id, actor_id)
+        )
         await session.commit()
+        foreign = manifest["foreign-reserve"]
+        async with httpx.AsyncClient(base_url=seed["api_base"], timeout=30) as api:
+            login = await api.post("/auth/login", json=seed["login"])
+            login.raise_for_status()
+            response = await api.post(
+                f"/operations/fbs-supplies/{foreign['supplies'][1]}/pick/scan",
+                headers={"Authorization": f"Bearer {login.json()['access_token']}"},
+                json={
+                    "barcode": foreign["products"][0]["sku"],
+                    "product_id": foreign["products"][0]["id"],
+                    "storage_location_id": foreign["sources"][0]["location_id"],
+                },
+            )
+            response.raise_for_status()
+            assert response.json()["picked_qty"] == 1
+        foreign["foreign_supply"] = foreign["supplies"].pop()
+        foreign["sources"][0]["initial"][foreign["products"][0]["id"]] = 0
+        session.expire_all()
         balances = (
             await session.scalars(
                 select(InventoryBalance).where(InventoryBalance.tenant_id == tenant)
@@ -381,6 +406,10 @@ async def main() -> None:
             )
             stock[str(b.product_id)] = stock.get(str(b.product_id), 0) + b.quantity
     seed["picking"] = manifest
+    seed["case_suites"] = {
+        "base": CASES,
+        "extended": [name for name in manifest if name not in CASES],
+    }
     seed["stock_by_product"] = stock
     for key in ("seller_token", "emulator_admin_token"):
         seed.pop(key, None)

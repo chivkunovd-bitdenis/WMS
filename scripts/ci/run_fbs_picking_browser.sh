@@ -4,7 +4,10 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 export FBS_PICK_EVIDENCE="${FBS_PICK_EVIDENCE:-$PWD/artifacts/fbs-picking}"
 mkdir -p "$FBS_PICK_EVIDENCE"
-git rev-parse HEAD > "$FBS_PICK_EVIDENCE/sha.txt"
+export APP_SHA="$(git rev-parse HEAD)"
+printf '%s\n' "$APP_SHA" > "$FBS_PICK_EVIDENCE/sha.txt"
+printf '%s\n' "${TEST_SHA:-$(git rev-parse HEAD)}" > "$FBS_PICK_EVIDENCE/test-sha.txt"
+printf '%s\n' "${FBS_PICK_SUITE:-all}" > "$FBS_PICK_EVIDENCE/suite.txt"
 # Unique project/ports prevent touching an operator's existing local containers.
 export WMS_DB_PORT=25434 WMS_REDIS_PORT=26380 WMS_API_PORT=28082
 export WB_EMULATOR_PORT=28083 WMS_WEB_PORT=25174

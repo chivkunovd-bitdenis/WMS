@@ -18,6 +18,8 @@ from app.models.fbs_order import (
     FbsOrderReservation,
 )
 from app.models.fbs_order_pick import FbsOrderPick
+from app.models.fbs_supply import FbsSupply
+from app.models.fbs_wb_operation import FbsWbOperation
 from app.models.inventory_balance import InventoryBalance
 from tests.fbs_picking_browser_seed import guard
 
@@ -59,6 +61,12 @@ async def main() -> None:
                 .where(FbsOrder.tenant_id == tenant)
             )
         ).all()
+        supplies = (
+            await session.scalars(select(FbsSupply).where(FbsSupply.tenant_id == tenant))
+        ).all()
+        operations = (
+            await session.scalars(select(FbsWbOperation).where(FbsWbOperation.tenant_id == tenant))
+        ).all()
         stock = {}
         for b in balances:
             stock[str(b.product_id)] = stock.get(str(b.product_id), 0) + b.quantity
@@ -79,6 +87,27 @@ async def main() -> None:
             }
 
         result = {
+            "supplies": [
+                {
+                    "id": str(s.id),
+                    "marketplace": s.marketplace,
+                    "warehouse": str(s.warehouse_id),
+                    "planned_shipment_date": s.planned_shipment_date.isoformat()
+                    if s.planned_shipment_date
+                    else None,
+                }
+                for s in supplies
+            ],
+            "operations": [
+                {
+                    "id": str(operation.id),
+                    "supply": str(operation.local_entity_id),
+                    "kind": operation.operation_kind,
+                    "state": operation.state,
+                    "request_summary": operation.request_summary_json,
+                }
+                for operation in operations
+            ],
             "stock": stock,
             "unchanged": stock == seed["stock_by_product"],
             "balances": [
