@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib.util
+import inspect
 import json
 import subprocess
 from pathlib import Path
@@ -23,11 +24,15 @@ def test_all_seven_backup_variants_and_original_assertions_are_preserved() -> No
     assert ast.literal_eval(parameters.args[1]) == [
         "", "dump", "archive", "listing", "empty", "network", "retry",
     ]
-    assertions = [ast.dump(node, include_attributes=False) for node in ast.walk(function)
+    # Python 3.14 omits empty fields by default; the legacy CI format includes them.
+    dump_options = (
+        {"show_empty": True} if "show_empty" in inspect.signature(ast.dump).parameters else {}
+    )
+    assertions = [ast.dump(node, include_attributes=False, **dump_options) for node in ast.walk(function)
                   if isinstance(node, ast.Assert)]
     assert len(assertions) == 23
     assert hashlib.sha256(json.dumps(assertions, ensure_ascii=False).encode()).hexdigest() == (
-        "ddbfe3e8447dd54825fadf01f437a1adb6fa18f2ed583f58172cb1ed962fc3da"
+        "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408"
     )
 
 

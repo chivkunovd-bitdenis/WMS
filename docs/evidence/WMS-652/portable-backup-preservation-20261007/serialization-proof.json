@@ -1,0 +1,37 @@
+{
+  "base": "7bbfafc68ef0834746e63f12a49db31a1977f030",
+  "python": "3.14.3",
+  "ast_dump_signature": "(node, annotate_fields=True, include_attributes=False, *, indent=None, show_empty=False)",
+  "source": "backend/tests/test_prod_deploy_backup.py",
+  "source_sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+  "assert_count": 23,
+  "parameters": [
+    "",
+    "dump",
+    "archive",
+    "listing",
+    "empty",
+    "network",
+    "retry"
+  ],
+  "default_314_sha256": "ddbfe3e8447dd54825fadf01f437a1adb6fa18f2ed583f58172cb1ed962fc3da",
+  "full_empty_fields_sha256": "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408",
+  "linux_311_actual_sha256": "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408",
+  "first_differing_assert_index": 4,
+  "first_default_dump": "Assert(test=Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Compare(left=Constant(value='label=com.docker.compose.project=synthetic-project'), ops=[In()], comparators=[Name(id='call', ctx=Load())]), generators=[comprehension(target=Name(id='call', ctx=Store()), iter=Name(id='calls', ctx=Load()), is_async=0)])]))",
+  "first_full_dump": "Assert(test=Call(func=Name(id='any', ctx=Load()), args=[GeneratorExp(elt=Compare(left=Constant(value='label=com.docker.compose.project=synthetic-project'), ops=[In()], comparators=[Name(id='call', ctx=Load())]), generators=[comprehension(target=Name(id='call', ctx=Store()), iter=Name(id='calls', ctx=Load()), ifs=[], is_async=0)])], keywords=[]))",
+  "different_dump_count": 10,
+  "linux_log_readonly_path": "/Users/deniscivkunov/Projects/WMS/.agent-runs/wms652-final-ci-37548248403/backend-shard1-job.log",
+  "linux_log_sha256": "b7adf88aa829a1eddc9e1ef909a0f90bfb087277ce0ce35ad45b56964a5682f4",
+  "linux_log_excerpt_lines": [
+    6318,
+    6340
+  ],
+  "actual_full_ci": {
+    "run": 37548248403,
+    "attempt": 1,
+    "merge": "ac845328b27b5be265962695e10766efddef339e",
+    "status": "FAILED; not rerun"
+  },
+  "existing_python311_common_paths": []
+}
