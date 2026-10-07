@@ -1,0 +1,45 @@
+{
+  "source_blob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+  "command": "npm run test:unit -- src/utils/wms702ProductLabelGeometry.test.ts",
+  "observed_tool_result": {
+    "exit_code": 0,
+    "test_files_passed": 1,
+    "tests_passed": 1,
+    "test_duration_ms": 113333,
+    "total_duration_seconds": 115.16,
+    "start_local": "2026-10-08 01:20:30"
+  },
+  "matrix": {
+    "stock_sizes": [
+      "58x40",
+      "60x80",
+      "60x40",
+      "70x120"
+    ],
+    "samples": [
+      "seven-fields",
+      "long-name-size",
+      "wide-glyph-name",
+      "uppercase-cyrillic-name",
+      "two-line-name-no-brand",
+      "composition-not-selected"
+    ],
+    "documents": [
+      "ordinary",
+      "shared-tape"
+    ],
+    "combinations": 48,
+    "copies_per_combination": 2,
+    "all_fields_off": "3 mandatory rows, original font size"
+  },
+  "assertions": [
+    "all rows visible within body",
+    "rows separated from neighbours and footer",
+    "minimum font5.7pt",
+    "real PDF physical page sizes",
+    "exactly2 PDF pages per combination",
+    "PDF text ordering and page bounds",
+    "actual canvas barcode and actual canvas Arial title generators"
+  ],
+  "scope_limit": "Completed full matrix before adding decoded-image completeness assertions and optional evidence export. Subsequent local subset validates new image assertions; CI executes all48."
+}

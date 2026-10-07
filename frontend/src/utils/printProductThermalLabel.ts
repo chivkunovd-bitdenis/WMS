@@ -56,8 +56,9 @@ export function labelPt(value: number): string {
   return `${Math.round(value * 10) / 10}pt`
 }
 
-/** Межстрочный интервал текста — ниже 1.3 на термопечати ИП визуально «сплющивается». */
+/** Spacious stock keeps the historical leading; compact stock fits all fields at readable type size. */
 const TEXT_LINE_HEIGHT = 1.35
+const COMPACT_TEXT_LINE_HEIGHT = 1.22
 const FOOTER_LINE_HEIGHT = 1.2
 /**
  * Базовый зазор между строками (мм при fontScale=1).
@@ -115,16 +116,44 @@ export type ProductLabelTextLine = {
 }
 
 /** Высота области под текст внутри .body (мм), без футера «оставьте отзыв». */
-export function estimateLabelTextAreaMm(size: LabelSize): number {
+export function estimateLabelTextAreaMm(size: LabelSize, barcodeHeightMm?: number): number {
   const k = labelScale(size)
-  const padding = (1.4 + 1) * k.uniform
+  const compact = isCompactLabel(size)
+  const padding = (compact ? 1.2 + 0.8 : 1.4 + 1) * k.uniform
   const barcodeBlock =
-    0.8 * k.uniform +
-    14 * k.uniform +
+    (compact ? 0.45 : 0.8) * k.uniform +
+    (barcodeHeightMm ?? (compact ? 12 : 14) * k.uniform) +
     0.3 * k.uniform +
     ptToMm(size, 8) * 1.2 +
     bodyTopGapMm(size)
   return size.heightMm - padding - barcodeBlock - footerReservedHeightMm(size)
+}
+
+/** Fit every selected compact-label field together, without clipping bottom rows. */
+export function productLabelBodyScale(lines: ProductLabelTextLine[], size: LabelSize, barcodeHeightMm?: number): number {
+  if (!isCompactLabel(size) || lines.length === 0) return 1
+  // Reserve a small printing/rounding margin. Barcode and footer keep their size.
+  const budget = Math.max(0, estimateLabelTextAreaMm(size, barcodeHeightMm) - 0.2)
+  const height = productLabelTextStackHeightMm(lines, size)
+  return Math.min(1, Math.floor((budget / height) * 1000) / 1000)
+}
+
+/** The PNG's intrinsic aspect ratio determines its height when CSS uses height:auto. */
+export function productLabelBarcodeHeightMm(dataUrl: string, size: LabelSize): number {
+  const k = labelScale(size)
+  const maxHeight = (isCompactLabel(size) ? 12 : 14) * k.uniform
+  if (!dataUrl.startsWith('data:image/png;base64,')) return maxHeight
+  try {
+    const header = atob(dataUrl.slice('data:image/png;base64,'.length, 'data:image/png;base64,'.length + 44))
+    if (header.slice(0, 8) !== '\x89PNG\r\n\x1a\n' || header.slice(12, 16) !== 'IHDR') return maxHeight
+    const uint32 = (start: number) => [0, 1, 2, 3].reduce((value, offset) => value * 256 + header.charCodeAt(start + offset), 0)
+    const width = uint32(16)
+    const height = uint32(20)
+    if (!(width > 0 && height > 0)) return maxHeight
+    return Math.min(maxHeight, 52 * k.uniform * height / width)
+  } catch {
+    return maxHeight
+  }
 }
 
 function productLabelTextLineHeightMm(line: ProductLabelTextLine, size: LabelSize): number {
@@ -148,6 +177,43 @@ const NAME_FONT_PT = 7
 /** Приблизительная ширина символа относительно кегля (Arial/кириллица). */
 const NAME_CHAR_WIDTH_RATIO = 0.55
 
+let nameMeasureContext: CanvasRenderingContext2D | undefined
+
+function nameWidthUnits(text: string, size: LabelSize): number {
+  try {
+    if (!nameMeasureContext && typeof document !== 'undefined') {
+      nameMeasureContext = document.createElement('canvas').getContext('2d') ?? undefined
+    }
+    if (nameMeasureContext) {
+      const fontPx = NAME_FONT_PT * labelTextFontScale(size) * 96 / 72
+      nameMeasureContext.font = `${fontPx}px Arial, Helvetica, sans-serif`
+      return nameMeasureContext.measureText(text).width / fontPx
+    }
+  } catch { /* Non-browser tests and unavailable canvas use a conservative bound. */ }
+  // A whole em per code point avoids optimistic estimates for wide Unicode glyphs.
+  return Array.from(text).length
+}
+
+function nameVisualLines(name: string, size: LabelSize): number {
+  const k = labelScale(size)
+  const usableWidthMm = size.widthMm - 2 * 1.8 * k.uniform
+  const fontMm = NAME_FONT_PT * labelTextFontScale(size) * PT_TO_MM
+  const capacity = usableWidthMm / fontMm
+  let lines = 1
+  let used = 0
+  for (const word of name.split(/\s+/u)) {
+    const width = nameWidthUnits(word, size)
+    const space = used > 0 ? nameWidthUnits(' ', size) : 0
+    if (used > 0 && used + space + width > capacity) { lines += 1; used = 0 }
+    else used += space
+    const total = used + width
+    const extraLines = Math.max(0, Math.ceil(total / capacity) - 1)
+    lines += extraLines
+    used = total - extraLines * capacity
+  }
+  return lines
+}
+
 /**
  * Максимум символов названия под размер этикетки. Обрезаем ТЕКСТ заранее,
  * а не через CSS max-height + overflow: на термопринтере обрезка «протекала»
@@ -164,20 +230,18 @@ export function maxProductNameChars(size: LabelSize, targetLines?: number): numb
 
 function truncateNameToLines(name: string, size: LabelSize, targetLines?: number): string {
   const max = maxProductNameChars(size, targetLines)
-  if (name.length <= max) {
+  const lines = targetLines ?? maxProductNameVisualLines(size)
+  if (name.length <= max && nameVisualLines(name, size) <= lines) {
     return name
   }
-  return `${name.slice(0, Math.max(1, max - 1)).trimEnd()}…`
+  let end = Math.min(name.length, Math.max(1, max - 1))
+  while (end > 1 && nameVisualLines(`${name.slice(0, end).trimEnd()}…`, size) > lines) end -= 1
+  return `${name.slice(0, end).trimEnd()}…`
 }
 
 /** Сколько строк название реально займёт после переноса (для бюджета высоты). */
 export function actualNameVisualLines(name: string, size: LabelSize): number {
-  const k = labelScale(size)
-  const usableWidthMm = size.widthMm - 2 * 1.8 * k.uniform
-  const charWidthMm = NAME_FONT_PT * labelTextFontScale(size) * NAME_CHAR_WIDTH_RATIO * PT_TO_MM
-  const perLine = Math.max(1, Math.floor(usableWidthMm / charWidthMm))
-  const lines = Math.max(1, Math.ceil(name.length / perLine))
-  return Math.min(maxProductNameVisualLines(size), lines)
+  return nameVisualLines(name, size)
 }
 
 const FOOTER_FONT_PT = 6.4
@@ -214,6 +278,7 @@ export function buildProductLabelTextLines(
   labelSize: LabelSize = DEFAULT_LABEL_SIZE,
 ): ProductLabelTextLine[] {
   const lines: ProductLabelTextLine[] = []
+  const lineHeight = isCompactLabel(labelSize) ? COMPACT_TEXT_LINE_HEIGHT : TEXT_LINE_HEIGHT
   const seller = data.seller_name?.trim()
   if (seller) {
     lines.push({
@@ -223,7 +288,7 @@ export function buildProductLabelTextLines(
       title: escapeLabelHtml(seller),
       visualLines: 1,
       fontPt: 6.8,
-      lineHeight: TEXT_LINE_HEIGHT,
+      lineHeight,
     })
   }
   const rawName = normalizeProductLabelName(data.product_name)
@@ -238,7 +303,7 @@ export function buildProductLabelTextLines(
     plainText: truncatedName,
     visualLines: actualNameVisualLines(truncatedName, labelSize),
     fontPt: NAME_FONT_PT,
-    lineHeight: TEXT_LINE_HEIGHT,
+    lineHeight,
   })
   const article = escapeLabelHtml(resolveProductLabelArticle(data))
   lines.push({
@@ -247,7 +312,7 @@ export function buildProductLabelTextLines(
     text: `Артикул: ${article}`,
     visualLines: 1,
     fontPt: 6.8,
-    lineHeight: TEXT_LINE_HEIGHT,
+    lineHeight,
   })
   for (const detail of productLabelDetailLines(data, printOptions)) {
     const isComposition = detail.startsWith('Состав:')
@@ -257,7 +322,7 @@ export function buildProductLabelTextLines(
       text: escapeLabelHtml(detail),
       visualLines: 1,
       fontPt: 6.8,
-      lineHeight: TEXT_LINE_HEIGHT,
+      lineHeight,
     })
   }
   return lines
@@ -335,6 +400,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
   const barcodeWidthMm = 52 * k.uniform
   const barcodeMaxHeightMm = (compact ? 12 : 14) * k.uniform
   const sellerMinHeightMm = compact ? 0 : 6.8 * textFont * PT_TO_MM * TEXT_LINE_HEIGHT
+  const lineHeight = compact ? COMPACT_TEXT_LINE_HEIGHT : TEXT_LINE_HEIGHT
   return `
   .barcode-wrap {
     flex: 0 0 auto;
@@ -361,12 +427,13 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     line-height: 1.2;
   }
   .body {
+    --product-label-body-scale: 1;
     flex: 1 1 auto;
     min-height: 0;
     overflow: hidden;
     margin-top: ${labelMm(bodyTopGapMm(size))};
-    line-height: ${TEXT_LINE_HEIGHT};
-    font-size: ${labelPt(6.8 * textFont)};
+    line-height: ${lineHeight};
+    font-size: calc(${labelPt(6.8 * textFont)} * var(--product-label-body-scale));
     display: flex;
     flex-direction: column;
     justify-content: flex-start;
@@ -377,7 +444,7 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
    * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
    */
   .body > p {
-    margin: 0 0 ${labelMm(textLineGapMm(size))};
+    margin: 0 0 calc(${labelMm(textLineGapMm(size))} * var(--product-label-body-scale));
     flex: 0 0 auto;
     flex-shrink: 0;
   }
@@ -385,8 +452,8 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
     margin-bottom: 0;
   }
   .seller {
-    font-size: ${labelPt(6.8 * textFont)};
-    line-height: ${TEXT_LINE_HEIGHT};
+    font-size: calc(${labelPt(6.8 * textFont)} * var(--product-label-body-scale));
+    line-height: ${lineHeight};
     ${compact ? '' : `min-height: ${labelMm(sellerMinHeightMm)};`}
     white-space: nowrap;
     overflow: hidden;
@@ -398,13 +465,13 @@ export function buildProductLabelContentCss(size: LabelSize = DEFAULT_LABEL_SIZE
    * ниже названия и не может напечататься поверх (баг на термопринтере).
    */
   .name {
-    font-size: ${labelPt(NAME_FONT_PT * textFont)};
+    font-size: calc(${labelPt(NAME_FONT_PT * textFont)} * var(--product-label-body-scale));
     font-weight: 400;
-    line-height: ${TEXT_LINE_HEIGHT};
+    line-height: ${lineHeight};
     word-break: break-word;
   }
   .meta {
-    line-height: ${TEXT_LINE_HEIGHT};
+    line-height: ${lineHeight};
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -467,13 +534,14 @@ export function buildProductLabelSectionHtml(
     labelSize,
   )
   const bodyHtml = textLines.map(renderProductLabelTextLine).join('')
+  const bodyScale = productLabelBodyScale(textLines, labelSize, productLabelBarcodeHeightMm(barcodeDataUrl, labelSize))
   const footerHtml = `<p class="footer">${escapeLabelHtml(PRODUCT_LABEL_REVIEW_FOOTER)}</p>`
   return `<section class="label" data-testid="product-thermal-label">
   <div class="barcode-wrap">
     <img id="barcode" src="${barcodeDataUrl}" alt="barcode" />
     <p class="digits">${barcode}</p>
   </div>
-  <div class="body">
+  <div class="body" style="--product-label-body-scale: ${bodyScale}">
     ${bodyHtml}
   </div>
   ${footerHtml}
