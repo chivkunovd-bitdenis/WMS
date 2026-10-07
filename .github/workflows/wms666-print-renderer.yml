@@ -1,0 +1,141 @@
+name: WMS-666 current-candidate print renderer
+
+on:
+  workflow_dispatch:
+    inputs:
+      application_ref:
+        description: Exact 40-character product commit SHA to render and test
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wms666-print-renderer-${{ inputs.application_ref }}
+  cancel-in-progress: false
+
+jobs:
+  current-candidate-renderer:
+    name: Linux Chromium and PDF contracts for the requested product SHA
+    timeout-minutes: 30
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Validate the requested immutable application SHA
+        env:
+          APPLICATION_REF: ${{ inputs.application_ref }}
+        run: |
+          [[ "$APPLICATION_REF" =~ ^[0-9a-f]{40}$ ]]
+          mkdir -p "$RUNNER_TEMP/release-print"
+
+      - name: Check out the exact product candidate
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.application_ref }}
+          path: application
+          fetch-depth: 1
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: application/frontend/package-lock.json
+
+      - name: Install isolated frontend and Linux print-renderer dependencies
+        run: |
+          npm ci --prefix application/frontend
+          npm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1
+          node "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium
+          sudo apt-get update -qq
+          sudo apt-get install -y poppler-utils
+          echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
+          chromium_path="$(node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log(chromium.executablePath())")"
+          echo "WMS672_CHROMIUM=$chromium_path" >> "$GITHUB_ENV"
+          echo "WMS_PRINT_CHROMIUM=$chromium_path" >> "$GITHUB_ENV"
+
+      - name: Record exact workflow, product, source, and renderer identities
+        env:
+          APPLICATION_REF: ${{ inputs.application_ref }}
+          WORKFLOW_SHA: ${{ github.sha }}
+          WORKFLOW_REF: ${{ github.ref }}
+        run: |
+          application_sha="$(git -C application rev-parse HEAD)"
+          test "$application_sha" = "$APPLICATION_REF"
+          node --version > "$RUNNER_TEMP/release-print/node-version.txt"
+          "$WMS672_CHROMIUM" --version > "$RUNNER_TEMP/release-print/chromium-version.txt"
+          pdftotext -v 2> "$RUNNER_TEMP/release-print/poppler-version.txt"
+          python - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path("application")
+          paths = [
+              "scripts/ci/run_release_print.sh",
+              "scripts/ci/wms-print-contract-probe.mjs",
+              "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts",
+              "frontend/src/screens/v2/fbsPickingColor.wms673.dom.test.tsx",
+              "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts",
+          ]
+          sources = {path: hashlib.sha256((root / path).read_bytes()).hexdigest() for path in paths}
+          manifest = {
+              "workflow_sha": os.environ["WORKFLOW_SHA"],
+              "workflow_ref": os.environ["WORKFLOW_REF"],
+              "application_input_ref": os.environ["APPLICATION_REF"],
+              "application_checkout_sha": subprocess.check_output(["git", "-C", str(root), "rev-parse", "HEAD"], text=True).strip(),
+              "source_sha256": sources,
+          }
+          pathlib.Path(os.environ["RUNNER_TEMP"], "release-print", "identity.json").write_text(json.dumps(manifest, indent=2) + "\n")
+          PY
+          node -p "require('$RUNNER_TEMP/print-contract-tools/node_modules/playwright/package.json').version" > "$RUNNER_TEMP/release-print/playwright-version.txt"
+
+      - name: Execute the existing WMS-672 / WMS-673 rendered browser and PDF suite
+        run: bash application/scripts/ci/run_release_print.sh
+
+      - name: Execute WMS-657 real Chromium and PDF layout cases C1-C6
+        working-directory: application/frontend
+        run: |
+          npx vitest run src/screens/v2/fbsPickingListPrint.wms657.test.ts \
+            --maxWorkers=1 --no-file-parallelism --reporter=json \
+            --outputFile="$RUNNER_TEMP/release-print/657.json" \
+            2>&1 | tee "$RUNNER_TEMP/release-print/657.log"
+
+      - name: Execute WMS-673 real single, group, and packing-screen DOM cases
+        working-directory: application/frontend
+        env:
+          WMS673_EVIDENCE_DIR: ${{ runner.temp }}/release-print/673-dom
+        run: |
+          npx vitest run src/screens/v2/fbsPickingColor.wms673.dom.test.tsx \
+            --maxWorkers=1 --no-file-parallelism --reporter=json \
+            --outputFile="$RUNNER_TEMP/release-print/673-dom.json" \
+            2>&1 | tee "$RUNNER_TEMP/release-print/673-dom.log"
+
+      - name: Assert every required renderer case actually executed
+        if: always()
+        run: |
+          python - <<'PY'
+          import json, pathlib, sys
+          root = pathlib.Path(__import__("os").environ["RUNNER_TEMP"]) / "release-print"
+          checks = [("657.json", 6), ("673-dom.json", 5), ("673.json", 5)]
+          errors = []
+          for filename, expected in checks:
+              path = root / filename
+              if not path.exists():
+                  errors.append(f"{filename}: missing report")
+                  continue
+              data = json.loads(path.read_text())
+              observed = (data.get("numTotalTests"), data.get("numPassedTests"), data.get("numFailedTests"), data.get("numPendingTests"))
+              if not data.get("success") or observed != (expected, expected, 0, 0):
+                  errors.append(f"{filename}: expected ({expected}, {expected}, 0, 0), got {observed}")
+              else:
+                  print(f"{filename}: {expected}/{expected} passed; none skipped or failed")
+          if errors:
+              print("\n".join(errors), file=sys.stderr)
+              sys.exit(1)
+          PY
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms666-print-renderer-${{ inputs.application_ref }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/release-print
+          if-no-files-found: error
+          retention-days: 14
