@@ -4,6 +4,9 @@ on:
   push:
     branches: [etalon, codex/wms666-sticker-prefetch]
   workflow_dispatch:
+concurrency:
+  group: wb-packing-stickers-${{ github.sha }}
+  cancel-in-progress: true
 permissions:
   contents: read
 jobs:
@@ -22,6 +25,27 @@ jobs:
       - name: Opening packing must request and display missing stickers in both entry points
         working-directory: frontend
         run: npx vitest run src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx --maxWorkers=1 --minWorkers=1
+      - name: Prove the guard catches the original ordinary-packing regression
+        working-directory: frontend
+        run: |
+          source_file=src/screens/v2/FfFbsSupplyWorkspace.tsx
+          trap 'git restore -- "$source_file"' EXIT
+          python3 - <<'PYCODE'
+          from pathlib import Path
+          p = Path("src/screens/v2/FfFbsSupplyWorkspace.tsx")
+          s = p.read_text()
+          fixed = "if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return"
+          broken = "if (!assemblyFrame?.visible || !registerSequentialScanner) return"
+          assert s.count(fixed) == 1
+          p.write_text(s.replace(fixed, broken))
+          PYCODE
+          if npx vitest run src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx -t 'clicking from composition' --maxWorkers=1 --minWorkers=1 > "$RUNNER_TEMP/sticker-red.log" 2>&1; then
+            cat "$RUNNER_TEMP/sticker-red.log"
+            echo 'Guard failed to detect the original regression'
+            exit 1
+          fi
+          cat "$RUNNER_TEMP/sticker-red.log"
+          grep -q WMS666_REQUIRED_STICKER_REQUEST "$RUNNER_TEMP/sticker-red.log"
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
