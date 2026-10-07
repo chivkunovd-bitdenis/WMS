@@ -2175,7 +2175,11 @@ export type FbsPrintBinding = {
 }
 
 /** Fail closed for an old response without an exact binding generation. */
-export async function validateFbsPrintBindings(token: string, bindings: FbsPrintBinding[]): Promise<void> {
+export async function validateFbsPrintBindings(
+  token: string,
+  bindings: FbsPrintBinding[],
+  reprintMarkingIds: string[] = [],
+): Promise<void> {
   if (!bindings.length) return
   if (bindings.some((binding) => !binding.marking_id || !binding.supply_id)) {
     throw new Error('ЧЗ заказа изменён или удалён. Обновите заказ и повторите печать.')
@@ -2183,7 +2187,7 @@ export async function validateFbsPrintBindings(token: string, bindings: FbsPrint
   const response = await fetch(apiUrl('/operations/fbs-orders/print-bindings/validate'), {
     method: 'POST',
     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ bindings }),
+    body: JSON.stringify({ bindings, reprint_marking_ids: reprintMarkingIds }),
     signal: AbortSignal.timeout(15_000),
   })
   if (!response.ok) await jsonOrThrow(response)

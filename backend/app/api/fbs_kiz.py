@@ -32,6 +32,7 @@ class FbsPrintBindingIn(BaseModel):
 
 class FbsPrintBindingsBody(BaseModel):
     bindings: list[FbsPrintBindingIn] = Field(min_length=1)
+    reprint_marking_ids: list[uuid.UUID] = Field(default_factory=list)
 
 
 @router.post("/print-bindings/validate", status_code=204)
@@ -40,9 +41,17 @@ async def validate_fbs_print_bindings(
     user: Annotated[User, Depends(require_fbs_operator_access)],
     session: Annotated[AsyncSession, Depends(get_db)],
 ) -> None:
+    binding_ids = {binding.marking_id for binding in body.bindings}
+    reprint_ids = set(body.reprint_marking_ids)
+    if len(reprint_ids) != len(body.reprint_marking_ids) or not reprint_ids.issubset(binding_ids):
+        raise HTTPException(
+            status_code=422,
+            detail="Reprint IDs must identify unique supplied bindings.",
+        )
     valid = await print_bindings_current(
         session, user.tenant_id,
         [PrintBinding(**binding.model_dump()) for binding in body.bindings],
+        reprint_marking_ids=reprint_ids,
     )
     if not valid:
         raise HTTPException(status_code=409, detail=envelope_from_exc(

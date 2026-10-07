@@ -31,8 +31,60 @@ class PrintBinding:
     cis_code: str
 
 
+def current_ozon_print_marking_ids(
+    markings: list[FbsOrderMarking], quantity: int,
+) -> set[uuid.UUID]:
+    """Choose the newest printable generation per Ozon exemplar.
+
+    Ozon positions can contain several KIZ, one per exemplar. Timestamp ties
+    across different exemplars are all retained, as in the existing Ozon
+    quantity reader; ties for the same exemplar are ambiguous and are not
+    treated as a current binding. Rows without exemplar metadata keep the
+    existing quantity/cutoff fallback.
+    """
+    if quantity <= 0:
+        return set()
+
+    def created_key(marking: FbsOrderMarking) -> float:
+        return marking.created_at.timestamp() if marking.created_at is not None else float("-inf")
+
+    by_exemplar: dict[int, list[FbsOrderMarking]] = {}
+    without_exemplar: list[FbsOrderMarking] = []
+    for marking in markings:
+        details = marking.meta_details_json if isinstance(marking.meta_details_json, dict) else {}
+        exemplar_id = details.get("exemplar_id")
+        if type(exemplar_id) is not int:
+            without_exemplar.append(marking)
+            continue
+        by_exemplar.setdefault(exemplar_id, []).append(marking)
+
+    latest_by_exemplar: list[FbsOrderMarking] = []
+    for rows in by_exemplar.values():
+        newest_at = max(created_key(row) for row in rows)
+        newest = [row for row in rows if created_key(row) == newest_at]
+        # An equal-time pair for one exemplar has no reliable generation order.
+        if len(newest) == 1:
+            latest_by_exemplar.append(newest[0])
+
+    candidates = latest_by_exemplar
+    candidates.extend(without_exemplar)
+    candidates.sort(key=lambda row: (created_key(row), str(row.id)), reverse=True)
+    selected = candidates[:quantity]
+    if len(candidates) > quantity and selected:
+        cutoff = created_key(selected[-1])
+        selected.extend(row for row in candidates[quantity:] if created_key(row) == cutoff)
+    return {
+        row.id for row in selected
+        if row.meta_status not in {META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED}
+    }
+
+
 async def print_bindings_current(
-    session: AsyncSession, tenant_id: uuid.UUID, bindings: list[PrintBinding],
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    bindings: list[PrintBinding],
+    *,
+    reprint_marking_ids: set[uuid.UUID] | None = None,
 ) -> bool:
     # The same order locks as KIZ delete/replace, in a stable order. Nothing
     # survives the request: a disconnected printer cannot block the operator.
@@ -79,7 +131,15 @@ async def print_bindings_current(
             if not await order_belonged_to_supply(session, order, supply):
                 return False
         marking, code = row
-        if marking.order_id != order.id or marking.meta_status == META_STATUS_REJECTED:
+        if marking.order_id != order.id:
+            return False
+        if marking.meta_status == META_STATUS_REJECTED and (
+            order.marketplace != "wb"
+            or reprint_marking_ids is None
+            or marking.id not in reprint_marking_ids
+        ):
+            return False
+        if marking.meta_status == META_STATUS_REPLACEMENT_REQUIRED:
             return False
         if code is not None and (code.tenant_id != tenant_id or code.seller_id != order.seller_id):
             return False
@@ -110,64 +170,12 @@ async def print_bindings_current(
                         FbsOrderMarking.order_product_id == marking.order_product_id,
                         FbsOrderMarking.tenant_id == tenant_id,
                         FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-                        FbsOrderMarking.meta_status.notin_({
-                            META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED,
-                        }),
                     )
                     .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
                     .with_for_update()
                     .execution_options(populate_existing=True)
                 )).all()
-                # Ozon's posting position can have one current CIS per exemplar.
-                # A timestamp/UUID slice can discard a different live exemplar
-                # when rows share a timestamp, or retain an older CIS after its
-                # same-exemplar replacement. Keep the newest active generation
-                # per exemplar instead of imposing an order on unrelated codes.
-                latest_by_exemplar: dict[int, FbsOrderMarking | None] = {}
-                for candidate in current_rows:
-                    details = (
-                        candidate.meta_details_json
-                        if isinstance(candidate.meta_details_json, dict)
-                        else {}
-                    )
-                    exemplar_id = details.get("exemplar_id")
-                    if type(exemplar_id) is not int:
-                        continue
-                    if exemplar_id not in latest_by_exemplar:
-                        latest_by_exemplar[exemplar_id] = candidate
-                        continue
-                    previous = latest_by_exemplar[exemplar_id]
-                    if previous is None:
-                        continue
-                    if previous.created_at == candidate.created_at:
-                        # Equal-time generations for the same exemplar have no
-                        # reliable ordering. Do not bless either binding.
-                        latest_by_exemplar[exemplar_id] = None
-                current_ids = {
-                    candidate.id
-                    for candidate in latest_by_exemplar.values()
-                    if candidate is not None
-                }
-                # Older Ozon rows can predate exemplar IDs. Preserve their
-                # existing quantity/cutoff semantics rather than making that
-                # historical data newly unprintable.
-                without_exemplar = [
-                    candidate
-                    for candidate in current_rows
-                    if not isinstance(candidate.meta_details_json, dict)
-                    or type(candidate.meta_details_json.get("exemplar_id")) is not int
-                ]
-                if without_exemplar:
-                    if len(without_exemplar) <= quantity:
-                        current_ids.update(candidate.id for candidate in without_exemplar)
-                    else:
-                        cutoff = without_exemplar[quantity - 1].created_at
-                        current_ids.update(
-                            candidate.id
-                            for candidate in without_exemplar
-                            if cutoff is not None and candidate.created_at is not None
-                            and candidate.created_at >= cutoff
-                        )
+                current_ids = current_ozon_print_marking_ids(current_rows, quantity)
                 ozon_position_current_ids[position_key] = current_ids
             if marking.id not in current_ids:
                 return False
@@ -180,7 +188,6 @@ async def print_bindings_current(
                 .where(
                     FbsOrderMarking.order_id == order.id,
                     FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-                    FbsOrderMarking.meta_status != META_STATUS_REJECTED,
                 )
                 .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
                 .limit(1)

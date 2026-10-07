@@ -45,6 +45,7 @@ from app.services.fbs_print_asset_service import (
     PrintBatchResult,
     request_supply_print_batch,
 )
+from app.services.fbs_print_binding_service import current_ozon_print_marking_ids
 from app.services.print_template_service import PrintLayout, PrintTemplateServiceError, parse_layout
 from app.services.wildberries_client import kiz_scan_skips_wb_readback
 from app.services.wildberries_errors import WildberriesClientError
@@ -930,18 +931,22 @@ def _selected_sgtin_marking(
 
 
 def _active_ozon_sgtin_markings(order: FbsOrder) -> list[FbsOrderMarking]:
-    """Return every printable Ozon KIZ in the posting's position order."""
+    """Return current printable Ozon KIZ rows in posting-position order."""
     position_index = {
         position.id: position.position_index for position in order.product_positions
     }
-    markings = [
-        marking
-        for marking in order.markings
-        if marking.kind == MARKING_KIND_SGTIN
-        and marking.meta_status != "rejected"
-        and marking.order_product_id in position_index
-        and marking.marking_code is not None
-    ]
+    quantities = {position.id: position.quantity for position in order.product_positions}
+    by_position: dict[uuid.UUID, list[FbsOrderMarking]] = {}
+    for marking in order.markings:
+        if marking.kind == MARKING_KIND_SGTIN and marking.order_product_id in position_index:
+            by_position.setdefault(marking.order_product_id, []).append(marking)
+    markings: list[FbsOrderMarking] = []
+    for position_id, rows in by_position.items():
+        current_ids = current_ozon_print_marking_ids(rows, quantities[position_id])
+        markings.extend(
+            marking for marking in rows
+            if marking.id in current_ids and marking.marking_code is not None
+        )
     return sorted(
         markings,
         key=lambda marking: (

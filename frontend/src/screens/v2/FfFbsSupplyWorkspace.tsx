@@ -3021,6 +3021,7 @@ export function FfFbsSupplyWorkspace({
           ? productBarcodeOptionsForPosition(ozonPosition, 'ozon')
           : productBarcodeOptionsForOrder(order, workspace.supply.marketplace),
         fbsTape: {
+          reprintMarkingIds: reprintMarkingId ? [reprintMarkingId] : undefined,
           orders: [{
             orderId: order.id,
             wbOrderId: order.wb_order_id,

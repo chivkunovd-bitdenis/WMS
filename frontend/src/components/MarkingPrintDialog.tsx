@@ -129,6 +129,8 @@ type FbsTapeContext = {
   selectedBarcodePositionId?: string
   /** New codes missing per SKU; already bound codes are reused by FBS. */
   markingShortage?: number
+  /** Exact rejected WB KIZ rows explicitly selected for physical reprint. */
+  reprintMarkingIds?: string[]
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
   confirmQrApplied: (asset: FbsTapeAsset, idempotencyKey: string) => Promise<void>
@@ -1196,7 +1198,9 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
       ) : []
       // Revalidate the binding after every asset/render step and directly before the
       // external print dispatch; the acknowledgement phase is separate and retryable.
-      await printTapeSections(sections, size, () => validateFbsPrintBindings(ctx.token, bindings))
+      await printTapeSections(sections, size, () => validateFbsPrintBindings(
+        ctx.token, bindings, ctx.fbsTape?.reprintMarkingIds,
+      ))
       const pending = {
         context: ctx.fbsTape,
         partialMessage,
