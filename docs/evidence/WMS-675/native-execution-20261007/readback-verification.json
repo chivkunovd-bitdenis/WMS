@@ -1,0 +1,942 @@
+{
+  "verdict": "PASS_ADDRESSED_PRODUCTION_READBACK",
+  "writes_by_this_adapter_attempt": 0,
+  "attribution": "Native production observed_handoff already completed remaining14 by06:27; collector does not identify initiating actor.",
+  "no_duplicate_mutation_required": true,
+  "repeated_read_delta": 0,
+  "results": [
+    {
+      "read": "accounting-before-20261007T075312Z",
+      "started_at": "2026-10-07T07:53:12.150398+00:00",
+      "finished_at": "2026-10-07T07:53:32.256524+00:00",
+      "proved_units": 26,
+      "conducted_units": 26,
+      "remaining": 0,
+      "cancelled_excluded": 5,
+      "unique_actual_expense_movements": 26,
+      "existing_12_expense_links_preserved": true,
+      "new_since_0626": [
+        {
+          "posting": "0187441457-0073-1",
+          "sku": 1697770458,
+          "movement_id": "a0010d3e-a695-472b-bc71-91555c3ad6ef",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.311771+00"
+        },
+        {
+          "posting": "0249035122-0351-1",
+          "sku": 1589998415,
+          "movement_id": "70375656-511f-4319-8f5c-c21e4e064691",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.976457+00"
+        },
+        {
+          "posting": "06383353-1897-1",
+          "sku": 1589998415,
+          "movement_id": "4238549b-5c95-46ed-88e1-a84d236d9ba2",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.237159+00"
+        },
+        {
+          "posting": "21052558-0445-1",
+          "sku": 1697770458,
+          "movement_id": "70fcd5cb-3275-4300-9f1d-112d33e99b31",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.905107+00"
+        },
+        {
+          "posting": "28508065-0594-1",
+          "sku": 1586484429,
+          "movement_id": "f31e1e21-4d75-4761-89b2-503bb5eff56a",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.092135+00"
+        },
+        {
+          "posting": "31853470-0198-1",
+          "sku": 1586466682,
+          "movement_id": "f307c5e7-68bf-4da0-ade7-fd3bb0b92c31",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.119292+00"
+        },
+        {
+          "posting": "45035035-0211-1",
+          "sku": 1697770458,
+          "movement_id": "7b2d9cdf-d000-4df0-bca9-fdac1d006a91",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.496361+00"
+        },
+        {
+          "posting": "56845110-0045-1",
+          "sku": 1697770458,
+          "movement_id": "a36cf06f-df25-46dc-8ebb-5d773752458c",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.592987+00"
+        },
+        {
+          "posting": "56907807-0024-1",
+          "sku": 1586484429,
+          "movement_id": "d8eb8404-9b1f-4d1a-83cc-00be503b1635",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.690801+00"
+        },
+        {
+          "posting": "59814512-0364-3",
+          "sku": 1697770458,
+          "movement_id": "9753a594-2c1e-4cf1-9e94-2eb6316d3fc5",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.222058+00"
+        },
+        {
+          "posting": "62035277-0532-1",
+          "sku": 1586466682,
+          "movement_id": "66829711-3c0b-49eb-8998-6257687869f5",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.409091+00"
+        },
+        {
+          "posting": "66144885-0156-18",
+          "sku": 1695128938,
+          "movement_id": "62c31439-5eba-44d7-91f2-5f18d42871db",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.74176+00"
+        },
+        {
+          "posting": "81035721-0742-1",
+          "sku": 1586466682,
+          "movement_id": "6f703408-9714-4322-a61d-0ab65161f453",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.187475+00"
+        },
+        {
+          "posting": "83893932-0680-2",
+          "sku": 1589998415,
+          "movement_id": "b72287ce-6781-40bb-a95e-4fe69ff789f7",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.812197+00"
+        }
+      ],
+      "new_since_0626_by_sku": {
+        "1697770458": 5,
+        "1589998415": 3,
+        "1586484429": 2,
+        "1586466682": 3,
+        "1695128938": 1
+      },
+      "all_52_billing_ids_quantity_amount_preserved": true,
+      "all_26_fact_ids_quantity_preserved": true,
+      "all_reservation_channels_zero": true,
+      "all_six_balances_equal_full_movement_history": true,
+      "orphan_expense_rows": 0,
+      "unattributed_negative_rows": 0,
+      "positions": [
+        {
+          "order_id": "8bf9d518-2702-4c29-89ab-4ed002c0f416",
+          "posting": "0113371235-0054-3",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7f0e0b8d-17ea-4703-b4f3-e2138f7336db"
+        },
+        {
+          "order_id": "b05ef83a-01c3-4f14-bafd-41669614d4c1",
+          "posting": "0144953533-0124-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "16ff70dd-6390-459a-ae92-9d1dc4bcd63d"
+        },
+        {
+          "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+          "posting": "0148656673-0134-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "3470f8fc-008d-4fe3-8a72-d9c73a46af42",
+          "posting": "0153677007-0258-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "04553936-c245-4300-8470-7b28388d480b"
+        },
+        {
+          "order_id": "eaabb48b-0174-414e-96b9-518f9220400e",
+          "posting": "0164033835-0039-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "02542eb4-3cde-4f3c-abc3-a5e14b954c92"
+        },
+        {
+          "order_id": "64a9b26b-3e27-48f7-ae18-c4d2c10ad5a1",
+          "posting": "0172663629-0081-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9dcf313c-d0bb-4984-ad91-e9625e59721e"
+        },
+        {
+          "order_id": "27da526e-9e2c-4798-a978-ec15582183f1",
+          "posting": "0181745532-0045-3",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "558f8beb-a0b6-489a-a8b6-5dd3a5a494b5",
+          "posting": "0187441457-0073-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a0010d3e-a695-472b-bc71-91555c3ad6ef"
+        },
+        {
+          "order_id": "32427a22-b4dd-4c8a-9278-76a067ab41d2",
+          "posting": "0190055173-0461-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "0d41ab28-857d-4b4e-abc7-276dc819acaa"
+        },
+        {
+          "order_id": "2c6241b2-dc71-4b21-bc9d-534c63b8d4ba",
+          "posting": "0236443586-0012-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7fd41899-4efb-4c5b-a337-fe6f15a8d63f"
+        },
+        {
+          "order_id": "c2d7a754-f334-431f-89ed-5e47d3e0c7a4",
+          "posting": "0249035122-0351-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "70375656-511f-4319-8f5c-c21e4e064691"
+        },
+        {
+          "order_id": "66f61455-fea9-42a2-b52a-b7a754bb660d",
+          "posting": "0282817049-0013-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "e203f00e-db36-46c0-aa1b-192539ab88b8",
+          "posting": "06383353-1897-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "4238549b-5c95-46ed-88e1-a84d236d9ba2"
+        },
+        {
+          "order_id": "b7216c03-b13d-49d8-a3e8-a7c99c29bda6",
+          "posting": "21052558-0445-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "70fcd5cb-3275-4300-9f1d-112d33e99b31"
+        },
+        {
+          "order_id": "958ac70f-79b5-4d9c-b0b1-dc2f5237cd25",
+          "posting": "23388119-0163-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a4c439af-0bc3-4a8b-84f6-20c439ddf37a"
+        },
+        {
+          "order_id": "ccdd5eaf-cd9b-456c-8415-0868a52fa0af",
+          "posting": "28508065-0594-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "f31e1e21-4d75-4761-89b2-503bb5eff56a"
+        },
+        {
+          "order_id": "0d45ad7d-956e-4625-9dc5-f10c2e5b453a",
+          "posting": "31853470-0198-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "f307c5e7-68bf-4da0-ade7-fd3bb0b92c31"
+        },
+        {
+          "order_id": "6c283f46-7f5b-4620-a322-096f37027c8c",
+          "posting": "45035035-0211-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7b2d9cdf-d000-4df0-bca9-fdac1d006a91"
+        },
+        {
+          "order_id": "c5177e7d-9db8-437a-ae64-9504275b6bad",
+          "posting": "50261136-0017-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "80ec7b0b-318e-4754-87dd-ae6e12a10691"
+        },
+        {
+          "order_id": "78de0390-f016-4d31-ac4e-7d6de97a20ac",
+          "posting": "55322493-0272-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "fd3f52a6-7350-4414-9277-4c0bd0b76043"
+        },
+        {
+          "order_id": "6fc67946-d062-49ba-ad8e-9c061a1177e1",
+          "posting": "56845110-0045-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a36cf06f-df25-46dc-8ebb-5d773752458c"
+        },
+        {
+          "order_id": "870e99a1-6435-4291-ac7d-cf0a81ab0572",
+          "posting": "56907807-0024-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "d8eb8404-9b1f-4d1a-83cc-00be503b1635"
+        },
+        {
+          "order_id": "4c9f0057-d363-4ec3-9c9b-4006c7f50516",
+          "posting": "59814512-0364-3",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9753a594-2c1e-4cf1-9e94-2eb6316d3fc5"
+        },
+        {
+          "order_id": "6444a2d9-23e0-4ddf-aa43-87abd03f27a7",
+          "posting": "62035277-0532-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "66829711-3c0b-49eb-8998-6257687869f5"
+        },
+        {
+          "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+          "posting": "66144885-0156-18",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "62c31439-5eba-44d7-91f2-5f18d42871db"
+        },
+        {
+          "order_id": "c614ec4d-3c05-49f4-a986-fb6048642456",
+          "posting": "80034639-0273-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "d46f4e6a-c28c-4ec6-a8b7-3c9734528f53",
+          "posting": "81035721-0742-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "6f703408-9714-4322-a61d-0ab65161f453"
+        },
+        {
+          "order_id": "a8e915f1-3a6f-45de-9cfb-f9f5cae5acde",
+          "posting": "83893932-0680-2",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "b72287ce-6781-40bb-a95e-4fe69ff789f7"
+        },
+        {
+          "order_id": "cfc68d5f-0694-486e-84b0-136e51ce2532",
+          "posting": "85257535-0274-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7184e35e-6bc9-492b-a7d7-96cae88ce449"
+        },
+        {
+          "order_id": "e014ba26-8cbc-4480-8ad5-581f9f500f51",
+          "posting": "99185584-1963-5",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "604b0a9f-910c-42ba-8c14-88b459ef6d12",
+          "posting": "99630148-0017-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9b5c3cd9-a8a8-45a9-9585-21bf49f7b15c"
+        }
+      ],
+      "sorting_balances": [
+        {
+          "db_at": "2026-10-07 07:53:22.803315+00",
+          "id": "aecd9352-31d5-4fb2-b8a1-145f7025596b",
+          "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "452",
+          "quantity_unpacked": "452",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:27:24.065206+00"
+        },
+        {
+          "db_at": "2026-10-07 07:53:22.803337+00",
+          "id": "3d29a313-0adf-4c8b-907f-3b634f93ffd2",
+          "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "271",
+          "quantity_unpacked": "271",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:51.648004+00"
+        },
+        {
+          "db_at": "2026-10-07 07:53:22.803339+00",
+          "id": "fe4442d1-827b-42df-a2b9-9d90e0cccec6",
+          "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "369",
+          "quantity_unpacked": "369",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:40:04.579786+00"
+        },
+        {
+          "db_at": "2026-10-07 07:53:22.803341+00",
+          "id": "ca71350a-c72b-4d4a-a08b-b7df30823839",
+          "product_id": "605bdc71-baae-43dd-9ed4-fb37e07906c0",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "234",
+          "quantity_unpacked": "234",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:52.141176+00"
+        },
+        {
+          "db_at": "2026-10-07 07:53:22.803343+00",
+          "id": "387960d6-0df1-4b3e-85f1-aacf950cb2bb",
+          "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "530",
+          "quantity_unpacked": "530",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:52.338438+00"
+        },
+        {
+          "db_at": "2026-10-07 07:53:22.803345+00",
+          "id": "fdf7d4ac-b88d-4dd9-8efe-3ec076ce9b26",
+          "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "187",
+          "quantity_unpacked": "187",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:51.982256+00"
+        }
+      ]
+    },
+    {
+      "read": "accounting-after-20261007T080200Z",
+      "started_at": "2026-10-07T08:03:19.145939+00:00",
+      "finished_at": "2026-10-07T08:03:36.697431+00:00",
+      "proved_units": 26,
+      "conducted_units": 26,
+      "remaining": 0,
+      "cancelled_excluded": 5,
+      "unique_actual_expense_movements": 26,
+      "existing_12_expense_links_preserved": true,
+      "new_since_0626": [
+        {
+          "posting": "0187441457-0073-1",
+          "sku": 1697770458,
+          "movement_id": "a0010d3e-a695-472b-bc71-91555c3ad6ef",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.311771+00"
+        },
+        {
+          "posting": "0249035122-0351-1",
+          "sku": 1589998415,
+          "movement_id": "70375656-511f-4319-8f5c-c21e4e064691",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.976457+00"
+        },
+        {
+          "posting": "06383353-1897-1",
+          "sku": 1589998415,
+          "movement_id": "4238549b-5c95-46ed-88e1-a84d236d9ba2",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.237159+00"
+        },
+        {
+          "posting": "21052558-0445-1",
+          "sku": 1697770458,
+          "movement_id": "70fcd5cb-3275-4300-9f1d-112d33e99b31",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.905107+00"
+        },
+        {
+          "posting": "28508065-0594-1",
+          "sku": 1586484429,
+          "movement_id": "f31e1e21-4d75-4761-89b2-503bb5eff56a",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.092135+00"
+        },
+        {
+          "posting": "31853470-0198-1",
+          "sku": 1586466682,
+          "movement_id": "f307c5e7-68bf-4da0-ade7-fd3bb0b92c31",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.119292+00"
+        },
+        {
+          "posting": "45035035-0211-1",
+          "sku": 1697770458,
+          "movement_id": "7b2d9cdf-d000-4df0-bca9-fdac1d006a91",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.496361+00"
+        },
+        {
+          "posting": "56845110-0045-1",
+          "sku": 1697770458,
+          "movement_id": "a36cf06f-df25-46dc-8ebb-5d773752458c",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.592987+00"
+        },
+        {
+          "posting": "56907807-0024-1",
+          "sku": 1586484429,
+          "movement_id": "d8eb8404-9b1f-4d1a-83cc-00be503b1635",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.690801+00"
+        },
+        {
+          "posting": "59814512-0364-3",
+          "sku": 1697770458,
+          "movement_id": "9753a594-2c1e-4cf1-9e94-2eb6316d3fc5",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.222058+00"
+        },
+        {
+          "posting": "62035277-0532-1",
+          "sku": 1586466682,
+          "movement_id": "66829711-3c0b-49eb-8998-6257687869f5",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.409091+00"
+        },
+        {
+          "posting": "66144885-0156-18",
+          "sku": 1695128938,
+          "movement_id": "62c31439-5eba-44d7-91f2-5f18d42871db",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.74176+00"
+        },
+        {
+          "posting": "81035721-0742-1",
+          "sku": 1586466682,
+          "movement_id": "6f703408-9714-4322-a61d-0ab65161f453",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:24.187475+00"
+        },
+        {
+          "posting": "83893932-0680-2",
+          "sku": 1589998415,
+          "movement_id": "b72287ce-6781-40bb-a95e-4fe69ff789f7",
+          "movement_created_at": "2026-10-07 06:27:22.537767+00",
+          "ledger_written_off_at": "2026-10-07 06:27:23.812197+00"
+        }
+      ],
+      "new_since_0626_by_sku": {
+        "1697770458": 5,
+        "1589998415": 3,
+        "1586484429": 2,
+        "1586466682": 3,
+        "1695128938": 1
+      },
+      "all_52_billing_ids_quantity_amount_preserved": true,
+      "all_26_fact_ids_quantity_preserved": true,
+      "all_reservation_channels_zero": true,
+      "all_six_balances_equal_full_movement_history": true,
+      "orphan_expense_rows": 0,
+      "unattributed_negative_rows": 0,
+      "positions": [
+        {
+          "order_id": "8bf9d518-2702-4c29-89ab-4ed002c0f416",
+          "posting": "0113371235-0054-3",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7f0e0b8d-17ea-4703-b4f3-e2138f7336db"
+        },
+        {
+          "order_id": "b05ef83a-01c3-4f14-bafd-41669614d4c1",
+          "posting": "0144953533-0124-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "16ff70dd-6390-459a-ae92-9d1dc4bcd63d"
+        },
+        {
+          "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+          "posting": "0148656673-0134-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "3470f8fc-008d-4fe3-8a72-d9c73a46af42",
+          "posting": "0153677007-0258-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "04553936-c245-4300-8470-7b28388d480b"
+        },
+        {
+          "order_id": "eaabb48b-0174-414e-96b9-518f9220400e",
+          "posting": "0164033835-0039-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "02542eb4-3cde-4f3c-abc3-a5e14b954c92"
+        },
+        {
+          "order_id": "64a9b26b-3e27-48f7-ae18-c4d2c10ad5a1",
+          "posting": "0172663629-0081-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9dcf313c-d0bb-4984-ad91-e9625e59721e"
+        },
+        {
+          "order_id": "27da526e-9e2c-4798-a978-ec15582183f1",
+          "posting": "0181745532-0045-3",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "558f8beb-a0b6-489a-a8b6-5dd3a5a494b5",
+          "posting": "0187441457-0073-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a0010d3e-a695-472b-bc71-91555c3ad6ef"
+        },
+        {
+          "order_id": "32427a22-b4dd-4c8a-9278-76a067ab41d2",
+          "posting": "0190055173-0461-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "0d41ab28-857d-4b4e-abc7-276dc819acaa"
+        },
+        {
+          "order_id": "2c6241b2-dc71-4b21-bc9d-534c63b8d4ba",
+          "posting": "0236443586-0012-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7fd41899-4efb-4c5b-a337-fe6f15a8d63f"
+        },
+        {
+          "order_id": "c2d7a754-f334-431f-89ed-5e47d3e0c7a4",
+          "posting": "0249035122-0351-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "70375656-511f-4319-8f5c-c21e4e064691"
+        },
+        {
+          "order_id": "66f61455-fea9-42a2-b52a-b7a754bb660d",
+          "posting": "0282817049-0013-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "e203f00e-db36-46c0-aa1b-192539ab88b8",
+          "posting": "06383353-1897-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "4238549b-5c95-46ed-88e1-a84d236d9ba2"
+        },
+        {
+          "order_id": "b7216c03-b13d-49d8-a3e8-a7c99c29bda6",
+          "posting": "21052558-0445-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "70fcd5cb-3275-4300-9f1d-112d33e99b31"
+        },
+        {
+          "order_id": "958ac70f-79b5-4d9c-b0b1-dc2f5237cd25",
+          "posting": "23388119-0163-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a4c439af-0bc3-4a8b-84f6-20c439ddf37a"
+        },
+        {
+          "order_id": "ccdd5eaf-cd9b-456c-8415-0868a52fa0af",
+          "posting": "28508065-0594-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "f31e1e21-4d75-4761-89b2-503bb5eff56a"
+        },
+        {
+          "order_id": "0d45ad7d-956e-4625-9dc5-f10c2e5b453a",
+          "posting": "31853470-0198-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "f307c5e7-68bf-4da0-ade7-fd3bb0b92c31"
+        },
+        {
+          "order_id": "6c283f46-7f5b-4620-a322-096f37027c8c",
+          "posting": "45035035-0211-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7b2d9cdf-d000-4df0-bca9-fdac1d006a91"
+        },
+        {
+          "order_id": "c5177e7d-9db8-437a-ae64-9504275b6bad",
+          "posting": "50261136-0017-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "80ec7b0b-318e-4754-87dd-ae6e12a10691"
+        },
+        {
+          "order_id": "78de0390-f016-4d31-ac4e-7d6de97a20ac",
+          "posting": "55322493-0272-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "fd3f52a6-7350-4414-9277-4c0bd0b76043"
+        },
+        {
+          "order_id": "6fc67946-d062-49ba-ad8e-9c061a1177e1",
+          "posting": "56845110-0045-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "a36cf06f-df25-46dc-8ebb-5d773752458c"
+        },
+        {
+          "order_id": "870e99a1-6435-4291-ac7d-cf0a81ab0572",
+          "posting": "56907807-0024-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "d8eb8404-9b1f-4d1a-83cc-00be503b1635"
+        },
+        {
+          "order_id": "4c9f0057-d363-4ec3-9c9b-4006c7f50516",
+          "posting": "59814512-0364-3",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9753a594-2c1e-4cf1-9e94-2eb6316d3fc5"
+        },
+        {
+          "order_id": "6444a2d9-23e0-4ddf-aa43-87abd03f27a7",
+          "posting": "62035277-0532-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "66829711-3c0b-49eb-8998-6257687869f5"
+        },
+        {
+          "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+          "posting": "66144885-0156-18",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "62c31439-5eba-44d7-91f2-5f18d42871db"
+        },
+        {
+          "order_id": "c614ec4d-3c05-49f4-a986-fb6048642456",
+          "posting": "80034639-0273-1",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "d46f4e6a-c28c-4ec6-a8b7-3c9734528f53",
+          "posting": "81035721-0742-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "6f703408-9714-4322-a61d-0ab65161f453"
+        },
+        {
+          "order_id": "a8e915f1-3a6f-45de-9cfb-f9f5cae5acde",
+          "posting": "83893932-0680-2",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "b72287ce-6781-40bb-a95e-4fe69ff789f7"
+        },
+        {
+          "order_id": "cfc68d5f-0694-486e-84b0-136e51ce2532",
+          "posting": "85257535-0274-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "7184e35e-6bc9-492b-a7d7-96cae88ce449"
+        },
+        {
+          "order_id": "e014ba26-8cbc-4480-8ad5-581f9f500f51",
+          "posting": "99185584-1963-5",
+          "proved": 0,
+          "conducted": 0,
+          "remaining": 0,
+          "movement_id": null
+        },
+        {
+          "order_id": "604b0a9f-910c-42ba-8c14-88b459ef6d12",
+          "posting": "99630148-0017-1",
+          "proved": 1,
+          "conducted": 1,
+          "remaining": 0,
+          "movement_id": "9b5c3cd9-a8a8-45a9-9585-21bf49f7b15c"
+        }
+      ],
+      "sorting_balances": [
+        {
+          "db_at": "2026-10-07 08:03:29.175848+00",
+          "id": "aecd9352-31d5-4fb2-b8a1-145f7025596b",
+          "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "452",
+          "quantity_unpacked": "452",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:27:24.065206+00"
+        },
+        {
+          "db_at": "2026-10-07 08:03:29.175864+00",
+          "id": "3d29a313-0adf-4c8b-907f-3b634f93ffd2",
+          "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "271",
+          "quantity_unpacked": "271",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:51.648004+00"
+        },
+        {
+          "db_at": "2026-10-07 08:03:29.175867+00",
+          "id": "fe4442d1-827b-42df-a2b9-9d90e0cccec6",
+          "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "369",
+          "quantity_unpacked": "369",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:40:04.579786+00"
+        },
+        {
+          "db_at": "2026-10-07 08:03:29.175869+00",
+          "id": "ca71350a-c72b-4d4a-a08b-b7df30823839",
+          "product_id": "605bdc71-baae-43dd-9ed4-fb37e07906c0",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "234",
+          "quantity_unpacked": "234",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:52.141176+00"
+        },
+        {
+          "db_at": "2026-10-07 08:03:29.175871+00",
+          "id": "387960d6-0df1-4b3e-85f1-aacf950cb2bb",
+          "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "530",
+          "quantity_unpacked": "530",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:52.338438+00"
+        },
+        {
+          "db_at": "2026-10-07 08:03:29.175873+00",
+          "id": "fdf7d4ac-b88d-4dd9-8efe-3ec076ce9b26",
+          "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+          "storage_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1",
+          "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+          "code": "__SORTING__",
+          "deleted_at": "",
+          "container_kind": "",
+          "container_id": "",
+          "quantity": "187",
+          "quantity_unpacked": "187",
+          "quantity_packed": "0",
+          "updated_at": "2026-10-07 06:39:51.982256+00"
+        }
+      ]
+    }
+  ],
+  "publication": "Provider stock-publish outcome not independently inspected; no publication success claim."
+}

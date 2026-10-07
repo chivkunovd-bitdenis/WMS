@@ -1,0 +1,41 @@
+{
+  "posting_number": "0187441457-0073-1",
+  "started_at_utc": "2026-10-07T07:55:54.499726+00:00",
+  "endpoint": "/v3/posting/fbs/get",
+  "semantic_operation": "read",
+  "http_method": "POST",
+  "status": "ok",
+  "card": {
+    "posting_number": "0187441457-0073-1",
+    "order_id": 39504480305,
+    "order_number": "0187441457-0073",
+    "status": "delivered",
+    "substatus": "posting_received",
+    "tpl_integration_type": "ozon",
+    "integration_type_flow": "ozon",
+    "in_process_at": "2026-10-02T08:50:26Z",
+    "shipment_date": "2026-10-02T15:00:00Z",
+    "delivering_date": "2026-10-02T15:20:10Z",
+    "fact_delivery_date": "2026-10-02T15:20:10.500856Z",
+    "products": [
+      {
+        "sku": 1697770458,
+        "quantity": 1,
+        "offer_id": "doorBell"
+      }
+    ],
+    "related_postings": {
+      "related_posting_numbers": []
+    },
+    "related_postings_present": true,
+    "related_weight_postings": [],
+    "cancellation": {
+      "cancel_reason_id": 0,
+      "cancellation_type": "",
+      "cancelled_after_ship": false
+    }
+  },
+  "http_status": 200,
+  "server_date": "Wed, 07 Oct 2026 07:55:54 GMT",
+  "finished_at_utc": "2026-10-07T07:55:54.573027+00:00"
+}

@@ -1,0 +1,22 @@
+{
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "actual_hashes": {
+    "app/db/session.py": "a0753dd7edfde807d023f71e88bf27aca1ab52adfa2d64d22c97eb24f612af7e",
+    "app/core/settings.py": "d0e7ea7a5c9673cf829a1fe4c6fe7f102e77985211cb84da313584c428bbbf46",
+    "app/services/fbs_observed_handoff_service.py": "137e9f7484cd5b4122c43f6ae56a40018dc5b755edc7144aaf48a744a1bafb07",
+    "app/services/fbs_packaging_integration_service.py": "7572f0d0d7f80c4917b43a5be16eaaa1edc8cb1421275b27feb6590f644cb8e1",
+    "app/services/fbs_stock_publish_service.py": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
+    "app/services/fbs_ozon_packaging_service.py": "963b39d9dc79190bd84ffd854b3cd828ed6eff8f8057264e2efc0e06c6e72914",
+    "app/services/fbs_order_billing_service.py": "645fa2e600bffded0752fb82818d17d16e8610374fb0cfed4ce670d4ce669844",
+    "app/services/fbs_shipment_source_service.py": "7773d14d6efc722eacdd1260ed6c1b698c06f00cd30174127dd7e20a8dc7dd07",
+    "app/services/fbs_shipment_service.py": "1e6d59473204c7511a5b8c57591cc57c22b8a3f03578677e7aeaa36b2e28770a",
+    "app/services/marketplace_account_service.py": "b709e496296f717e29742e6cb7ca5e5c1cffd39eb4c9e98005b888c73c30db3e",
+    "app/services/ozon_marketplace_transport.py": "89303660b8973c0632d76c927b8e42fe3c7947ee255ac4ab4e2fe4f947e9e045",
+    "app/services/ozon_provider_factory.py": "89b2dd30fcf12e2eb1bcfb223a295fb0da2bf3a334804813cc7e70d41bd28013",
+    "app/models/fbs_order.py": "e0e379f39c6b065b4f5784382e0e6298b173dedc44476eff96f07de362bcae24",
+    "app/models/fbs_supply.py": "4ca6f4c553169169268050a92737ba111eecd10db5737fa02136607721eb942a",
+    "app/models/fbs_shipment_reversal_ledger.py": "7eca4209b0ddcea55e3d230d9a340727073141259ab5d8f7cda7a5b22290a8a8",
+    "app/models/fbs_wb_operation.py": "741989374c8d4c1f03540dbadc596989b38d239a19ad503266cabb0aaf16d0f1",
+    "app/models/product.py": "67be9d8185c608a967f9d45eeff18063b0c38bc723189f520c0cad8c86013df7"
+  }
+}

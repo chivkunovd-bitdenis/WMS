@@ -1,0 +1,9 @@
+{
+  "private_folder": "/tmp/wms675-native-approved-20261007-zoqdokr3",
+  "copied_files": 21,
+  "normal_installed_source_hashes_match": 17,
+  "adapter_sha256": "5d290b28419c72389a85a2f518efcdbf612c43c49d43f62e048dd5c3bf427535",
+  "bindings_sha256": "a4e59a459c92c9fadf93455be1669d8cdd0a7be9028d397fd902766b49885e6d",
+  "execute_performed": false,
+  "adapter_commit": "fb7850c919314ec62d0c771026e84b38f5fd2acc"
+}

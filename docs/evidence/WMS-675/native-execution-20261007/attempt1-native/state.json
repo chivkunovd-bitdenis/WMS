@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-10-07T07:55:48.340931+00:00",
+  "execute_requested": true,
+  "production_source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "sorting_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1"
+  },
+  "checkpoint_outcome": "NOT_STARTED",
+  "stock_outcome": "NOT_STARTED",
+  "phase": "STOPPED",
+  "updated_at": "2026-10-07T07:55:56.785167+00:00",
+  "reader_exit": 0,
+  "reader_status": "READ_COMPLETE_REQUIRES_ACCOUNTING_PLAN",
+  "reader_safe_failure_code": null,
+  "stdout_sha256": "3ff738e557f30dd32fb688df0d8c894852405aaf7f63c862d5bf99cebc8432ef",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "finished_at": "2026-10-07T07:55:56.796584+00:00",
+  "error_type": "Stop",
+  "safe_error_code": "external_status_changed"
+}

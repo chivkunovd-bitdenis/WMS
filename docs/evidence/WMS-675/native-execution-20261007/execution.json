@@ -1,0 +1,15 @@
+{
+  "review_commit": "371cd84c1ef9f2cba1ffd4b630831b4d18d4e5af",
+  "adapter_commit": "fb7850c919314ec62d0c771026e84b38f5fd2acc",
+  "producer": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "private_output": "/tmp/wms675-native-approved-20261007-zoqdokr3/actual-20261007T075546Z",
+  "started_at": "2026-10-07T07:55:46.295001+00:00",
+  "operation": "approved native addressed recovery; only fresh locked missing",
+  "stdout_stderr_content_retained": false,
+  "exit_code": 2,
+  "finished_at": "2026-10-07T07:55:57.204919+00:00",
+  "stdout_bytes": 0,
+  "stderr_bytes": 0,
+  "stdout_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

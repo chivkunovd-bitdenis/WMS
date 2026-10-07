@@ -1,0 +1,88 @@
+{
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "role": "wms_agent_t_b80a893bab8742b68fd76d41502c900f",
+  "writes": 0,
+  "external_calls": 0,
+  "started_at": "2026-10-07T08:03:19.145939+00:00",
+  "queries": [
+    {
+      "name": "identity",
+      "sql_sha256": "b2a7c9119e4600225725d0d9559c891dce90d64bf438196b1cc2107fa8c92401",
+      "status": "ok",
+      "rows": 1,
+      "sha256": "f5351e55ecde1a0f91f40e8a4360ab65e4a0beb0401e2ba80e1820b3f7b43b30"
+    },
+    {
+      "name": "orders_positions_reserves",
+      "sql_sha256": "a9c989b6a3b4e2bcb984cb30f907309e3e678bc2f1465a29dc9d367a66b4d77e",
+      "status": "ok",
+      "rows": 31,
+      "sha256": "8198cbf2c618b2fb8817913afe623856700298e9a6b99d28a518cd7b3389c144"
+    },
+    {
+      "name": "ledger",
+      "sql_sha256": "fe3eae4ea8b9bb5df40e40e3ad028a2661ab1922c32598371d25c0ced42b1134",
+      "status": "ok",
+      "rows": 31,
+      "sha256": "6ed28bae91399a4b14bead6683beb574e19c88c09a3d94bcde546a50f105f371"
+    },
+    {
+      "name": "unlinked_fbs_movements",
+      "sql_sha256": "937bd9a92cd79e3ca4a7f1e121247c0a9840f9ebd0f6fe952fc4289a2f8ced2b",
+      "status": "ok",
+      "rows": 0,
+      "sha256": "5dd344d4192b2b16662607b2315dcc8b9d56f3ee0826aa1f73739f0e3964d4dd"
+    },
+    {
+      "name": "balances_vs_all_movements",
+      "sql_sha256": "f0a3f45bbea547b43a7ffff9fd73693d5d9feebe9046f689766ba923236c9e5c",
+      "status": "ok",
+      "rows": 6,
+      "sha256": "da2dd59635376c657042350c350c55f2b6b83b3b4089ec6bb4d537ed2a62fee2"
+    },
+    {
+      "name": "balances_locations",
+      "sql_sha256": "5f15e48433139306c7f11f3d1409817d6a1529636ad7d7fe9c286f61a97e0150",
+      "status": "ok",
+      "rows": 6,
+      "sha256": "e72aae1b52472c17e0c3ee87f600fb9ce921f34554fbedc599c37804a42915ff"
+    },
+    {
+      "name": "billing_entries",
+      "sql_sha256": "65da36492b3a5ebc4c6ec1b7667ddd9c165b490b5636344d121aa45277d1f9b9",
+      "status": "ok",
+      "rows": 52,
+      "sha256": "1b992cf1dada02d79583cd49eaf87d642bc799df8329996f73a134e6076068a1"
+    },
+    {
+      "name": "operation_facts",
+      "sql_sha256": "4392c6d9b7d5460b3ce305edfaaad164590ebc8b4f79c010d9f772180b39deb5",
+      "status": "ok",
+      "rows": 26,
+      "sha256": "70ac6b3fea0e56bdc6217603faab5e2b82bd99a72e098ac0de548f2aa313e658"
+    },
+    {
+      "name": "supply_operations",
+      "sql_sha256": "96c41636c52086dda4d77032f24def80c086eb1255d0bd0be43a0e8f51d99ba5",
+      "status": "ok",
+      "rows": 3,
+      "sha256": "3be99083bce86565ff72ae3c650ee9d97f3815806d640b9fd0afc9fe3f0261cb"
+    },
+    {
+      "name": "other_negative_since_audit",
+      "sql_sha256": "d7eef4c3b1fbbf7dfdfad17576aa55c39776a3d145db2ff45c4871aebac4a9a8",
+      "status": "ok",
+      "rows": 0,
+      "sha256": "499a55f8e23b2ce4c32bab656e701ffb686e6491a3d8335842e1841ad341c592"
+    },
+    {
+      "name": "new_history_attribution",
+      "sql_sha256": "f03771d564677ae257ba6c7ed13e090121d4fb5cf990bbc83623db229647a492",
+      "status": "ok",
+      "rows": 4,
+      "sha256": "4d1854c50aaceb93afc58a35763135f3fea173605a0cc1d6e6a88257d59cbd40"
+    }
+  ],
+  "snapshot_consistency": "Separate read-only gateway SELECTs; actual native locks recheck before any conduct.",
+  "finished_at": "2026-10-07T08:03:36.697431+00:00"
+}
