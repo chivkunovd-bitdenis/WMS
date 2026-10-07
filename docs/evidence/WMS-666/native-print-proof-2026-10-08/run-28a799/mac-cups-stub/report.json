@@ -1,0 +1,41 @@
+{
+  "source_blob": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+  "candidate_head": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+  "physical_printer_called": false,
+  "adapter": "actual MacPrinter.submit_default; cupsPrintFile replaced by file-copy/receipt stub",
+  "outputs": [
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "285a718104d057986156f22b2a3e14b48d0d1eb8fac9789974ae913fc88febad",
+      "bytes": 872,
+      "stub_file": "1-label.png",
+      "option_count": 3,
+      "source_sha256": "285a718104d057986156f22b2a3e14b48d0d1eb8fac9789974ae913fc88febad",
+      "receipt": "SYNTHETIC_ONLY-701",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "stub_file": "2-label.png",
+      "option_count": 3,
+      "source_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "receipt": "SYNTHETIC_ONLY-702",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "3a31df45c7428757fcc93d9a49193a67dbc5c69c025e2657e5e38b058b041367",
+      "bytes": 822,
+      "stub_file": "3-label.png",
+      "option_count": 3,
+      "source_sha256": "3a31df45c7428757fcc93d9a49193a67dbc5c69c025e2657e5e38b058b041367",
+      "receipt": "SYNTHETIC_ONLY-703",
+      "identical_input_output": true
+    }
+  ]
+}

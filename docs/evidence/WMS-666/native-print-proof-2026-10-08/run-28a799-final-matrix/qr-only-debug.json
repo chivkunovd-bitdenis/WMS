@@ -1,0 +1,77 @@
+{
+  "ui": {
+    "url": "http://127.0.0.1:16696/app/ff/fbs?supply_id=e5102490-46ca-467b-a5ec-c20ae8d962f1",
+    "alert": "В этой сборке не осталось заказов с таким штрихкодом.",
+    "body": " цвет, размер\n​\nПоиск: заказ, поставка, товар, категория, артикул, ШК, SKU, цвет, размер\nНомер / название поставки\tСеллер\tСклад\tЗаказы / единицы\tКороба\tСтатус\tДата отгрузки\tПечать\n\n\nKIZ supply 1791410089954239000\n\nWB №WB-GI-KIZ-1791410089954239000-3b887af6\tTape race\t\n\nWB 99\n\nWMS: Tape race\t2 / 2\t0\t\nВ работе\n\t—\t\nQR\nKIZ supply 1791410089954239000\n\nTape race · № WB WB-GI-KIZ-1791410089954239000-3b887af6\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 01:54:50\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nВ этой сборке не осталось заказов с таким штрихкодом.\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 0 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-0\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nЧЗ не внесён\nДоступно ЧЗ\n\n4 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-1\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →"
+  },
+  "native": {
+    "drop_next_response": false,
+    "accepted_png_count": 0
+  },
+  "api": [
+    {
+      "method": "GET",
+      "path": "/proxy/fbs/assembly-time?from=2026-09-30T22%3A17%3A42.255Z&to=2026-10-07T22%3A17%3A42.255Z",
+      "status": 200,
+      "bytes": 80
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "status": 200,
+      "bytes": 115
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-assembly-tasks",
+      "status": 200,
+      "bytes": 12
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "status": 200,
+      "bytes": 115
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "status": 200,
+      "bytes": 623
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/e5102490-46ca-467b-a5ec-c20ae8d962f1/workspace",
+      "status": 200,
+      "bytes": 4773
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/3e5fc2bd-0572-48f8-828b-490347122061",
+      "status": 200,
+      "bytes": 1265
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/e5102490-46ca-467b-a5ec-c20ae8d962f1/scan-auto-print",
+      "status": 409,
+      "bytes": 228,
+      "request": {
+        "barcode": "460666AUDIT",
+        "idempotency_key": "1c4137e2-b611-49a2-afe3-635e0904779e",
+        "print_qr": true,
+        "print_chz": false,
+        "reprint_chz": false,
+        "await_honest_sign": true
+      },
+      "response": {
+        "detail": {
+          "code": "scan_product_exhausted",
+          "message": "Все подходящие единицы товара в этой поставке уже обработаны сканированием.",
+          "context": {},
+          "retryable": false
+        }
+      }
+    }
+  ]
+}

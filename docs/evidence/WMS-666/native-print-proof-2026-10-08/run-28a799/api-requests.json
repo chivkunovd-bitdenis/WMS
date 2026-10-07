@@ -1,0 +1,142 @@
+[
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 115
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/fbs/assembly-time?from=2026-09-30T21%3A40%3A01.686Z&to=2026-10-07T21%3A40%3A01.686Z",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 80
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 115
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-assembly-tasks",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 12
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 623
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 4759
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 1265
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 1413
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-print-assets/712628aa-ebd4-48c9-a62b-3e804c0f2af8/content",
+    "status": 200,
+    "contentType": "image/png",
+    "responseBytes": 872
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/966fe915-d6b3-40a9-b7d5-5de248172252/print-claim",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/966fe915-d6b3-40a9-b7d5-5de248172252/print-started",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/966fe915-d6b3-40a9-b7d5-5de248172252/print-claim",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 32
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "contentType": "application/json",
+    "responseBytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+    "status": 204,
+    "contentType": "application/json",
+    "responseBytes": 0
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/966fe915-d6b3-40a9-b7d5-5de248172252/print-started",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 32
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 1265
+  },
+  {
+    "method": "POST",
+    "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d/lines/2d2992d7-2d70-4e7d-bd17-90b4a99406d7/pack",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 2053
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 1851
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 4947
+  },
+  {
+    "method": "GET",
+    "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+    "status": 200,
+    "contentType": "application/json",
+    "responseBytes": 4947
+  }
+]

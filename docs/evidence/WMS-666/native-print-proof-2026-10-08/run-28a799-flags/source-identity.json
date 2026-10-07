@@ -1,0 +1,22 @@
+{
+  "browser_and_api_checkout_head_observed_after_run": "160640df7d811ba8f74939280b1959dcbd29a825",
+  "native_handler_checkout_head": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+  "source_blob_shas": {
+    "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+    "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
+    "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "4de19896e0242264405ed3972a55657f08b4d3ed",
+    "backend/app/api/fbs_supplies.py": "5eca9c3a5bcd36972a65f672db9fbe6782910ca3",
+    "backend/app/api/fbs_kiz.py": "20a609a8dacc98f37ed391133e5c452741a2dce3",
+    "backend/app/services/fbs_print_binding_service.py": "998e0dc98c9d00f735cb61ea58be0b11e8f52a3a",
+    "backend/app/services/fbs_scan_auto_print_service.py": "a5676e92ebe5107a35bcccad213caa78d9ef2745",
+    "backend/app/services/fbs_order_tape_print_service.py": "ae96f7f7d95f34d32ac42c56f554b68c032f7724"
+  },
+  "between_checkout_heads": "only backend/tests/test_fbs_marking_presentation.py and docs/requirements/WMS-666.md changed; every product/runtime source blob used in this proof is identical",
+  "test_api": "real application ASGI handlers and isolated PostgreSQL fixture at 127.0.0.1:16692; no WMS product API stub",
+  "ui": "real FBS screen from release checkout, served by isolated Vite at 127.0.0.1:16696",
+  "native_print": "real candidate handler + SQLite ledger on 127.0.0.1:17843; only Printer.submit injected to synthetic PNG/receipt sink",
+  "chrome": "single isolated Chrome instance, sequential scenario, CDP 16697; closed after capture",
+  "physical_paper": "NOT_TESTED"
+}

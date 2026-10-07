@@ -1,0 +1,253 @@
+{
+  "candidate": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+  "case": "real second scan, drop response after native acceptance, retry same product barcode",
+  "before": {
+    "drop_next_response": false,
+    "accepted_png_count": 3
+  },
+  "lostError": "Нет ответа WMS Print. Запустите программу. Если Chrome запросил доступ к этому компьютеру — разрешите его. Перед повтором проверьте очередь принтера.",
+  "lostKey": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb",
+  "after": {
+    "drop_next_response": false,
+    "accepted_png_count": 6
+  },
+  "requests": [
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz:c2",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz",
+      "origin": "http://127.0.0.1:16696"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz:c2",
+      "origin": "http://127.0.0.1:16696"
+    }
+  ],
+  "receipts": [
+    {
+      "accepted_at_utc": "2026-10-07T21:40:02.710816+00:00",
+      "bytes": 872,
+      "job_key": "966fe915-d6b3-40a9-b7d5-5de248172252",
+      "png": "sink/job-0001-285a718104d0.png",
+      "receipt": "emulator-0001-285a718104d0",
+      "sha256": "285a718104d057986156f22b2a3e14b48d0d1eb8fac9789974ae913fc88febad"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T21:40:02.877722+00:00",
+      "bytes": 40498,
+      "job_key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz",
+      "png": "sink/job-0002-f2f4c4632159.png",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T21:40:02.903314+00:00",
+      "bytes": 40498,
+      "job_key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz:c2",
+      "png": "sink/job-0003-f2f4c4632159.png",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T21:43:35.836685+00:00",
+      "bytes": 822,
+      "job_key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb",
+      "png": "sink/job-0004-3a31df45c742.png",
+      "receipt": "emulator-0004-3a31df45c742",
+      "sha256": "3a31df45c7428757fcc93d9a49193a67dbc5c69c025e2657e5e38b058b041367"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T21:43:36.412143+00:00",
+      "bytes": 40214,
+      "job_key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz",
+      "png": "sink/job-0005-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    },
+    {
+      "accepted_at_utc": "2026-10-07T21:43:36.434540+00:00",
+      "bytes": 40214,
+      "job_key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz:c2",
+      "png": "sink/job-0006-cb9e8ba5ed4a.png",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a"
+    }
+  ],
+  "api": [
+    {
+      "method": "GET",
+      "path": "/proxy/fbs/assembly-time?from=2026-09-30T21%3A43%3A35.146Z&to=2026-10-07T21%3A43%3A35.146Z",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-assembly-tasks",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-print-assets/696b2952-f801-43e1-8d29-9b9e994abeaa/content",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb/print-started",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb/print-claim",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-orders/print-bindings/validate",
+      "status": 204
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/scan-auto-print/eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb/print-started",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+      "status": 200
+    },
+    {
+      "method": "POST",
+      "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d/lines/2d2992d7-2d70-4e7d-bd17-90b4a99406d7/pack",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/packaging-tasks/7cf9b409-eb87-4faa-a21d-a87eb215957d",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "path": "/proxy/operations/fbs-supplies/2a584cbd-812b-4550-9a81-1f83010b9271/workspace",
+      "status": 200
+    }
+  ],
+  "uiAfter": "IZ-1791408959527873000-f613d960\n\nСклад WMS\n\nTape race\n\nМаршрут\n\nСклад / СЦ\n\nДата отгрузки\nДата отгрузки\nСохранить\n2 из 2 подготовлено к отгрузке\nСдать в Wildberries до 09.10.2026, 01:36:00\n23 ч\nИстория поставки\nСостав ✓\nПодбор\nУпаковка и маркировка\nКороба\n​\nПечатать QR\nПечатать ЧЗ\n\n2\n\nПерепечатывать ЧЗ\nРазмер этикетки\n60 × 80 мм\nРазмер этикетки\nУпаковка и маркировка\n\nНапечатано 0 из 2 · упаковано 2 из 2 · выбрано 0\n\nВыбрать всё\nПечать всего (2)\nПроверить в WB\nДействия с поставкой\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800393\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-1\n\nЧЗ\n\nТЗ\nQR\n\nKIZ product 800392\n\nVENDOR-800392 · 460666AUDIT · заказ 800392\nWB ещё не подтвердил ЧЗ\nДоступно ЧЗ\n\n2 · нужно 2\n\nСтикер\n\nAUDIT-STICK ER-0\n\nЧЗ\n\nТЗ\nQR\nДалее: Короба →",
+  "dbAfter": {
+    "markings": [
+      {
+        "id": "326a7314-9a7a-48c3-901f-bf1bb0a60bc0",
+        "order_id": "c2d5be49-1fe5-4d28-9f72-1d76d00f0fa3",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "code_id": "fa292810-4c92-472e-96cb-d705472b5473",
+        "status": "unknown"
+      },
+      {
+        "id": "96dea259-0039-4d64-aaf1-5f7bd1251ef5",
+        "order_id": "9b7bd96d-e59b-477e-9920-b2277fe7ac32",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "code_id": "3b8e6e32-0226-4569-adf6-dd88db717448",
+        "status": "unknown"
+      }
+    ],
+    "codes": [
+      {
+        "id": "e5eeda68-c5aa-4c99-9a2f-e635f0b68eff",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "b0719ed7-f85d-4798-a979-bac716b66237",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      },
+      {
+        "id": "fa292810-4c92-472e-96cb-d705472b5473",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "printed"
+      },
+      {
+        "id": "3b8e6e32-0226-4569-adf6-dd88db717448",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "printed"
+      }
+    ],
+    "orders": [
+      {
+        "id": "c2d5be49-1fe5-4d28-9f72-1d76d00f0fa3",
+        "pack_status": "packed"
+      },
+      {
+        "id": "9b7bd96d-e59b-477e-9920-b2277fe7ac32",
+        "pack_status": "packed"
+      }
+    ],
+    "stock": "([(UUID('26d59651-5802-4996-8a8b-4b49d53b272d'), 3, 3, 0)], [(UUID('2cdb91b4-e717-4436-905f-5e6272b0cf3b'), 1), (UUID('9044fc89-45fb-4176-8895-461c54aaf321'), 1)], 0)"
+  }
+}

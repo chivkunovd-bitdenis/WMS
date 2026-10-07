@@ -1,0 +1,11 @@
+
+DevTools listening on ws://127.0.0.1:16697/devtools/browser/8749a7fc-307a-4cc7-8503-73369da48d20
+Trying to load the allocator multiple times. This is *not* supported.
+Created TensorFlow Lite XNNPACK delegate for CPU.
+[78114:5212123:1008/013959.957149:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[78114:5212123:1008/013959.957574:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[78114:5212123:1008/013959.957666:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[78114:5212123:1008/013959.957765:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[78114:5212123:1008/013959.957843:ERROR:ui/display/mac/cv_display_link_mac.mm:188] CVDisplayLinkCreateWithCGDisplay failed. CVReturn: -6670
+[78020:5212052:1008/014002.662048:ERROR:google_apis/gcm/engine/registration_request.cc:291] Registration response error message: DEPRECATED_ENDPOINT
+[79933:5214810:1008/014003.217703:ERROR:sandbox/mac/system_services.cc:31] SetApplicationIsDaemon: Error Domain=NSOSStatusErrorDomain Code=-50 "paramErr: error in user parameter list" (-50)

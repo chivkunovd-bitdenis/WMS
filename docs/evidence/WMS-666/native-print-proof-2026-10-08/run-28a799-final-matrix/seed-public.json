@@ -1,0 +1,26 @@
+{
+  "supply_id": "e5102490-46ca-467b-a5ec-c20ae8d962f1",
+  "order_ids": [
+    "a34a32ef-30d8-459b-8289-20c54451a1a0",
+    "ac69120f-1b60-4ae1-b539-f5a671b586b1"
+  ],
+  "supply_ids": [
+    "e5102490-46ca-467b-a5ec-c20ae8d962f1"
+  ],
+  "task_id": "3e5fc2bd-0572-48f8-828b-490347122061",
+  "line_id": "d3375758-e3fc-4c3c-ab06-4e5335e19e04",
+  "barcode": "460666AUDIT",
+  "synthetic_order_stickers": [
+    {
+      "text": "*WMS666-MATRIX-A",
+      "bytes": 749,
+      "sha256": "ec08a0298a8dc0910fd8a2e252f88e48fc6f10dbed3e96046a2968c6a20f8335"
+    },
+    {
+      "text": "*WMS666-MATRIX-B",
+      "bytes": 747,
+      "sha256": "8333456e981a8cb7dd9bb092c1eaac8825e7236de7dc918dbe3e26e89f121273"
+    }
+  ],
+  "credentials_saved": false
+}

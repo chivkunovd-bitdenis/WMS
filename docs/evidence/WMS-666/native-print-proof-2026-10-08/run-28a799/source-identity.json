@@ -1,0 +1,16 @@
+{
+  "candidate_head": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+  "runtime_blob_shas": {
+    "tools/print-agent/wms_print_direct.py": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+    "frontend/src/utils/printDirectQr.ts": "0a8ceaf8b7018ef1be3278b8d9f2806630f04050",
+    "frontend/src/utils/printPreparedQr.ts": "e62caa36019cca656716a9947bbab487713a1f5b",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts": "82a6ad9f4584532c85b763b8d409a29d4ffd93a2",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": "4de19896e0242264405ed3972a55657f08b4d3ed"
+  },
+  "native_handler_harness": "docs/evidence/WMS-666/native-print-proof-2026-10-08/emulated_wms_print_direct.py",
+  "api_ui_services": "release integrator test fixture at 16692/16696; single isolated Chrome/CDP on 16697, no print interception",
+  "printer_boundary": "only Printer.submit is injected for HTTP acceptance trace; separate MacPrinter.submit_default passed through a synthetic cupsPrintFile stub",
+  "physical_paper": "NOT_TESTED",
+  "browser_and_api_checkout_head_observed_after_run": "160640df7d811ba8f74939280b1959dcbd29a825",
+  "difference_from_native_handler_checkout": "only backend/tests/test_fbs_marking_presentation.py and docs/requirements/WMS-666.md were added/changed; product runtime blobs remain equal"
+}

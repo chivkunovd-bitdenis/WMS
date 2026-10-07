@@ -1,0 +1,74 @@
+{
+  "source_blob": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+  "candidate_head": "28a7999fefd886de41f6ffda5b05b69cd49aa496",
+  "physical_printer_called": false,
+  "adapter": "actual MacPrinter.submit_default; cupsPrintFile replaced by file-copy/receipt stub",
+  "outputs": [
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "bdaacc15ea2ea5f94e16901d4288c8cc74f8dc2cf8e42cb3c67007e1e1554330",
+      "bytes": 743,
+      "stub_file": "1-label.png",
+      "option_count": 3,
+      "source_sha256": "bdaacc15ea2ea5f94e16901d4288c8cc74f8dc2cf8e42cb3c67007e1e1554330",
+      "receipt": "SYNTHETIC_ONLY-701",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "stub_file": "2-label.png",
+      "option_count": 3,
+      "source_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "receipt": "SYNTHETIC_ONLY-702",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "bytes": 40498,
+      "stub_file": "3-label.png",
+      "option_count": 3,
+      "source_sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "receipt": "SYNTHETIC_ONLY-703",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "6619369c6bdefde2c24038202c540595f95df6a462c749b13a0d5113d8879cf0",
+      "bytes": 737,
+      "stub_file": "4-label.png",
+      "option_count": 3,
+      "source_sha256": "6619369c6bdefde2c24038202c540595f95df6a462c749b13a0d5113d8879cf0",
+      "receipt": "SYNTHETIC_ONLY-704",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "bytes": 40214,
+      "stub_file": "5-label.png",
+      "option_count": 3,
+      "source_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "receipt": "SYNTHETIC_ONLY-705",
+      "identical_input_output": true
+    },
+    {
+      "queue": "SYNTHETIC_ONLY",
+      "title": "WMS QR",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "bytes": 40214,
+      "stub_file": "6-label.png",
+      "option_count": 3,
+      "source_sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "receipt": "SYNTHETIC_ONLY-706",
+      "identical_input_output": true
+    }
+  ]
+}
