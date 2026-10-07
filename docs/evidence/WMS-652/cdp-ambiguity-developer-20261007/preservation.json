@@ -1,0 +1,23 @@
+{
+  "implementation_sha": "307873b739c879a7e322275efc223f0069b47745",
+  "test_before_code_original_sha": "d0242bb882290daadd59e5a38e678392d3a520a3",
+  "local_test_cherry_pick_sha": "2f509617c",
+  "source_delta_one_response_guard_only": true,
+  "original43_business_source_unchanged": true,
+  "frozen_seven_test_sha256": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+  "precode": {
+    "pass": 5,
+    "fail": 2,
+    "skip": 0,
+    "exit": 1
+  },
+  "after": {
+    "pass": 7,
+    "fail": 0,
+    "skip": 0,
+    "exit": 0
+  },
+  "syntax_exit": 0,
+  "browser_or_full_CI_executed": false,
+  "original_CI_cause": "UNKNOWN"
+}
