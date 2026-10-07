@@ -1,5 +1,5 @@
 {
-  "status": "INTEGRATED_ACCEPTED_SOURCE_DELTA_PENDING_NARROW_INDEPENDENT_REVIEW",
+  "status": "NARROW_MERGE_TECHNICALLY_ACCEPTED_RELEASE_BLOCKED",
   "old_accepted_checkpoint": "edd9657de1850cb8e2eff8beecde89fe8ec3f913",
   "candidate_P_pin": "989historicalonly; actualmergedruntime requiresnewP afterindependentreview",
   "new_sources_preserved": {
@@ -9,10 +9,22 @@
   },
   "code_changes": "Exactaccepted672decoderAST;ourreceiptmetadata/grid and entireInbound687/680features unchanged",
   "remaining": [
-    "SourceF6purefixture3e review/hash",
-    "OtherCDPInterceptionIdfix acceptedsource pending",
-    "Narrowactualintegrationreview then combinedP/newSOURCE/fullCI"
+    "Accepted CDP InterceptionId fixture fix stillpending concurrentcoordinator",
+    "680actual13canaries wholeEOF notyetdelivered",
+    "Whole exactSHA/fullCI + compatiblemainSOURCEpin + etalon/deploy never claimed"
   ],
   "release_authorized": false,
-  "F6_hash_status": "Prioracceptedhash retained deliberately; e249pendingindependentreview. No prematureactivation."
+  "F6_hash_status": "actualcbcaPASS+025analyst acceptance,270thregression source/case protected;2XML+2logs committed428",
+  "reviewed_P": "10c018092ab6f76928a54115eb824a64adc637be",
+  "original_independent_review": "b733c5a345cf36f9b55212299e73496182941dea",
+  "unchanged_review_publication": "3a5f8ebbdb1072d46974047d69f0bcb4b2da0849",
+  "review_blob": "8845573d35860d0031b96df7252755a7b43eeaa0",
+  "foreign672_analyst_acceptance": "foreign coordinator ownership; not overwritten",
+  "policy": [
+    270,
+    27,
+    1676
+  ],
+  "graph_status": "oneactualpositivePASS after14min, remaininglater-basepositive+13negatives stillrunning; no repeat/no falsewholePASS",
+  "final_SOURCE_S": null
 }
