@@ -27,5 +27,9 @@
   "scope_exit": 0,
   "scope_output": {
     "unapproved_product_paths": []
-  }
+  },
+  "integrity_command": "python3 scripts/ci/process_contracts.py --base 4b298efc95be7b4b6b7fe5665be9f3671f1fe747 --bootstrap",
+  "integrity_exit": 0,
+  "integrity_output": "Process contract integrity: 230 files",
+  "bootstrap_limit": "BASE has no policy; this only validates candidate hashes, new independently approved SOURCE pin still required"
 }
