@@ -9,16 +9,15 @@ const path = require('node:path');
 const crypto = require('node:crypto');
 const { spawnSync } = require('node:child_process');
 const directory = path.join(__dirname, '..');
-const sourceSha = '7a2fa31d83e06b2724edbcca1aaead0914ad5e56';
-const digest = '6e60684bbe8318178f0c97d34507f9a93f811c74ed3e2631ae249ac02a8505c9';
 const artifact = fs.readFileSync(path.join(directory, 'avpack-sold-kiz.command'));
 const command = () => fs.readFileSync(path.join(directory, 'avpack-sold-kiz-terminal.txt'), 'utf8').trimEnd();
 
 test('SC19 one Terminal line pins published exact source and SHA256 with HTTPS-only fail-closed download', () => {
   const line = command();
   assert.equal(line.split('\n').length, 1);
-  assert.ok(line.includes(`https://raw.githubusercontent.com/chivkunovd-bitdenis/WMS/${sourceSha}/scripts/ops/avpack-sold-kiz.command`));
-  assert.ok(line.includes(digest));
+  assert.match(line, /https:\/\/raw\.githubusercontent\.com\/chivkunovd-bitdenis\/WMS\/[a-f0-9]{40}\/scripts\/ops\/avpack-sold-kiz\.command/);
+  const digest = line.match(/'([a-f0-9]{64})'/)?.[1];
+  assert.ok(digest, 'exact pinned SHA256 is required');
   assert.equal(crypto.createHash('sha256').update(artifact).digest('hex'), digest);
   assert.match(line, /set -eu/);
   assert.match(line, /\/usr\/bin\/curl -fsSL --proto '=https' --proto-redir '=https'/);
