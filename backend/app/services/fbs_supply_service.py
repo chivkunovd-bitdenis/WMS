@@ -596,6 +596,46 @@ async def create_supply_from_orders(
     ozon_provider: OzonMarketplaceProvider | None = None,
     created_by_user_id: uuid.UUID | None = None,
 ) -> dict[str, Any]:
+    # WMS-666: creation must return usable stickers before any tab is opened.
+    workspace = await _create_supply_from_orders(
+        session,
+        tenant_id,
+        name=name,
+        order_ids=order_ids,
+        planned_delivery_type=planned_delivery_type,
+        planned_destination=planned_destination,
+        idempotency_key=idempotency_key,
+        http_client=http_client,
+        ozon_provider=ozon_provider,
+        created_by_user_id=created_by_user_id,
+    )
+    if workspace["supply"].get("marketplace", "wb") != "wb":
+        return workspace
+    supply_id = uuid.UUID(str(workspace["supply"]["id"]))
+    # A sticker outage must not roll back an already confirmed WB supply.
+    await session.commit()
+    supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
+    if supply is not None:
+        await _request_order_stickers_for_picking(session, tenant_id, supply, http_client)
+        refreshed = await get_supply_workspace(session, tenant_id, supply_id)
+        refreshed["partial_rejection"] = workspace.get("partial_rejection")
+        workspace = refreshed
+    return workspace
+
+
+async def _create_supply_from_orders(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    *,
+    name: str,
+    order_ids: list[uuid.UUID],
+    planned_delivery_type: str,
+    planned_destination: dict[str, Any] | None,
+    idempotency_key: str,
+    http_client: httpx.AsyncClient,
+    ozon_provider: OzonMarketplaceProvider | None = None,
+    created_by_user_id: uuid.UUID | None = None,
+) -> dict[str, Any]:
     if not idempotency_key.strip():
         raise FbsSupplyError("missing_idempotency_key", http_status=400)
     if not order_ids:
@@ -1274,7 +1314,11 @@ async def _request_order_stickers_for_picking(
     orders: list[FbsOrder] | None = None,
 ) -> None:
     target_orders = supply.orders if orders is None else orders
-    missing = [order.id for order in target_orders if not order.sticker_code]
+    missing = [
+        order.id
+        for order in target_orders
+        if not order.sticker_code and order.status != FBS_ORDER_STATUS_CANCELLED
+    ]
     if not missing:
         return
     try:
