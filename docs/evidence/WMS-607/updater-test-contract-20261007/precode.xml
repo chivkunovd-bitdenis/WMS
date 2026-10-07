@@ -1,0 +1,66 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.directMacUpdater" tests="10" failures="8" errors="0" skipped="0"><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_direct_build_metadata" time="0.8755902080010856" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_public_and_current_journal_replay" time="0.148084333006409" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported" time="0.07928962500591297"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 308, in test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed" time="0.08274275000439957"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 321, in test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc3_lossless_backup_and_archive_or_space_failure" time="0.07945912500144914"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 349, in test_uc3_lossless_backup_and_archive_or_space_failure
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc4_foreign_port_owner_and_health200_wrong_process" time="0.08528408400161425"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 356, in test_uc4_foreign_port_owner_and_health200_wrong_process
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc5_replace_and_start_rollback_preserve_current_journal" time="0.08170604100450873"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 364, in test_uc5_replace_and_start_rollback_preserve_current_journal
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc6_repeat_concurrent_and_interrupted_update_recover" time="0.08193816600396531"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 373, in test_uc6_repeat_concurrent_and_interrupted_update_recover
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc7_actual_journal_replay_after_update_and_failed_restart" time="0.08014808299776632"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 383, in test_uc7_actual_journal_replay_after_update_and_failed_restart
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc8_no_security_printer_or_dependencies_change_permission_recovery" time="0.08070433299872093"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 403, in test_uc8_no_security_printer_or_dependencies_change_permission_recovery
+    self.require_entry()
+    ~~~~~~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 241, in require_entry
+    self.assertTrue(ENTRY.is_file(), 'Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Direct updater entrypoint is NOT IMPLEMENTED at BASE; no behavioural execution/RED is claimed
+</failure></testcase></testsuite>

@@ -1,0 +1,197 @@
+{
+  "task": "WMS-607",
+  "base": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+  "updater_entry": "tools/print-agent/update_macos_direct.sh",
+  "updater_entry_absent": true,
+  "test_sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+  "xml_ids": [
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+    "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery",
+    "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+    "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata"
+  ],
+  "precode": {
+    "total": 10,
+    "PASS": 2,
+    "FAIL_missing_entry": 8,
+    "SKIP": 0,
+    "ERROR": 0,
+    "updater_behavior_executed": false
+  },
+  "requirements": {
+    "base_sha256": "56d09c5a88e981d6d638b951c3117a647faa90ce4322b97c52fb50e4d85f6874",
+    "current_sha256": "706159108016721c5e39e2d2c3e6726c5ee67b65f142ac37ae8d969d2f60eb31",
+    "only_eight_Test_cells_changed": true,
+    "R_U1_to_8_and_U_C1_to_10_preserved": true,
+    "manual_U_C9_10_unchanged": true
+  },
+  "existing_print_agent_files_unchanged": [
+    {
+      "path": "tools/print-agent/.gitignore",
+      "git_blob": "d1fdc1d0a0b315705f3b948f91363510fc20b10a",
+      "sha256": "2ee183ff4491eabfd7f77d12d9dd123e3fbec1ed3f731fa267d97be8c524b64e",
+      "bytes": 120
+    },
+    {
+      "path": "tools/print-agent/README-direct.md",
+      "git_blob": "f985112e617fa2597398a86b14cb79248f355620",
+      "sha256": "c61ef50ddacd79511e4b02bb3eb5e5fe11b8731aab33640b9c5f1b64773e0e9d",
+      "bytes": 2572
+    },
+    {
+      "path": "tools/print-agent/README.md",
+      "git_blob": "30d514cb3cd76b19957a6462fac7bbd2291b7201",
+      "sha256": "f490d2f569c72ace1ecb6182962275e22921cc02ef2f86b91f30c1c45e907347",
+      "bytes": 17408
+    },
+    {
+      "path": "tools/print-agent/build_console.py",
+      "git_blob": "f2c24099fa289ecd53d3baede423585f352c4c37",
+      "sha256": "7a350fb46cf18964f2a1ecd20ce85afc2840f5d5064fe696d32b81caa09a027f",
+      "bytes": 4415
+    },
+    {
+      "path": "tools/print-agent/build_package.py",
+      "git_blob": "c49f955c0672e5bef13077af7597d39af3562b5b",
+      "sha256": "56f2d8b81c28eb27fd2e5c16fd00b84fe10e0ca0c141c6a564522ea47873ed61",
+      "bytes": 5094
+    },
+    {
+      "path": "tools/print-agent/history.html",
+      "git_blob": "bee7d0e4b313c3be88e23a3cc1512c28d3611789",
+      "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "bytes": 5643
+    },
+    {
+      "path": "tools/print-agent/publish_release.py",
+      "git_blob": "67a6c4e95ad73c594b142e3c1458e709abf4f0b5",
+      "sha256": "0846099de2e042fa92f9ab5acd9eabfde8de84b1cec2e29625cbb2a6af197eb9",
+      "bytes": 5945
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "git_blob": "1a355be40e4c114a316fe85b18b12df57866eddf",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+      "bytes": 8619
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "git_blob": "ef8863ec7e15516ec1681b31a0bdf07a5950b067",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+      "bytes": 11965
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "git_blob": "3fa6656ffcaeaefe200f5d0355417bd8cb01c960",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+      "bytes": 5141
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "git_blob": "b170b764d82afc5ed545a4aac6dd5491448fd69e",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "bytes": 10276
+    },
+    {
+      "path": "tools/print-agent/test_publish_release.py",
+      "git_blob": "235e7fdbd790dd0b013e7035dfee31741d2f1fe4",
+      "sha256": "f3a868008d4b78cbc9fc3af55d25bf1b5c956b49071ea0a99e5c24b08aa4dfef",
+      "bytes": 7077
+    },
+    {
+      "path": "tools/print-agent/test_wms_cups_observe.c",
+      "git_blob": "2ab401c05ae6e2972ecc7f86641e5c151d5299b7",
+      "sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26",
+      "bytes": 2053
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_agent.py",
+      "git_blob": "fd71dfe7c60b319d209083017c4932227397fe65",
+      "sha256": "636e51c942cee2138b2f87e4dbe848d4f8d5cf3b0ae759d48a478ff73de95c80",
+      "bytes": 3236
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_direct.py",
+      "git_blob": "09f4d232e3205a976b0a0ba81ad463b81d127cd4",
+      "sha256": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
+      "bytes": 3259
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_runtime.py",
+      "git_blob": "ed891ebe337c8e00630d154f4a39da833441051b",
+      "sha256": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
+      "bytes": 28374
+    },
+    {
+      "path": "tools/print-agent/windows-installer.nsi",
+      "git_blob": "5b76b9ac4aa5a7154c880dab0d39ce3e0203cfae",
+      "sha256": "55b860373e0fe345cfb99a3486fc232a58f09cac08f8d40882a48a4cf55a6e0a",
+      "bytes": 2842
+    },
+    {
+      "path": "tools/print-agent/wms_cups_observe.c",
+      "git_blob": "7d33314e3d777f305b38de891d33fcfff671fb5f",
+      "sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "bytes": 3894
+    },
+    {
+      "path": "tools/print-agent/wms_print_agent.py",
+      "git_blob": "4043ebf90554b8c2a708672aa270f59b58627416",
+      "sha256": "6538cb17cb7f9c90d8911c81d7af40765dd8fd2b5c432bb5b7ace2006927559a",
+      "bytes": 14121
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct.py",
+      "git_blob": "81ebff2bb9c638f1d6d41e2f22f618282a5ba476",
+      "sha256": "ee7d1fb1ef1d603231e428e445c03e9dde95fd745f454b58c8aeea02faff35b2",
+      "bytes": 11574
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "git_blob": "9407a52ca88da01a094c2f4d2884f64211f145e0",
+      "sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+      "bytes": 67511
+    },
+    {
+      "path": "tools/print-agent/wms_print_runtime.py",
+      "git_blob": "7a579cb97fde113bdc421e9715d17d4435247d1d",
+      "sha256": "6227669f9772c7bb90ed64366dd11467e79be5f4f7c246cecb13f95046c865b4",
+      "bytes": 44180
+    }
+  ],
+  "copy_mutations": [
+    {
+      "source_path": "tools/print-agent/build_console.py",
+      "source_sha256": "7a350fb46cf18964f2a1ecd20ce85afc2840f5d5064fe696d32b81caa09a027f",
+      "mutant_sha256": "aadfc42515c9834b446550ed271183f4023dc84b3c15f40dda88a3811a29002b",
+      "replacement": [
+        "\"runtime\": \"direct\"",
+        "\"runtime\": \"paired\""
+      ],
+      "case": "UpdaterContract.test_preservation_actual_direct_build_metadata",
+      "native_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "tracked_source_unchanged": true
+    },
+    {
+      "source_path": "tools/print-agent/wms_print_direct_macos.swift",
+      "source_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+      "mutant_sha256": "d22c594baef33f04d816f75a13f42288ce9c4804f15a6b2a43f3b29120d2fafd",
+      "replacement": [
+        "if let old=jobs[key] {",
+        "if let old=jobs[key], old.status == \"failed_before_submit\" {"
+      ],
+      "case": "UpdaterContract.test_preservation_actual_public_and_current_journal_replay",
+      "native_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "tracked_source_unchanged": true
+    }
+  ],
+  "no_product_or_installer_edits": true
+}

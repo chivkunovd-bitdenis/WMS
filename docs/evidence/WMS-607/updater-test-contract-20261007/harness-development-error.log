@@ -1,0 +1,21 @@
+setUpClass (__main__.UpdaterContract) ... ERROR
+
+======================================================================
+ERROR: setUpClass (__main__.UpdaterContract)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 132, in setUpClass
+    cls.native = cls.compile_native(candidate.decode(), 'current')
+                 ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_contract.py", line 153, in compile_native
+    if r.returncode:raise RuntimeError('Actual Swift fixture compilation error: '+r.stderr)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+RuntimeError: Actual Swift fixture compilation error: /var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms607-updater-native-ik5e_olw/current.swift:476:5: error: constant must be declared private or fileprivate because its type 'Printer' uses a private type
+let p=try Printer(directory:dir,autoWork:false,submit:{_,_ in calls+=1;if key=="current-unknown" {throw PrintError.message("External outcome unknown")};return "Fixture-42"},queue:{"Fixture"})
+    ^
+
+
+----------------------------------------------------------------------
+Ran 0 tests in 0.759s
+
+FAILED (errors=1)

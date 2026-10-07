@@ -1,0 +1,332 @@
+{
+  "task": "WMS-607",
+  "kind": "test-first-updater-contract",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "role": "separate testwriter; future implementation requires distinct reviewer",
+  "base": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+  "accepted_HTTP_product": "dc652472d75812dbebc68ef4353a718b0f629cbe",
+  "HTTP_acceptance": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+  "entry": {
+    "path": "tools/print-agent/update_macos_direct.sh",
+    "absent_at_base": true,
+    "override": "WMS607_UPDATER_ENTRY selects real bash installer only",
+    "argv": [
+      "--app-dir",
+      "TEMP/app",
+      "--state-dir",
+      "TEMP/state",
+      "--backup-dir",
+      "TEMP/backups",
+      "--manifest",
+      "TEMP/manifest.json"
+    ],
+    "metadata_shape": {
+      "source_commit": "40-hex immutable target source",
+      "artifacts": {
+        "arm64": {
+          "url": "pinned URL",
+          "sha256": "archive SHA256"
+        },
+        "x86_64": {
+          "url": "pinned URL",
+          "sha256": "archive SHA256"
+        }
+      }
+    }
+  },
+  "suite": {
+    "format": "junit",
+    "name": "WMS607.directMacUpdater",
+    "exact": true,
+    "xml_ids": [
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+      "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery",
+      "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+      "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata"
+    ],
+    "required_count": 10,
+    "skip_or_error_is_not_acceptance": true
+  },
+  "classification": [
+    {
+      "check": "U-C1",
+      "requirements": [
+        "R-U1"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported"
+    },
+    {
+      "check": "U-C2",
+      "requirements": [
+        "R-U2"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed"
+    },
+    {
+      "check": "U-C3",
+      "requirements": [
+        "R-U3"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure"
+    },
+    {
+      "check": "U-C4",
+      "requirements": [
+        "R-U4"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process"
+    },
+    {
+      "check": "U-C5",
+      "requirements": [
+        "R-U5"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal"
+    },
+    {
+      "check": "U-C6",
+      "requirements": [
+        "R-U6"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover"
+    },
+    {
+      "check": "U-C7",
+      "requirements": [
+        "R-U5",
+        "R-U6",
+        "R-U8"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart"
+    },
+    {
+      "check": "U-C8",
+      "requirements": [
+        "R-U7"
+      ],
+      "class": "навсегда",
+      "xml_id": "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+    },
+    {
+      "check": "U-C9",
+      "class": "руками",
+      "test": null
+    },
+    {
+      "check": "U-C10",
+      "class": "руками",
+      "test": null
+    }
+  ],
+  "positive_preservation_ids": [
+    "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+    "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata"
+  ],
+  "raw_report_command": "WMS607_UPDATER_EVIDENCE_DIR=<owned-raw-dir> python3 -B docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py --report <owned-report-dir>/macos-direct-updater.xml",
+  "precode_command": "WMS607_UPDATER_EVIDENCE_DIR=docs/evidence/WMS-607/updater-test-contract-20261007/precode python3 -B docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py --report docs/evidence/WMS-607/updater-test-contract-20261007/precode.xml",
+  "precode": {
+    "total": 10,
+    "PASS": 2,
+    "FAIL_missing_entry": 8,
+    "SKIP": 0,
+    "ERROR": 0,
+    "updater_behavior_executed": false,
+    "native_exit": 1,
+    "interpretation": "8 integration-absence assertion failures, NOT reproduced updater behavioral RED; actual existing code passes 2 preservation cases",
+    "log": "precode.log",
+    "report": "precode.xml",
+    "raw_directory": "precode"
+  },
+  "environment": {
+    "os": "Darwin",
+    "os_release": "25.3.0",
+    "machine": "arm64",
+    "python": "3.14.3",
+    "swift": "Apple Swift version 5.8.1 / arm64-apple-darwin25.3.0"
+  },
+  "new_test_closure": [
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+      "bytes": 30177
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+      "sha256": "518c52e6f00ffe53371a6d030c0a906dcc09a03f2bf77e5b79fde7c201901fc3",
+      "bytes": 2704
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-control.py",
+      "sha256": "eeffec8a2877679f478086769248b84b6b4e93d8ee8ce960db8e425f7b37916a",
+      "bytes": 2338
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/source-probe.py",
+      "sha256": "a3e9ff94b9e79cac6090d708d0b91d7c3acf9153d3df94fb58a5b1e421fb0a8c",
+      "bytes": 4418
+    }
+  ],
+  "current_product_closure": [
+    {
+      "path": "tools/print-agent/build_console.py",
+      "git_blob": "f2c24099fa289ecd53d3baede423585f352c4c37",
+      "sha256": "7a350fb46cf18964f2a1ecd20ce85afc2840f5d5064fe696d32b81caa09a027f",
+      "bytes": 4415
+    },
+    {
+      "path": "tools/print-agent/history.html",
+      "git_blob": "bee7d0e4b313c3be88e23a3cc1512c28d3611789",
+      "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "bytes": 5643
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "git_blob": "1a355be40e4c114a316fe85b18b12df57866eddf",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+      "bytes": 8619
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "git_blob": "ef8863ec7e15516ec1681b31a0bdf07a5950b067",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+      "bytes": 11965
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "git_blob": "3fa6656ffcaeaefe200f5d0355417bd8cb01c960",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+      "bytes": 5141
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "git_blob": "b170b764d82afc5ed545a4aac6dd5491448fd69e",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "bytes": 10276
+    },
+    {
+      "path": "tools/print-agent/wms_cups_observe.c",
+      "git_blob": "7d33314e3d777f305b38de891d33fcfff671fb5f",
+      "sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "bytes": 3894
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "git_blob": "9407a52ca88da01a094c2f4d2884f64211f145e0",
+      "sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+      "bytes": 67511
+    }
+  ],
+  "legacy_native_input": {
+    "ref": "9a33b651c309796707053e1056c7f80dff7194d5",
+    "path": "tools/print-agent/wms_print_direct_macos.swift",
+    "git_blob": "27c6e05a732aaa0567be72f3421e25879931a58e",
+    "sha256": "d47614beef415b86c49cdad0d531e642028c0cadf86652701736ada6385210ad",
+    "bytes": 19004
+  },
+  "rules_inputs": [
+    {
+      "ref": "origin/etalon",
+      "path": "AGENTS.md",
+      "git_blob": "510ce8febd402f9a78a5f1fddd964d99283afaff",
+      "sha256": "829e975ebcdfd2574c5e215985f9cf3a5c621b3f35b6686351daae01c1f82ee1",
+      "bytes": 25924
+    },
+    {
+      "ref": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+      "path": "docs/reviews/2026-09-11-analyst-draft/skills/wms-test-writer/SKILL.md",
+      "git_blob": "96766f491f95e940cca1df8782fe4edd7518e869",
+      "sha256": "b0d5b3593416035febd6408284f33d8b8f742d6727c3e264e64c16ce0c4c0fb9",
+      "bytes": 2697
+    },
+    {
+      "ref": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+      "path": "docs/reviews/2026-09-11-analyst-draft/owner-cases.md",
+      "git_blob": "19a12f266ef38e697e1b30cf2f3da3d589e8cce2",
+      "sha256": "54aa3a4f79b0e97eb0e397c03ef37410cd3bb86b7516bb49e188511910525c3e",
+      "bytes": 10840
+    },
+    {
+      "ref": "756b45a4d46b9e9a33657549e2c2addb6bae89c1",
+      "path": "docs/reviews/2026-09-11-analyst-draft/failure-cases.md",
+      "git_blob": "48263ba41e8fdb67c744864f7ec52a26b768598b",
+      "sha256": "9d8ed7208873340f3b039de322bb009a4159e1c6eec2f2b2a7c5f53fd9d86dc4",
+      "bytes": 34888
+    }
+  ],
+  "requirements": {
+    "base_sha256": "56d09c5a88e981d6d638b951c3117a647faa90ce4322b97c52fb50e4d85f6874",
+    "current_sha256": "706159108016721c5e39e2d2c3e6726c5ee67b65f142ac37ae8d969d2f60eb31",
+    "only_eight_Test_cells_changed": true,
+    "R_U1_to_8_and_U_C1_to_10_preserved": true,
+    "manual_U_C9_10_unchanged": true
+  },
+  "copy_controls": [
+    {
+      "source_path": "tools/print-agent/build_console.py",
+      "source_sha256": "7a350fb46cf18964f2a1ecd20ce85afc2840f5d5064fe696d32b81caa09a027f",
+      "mutant_sha256": "aadfc42515c9834b446550ed271183f4023dc84b3c15f40dda88a3811a29002b",
+      "replacement": [
+        "\"runtime\": \"direct\"",
+        "\"runtime\": \"paired\""
+      ],
+      "case": "UpdaterContract.test_preservation_actual_direct_build_metadata",
+      "native_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "tracked_source_unchanged": true
+    },
+    {
+      "source_path": "tools/print-agent/wms_print_direct_macos.swift",
+      "source_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+      "mutant_sha256": "d22c594baef33f04d816f75a13f42288ce9c4804f15a6b2a43f3b29120d2fafd",
+      "replacement": [
+        "if let old=jobs[key] {",
+        "if let old=jobs[key], old.status == \"failed_before_submit\" {"
+      ],
+      "case": "UpdaterContract.test_preservation_actual_public_and_current_journal_replay",
+      "native_exit": 1,
+      "meaningful_assertion_FAIL": true,
+      "tracked_source_unchanged": true
+    }
+  ],
+  "copy_control_command": "python3 -B docs/evidence/WMS-607/updater-test-contract-20261007/mutation-control.py",
+  "boundaries": {
+    "actual": [
+      "existing build_console.main",
+      "actual current and public-.4 Printer source with real timers/files/journals",
+      "actual future installer CLI logic",
+      "real temporary ZIP/files/symlinks/modes/backups"
+    ],
+    "controlled_external": [
+      "hardware/OS",
+      "pinned download",
+      "file/lipo native architecture",
+      "process/port/kill/health",
+      "permissions/security tools",
+      "compiler/sign/archive in builder preservation only",
+      "CUPS submission and queue in actual Printer"
+    ],
+    "package_binary": "external startup fixture, NOT actual released executable",
+    "scope": "temporary directories only; no HOME override, host Library, real printer, release or provider action"
+  },
+  "immutable_for_developer": true,
+  "no_product_implementation": true,
+  "manual_checks_pending": [
+    "U-C9",
+    "U-C10"
+  ],
+  "acceptance_claimed": false
+}

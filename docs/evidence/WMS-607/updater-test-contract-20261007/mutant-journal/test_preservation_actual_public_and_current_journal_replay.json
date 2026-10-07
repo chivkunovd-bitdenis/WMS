@@ -1,0 +1,121 @@
+{
+  "case": "test_macos_direct_updater_contract.UpdaterContract.test_preservation_actual_public_and_current_journal_replay",
+  "source_sha256": "d22c594baef33f04d816f75a13f42288ce9c4804f15a6b2a43f3b29120d2fafd",
+  "test_sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+  "entry_sha256": null,
+  "entry_present": false,
+  "executions": [],
+  "native_journal_records": [
+    {
+      "producer": "public-.4",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-41\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-accepted",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"updatedAt\":\"2026-10-07T04:38:02Z\",\"legacy\":false,\"widthMm\":58,\"imageAvailable\":true,\"receipt\":\"Fixture-42\",\"paperStatus\":\"unconfirmed\",\"title\":\"WMS-60cbd1da924a6dcfb2c900570b6f714d4715d01d521b0af8b5578912e6a5d991\",\"physicalConfirmationSupported\":false,\"heightMm\":40,\"idempotencyKey\":\"current-accepted\",\"createdAt\":\"2026-10-07T04:38:02Z\",\"observations\":[\"2026-10-07T04:38:02Z saved\",\"2026-10-07T04:38:02Z submitting: Начата передача в системную очередь\",\"2026-10-07T04:38:02Z accepted: Системная очередь приняла задание; бумага не подтверждена\"],\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"reprints\":[],\"status\":\"accepted\",\"queueObservation\":{},\"reason\":\"Системная очередь приняла задание; бумага не подтверждена\",\"queue\":\"Fixture\",\"context\":{}}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-unknown",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"heightMm\":40,\"status\":\"unknown\",\"createdAt\":\"2026-10-07T04:38:02Z\",\"reprints\":[],\"title\":\"WMS-43022a78008a4da12499df80e820a477cc669447dd4b32c2ea724c1e428697a3\",\"queueObservation\":{},\"updatedAt\":\"2026-10-07T04:38:02Z\",\"reason\":\"External outcome unknown\",\"observations\":[\"2026-10-07T04:38:02Z saved\",\"2026-10-07T04:38:02Z submitting: Начата передача в системную очередь\",\"2026-10-07T04:38:02Z unknown: External outcome unknown\"],\"queue\":\"Fixture\",\"idempotencyKey\":\"current-unknown\",\"paperStatus\":\"unconfirmed\",\"context\":{},\"widthMm\":58,\"imageAvailable\":true,\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"physicalConfirmationSupported\":false,\"legacy\":false}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"status\":\"saved\",\"widthMm\":58,\"reason\":\"Изображение сохранено; ожидает передачи в системную очередь\",\"context\":{},\"updatedAt\":\"2026-10-07T04:38:02Z\",\"idempotencyKey\":\"legacy-accepted\",\"legacy\":false,\"reprints\":[],\"paperStatus\":\"unconfirmed\",\"observations\":[\"2026-10-07T04:38:02Z saved\"],\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"createdAt\":\"2026-10-07T04:38:02Z\",\"heightMm\":40,\"imageAvailable\":true,\"queueObservation\":{},\"physicalConfirmationSupported\":false,\"title\":\"WMS-1fcd41ebbab7933ad5a98f4d3a8508e7a3879758b463f4be6c5db9c43e465376\"}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    }
+  ],
+  "app": {
+    "build.json": [
+      "file",
+      420,
+      "08b16d31e90d0a6277e8641d1d5e153876510b63344e5247c2d831bee211cf22"
+    ],
+    "history-link": [
+      "link",
+      "history.html"
+    ],
+    "history.html": [
+      "file",
+      420,
+      "101e006063209ad96eca404b2f45618539963f9322d0ccd7b977efc402d3d02f"
+    ],
+    "old-only.txt": [
+      "file",
+      420,
+      "59ec2693a278d3db6e890623530604e52020e76bd08c751605a03f6ede964151"
+    ],
+    "private-mode": [
+      "file",
+      384,
+      "e642b12901a6ee51456f654c48cd0aa6e90afd64e035afbc97cfc542209c70f9"
+    ],
+    "wms-print": [
+      "file",
+      493,
+      "e6f5375f2d8dff2000c3f77d3ea9c5b81c3bc9dfb287dc7c1a6464984730b1e1"
+    ]
+  },
+  "state": {
+    "config/operator.json": [
+      "file",
+      420,
+      "6c2f15dadb396c59cdbec1d861b100ba0426f78a6631340c42886e44b0c2ced2"
+    ],
+    "direct-jobs.json": [
+      "file",
+      420,
+      "9c112d354fd37a5e30df6a863d39c977e6ab479a90cd02f0706d21402d473011"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.json": [
+      "file",
+      384,
+      "8bf85b3dda74539da89af73d79cf64a2dca76f48d333e90eddcacd7cc119662d"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "jobs-v2/af697106e063282355df5857b30f81f4ace8f9285d5d7fb11232717da7fa36c1.json": [
+      "file",
+      384,
+      "9596dae7dd7189d3610c30976ab5009c42db22c999ff8059628bb4a2bfd9c90b"
+    ],
+    "jobs-v2/af697106e063282355df5857b30f81f4ace8f9285d5d7fb11232717da7fa36c1.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.json": [
+      "file",
+      384,
+      "749ea2bde30b9d04ca9d81258ca2b8facaf57b4bc675d0573a2198e8c9cb537a"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "runtime.lock": [
+      "file",
+      384,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ]
+  },
+  "commands": []
+}

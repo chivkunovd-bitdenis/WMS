@@ -1,0 +1,28 @@
+[
+  {
+    "source_path": "tools/print-agent/build_console.py",
+    "source_sha256": "7a350fb46cf18964f2a1ecd20ce85afc2840f5d5064fe696d32b81caa09a027f",
+    "mutant_sha256": "aadfc42515c9834b446550ed271183f4023dc84b3c15f40dda88a3811a29002b",
+    "replacement": [
+      "\"runtime\": \"direct\"",
+      "\"runtime\": \"paired\""
+    ],
+    "case": "UpdaterContract.test_preservation_actual_direct_build_metadata",
+    "native_exit": 1,
+    "meaningful_assertion_FAIL": true,
+    "tracked_source_unchanged": true
+  },
+  {
+    "source_path": "tools/print-agent/wms_print_direct_macos.swift",
+    "source_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+    "mutant_sha256": "d22c594baef33f04d816f75a13f42288ce9c4804f15a6b2a43f3b29120d2fafd",
+    "replacement": [
+      "if let old=jobs[key] {",
+      "if let old=jobs[key], old.status == \"failed_before_submit\" {"
+    ],
+    "case": "UpdaterContract.test_preservation_actual_public_and_current_journal_replay",
+    "native_exit": 1,
+    "meaningful_assertion_FAIL": true,
+    "tracked_source_unchanged": true
+  }
+]
