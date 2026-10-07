@@ -385,7 +385,7 @@ jobs:
       - name: Install infrastructure test dependencies
         run: python -m pip install pytest pytest-xdist
       - name: Verify whole candidate against the accepted product reference
-        run: python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d
+        run: python scripts/ci/product_scope.py --root . --trusted-ref 1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333
       - name: Infrastructure tests (not business guards)
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "c21e5fa87d961ffea9e502fd74310386e63b52da15ebce5376dd04bfced7737a",
+    ".github/workflows/ci.yml": "1888cd23eddfc95d7c3314423f22f2dcef8453371ff4039ce30ddd7023fa9a82",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -199,7 +199,7 @@
     "scripts/ci/tests/test_backend_shard_redis_setup.py": "756bc9ea158afae5624813781b9191bbc71d9408b4265115cc60b01694768884",
     "scripts/ci/tests/test_backend_shards.py": "dded5d07d5cb4f7203d24eb93f4bd55a8b816c81797ab6c5b7ff968d47dbcb0c",
     "scripts/ci/tests/test_ci_baseline.py": "00a7a6654c8bdfdddaafe6baab11adbb69a6c4dd0c5bcf076a5f253f53fa97e3",
-    "scripts/ci/tests/test_ci_release_additions.py": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+    "scripts/ci/tests/test_ci_release_additions.py": "8fc3231a1eee6a90d76543d59ccaa6d07df2b131dcb918e001491d347a1d8e7e",
     "scripts/ci/tests/test_process_contracts.py": "2021d492450e1d1213e2e189fdfe736643043d86475d326290a9d730d2b19341",
     "scripts/ci/tests/test_process_deploy_gate.py": "e7f31290a441da3f118674a208c4e5497ab3f11415e1d5d61670298a7a53d18f",
     "scripts/ci/tests/test_product_scope.py": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
@@ -232,7 +232,7 @@
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
     "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
-    "backend/app/services/fbs_stock_publish_service.py": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+    "backend/app/services/fbs_stock_publish_service.py": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
     "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
   },
   "suites": {
