@@ -6,9 +6,10 @@
     "d61805978b3e7878d1056c99b4e6e0823edf49a5",
     "ef154664e365644f4ba002c6e8affc5607fae725",
     "98978e667bbc305cc08a9b541016fef06686388e",
-    "10c018092ab6f76928a54115eb824a64adc637be"
+    "10c018092ab6f76928a54115eb824a64adc637be",
+    "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c"
   ],
-  "final_reviewed_source": "10c018092ab6f76928a54115eb824a64adc637be",
+  "final_reviewed_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
   "self_selecting_references": [
     "HEAD",
     "${GITHUB_SHA}"
@@ -30,6 +31,16 @@
     "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc"
   },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate.",
-  "frozen_source": "10c018092ab6f76928a54115eb824a64adc637be",
-  "independent_acceptance_record": "3a5f8ebbdb1072d46974047d69f0bcb4b2da0849"
+  "frozen_source": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "independent_acceptance_record": "0d8b163dca564e5e80623223f42dc713e47e849f",
+  "independent_review_verdict": "FAIL",
+  "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
+  "owner_authorized_targeted_correction": {
+    "path": "docs/evidence/WMS-652/batch-receipt-path-correction-20261007/README.md",
+    "correction_commit": "7f558588f604537ae59bf1d386bd7a946d5e5d05",
+    "actual_probe_commit": "ba63e46f8",
+    "repeat_independent_review": false,
+    "scope": "sole new batch receipt path; source release authorized after completed whole-package review, original FAIL retained",
+    "product_scope": "unchanged P independently confirmed in completed review; status describes product freeze, not a new SOURCE reviewer PASS"
+  }
 }

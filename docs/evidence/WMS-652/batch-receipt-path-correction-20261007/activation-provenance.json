@@ -1,0 +1,10 @@
+{
+  "reviewed_H": "acf62b24a39565957f779c63b46cf573f8208d63",
+  "product_P": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "review_publication_R": "0d8b163dca564e5e80623223f42dc713e47e849f",
+  "review_verdict": "FAIL",
+  "corrected_path": "release-postgres/662-batch.xml",
+  "repeat_independent_review": false,
+  "owner_directed_release": true,
+  "docgate_log_scope": "exact reviewed H before data-only activation/path correction; not claimed for a future SHA"
+}
