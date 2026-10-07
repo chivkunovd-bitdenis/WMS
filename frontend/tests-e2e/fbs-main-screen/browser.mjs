@@ -12,19 +12,28 @@ const seed = JSON.parse(await readFile(process.env.FBS_MAIN_SEED || `${evidence}
 const fixture = seed.main
 const browser = await chromium.launch({ headless: true })
 const results = []
+const selectedCases = process.env.FBS_MAIN_CASES?.split(',').filter(Boolean)
 const wbDynamic = Object.values(seed.orders).flat().map(order => order.wms_order_id)
 const orderId = key => fixture.orders[key].id
-const newIds = [...wbDynamic, ...['wb_new', 'wb_other_seller', 'ozon_new', 'wb_unpublished'].map(orderId)]
+const sellerBIds = [orderId('wb_other_seller'), fixture.second_warehouse_order.id]
+const newIds = [...wbDynamic, ...['wb_new', 'wb_other_seller', 'ozon_new', 'wb_unpublished'].map(orderId), fixture.second_warehouse_order.id]
+let createdWbSupplyId = null
 
 async function run(name, test, role = 'admin') {
+  if (selectedCases && !selectedCases.includes(name)) return
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 }, acceptDownloads: true })
   const page = await context.newPage()
   const errors = []
   const responses = []
+  const worklistSnapshots = []
   let phase = 'setup'
   page.on('pageerror', error => errors.push(error.message))
-  page.on('response', response => {
+  page.on('response', async response => {
     if (response.url().includes('/api/operations/fbs')) responses.push({ url: response.url(), status: response.status() })
+    if (response.url().includes('/fbs-orders/worklist') && response.ok()) {
+      const body = await response.json().catch(() => null)
+      if (body?.items) worklistSnapshots.push({ status: response.status(), ids: body.items.map(item => item.id) })
+    }
   })
   try {
     const login = role === 'admin' ? seed.login : seed.role_logins[role]
@@ -40,7 +49,8 @@ async function run(name, test, role = 'admin') {
     assert.deepEqual(errors, [], 'Unhandled browser errors')
     results.push({ name, status: 'passed', responses })
   } catch (error) {
-    results.push({ name, status: 'failed', phase, error: String(error.stack || error), responses, browserErrors: errors })
+    const actualOrderIds = await page.getByTestId('fbs-worklist-table').locator('tbody tr[data-testid^="fbs-order-"]').evaluateAll(rows => rows.map(row => row.dataset.testid.slice('fbs-order-'.length))).catch(() => null)
+    results.push({ name, status: 'failed', phase, error: String(error.stack || error), responses, worklistSnapshots, expectedOrderIds: [...newIds], actualOrderIds, browserErrors: errors })
   } finally {
     await page.screenshot({ path: path.join(evidence, `${name}.png`), fullPage: true }).catch(() => {})
     await context.close()
@@ -86,7 +96,7 @@ await run('S2-marketplace-seller-search-empty', async page => {
   await choose(page, 'Маркетплейс', 'Wildberries')
   await expectIds(page, newIds.filter(id => id !== orderId('ozon_new')))
   await choose(page, 'Селлер', fixture.sellers[1].name)
-  await expectIds(page, [orderId('wb_other_seller')])
+  await expectIds(page, sellerBIds)
   await choose(page, 'Селлер', 'Все селлеры')
   await search(page, fixture.orders.wb_new.number)
   await expectIds(page, [orderId('wb_new')])
@@ -100,6 +110,19 @@ await run('S3-ozon-position-fields', async page => {
     for (const value of [position.name, position.article, position.sku]) await expect(posting).toContainText(value)
   }
   for (const column of ['Товар', 'Артикул продавца', 'SKU', 'ШК', 'Размер', 'Селлер', 'Маршрут сдачи', 'Отгрузить до']) await expect(page.getByTestId('fbs-worklist-table').getByRole('columnheader', { name: column, exact: true })).toBeVisible()
+})
+await run('S2-two-wb-warehouses-exact-membership', async page => {
+  await choose(page, 'Маркетплейс', 'Wildberries')
+  await expectIds(page, newIds.filter(id => id !== orderId('ozon_new')))
+  await page.getByTestId('fbs-worklist-warehouse').click()
+  await page.getByTestId('fbs-worklist-warehouse-501002').click()
+  await expectIds(page, [fixture.second_warehouse_order.id])
+  await page.getByTestId('fbs-worklist-warehouse').click()
+  await page.getByTestId('fbs-worklist-warehouse-501001').click()
+  await expectIds(page, newIds.filter(id => ![orderId('ozon_new'), fixture.second_warehouse_order.id].includes(id)))
+  await choose(page, 'Маркетплейс', 'Ozon')
+  await expect(page.getByTestId('fbs-worklist-warehouse')).toContainText('Все склады')
+  await expectIds(page, [orderId('ozon_new')])
 })
 await run('S4-hidden-selection-and-loaded-select-all', async page => {
   await row(page, 'wb_new').getByRole('checkbox').check()
@@ -122,17 +145,32 @@ await run('S4-not-published-selectable', async page => {
   await row(page, 'wb_unpublished').getByRole('checkbox').check()
   await expect(bar(page).getByRole('button', { name: 'Сформировать поставку', exact: true })).toBeEnabled()
 })
+await run('S4-selected-dialog-remove-and-clear', async page => {
+  await row(page, 'wb_new').getByRole('checkbox').check()
+  await row(page, 'ozon_new').getByRole('checkbox').check()
+  await page.getByTestId('fbs-selected-open').click()
+  const selected = page.getByTestId('fbs-selected-list')
+  await selected.getByRole('button', { name: 'Убрать', exact: true }).first().click()
+  await expect(selected).not.toContainText(fixture.orders.wb_new.number)
+  await expect(selected).toContainText(fixture.orders.ozon_new.number)
+  await expect(bar(page)).toContainText('Выбрано заказов: 1')
+  await page.getByRole('dialog').getByRole('button', { name: 'Снять всё', exact: true }).click()
+  await expect(bar(page)).toHaveCount(0)
+  await page.getByRole('dialog').getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(row(page, 'wb_new').getByRole('checkbox')).not.toBeChecked()
+  await expect(row(page, 'ozon_new').getByRole('checkbox')).not.toBeChecked()
+})
 await run('S2-S4-selection-resets-and-warehouse-reset', async page => {
   await row(page, 'wb_new').getByRole('checkbox').check()
   await choose(page, 'Селлер', fixture.sellers[1].name)
-  await expectIds(page, [orderId('wb_other_seller')])
+  await expectIds(page, sellerBIds)
   await expect(bar(page)).toHaveCount(0)
   await choose(page, 'Селлер', 'Все селлеры')
   await expectIds(page, newIds)
   await row(page, 'wb_new').getByRole('checkbox').check()
   await page.getByTestId('fbs-worklist-warehouse').click()
   await page.getByTestId('fbs-worklist-warehouse-501001').click()
-  await expectIds(page, newIds)
+  await expectIds(page, newIds.filter(id => ![orderId('ozon_new'), fixture.second_warehouse_order.id].includes(id)))
   await expect(bar(page)).toHaveCount(0)
   await row(page, 'wb_new').getByRole('checkbox').check()
   await page.getByRole('tab', { name: 'В работе', exact: true }).click()
@@ -229,11 +267,11 @@ await run('S10-cancelled-wb-entry-marketplace', async page => {
 })
 await run('S12-independent-metric-seller-and-refresh', async page => {
   await choose(page, 'Селлер', fixture.sellers[1].name)
-  await expectIds(page, [orderId('wb_other_seller')])
+  await expectIds(page, sellerBIds)
   const loading = page.waitForResponse(response => response.url().includes('/api/fbs/assembly-time?') && new URL(response.url()).searchParams.get('seller_id') === fixture.sellers[0].id)
   await page.getByTestId('fbs-metric-seller').selectOption(fixture.sellers[0].id)
   assert((await loading).ok(), 'actual metric API failed')
-  await expectIds(page, [orderId('wb_other_seller')])
+  await expectIds(page, sellerBIds)
   await expect(page.getByTestId('fbs-metric-orders')).toHaveText('3')
   await expect(page.getByTestId('fbs-metric-value')).toHaveText('18,0')
   await expect(page.getByTestId('fbs-metric-in12')).toHaveText('33%')
@@ -241,7 +279,25 @@ await run('S12-independent-metric-seller-and-refresh', async page => {
   const refreshing = page.waitForResponse(response => response.url().includes('/fbs-orders/worklist'))
   await page.getByRole('button', { name: 'Обновить', exact: true }).click()
   assert((await refreshing).ok(), 'actual refresh failed')
-  await expectIds(page, [orderId('wb_other_seller')])
+  await expectIds(page, sellerBIds)
+})
+await run('S12-valid-custom-dates-and-month', async page => {
+  await page.getByTestId('fbs-metric-preset-month').click()
+  await expect(page.getByTestId('fbs-metric-orders')).toHaveText('3')
+  await expect(page.getByTestId('fbs-metric-value')).toHaveText('18,0')
+  await page.getByTestId('fbs-metric-preset-custom').click()
+  const start = new Date(Date.now()-7*24*3600*1000).toISOString().slice(0, 10)
+  const end = new Date(Date.now()+24*3600*1000).toISOString().slice(0, 10)
+  await page.getByTestId('fbs-metric-range-start').fill(start)
+  const loading = page.waitForResponse(response => {
+    if (!response.url().includes('/api/fbs/assembly-time?')) return false
+    const query = new URL(response.url()).searchParams
+    return query.get('from') === `${start}T00:00:00+03:00` && query.get('to') === `${end}T23:59:59+03:00`
+  })
+  await page.getByTestId('fbs-metric-range-end').fill(end)
+  assert((await loading).ok(), 'complete valid custom dates must reach the actual metric API')
+  await expect(page.getByTestId('fbs-metric-orders')).toHaveText('3')
+  await expect(page.getByTestId('fbs-metric-value')).toHaveText('18,0')
 })
 await run('S11-export-hidden-selected-wb', async page => {
   await row(page, 'wb_new').getByRole('checkbox').check()
@@ -323,6 +379,7 @@ await run('S5-S6-real-create-and-add-existing-wb', async (page, { context, token
   const workspace = await createdResponse.json()
   const supplyId = workspace.supply.id
   assert.deepEqual(workspace.orders.map(order => order.id), [first])
+  newIds.splice(newIds.indexOf(first), 1)
   await expect(page).toHaveURL(new RegExp(`supply_id=${supplyId}`))
   await expect(page.getByTestId('fbs-workspace')).toBeVisible()
   await page.getByTestId('fbs-workspace').getByRole('button', { name: 'Закрыть', exact: true }).click()
@@ -340,6 +397,7 @@ await run('S5-S6-real-create-and-add-existing-wb', async (page, { context, token
   assert(addedResponse.ok(), `actual add failed: ${addedResponse.status()}`)
   const added = await addedResponse.json()
   assert.deepEqual(added.orders.map(order => order.id).sort(), [first, second].sort())
+  newIds.splice(newIds.indexOf(second), 1)
   await expect(page).toHaveURL(new RegExp(`supply_id=${supplyId}`))
   await page.getByTestId('fbs-workspace').getByRole('button', { name: 'Закрыть', exact: true }).click()
   await page.getByRole('tab', { name: 'Новые', exact: true }).click()
@@ -348,6 +406,78 @@ await run('S5-S6-real-create-and-add-existing-wb', async (page, { context, token
   const reloaded = await context.request.get(`${root}/api/operations/fbs-supplies/${supplyId}/workspace`, { headers: { Authorization: `Bearer ${token}` } })
   assert(reloaded.ok())
   assert.deepEqual((await reloaded.json()).orders.map(order => order.id).sort(), [first, second].sort(), 'committed API readback must contain both orders exactly once')
+  createdWbSupplyId = supplyId
+})
+await run('S8-ready-wb-cargo-qr-preview-and-copies', async (page, { context, token }) => {
+  assert(createdWbSupplyId, 'Dependency: real create/add scenario must first produce a committed WB supply')
+  const supplyId = createdWbSupplyId
+  // Prepare an actual upstream WB cargo-place QR through WMS. The main-table
+  // action must download and preview that real stored asset without opening a document.
+  const cargo = await context.request.post(`${root}/api/operations/fbs-supplies/${supplyId}/cargo-places`, {
+    headers: { Authorization: `Bearer ${token}` },
+    data: { count: 1, boxes: [{ client_id: 'main-ci-box', length_mm: 100, width_mm: 100, height_mm: 100, weight_g: 500 }], idempotency_key: `main-qr-${supplyId}` },
+  })
+  assert.equal(cargo.status(), 201, 'real WB cargo-place preparation failed')
+  const places = (await cargo.json()).cargo_places
+  assert.equal(places.length, 1)
+  assert.equal(places[0].qr_asset.status, 'ready')
+  await page.getByRole('tab', { name: 'В работе', exact: true }).click()
+  await page.getByTestId(`fbs-supply-qr-print-${supplyId}`).click()
+  const preview = page.getByRole('dialog').filter({ has: page.getByRole('heading', { name: 'Проверка перед печатью', exact: true }) })
+  await expect(preview).toBeVisible()
+  await expect(preview.getByText('Готово 1', { exact: true })).toBeVisible()
+  await expect(preview.getByRole('button', { name: 'Печать', exact: true })).toBeEnabled()
+  await expect(page.getByTestId('fbs-workspace')).toHaveCount(0)
+  await expect(page).not.toHaveURL(/supply_id=/)
+  await preview.getByTestId('fbs-print-preview-copies').locator('input').fill('99')
+  await preview.getByTestId('fbs-print-preview-copies').locator('input').blur()
+  await expect(preview.getByTestId('fbs-print-preview-copies').locator('input')).toHaveValue('99')
+  await preview.getByTestId('fbs-print-preview-copies').locator('input').fill('1')
+  await preview.getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(preview).toHaveCount(0)
+})
+await run('S5-S7-two-sellers-two-wb-warehouses-common-assembly', async (page, { context, token }) => {
+  const selected = [seed.orders.pvz[0].wms_order_id, fixture.second_warehouse_order.id]
+  for (const id of selected) await page.getByTestId(`fbs-order-${id}`).getByRole('checkbox').check()
+  const creations = []
+  page.on('response', response => {
+    if (response.url().endsWith('/fbs-supplies/from-orders') && response.request().method() === 'POST') creations.push(response.json())
+  })
+  await bar(page).getByRole('button', { name: 'Сформировать поставку', exact: true }).click()
+  const dialog = page.getByTestId('fbs-group-create-dialog')
+  await expect(dialog).toBeVisible()
+  await expect(dialog.locator('tr[data-testid^="fbs-group-create-row-"]')).toHaveCount(2)
+  await expect(page.getByTestId('fbs-group-create-submit')).toBeEnabled()
+  const creatingTask = page.waitForResponse(response => response.url().endsWith('/fbs-assembly-tasks') && response.request().method() === 'POST')
+  await page.getByTestId('fbs-group-create-submit').click()
+  const taskResponse = await creatingTask
+  assert(taskResponse.ok(), `common assembly task failed: ${taskResponse.status()}`)
+  const task = await taskResponse.json()
+  const documents = await Promise.all(creations)
+  assert.equal(documents.length, 2)
+  assert.deepEqual(documents.flatMap(document => document.orders.map(order => order.id)).sort(), selected.sort())
+  assert.deepEqual(documents.map(document => document.supply.seller.id).sort(), fixture.sellers.slice(0,2).map(seller => seller.id).sort())
+  assert.deepEqual(documents.map(document => document.supply.wb_warehouse.id).sort(), [501001, 501002])
+  assert(documents.every(document => document.supply.marketplace === 'wb'))
+  const supplyIds = documents.map(document => document.supply.id).sort()
+  assert.deepEqual(task.supplies.map(supply => supply.id).sort(), supplyIds)
+  for (const id of selected) newIds.splice(newIds.indexOf(id), 1)
+  const assembly = page.getByTestId('fbs-assembly')
+  await expect(assembly).toBeVisible()
+  assert.deepEqual(new URL(page.url()).searchParams.get('supply_ids').split(',').sort(), supplyIds)
+  await page.reload()
+  await expect(assembly).toBeVisible()
+  await assembly.getByRole('tab', { name: 'Состав', exact: true }).click()
+  for (const supplyId of supplyIds) await expect(page.getByTestId(`fbs-assembly-composition-supply-${supplyId}`)).toBeVisible()
+  await assembly.getByRole('button', { name: 'Закрыть', exact: true }).click()
+  await expect(page).not.toHaveURL(/supply_ids=/)
+  await expect(page.getByTestId(`fbs-assembly-task-${task.id}`)).toBeVisible()
+  for (const supplyId of supplyIds) assert.equal(await page.getByTestId(`fbs-18-supply-${supplyId}`).count(), 1, 'nested supply must appear once')
+  const taskRead = await context.request.get(`${root}/api/operations/fbs-assembly-tasks`, { headers: { Authorization: `Bearer ${token}` } })
+  assert(taskRead.ok())
+  const matches = (await taskRead.json()).items.filter(item => item.id === task.id)
+  assert.equal(matches.length, 1)
+  assert.deepEqual(matches[0].supplies.map(supply => supply.id).sort(), supplyIds)
 })
 await browser.close()
 await writeFile(path.join(evidence, 'results.json'), JSON.stringify(results, null, 2))

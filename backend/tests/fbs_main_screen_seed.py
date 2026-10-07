@@ -17,6 +17,7 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 from urllib.parse import urlparse
 
+import httpx
 from sqlalchemy import select
 from sqlalchemy.engine import make_url
 
@@ -26,7 +27,15 @@ from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
 from app.models.seller import Seller
+from tests.fbs_browser_e2e_seed import (
+    API_BASE,
+    EMULATOR_ADMIN_TOKEN,
+    EMULATOR_BASE,
+    _require,
+    _wait_job,
+)
 from tests.fbs_browser_e2e_seed import _main as seed_browser
+from tests.fbs_seed_helpers import seed_fbs_warehouse_binding
 
 
 async def main() -> None:
@@ -69,12 +78,21 @@ async def main() -> None:
         }
         assert all(products.values()), "Every seller needs their own seeded product"
         products[original.seller_id] = await session.get(Product, original.product_id)
+        await seed_fbs_warehouse_binding(
+            session,
+            tenant_id=tenant,
+            seller_id=sellers[1].id,
+            wms_warehouse_id=warehouse,
+            wb_warehouse_id=501002,
+        )
         # Explicit records on both sides of deadline/status boundaries.
         specs = [
             ("wb_new", "wb", "new", "new", 2, 0),
             ("wb_other_seller", "wb", "new", None, 3, 1),
             ("wb_expired", "wb", "new", "new", -2, 0),
-            ("wb_external", "wb", "new", "confirm", 2, 0),
+            # An imported history sentinel belongs to seller C, whose upstream
+            # is not synchronized in this run. A/B fixtures undergo real sync.
+            ("wb_external", "wb", "new", "confirm", 2, 2),
             ("wb_cancelled", "wb", "cancelled", "cancel", 2, 0),
             ("wb_defect", "wb", "defect", "cancel", 2, 0),
             ("ozon_new", "ozon", "new", "new", -2, 0),
@@ -97,7 +115,7 @@ async def main() -> None:
                 wb_barcode=product.wb_barcode,
                 wb_chrt_id=product.wb_chrt_id,
                 wb_nm_id=product.wb_nm_id,
-                wb_warehouse_id=501001,
+                wb_warehouse_id=1020005029603630 if marketplace == "ozon" else 501001,
                 status=status,
                 supplier_status=supplier,
                 mapping_status="mapped",
@@ -183,6 +201,54 @@ async def main() -> None:
                 fixture["stock_by_product"].get(key, 0) + balance.quantity
             )
         await session.commit()
+    # A second seller's real order on a different external WB warehouse makes
+    # the warehouse/group tests exercise genuine upstream creation, not fake IDs.
+    async with httpx.AsyncClient(base_url=API_BASE, timeout=30) as client:
+        login = await _require(await client.post("/auth/login", json=seed["login"]))
+        headers = {"Authorization": f"Bearer {login['access_token']}"}
+        seller_b_id = str(sellers[1].id)
+        job = await _require(
+            await client.post(
+                f"/operations/fbs-sellers/{seller_b_id}/stocks/sync",
+                headers=headers,
+                json={"wb_warehouse_id": 501002},
+            ),
+            expected=(200, 202),
+        )
+        if "id" in job:
+            await _wait_job(client, headers, job["id"])
+        async with httpx.AsyncClient(base_url=EMULATOR_BASE, timeout=30) as emulator:
+            created = await _require(
+                await emulator.post(
+                    "/__admin/orders",
+                    headers={"X-Admin-Token": EMULATOR_ADMIN_TOKEN},
+                    params={
+                        "seller": "seller_b",
+                        "count": 1,
+                        "warehouse_id": 501002,
+                        "chrt_id": 222001,
+                    },
+                )
+            )
+        assert created["created"] == 1, "Second WB warehouse must have published stock"
+        external_id = created["orders"][0]["id"]
+        job = await _require(
+            await client.post(
+                "/operations/fbs-orders/sync", headers=headers, json={"seller_id": seller_b_id}
+            ),
+            expected=(202,),
+        )
+        await _wait_job(client, headers, job["id"])
+        worklist = await _require(
+            await client.get(
+                "/operations/fbs-orders/worklist",
+                headers=headers,
+                params={"seller_id": seller_b_id, "status_group": "new", "limit": 200},
+            )
+        )
+        matches = [order for order in worklist["items"] if order["wb_order_id"] == external_id]
+        assert len(matches) == 1
+        fixture["second_warehouse_order"] = {"id": matches[0]["id"], "number": str(external_id)}
     seed["main"] = fixture
     # Do not persist emulator tokens; browser needs only disposable account login.
     for key in ("seller_token", "emulator_admin_token"):
