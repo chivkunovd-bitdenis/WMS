@@ -1,0 +1,36 @@
+{
+  "status": "INTEGRATED_PREVIOUSLY_ACCEPTED_SOURCE_PENDING_NARROW_MERGE_REVIEW",
+  "function_merge": "incoming9dae raster+peerdrain chosen at sole commonbasef606 decode conflict; ours684metadata preserved automatically",
+  "files": {
+    "backend/tests/test_prod_deploy_backup.py": {
+      "source": "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f",
+      "blob": "9f9f6b89ccd4add1bae89e87a95c2a798461724a"
+    },
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": {
+      "source": "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f",
+      "blob": "af5383dd66a76515fcab8d1fcca789e9fc34ac00"
+    },
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": {
+      "source": "9dae4b19f6d4dca554200e08282579414a110848",
+      "blob": "c6467f69c85b8fefe164c6c655ba4cf94a9c0bfa"
+    },
+    "frontend/tests-e2e/wms672-peer-drain.test.mjs": {
+      "source": "9dae4b19f6d4dca554200e08282579414a110848",
+      "blob": "a5eb3c50eb90355c8a5c2a98a7a75f992ec567ab"
+    },
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": {
+      "source": "9dae4b19f6d4dca554200e08282579414a110848",
+      "blob": "bc02bf1f4cb16c9e5a08ce53c11ee1f0f65f65ed"
+    }
+  },
+  "independent_review_backup_portability": "3850c37895eec94dc391ea46136f416271404845",
+  "target_tests": "No repeat of originalgreen12; compiledfunctionequality/sourceproof; existing684DOM/PDF paths potentiallynarrowafteractualmerge; allnew27 mandatory in nextCI",
+  "accepted_other_product_source": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "syntax_and_full_tsc": "PASS currentcombineddecoder",
+  "backup_ruff": "PASS after105-characterSourceportableline wrapped only",
+  "portable_fixture_formatting": {
+    "path": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+    "AST_identical": true,
+    "cause": "Incomingaccepted105-charline violatesrepo100charRuff; onlywrappinglistcomprehension"
+  }
+}

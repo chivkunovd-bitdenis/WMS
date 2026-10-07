@@ -1,0 +1,18 @@
+{
+  "status": "INTEGRATED_ACCEPTED_SOURCE_DELTA_PENDING_NARROW_INDEPENDENT_REVIEW",
+  "old_accepted_checkpoint": "edd9657de1850cb8e2eff8beecde89fe8ec3f913",
+  "candidate_P_pin": "989historicalonly; actualmergedruntime requiresnewP afterindependentreview",
+  "new_sources_preserved": {
+    "new_paths": 7,
+    "new_mandatory_cases": 27,
+    "new_suites": 3
+  },
+  "code_changes": "Exactaccepted672decoderAST;ourreceiptmetadata/grid and entireInbound687/680features unchanged",
+  "remaining": [
+    "SourceF6purefixture3e review/hash",
+    "OtherCDPInterceptionIdfix acceptedsource pending",
+    "Narrowactualintegrationreview then combinedP/newSOURCE/fullCI"
+  ],
+  "release_authorized": false,
+  "F6_hash_status": "Prioracceptedhash retained deliberately; e249pendingindependentreview. No prematureactivation."
+}

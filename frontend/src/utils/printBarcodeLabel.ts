@@ -195,32 +195,75 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], hand
         await Promise.all(images.map((image) => image.decode()))
         return
       }
-      // decode() temporarily retains decoded image resources through rendering.
-      // Starting the entire inbound tape in one turn can exhaust that budget
-      // even when the PNGs themselves are valid. Keep parallel work small and let a
-      // rendering turn finish before requesting the next group. The parent
-      // window supplies frames: the zero-sized print iframe may be throttled.
-      // Chromium retains completed decode locks briefly, too. Smaller groups
-      // reduce that retained-image pressure across rendering turns.
-      const groupSize = 8
-      for (let start = 0; start < images.length; start += groupSize) {
-        await Promise.all(images.slice(start, start + groupSize).map((image) => image.decode()))
-        if (start + groupSize < images.length) {
-          await new Promise<void>((resolve) => {
-            // A background tab can suspend animation frames. Still yield a
-            // task there, without leaving preparation waiting indefinitely.
-            let frame = 0
-            const done = () => {
-              window.cancelAnimationFrame(frame)
-              clearTimeout(timer)
-              resolve()
-            }
-            const timer = setTimeout(done, 100)
-            frame = window.requestAnimationFrame(() => {
-              frame = window.requestAnimationFrame(done)
-            })
+      // Successful decode() retains resources until the image is rendered.
+      // Let each original cohort participate in raster preparation instead of
+      // accumulating full-size decodes in a zero-sized, unpainted document.
+      // The source HTML and every temporary style are restored before handoff.
+      const groupSize = 16
+      const originalFrameStyle = iframe.getAttribute('style')
+      const originalImageStyles = images.map((image) => image.getAttribute('style'))
+      const stagingStyle = images[0]!.ownerDocument.createElement('style')
+      // Preparation is a viewport of thumbnails, not the long page flow.
+      // Keep the original print stylesheet and source document unchanged.
+      stagingStyle.textContent = '.label { position: fixed; top: 0; left: 0; } .title, .code { display: none; }'
+      images[0]!.ownerDocument.head.appendChild(stagingStyle)
+      iframe.style.width = `${groupSize}px`
+      iframe.style.height = '1px'
+      iframe.style.pointerEvents = 'none'
+      iframe.style.opacity = '0.01'
+      try {
+        for (let start = 0; start < images.length; start += groupSize) {
+          images.forEach((image, index) => {
+            image.style.display = index >= start && index < start + groupSize ? 'block' : 'none'
+            if (index < start || index >= start + groupSize) return
+            image.style.position = 'fixed'
+            image.style.left = `${index - start}px`
+            image.style.top = '0'
+            image.style.width = '1px'
+            image.style.height = '1px'
+            image.style.maxWidth = 'none'
+            image.style.maxHeight = 'none'
+            image.style.zIndex = '1'
+            // Nearest-neighbor filtering would keep the original-size raster
+            // even for a thumbnail. Print retains its original pixelated CSS.
+            image.style.imageRendering = 'auto'
           })
+          // Capture synchronous decode throws as cohort failures too.
+          const active = images.slice(start, start + groupSize).map(async (image) => { await image.decode() })
+          try {
+            await Promise.all(active)
+          } catch (error) {
+            // Removing the iframe must not abandon its still-running peers.
+            // Keep the first failure while every already-started worker settles.
+            await Promise.allSettled(active)
+            throw error
+          }
+          if (start + groupSize < images.length) {
+            await new Promise<void>((resolve) => {
+              // A background tab can suspend animation frames. Still yield a
+              // task there, without leaving preparation waiting indefinitely.
+              let frame = 0
+              const done = () => {
+                window.cancelAnimationFrame(frame)
+                clearTimeout(timer)
+                resolve()
+              }
+              const timer = setTimeout(done, 100)
+              frame = window.requestAnimationFrame(() => {
+                frame = window.requestAnimationFrame(done)
+              })
+            })
+          }
         }
+      } finally {
+        stagingStyle.remove()
+        images.forEach((image, index) => {
+          const style = originalImageStyles[index]
+          if (style == null) image.removeAttribute('style')
+          else image.setAttribute('style', style)
+        })
+        if (originalFrameStyle === null) iframe.removeAttribute('style')
+        else iframe.setAttribute('style', originalFrameStyle)
       }
     }
     decodeImages()
