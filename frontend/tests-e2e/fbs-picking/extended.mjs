@@ -81,8 +81,9 @@ export async function registerExtended(h) {
     await page.evaluate(code=>navigator.clipboard.writeText(code),f.products[0].sku)
     await page.keyboard.press('Control+V')
     await expect(scanner(page)).toHaveValue(f.products[0].sku)
-    await page.waitForTimeout(250)
-    await page.getByTestId('pick-left-qty').click();await state('paste-blur-commit',f,1)
+    // Blur after the 400ms unfinished-burst guard, before the 900ms idle submission.
+    await page.waitForTimeout(500)
+    await page.getByTestId('pick-left-qty').click();await expect(scanner(page)).not.toBeFocused();await state('paste-blur-commit',f,1)
     await scanner(page).fill(f.products[0].sku);await scanner(page).press('Enter')
     await state('pasted-enter',f,2)
   })
