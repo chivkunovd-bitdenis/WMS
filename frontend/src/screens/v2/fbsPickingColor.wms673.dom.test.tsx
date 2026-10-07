@@ -18,7 +18,21 @@ beforeAll(() => {
 let host: HTMLDivElement, root: Root
 let fixtures: FbsWorkspace[], requests: Array<{ path: string; method: string; auth: string | null }>
 let pickFailure: boolean, waitPick: Promise<void> | null
-let options: Record<string, unknown[]>
+let options: Record<string, Array<{
+  product_id: string
+  picked_qty: number
+  locations: Array<{
+    storage_location_id: string
+    location_code: string
+    available: number
+    sources?: Array<{
+      available: number
+      is_loose: boolean
+      source_label?: string
+      container_path: Array<{ kind: string; id: string; code: string; label: string }>
+    }>
+  }>
+}>>
 let printed: string[], closed: boolean
 const originalFetch = globalThis.fetch
 const printWindow = () => ({
@@ -50,9 +64,7 @@ beforeEach(() => {
           : order.product.id ? [order.product.id] : []
         for (const productId of productIds) {
           if (contextByProduct.has(productId)) continue
-          const option = (options[one.supply.id] ?? []).find((item) => item.product_id === productId) as {
-            locations?: Array<{ location_code: string; available: number; sources?: Array<{ source_label?: string }> }>
-          } | undefined
+          const option = options[one.supply.id]?.find((item) => item.product_id === productId)
           const locations = option?.locations?.flatMap((location) => location.sources?.length
             ? location.sources.map((source) => `${location.location_code} · ${source.source_label ?? 'тара'}: ${location.available}`)
             : [`${location.location_code}: ${location.available}`])
