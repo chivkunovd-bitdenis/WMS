@@ -8,4 +8,5 @@ services:
       - >-
         from app.celery_app import celery_app;
         celery_app.conf.beat_schedule.pop('wb-catalog-hourly', None);
+        print('WMS-689 enabled schedules: ' + ','.join(sorted(celery_app.conf.beat_schedule)), flush=True);
         celery_app.Beat(loglevel='info').run()
