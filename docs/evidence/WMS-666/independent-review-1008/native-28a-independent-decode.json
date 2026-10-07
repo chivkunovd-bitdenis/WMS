@@ -1,0 +1,55 @@
+{
+  "source": "historical preliminary 28a799 / NOT final candidate",
+  "method": "independent source PNG decode and binary comparison with every actual HTTP payload",
+  "results": [
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252",
+      "receipt": "emulator-0001-285a718104d0",
+      "sha256": "285a718104d057986156f22b2a3e14b48d0d1eb8fac9789974ae913fc88febad",
+      "requests": 1,
+      "qr": "*NATIVE-ORDER-666-A",
+      "cis": null
+    },
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz",
+      "receipt": "emulator-0002-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "requests": 1,
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000"
+    },
+    {
+      "key": "966fe915-d6b3-40a9-b7d5-5de248172252:chz:c2",
+      "receipt": "emulator-0003-f2f4c4632159",
+      "sha256": "f2f4c4632159ca777baaedc16c7d402e33a9d228e05f94b82b87e83db3ac9261",
+      "requests": 1,
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000000"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb",
+      "receipt": "emulator-0004-3a31df45c742",
+      "sha256": "3a31df45c7428757fcc93d9a49193a67dbc5c69c025e2657e5e38b058b041367",
+      "requests": 2,
+      "qr": "*NATIVE-ORDER-666-B",
+      "cis": null
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz",
+      "receipt": "emulator-0005-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "requests": 1,
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001"
+    },
+    {
+      "key": "eeaf1ca0-2af0-4cdf-9211-4bb189f9daeb:chz:c2",
+      "receipt": "emulator-0006-cb9e8ba5ed4a",
+      "sha256": "cb9e8ba5ed4adefc15bd0f0df7b2864d64b59e2075beea00b9612ff7a880938a",
+      "requests": 1,
+      "qr": null,
+      "cis": "010460043993125321KIZTAPE0000000001"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED"
+}
