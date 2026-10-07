@@ -1,0 +1,38 @@
+{
+  "run-initial.json": {
+    "bytes": 12917,
+    "sha256": "2229e8da60fdad298210608ee4732028da3fedbf8a63b7c7e9972d05152279fa"
+  },
+  "jobs-initial.json": {
+    "bytes": 2407,
+    "sha256": "f28f16eda8a38a077b2220648d506e2820d9ed648d20d8c1376e7febbe4fa12d"
+  },
+  "run-final.json": {
+    "bytes": 12920,
+    "sha256": "b4c118dbcab6f644f997faa2d6c43bd2b7f75c7ef73e75fd10af7cdbc24eb259"
+  },
+  "jobs-final.json": {
+    "bytes": 2775,
+    "sha256": "ade20f28a1ae04430e8e70a5fe1f4d7fc27639a9c9b85b99282b43f018940780"
+  },
+  "artifacts.json": {
+    "bytes": 848,
+    "sha256": "0ed9cc68f0f24a9e7d93e7975d4b34a89a114475b55a117c73ff11a4df12af0f"
+  },
+  "full-job.log": {
+    "bytes": 124751,
+    "sha256": "e18967c5aaa685cc60d58848d94e9ff96627b3d618fa77716fc20ff8fd9098b2"
+  },
+  "ledger.json": {
+    "bytes": 106135,
+    "sha256": "85b6200cd27d3d2997de9efaef4bdddf514a398e2c87584bbfd302e9af42e16a"
+  },
+  "raw-manifest.json": {
+    "bytes": 9249,
+    "sha256": "9b795edc13977a0f012d326c39a58d2fdabb924bf9ae32d07e1cc2b0a1c44ff4"
+  },
+  "README.md": {
+    "bytes": 4664,
+    "sha256": "3d9d905c8667935412082ba7c8024641d1e93faf1278246cdf47eb0cdec11d6c"
+  }
+}
