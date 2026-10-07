@@ -612,9 +612,10 @@ async def create_supply_from_orders(
         ozon_provider=ozon_provider,
         created_by_user_id=created_by_user_id,
     )
-    if workspace["supply"].get("marketplace", "wb") != "wb":
+    supply_data = workspace.get("supply")
+    if not isinstance(supply_data, dict) or supply_data.get("marketplace", "wb") != "wb":
         return workspace
-    supply_id = uuid.UUID(str(workspace["supply"]["id"]))
+    supply_id = uuid.UUID(str(supply_data["id"]))
     # A sticker outage must not roll back an already confirmed WB supply.
     await session.commit()
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
