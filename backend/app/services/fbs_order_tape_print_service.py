@@ -77,6 +77,8 @@ class FbsOrderTapePrintedCode:
     # carries that existing association so the client never labels it as the
     # first product of a multi-position posting.
     order_product_id: uuid.UUID | None = None
+    marking_id: uuid.UUID | None = None
+    supply_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -351,6 +353,8 @@ async def print_fbs_order_tape(
                             cis_code=ozon_marking.marking_code.cis_code,
                             has_label_artifact=bool(ozon_marking.marking_code.label_artifact_pdf),
                             order_product_id=ozon_marking.order_product_id,
+                            marking_id=ozon_marking.id,
+                            supply_id=supply_id,
                         )
                         for ozon_marking in ozon_markings
                         if ozon_marking.marking_code is not None
@@ -442,6 +446,8 @@ async def print_fbs_order_tape(
                         id=code.id, cis_code=code.cis_code,
                         has_label_artifact=bool(code.label_artifact_pdf),
                         order_product_id=existing.order_product_id,
+                        marking_id=getattr(existing, "id", None),
+                        supply_id=supply_id,
                     )],
                 ))
                 continue
@@ -518,6 +524,8 @@ async def print_fbs_order_tape(
                         cis_code=row.cis_code,
                         has_label_artifact=row.has_label_artifact,
                         order_product_id=marking.order_product_id if marking is not None else None,
+                        marking_id=marking.id if marking is not None else None,
+                        supply_id=supply_id,
                     )
                     for row in printed.printed_codes
                 ],

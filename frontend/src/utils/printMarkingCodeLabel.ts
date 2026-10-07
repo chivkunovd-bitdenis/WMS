@@ -696,13 +696,14 @@ export async function printCzArtifactTape(
 export async function printTapeSections(
   sections: string[],
   labelSize?: LabelSize,
+  beforeDispatch?: () => Promise<void>,
 ): Promise<void> {
   if (sections.length === 0) {
     throw new Error('Нет этикеток для печати.')
   }
   // Без явного размера печатаем на последнем выбранном пользователем.
   const size = labelSize ?? resolveLabelSize(loadLabelSizeId())
-  await printHtmlInIframe(buildMarkingTapeDocument(sections, size))
+  await printHtmlInIframe(buildMarkingTapeDocument(sections, size), beforeDispatch)
 }
 
 export async function printMarkingCodeTape(
@@ -740,7 +741,7 @@ declare global {
   }
 }
 
-export async function printHtmlInIframe(html: string): Promise<void> {
+export async function printHtmlInIframe(html: string, beforeDispatch?: () => Promise<void>): Promise<void> {
   if (typeof window !== 'undefined' && window.__WMS_CAPTURE_PRINT_HTML__) {
     window.__WMS_LAST_PRINT_HTML__ = html
   }
@@ -799,19 +800,30 @@ export async function printHtmlInIframe(html: string): Promise<void> {
         // Browser focus can be denied while the print form itself remains usable.
       }
       window.setTimeout(() => {
-        if (settled) return
-        try {
-          frameWindow.print()
-        } catch {
-          fail('Не удалось запустить печать КИЗ.')
-          return
-        }
-        // ``window.print`` has been invoked: the browser has received the print
-        // form.  We cannot truthfully wait for a physical printer afterwards.
-        finish(() => {
-          window.setTimeout(cleanup, 500)
-          resolve()
-        })
+        void (async () => {
+          if (settled) return
+          try {
+            // The last async step, after iframe/images/fonts and the print delay.
+            // A successful read is not a receipt from the external printer.
+            await beforeDispatch?.()
+            if (settled) return
+          } catch (cause) {
+            fail(cause instanceof Error ? cause.message : 'Не удалось проверить ЧЗ перед печатью.')
+            return
+          }
+          try {
+            frameWindow.print()
+          } catch {
+            fail('Не удалось запустить печать КИЗ.')
+            return
+          }
+          // ``window.print`` has been invoked: the browser has received the print
+          // form.  We cannot truthfully wait for a physical printer afterwards.
+          finish(() => {
+            window.setTimeout(cleanup, 500)
+            resolve()
+          })
+        })()
       }, 100)
     }
 

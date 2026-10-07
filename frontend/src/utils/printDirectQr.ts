@@ -2,6 +2,7 @@ import type { PreparedQrInput } from './printPreparedQr'
 
 /** A receipt means accepted by the OS queue, not confirmed paper output. */
 async function dispatch(input: PreparedQrInput): Promise<void> {
+  await input.beforeDispatch?.()
   let response: Response
   try {
     response = await fetch('http://127.0.0.1:17843/print', {

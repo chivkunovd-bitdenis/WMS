@@ -435,6 +435,8 @@ export type FbsOrderPrintTapeOrder = {
   qr_asset: FbsPrintAsset | null
   codes: string[]
   printed_codes: Array<{
+    marking_id?: string | null
+    supply_id?: string | null
     id: string
     cis_code: string
     has_label_artifact: boolean
@@ -490,6 +492,7 @@ export type FbsScanAutoPrintTargetClaim = {
 }
 
 export type FbsScanAutoPrintReprintClaim = FbsScanAutoPrintTargetClaim & {
+  marking_id?: string | null
   kiz: string | null
   code_id?: string | null
   has_label_artifact?: boolean
@@ -1159,7 +1162,7 @@ export async function claimFbsScanAutoPrintReprint(
     await fetch(apiUrl(`/operations/fbs-supplies/${supplyId}/scan-auto-print/${scanId}/reprint-claim`), {
       method: 'POST',
       headers: jsonHeaders(token, ah),
-      body: JSON.stringify({ attempt_key: attemptKey }),
+      body: JSON.stringify({ attempt_key: attemptKey, include_binding: true }),
     }),
   )
 }
@@ -2160,4 +2163,27 @@ export async function getFbsPickingContext(
     headers: { ...ah(token) },
   })
   return jsonOrThrow<FbsPickingContext[]>(res)
+}
+
+
+export type FbsPrintBinding = {
+  order_id: string
+  supply_id?: string | null
+  marking_id?: string | null
+  cis_code: string
+}
+
+/** Fail closed for an old response without an exact binding generation. */
+export async function validateFbsPrintBindings(token: string, bindings: FbsPrintBinding[]): Promise<void> {
+  if (!bindings.length) return
+  if (bindings.some((binding) => !binding.marking_id || !binding.supply_id)) {
+    throw new Error('ЧЗ заказа изменён или удалён. Обновите заказ и повторите печать.')
+  }
+  const response = await fetch(apiUrl('/operations/fbs-orders/print-bindings/validate'), {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ bindings }),
+    signal: AbortSignal.timeout(15_000),
+  })
+  if (!response.ok) await jsonOrThrow(response)
 }

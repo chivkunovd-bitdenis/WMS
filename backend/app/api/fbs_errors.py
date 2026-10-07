@@ -115,6 +115,7 @@ FBS_ERROR_MESSAGES_RU: dict[str, str] = {
     "print_job_conflict": "Этот номер печати уже занят другим заданием.",
     "print_job_not_running": "Задание печати не выдано агенту.",
     "print_job_result_conflict": "Задание печати уже завершено с другим результатом.",
+    "print_binding_changed": "ЧЗ заказа изменён или удалён. Обновите заказ и повторите печать.",
     "print_asset_changed": "Файл этикетки изменился после постановки в очередь.",
     "print_asset_warehouse_mismatch": "Этикетка относится к другому складу.",
     "invalid_print_document": "Файл этикеток не принят: ожидается PDF допустимого размера.",
