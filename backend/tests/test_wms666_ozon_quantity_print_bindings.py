@@ -5,15 +5,25 @@ from __future__ import annotations
 import uuid
 from datetime import UTC, datetime, timedelta
 
+from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from test_fbs_kiz import _register_ff_admin, _setup_seller_warehouse
 
-from app.models.fbs_order import FbsOrder, FbsOrderMarking
+from app.models.fbs_order import (
+    MAPPING_STATUS_MAPPED,
+    RESERVE_STATUS_RESERVED,
+    FbsOrder,
+    FbsOrderMarking,
+    FbsOrderProduct,
+)
 from app.models.fbs_supply import FBS_DELIVERY_TYPE_WAREHOUSE_SC, FbsSupply
+from app.models.marking_code import MarkingCode
+from app.models.product import Product
 from app.services.fbs_print_binding_service import PrintBinding, print_bindings_current
 from app.services.ozon_fbs_marking_gate_service import current_markings
-from tests.test_ozon_fbs_process_contract import _seed_order
+from tests.test_ozon_fbs_process_contract import SKU, _seed_order
 
 
 def _bindings(
@@ -188,3 +198,130 @@ async def test_ozon_equal_timestamp_cutoff_keeps_every_current_binding(
     assert await print_bindings_current(db_session, order.tenant_id, current_replacement) is True
     assert await print_bindings_current(db_session, order.tenant_id, superseded_exemplar) is False
     assert await print_bindings_current(db_session, order.tenant_id, binding) is True
+
+
+async def test_ozon_print_tape_output_passes_late_binding_validation(
+    async_client: AsyncClient,
+    db_session: AsyncSession,
+) -> None:
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix,
+    )
+    product = Product(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        name="Ozon quantity-3 print tape",
+        sku_code=f"ozon-tape-{suffix}",
+        requires_honest_sign=True,
+    )
+    supply = FbsSupply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        marketplace="ozon",
+        external_supply_id=f"ozon-tape-{suffix}",
+        name="Ozon quantity print tape",
+        status="assembling",
+        delivery_type=FBS_DELIVERY_TYPE_WAREHOUSE_SC,
+    )
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        product=product,
+        supply=supply,
+        marketplace="ozon",
+        external_order_id=f"ozon-tape-posting-{suffix}",
+        wb_order_id=800_000_000 + int(suffix[-8:], 16) % 100_000_000,
+        created_at_wb=now,
+        deadline_at=now + timedelta(days=1),
+        mapping_status=MAPPING_STATUS_MAPPED,
+        reserve_status=RESERVE_STATUS_RESERVED,
+        status="assembling",
+        required_meta_json=["sgtin"],
+    )
+    db_session.add_all([product, supply, order])
+    await db_session.flush()
+    position = FbsOrderProduct(
+        order_id=order.id,
+        product_id=product.id,
+        ozon_sku=SKU,
+        offer_id=f"offer-{suffix}",
+        name=product.name,
+        quantity=3,
+        position_index=0,
+        provider_data_json={"sku": SKU, "quantity": 3},
+    )
+    db_session.add(position)
+    await db_session.flush()
+
+    created_at = now - timedelta(seconds=2)
+    marking_specs = [
+        (uuid.UUID(int=30), 81, "0001", created_at),
+        (uuid.UUID(int=20), 82, "0002", created_at),
+        (uuid.UUID(int=10), 83, "0003", created_at),
+        (uuid.UUID(int=40), 81, "9999", created_at + timedelta(seconds=1)),
+    ]
+    markings: list[FbsOrderMarking] = []
+    for marking_id, exemplar_id, tail, marking_created_at in marking_specs:
+        cis_code = f"010460123456789021{tail}"
+        code = MarkingCode(
+            tenant_id=tenant_id,
+            seller_id=seller_id,
+            product_id=product.id,
+            cis_code=cis_code,
+            source="pool",
+            status="printed",
+        )
+        marking = FbsOrderMarking(
+            id=marking_id,
+            tenant_id=tenant_id,
+            order_id=order.id,
+            order_product_id=position.id,
+            kind="sgtin",
+            value=cis_code,
+            meta_status="accepted",
+            meta_details_json={"exemplar_id": exemplar_id},
+            created_at=marking_created_at,
+            marking_code=code,
+        )
+        markings.append(marking)
+    db_session.add_all(markings)
+    await db_session.commit()
+
+    prepared = await async_client.post(
+        f"/operations/fbs-supplies/{supply.id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order.id)],
+            "include_order_qr": False,
+            "reprint": False,
+            "layout_json": {"units": [{"block": "cz", "copies": 1}]},
+        },
+    )
+    assert prepared.status_code == 200, prepared.text
+    order_result = prepared.json()["orders"][0]
+    printed_codes = order_result["printed_codes"]
+    exact_bindings = [
+        {
+            "order_id": order_result["order_id"],
+            "supply_id": printed_code["supply_id"],
+            "marking_id": printed_code["marking_id"],
+            "cis_code": printed_code["cis_code"],
+        }
+        for printed_code in printed_codes
+    ]
+    # This is the same late-validation API the browser invokes immediately
+    # before dispatching the already prepared Ozon tape.
+    validation = await async_client.post(
+        "/operations/fbs-orders/print-bindings/validate",
+        headers=headers,
+        json={"bindings": exact_bindings},
+    )
+
+    assert validation.status_code == 204, validation.text
+    expected_marking_ids = {str(marking.id) for marking in markings[1:]}
+    assert {row["marking_id"] for row in printed_codes} == expected_marking_ids
+    assert len(printed_codes) == 3
