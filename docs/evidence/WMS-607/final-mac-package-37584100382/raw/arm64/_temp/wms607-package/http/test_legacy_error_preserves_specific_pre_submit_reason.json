@@ -1,0 +1,86 @@
+{
+  "case": "test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason",
+  "provenance": {
+    "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "transformed_source_sha256": "becaf02562ac18fbc78056da3f28db182b1f8ce50fc9eb7b9a48661cee4e5b18",
+    "swift": "Apple Swift version 5.10 (swiftlang-5.10.0.13 clang-1500.3.9.4)\nTarget: arm64-apple-macosx14.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "protocolVersion": 2,
+        "physicalConfirmationSupported": false,
+        "historyUrl": "http://127.0.0.1:49910",
+        "app": "WMS Print Direct"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "observations": [
+          "2026-10-07T06:55:55Z saved",
+          "2026-10-07T06:55:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+        ],
+        "context": {},
+        "imageAvailable": true,
+        "paperStatus": "unconfirmed",
+        "physicalConfirmationSupported": false,
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "legacy": false,
+        "updatedAt": "2026-10-07T06:55:55Z",
+        "queueObservation": {},
+        "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "title": "WMS-bf33c7add9574f6bbe3b288f8b84b9fa20944ac9e9d142e3ab446b7104090a89",
+        "status": "failed_before_submit",
+        "error": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан. История: http://127.0.0.1:49910",
+        "createdAt": "2026-10-07T06:55:55Z",
+        "idempotencyKey": "reason-scan",
+        "reprints": [],
+        "widthMm": 58,
+        "heightMm": 40
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p"
+    ]
+  ],
+  "jobs": [
+    {
+      "context": {},
+      "title": "WMS-bf33c7add9574f6bbe3b288f8b84b9fa20944ac9e9d142e3ab446b7104090a89",
+      "queueObservation": {},
+      "heightMm": 40,
+      "status": "failed_before_submit",
+      "observations": [
+        "2026-10-07T06:55:55Z saved",
+        "2026-10-07T06:55:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+      ],
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+      "updatedAt": "2026-10-07T06:55:55Z",
+      "idempotencyKey": "reason-scan",
+      "widthMm": 58,
+      "createdAt": "2026-10-07T06:55:55Z",
+      "legacy": false
+    }
+  ]
+}

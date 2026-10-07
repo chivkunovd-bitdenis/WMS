@@ -1,0 +1,333 @@
+{
+  "total_count": 2,
+  "jobs": [
+    {
+      "id": 112670187998,
+      "run_id": 37584100382,
+      "workflow_name": "CI",
+      "head_branch": "codex/wms607-direct-updater-mac-package-20261007",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37584100382",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaO6qh3g",
+      "head_sha": "1c2bddd844ff6baf331eae53b3a44304d834cc01",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112670187998",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37584100382/job/112670187998",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T06:54:10Z",
+      "started_at": "2026-10-07T06:54:16Z",
+      "completed_at": "2026-10-07T06:56:19Z",
+      "name": "mac-direct-package (macos-14, arm64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T06:54:17Z",
+          "completed_at": "2026-10-07T06:54:18Z"
+        },
+        {
+          "name": "Require isolated dispatch and exact full source identity",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T06:54:18Z",
+          "completed_at": "2026-10-07T06:54:18Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T06:54:18Z",
+          "completed_at": "2026-10-07T06:54:31Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T06:54:31Z",
+          "completed_at": "2026-10-07T06:54:31Z"
+        },
+        {
+          "name": "Record actual source and architecture before all native checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T06:54:31Z",
+          "completed_at": "2026-10-07T06:54:33Z"
+        },
+        {
+          "name": "Require filled accepted WMS-607 requirements from the complete source checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T06:54:33Z",
+          "completed_at": "2026-10-07T06:54:34Z"
+        },
+        {
+          "name": "Frozen startup owner three cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T06:54:34Z",
+          "completed_at": "2026-10-07T06:54:34Z"
+        },
+        {
+          "name": "Frozen updater ten cases including actual native journal",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T06:54:34Z",
+          "completed_at": "2026-10-07T06:55:18Z"
+        },
+        {
+          "name": "Frozen rollback four cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T06:55:18Z",
+          "completed_at": "2026-10-07T06:55:19Z"
+        },
+        {
+          "name": "Preserved nineteen native HTTP resolver and print cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-07T06:55:19Z",
+          "completed_at": "2026-10-07T06:55:57Z"
+        },
+        {
+          "name": "Require exact actual executed identities without skips or errors",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T06:55:57Z",
+          "completed_at": "2026-10-07T06:55:57Z"
+        },
+        {
+          "name": "Original native Direct console builder and unpacked self-test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-07T06:55:57Z",
+          "completed_at": "2026-10-07T06:56:14Z"
+        },
+        {
+          "name": "Verify archive provenance and source remains unchanged",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-07T06:56:14Z",
+          "completed_at": "2026-10-07T06:56:15Z"
+        },
+        {
+          "name": "Preserve exact native archives and all actual raw checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-07T06:56:15Z",
+          "completed_at": "2026-10-07T06:56:16Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-10-07T06:56:16Z",
+          "completed_at": "2026-10-07T06:56:16Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-10-07T06:56:16Z",
+          "completed_at": "2026-10-07T06:56:16Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-10-07T06:56:16Z",
+          "completed_at": "2026-10-07T06:56:17Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112670187998",
+      "labels": [
+        "macos-14"
+      ],
+      "runner_id": 1000004440,
+      "runner_name": "GitHub Actions 1000004440",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    },
+    {
+      "id": 112670188348,
+      "run_id": 37584100382,
+      "workflow_name": "CI",
+      "head_branch": "codex/wms607-direct-updater-mac-package-20261007",
+      "run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/runs/37584100382",
+      "run_attempt": 1,
+      "node_id": "CR_kwDOR_ECvM8AAAAaO6qjPA",
+      "head_sha": "1c2bddd844ff6baf331eae53b3a44304d834cc01",
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/jobs/112670188348",
+      "html_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37584100382/job/112670188348",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-10-07T06:54:10Z",
+      "started_at": "2026-10-07T06:54:16Z",
+      "completed_at": "2026-10-07T06:59:25Z",
+      "name": "mac-direct-package (macos-15-intel, x86_64)",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-10-07T06:54:19Z",
+          "completed_at": "2026-10-07T06:54:22Z"
+        },
+        {
+          "name": "Require isolated dispatch and exact full source identity",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-10-07T06:54:22Z",
+          "completed_at": "2026-10-07T06:54:23Z"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-10-07T06:54:23Z",
+          "completed_at": "2026-10-07T06:54:55Z"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-10-07T06:54:55Z",
+          "completed_at": "2026-10-07T06:54:56Z"
+        },
+        {
+          "name": "Record actual source and architecture before all native checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-10-07T06:54:56Z",
+          "completed_at": "2026-10-07T06:55:06Z"
+        },
+        {
+          "name": "Require filled accepted WMS-607 requirements from the complete source checkout",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-10-07T06:55:06Z",
+          "completed_at": "2026-10-07T06:55:08Z"
+        },
+        {
+          "name": "Frozen startup owner three cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-10-07T06:55:08Z",
+          "completed_at": "2026-10-07T06:55:09Z"
+        },
+        {
+          "name": "Frozen updater ten cases including actual native journal",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-10-07T06:55:09Z",
+          "completed_at": "2026-10-07T06:57:33Z"
+        },
+        {
+          "name": "Frozen rollback four cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-10-07T06:57:33Z",
+          "completed_at": "2026-10-07T06:57:34Z"
+        },
+        {
+          "name": "Preserved nineteen native HTTP resolver and print cases",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-10-07T06:57:34Z",
+          "completed_at": "2026-10-07T06:58:54Z"
+        },
+        {
+          "name": "Require exact actual executed identities without skips or errors",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-10-07T06:58:54Z",
+          "completed_at": "2026-10-07T06:58:55Z"
+        },
+        {
+          "name": "Original native Direct console builder and unpacked self-test",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-10-07T06:58:55Z",
+          "completed_at": "2026-10-07T06:59:19Z"
+        },
+        {
+          "name": "Verify archive provenance and source remains unchanged",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-10-07T06:59:19Z",
+          "completed_at": "2026-10-07T06:59:20Z"
+        },
+        {
+          "name": "Preserve exact native archives and all actual raw checks",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 14,
+          "started_at": "2026-10-07T06:59:20Z",
+          "completed_at": "2026-10-07T06:59:21Z"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-10-07T06:59:21Z",
+          "completed_at": "2026-10-07T06:59:22Z"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 28,
+          "started_at": "2026-10-07T06:59:22Z",
+          "completed_at": "2026-10-07T06:59:22Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 29,
+          "started_at": "2026-10-07T06:59:22Z",
+          "completed_at": "2026-10-07T06:59:22Z"
+        }
+      ],
+      "check_run_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/check-runs/112670188348",
+      "labels": [
+        "macos-15-intel"
+      ],
+      "runner_id": 1000004441,
+      "runner_name": "GitHub Actions 1000004441",
+      "runner_group_id": 0,
+      "runner_group_name": "GitHub Actions"
+    }
+  ]
+}

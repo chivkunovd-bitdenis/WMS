@@ -1,0 +1,13 @@
+{
+  "archive": "WMS-Print-Console-Mac-arm64.zip",
+  "sha256": "27cd6bff1cabd78c750f5ecfd92236fbb34c89d29b0c57a91a63f83e8612274a",
+  "size": 181837,
+  "build": {
+    "source_commit": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "runtime": "direct",
+    "console": true,
+    "physical_print_verified": false
+  }
+}

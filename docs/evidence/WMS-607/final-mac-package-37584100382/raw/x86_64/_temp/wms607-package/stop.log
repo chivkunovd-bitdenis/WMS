@@ -1,0 +1,9 @@
+test_foreign_owner_not_signaled_existing_application_recovery_preserved (__main__.RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved) ... ok
+test_owned_TERM_error_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_error_retains_target_and_recovery) ... ok
+test_owned_TERM_success_survivor_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_success_survivor_retains_target_and_recovery) ... ok
+test_successful_owned_stop_restores_previous_and_preserves_journal (__main__.RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal) ... ok
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.758s
+
+OK

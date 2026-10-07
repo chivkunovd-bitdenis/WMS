@@ -1,0 +1,13 @@
+{
+  "source_commit": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+  "artifacts": {
+    "arm64": {
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-direct-v2026.10.07.1/WMS-Print-Console-Mac-arm64.zip",
+      "sha256": "27cd6bff1cabd78c750f5ecfd92236fbb34c89d29b0c57a91a63f83e8612274a"
+    },
+    "x86_64": {
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/releases/download/wms-print-direct-v2026.10.07.1/WMS-Print-Console-Mac-x86_64.zip",
+      "sha256": "45e4871dbd2a70211bc6c091b388e62cf438d9c833020f95d007f8b9b033e8f8"
+    }
+  }
+}

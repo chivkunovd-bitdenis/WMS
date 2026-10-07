@@ -1,0 +1,45 @@
+{
+  "total_count": 2,
+  "artifacts": [
+    {
+      "id": 11466122973,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ2NjEyMjk3Mw==",
+      "name": "WMS607-Direct-x86_64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37584100382-1",
+      "size_in_bytes": 228094,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11466122973",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11466122973/zip",
+      "expired": false,
+      "digest": "sha256:68351a02364f8474185a270fb3f3cca19eb42077f1cda2610b2f6a22607c7be6",
+      "created_at": "2026-10-07T06:59:22Z",
+      "updated_at": "2026-10-07T06:59:22Z",
+      "expires_at": "2026-10-21T06:59:20Z",
+      "workflow_run": {
+        "id": 37584100382,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/wms607-direct-updater-mac-package-20261007",
+        "head_sha": "1c2bddd844ff6baf331eae53b3a44304d834cc01"
+      }
+    },
+    {
+      "id": 11465972931,
+      "node_id": "MDg6QXJ0aWZhY3QxMTQ2NTk3MjkzMQ==",
+      "name": "WMS607-Direct-arm64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37584100382-1",
+      "size_in_bytes": 229009,
+      "url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11465972931",
+      "archive_download_url": "https://api.github.com/repos/chivkunovd-bitdenis/WMS/actions/artifacts/11465972931/zip",
+      "expired": false,
+      "digest": "sha256:5c6398be1051ca4bed8ead04aaba37897422139cbc843dd5e34485d8a30d8410",
+      "created_at": "2026-10-07T06:56:16Z",
+      "updated_at": "2026-10-07T06:56:16Z",
+      "expires_at": "2026-10-21T06:56:15Z",
+      "workflow_run": {
+        "id": 37584100382,
+        "repository_id": 1206977212,
+        "head_repository_id": 1206977212,
+        "head_branch": "codex/wms607-direct-updater-mac-package-20261007",
+        "head_sha": "1c2bddd844ff6baf331eae53b3a44304d834cc01"
+      }
+    }
+  ]
+}

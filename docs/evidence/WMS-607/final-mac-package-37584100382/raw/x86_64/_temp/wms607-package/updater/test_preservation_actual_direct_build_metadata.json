@@ -1,0 +1,103 @@
+{
+  "case": "test_macos_direct_updater_contract.UpdaterContract.test_preservation_actual_direct_build_metadata",
+  "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+  "test_sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+  "entry_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+  "entry_present": true,
+  "executions": [],
+  "native_journal_records": [
+    {
+      "producer": "public-.4",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-41\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-accepted",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"title\":\"WMS-60cbd1da924a6dcfb2c900570b6f714d4715d01d521b0af8b5578912e6a5d991\",\"status\":\"accepted\",\"legacy\":false,\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"reprints\":[],\"paperStatus\":\"unconfirmed\",\"queueObservation\":{},\"heightMm\":40,\"context\":{},\"widthMm\":58,\"reason\":\"Системная очередь приняла задание; бумага не подтверждена\",\"idempotencyKey\":\"current-accepted\",\"observations\":[\"2026-10-07T06:55:30Z saved\",\"2026-10-07T06:55:30Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:30Z accepted: Системная очередь приняла задание; бумага не подтверждена\"],\"createdAt\":\"2026-10-07T06:55:30Z\",\"receipt\":\"Fixture-42\",\"updatedAt\":\"2026-10-07T06:55:30Z\",\"imageAvailable\":true,\"physicalConfirmationSupported\":false,\"queue\":\"Fixture\"}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-unknown",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"status\":\"unknown\",\"idempotencyKey\":\"current-unknown\",\"heightMm\":40,\"reprints\":[],\"observations\":[\"2026-10-07T06:55:30Z saved\",\"2026-10-07T06:55:30Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:30Z unknown: External outcome unknown\"],\"physicalConfirmationSupported\":false,\"createdAt\":\"2026-10-07T06:55:30Z\",\"context\":{},\"legacy\":false,\"paperStatus\":\"unconfirmed\",\"imageAvailable\":true,\"queue\":\"Fixture\",\"reason\":\"External outcome unknown\",\"title\":\"WMS-43022a78008a4da12499df80e820a477cc669447dd4b32c2ea724c1e428697a3\",\"queueObservation\":{},\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"updatedAt\":\"2026-10-07T06:55:30Z\",\"widthMm\":58}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    }
+  ],
+  "app": {
+    "build.json": [
+      "file",
+      420,
+      "08b16d31e90d0a6277e8641d1d5e153876510b63344e5247c2d831bee211cf22"
+    ],
+    "history-link": [
+      "link",
+      "history.html"
+    ],
+    "history.html": [
+      "file",
+      420,
+      "101e006063209ad96eca404b2f45618539963f9322d0ccd7b977efc402d3d02f"
+    ],
+    "old-only.txt": [
+      "file",
+      420,
+      "59ec2693a278d3db6e890623530604e52020e76bd08c751605a03f6ede964151"
+    ],
+    "private-mode": [
+      "file",
+      384,
+      "e642b12901a6ee51456f654c48cd0aa6e90afd64e035afbc97cfc542209c70f9"
+    ],
+    "wms-print": [
+      "file",
+      493,
+      "272548756b91fb9f2ec71feda46e995525f407d4493409e88c74ab9b7f4ac5d6"
+    ]
+  },
+  "state": {
+    "config/operator.json": [
+      "file",
+      420,
+      "6c2f15dadb396c59cdbec1d861b100ba0426f78a6631340c42886e44b0c2ced2"
+    ],
+    "direct-jobs.json": [
+      "file",
+      420,
+      "66ccc29e471d6dfdc168e93ff33a68212c9b85d1d862567485caa1c53084311a"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.json": [
+      "file",
+      384,
+      "58cf74f9aad536ccc542109161d20a9a658e22395a124f35ae12dce995f19e0b"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.json": [
+      "file",
+      384,
+      "72c5d2bd060b60bce402469ea283a2416e2bbcaa810af568adc05775c0adcc4f"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "runtime.lock": [
+      "file",
+      384,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ]
+  },
+  "commands": []
+}

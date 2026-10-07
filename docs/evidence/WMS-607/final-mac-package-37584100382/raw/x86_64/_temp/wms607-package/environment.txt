@@ -1,0 +1,4 @@
+Darwin sjc20-cw753-4a76f3f5-433f-444f-b30d-a768a576a3a6-CA9633DBF427.local 24.6.0 Darwin Kernel Version 24.6.0: Tue Jul 21 20:50:07 PDT 2026; root:xnu-11417.140.69.711.44~1/RELEASE_X86_64 x86_64
+Python 3.13.15
+Apple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)
+Target: x86_64-apple-macosx15.0

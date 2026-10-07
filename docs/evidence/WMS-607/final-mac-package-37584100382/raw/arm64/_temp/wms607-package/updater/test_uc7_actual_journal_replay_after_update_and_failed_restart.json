@@ -1,0 +1,761 @@
+{
+  "case": "test_macos_direct_updater_contract.UpdaterContract.test_uc7_actual_journal_replay_after_update_and_failed_restart",
+  "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+  "test_sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+  "entry_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+  "entry_present": true,
+  "executions": [
+    {
+      "exit": 0,
+      "stdout": "Verified native Direct target dc652472d75812dbebc68ef4353a718b0f629cbe (arm64). Previous application/state archive: $CASE/backups/previous.NyB451A0. Physical printing has not been tested.\n",
+      "stderr": ""
+    },
+    {
+      "exit": 1,
+      "stdout": "",
+      "stderr": "Start/readiness failed. If macOS blocked this verified executable, allow it in Privacy & Security, then repeat this command. Chrome may request local access for the WMS site.\nWMS Print update: Target launch/readiness failed; restoring previous application\n"
+    }
+  ],
+  "native_journal_records": [
+    {
+      "producer": "public-.4",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-41\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-accepted",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"heightMm\":40,\"reprints\":[],\"imageAvailable\":true,\"createdAt\":\"2026-10-07T06:55:09Z\",\"receipt\":\"Fixture-42\",\"queueObservation\":{},\"legacy\":false,\"reason\":\"Системная очередь приняла задание; бумага не подтверждена\",\"physicalConfirmationSupported\":false,\"widthMm\":58,\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z accepted: Системная очередь приняла задание; бумага не подтверждена\"],\"context\":{},\"queue\":\"Fixture\",\"status\":\"accepted\",\"idempotencyKey\":\"current-accepted\",\"title\":\"WMS-60cbd1da924a6dcfb2c900570b6f714d4715d01d521b0af8b5578912e6a5d991\",\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"updatedAt\":\"2026-10-07T06:55:09Z\",\"paperStatus\":\"unconfirmed\"}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-unknown",
+      "mode": "seed",
+      "exit": 0,
+      "stdout": "{\"imageAvailable\":true,\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"legacy\":false,\"context\":{},\"queueObservation\":{},\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z unknown: External outcome unknown\"],\"createdAt\":\"2026-10-07T06:55:09Z\",\"title\":\"WMS-43022a78008a4da12499df80e820a477cc669447dd4b32c2ea724c1e428697a3\",\"reason\":\"External outcome unknown\",\"paperStatus\":\"unconfirmed\",\"heightMm\":40,\"physicalConfirmationSupported\":false,\"updatedAt\":\"2026-10-07T06:55:09Z\",\"reprints\":[],\"idempotencyKey\":\"current-unknown\",\"queue\":\"Fixture\",\"widthMm\":58,\"status\":\"unknown\"}\nSUBMISSIONS:1\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"observations\":[],\"imageAvailable\":false,\"reprints\":[],\"queue\":\"Fixture\",\"updatedAt\":\"2026-10-07T06:55:12Z\",\"reason\":\"Старый журнал: изображение, размер и физический результат отсутствуют\",\"idempotencyKey\":\"legacy-accepted\",\"paperStatus\":\"unconfirmed\",\"receipt\":\"Fixture-41\",\"context\":{},\"createdAt\":\"unknown\",\"physicalConfirmationSupported\":false,\"queueObservation\":{},\"status\":\"accepted\",\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"legacy\":true}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-41\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"widthMm\":58,\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z accepted: Системная очередь приняла задание; бумага не подтверждена\"],\"idempotencyKey\":\"current-accepted\",\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"heightMm\":40,\"createdAt\":\"2026-10-07T06:55:09Z\",\"paperStatus\":\"unconfirmed\",\"legacy\":false,\"physicalConfirmationSupported\":false,\"imageAvailable\":true,\"title\":\"WMS-60cbd1da924a6dcfb2c900570b6f714d4715d01d521b0af8b5578912e6a5d991\",\"queueObservation\":{},\"updatedAt\":\"2026-10-07T06:55:09Z\",\"reprints\":[],\"reason\":\"Системная очередь приняла задание; бумага не подтверждена\",\"queue\":\"Fixture\",\"receipt\":\"Fixture-42\",\"context\":{},\"status\":\"accepted\"}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "current-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-42\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-unknown",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"queueObservation\":{},\"paperStatus\":\"unconfirmed\",\"idempotencyKey\":\"current-unknown\",\"queue\":\"Fixture\",\"heightMm\":40,\"status\":\"unknown\",\"reprints\":[],\"title\":\"WMS-43022a78008a4da12499df80e820a477cc669447dd4b32c2ea724c1e428697a3\",\"reason\":\"External outcome unknown\",\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"createdAt\":\"2026-10-07T06:55:09Z\",\"imageAvailable\":true,\"legacy\":false,\"physicalConfirmationSupported\":false,\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z unknown: External outcome unknown\"],\"widthMm\":58,\"updatedAt\":\"2026-10-07T06:55:09Z\",\"context\":{}}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "current-unknown",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "ERROR:Задание уже передавалось. Проверьте очередь принтера; повтор автоматически не отправлен.\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"updatedAt\":\"2026-10-07T06:55:14Z\",\"reason\":\"Старый журнал: изображение, размер и физический результат отсутствуют\",\"observations\":[],\"physicalConfirmationSupported\":false,\"reprints\":[],\"createdAt\":\"unknown\",\"queue\":\"Fixture\",\"queueObservation\":{},\"paperStatus\":\"unconfirmed\",\"imageAvailable\":false,\"status\":\"accepted\",\"idempotencyKey\":\"legacy-accepted\",\"legacy\":true,\"context\":{},\"receipt\":\"Fixture-41\"}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "legacy-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-41\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"createdAt\":\"2026-10-07T06:55:09Z\",\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z accepted: Системная очередь приняла задание; бумага не подтверждена\"],\"queueObservation\":{},\"imageAvailable\":true,\"heightMm\":40,\"paperStatus\":\"unconfirmed\",\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"physicalConfirmationSupported\":false,\"status\":\"accepted\",\"legacy\":false,\"idempotencyKey\":\"current-accepted\",\"queue\":\"Fixture\",\"updatedAt\":\"2026-10-07T06:55:09Z\",\"title\":\"WMS-60cbd1da924a6dcfb2c900570b6f714d4715d01d521b0af8b5578912e6a5d991\",\"widthMm\":58,\"reason\":\"Системная очередь приняла задание; бумага не подтверждена\",\"receipt\":\"Fixture-42\",\"reprints\":[],\"context\":{}}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "current-accepted",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "Fixture-42\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "actual-current-Printer",
+      "key": "current-unknown",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "{\"reason\":\"External outcome unknown\",\"idempotencyKey\":\"current-unknown\",\"queue\":\"Fixture\",\"legacy\":false,\"imageAvailable\":true,\"physicalConfirmationSupported\":false,\"reprints\":[],\"hash\":\"f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def\",\"heightMm\":40,\"createdAt\":\"2026-10-07T06:55:09Z\",\"paperStatus\":\"unconfirmed\",\"widthMm\":58,\"context\":{},\"queueObservation\":{},\"status\":\"unknown\",\"updatedAt\":\"2026-10-07T06:55:09Z\",\"title\":\"WMS-43022a78008a4da12499df80e820a477cc669447dd4b32c2ea724c1e428697a3\",\"observations\":[\"2026-10-07T06:55:09Z saved\",\"2026-10-07T06:55:09Z submitting: Начата передача в системную очередь\",\"2026-10-07T06:55:09Z unknown: External outcome unknown\"]}\nSUBMISSIONS:0\n",
+      "stderr": ""
+    },
+    {
+      "producer": "public-.4",
+      "key": "current-unknown",
+      "mode": "replay",
+      "exit": 0,
+      "stdout": "ERROR:Задание уже передавалось. Проверьте очередь принтера; повтор автоматически не отправлен.\nSUBMISSIONS:0\n",
+      "stderr": ""
+    }
+  ],
+  "app": {
+    "build.json": [
+      "file",
+      420,
+      "6797a903917e00c6e3092a5f0e5c367a8800eadf4709017b5c80164ac409afae"
+    ],
+    "history.html": [
+      "file",
+      420,
+      "df174f1968c6586f8301b5a1e282f1ef49b6ea946e5be3063f01c3221b4eb0f0"
+    ],
+    "updater-manifest.json": [
+      "file",
+      420,
+      "e7e7b5c413397f379d1fb98808990b39cd962453a858cc5fe2bcfbfa9241bce6"
+    ],
+    "wms-print": [
+      "file",
+      493,
+      "272548756b91fb9f2ec71feda46e995525f407d4493409e88c74ab9b7f4ac5d6"
+    ]
+  },
+  "state": {
+    "config/operator.json": [
+      "file",
+      420,
+      "6c2f15dadb396c59cdbec1d861b100ba0426f78a6631340c42886e44b0c2ced2"
+    ],
+    "direct-jobs.json": [
+      "file",
+      420,
+      "636e5aa428522f7bba4b42ec725d376130ec475c0a3224bf3ae0dd7b9b2f0723"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.json": [
+      "file",
+      384,
+      "96fdee460cfc80ce556267284dbf95bbc42c8b71992f2492752b2c5ad97f649e"
+    ],
+    "jobs-v2/1e6eb17bbf254d54500e2646813d5160ed26425b9851123ed2733dd69bf4bd10.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.json": [
+      "file",
+      384,
+      "597b4393adb95b3ff085b9e53f615999fd3f01308e6fdc4f87e7fdff91d857e4"
+    ],
+    "jobs-v2/b64085afe521f0df93be609010dcbe83dd879a23fefe689f2cff6c46417bbdab.png": [
+      "file",
+      384,
+      "a93c17028d894827813ce3f52be4c7f70b5e33571bd9e51ca8fd2975ef03a1a9"
+    ],
+    "late-unknown.json": [
+      "file",
+      384,
+      "89f0834b19e8c9e183df6b9c7f0b24882961ff145362cb19d2356b2cf66a4e95"
+    ],
+    "runtime.lock": [
+      "file",
+      384,
+      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    ]
+  },
+  "commands": [
+    [
+      "uname",
+      "-s"
+    ],
+    [
+      "uname",
+      "-m"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "hw.optional.arm64"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "sysctl.proc_translated"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/backups"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/.app.direct-update"
+    ],
+    [
+      "mkdir",
+      "$CASE/.app.direct-update/lock"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--location",
+      "--proto",
+      "=https",
+      "--proto-redir",
+      "=https",
+      "--max-time",
+      "120",
+      "https://fixture.invalid/releases/immutable/arm64.zip",
+      "-o",
+      "$CASE/.wms-print-stage.AtI1dxVJ/package.zip"
+    ],
+    [
+      "ditto",
+      "-xk",
+      "$CASE/.wms-print-stage.AtI1dxVJ/package.zip",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print/wms-print"
+    ],
+    [
+      "codesign",
+      "--verify",
+      "--strict",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print/wms-print"
+    ],
+    [
+      "binary",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print/wms-print",
+      "--self-test"
+    ],
+    [
+      "cp",
+      "-p",
+      "$CASE/manifest.json",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print/updater-manifest.json"
+    ],
+    [
+      "df",
+      "-k",
+      "$CASE"
+    ],
+    [
+      "df",
+      "-k",
+      "$CASE/backups"
+    ],
+    [
+      "ditto",
+      "$CASE/app",
+      "$CASE/backups/previous.NyB451A0/application"
+    ],
+    [
+      "ditto",
+      "$CASE/.wms-print-stage.AtI1dxVJ/unpacked/wms-print",
+      "$CASE/.app.direct-update/next"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "kill",
+      "-TERM",
+      "42424242"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "kill",
+      "-0",
+      "42424242"
+    ],
+    [
+      "ditto",
+      "$CASE/state",
+      "$CASE/backups/previous.NyB451A0/state"
+    ],
+    [
+      "mv",
+      "$CASE/app",
+      "$CASE/.app.direct-update/previous"
+    ],
+    [
+      "mv",
+      "$CASE/.app.direct-update/next",
+      "$CASE/app"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--updater-start",
+      "$CASE/state"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--max-time",
+      "2",
+      "http://127.0.0.1:17843/health"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--readiness"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--max-time",
+      "2",
+      "http://127.0.0.1:17843/health"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--readiness"
+    ],
+    [
+      "uname",
+      "-s"
+    ],
+    [
+      "uname",
+      "-m"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "hw.optional.arm64"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "sysctl.proc_translated"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/backups"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/.app.direct-update"
+    ],
+    [
+      "mkdir",
+      "$CASE/.app.direct-update/lock"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--location",
+      "--proto",
+      "=https",
+      "--proto-redir",
+      "=https",
+      "--max-time",
+      "120",
+      "https://fixture.invalid/releases/immutable/arm64.zip",
+      "-o",
+      "$CASE/.wms-print-stage.xs8ApiXY/package.zip"
+    ],
+    [
+      "ditto",
+      "-xk",
+      "$CASE/.wms-print-stage.xs8ApiXY/package.zip",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print/wms-print"
+    ],
+    [
+      "codesign",
+      "--verify",
+      "--strict",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print/wms-print"
+    ],
+    [
+      "binary",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print/wms-print",
+      "--self-test"
+    ],
+    [
+      "cp",
+      "-p",
+      "$CASE/manifest.json",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print/updater-manifest.json"
+    ],
+    [
+      "df",
+      "-k",
+      "$CASE"
+    ],
+    [
+      "df",
+      "-k",
+      "$CASE/backups"
+    ],
+    [
+      "ditto",
+      "$CASE/app",
+      "$CASE/backups/previous.xzWpPPF4/application"
+    ],
+    [
+      "ditto",
+      "$CASE/.wms-print-stage.xs8ApiXY/unpacked/wms-print",
+      "$CASE/.app.direct-update/next"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "kill",
+      "-TERM",
+      "42424242"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "kill",
+      "-0",
+      "42424242"
+    ],
+    [
+      "ditto",
+      "$CASE/state",
+      "$CASE/backups/previous.xzWpPPF4/state"
+    ],
+    [
+      "mv",
+      "$CASE/app",
+      "$CASE/.app.direct-update/previous"
+    ],
+    [
+      "mv",
+      "$CASE/.app.direct-update/next",
+      "$CASE/app"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--updater-start",
+      "$CASE/state"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "mv",
+      "$CASE/app",
+      "$CASE/.app.direct-update/failed-target"
+    ],
+    [
+      "mv",
+      "$CASE/.app.direct-update/previous",
+      "$CASE/app"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--updater-start",
+      "$CASE/state"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--max-time",
+      "2",
+      "http://127.0.0.1:17843/health"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Fixture_Label_Printer"
+    ]
+  ]
+}

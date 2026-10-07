@@ -1,0 +1,1022 @@
+mac-direct-package (macos-15-intel, x86_64)	Set up job	﻿2026-10-07T06:54:19.4518510Z Current runner version: '2.337.0'
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4711570Z ##[group]Runner Image Provisioner
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4713580Z Hosted Compute Agent
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4714750Z Version: 20260819.586
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4716040Z Commit: 3cc4a88dfa507ef76119ad1bb3eccc6378bb2b76
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4717580Z Build Date: 2026-08-18T23:20:18Z
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4719020Z Worker ID: {27da8315-7d38-4046-af09-c44d404412dc}
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4720510Z Azure Region: westus
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4721680Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4726030Z ##[group]Operating System
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4727430Z macOS
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4728450Z 15.7.9
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4729610Z 24G830
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4731060Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4732260Z ##[group]Runner Image
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4841510Z Image: macos-15
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4842970Z Version: 20260824.0482.1
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4845490Z Included Software: https://github.com/actions/runner-images/blob/macos-15/20260824.0482/images/macos/macos-15-Readme.md
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4849450Z Image Release: https://github.com/actions/runner-images/releases/tag/macos-15%2F20260824.0482
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4851770Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4854270Z ##[group]GITHUB_TOKEN Permissions
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4859810Z Contents: read
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4860990Z Metadata: read
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4862100Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4866650Z Secret source: Actions
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4869060Z Cache mode: write
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.4874590Z Prepare workflow directory
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.6621410Z Prepare all required actions
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:19.6772660Z Getting action download info
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:20.3173360Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:20.7320400Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:21.7110980Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+mac-direct-package (macos-15-intel, x86_64)	Set up job	2026-10-07T06:54:22.7277100Z Complete job name: mac-direct-package (macos-15-intel, x86_64)
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	﻿2026-10-07T06:54:22.9772570Z ##[group]Run test "$DISPATCH_REF" = refs/heads/codex/wms607-direct-updater-mac-package-20261007
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9778970Z [36;1mtest "$DISPATCH_REF" = refs/heads/codex/wms607-direct-updater-mac-package-20261007[0m
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9783720Z [36;1mtest "$DISPATCH_ATTEMPT" = 1[0m
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9786820Z [36;1m[[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]][0m
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9790530Z [36;1mtest "$REQUESTED_SOURCE" = a475a7342c0da72dd49b2990bd998c522ecc2c2b[0m
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9921700Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9925350Z env:
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9928380Z   REQUESTED_SOURCE: a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9933220Z   DISPATCH_REF: refs/heads/codex/wms607-direct-updater-mac-package-20261007
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9937320Z   DISPATCH_ATTEMPT: 1
+mac-direct-package (macos-15-intel, x86_64)	Require isolated dispatch and exact full source identity	2026-10-07T06:54:22.9939510Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	﻿2026-10-07T06:54:23.1229260Z ##[group]Run actions/checkout@v4
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1231890Z with:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1233790Z   ref: a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1236290Z   fetch-depth: 0
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1238270Z   persist-credentials: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1240680Z   repository: chivkunovd-bitdenis/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1265770Z   token: ***
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1268530Z   ssh-strict: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1270600Z   ssh-user: git
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1272430Z   clean: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1274250Z   sparse-checkout-cone-mode: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1276470Z   fetch-tags: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1278510Z   show-progress: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1280380Z   lfs: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1282100Z   submodules: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1284070Z   set-safe-directory: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1286300Z   allow-unsafe-pr-checkout: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:23.1288550Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.1337330Z Syncing repository: chivkunovd-bitdenis/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.1551710Z ##[group]Getting Git version info
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.1611510Z Working directory is '/Users/runner/work/WMS/WMS'
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.2624640Z [command]/usr/local/bin/git version
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.2899380Z git version 2.55.0
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.4223150Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.4237680Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/ac4d4c1f-1788-4a03-98ff-3c132fbeb509/.gitconfig'
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.4245690Z Temporarily overriding HOME='/Users/runner/work/_temp/ac4d4c1f-1788-4a03-98ff-3c132fbeb509' before making global git config changes
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.4252110Z Adding repository directory to the temporary git global config as a safe directory
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.4257930Z [command]/usr/local/bin/git config --global --add safe.directory /Users/runner/work/WMS/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.5710590Z Deleting the contents of '/Users/runner/work/WMS/WMS'
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.5722540Z ##[group]Initializing the repository
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.5728760Z [command]/usr/local/bin/git init /Users/runner/work/WMS/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6526540Z hint: Using 'master' as the name for the initial branch. This default branch name
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6540470Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6550580Z hint: to use in all of your new repositories, which will suppress this warning,
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6557240Z hint: call:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6560470Z hint:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6566840Z hint: 	git config --global init.defaultBranch <name>
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6571960Z hint:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6576700Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6584250Z hint: 'development'. The just-created branch can be renamed via this command:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6593330Z hint:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6598390Z hint: 	git branch -m <name>
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6604130Z hint:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6612200Z hint: Disable this message with "git config set advice.defaultBranchName false"
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6622810Z Initialized empty Git repository in /Users/runner/work/WMS/WMS/.git/
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.6646050Z [command]/usr/local/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7145320Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7155870Z ##[group]Disabling automatic garbage collection
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7205660Z [command]/usr/local/bin/git config --local gc.auto 0
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7390540Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7396680Z ##[group]Setting up auth
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7414050Z [command]/usr/local/bin/git config --local --name-only --get-regexp core\.sshCommand
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:24.7744390Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:25.0863770Z [command]/usr/local/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:25.1044640Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:26.0883030Z [command]/usr/local/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:26.1080770Z [command]/usr/local/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:27.4837610Z [command]/usr/local/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:27.5020270Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:27.5026050Z ##[group]Fetching the repository
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:27.5031250Z [command]/usr/local/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9880000Z From https://github.com/chivkunovd-bitdenis/WMS
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9884440Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9895290Z  * [new branch]          archive/staging-20260924-93f511ab -> origin/archive/staging-20260924-93f511ab
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9898430Z  * [new branch]          archive/staging-before-wms521-20260924 -> origin/archive/staging-before-wms521-20260924
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9902100Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9904820Z  * [new branch]          backlog/fbs-followups-20260812 -> origin/backlog/fbs-followups-20260812
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9907930Z  * [new branch]          brand/portal-logos-20260811 -> origin/brand/portal-logos-20260811
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9910490Z  * [new branch]          brand/portal-logos-live-20260811 -> origin/brand/portal-logos-live-20260811
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9913620Z  * [new branch]          brand/portal-logos-prod-20260811 -> origin/brand/portal-logos-prod-20260811
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9916710Z  * [new branch]          chore/deploy-smoke-retry-on-main -> origin/chore/deploy-smoke-retry-on-main
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9919400Z  * [new branch]          chore/operator-change-contract-20260901 -> origin/chore/operator-change-contract-20260901
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9922020Z  * [new branch]          chore/railway-toml-fix  -> origin/chore/railway-toml-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9924450Z  * [new branch]          chore/release-via-pr-only-rules -> origin/chore/release-via-pr-only-rules
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9927140Z  * [new branch]          chore/staging-sync-20261003 -> origin/chore/staging-sync-20261003
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9929630Z  * [new branch]          chore/wb-emulator-railway-dockerfile -> origin/chore/wb-emulator-railway-dockerfile
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9932500Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9935640Z  * [new branch]          chore/wms574-stand      -> origin/chore/wms574-stand
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9937830Z  * [new branch]          codex/agent-job-1710a7649a6964db -> origin/codex/agent-job-1710a7649a6964db
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9939970Z  * [new branch]          codex/agent-job-21079e59afb9acdb -> origin/codex/agent-job-21079e59afb9acdb
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9942100Z  * [new branch]          codex/agent-job-6f3e370ab6217c51 -> origin/codex/agent-job-6f3e370ab6217c51
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9944180Z  * [new branch]          codex/agent-job-8c954436cd418999 -> origin/codex/agent-job-8c954436cd418999
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9946600Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac -> origin/codex/agent-job-97af6faf8d8c22ac
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9949140Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5 -> origin/codex/agent-job-bb021d7e007fb8a5
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9951890Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150 -> origin/codex/agent-job-ef71dbb00ee2b150
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9954350Z  * [new branch]          codex/agent-job-fc68bb2705b6850f -> origin/codex/agent-job-fc68bb2705b6850f
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9957900Z  * [new branch]          codex/artmaks-fbo-mockup -> origin/codex/artmaks-fbo-mockup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9960610Z  * [new branch]          codex/backlog40-ci-contracts -> origin/codex/backlog40-ci-contracts
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9963010Z  * [new branch]          codex/backlog40-ci-pdf  -> origin/codex/backlog40-ci-pdf
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9965440Z  * [new branch]          codex/billing-journal-20260825 -> origin/codex/billing-journal-20260825
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9968950Z  * [new branch]          codex/billing-module-20260826 -> origin/codex/billing-module-20260826
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9971480Z  * [new branch]          codex/billing-stage-finish-20260823 -> origin/codex/billing-stage-finish-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9974220Z  * [new branch]          codex/billing-storage-bounds-20260823 -> origin/codex/billing-storage-bounds-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9976850Z  * [new branch]          codex/box-label-bulk-print-20260824 -> origin/codex/box-label-bulk-print-20260824
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9980580Z  * [new branch]          codex/catalog-box-filters-20260824 -> origin/codex/catalog-box-filters-20260824
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9983260Z  * [new branch]          codex/catalog-box-tabs-source-20260823 -> origin/codex/catalog-box-tabs-source-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9986170Z  * [new branch]          codex/cell-contents-scanner-20260824 -> origin/codex/cell-contents-scanner-20260824
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9988970Z  * [new branch]          codex/fbs-qr-only-print-20260823 -> origin/codex/fbs-qr-only-print-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9991400Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9993870Z  * [new branch]          codex/fix-seller-inbound-empty-picker -> origin/codex/fix-seller-inbound-empty-picker
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:49.9996470Z  * [new branch]          codex/fix-wb-done-supply-status-prod -> origin/codex/fix-wb-done-supply-status-prod
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0000200Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820 -> origin/codex/hotfix-fbs-100-orders-20260820
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0003520Z  * [new branch]          codex/hotfix-fbs-packaging-flag -> origin/codex/hotfix-fbs-packaging-flag
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0005440Z  * [new branch]          codex/hotfix-ozon-kiz   -> origin/codex/hotfix-ozon-kiz
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0007520Z  * [new branch]          codex/invoice-row-location -> origin/codex/invoice-row-location
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0009830Z  * [new branch]          codex/knowledge-inbound-guide-20260824 -> origin/codex/knowledge-inbound-guide-20260824
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0012390Z  * [new branch]          codex/mp-dashboard-e2e-20260815 -> origin/codex/mp-dashboard-e2e-20260815
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0014590Z  * [new branch]          codex/night-ready-acceptance-1006 -> origin/codex/night-ready-acceptance-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0016890Z  * [new branch]          codex/night-ready-candidate-1006-inrepo -> origin/codex/night-ready-candidate-1006-inrepo
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0019590Z  * [new branch]          codex/night-ready-exact-staging-1006 -> origin/codex/night-ready-exact-staging-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0022380Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0024860Z  * [new branch]          codex/night-ready-migration-compat-1006 -> origin/codex/night-ready-migration-compat-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0027310Z  * [new branch]          codex/night-ready-staging-1006 -> origin/codex/night-ready-staging-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0029670Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0032370Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0034830Z  * [new branch]          codex/night-ready-staging-rollback-1006 -> origin/codex/night-ready-staging-rollback-1006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0038190Z  * [new branch]          codex/night-release-5beb52da-1 -> origin/codex/night-release-5beb52da-1
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0040570Z  * [new branch]          codex/night-requirements-20261006 -> origin/codex/night-requirements-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0043210Z  * [new branch]          codex/night1007-658     -> origin/codex/night1007-658
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0044980Z  * [new branch]          codex/night1007-671-687 -> origin/codex/night1007-671-687
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0046570Z  * [new branch]          codex/night1007-675-release -> origin/codex/night1007-675-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0048480Z  * [new branch]          codex/night1007-679-680 -> origin/codex/night1007-679-680
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0049980Z  * [new branch]          codex/night1007-681     -> origin/codex/night1007-681
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0051630Z  * [new branch]          codex/night1007-684-586 -> origin/codex/night1007-684-586
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0053310Z  * [new branch]          codex/night1007-integration -> origin/codex/night1007-integration
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0056400Z  * [new branch]          codex/night1007-main-reviewed-upgrade -> origin/codex/night1007-main-reviewed-upgrade
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0058590Z  * [new branch]          codex/night1007-print-regressions-646cb4 -> origin/codex/night1007-print-regressions-646cb4
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0060690Z  * [new branch]          codex/night1007-process-upgrade-contract -> origin/codex/night1007-process-upgrade-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0063390Z  * [new branch]          codex/night1007-reviewed-source-20261007 -> origin/codex/night1007-reviewed-source-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0065650Z  * [new branch]          codex/night1007-wms652-ci-fix -> origin/codex/night1007-wms652-ci-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0068070Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0070030Z  * [new branch]          codex/ozon-catalog-20260825 -> origin/codex/ozon-catalog-20260825
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0072270Z  * [new branch]          codex/ozon-fbs-20260825 -> origin/codex/ozon-fbs-20260825
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0073960Z  * [new branch]          codex/ozon-stock-20260825 -> origin/codex/ozon-stock-20260825
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0075690Z  * [new branch]          codex/ozon-test-key-marker-20260824 -> origin/codex/ozon-test-key-marker-20260824
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0078160Z  * [new branch]          codex/priority-five-release-20261006 -> origin/codex/priority-five-release-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0080110Z  * [new branch]          codex/priority-five-review-20261006 -> origin/codex/priority-five-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0082370Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0084930Z  * [new branch]          codex/regress-live-cases-20260825 -> origin/codex/regress-live-cases-20260825
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0087320Z  * [new branch]          codex/release-20261006-astra-a -> origin/codex/release-20261006-astra-a
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0089600Z  * [new branch]          codex/release-20261006-astra-b -> origin/codex/release-20261006-astra-b
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0092160Z  * [new branch]          codex/release-ci-final-20261006 -> origin/codex/release-ci-final-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0094440Z  * [new branch]          codex/release-log-2026-09-27 -> origin/codex/release-log-2026-09-27
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0096650Z  * [new branch]          codex/reporting-backend-core-20260823 -> origin/codex/reporting-backend-core-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0099160Z  * [new branch]          codex/reporting-stage-finish-20260823 -> origin/codex/reporting-stage-finish-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0101540Z  * [new branch]          codex/staging-sync-login-20260914 -> origin/codex/staging-sync-login-20260914
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0103590Z  * [new branch]          codex/storage-stage-20260823 -> origin/codex/storage-stage-20260823
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0105400Z  * [new branch]          codex/trello-wms-20261005 -> origin/codex/trello-wms-20261005
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0108490Z  * [new branch]          codex/trello-wms-20261006 -> origin/codex/trello-wms-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0110180Z  * [new branch]          codex/trello-wms-20261006-1200 -> origin/codex/trello-wms-20261006-1200
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0111580Z  * [new branch]          codex/tsd-package-20260913 -> origin/codex/tsd-package-20260913
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0113150Z  * [new branch]          codex/tsd-package-stage-release -> origin/codex/tsd-package-stage-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0115210Z  * [new branch]          codex/tsd-staging-merge-20260913 -> origin/codex/tsd-staging-merge-20260913
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0117870Z  * [new branch]          codex/volna9-01-backend-only -> origin/codex/volna9-01-backend-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0119910Z  * [new branch]          codex/volna9-02-status-only -> origin/codex/volna9-02-status-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0121830Z  * [new branch]          codex/volna9-03-backend-only -> origin/codex/volna9-03-backend-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0124210Z  * [new branch]          codex/volna9-04-backend-only -> origin/codex/volna9-04-backend-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0127540Z  * [new branch]          codex/volna9-05-backend-only -> origin/codex/volna9-05-backend-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0129680Z  * [new branch]          codex/volna9-06-print-order-only -> origin/codex/volna9-06-print-order-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0132060Z  * [new branch]          codex/weekly-release-20260909 -> origin/codex/weekly-release-20260909
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0133880Z  * [new branch]          codex/wms-chat-20260911 -> origin/codex/wms-chat-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0135740Z  * [new branch]          codex/wms-chat-evening-20260910 -> origin/codex/wms-chat-evening-20260910
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0137960Z  * [new branch]          codex/wms-integrations-20260911 -> origin/codex/wms-integrations-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0139840Z  * [new branch]          codex/wms-ozon-20260911 -> origin/codex/wms-ozon-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0141780Z  * [new branch]          codex/wms-ozon-generator-20260911 -> origin/codex/wms-ozon-generator-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0144010Z  * [new branch]          codex/wms-pick-container-scan -> origin/codex/wms-pick-container-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0146280Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820 -> origin/codex/wms-pipeline-unified-v2-20260820
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0148400Z  * [new branch]          codex/wms-print-20260911 -> origin/codex/wms-print-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0150910Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0153520Z  * [new branch]          codex/wms-psp-backlog-20260921 -> origin/codex/wms-psp-backlog-20260921
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0155760Z  * [new branch]          codex/wms-qr-review-evidence-20261006 -> origin/codex/wms-qr-review-evidence-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0157910Z  * [new branch]          codex/wms-release-20260911 -> origin/codex/wms-release-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0160080Z  * [new branch]          codex/wms-release-ozon-terminal -> origin/codex/wms-release-ozon-terminal
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0162150Z  * [new branch]          codex/wms-storage-20260911 -> origin/codex/wms-storage-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0164130Z  * [new branch]          codex/wms-storage-final-20260911 -> origin/codex/wms-storage-final-20260911
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0166120Z  * [new branch]          codex/wms-transfer-urgent -> origin/codex/wms-transfer-urgent
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0168770Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0171980Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0173990Z  * [new branch]          codex/wms010-backlog40  -> origin/codex/wms010-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0175500Z  * [new branch]          codex/wms011-backlog40  -> origin/codex/wms011-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0178590Z  * [new branch]          codex/wms013-backlog40  -> origin/codex/wms013-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0180190Z  * [new branch]          codex/wms040-backlog40  -> origin/codex/wms040-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0181900Z  * [new branch]          codex/wms045-backlog40  -> origin/codex/wms045-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0184250Z  * [new branch]          codex/wms058-availability-followup -> origin/codex/wms058-availability-followup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0186240Z  * [new branch]          codex/wms058-backlog40  -> origin/codex/wms058-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0187820Z  * [new branch]          codex/wms058-browser-qa -> origin/codex/wms058-browser-qa
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0189470Z  * [new branch]          codex/wms058-mp-box-source -> origin/codex/wms058-mp-box-source
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0191280Z  * [new branch]          codex/wms058-overplan-source -> origin/codex/wms058-overplan-source
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0193020Z  * [new branch]          codex/wms058-review-fix -> origin/codex/wms058-review-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0194860Z  * [new branch]          codex/wms080-392-review-fix -> origin/codex/wms080-392-review-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0198800Z  * [new branch]          codex/wms080-backlog40  -> origin/codex/wms080-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0200570Z  * [new branch]          codex/wms081-backlog40  -> origin/codex/wms081-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0203640Z  * [new branch]          codex/wms081-defect-compat -> origin/codex/wms081-defect-compat
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0205670Z  * [new branch]          codex/wms082-085-emulator-meta -> origin/codex/wms082-085-emulator-meta
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0207530Z  * [new branch]          codex/wms082-backlog40  -> origin/codex/wms082-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0209310Z  * [new branch]          codex/wms083-backlog40  -> origin/codex/wms083-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0211070Z  * [new branch]          codex/wms084-backlog40  -> origin/codex/wms084-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0212950Z  * [new branch]          codex/wms084-emulator-delete -> origin/codex/wms084-emulator-delete
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0215070Z  * [new branch]          codex/wms084-packing-test-contract -> origin/codex/wms084-packing-test-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0217220Z  * [new branch]          codex/wms084-rebind     -> origin/codex/wms084-rebind
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0218780Z  * [new branch]          codex/wms085-backlog40  -> origin/codex/wms085-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0220420Z  * [new branch]          codex/wms086-backlog40  -> origin/codex/wms086-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0222090Z  * [new branch]          codex/wms087-backlog40  -> origin/codex/wms087-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0224460Z  * [new branch]          codex/wms091-backlog40  -> origin/codex/wms091-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0226260Z  * [new branch]          codex/wms092-backlog40  -> origin/codex/wms092-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0227870Z  * [new branch]          codex/wms095-backlog40  -> origin/codex/wms095-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0230360Z  * [new branch]          codex/wms095-import-error-backlog40 -> origin/codex/wms095-import-error-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0232350Z  * [new branch]          codex/wms096-backlog40  -> origin/codex/wms096-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0234180Z  * [new branch]          codex/wms110-backlog40  -> origin/codex/wms110-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0235910Z  * [new branch]          codex/wms115-backlog40  -> origin/codex/wms115-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0237480Z  * [new branch]          codex/wms123-backlog40  -> origin/codex/wms123-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0239010Z  * [new branch]          codex/wms272-backlog40  -> origin/codex/wms272-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0241080Z  * [new branch]          codex/wms272-resume-backlog40 -> origin/codex/wms272-resume-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0242870Z  * [new branch]          codex/wms273-backlog40  -> origin/codex/wms273-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0244460Z  * [new branch]          codex/wms276-backlog40  -> origin/codex/wms276-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0245950Z  * [new branch]          codex/wms277-backlog40  -> origin/codex/wms277-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0249350Z  * [new branch]          codex/wms277-catalog    -> origin/codex/wms277-catalog
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0251010Z  * [new branch]          codex/wms277-import-sku-collision -> origin/codex/wms277-import-sku-collision
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0252830Z  * [new branch]          codex/wms278-backlog40  -> origin/codex/wms278-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0254730Z  * [new branch]          codex/wms387-training   -> origin/codex/wms387-training
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0256550Z  * [new branch]          codex/wms389-backlog40  -> origin/codex/wms389-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0258310Z  * [new branch]          codex/wms390-backlog40  -> origin/codex/wms390-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0259820Z  * [new branch]          codex/wms391-backlog40  -> origin/codex/wms391-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0261400Z  * [new branch]          codex/wms392-backlog40  -> origin/codex/wms392-backlog40
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0262840Z  * [new branch]          codex/wms392-review-tests -> origin/codex/wms392-review-tests
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0265660Z  * [new branch]          codex/wms394-kiz-ui     -> origin/codex/wms394-kiz-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0267350Z  * [new branch]          codex/wms395-pool-inline -> origin/codex/wms395-pool-inline
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0269030Z  * [new branch]          codex/wms396-stage      -> origin/codex/wms396-stage
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0270690Z  * [new branch]          codex/wms396-staging-release -> origin/codex/wms396-staging-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0272590Z  * [new branch]          codex/wms396-true-api   -> origin/codex/wms396-true-api
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0274130Z  * [new branch]          codex/wms397-api        -> origin/codex/wms397-api
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0276070Z  * [new branch]          codex/wms399-chat-design -> origin/codex/wms399-chat-design
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0278240Z  * [new branch]          codex/wms401-android-build-proof -> origin/codex/wms401-android-build-proof
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0280410Z  * [new branch]          codex/wms406-backfill-final-plan -> origin/codex/wms406-backfill-final-plan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0282490Z  * [new branch]          codex/wms406-invoice    -> origin/codex/wms406-invoice
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0284060Z  * [new branch]          codex/wms406-report     -> origin/codex/wms406-report
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0285990Z  * [new branch]          codex/wms408-billing-unification -> origin/codex/wms408-billing-unification
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0287840Z  * [new branch]          codex/wms415-coord-20260910 -> origin/codex/wms415-coord-20260910
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0289940Z  * [new branch]          codex/wms418-catalog-publication-filter -> origin/codex/wms418-catalog-publication-filter
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0292240Z  * [new branch]          codex/wms418-loviana-off -> origin/codex/wms418-loviana-off
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0294220Z  * [new branch]          codex/wms425-marketplace-hotfix -> origin/codex/wms425-marketplace-hotfix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0296290Z  * [new branch]          codex/wms433-stage-user-only -> origin/codex/wms433-stage-user-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0298690Z  * [new branch]          codex/wms433-support-bot-concept -> origin/codex/wms433-support-bot-concept
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0301210Z  * [new branch]          codex/wms437-analyst-cases -> origin/codex/wms437-analyst-cases
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0303320Z  * [new branch]          codex/wms437-small-task-process -> origin/codex/wms437-small-task-process
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0305350Z  * [new branch]          codex/wms440-tsd        -> origin/codex/wms440-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0307140Z  * [new branch]          codex/wms440-tsd-ui     -> origin/codex/wms440-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0308940Z  * [new branch]          codex/wms441-c10-evidence -> origin/codex/wms441-c10-evidence
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0340460Z  * [new branch]          codex/wms441-tsd        -> origin/codex/wms441-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0342560Z  * [new branch]          codex/wms441-tsd-ui     -> origin/codex/wms441-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0344250Z  * [new branch]          codex/wms442-tsd        -> origin/codex/wms442-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0346790Z  * [new branch]          codex/wms442-tsd-ui     -> origin/codex/wms442-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0348020Z  * [new branch]          codex/wms443-tsd        -> origin/codex/wms443-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0349580Z  * [new branch]          codex/wms443-tsd-ui     -> origin/codex/wms443-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0351020Z  * [new branch]          codex/wms444-tsd        -> origin/codex/wms444-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0352440Z  * [new branch]          codex/wms444-tsd-ui     -> origin/codex/wms444-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0353910Z  * [new branch]          codex/wms445-tsd        -> origin/codex/wms445-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0355540Z  * [new branch]          codex/wms445-tsd-server-truth -> origin/codex/wms445-tsd-server-truth
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0357270Z  * [new branch]          codex/wms445-tsd-ui     -> origin/codex/wms445-tsd-ui
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0359150Z  * [new branch]          codex/wms447-full-marketplace-labels -> origin/codex/wms447-full-marketplace-labels
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0361190Z  * [new branch]          codex/wms460-fbs-qr-scan -> origin/codex/wms460-fbs-qr-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0364570Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0366620Z  * [new branch]          codex/wms476-auto-legacy-guard -> origin/codex/wms476-auto-legacy-guard
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0368710Z  * [new branch]          codex/wms476-implementation-sol-high -> origin/codex/wms476-implementation-sol-high
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0370960Z  * [new branch]          codex/wms476-staging-release-20260923 -> origin/codex/wms476-staging-release-20260923
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0373460Z  * [new branch]          codex/wms477-backend-review-fix -> origin/codex/wms477-backend-review-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0375780Z  * [new branch]          codex/wms477-p3-notice  -> origin/codex/wms477-p3-notice
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0377660Z  * [new branch]          codex/wms483-prod-release-20260920 -> origin/codex/wms483-prod-release-20260920
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0379540Z  * [new branch]          codex/wms483-wb-zero-refresh -> origin/codex/wms483-wb-zero-refresh
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0381440Z  * [new branch]          codex/wms489-staging-release -> origin/codex/wms489-staging-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0383570Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0385770Z  * [new branch]          codex/wms502-stock-sorting-incident -> origin/codex/wms502-stock-sorting-incident
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0387710Z  * [new branch]          codex/wms506-silent-kiz-print -> origin/codex/wms506-silent-kiz-print
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0389770Z  * [new branch]          codex/wms508-persistent-form-cards -> origin/codex/wms508-persistent-form-cards
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0391820Z  * [new branch]          codex/wms514-clickable-mockup -> origin/codex/wms514-clickable-mockup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0394040Z  * [new branch]          codex/wms514-staging-release-20260924 -> origin/codex/wms514-staging-release-20260924
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0396360Z  * [new branch]          codex/wms515-client-registry -> origin/codex/wms515-client-registry
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0398550Z  * [new branch]          codex/wms517-current-release-analysis -> origin/codex/wms517-current-release-analysis
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0401120Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0403460Z  * [new branch]          codex/wms517-mac-dynamic-eligible -> origin/codex/wms517-mac-dynamic-eligible
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0405210Z  * [new branch]          codex/wms517-mac-test-contract -> origin/codex/wms517-mac-test-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0407210Z  * [new branch]          codex/wms517-price-by-product-group -> origin/codex/wms517-price-by-product-group
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0409260Z  * [new branch]          codex/wms517-sales-report-contract -> origin/codex/wms517-sales-report-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0412180Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0415650Z  * [new branch]          codex/wms517-staging-20261001 -> origin/codex/wms517-staging-20261001
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0418230Z  * [new branch]          codex/wms519-artifact-pdf-hotfix -> origin/codex/wms519-artifact-pdf-hotfix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0420520Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio -> origin/codex/wms519-kiz-label-aspect-ratio
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0422470Z  * [new branch]          codex/wms519-post-deploy-docs -> origin/codex/wms519-post-deploy-docs
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0424330Z  * [new branch]          codex/wms520-requirements -> origin/codex/wms520-requirements
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0425930Z  * [new branch]          codex/wms521-kiz-release -> origin/codex/wms521-kiz-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0427500Z  * [new branch]          codex/wms523-auto-import-pools -> origin/codex/wms523-auto-import-pools
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0429000Z  * [new branch]          codex/wms524-confirm-order -> origin/codex/wms524-confirm-order
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0431880Z  * [new branch]          codex/wms524-print-blank -> origin/codex/wms524-print-blank
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0433520Z  * [new branch]          codex/wms533-client-hardening -> origin/codex/wms533-client-hardening
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0435080Z  * [new branch]          codex/wms533-five-events -> origin/codex/wms533-five-events
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0436790Z  * [new branch]          codex/wms533-prod-five-events -> origin/codex/wms533-prod-five-events
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0438570Z  * [new branch]          codex/wms533-seller-stock-events -> origin/codex/wms533-seller-stock-events
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0440520Z  * [new branch]          codex/wms537-pg-fixture-review-20261006 -> origin/codex/wms537-pg-fixture-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0442340Z  * [new branch]          codex/wms550-sorting-scan -> origin/codex/wms550-sorting-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0444060Z  * [new branch]          codex/wms582-yandex-market-api -> origin/codex/wms582-yandex-market-api
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0446100Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0447820Z  * [new branch]          codex/wms591-avpack-6300 -> origin/codex/wms591-avpack-6300
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0449200Z  * [new branch]          codex/wms593-597-urgent -> origin/codex/wms593-597-urgent
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0450500Z  * [new branch]          codex/wms602-fbs-cell-scan -> origin/codex/wms602-fbs-cell-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0452070Z  * [new branch]          codex/wms603-box-scan   -> origin/codex/wms603-box-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0453750Z  * [new branch]          codex/wms604-staging-integration -> origin/codex/wms604-staging-integration
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0455570Z  * [new branch]          codex/wms604-unified-packing -> origin/codex/wms604-unified-packing
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0458230Z  * [new branch]          codex/wms607-artmaks-acceptance-updater-contract -> origin/codex/wms607-artmaks-acceptance-updater-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0460680Z  * [new branch]          codex/wms607-artmaks-direct-repair -> origin/codex/wms607-artmaks-direct-repair
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0462570Z  * [new branch]          codex/wms607-artmaks-http-recovery -> origin/codex/wms607-artmaks-http-recovery
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0464560Z  * [new branch]          codex/wms607-artmaks-http-recovery-contract -> origin/codex/wms607-artmaks-http-recovery-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0466870Z  * [new branch]          codex/wms607-artmaks-http-recovery-review-20261007 -> origin/codex/wms607-artmaks-http-recovery-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0469210Z  * [new branch]          codex/wms607-artmaks-installer-findings -> origin/codex/wms607-artmaks-installer-findings
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0471160Z  * [new branch]          codex/wms607-artmaks-repair-review -> origin/codex/wms607-artmaks-repair-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0473710Z  * [new branch]          codex/wms607-artmaks-test-contract -> origin/codex/wms607-artmaks-test-contract
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0478930Z  * [new branch]          codex/wms607-direct-updater-implementation-20261007 -> origin/codex/wms607-direct-updater-implementation-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0482450Z  * [new branch]          codex/wms607-direct-updater-mac-package-20261007 -> origin/codex/wms607-direct-updater-mac-package-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0485180Z  * [new branch]          codex/wms607-http-replacement-acceptance-20261007 -> origin/codex/wms607-http-replacement-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0487550Z  * [new branch]          codex/wms607-instant-print -> origin/codex/wms607-instant-print
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0489870Z  * [new branch]          codex/wms607-mac-package-peer-review-20261007 -> origin/codex/wms607-mac-package-peer-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0492130Z  * [new branch]          codex/wms607-mac-package-receipts-20261007 -> origin/codex/wms607-mac-package-receipts-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0494250Z  * [new branch]          codex/wms607-mac-package-rereview-20261007 -> origin/codex/wms607-mac-package-rereview-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0497050Z  * [new branch]          codex/wms607-mac-single-binary -> origin/codex/wms607-mac-single-binary
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0498810Z  * [new branch]          codex/wms607-printer-failure-analysis -> origin/codex/wms607-printer-failure-analysis
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0500740Z  * [new branch]          codex/wms607-staging-print -> origin/codex/wms607-staging-print
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0502800Z  * [new branch]          codex/wms607-startup-owner-fix-20261007 -> origin/codex/wms607-startup-owner-fix-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0505290Z  * [new branch]          codex/wms607-startup-owner-review-20261007 -> origin/codex/wms607-startup-owner-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0508210Z  * [new branch]          codex/wms607-startup-owner-software-acceptance-20261007 -> origin/codex/wms607-startup-owner-software-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0511220Z  * [new branch]          codex/wms607-startup-owner-test-contract-20261007 -> origin/codex/wms607-startup-owner-test-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0513970Z  * [new branch]          codex/wms607-updater-independent-review-20261007 -> origin/codex/wms607-updater-independent-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0517170Z  * [new branch]          codex/wms607-updater-software-acceptance-20261007 -> origin/codex/wms607-updater-software-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0519770Z  * [new branch]          codex/wms607-updater-stop-contract-20261007 -> origin/codex/wms607-updater-stop-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0522520Z  * [new branch]          codex/wms607-updater-stop-rereview-20261007 -> origin/codex/wms607-updater-stop-rereview-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0525310Z  * [new branch]          codex/wms607-updater-test-contract-20261007 -> origin/codex/wms607-updater-test-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0527340Z  * [new branch]          codex/wms607-windows-x64 -> origin/codex/wms607-windows-x64
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0529240Z  * [new branch]          codex/wms608-scanned-row-first -> origin/codex/wms608-scanned-row-first
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0531870Z  * [new branch]          codex/wms610-fbs-picking-columns -> origin/codex/wms610-fbs-picking-columns
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0534050Z  * [new branch]          codex/wms611-fbs-print-disabled -> origin/codex/wms611-fbs-print-disabled
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0535880Z  * [new branch]          codex/wms612-delivery-checks -> origin/codex/wms612-delivery-checks
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0537570Z  * [new branch]          codex/wms612-staging-all -> origin/codex/wms612-staging-all
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0539320Z  * [new branch]          codex/wms614-616-prod-release -> origin/codex/wms614-616-prod-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0540940Z  * [new branch]          codex/wms617-video-demo -> origin/codex/wms617-video-demo
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0542560Z  * [new branch]          codex/wms618-staging    -> origin/codex/wms618-staging
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0544000Z  * [new branch]          codex/wms622-fbo-kiz-recovery -> origin/codex/wms622-fbo-kiz-recovery
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0545610Z  * [new branch]          codex/wms623-artmaks-unused-pdfs -> origin/codex/wms623-artmaks-unused-pdfs
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0549110Z  * [new branch]          codex/wms624-developer-requests-current -> origin/codex/wms624-developer-requests-current
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0550890Z  * [new branch]          codex/wms624-sync-cadence -> origin/codex/wms624-sync-cadence
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0552490Z  * [new branch]          codex/wms625-print-reliability -> origin/codex/wms625-print-reliability
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0554500Z  * [new branch]          codex/wms626-astra-effort-limit -> origin/codex/wms626-astra-effort-limit
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0556260Z  * [new branch]          codex/wms627-artmaks-stock-reconcile -> origin/codex/wms627-artmaks-stock-reconcile
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0558190Z  * [new branch]          codex/wms628-artmaks-wrong-scan -> origin/codex/wms628-artmaks-wrong-scan
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0559980Z  * [new branch]          codex/wms628-production -> origin/codex/wms628-production
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0561430Z  * [new branch]          codex/wms629-packing-scroll -> origin/codex/wms629-packing-scroll
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0564520Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0566340Z  * [new branch]          codex/wms651-counter-copy -> origin/codex/wms651-counter-copy
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0568540Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0571070Z  * [new branch]          codex/wms652-abort-boundary-review-20261007 -> origin/codex/wms652-abort-boundary-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0572950Z  * [new branch]          codex/wms652-acceptance-evidence -> origin/codex/wms652-acceptance-evidence
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0575250Z  * [new branch]          codex/wms652-accepted-reference-contract-20261007 -> origin/codex/wms652-accepted-reference-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0577650Z  * [new branch]          codex/wms652-all-pg-fixture-comparison -> origin/codex/wms652-all-pg-fixture-comparison
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0579670Z  * [new branch]          codex/wms652-backup-boundary-format -> origin/codex/wms652-backup-boundary-format
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0582080Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0584550Z  * [new branch]          codex/wms652-backup-fixture-review -> origin/codex/wms652-backup-fixture-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0587330Z  * [new branch]          codex/wms652-backup-format-ledger-review-20261007 -> origin/codex/wms652-backup-format-ledger-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0590420Z  * [new branch]          codex/wms652-batch-exact-ledger-contract-20261007 -> origin/codex/wms652-batch-exact-ledger-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0593910Z  * [new branch]          codex/wms652-batch-exact-pair-pins -> origin/codex/wms652-batch-exact-pair-pins
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0596540Z  * [new branch]          codex/wms652-batch-exact-pair-review-20261007 -> origin/codex/wms652-batch-exact-pair-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0599460Z  * [new branch]          codex/wms652-batch-pid-contract-20261007 -> origin/codex/wms652-batch-pid-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0601880Z  * [new branch]          codex/wms652-batch-pid-fixture-fix -> origin/codex/wms652-batch-pid-fixture-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0604300Z  * [new branch]          codex/wms652-batch-pid-fixture-review-20261007 -> origin/codex/wms652-batch-pid-fixture-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0607060Z  * [new branch]          codex/wms652-batch-release-acceptance-20261007 -> origin/codex/wms652-batch-release-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0609260Z  * [new branch]          codex/wms652-bot-night  -> origin/codex/wms652-bot-night
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0611420Z  * [new branch]          codex/wms652-cdp-ambiguity-contract-20261007 -> origin/codex/wms652-cdp-ambiguity-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0613770Z  * [new branch]          codex/wms652-cdp-cancel-contract-20261007 -> origin/codex/wms652-cdp-cancel-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0617400Z  * [new branch]          codex/wms652-cdp-contract-review-20261007 -> origin/codex/wms652-cdp-contract-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0620030Z  * [new branch]          codex/wms652-cdp-explicit-abort-diagnostic -> origin/codex/wms652-cdp-explicit-abort-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0622480Z  * [new branch]          codex/wms652-cdp-fixture-source-review-20261007 -> origin/codex/wms652-cdp-fixture-source-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0624990Z  * [new branch]          codex/wms652-cdp-known-cancel-fixture -> origin/codex/wms652-cdp-known-cancel-fixture
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0627250Z  * [new branch]          codex/wms652-cdp-r1-rereview-20261007 -> origin/codex/wms652-cdp-r1-rereview-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0629590Z  * [new branch]          codex/wms652-checkpoint-requirements -> origin/codex/wms652-checkpoint-requirements
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0631790Z  * [new branch]          codex/wms652-chrome141-job-lifecycle-diagnostic -> origin/codex/wms652-chrome141-job-lifecycle-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0635100Z  * [new branch]          codex/wms652-ci-delta-review -> origin/codex/wms652-ci-delta-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0636630Z  * [new branch]          codex/wms652-ci-two-shards -> origin/codex/wms652-ci-two-shards
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0638620Z  * [new branch]          codex/wms652-critical-fbs-contracts -> origin/codex/wms652-critical-fbs-contracts
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0641240Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0643880Z  * [new branch]          codex/wms652-etalon-invalid-id-identity-diagnostic -> origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0646600Z  * [new branch]          codex/wms652-etalon-invalid-id-review-20261007 -> origin/codex/wms652-etalon-invalid-id-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0649300Z  * [new branch]          codex/wms652-etalon-low-overhead-error-context -> origin/codex/wms652-etalon-low-overhead-error-context
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0652410Z  * [new branch]          codex/wms652-etalon-xhr-context-review-20261007 -> origin/codex/wms652-etalon-xhr-context-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0655580Z  * [new branch]          codex/wms652-final-batch-source-pin-20261007 -> origin/codex/wms652-final-batch-source-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0658290Z  * [new branch]          codex/wms652-final-bootstrap-pin-20261007 -> origin/codex/wms652-final-bootstrap-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0661310Z  * [new branch]          codex/wms652-final-infrastructure-pin-review-20261007 -> origin/codex/wms652-final-infrastructure-pin-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0664350Z  * [new branch]          codex/wms652-final-source-pin-review-20261007 -> origin/codex/wms652-final-source-pin-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0666740Z  * [new branch]          codex/wms652-final-stock-source-pin-20261007 -> origin/codex/wms652-final-stock-source-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0669670Z  * [new branch]          codex/wms652-frontend-report-identities-20261007 -> origin/codex/wms652-frontend-report-identities-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0672210Z  * [new branch]          codex/wms652-independent-main-check -> origin/codex/wms652-independent-main-check
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0674810Z  * [new branch]          codex/wms652-infrastructure-acceptance-20261007 -> origin/codex/wms652-infrastructure-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0678010Z  * [new branch]          codex/wms652-infrastructure-corrections-review-20261007 -> origin/codex/wms652-infrastructure-corrections-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0681040Z  * [new branch]          codex/wms652-nested-stock-acceptance-20261007 -> origin/codex/wms652-nested-stock-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0684030Z  * [new branch]          codex/wms652-nested-stock-causal-review-20261007 -> origin/codex/wms652-nested-stock-causal-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0687060Z  * [new branch]          codex/wms652-nested-stock-fix-review-20261007 -> origin/codex/wms652-nested-stock-fix-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0691890Z  * [new branch]          codex/wms652-nested-stock-publish-requirements-20261007 -> origin/codex/wms652-nested-stock-publish-requirements-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0695290Z  * [new branch]          codex/wms652-nested-stock-test-contract-20261007 -> origin/codex/wms652-nested-stock-test-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0697730Z  * [new branch]          codex/wms652-night-reader -> origin/codex/wms652-night-reader
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0699520Z  * [new branch]          codex/wms652-night-repair -> origin/codex/wms652-night-repair
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0701000Z  * [new branch]          codex/wms652-pdf-probe  -> origin/codex/wms652-pdf-probe
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0702880Z  * [new branch]          codex/wms652-pg-collector-peer-review -> origin/codex/wms652-pg-collector-peer-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0705430Z  * [new branch]          codex/wms652-portable-backup-proof-20261007 -> origin/codex/wms652-portable-backup-proof-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0709360Z  * [new branch]          codex/wms652-process-fixes-review-20261007 -> origin/codex/wms652-process-fixes-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0711650Z  * [new branch]          codex/wms652-process-gates -> origin/codex/wms652-process-gates
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0713760Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0716380Z  * [new branch]          codex/wms652-prod-env-negative-canary-20261007 -> origin/codex/wms652-prod-env-negative-canary-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0719070Z  * [new branch]          codex/wms652-realqr-cdp-lifecycle-diagnostic -> origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0721880Z  * [new branch]          codex/wms652-reference-migration-review-20261007 -> origin/codex/wms652-reference-migration-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0724230Z  * [new branch]          codex/wms652-regression-guard -> origin/codex/wms652-regression-guard
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0726310Z  * [new branch]          codex/wms652-release-ci-20261006 -> origin/codex/wms652-release-ci-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0728800Z  * [new branch]          codex/wms652-release-execution-evidence-20261007 -> origin/codex/wms652-release-execution-evidence-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0732030Z  * [new branch]          codex/wms652-remount-interception-diagnosis-20261007 -> origin/codex/wms652-remount-interception-diagnosis-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0735310Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0738100Z  * [new branch]          codex/wms652-reviewed-batch-source-pin-20261007 -> origin/codex/wms652-reviewed-batch-source-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0741300Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0743890Z  * [new branch]          codex/wms652-reviewed-infrastructure-pin-20261007 -> origin/codex/wms652-reviewed-infrastructure-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0746340Z  * [new branch]          codex/wms652-reviewed-stock-source-pin-20261007 -> origin/codex/wms652-reviewed-stock-source-pin-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0748480Z  * [new branch]          codex/wms652-server-deploy-gate -> origin/codex/wms652-server-deploy-gate
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0750580Z  * [new branch]          codex/wms652-sonnet-frontend -> origin/codex/wms652-sonnet-frontend
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0752740Z  * [new branch]          codex/wms652-stock-outer-commit-guard -> origin/codex/wms652-stock-outer-commit-guard
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0754770Z  * [new branch]          codex/wms652-trusted-anchor -> origin/codex/wms652-trusted-anchor
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0756450Z  * [new branch]          codex/wms652-ui-gate    -> origin/codex/wms652-ui-gate
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0758590Z  * [new branch]          codex/wms652-warehouse-sc-sqlite-diagnostic -> origin/codex/wms652-warehouse-sc-sqlite-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0762400Z  * [new branch]          codex/wms652-workspace-runtime-context-diagnostic -> origin/codex/wms652-workspace-runtime-context-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0764840Z  * [new branch]          codex/wms653-scope-attribution-20261006 -> origin/codex/wms653-scope-attribution-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0767310Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0770260Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0772840Z  * [new branch]          codex/wms654-product-20261006 -> origin/codex/wms654-product-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0774460Z  * [new branch]          codex/wms659-imperia-boxes -> origin/codex/wms659-imperia-boxes
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0775970Z  * [new branch]          codex/wms660-barcodes   -> origin/codex/wms660-barcodes
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0777510Z  * [new branch]          codex/wms661-analyst-20261006 -> origin/codex/wms661-analyst-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0780820Z  * [new branch]          codex/wms661-installed-baseline-tests -> origin/codex/wms661-installed-baseline-tests
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0783410Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0785880Z  * [new branch]          codex/wms661-runtime-preflight-20261006 -> origin/codex/wms661-runtime-preflight-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0788120Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0790700Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0793060Z  * [new branch]          codex/wms662-663-priority -> origin/codex/wms662-663-priority
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0794840Z  * [new branch]          codex/wms662-f6-testwriter -> origin/codex/wms662-f6-testwriter
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0797240Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0799870Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0801810Z  * [new branch]          codex/wms662-prod-handoff -> origin/codex/wms662-prod-handoff
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0803310Z  * [new branch]          codex/wms662-review-c36b8ab -> origin/codex/wms662-review-c36b8ab
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0805200Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0807500Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0810480Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0813400Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0816530Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0819490Z  * [new branch]          codex/wms663-release-retry-acceptance -> origin/codex/wms663-release-retry-acceptance
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0822450Z  * [new branch]          codex/wms663-release-retry-fix -> origin/codex/wms663-release-retry-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0825690Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0829610Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0833390Z  * [new branch]          codex/wms663-retry-contract-20261006 -> origin/codex/wms663-retry-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0836690Z  * [new branch]          codex/wms663-scoped-priority-20261006 -> origin/codex/wms663-scoped-priority-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0838880Z  * [new branch]          codex/wms664-dispatcher-stall -> origin/codex/wms664-dispatcher-stall
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0841380Z  * [new branch]          codex/wms665-avpack-withdrawal-helper -> origin/codex/wms665-avpack-withdrawal-helper
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0844240Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0847800Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0850860Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0853740Z  * [new branch]          codex/wms666-ci-history-scope-20261006 -> origin/codex/wms666-ci-history-scope-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0857490Z  * [new branch]          codex/wms666-ci-qr-finish-20261006 -> origin/codex/wms666-ci-qr-finish-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0859980Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0862800Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0865390Z  * [new branch]          codex/wms666-priority-etalon-20261006 -> origin/codex/wms666-priority-etalon-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0867810Z  * [new branch]          codex/wms666-release-c11-acceptance -> origin/codex/wms666-release-c11-acceptance
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0870380Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0873110Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0876640Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0879170Z  * [new branch]          codex/wms666-unified-fbs-packing -> origin/codex/wms666-unified-fbs-packing
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0881080Z  * [new branch]          codex/wms667-stock-filter -> origin/codex/wms667-stock-filter
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0883570Z  * [new branch]          codex/wms667-visual-runner -> origin/codex/wms667-visual-runner
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0885640Z  * [new branch]          codex/wms668-dispatcher-batch-final -> origin/codex/wms668-dispatcher-batch-final
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0888400Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0891150Z  * [new branch]          codex/wms672-673-analyst-20261006 -> origin/codex/wms672-673-analyst-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0893850Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0896420Z  * [new branch]          codex/wms672-c5-cache-clock-trace -> origin/codex/wms672-c5-cache-clock-trace
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0898550Z  * [new branch]          codex/wms672-c5-cache-debug-trace -> origin/codex/wms672-c5-cache-debug-trace
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0900880Z  * [new branch]          codex/wms672-c5-cache-trace -> origin/codex/wms672-c5-cache-trace
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0903330Z  * [new branch]          codex/wms672-c5-linux-diagnostic -> origin/codex/wms672-c5-linux-diagnostic
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0905060Z  * [new branch]          codex/wms672-c5-linux-fix-check -> origin/codex/wms672-c5-linux-fix-check
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0906680Z  * [new branch]          codex/wms672-c5-peer-drain-check -> origin/codex/wms672-c5-peer-drain-check
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0908610Z  * [new branch]          codex/wms672-c5-raster-resource-comparison -> origin/codex/wms672-c5-raster-resource-comparison
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0911530Z  * [new branch]          codex/wms672-c5-target-cache-trace -> origin/codex/wms672-c5-target-cache-trace
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0913380Z  * [new branch]          codex/wms672-functional-finish-20261006 -> origin/codex/wms672-functional-finish-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0915150Z  * [new branch]          codex/wms672-native-decode-fix -> origin/codex/wms672-native-decode-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0948980Z  * [new branch]          codex/wms672-native-error-contract-20261007 -> origin/codex/wms672-native-error-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0951890Z  * [new branch]          codex/wms672-native-fix-review -> origin/codex/wms672-native-fix-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0954340Z  * [new branch]          codex/wms672-peer-drain-contract-20261007 -> origin/codex/wms672-peer-drain-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0956800Z  * [new branch]          codex/wms672-peer-drain-source-review -> origin/codex/wms672-peer-drain-source-review
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0959590Z  * [new branch]          codex/wms672-raster-analyst-acceptance-20261007 -> origin/codex/wms672-raster-analyst-acceptance-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0962700Z  * [new branch]          codex/wms672-raster-resource-contract-20261007 -> origin/codex/wms672-raster-resource-contract-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0964570Z  * [new branch]          codex/wms672-raster-resource-fix -> origin/codex/wms672-raster-resource-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0966330Z  * [new branch]          codex/wms672-raster-resource-review-20261007 -> origin/codex/wms672-raster-resource-review-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0968230Z  * [new branch]          codex/wms675-ci-topology-proof-20261006 -> origin/codex/wms675-ci-topology-proof-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0969970Z  * [new branch]          codex/wms675-fresh-readonly-20261007 -> origin/codex/wms675-fresh-readonly-20261007
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0971760Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0973650Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0975330Z  * [new branch]          codex/wms675-reserve-reconcile -> origin/codex/wms675-reserve-reconcile
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0976770Z  * [new branch]          codex/wms676-crosscheck-astra -> origin/codex/wms676-crosscheck-astra
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0978310Z  * [new branch]          codex/wms676-night-review-fallback -> origin/codex/wms676-night-review-fallback
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0979800Z  * [new branch]          codex/wms676-sol61-pipeline -> origin/codex/wms676-sol61-pipeline
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0981310Z  * [new branch]          codex/wms679-fbw-analysis-source349 -> origin/codex/wms679-fbw-analysis-source349
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0983060Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0984560Z  * [new branch]          codex/wms681-qr-recovery -> origin/codex/wms681-qr-recovery
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0985910Z  * [new branch]          codex/wms681-real-wb-qr-hotfix -> origin/codex/wms681-real-wb-qr-hotfix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0987420Z  * [new branch]          deploy/wb-emulator-real-order-qr -> origin/deploy/wb-emulator-real-order-qr
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0988950Z  * [new branch]          docs/owner-requirements-20260831 -> origin/docs/owner-requirements-20260831
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0990680Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0992200Z  * [new branch]          docs/wms469-470-backlog -> origin/docs/wms469-470-backlog
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0993500Z  * [new branch]          docs/wms561-ship-by-in-supply -> origin/docs/wms561-ship-by-in-supply
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0994940Z  * [new branch]          docs/wms584-585-tsd-walkthrough -> origin/docs/wms584-585-tsd-walkthrough
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.0997010Z  * [new branch]          docs/wms648-ozon-catalog-backlog -> origin/docs/wms648-ozon-catalog-backlog
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1000230Z  * [new branch]          docs/wms649-shk-po-ploshchadke -> origin/docs/wms649-shk-po-ploshchadke
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1001470Z  * [new branch]          etalon                  -> origin/etalon
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1002630Z  * [new branch]          feat/cz-print-split-artifact -> origin/feat/cz-print-split-artifact
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1004130Z  * [new branch]          feat/fbs-warehouse-filter-20260812 -> origin/feat/fbs-warehouse-filter-20260812
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1005670Z  * [new branch]          feat/ff-inbound-create-20260812 -> origin/feat/ff-inbound-create-20260812
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1007130Z  * [new branch]          feat/marking-import-s3-storage -> origin/feat/marking-import-s3-storage
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1008490Z  * [new branch]          feat/mobile-fbs-demo-seed -> origin/feat/mobile-fbs-demo-seed
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1009790Z  * [new branch]          feat/product-barcode-print -> origin/feat/product-barcode-print
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1011040Z  * [new branch]          feat/wms056-audit-trail -> origin/feat/wms056-audit-trail
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1012820Z  * [new branch]          feat/wms062-warehouse-docs -> origin/feat/wms062-warehouse-docs
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1014130Z  * [new branch]          feat/wms111-wb-cancel-return -> origin/feat/wms111-wb-cancel-return
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1015460Z  * [new branch]          feat/wms121-supply-identity -> origin/feat/wms121-supply-identity
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1016780Z  * [new branch]          feat/wms270-login-and-ports -> origin/feat/wms270-login-and-ports
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1018130Z  * [new branch]          feat/wms338-stock-min-formula -> origin/feat/wms338-stock-min-formula
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1019430Z  * [new branch]          feat/wms349-merge-service -> origin/feat/wms349-merge-service
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1020600Z  * [new branch]          feat/wms363-ozon-tsd    -> origin/feat/wms363-ozon-tsd
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1021710Z  * [new branch]          feat/wms397-chat-mvp    -> origin/feat/wms397-chat-mvp
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1022910Z  * [new branch]          feat/wms401-mobile-followup -> origin/feat/wms401-mobile-followup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1024310Z  * [new branch]          feat/wms433-assistant-release -> origin/feat/wms433-assistant-release
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1025640Z  * [new branch]          feat/wms433-tenant-rollout -> origin/feat/wms433-tenant-rollout
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1026890Z  * [new branch]          feat/wms447-fbs-box-count -> origin/feat/wms447-fbs-box-count
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1028280Z  * [new branch]          feat/wms453-455-boxes-shared-pool -> origin/feat/wms453-455-boxes-shared-pool
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1029650Z  * [new branch]          feat/wms469-stock-dialog -> origin/feat/wms469-stock-dialog
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1030950Z  * [new branch]          feat/wms529-stock-vs-location -> origin/feat/wms529-stock-vs-location
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1032220Z  * [new branch]          feat/wms534-intake-box  -> origin/feat/wms534-intake-box
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1033500Z  * [new branch]          feat/wms536-scan-layer  -> origin/feat/wms536-scan-layer
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1038000Z  * [new branch]          feat/wms539-artmaks-cells-import -> origin/feat/wms539-artmaks-cells-import
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1039870Z  * [new branch]          feat/wms631-print-agent -> origin/feat/wms631-print-agent
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1041440Z  * [new branch]          feat/wms633-chz-copies  -> origin/feat/wms633-chz-copies
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1043270Z  * [new branch]          feat/wms636-wb-rejected-filter -> origin/feat/wms636-wb-rejected-filter
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1045180Z  * [new branch]          feat/wms641-support-agent -> origin/feat/wms641-support-agent
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1046610Z  * [new branch]          feat/wms650-sorting-impl -> origin/feat/wms650-sorting-impl
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1048460Z  * [new branch]          feat/wms650-sorting-mockup -> origin/feat/wms650-sorting-mockup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1050190Z  * [new branch]          fix/auth-staff-e2e-20260815 -> origin/fix/auth-staff-e2e-20260815
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1052290Z  * [new branch]          fix/cis-pool-full-20260821 -> origin/fix/cis-pool-full-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1056300Z  * [new branch]          fix/cz-artifact-print-scale -> origin/fix/cz-artifact-print-scale
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1058240Z  * [new branch]          fix/deploy-hard-reset   -> origin/fix/deploy-hard-reset
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1060210Z  * [new branch]          fix/fbs-box-controls-20260901 -> origin/fix/fbs-box-controls-20260901
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1063310Z  * [new branch]          fix/fbs-supplier-status-sync -> origin/fix/fbs-supplier-status-sync
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1065190Z  * [new branch]          fix/inventory-owner-block-20260902 -> origin/fix/inventory-owner-block-20260902
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1067560Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1069440Z  * [new branch]          fix/kiz-gs-restore-20260821 -> origin/fix/kiz-gs-restore-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1070880Z  * [new branch]          fix/no-distribution-20260821 -> origin/fix/no-distribution-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1074620Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1076630Z  * [new branch]          fix/packing-optional-20260819 -> origin/fix/packing-optional-20260819
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1078290Z  * [new branch]          fix/packing-optional-to-prod -> origin/fix/packing-optional-to-prod
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1079880Z  * [new branch]          fix/picklist-size-20260819 -> origin/fix/picklist-size-20260819
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1081700Z  * [new branch]          fix/print-pdf-dialog    -> origin/fix/print-pdf-dialog
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1083170Z  * [new branch]          fix/print-restore-proven -> origin/fix/print-restore-proven
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1084670Z  * [new branch]          fix/review-findings-20260902 -> origin/fix/review-findings-20260902
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1086570Z  * [new branch]          fix/seller-honest-sign-sync-20260819 -> origin/fix/seller-honest-sign-sync-20260819
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1088860Z  * [new branch]          fix/warehouse-single-20260821 -> origin/fix/warehouse-single-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1090460Z  * [new branch]          fix/wb-label-seller-line-height -> origin/fix/wb-label-seller-line-height
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1091980Z  * [new branch]          fix/wb-label-seller-line-trim -> origin/fix/wb-label-seller-line-trim
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1093740Z  * [new branch]          fix/wb-meta-method-20260821 -> origin/fix/wb-meta-method-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1095910Z  * [new branch]          fix/wb-token-save-500   -> origin/fix/wb-token-save-500
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1097890Z  * [new branch]          fix/wms-fbs-single-pick-by-cell -> origin/fix/wms-fbs-single-pick-by-cell
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1099920Z  * [new branch]          fix/wms-session-regression -> origin/fix/wms-session-regression
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1101530Z  * [new branch]          fix/wms487-tape-print-missing-codes -> origin/fix/wms487-tape-print-missing-codes
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1103070Z  * [new branch]          fix/wms517-price-snapshot -> origin/fix/wms517-price-snapshot
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1104430Z  * [new branch]          fix/wms517-sold-only    -> origin/fix/wms517-sold-only
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1105690Z  * [new branch]          fix/wms625-on-etalon-20261003 -> origin/fix/wms625-on-etalon-20261003
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1107100Z  * [new branch]          fix/wms634-fbo-date-delegated -> origin/fix/wms634-fbo-date-delegated
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1108830Z  * [new branch]          fix/wms635-kiz-no-wb-wait -> origin/fix/wms635-kiz-no-wb-wait
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1110380Z  * [new branch]          fix/wms639-scan-no-wb-readback -> origin/fix/wms639-scan-no-wb-readback
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1112490Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait -> origin/fix/wms640-scan-kiz-no-wb-wait
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1114680Z  * [new branch]          fix/wms641-kiz-delete-background -> origin/fix/wms641-kiz-delete-background
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1116860Z  * [new branch]          fix/wms642-kiz-no-locks-handover -> origin/fix/wms642-kiz-no-locks-handover
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1119420Z  * [new branch]          fix/wms643-no-print-when-unchecked -> origin/fix/wms643-no-print-when-unchecked
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1121440Z  * [new branch]          fix/wms652-contract-check-merge -> origin/fix/wms652-contract-check-merge
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1123530Z  * [new branch]          fix/wms656-full-kiz-label -> origin/fix/wms656-full-kiz-label
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1124910Z  * [new branch]          fix/wms666-product-stock-scope -> origin/fix/wms666-product-stock-scope
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1126610Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1129110Z  * [new branch]          hotfix/boxes-print-all-qr -> origin/hotfix/boxes-print-all-qr
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1131340Z  * [new branch]          hotfix/cz-print-regression-2026-07-07 -> origin/hotfix/cz-print-regression-2026-07-07
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1133030Z  * [new branch]          hotfix/inbound-qty-blur-v2 -> origin/hotfix/inbound-qty-blur-v2
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1135520Z  * [new branch]          hotfix/inbound-table-header-alignment -> origin/hotfix/inbound-table-header-alignment
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1138380Z  * [new branch]          hotfix/ozon-requirements-int-sku -> origin/hotfix/ozon-requirements-int-sku
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1140640Z  * [new branch]          hotfix/tz-print-landscape-revert -> origin/hotfix/tz-print-landscape-revert
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1142430Z  * [new branch]          hotfix/wb-unified-token-fbs-intake -> origin/hotfix/wb-unified-token-fbs-intake
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1143990Z  * [new branch]          hotfix/wms622-628-restore -> origin/hotfix/wms622-628-restore
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1145670Z  * [new branch]          integration/fbs-fixes-20260821 -> origin/integration/fbs-fixes-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1147620Z  * [new branch]          main                    -> origin/main
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1148770Z  * [new branch]          mobile/android7-v014-recovery -> origin/mobile/android7-v014-recovery
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1150210Z  * [new branch]          mobile/feat-fbs         -> origin/mobile/feat-fbs
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1151340Z  * [new branch]          mockup/psp2-clickable   -> origin/mockup/psp2-clickable
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1153290Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1155560Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1157590Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1159680Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1162110Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1164680Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1166690Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1168810Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1171580Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1174960Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1176670Z  * [new branch]          night/volna-9/lane-1/01-wb-marking -> origin/night/volna-9/lane-1/01-wb-marking
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1178400Z  * [new branch]          night/volna-9/lane-1/07-reporting -> origin/night/volna-9/lane-1/07-reporting
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1181070Z  * [new branch]          night/volna-9/lane-1/defect-01 -> origin/night/volna-9/lane-1/defect-01
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1183440Z  * [new branch]          night/volna-9/lane-1/feature-07 -> origin/night/volna-9/lane-1/feature-07
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1185060Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen -> origin/night/volna-9/lane-2/02-verdikt-screen
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1186620Z  * [new branch]          night/volna-9/lane-2/08-storage -> origin/night/volna-9/lane-2/08-storage
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1188100Z  * [new branch]          night/volna-9/lane-2/defect-02 -> origin/night/volna-9/lane-2/defect-02
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1189910Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1192020Z  * [new branch]          night/volna-9/lane-3/09-billing -> origin/night/volna-9/lane-3/09-billing
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1193630Z  * [new branch]          night/volna-9/lane-3/defect-03 -> origin/night/volna-9/lane-3/defect-03
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1196210Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1201080Z  * [new branch]          night/volna-9/lane-4/defect-04 -> origin/night/volna-9/lane-4/defect-04
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1203440Z  * [new branch]          night/volna-9/lane-5/05-prod-slow -> origin/night/volna-9/lane-5/05-prod-slow
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1205680Z  * [new branch]          night/volna-9/lane-5/defect-05 -> origin/night/volna-9/lane-5/defect-05
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1208330Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1210860Z  * [new branch]          night/volna-9/lane-6/defect-06 -> origin/night/volna-9/lane-6/defect-06
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1212900Z  * [new branch]          night/wms-653-5beb52da  -> origin/night/wms-653-5beb52da
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1214780Z  * [new branch]          night/wms-654-5beb52da  -> origin/night/wms-654-5beb52da
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1216650Z  * [new branch]          night/wms-657-5beb52da  -> origin/night/wms-657-5beb52da
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1218440Z  * [new branch]          night/wms-658-5beb52da  -> origin/night/wms-658-5beb52da
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1220290Z  * [new branch]          night/wms-659-5beb52da  -> origin/night/wms-659-5beb52da
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1222590Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1225610Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1228500Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1234370Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1237220Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1241960Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1247350Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1250470Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1256470Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1261850Z  * [new branch]          process/pipeline-on-etalon-20260821 -> origin/process/pipeline-on-etalon-20260821
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1265190Z  * [new branch]          release/2026-10-02-packing-stock -> origin/release/2026-10-02-packing-stock
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1268830Z  * [new branch]          release/2026-10-03-ready -> origin/release/2026-10-03-ready
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1271570Z  * [new branch]          release/barcode-tall-label -> origin/release/barcode-tall-label
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1274180Z  * [new branch]          release/inbound-print-fix -> origin/release/inbound-print-fix
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1276700Z  * [new branch]          release/wms641-agent-v1 -> origin/release/wms641-agent-v1
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1279790Z  * [new branch]          release/wms641-agent-v2 -> origin/release/wms641-agent-v2
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1282050Z  * [new branch]          release/wms641-agent-v3 -> origin/release/wms641-agent-v3
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1285340Z  * [new branch]          review/pick-and-binding-fixes-20260816 -> origin/review/pick-and-binding-fixes-20260816
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1289100Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1292440Z  * [new branch]          speed/test-infra-20260830 -> origin/speed/test-infra-20260830
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1294970Z  * [new branch]          staging                 -> origin/staging
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1296730Z  * [new branch]          support-task/WMS-651-4  -> origin/support-task/WMS-651-4
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1299360Z  * [new branch]          support-task/WMS-653-6  -> origin/support-task/WMS-653-6
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1302070Z  * [new branch]          support-task/WMS-654-7  -> origin/support-task/WMS-654-7
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1304220Z  * [new branch]          support-task/WMS-657-8  -> origin/support-task/WMS-657-8
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1306780Z  * [new branch]          support-task/WMS-658-9  -> origin/support-task/WMS-658-9
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1308790Z  * [new branch]          support-task/WMS-661-14 -> origin/support-task/WMS-661-14
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1311450Z  * [new branch]          support-task/WMS-667-18 -> origin/support-task/WMS-667-18
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1314290Z  * [new branch]          support-task/WMS-677-22 -> origin/support-task/WMS-677-22
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1316980Z  * [new branch]          support-task/WMS-679-26 -> origin/support-task/WMS-679-26
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1319500Z  * [new branch]          support-task/WMS-680-27 -> origin/support-task/WMS-680-27
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1320940Z  * [new branch]          support-task/WMS-683-29 -> origin/support-task/WMS-683-29
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1322690Z  * [new branch]          test/wms672-c7-c10-c11-20261006 -> origin/test/wms672-c7-c10-c11-20261006
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1324380Z  * [new tag]             tsd-preview             -> tsd-preview
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1325900Z  * [new tag]             wms-print-direct-v2026.09.30.1 -> wms-print-direct-v2026.09.30.1
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1327710Z  * [new tag]             wms-print-direct-v2026.09.30.2 -> wms-print-direct-v2026.09.30.2
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1329440Z  * [new tag]             wms-print-direct-v2026.09.30.3 -> wms-print-direct-v2026.09.30.3
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1331440Z  * [new tag]             wms-print-direct-v2026.09.30.4 -> wms-print-direct-v2026.09.30.4
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1333120Z  * [new tag]             wms-print-direct-v2026.09.30.5 -> wms-print-direct-v2026.09.30.5
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1334800Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1 -> wms-print-direct-v2026.10.01.1-rc1
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1336580Z  * [new tag]             wms-print-v2026.09.13.1 -> wms-print-v2026.09.13.1
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1338000Z  * [new tag]             wms-print-v2026.09.13.2 -> wms-print-v2026.09.13.2
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1339730Z  * [new tag]             wms-print-v2026.09.13.3 -> wms-print-v2026.09.13.3
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1343720Z [command]/usr/local/bin/git rev-parse --verify --quiet a475a7342c0da72dd49b2990bd998c522ecc2c2b^{object}
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1345610Z a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1348610Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1349840Z ##[group]Determining the checkout info
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1351240Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1352720Z [command]/usr/local/bin/git sparse-checkout disable
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1355270Z [command]/usr/local/bin/git config --local --unset-all extensions.worktreeConfig
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1358060Z ##[group]Checking out the ref
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:50.1359310Z [command]/usr/local/bin/git checkout --progress --force a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.3053000Z Updating files:  41% (1762/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.4056390Z Updating files:  42% (1795/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.4926180Z Updating files:  43% (1837/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5084220Z Updating files:  44% (1880/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5138430Z Updating files:  45% (1923/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5203670Z Updating files:  46% (1966/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5279720Z Updating files:  47% (2008/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5347540Z Updating files:  48% (2051/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5416780Z Updating files:  49% (2094/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5681550Z Updating files:  50% (2136/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.5948510Z Updating files:  51% (2179/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.7757010Z Updating files:  52% (2222/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.8131810Z Updating files:  53% (2265/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.8412130Z Updating files:  54% (2307/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:51.9846240Z Updating files:  55% (2350/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.0591530Z Updating files:  56% (2393/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2293010Z Updating files:  57% (2436/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2364330Z Updating files:  58% (2478/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2423840Z Updating files:  59% (2521/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2465210Z Updating files:  59% (2530/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2511870Z Updating files:  60% (2564/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2554100Z Updating files:  61% (2606/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.2790610Z Updating files:  62% (2649/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.3193230Z Updating files:  63% (2692/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.3508460Z Updating files:  64% (2735/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.4161160Z Updating files:  65% (2777/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.4452300Z Updating files:  66% (2820/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.4711240Z Updating files:  67% (2863/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.5016910Z Updating files:  68% (2905/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.5736560Z Updating files:  69% (2948/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.6428520Z Updating files:  70% (2991/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.8291690Z Updating files:  71% (3034/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.8819670Z Updating files:  72% (3076/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:52.9823070Z Updating files:  73% (3119/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.0040270Z Updating files:  74% (3162/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.0048490Z Updating files:  75% (3204/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.0159110Z Updating files:  76% (3247/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.0329270Z Updating files:  77% (3290/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.1754700Z Updating files:  78% (3333/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.3269760Z Updating files:  78% (3372/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.3511400Z Updating files:  79% (3375/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.3604460Z Updating files:  80% (3418/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.4246910Z Updating files:  81% (3461/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.5438840Z Updating files:  82% (3504/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.5605520Z Updating files:  83% (3546/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.5772970Z Updating files:  84% (3589/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.5992010Z Updating files:  85% (3632/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.6411610Z Updating files:  86% (3674/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.6794470Z Updating files:  87% (3717/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.7150620Z Updating files:  88% (3760/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.7926560Z Updating files:  89% (3803/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:53.9862350Z Updating files:  90% (3845/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.0865600Z Updating files:  91% (3888/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.0959620Z Updating files:  92% (3931/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.2044380Z Updating files:  93% (3973/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.2124790Z Updating files:  94% (4016/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.2332760Z Updating files:  95% (4059/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.2996820Z Updating files:  95% (4090/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.3439320Z Updating files:  96% (4102/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.4253440Z Updating files:  97% (4144/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.4777290Z Updating files:  98% (4187/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.5477890Z Updating files:  99% (4230/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.5516200Z Updating files: 100% (4272/4272)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.5593130Z Updating files: 100% (4272/4272), done.
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.5710510Z HEAD is now at a475a7342 WMS-607: accept reviewed startup ownership correction before package CI
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.6330150Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.6860240Z [command]/usr/local/bin/git log -1 --format=%H
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.6934190Z a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.7094250Z ##[group]Removing auth
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.7139150Z [command]/usr/local/bin/git config --local --name-only --get-regexp core\.sshCommand
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:54.7310130Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.0981700Z [command]/usr/local/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.1108390Z http.https://github.com/.extraheader
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.1939380Z [command]/usr/local/bin/git config --local --unset-all http.https://github.com/.extraheader
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.3320050Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.5947840Z [command]/usr/local/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.7177890Z [command]/usr/local/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+mac-direct-package (macos-15-intel, x86_64)	Run actions/checkout@v4	2026-10-07T06:54:55.8365090Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	﻿2026-10-07T06:54:55.8838270Z ##[group]Run actions/setup-python@v5
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8838970Z with:
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8839390Z   python-version: 3.13
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8840120Z   check-latest: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8846160Z   token: ***
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8846640Z   update-environment: true
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8847150Z   allow-prereleases: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8847800Z   freethreaded: false
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:55.8848290Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:56.3140340Z ##[group]Installed versions
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:56.3341180Z (node:36530) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:56.3386950Z (Use `node --trace-deprecation ...` to show where the warning was created)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:56.3935960Z Successfully set up CPython (3.13.15)
+mac-direct-package (macos-15-intel, x86_64)	Run actions/setup-python@v5	2026-10-07T06:54:56.3964840Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	﻿2026-10-07T06:54:56.4198490Z ##[group]Run test "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE"
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4200400Z [36;1mtest "$(git rev-parse HEAD)" = "$REQUESTED_SOURCE"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4201710Z [36;1mtest "$(uname -m)" = "$EXPECTED_ARCH"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4202890Z [36;1mmkdir -p "$RUNNER_TEMP/wms607-package"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4204370Z [36;1mgit rev-parse HEAD > "$RUNNER_TEMP/wms607-package/source.txt"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4206520Z [36;1mprintf '%s\n' "$HARNESS_SHA" > "$RUNNER_TEMP/wms607-package/harness.txt"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4208210Z [36;1muname -a > "$RUNNER_TEMP/wms607-package/environment.txt"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4209560Z [36;1mpython3 --version >> "$RUNNER_TEMP/wms607-package/environment.txt"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4211070Z [36;1mswiftc --version >> "$RUNNER_TEMP/wms607-package/environment.txt"[0m
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4399550Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4400870Z env:
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4402000Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4404080Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4405870Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4407500Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4409120Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4410830Z   REQUESTED_SOURCE: a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4412140Z   EXPECTED_ARCH: x86_64
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4413090Z   HARNESS_SHA: 1c2bddd844ff6baf331eae53b3a44304d834cc01
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:54:56.4414240Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Record actual source and architecture before all native checks	2026-10-07T06:55:06.5900090Z swift-driver version: 1.120.5 
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	﻿2026-10-07T06:55:06.6464520Z ##[group]Run git merge-base --is-ancestor 49da13fd2a0d22f207818248f274cf5ff400e39f HEAD
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6466740Z [36;1mgit merge-base --is-ancestor 49da13fd2a0d22f207818248f274cf5ff400e39f HEAD[0m
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6469400Z [36;1mpython3 -B scripts/ci/check_task_documents.py 49da13fd2a0d22f207818248f274cf5ff400e39f > "$RUNNER_TEMP/wms607-package/documents.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6617400Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6618520Z env:
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6619830Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6621510Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6624190Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6625750Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6627200Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require filled accepted WMS-607 requirements from the complete source checkout	2026-10-07T06:55:06.6628410Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	﻿2026-10-07T06:55:08.3059500Z ##[group]Run export WMS607_START_OWNER_RAW="$RUNNER_TEMP/wms607-package/startup-owner"
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3061690Z [36;1mexport WMS607_START_OWNER_RAW="$RUNNER_TEMP/wms607-package/startup-owner"[0m
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3064920Z [36;1mpython3 -B tools/print-agent/test_macos_direct_updater_start_owner_contract.py --report "$RUNNER_TEMP/wms607-package/startup-owner.xml" > "$RUNNER_TEMP/wms607-package/startup-owner.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3181880Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3182760Z env:
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3183770Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3185580Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3187130Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3188410Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3190360Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen startup owner three cases	2026-10-07T06:55:08.3191600Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	﻿2026-10-07T06:55:09.2957280Z ##[group]Run export WMS607_UPDATER_EVIDENCE_DIR="$RUNNER_TEMP/wms607-package/updater"
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.2958860Z [36;1mexport WMS607_UPDATER_EVIDENCE_DIR="$RUNNER_TEMP/wms607-package/updater"[0m
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.2961140Z [36;1mpython3 -B docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py --report "$RUNNER_TEMP/wms607-package/updater.xml" > "$RUNNER_TEMP/wms607-package/updater.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3040830Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3041430Z env:
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3042220Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3043450Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3044650Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3045730Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3046850Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen updater ten cases including actual native journal	2026-10-07T06:55:09.3047860Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	﻿2026-10-07T06:57:33.8466900Z ##[group]Run python3 -B tools/print-agent/test_macos_direct_updater_stop_contract.py --report "$RUNNER_TEMP/wms607-package/stop.xml" > "$RUNNER_TEMP/wms607-package/stop.log" 2>&1
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8469720Z [36;1mpython3 -B tools/print-agent/test_macos_direct_updater_stop_contract.py --report "$RUNNER_TEMP/wms607-package/stop.xml" > "$RUNNER_TEMP/wms607-package/stop.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8546170Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8546710Z env:
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8547400Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8548770Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8549830Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8550790Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8551760Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Frozen rollback four cases	2026-10-07T06:57:33.8552670Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	﻿2026-10-07T06:57:34.7946380Z ##[group]Run export WMS607_HTTP_EVIDENCE_DIR="$RUNNER_TEMP/wms607-package/http"
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.7947640Z [36;1mexport WMS607_HTTP_EVIDENCE_DIR="$RUNNER_TEMP/wms607-package/http"[0m
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.7949630Z [36;1mpython3 -B docs/evidence/WMS-607/updater-implementation-20261007/run-existing.py --report "$RUNNER_TEMP/wms607-package/existing.xml" > "$RUNNER_TEMP/wms607-package/existing.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8016770Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8017970Z env:
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8018570Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8019640Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8020710Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8021650Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8022650Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserved nineteen native HTTP resolver and print cases	2026-10-07T06:57:34.8023580Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	﻿2026-10-07T06:58:54.9105930Z ##[group]Run python3 - <<'PYCODE'
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9106660Z [36;1mpython3 - <<'PYCODE'[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9107200Z [36;1mfrom pathlib import Path[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9107750Z [36;1mimport os[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9108290Z [36;1mimport xml.etree.ElementTree as ET[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9109110Z [36;1msource = Path('docs/evidence/WMS-607/updater-stop-fix-20261007')[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9110170Z [36;1mactual = Path(os.environ['RUNNER_TEMP']) / 'wms607-package'[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9111580Z [36;1mfor report, baseline, expected in [('updater.xml','updater.xml',10),('stop.xml','green.xml',4),('existing.xml','existing.xml',19)]:[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9112820Z [36;1m    def ids(path):[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9113370Z [36;1m        root = ET.parse(path).getroot()[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9114530Z [36;1m        assert not list(root.iter('failure')) and not list(root.iter('error')) and not list(root.iter('skipped')), path[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9116030Z [36;1m        rows = [f"{case.get('classname')}::{case.get('name')}" for case in root.iter('testcase')][0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9117790Z [36;1m        assert len(rows) == expected and len(set(rows)) == expected, path[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9118640Z [36;1m        return set(rows)[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9119560Z [36;1m    assert ids(actual / report) == ids(source / baseline), report[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9120350Z [36;1mimport json[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9121460Z [36;1mcontract = json.loads(Path('docs/evidence/WMS-607/startup-owner-test-contract-20261007/contract.json').read_text())[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9122730Z [36;1mexpected = contract['suite']['count'][0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9123360Z [36;1massert expected == 3[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9124170Z [36;1massert ids(actual / 'startup-owner.xml') == set(contract['suite']['xml_ids'])[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9125070Z [36;1mPYCODE[0m
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9196120Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9196660Z env:
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9197290Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9198440Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9199540Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9200490Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9201470Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Require exact actual executed identities without skips or errors	2026-10-07T06:58:54.9202280Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	﻿2026-10-07T06:58:55.0182000Z ##[group]Run python3 -B tools/print-agent/build_console.py > "$RUNNER_TEMP/wms607-package/build.log" 2>&1
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0183760Z [36;1mpython3 -B tools/print-agent/build_console.py > "$RUNNER_TEMP/wms607-package/build.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0185390Z [36;1mtools/print-agent/dist-console/wms-print/wms-print --self-test > "$RUNNER_TEMP/wms607-package/self-test.log" 2>&1[0m
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0308590Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0309090Z env:
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0309680Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0310850Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0312490Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0313730Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0314670Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Original native Direct console builder and unpacked self-test	2026-10-07T06:58:55.0329310Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	﻿2026-10-07T06:59:19.1041930Z ##[group]Run python3 - <<'PYCODE'
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1042970Z [36;1mpython3 - <<'PYCODE'[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1043630Z [36;1mimport hashlib, json, os, subprocess, zipfile[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1044310Z [36;1mfrom pathlib import Path[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1045030Z [36;1mpackage = Path('tools/print-agent/dist-console/wms-print')[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1045910Z [36;1mdata = json.loads((package/'build.json').read_text())[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1046800Z [36;1massert data['source_commit'] == os.environ['REQUESTED_SOURCE'][0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1047970Z [36;1massert data['architecture'] == os.environ['EXPECTED_ARCH'] and data['platform'] == 'darwin'[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1049380Z [36;1massert data['runtime'] == 'direct' and data['console'] is True and data['physical_print_verified'] is False[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1051020Z [36;1massert subprocess.check_output(['lipo','-archs',str(package/'wms-print')], text=True).strip() == os.environ['EXPECTED_ARCH'][0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1052620Z [36;1msubprocess.run(['codesign','--verify','--strict',str(package/'wms-print')],check=True)[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1053900Z [36;1marchives = list(Path('tools/print-agent/dist-console').glob('*.zip'))[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1054730Z [36;1massert len(archives) == 1[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1055300Z [36;1marchive = archives[0][0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1055880Z [36;1mwith zipfile.ZipFile(archive) as stream:[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1056720Z [36;1m    assert json.loads(stream.read('wms-print/build.json')) == data[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1058120Z [36;1m    assert stream.read('wms-print/update_macos_direct.sh') == Path('tools/print-agent/update_macos_direct.sh').read_bytes()[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1060250Z [36;1mrecord = {'archive':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest(),'size':archive.stat().st_size,'build':data}[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1062130Z [36;1m(Path(os.environ['RUNNER_TEMP'])/'wms607-package'/'archive.json').write_text(json.dumps(record,indent=2)+'\n')[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1063510Z [36;1massert not subprocess.check_output(['git','diff','--name-only']).strip()[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1064880Z [36;1massert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip() == os.environ['REQUESTED_SOURCE'][0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1065980Z [36;1mPYCODE[0m
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1134500Z shell: /bin/bash -e {0}
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1134990Z env:
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1135580Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1136590Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1137590Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1138500Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1139400Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1140280Z   REQUESTED_SOURCE: a475a7342c0da72dd49b2990bd998c522ecc2c2b
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1141000Z   EXPECTED_ARCH: x86_64
+mac-direct-package (macos-15-intel, x86_64)	Verify archive provenance and source remains unchanged	2026-10-07T06:59:19.1141480Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	﻿2026-10-07T06:59:20.1262330Z ##[group]Run actions/upload-artifact@v4
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1277390Z with:
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1278170Z   name: WMS607-Direct-x86_64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37584100382-1
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1279460Z   path: tools/print-agent/dist-console/*.zip
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	/Users/runner/work/_temp/wms607-package
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1280340Z   if-no-files-found: error
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1280810Z   retention-days: 14
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1281250Z   compression-level: 6
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1281780Z   overwrite: false
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1282190Z   include-hidden-files: false
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1282750Z env:
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1283310Z   pythonLocation: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1284270Z   PKG_CONFIG_PATH: /Users/runner/hostedtoolcache/Python/3.13.15/x64/lib/pkgconfig
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1286540Z   Python_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1287420Z   Python2_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1288390Z   Python3_ROOT_DIR: /Users/runner/hostedtoolcache/Python/3.13.15/x64
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.1289070Z ##[endgroup]
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4139680Z (node:49182) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4141560Z (Use `node --trace-deprecation ...` to show where the warning was created)
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4348060Z Multiple search paths detected. Calculating the least common ancestor of all paths
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4351470Z The least common ancestor is /Users/runner/work. This will be the root directory of the artifact
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4352640Z With the provided path, there will be 34 files uploaded
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4357590Z Artifact name is valid!
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.4358160Z Root directory input is valid!
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.8497610Z Beginning upload of artifact content to blob storage
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:20.9256060Z (node:49182) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.4794510Z Uploaded bytes 228094
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.5591280Z Finished uploading artifact content to blob storage!
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.5593210Z SHA256 digest of uploaded artifact zip is 68351a02364f8474185a270fb3f3cca19eb42077f1cda2610b2f6a22607c7be6
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.5594530Z Finalizing artifact upload
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.8673620Z Artifact WMS607-Direct-x86_64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37584100382-1.zip successfully finalized. Artifact ID 11466122973
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.8675820Z Artifact WMS607-Direct-x86_64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37584100382-1 has been successfully uploaded! Final size is 228094 bytes. Artifact ID is 11466122973
+mac-direct-package (macos-15-intel, x86_64)	Preserve exact native archives and all actual raw checks	2026-10-07T06:59:21.8684870Z Artifact download URL: https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37584100382/artifacts/11466122973
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/setup-python@v5	﻿2026-10-07T06:59:21.8924980Z Post job cleanup.
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/setup-python@v5	2026-10-07T06:59:22.0723820Z (node:49186) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/setup-python@v5	2026-10-07T06:59:22.0725630Z (Use `node --trace-deprecation ...` to show where the warning was created)
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	﻿2026-10-07T06:59:22.0941110Z Post job cleanup.
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2398310Z [command]/usr/local/bin/git version
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2498770Z git version 2.55.0
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2536590Z Copying '/Users/runner/.gitconfig' to '/Users/runner/work/_temp/1449fc2d-a6ae-4e92-a68e-2fa662f660b7/.gitconfig'
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2551750Z Temporarily overriding HOME='/Users/runner/work/_temp/1449fc2d-a6ae-4e92-a68e-2fa662f660b7' before making global git config changes
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2553680Z Adding repository directory to the temporary git global config as a safe directory
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2559120Z [command]/usr/local/bin/git config --global --add safe.directory /Users/runner/work/WMS/WMS
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2664650Z [command]/usr/local/bin/git config --local --name-only --get-regexp core\.sshCommand
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.2776440Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.4123580Z [command]/usr/local/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.4217560Z [command]/usr/local/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.5433990Z [command]/usr/local/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+mac-direct-package (macos-15-intel, x86_64)	Post Run actions/checkout@v4	2026-10-07T06:59:22.5538910Z [command]/usr/local/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+mac-direct-package (macos-15-intel, x86_64)	Complete job	﻿2026-10-07T06:59:22.7008970Z Cleaning up orphan processes
+mac-direct-package (macos-15-intel, x86_64)	Complete job	2026-10-07T06:59:22.7406750Z Terminate orphan process: pid (49169) (sleep)
+mac-direct-package (macos-15-intel, x86_64)	Complete job	2026-10-07T06:59:22.9136040Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

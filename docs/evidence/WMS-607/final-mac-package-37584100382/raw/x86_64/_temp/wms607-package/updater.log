@@ -1,0 +1,16 @@
+test_preservation_actual_direct_build_metadata (test_macos_direct_updater_contract.UpdaterContract.test_preservation_actual_direct_build_metadata) ... ok
+test_preservation_actual_public_and_current_journal_replay (test_macos_direct_updater_contract.UpdaterContract.test_preservation_actual_public_and_current_journal_replay) ... ok
+test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported (test_macos_direct_updater_contract.UpdaterContract.test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported) ... ok
+test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed (test_macos_direct_updater_contract.UpdaterContract.test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed) ... ok
+test_uc3_lossless_backup_and_archive_or_space_failure (test_macos_direct_updater_contract.UpdaterContract.test_uc3_lossless_backup_and_archive_or_space_failure) ... ok
+test_uc4_foreign_port_owner_and_health200_wrong_process (test_macos_direct_updater_contract.UpdaterContract.test_uc4_foreign_port_owner_and_health200_wrong_process) ... ok
+test_uc5_replace_and_start_rollback_preserve_current_journal (test_macos_direct_updater_contract.UpdaterContract.test_uc5_replace_and_start_rollback_preserve_current_journal) ... ok
+test_uc6_repeat_concurrent_and_interrupted_update_recover (test_macos_direct_updater_contract.UpdaterContract.test_uc6_repeat_concurrent_and_interrupted_update_recover) ... ok
+test_uc7_actual_journal_replay_after_update_and_failed_restart (test_macos_direct_updater_contract.UpdaterContract.test_uc7_actual_journal_replay_after_update_and_failed_restart) ... ok
+test_uc8_no_security_printer_or_dependencies_change_permission_recovery (test_macos_direct_updater_contract.UpdaterContract.test_uc8_no_security_printer_or_dependencies_change_permission_recovery) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 143.972s
+
+OK
+/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ga6tpxt_/builder/dist-console/WMS-Print-Console-Mac-arm64.zip

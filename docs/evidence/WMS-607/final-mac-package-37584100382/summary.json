@@ -1,0 +1,52 @@
+{
+  "run_id": 37584100382,
+  "attempt": 1,
+  "harness": "1c2bddd844ff6baf331eae53b3a44304d834cc01",
+  "source": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+  "native_cases_per_arch": 36,
+  "rows": [
+    {
+      "arch": "arm64",
+      "cases": 36,
+      "job_id": 112670187998,
+      "artifact_id": 11465972931,
+      "wrapper_sha256": "5c6398be1051ca4bed8ead04aaba37897422139cbc843dd5e34485d8a30d8410",
+      "wrapper_bytes": 229009,
+      "archive": "raw/arm64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+      "archive_sha256": "27cd6bff1cabd78c750f5ecfd92236fbb34c89d29b0c57a91a63f83e8612274a",
+      "archive_bytes": 181837,
+      "build": {
+        "source_commit": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+        "platform": "darwin",
+        "architecture": "arm64",
+        "runtime": "direct",
+        "console": true,
+        "physical_print_verified": false
+      }
+    },
+    {
+      "arch": "x86_64",
+      "cases": 36,
+      "job_id": 112670188348,
+      "artifact_id": 11466122973,
+      "wrapper_sha256": "68351a02364f8474185a270fb3f3cca19eb42077f1cda2610b2f6a22607c7be6",
+      "wrapper_bytes": 228094,
+      "archive": "raw/x86_64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-x86_64.zip",
+      "archive_sha256": "45e4871dbd2a70211bc6c091b388e62cf438d9c833020f95d007f8b9b033e8f8",
+      "archive_bytes": 180216,
+      "build": {
+        "source_commit": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+        "platform": "darwin",
+        "architecture": "x86_64",
+        "runtime": "direct",
+        "console": true,
+        "physical_print_verified": false
+      }
+    }
+  ],
+  "prior_upload_failure_run": 37583326182,
+  "client_install_verified": false,
+  "physical_print_verified": false,
+  "public_promotion_performed": false,
+  "checked_at": "2026-10-07T07:01:22.769362+00:00"
+}

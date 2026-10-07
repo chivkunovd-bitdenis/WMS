@@ -1,0 +1,374 @@
+{
+  "members": [
+    {
+      "path": "api/artifacts.json",
+      "bytes": 1957,
+      "sha256": "fc252d72b1090300381588c7e8b3dc78f5ad10eb4480846488629b8be90d72c0"
+    },
+    {
+      "path": "api/jobs.json",
+      "bytes": 11738,
+      "sha256": "7c5442ee3b35dca2da1dc282cf5ceb80c525fc42219b2d9c3c0750f4793e2c22"
+    },
+    {
+      "path": "api/run.json",
+      "bytes": 14381,
+      "sha256": "68b5db4eb4d63fede8e629b4437a4934ca526229e46319bff047b65cc73773ae"
+    },
+    {
+      "path": "job-arm64.log",
+      "bytes": 177532,
+      "sha256": "8dbad74c5002c053a582ef087f51764e34c996df604bc5ed892f1469d07681f9"
+    },
+    {
+      "path": "job-x86_64.log",
+      "bytes": 190869,
+      "sha256": "82714b7f0d2d157f10c5023300cf89f4d502b1b2760d2314bf68b99bb75c2cb4"
+    },
+    {
+      "path": "raw/arm64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+      "bytes": 181837,
+      "sha256": "27cd6bff1cabd78c750f5ecfd92236fbb34c89d29b0c57a91a63f83e8612274a"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/archive.json",
+      "bytes": 370,
+      "sha256": "43b8017dc87727676f7f50b7627c80c8f7b2ceb70c50394aa65c43f4c28beb66"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/build.log",
+      "bytes": 374,
+      "sha256": "317b1aebfdf88f85c4b917eb58fbae1e55cefc44e4e56ab7b6009e6e4346d27d"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/documents.log",
+      "bytes": 93,
+      "sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/environment.txt",
+      "bytes": 311,
+      "sha256": "416ce501e98a5efd51aca2303fa43b14cbeb11b9dfdac764ec0f0ee5c640ec73"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/existing.log",
+      "bytes": 3109,
+      "sha256": "40478fdeb6dcbef7034004d007e36e6a0f31396ef61047efc6b735617551908c"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/existing.xml",
+      "bytes": 3080,
+      "sha256": "fbc2614019b0f4fdaff01f622b6f2d488a9d7430e6c677d9da2e15c5a253a032"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/harness.txt",
+      "bytes": 41,
+      "sha256": "56121e7822d30d38207bebbb32a26ba2682fc8c8608c61afa6f7205d4193dfee"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json",
+      "bytes": 6189,
+      "sha256": "9b37b50ab022b242367a02a9fd6d5fd0d8e0524ee4ab87c6c92dc9d6ddc79502"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+      "bytes": 3667,
+      "sha256": "005abcd79e71af0fff096b2a9a296e213a7972a10b28961020041fd3d1b9ac25"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+      "bytes": 10548,
+      "sha256": "592936a816b24e60727b46879ca00f56880ffc2cfe67f26fbeb741e53c136b18"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json",
+      "bytes": 6648,
+      "sha256": "55df32f2c2f0cba30ff989300ca4a2ae9cdd42a2d9ee7b04a6d76174cf291620"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+      "bytes": 6524,
+      "sha256": "f42ff3ca72bf08521f0297d5d824c9e32222bb7288c000dea89e5dcb43e6c577"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/self-test.log",
+      "bytes": 176,
+      "sha256": "1ee761108aa212afd17136e8bcdb991245a810e4c97b3b280ad849ea26c1f590"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/source.txt",
+      "bytes": 41,
+      "sha256": "62791c6ab0b115e89941ecd8269911a29d4700258fdb35b4a2b60a25ea2caf89"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/startup-owner/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+      "bytes": 1404,
+      "sha256": "cf407910aef95dac0cb985d848cdb70b80e8a3f35effb01487fb58fb055f1f5a"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/startup-owner/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "bytes": 1403,
+      "sha256": "04841f6af2902e8be36f2dabdaabd22b032fa711cb429f56eb1efb98f6dac33d"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/startup-owner/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "bytes": 1365,
+      "sha256": "dd1016791256968b1b7c89185a41c1380c34890cb42d9aa93056e277880d6715"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/startup-owner.log",
+      "bytes": 571,
+      "sha256": "2a6bf80e47243a633b1299b36746ac2704ebd760967f36611ad4d43dbd1558af"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/startup-owner.xml",
+      "bytes": 610,
+      "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/stop.log",
+      "bytes": 754,
+      "sha256": "3c0b052de7a09bdad7ba51dc05275e345822ada96f66f8a156ddf51402b7aa63"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/stop.xml",
+      "bytes": 760,
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+      "bytes": 4653,
+      "sha256": "3e063dfbd5d8ea6b734641cfaaa921f1ae0fffb5e9eb93766251a4c6cd1adea0"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+      "bytes": 8271,
+      "sha256": "bf93aaffd801056da5d617e730eb992cd6a4f36c7dee4d862e171791201b35a1"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+      "bytes": 18828,
+      "sha256": "2888eded9b774ade00ea3ccededd155eb29a40e88d2acb91ea4b9effbd3a1877"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+      "bytes": 24046,
+      "sha256": "a8be23ca6dee249ffdc0a2236e553a8b9043632937eae5d0bb0a9c56cd4ed9ca"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+      "bytes": 11439,
+      "sha256": "f19ff8d5946191729d4d4df831a874d2db0194807ce53a810d3f2da3b222b07b"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+      "bytes": 9521,
+      "sha256": "bb7e4dfc5c4678247875c3d4f4a3dbba3a652ab658e040c0a892bb815b50ad76"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+      "bytes": 13230,
+      "sha256": "e932fce74cc6a4c57cc60ff603a49ba9c2370cd3fefd42c166a0402aaef53c9c"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+      "bytes": 19630,
+      "sha256": "e332bce712b7f4f5eedb00119fde77f49486a7956e5a085b9035fe1715f2d12c"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+      "bytes": 21013,
+      "sha256": "b442ac0a21f45df0653234df79857e6592ae1a891740c76075d158f673a6e70d"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+      "bytes": 13678,
+      "sha256": "bbca2a65c5c762efe88eb6c7794387ffb8eb7aa28724108d82fa1d1310d2b8cc"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater.log",
+      "bytes": 2023,
+      "sha256": "d57e9ac186385edb9988d1f14b235f43e395edb566bd815557f1eb5e02f2b964"
+    },
+    {
+      "path": "raw/arm64/_temp/wms607-package/updater.xml",
+      "bytes": 1810,
+      "sha256": "363aaf76b74c6c24587b1b6283a025180c15add506e7a00711f02f271a7a2ed4"
+    },
+    {
+      "path": "raw/x86_64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-x86_64.zip",
+      "bytes": 180216,
+      "sha256": "45e4871dbd2a70211bc6c091b388e62cf438d9c833020f95d007f8b9b033e8f8"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/archive.json",
+      "bytes": 372,
+      "sha256": "a20c7219e19275b654e323a4e3e41316afd4ccb25840ecb9826c5a1944449f8c"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/build.log",
+      "bytes": 267,
+      "sha256": "7a8abca786008b6c99462043d1e60ef69b864f168f21d31c5d757d478a51b09f"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/documents.log",
+      "bytes": 93,
+      "sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/environment.txt",
+      "bytes": 308,
+      "sha256": "72cbce343f16759c74a4182ceb9367017bb975517fbb45b7f271f7cf5e428463"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/existing.log",
+      "bytes": 3107,
+      "sha256": "e9da7fde10aadfebc8cd8a7fe5932dfcdd27dfa2af66551a0b1a06ef966a8b46"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/existing.xml",
+      "bytes": 3072,
+      "sha256": "3444a0f39e01388134c69d45bfdcfcd27d610d86eb39f69ed51f8e53dada8d35"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/harness.txt",
+      "bytes": 41,
+      "sha256": "56121e7822d30d38207bebbb32a26ba2682fc8c8608c61afa6f7205d4193dfee"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json",
+      "bytes": 6192,
+      "sha256": "0182fa91154b8e57becb4e8eb159094089e1e6976611cbd17d95bb9f2aa70428"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+      "bytes": 3670,
+      "sha256": "c9bfcdb5b8f330c5dc74669c0471df8e06a135bbef937917ba4b7f54c47c6880"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+      "bytes": 10551,
+      "sha256": "d9958d544c8038b4ee64376614763a7cc7dd7a8490ce21d21934975084eb8052"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json",
+      "bytes": 6651,
+      "sha256": "49d26aabf70b0dd2e0ba3b8cc57991f6329f4118dbad10d16f6ec4b78552d8c9"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+      "bytes": 6527,
+      "sha256": "c895e4f246ab1a152dcc9e150b75a08691e014a661340013af535999963d7a89"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/self-test.log",
+      "bytes": 176,
+      "sha256": "1ee761108aa212afd17136e8bcdb991245a810e4c97b3b280ad849ea26c1f590"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/source.txt",
+      "bytes": 41,
+      "sha256": "62791c6ab0b115e89941ecd8269911a29d4700258fdb35b4a2b60a25ea2caf89"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/startup-owner/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+      "bytes": 1404,
+      "sha256": "36a5fa525d1b02009dbca338206e15fca22d4a94cb641b96ddb08c4a5c8dde34"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/startup-owner/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "bytes": 1403,
+      "sha256": "5da87c36bb539d88c23582026171daa7d6805f88abfb6228988ff136ef167008"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/startup-owner/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "bytes": 1365,
+      "sha256": "8c34ab49405e19363d10e508838bbd2a0d536cd57acd4163959b54fc8e3e1f3d"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/startup-owner.log",
+      "bytes": 571,
+      "sha256": "0925d3dc14a9e73004fecafbcfbd97ce9678bd32d261c72939a6556719fe2f81"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/startup-owner.xml",
+      "bytes": 610,
+      "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/stop.log",
+      "bytes": 754,
+      "sha256": "fa5a34db8c098306d4625268312bff10dc94c5db1e37364804763addf27b0c1f"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/stop.xml",
+      "bytes": 760,
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+      "bytes": 4653,
+      "sha256": "39dfe4e64be617db3ce0caacc7cce7408cb5519bb1f88a29eaed9eac39db412b"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+      "bytes": 8271,
+      "sha256": "ac3e6675bffd75950fa326cc4a8b065e359d020fd1bf43acca737f905334101f"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+      "bytes": 18828,
+      "sha256": "b5f1678cfd5db4dca1f97047aff7652d89a44a6e2d0098db29369f304a1cd305"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+      "bytes": 24046,
+      "sha256": "3944f167535f037bbf6f8453c30cc386551c5884988bf3d64ed4b8a79aa72439"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+      "bytes": 11439,
+      "sha256": "72c772ab4d3442b5c0acb574b4f0020a30f77192853714885d0e3038dcc93acc"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+      "bytes": 9521,
+      "sha256": "d0119e129fc7a326bfa1a34648d1493455cfa71ff2a82c5ed5bdd8f85f5acd00"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+      "bytes": 13230,
+      "sha256": "8b6c8e5c4360b4fa195076752e617da203f4729db551f390f9ad7659637e75c3"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+      "bytes": 20884,
+      "sha256": "3c7b674c2b7b0fa32219cf1f4ee2bf281ea76e91a25cb93a810b2b295ff874ea"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+      "bytes": 21013,
+      "sha256": "9e070cf44799f049c38bc49cfee80dbe8ef68df6f6bb648ae80b41dacad270cd"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+      "bytes": 13678,
+      "sha256": "afe4a2aef4aa544f6a1641fc91d43bf29672e3567fca0648cb5222e80917ea11"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater.log",
+      "bytes": 2024,
+      "sha256": "416b936d9eaf2634eb56a277ad41899ed31577ab78d36aff4f5cab714e63da3d"
+    },
+    {
+      "path": "raw/x86_64/_temp/wms607-package/updater.xml",
+      "bytes": 1812,
+      "sha256": "f376d5088c3d3ab08cdd75240cc1f320a6f92366342fec6727bec756b4cea432"
+    },
+    {
+      "path": "summary.json",
+      "bytes": 1850,
+      "sha256": "dd60d3d1d795dd13064b6d00bf4174e311580bde45de7ac770694768d9656318"
+    }
+  ]
+}
