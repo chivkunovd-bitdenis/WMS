@@ -1,0 +1,37 @@
+{
+  "sha": "bfdc72ba3840798cdf4a7aa5440e51599128e80f",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;normal]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;delete-before-claim]",
+      "status": "FAIL",
+      "failure": "SyntaxError: Unexpected end of JSON input"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;delete-after-claim]",
+      "status": "FAIL",
+      "failure": "SyntaxError: Unexpected end of JSON input"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;normal]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-before-claim]",
+      "status": "FAIL",
+      "failure": "SyntaxError: Unexpected end of JSON input"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-after-claim]",
+      "status": "FAIL",
+      "failure": "SyntaxError: Unexpected end of JSON input"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "REAL_LOCAL_API_POSTGRES_SYNTHETIC_WB",
+  "currentCase": "WMS666.actualPool[supply_ids;delete-after-claim]",
+  "productSha": "212f19d548496fef7baf75c83204b771e304281b"
+}

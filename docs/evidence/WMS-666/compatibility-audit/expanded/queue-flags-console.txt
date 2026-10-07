@@ -1,0 +1,4 @@
+{"id":"WMS666.actualPool[supply_id;rapid-scans]","status":"PASS"}
+{"id":"WMS666.actualPool[supply_id;flags-after-claim]","status":"PASS"}
+{"id":"WMS666.actualPool[supply_ids;rapid-scans]","status":"PASS"}
+{"id":"WMS666.actualPool[supply_ids;flags-after-claim]","status":"PASS"}

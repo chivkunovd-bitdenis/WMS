@@ -1,0 +1,13 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-compatibility-audit/frontend
+
+ ✓ src/utils/printProductThermalLabel.test.ts (15 tests) 6ms
+ ✓ src/utils/printPackagingInstructions.test.ts (2 tests) 5ms
+ ✓ src/screens/v2/FbsTransferSupplyDialog.test.tsx (2 tests) 863ms
+   ✓ preserves the original request through network loss, rerender, reopen and partial confirmation  599ms
+
+ Test Files  3 passed (3)
+      Tests  19 passed (19)
+   Start at  23:46:55
+   Duration  4.50s (transform 241ms, setup 0ms, collect 2.37s, tests 874ms, environment 608ms, prepare 182ms)
+

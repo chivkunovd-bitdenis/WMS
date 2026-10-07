@@ -1,0 +1,24 @@
+{
+  "sha": "bfdc72ba3840798cdf4a7aa5440e51599128e80f",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;replace-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;replace-after-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;replace-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "REAL_LOCAL_API_POSTGRES_SYNTHETIC_WB",
+  "currentCase": "WMS666.actualPool[supply_ids;replace-after-claim]",
+  "productSha": "212f19d548496fef7baf75c83204b771e304281b"
+}

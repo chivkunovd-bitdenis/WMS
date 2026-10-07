@@ -1,0 +1,2096 @@
+{
+  "transfer-postgres-valid-actor.xml": [
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_transfer_preserves_kiz_packing_and_replays_once",
+      "time": "2.486",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_unknown_patch_partial_then_reconcile_without_replay",
+      "time": "0.365",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_unknown_create_recovers_named_supply_without_second_post",
+      "time": "0.338",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_known_rejection_is_failed_not_unknown",
+      "time": "0.322",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_targets_and_mutations_enforce_scope_and_draft",
+      "time": "0.234",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_packed_transfer_can_start_target_without_second_fulfillment",
+      "time": "0.412",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_crash_between_batches_resumes_only_unsent_batch",
+      "time": "0.980",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_target_started_during_wb_wait_receives_incoming_task_line",
+      "time": "0.254",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c1_targets_are_open_compatible_supplies_in_any_working_state",
+      "time": "0.306",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_transfer_into_supply_in_work_keeps_kiz_sticker_pick_and_packing",
+      "time": "0.357",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c3_new_supply_gets_typed_name_or_short_number",
+      "time": "0.303",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_lost_create_with_typed_name_recovers_only_our_supply",
+      "time": "0.283",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_ambiguous_or_foreign_same_name_stays_unknown_without_second_create",
+      "time": "0.341",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_lost_create_must_not_adopt_a_single_recent_foreign_supply",
+      "time": "0.255",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_fulfilled_order_round_trip_does_not_grow_plan",
+      "time": "0.525",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_same_name_supply_from_snapshot_is_never_ours",
+      "time": "0.471",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_no_snapshot_no_create",
+      "time": "0.242",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_pack_all_in_target_after_packed_order_arrives",
+      "time": "0.756",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_started_draft_does_not_plan_order_packed_elsewhere",
+      "time": "0.682",
+      "result": "PASS"
+    }
+  ],
+  "transfer-postgres.xml": [
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_transfer_preserves_kiz_packing_and_replays_once",
+      "time": "1.703",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_unknown_patch_partial_then_reconcile_without_replay",
+      "time": "0.248",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_unknown_create_recovers_named_supply_without_second_post",
+      "time": "0.219",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_known_rejection_is_failed_not_unknown",
+      "time": "0.182",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_targets_and_mutations_enforce_scope_and_draft",
+      "time": "0.203",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_packed_transfer_can_start_target_without_second_fulfillment",
+      "time": "0.190",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_crash_between_batches_resumes_only_unsent_batch",
+      "time": "0.247",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_fbs_supply_transfer",
+      "name": "test_target_started_during_wb_wait_receives_incoming_task_line",
+      "time": "0.309",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c1_targets_are_open_compatible_supplies_in_any_working_state",
+      "time": "0.255",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_transfer_into_supply_in_work_keeps_kiz_sticker_pick_and_packing",
+      "time": "0.211",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c3_new_supply_gets_typed_name_or_short_number",
+      "time": "0.150",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_lost_create_with_typed_name_recovers_only_our_supply",
+      "time": "0.166",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_ambiguous_or_foreign_same_name_stays_unknown_without_second_create",
+      "time": "0.135",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_lost_create_must_not_adopt_a_single_recent_foreign_supply",
+      "time": "0.160",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_fulfilled_order_round_trip_does_not_grow_plan",
+      "time": "0.166",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_same_name_supply_from_snapshot_is_never_ours",
+      "time": "0.205",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c5_no_snapshot_no_create",
+      "time": "0.133",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_pack_all_in_target_after_packed_order_arrives",
+      "time": "0.148",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms581_supply_transfer",
+      "name": "test_c2_started_draft_does_not_plan_order_packed_elsewhere",
+      "time": "0.184",
+      "result": "FAIL"
+    },
+    {
+      "classname": "tests.test_wms560_tape_pending_kiz",
+      "name": "test_accepted_write_without_echo_stays_in_tape_and_confirms_later[empty_value]",
+      "time": "0.780",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms560_tape_pending_kiz",
+      "name": "test_accepted_write_without_echo_stays_in_tape_and_confirms_later[absent_row]",
+      "time": "0.670",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms560_tape_pending_kiz",
+      "name": "test_lost_wb_answer_keeps_only_that_order_out_of_tape",
+      "time": "0.677",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms560_tape_pending_kiz",
+      "name": "test_wb_rejection_still_keeps_order_out_of_tape",
+      "time": "0.636",
+      "result": "PASS"
+    }
+  ],
+  "actions-postgres.xml": [
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[filled-accepted]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[optional-allowed_without_check]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[pending-pending]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[required-None]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[invalid-rejected]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_wb_decision_mapping_covers_safe_sync_states[something-new-None]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_universal_test_kiz_is_opt_in_and_unique_per_order",
+      "time": "0.273",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_strips_aim_prefix[]d2]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_strips_aim_prefix[]d1]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_strips_aim_prefix[]Q1]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_strips_aim_prefix[]Q3]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_strips_aim_prefix[]C1]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[~]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[|]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[#]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[<GS>]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[{GS}]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[\\\\x1d]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[<gs>]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[{gs}]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_repairs_keyboard_layout",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_trims_scanner_suffix",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_repairs_keyboard_layout_and_gs_together",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_clean_value_has_no_hints",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_restores_separator_before_weight_ai",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_scanned_cis_repairs_russian_aim_prefix_after_layout",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_windows_russian_keyboard_layout_mapping_is_complete",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_is_probably_cis_rejects_garbage",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_scan_debug_masks_gs_in_edges",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_matches_tolerant_sticker_fields[sticker_code]",
+      "time": "3.728",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_matches_tolerant_sticker_fields[wb_barcode]",
+      "time": "2.025",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_garbage_sticker_returns_404",
+      "time": "2.092",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_foreign_supply_sticker_returns_404",
+      "time": "2.052",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_frozen_order_returns_409",
+      "time": "2.236",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_lookup_existing_pool_kiz_needs_confirmation",
+      "time": "2.307",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_normalizes_and_does_not_write",
+      "time": "2.074",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_rejects_garbage_with_debug",
+      "time": "2.209",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_duplicate_marking_returns_order_context",
+      "time": "2.008",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_frozen_order_returns_409",
+      "time": "1.938",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_partial_success_keeps_other_transactions",
+      "time": "2.444",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_existing_kiz_needs_confirmation_without_writes",
+      "time": "1.885",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_confirmed_replaces_old_kiz_and_voids_code",
+      "time": "2.151",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_success_creates_records_event_and_counter",
+      "time": "2.313",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_delete_wb_error_does_not_change_records",
+      "time": "1.969",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call",
+      "time": "2.101",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_external_marking_counts_as_printed_for_pool_and_gate",
+      "time": "2.600",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_rejects_available_pool_code_owner_mismatches",
+      "time": "2.168",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_claims_available_pool_code_without_reclassifying_it",
+      "time": "2.256",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_replacement_runs_registry_checks_before_wb_delete",
+      "time": "2.149",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_replacement_restores_old_wb_value_when_new_value_is_rejected",
+      "time": "2.253",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_replacement_persists_reason_when_wb_restore_also_fails",
+      "time": "2.438",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_pool_to_external_replacement_does_not_double_count_unit",
+      "time": "2.544",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[False-accepted]",
+      "time": "2.361",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[True-pending]",
+      "time": "2.733",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[True-rejected]",
+      "time": "2.525",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row",
+      "time": "2.194",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[filled-same-accepted-ok]",
+      "time": "2.110",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[optional-same-allowed_without_check-no_check]",
+      "time": "2.112",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[pending-same-pending-checking]",
+      "time": "1.959",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[required-None-missing-new]",
+      "time": "1.967",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[invalid-same-rejected-error]",
+      "time": "2.243",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[unrecognized-same-unknown-error]",
+      "time": "2.057",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[required-same-unknown-new]",
+      "time": "2.321",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[filled-other-replacement_required-error]",
+      "time": "2.366",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[invalid-other-replacement_required-error]",
+      "time": "2.412",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_partial_wb_row_is_unknown_without_fresh_check_time",
+      "time": "2.082",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_omitted_wb_row_preserves_saved_verdict",
+      "time": "2.490",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch[required-None-missing]",
+      "time": "2.127",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch[invalid-other-replacement_required]",
+      "time": "2.067",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_marking_pool_counts_replacement_required_order_as_needing_code",
+      "time": "1.959",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_fixes_production_scan_byte_for_byte",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_is_idempotent_on_production_scan",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_handles_footwear_88_char_signature",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_not_fooled_by_91_and_92_inside_serial",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_leaves_already_separated_code_untouched",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_leaves_short_form_kiz_without_crypto_tail",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[truncated_signature-010460601234567821aXq7Tz9Km91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[signature_66-010460601234567821aXq7Tz9Km91K7pQ92AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[serial_21-010460601234567821AAAAAAAAAAAAAAAAAAAAA91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[serial_empty-01046060123456782191K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[wrong_ai_marker-010460601234567821aXq7Tz9Km93K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_to_guess_when_structure_does_not_match[long_noise-010460601234567821XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_accepts_serial_length_boundaries[1]",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_accepts_serial_length_boundaries[20]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[empty-]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[only_separators-\\x1d\\x1d\\x1d]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[noise-laser scanner noise]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[gtin_not_digits-01ABCDEFGHIJKLMN21aXq7Tz9Km91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[gtin_13_digits-01000000000000021aXq7Tz9Km91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[no_ai21-010460601234567810aXq7Tz9Km91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_values_that_are_not_kiz_prefixed[not_a_gs1_string_at_all-PROD-BARCODE-1234567890]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_survives_aim_prefix_and_russian_layout",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_trailing_scanner_newline",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[\\t]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[ ]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[\\r\\n]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[\\x0b]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[\\x0c]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_ignores_any_trailing_scanner_whitespace[\\t\\t \\r\\n]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_normalize_does_not_strip_separator_as_if_it_were_whitespace",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_never_loses_payload_characters",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_repairs_code_with_only_one_of_two_separators[91]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_repairs_code_with_only_one_of_two_separators[92]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_collapses_duplicated_separators_to_canonical_form",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_does_not_call_a_separated_code_lost",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_rejects_unrestorable_glued_code",
+      "time": "2.246",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_validate_unrestorable_code_is_client_error_not_500",
+      "time": "1.925",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_never_sends_unrestorable_code_to_wb",
+      "time": "1.984",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_fbs_kiz_commit_sends_restored_production_value_to_wb",
+      "time": "2.008",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_normalizes_trailing_gs1_terminator_without_losing_data",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_does_not_reparse_a_code_that_already_parses",
+      "time": "0.001",
+      "result": "XFAIL"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_leaves_alternative_crypto_tag_93_alone_when_separated",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_rather_than_guesses_unknown_kiz_shapes[crypto_tag_93-010460601234567821aXq7Tz9Km91K7pQ93MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_gs_restore_refuses_rather_than_guesses_unknown_kiz_shapes[unknown_tail_length_60-010460601234567821aXq7Tz9Km91K7pQ92MMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMMM]",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[transport-filled]",
+      "time": "2.492",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[503-filled]",
+      "time": "2.851",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[read-filled]",
+      "time": "2.697",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[403-refused]",
+      "time": "2.455",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[transport-invalid]",
+      "time": "2.406",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz",
+      "name": "test_initial_kiz_uncertain_write_is_persisted_and_reconciled_without_rewrite[transport-cancel]",
+      "time": "3.099",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[available_pool]",
+      "time": "2.185",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[available_external]",
+      "time": "2.275",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[printed]",
+      "time": "2.170",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[printed_bound]",
+      "time": "2.358",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[reserved_bound]",
+      "time": "2.239",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_scan_known_code_records_application_once_without_reprinting[wrong_line]",
+      "time": "2.089",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_kiz_applied",
+      "name": "test_print_scan_history_and_reprint_keep_the_same_applied_code",
+      "time": "2.118",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[False-reserved]",
+      "time": "2.383",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[False-printed]",
+      "time": "2.658",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[False-applied]",
+      "time": "3.202",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[True-reserved]",
+      "time": "3.589",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[True-printed]",
+      "time": "4.359",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_returns_same_code_with_printed_history_and_replay[True-applied]",
+      "time": "5.520",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[external-reserved]",
+      "time": "6.648",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[external_fbs-printed]",
+      "time": "5.103",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[external_fbs-applied]",
+      "time": "4.126",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-introduced]",
+      "time": "3.846",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-shipped]",
+      "time": "3.665",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-transferred]",
+      "time": "3.540",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-defective]",
+      "time": "3.265",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-replaced]",
+      "time": "2.825",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-void]",
+      "time": "2.934",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_cancel_never_releases_external_or_terminal_code[pool-unknown_terminal]",
+      "time": "2.908",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_failed_cancel_is_atomic_and_can_be_retried[wb]",
+      "time": "2.395",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_failed_cancel_is_atomic_and_can_be_retried[local]",
+      "time": "2.208",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_postgres_cancel_serializes_replay_and_new_claim[cancel]",
+      "time": "2.311",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms518_kiz_pool_return",
+      "name": "test_postgres_cancel_serializes_replay_and_new_claim[claim]",
+      "time": "2.645",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_any_wb_answer_keeps_the_scanned_kiz_bound[429-wb_pending_confirmation-unknown-pending_confirmation]",
+      "time": "2.058",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_any_wb_answer_keeps_the_scanned_kiz_bound[404-wb_rejected_kept-rejected-failed]",
+      "time": "2.056",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_any_wb_answer_keeps_the_scanned_kiz_bound[409-wb_rejected_kept-rejected-failed]",
+      "time": "2.228",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_background_reconciliation_resends_a_kiz_wb_does_not_have[429]",
+      "time": "2.170",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_background_reconciliation_resends_a_kiz_wb_does_not_have[500]",
+      "time": "2.119",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_step_back_undoes_a_kiz_wb_refused",
+      "time": "3.604",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_d1_wb_takes_the_write_but_reads_back_a_refusal",
+      "time": "1.870",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_wms639_commit_outside_scan_still_reads_wb_verdict",
+      "time": "1.947",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_q1_scan_write_waits_for_wb_only_briefly",
+      "time": "2.161",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_d3_operator_kiz_is_usable_again_after_step_back",
+      "time": "2.843",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_d2_print_chz_hands_out_the_pool_kiz_while_wb_is_slow",
+      "time": "2.199",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms635_kiz_no_wb_wait",
+      "name": "test_r_a5c_empty_wb_read_keeps_the_refused_kiz_red",
+      "time": "2.479",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_repeated_scan_of_a_queued_kiz_never_calls_wb",
+      "time": "2.113",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_worker_holds_no_row_while_wb_answers",
+      "time": "2.315",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_code_removed_during_the_write_is_shown_and_keeps_the_supply",
+      "time": "2.572",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_accepted_write_is_not_sent_twice",
+      "time": "2.421",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_queued_kiz_reach_wb_before_the_handover",
+      "time": "2.316",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_code_confirmed_by_another_path_stays_in_wb",
+      "time": "2.578",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_another_code_in_wb_keeps_the_supply",
+      "time": "2.123",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_sent_code_next_to_another_code_in_wb_keeps_the_supply",
+      "time": "2.100",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_replacement_during_the_handover_keeps_the_supply",
+      "time": "2.018",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[400]",
+      "time": "2.162",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[401]",
+      "time": "2.505",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[403]",
+      "time": "2.504",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[404]",
+      "time": "2.533",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[409]",
+      "time": "2.547",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[429]",
+      "time": "2.568",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_only_a_refusal_of_the_code_turns_red[500]",
+      "time": "2.783",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_other_code_first_seen_by_the_handover_keeps_the_supply",
+      "time": "2.262",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_scan_right_before_the_handover_keeps_the_supply",
+      "time": "2.907",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_code_of_a_handed_over_supply_is_still_sent",
+      "time": "3.625",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_saved_other_code_keeps_the_supply_whatever_the_operation[confirmed]",
+      "time": "3.766",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_saved_other_code_keeps_the_supply_whatever_the_operation[failed]",
+      "time": "3.619",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_saved_other_code_keeps_the_supply_whatever_the_operation[pending_confirmation]",
+      "time": "3.127",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_resumed_handover_checks_kiz_again[False]",
+      "time": "3.575",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_resumed_handover_checks_kiz_again[True]",
+      "time": "3.176",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_code_of_a_handed_over_supply_is_sent_and_read_once[in_delivery]",
+      "time": "2.323",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_code_of_a_handed_over_supply_is_sent_and_read_once[done]",
+      "time": "2.402",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_wms642_kiz_no_locks_handover",
+      "name": "test_kiz_of_a_cancelled_order_does_not_keep_the_rest",
+      "time": "6.263",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_skip_reprint",
+      "name": "test_skip_pack_handoff_reuses_saved_code_without_new_pool_or_wb_write[False]",
+      "time": "5.427",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_skip_reprint",
+      "name": "test_skip_pack_handoff_reuses_saved_code_without_new_pool_or_wb_write[True]",
+      "time": "5.660",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_skip_reprint",
+      "name": "test_skipped_supply_does_not_replace_unprintable_saved_marking[operator-True]",
+      "time": "0.002",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_skip_reprint",
+      "name": "test_skipped_supply_does_not_replace_unprintable_saved_marking[pool-False]",
+      "time": "0.002",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_packaging_fact_contract",
+      "name": "test_manual_pack_scan_undo_and_confirm_leave_stock_untouched",
+      "time": "1.067",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_packaging_fact_contract",
+      "name": "test_ozon_single_repeat_and_mass_pack_are_facts_before_picking[0]",
+      "time": "0.308",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_packaging_fact_contract",
+      "name": "test_ozon_single_repeat_and_mass_pack_are_facts_before_picking[3]",
+      "time": "0.453",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_packaging_fact_contract",
+      "name": "test_unload_marking_requirement_does_not_depend_on_packing_progress",
+      "time": "0.189",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packaging_task_created_on_assembling",
+      "time": "2.195",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_bind_packaging_box_to_trbx",
+      "time": "2.056",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_bind_packaging_box_rejects_foreign_tenant_warehouse",
+      "time": "3.970",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packaging_complete_does_not_convert_or_promote_supply",
+      "time": "2.926",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_supply_deliver_allowed_without_packaging",
+      "time": "2.878",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_warehouse_sc_supply_gets_packaging_task",
+      "time": "2.027",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packaging_task_skips_unmapped_product",
+      "time": "2.200",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_supply_legacy_add_order_allowed_after_packing",
+      "time": "2.305",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_supply_manual_packed_status_rejected",
+      "time": "2.024",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_marking_update_does_not_promote_wb_supply",
+      "time": "2.195",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packaging_keeps_physical_stock_reserved_until_delivery",
+      "time": "2.179",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packing_without_stock_in_line_location",
+      "time": "2.127",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packing_does_not_convert_stock_from_other_warehouse",
+      "time": "2.212",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_fbs_packaging_task_completes_without_stock_or_supply_promotion",
+      "time": "2.664",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_integration",
+      "name": "test_tape_covers_every_order_and_matches_picking_list",
+      "time": "2.296",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_tc15_one_order_sticker_binary_content",
+      "time": "2.018",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_tc15_missing_file_not_ready",
+      "time": "2.295",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_tc16_batch_stickers_partial_failure_and_retry_missing",
+      "time": "2.630",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_tc16_retry_missing_does_not_regenerate_ready",
+      "time": "2.301",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_print_asset_cross_tenant_404",
+      "time": "2.506",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_storage_traversal_path_rejected",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_print_assets",
+      "name": "test_applied_separate_from_print_opened",
+      "time": "2.346",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_positions",
+      "name": "test_whole_positions_distribute_independently_and_readiness_requires_every_position",
+      "time": "0.160",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_positions",
+      "name": "test_ozon_box_rejects_other_orders_and_positions_outside_its_supply",
+      "time": "0.173",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_positions",
+      "name": "test_assembled_ozon_order_freezes_all_box_membership",
+      "time": "0.134",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_positions",
+      "name": "test_database_prevents_duplicate_whole_position_assignments",
+      "time": "0.123",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_positions",
+      "name": "test_migration_preserves_wb_uniqueness_and_allows_distinct_ozon_positions",
+      "time": "0.019",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_qr_sends_every_box_and_repeat_never_ships_again",
+      "time": "0.133",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_partial_assignment_fails_before_any_external_request",
+      "time": "0.120",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_timeout_retries_readback_without_resending",
+      "time": "0.139",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_packages_take_live_quantity_only_from_position",
+      "time": "0.110",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_pdf_contains_every_result_posting_label",
+      "time": "0.051",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_one_missing_split_label_never_yields_partial_ready_pdf",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_partial_ship_result_cannot_be_handed_off",
+      "time": "0.121",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_handoff_revalidates_the_complete_position_set",
+      "time": "0.131",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_confirmed_ship_failure_unfreezes_contents_and_allows_retry",
+      "time": "0.169",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_retry_qr_surfaces_ozon_label_error_and_keeps_assembly",
+      "time": "0.201",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_label_error_persists_on_every_box_of_the_order_until_a_label_succeeds",
+      "time": "0.330",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_assembly_failure_with_a_real_session_user_returns_the_original_error",
+      "time": "0.186",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_wb_box_rows_never_carry_an_ozon_label_error",
+      "time": "0.152",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_ready_label_hides_a_stale_remembered_error",
+      "time": "0.178",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_label_error_write_never_clobbers_a_concurrently_saved_assembly_marker",
+      "time": "0.155",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_error_is_never_saved_to_a_different_supplys_order",
+      "time": "0.226",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_error_follows_the_order_actually_locked_after_box_contents_change",
+      "time": "0.252",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_box_assembly",
+      "name": "test_error_on_a_box_assigned_after_being_empty_follows_the_new_order",
+      "time": "0.223",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_exemplar_set_carries_every_code_of_the_posting_not_only_the_last",
+      "time": "0.169",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_rejected_codes_are_not_resent_with_the_full_set",
+      "time": "0.180",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_empty_exemplar_answer_is_a_typed_error_not_a_crash",
+      "time": "0.173",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_restrictions_of_a_real_drop_off_point_are_limits_not_violations",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_restrictions_still_stop_a_posting_that_really_exceeds_them",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_posting_weight_is_summed_over_positions",
+      "time": "0.161",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_shipping_list_uses_the_method_ozon_still_serves",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_ozon_fbs_process_contract",
+      "name": "test_handoff_asks_for_the_shipping_list_by_the_live_path",
+      "time": "0.165",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_warehouse_boxes_get_cargo_places_and_orders_are_exclusive",
+      "time": "2.549",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wb_box_readiness_never_depends_on_pack_status",
+      "time": "2.513",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_box_creation_key_is_idempotent_and_rejects_different_count",
+      "time": "2.163",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_box_creation_wb_rejection_cleans_local_boxes_and_same_key_can_retry[404]",
+      "time": "2.059",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_box_creation_wb_rejection_cleans_local_boxes_and_same_key_can_retry[409]",
+      "time": "2.088",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_box_retry_after_409_reconciles_timeout_with_same_operator_key",
+      "time": "2.493",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_recovers_original_five_box_group_without_recreating_physical_boxes[False]",
+      "time": "2.279",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_recovers_original_five_box_group_without_recreating_physical_boxes[True]",
+      "time": "2.535",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_concurrent_group_recovery_creates_once_and_excludes_other_group",
+      "time": "2.563",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_pending_readback_does_not_take_trbx_owned_by_other_physical_group",
+      "time": "2.072",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_reconciles_timeout_without_blind_external_create[exact]",
+      "time": "2.300",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_reconciles_timeout_without_blind_external_create[empty]",
+      "time": "1.928",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_reconciles_timeout_without_blind_external_create[ambiguous]",
+      "time": "2.368",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_reconciles_timeout_without_blind_external_create[read_error]",
+      "time": "2.056",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_retries_confirmed_readback_after_qr_failure_without_create",
+      "time": "2.078",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_partial_wb_sticker_success_is_durable_after_next_sticker_failure",
+      "time": "2.555",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_legacy_marker_recovers_with_scoped_original_raw_key[no-distribution:]",
+      "time": "2.886",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_legacy_marker_recovers_with_scoped_original_raw_key[retired-no-dist:]",
+      "time": "2.983",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_refusal_preserves_old_group_and_next_explicit_retry[404]",
+      "time": "2.656",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_refusal_preserves_old_group_and_next_explicit_retry[409]",
+      "time": "2.497",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_failed_group_does_not_duplicate_unattributable_remote_ids",
+      "time": "2.022",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_recovery_preserves_fbs_business_state",
+      "time": "2.905",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_wms681_qr_foreign_tenant_cannot_start_recovery",
+      "time": "3.874",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_without_distribution_boxes_do_not_accept_order_assignment",
+      "time": "2.103",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_legacy_create_boxes_toggle_rejects_existing_assignment",
+      "time": "2.253",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_legacy_without_distribution_marker_still_blocks_assignment",
+      "time": "2.436",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_legacy_without_distribution_create_retry_returns_existing_box[no-distribution:]",
+      "time": "2.369",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_legacy_without_distribution_create_retry_returns_existing_box[retired-no-dist:]",
+      "time": "2.581",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_truncated_legacy_key_does_not_capture_distinct_long_key[no-distribution:]",
+      "time": "2.141",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_truncated_legacy_key_does_not_capture_distinct_long_key[retired-no-dist:]",
+      "time": "3.300",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_truncated_legacy_key_retry_returns_existing_box[no-distribution:]",
+      "time": "2.149",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_truncated_legacy_key_retry_returns_existing_box[retired-no-dist:]",
+      "time": "2.148",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_without_distribution_mode_depends_on_assignments_not_box_count",
+      "time": "2.281",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_without_distribution_toggle_preserves_full_key_for_create_retry",
+      "time": "2.047",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_without_distribution_keeps_distinct_max_length_idempotency_keys",
+      "time": "2.128",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_boxes_without_distribution_api_persists_mode_across_empty_box_lifecycle",
+      "time": "2.321",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_migration_moves_provable_legacy_marker_to_supply_before_empty_box_lifecycle",
+      "time": "2.203",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_client_key_with_legacy_prefix_is_not_mode_marker_and_stays_idempotent",
+      "time": "2.316",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_boxes_without_distribution_api_conflicts_when_order_is_assigned",
+      "time": "2.207",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_wb_distribution_does_not_publish_navigation_blockers",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_opens_boxes_without_sticker_navigation_blocker",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_active_wb_starts_with_optional_picking",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_active_wb_stage_does_not_consult_packaging_progress",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_completed_wb_assembling_never_returns_to_picking",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_wb_never_exposes_navigation_blockers",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_fresh_ozon_supply_starts_with_picking_not_boxes",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_ozon_never_exposes_navigation_blockers",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_completed_ozon_assembling_never_returns_to_picking",
+      "time": "0.000",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packing_box",
+      "name": "test_workspace_without_distribution_skips_assignment_gate",
+      "time": "0.001",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_fact_keeps_stock_unpacked_until_delivery",
+      "time": "2.180",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_and_complete_without_pick",
+      "time": "2.387",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_all_completes_without_marking_or_stock_conversion",
+      "time": "2.376",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_all_honest_sign_skip_completes_without_promotion",
+      "time": "2.628",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_all_insufficient_stock_completes_without_cross_warehouse_write_off",
+      "time": "2.507",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_all_completes_atomically_and_is_idempotent",
+      "time": "2.526",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_same_sku_two_orders_third_rejected",
+      "time": "3.384",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_succeeds_when_line_balance_already_marked_packed",
+      "time": "2.894",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_fbs_pack_continues_when_location_has_no_stock_at_all",
+      "time": "2.571",
+      "result": "PASS"
+    },
+    {
+      "classname": "tests.test_fbs_packaging_fulfillment",
+      "name": "test_ozon_multi_product_packaging_requires_all_posting_units",
+      "time": "5.746",
+      "result": "PASS"
+    }
+  ]
+}

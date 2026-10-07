@@ -1,0 +1,2 @@
+{"id":"WMS666.actualPool[supply_id;controls]","status":"PASS"}
+{"id":"WMS666.actualPool[supply_ids;controls]","status":"FAIL","failure":"AssertionError [ERR_ASSERTION]: proposed shared panel must expose selected/all actions in assembly too\n\nfalse !== true\n"}

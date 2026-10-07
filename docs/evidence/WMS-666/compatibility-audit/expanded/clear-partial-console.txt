@@ -1,0 +1,1 @@
+{"id":"WMS666.actualPool[supply_id;clear-partial]","status":"PASS"}
