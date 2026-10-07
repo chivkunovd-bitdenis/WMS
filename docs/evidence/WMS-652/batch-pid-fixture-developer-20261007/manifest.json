@@ -1,0 +1,45 @@
+{
+  "implementation_sha": "308dde98518a6c14de421caadef1a9528e0e0bd4",
+  "members": [
+    {
+      "path": "README.md",
+      "bytes": 2760,
+      "sha256": "223d919831923d7ea44ad9f96e5c59bccb5ab676565b72377c47c095744d8441"
+    },
+    {
+      "path": "mypy.log",
+      "bytes": 45,
+      "sha256": "7b88c3bba484f804c624ac1951bcec1a174f82253ddf5a2dc46be7faebe231cc"
+    },
+    {
+      "path": "precode-red.log",
+      "bytes": 4196,
+      "sha256": "795ec62256e2f974fdbff92c483e03bde474297e2b2511ceb2adb8e0ca98ae9c"
+    },
+    {
+      "path": "precode-red.xml",
+      "bytes": 3487,
+      "sha256": "a3af1d2e48293f44ec319cd699094724464b3dd51fe30e3cdf9c7cfe3d1048c1"
+    },
+    {
+      "path": "preservation.json",
+      "bytes": 785,
+      "sha256": "5fc1cb4a7453a2296945e68cbff7bd017c24381c77c6384a53fa1efd28b7bc17"
+    },
+    {
+      "path": "ruff.log",
+      "bytes": 19,
+      "sha256": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18"
+    },
+    {
+      "path": "targeted-green.log",
+      "bytes": 1095,
+      "sha256": "530c193ce0f5b5bef89e08350d0b009873b28423ef6b1706f05b3c35a328f6a3"
+    },
+    {
+      "path": "targeted-green.xml",
+      "bytes": 587,
+      "sha256": "ed99fd1354051673430a5f481c60c6062647575325bf321e7d626cc9d37159b2"
+    }
+  ]
+}
