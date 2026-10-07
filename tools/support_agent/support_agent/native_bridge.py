@@ -74,7 +74,9 @@ class NativeBridge:
                 continue
             message = self._messages([row])[0]
             state = [message["revision"], message["text"], message["status"], message["media"]]
-            digest = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+            # Full 64-hex strings are intentionally masked by the shared secret
+            # scrubber. This public revision token must survive CLI serialization.
+            digest = "v-" + hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()[:20]
             versions[message_id] = digest
             if message_id in (known_materials or {}) and known_materials[message_id] != digest:
                 materials.append(message)

@@ -25,9 +25,15 @@ def test_native_reader_gets_current_version_of_an_edit(tmp_path):
 
 
 def test_voice_and_image_completion_are_visible_after_message_cursor(tmp_path):
+    import json
+
+    from support_agent.redact import scrub
+
     bridge = NativeBridge(make_config(tmp_path))
     ident = add(bridge, kind="voice", text="")
     first = bridge.inbox()
+    serialized = json.loads(scrub(bridge.cfg, json.dumps(first)))
+    assert serialized["material_versions"] == first["material_versions"]
     assert bridge.store.complete_transcription(ident, 1, "actual transcript")
     bridge.store.kv_set(f"media:{ident}:1", {"path": "/original.ogg", "status": "ready"})
     ready = bridge.watch(first["next_message_id"], seconds=0,
