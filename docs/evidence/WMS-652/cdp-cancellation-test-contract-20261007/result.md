@@ -61,3 +61,31 @@ the five exact names/current closure hash/counts; the old4 report remains intact
 
 No developer implementation, other suites, browser/product/workflow/policy
 changes or SOURCE approval occurred. Original historical CI cause stays UNKNOWN.
+
+## Additive in-flight ambiguity contract before the defect fix
+
+Base3151a29954138f0b92226ae8965a5b186b26b9f3 contains the reviewed first-attempt
+retirement implementation. The full frozen910217fe9323cfaee211b294b01ec7b77daf49d8
+test bytes remain an exact prefix: all helpers, CDP1–5 and12 negative expectations
+are unchanged. Only a local wire helper and CDP6/CDP7 are appended.
+
+Each new case observes the exact cancellation, sends one actual Fetch.fulfillRequest,
+then observes ambiguous ownership before the native error reply. CDP6 reuses the
+same FetchID; CDP7 adds a second FetchID mapped to the same NetworkID. Neither may
+retire or return an accepted/submitted receipt; both must reject with the original
+-32602/Invalid InterceptionId diagnostic and no retry.
+
+One targeted command (unchanged in contract.json) produced before-ambiguity-seven.tap:
+7 cases,5 PASS,2 target FAIL,0 skips, exit1. Both fail at strictFailure because the
+actual class resolves retired:true. Earlier assertions prove the command was sent
+before the intervention, the native payload survived and exactly one command was
+issued. This is the current defect itself, not a setup error or synthetic classifier.
+CDP1–5 remain GREEN in this same actual-class run. No extra mutation or suite run
+was needed. ambiguity-proof.json records exact IDs, closure/source hashes, original
+prefix equality and preserved historical proofs/current five-case GREEN receipts.
+
+The four-file closure and planned node-tap report print/wms652-cdp-cancellation.tap
+remain the same. Browser/app/CI/policy and original43 sources were not edited.
+No implementation, independent acceptance or SOURCE approval is claimed; those
+remain separate developer/reviewer/analyst/integrator stages. The original unlogged
+CI cause remains UNKNOWN. No browser/build/fullCI or old suites were rerun.
