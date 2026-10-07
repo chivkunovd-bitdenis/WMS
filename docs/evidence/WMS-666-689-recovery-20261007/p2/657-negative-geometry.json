@@ -1,0 +1,98 @@
+[
+  {
+    "i": 0,
+    "text": "1",
+    "client": 27,
+    "scroll": 27,
+    "width": 27.96875,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 1,
+    "text": "—",
+    "client": 53,
+    "scroll": 53,
+    "width": 53.9375,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 2,
+    "text": "PDF-PRODUCT-LONG-WMS-657\n          PDF-IDENTIFIER-WMS-657",
+    "client": 126,
+    "scroll": 126,
+    "width": 126.578125,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 3,
+    "text": "PDF-ARTICLE-WMS-657",
+    "client": 93,
+    "scroll": 93,
+    "width": 94.390625,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 4,
+    "text": "PDF-COLOR-WMS-657",
+    "client": 82,
+    "scroll": 82,
+    "width": 83.0625,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 5,
+    "text": "Универсальный",
+    "client": 75,
+    "scroll": 75,
+    "width": 75.515625,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 6,
+    "text": "PDF-LOCATION-LONG-WMS-657",
+    "client": 176,
+    "scroll": 176,
+    "width": 176.6875,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 7,
+    "text": "№PDF-ORDER-657",
+    "client": 90,
+    "scroll": 96,
+    "width": 90.609375,
+    "whiteSpace": "nowrap"
+  },
+  {
+    "i": 8,
+    "text": "S657",
+    "client": 115,
+    "scroll": 115,
+    "width": 115.875,
+    "whiteSpace": "nowrap"
+  },
+  {
+    "i": 9,
+    "text": "1",
+    "client": 42,
+    "scroll": 42,
+    "width": 42.65625,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 10,
+    "text": "0 / 1",
+    "client": 67,
+    "scroll": 67,
+    "width": 67.953125,
+    "whiteSpace": "normal"
+  },
+  {
+    "i": 11,
+    "text": "PDF-MARKING-WMS-657",
+    "client": 90,
+    "scroll": 90,
+    "width": 90.6875,
+    "whiteSpace": "normal"
+  }
+]

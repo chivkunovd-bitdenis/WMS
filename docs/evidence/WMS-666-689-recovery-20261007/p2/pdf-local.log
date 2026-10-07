@@ -1,0 +1,14 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+ ✓ src/screens/v2/fbsPickingColor.wms673.pdf.test.ts (5 tests | 3 skipped) 42ms
+ ✓ src/screens/v2/fbsPickingListPrint.wms657.test.ts (6 tests) 7684ms
+   ✓ WMS-657 · перенос размера в листе подбора FBS > C4: Chromium держит длинный размер и соседние данные в границах колонок  2753ms
+   ✓ WMS-657 · перенос размера в листе подбора FBS > C5: PDF A4 landscape сохраняет таблицу и полный текст всех колонок  2577ms
+   ✓ WMS-657 · перенос размера в листе подбора FBS > C6: многострочный HTML/PDF не смешивает строки и варианты размера  2348ms
+
+ Test Files  2 passed (2)
+      Tests  8 passed | 3 skipped (11)
+   Start at  00:10:41
+   Duration  8.45s (transform 201ms, setup 0ms, collect 503ms, tests 7.73s, environment 670ms, prepare 228ms)
+

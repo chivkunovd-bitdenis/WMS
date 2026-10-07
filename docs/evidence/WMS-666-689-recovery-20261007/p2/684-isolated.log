@@ -1,0 +1,12 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+ ✓ src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx (2 tests) 42457ms
+   ✓ K6 Chromium PDF pages match every selected stock and decode original barcodes in both paths  28828ms
+   ✓ K6 preserved browser PDF keeps dimensions and original code128 on every stock  13628ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  00:12:19
+   Duration  45.68s (transform 696ms, setup 0ms, collect 2.53s, tests 42.46s, environment 493ms, prepare 63ms)
+
