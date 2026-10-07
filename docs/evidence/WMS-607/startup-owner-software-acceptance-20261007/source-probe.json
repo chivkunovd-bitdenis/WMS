@@ -1,0 +1,133 @@
+{
+  "base": "7cf184f80846eb500753998b27d8b04d04c0a536",
+  "product": "7bbcdd8a8aba9fd44dd4ee4ce2dbdee5af26b880",
+  "frozen_contract": "7b94a8dd0f1d6a772272930df3894d3ccd299686",
+  "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+  "source_git_blob": "48fd6104b15513290c3f63ed769f35c969ac2615",
+  "source_delta": "one updater file 7 insertions / 3 deletions",
+  "manifest_members_verified": 17,
+  "previous_print_agent_paths_preserved_except_owned_shell": 24,
+  "reports": {
+    "precode": {
+      "tests": 3,
+      "pass": 2,
+      "fail": 1,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+      ],
+      "sha256": "afe8b6d352f090b407343937fef1b1d545b38ab78d62d12b74df66a98c18f286"
+    },
+    "green": {
+      "tests": 3,
+      "pass": 3,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+        "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+      ],
+      "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374"
+    },
+    "rollback": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ],
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1"
+    },
+    "updater": {
+      "tests": 10,
+      "pass": 10,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+      ],
+      "sha256": "9a8c2abc401f2ebd8bb022e21051c1f614c6de7bd3040f9638b570e82d837c26"
+    },
+    "existing": {
+      "tests": 19,
+      "pass": 19,
+      "fail": 0,
+      "error": 0,
+      "skip": 0,
+      "xml_ids": [
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+        "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+        "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+        "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+        "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+        "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+        "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+        "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+        "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+      ],
+      "sha256": "73efffce6d071d6149981e9fda56cdca400e2cbb5025d543e66d23c9ec626724"
+    }
+  },
+  "final_unique_software_cases": 36,
+  "new_raw_records": [
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+      "sha256": "f08dbd2468a491a0e99523c4cc0aa966703b723a6762239ed77f4cc4e9f3b579",
+      "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+      "native_exit": 1,
+      "mode": "foreign"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "sha256": "0b3e779b92ce2591627add6f03577d7b5d89d540d6237ad49617eaf4792addf6",
+      "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+      "native_exit": 0,
+      "mode": "warming"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "sha256": "c47875e6ecbb5560f9391e8dd810a3a0e49034bb8e0e4fd62b8fb106badddbd7",
+      "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+      "native_exit": 0,
+      "mode": "owned"
+    }
+  ],
+  "historic_package_receipt_commit": "71640d0c1160049f085bc6b524581ff25a804b1c",
+  "historic_package_result_sha256": "c61e6ad24f9e4993127e13b3470929a2342a60d7b48e8db24c7ebf44eb828f5a",
+  "old_15_second_test_deadline_byte_preserved": true,
+  "runtime_tests_or_build_executed_here": false,
+  "independent_review_commit": "74000fb4aa9faa1e30ed4a376436054d7d0de6c4",
+  "independent_review_doc_sha256": "3a92dcacd6cf899a40bb97dfc637f69779384bebc42db81f94dc77e41ff0c96b",
+  "independent_new_three_pass_zero_error_skip": true,
+  "independent_review_import_commit": "3223de5afe6c5f5b30720c3fb1578d5a95ff928d"
+}
