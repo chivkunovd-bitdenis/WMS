@@ -92,6 +92,15 @@ def posting_row(
     return row
 
 
+def _utc_after_database_round_trip(value: datetime, *, is_sqlite: bool) -> datetime:
+    """SQLite stores the UTC wall time but does not round-trip its tzinfo."""
+    if is_sqlite:
+        assert value.tzinfo is None
+        return value.replace(tzinfo=UTC)
+    assert value.tzinfo is not None
+    return value.astimezone(UTC)
+
+
 async def _seed(db_session: AsyncSession, *, with_binding: bool = True) -> SimpleNamespace:
     tenant = Tenant(name="Ozon contract", slug=f"ozon-contract-{uuid.uuid4().hex[:8]}")
     seller = Seller(tenant=tenant, name="Seller")
@@ -315,14 +324,21 @@ async def test_posting_barcode_price_and_creation_date_come_from_the_real_fields
     await _sync(db_session, ctx, [posting_row()])
 
     order = await _order(db_session)
+    await db_session.refresh(order)
     # Штрихкоды лежат в объекте `barcodes`; на верхнем уровне поля `barcode` нет.
     assert order.wb_barcode == "%303%3435"
     # Цены на верхнем уровне у отправления нет: считаем по позициям, в копейках.
     assert order.price == 250000
     # Даты создания у отправления нет — есть `in_process_at`. Раньше сюда молча
     # подставлялось «сейчас».
-    assert order.created_at_wb == datetime(2026, 9, 1, 10, 30, tzinfo=UTC)
-    assert order.deadline_at == datetime(2026, 9, 4, 10, 30, tzinfo=UTC)
+    assert FbsOrder.__table__.c.created_at_wb.type.timezone is True
+    is_sqlite = db_session.bind.dialect.name == "sqlite"
+    assert _utc_after_database_round_trip(
+        order.created_at_wb, is_sqlite=is_sqlite,
+    ) == datetime(2026, 9, 1, 10, 30, tzinfo=UTC)
+    assert _utc_after_database_round_trip(
+        order.deadline_at, is_sqlite=is_sqlite,
+    ) == datetime(2026, 9, 4, 10, 30, tzinfo=UTC)
 
 
 async def test_assembled_posting_is_not_offered_to_the_operator_as_new(
