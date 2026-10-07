@@ -173,3 +173,20 @@ test('CDP4 native fulfillment success after navigation preserves the exact valid
   assert.notEqual(outcome.value?.retired, true);
   assert.deepEqual(f.errors, []); assert.equal(f.commands.length, 1);
 });
+
+test('CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry', async context => {
+  const f = fixture(); f.paused(); f.cancel();
+  const first = await f.call();
+  retired(first);
+  assert.equal(f.commands.length, 1);
+  const duplicate = await f.callback();
+  context.diagnostic(JSON.stringify({firstRetired: first.value.retired,
+    duplicateKind: duplicate.kind, duplicateRetired: duplicate.value?.retired,
+    nativeDiagnostic: diagnostic(duplicate.value), commands: f.commands.length,
+    callbackErrors: f.errors}));
+  strictFailure(duplicate);
+  assert.equal(f.commands.length, 2, 'one original attempt and one deliberate duplicate; no hidden retries');
+  assert.equal(f.errors.length, 1, 'an already-retired token cannot exclude a second native failure from the strict collector');
+  assert.ok(f.errors[0].includes('-32602'));
+  assert.ok(f.errors[0].includes('Invalid InterceptionId.'));
+});
