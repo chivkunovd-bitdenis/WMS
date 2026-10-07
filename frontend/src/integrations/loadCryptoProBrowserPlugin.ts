@@ -12,11 +12,15 @@ const awaitRuntimePromise = async (runtime: unknown): Promise<void> => {
   if ((typeof runtime !== 'object' && typeof runtime !== 'function') || runtime === null) {
     throw new CryptoProError('plugin_unavailable')
   }
-  const then = (runtime as { then?: unknown }).then
-  if (typeof then === 'function') {
-    await new Promise<void>((resolve, reject) => {
-      Reflect.apply(then, runtime, [resolve, reject])
-    })
+  try {
+    const then = (runtime as { then?: unknown }).then
+    if (typeof then === 'function') {
+      await new Promise<void>((resolve, reject) => {
+        Reflect.apply(then, runtime, [resolve, reject])
+      })
+    }
+  } catch (error) {
+    throw error instanceof CryptoProError ? error : new CryptoProError('plugin_unavailable')
   }
 }
 
