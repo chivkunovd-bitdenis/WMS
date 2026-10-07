@@ -481,6 +481,61 @@ def _restore_missing_gs_by_structure(value: str) -> tuple[str, bool, bool]:
     return restored, restored != value, False
 
 
+def _has_complete_gs1_structure(value: str) -> bool:
+    """Return whether surviving GS separators already delimit known complete AIs.
+
+    A valid delimiter is stronger evidence than the heuristic used to recover a
+    separator that was removed altogether. In particular, a serial may itself
+    contain text such as ``91ZZQQ``; do not reinterpret it when AI 21 already
+    ends at a real separator before a complete AI 92 signature.
+    """
+    if not _cis_prefix_ok(value):
+        return False
+    position = 0
+    seen_prefix_ai = False
+    seen_serial_ai = False
+    while position < len(value):
+        if value[position] == _GS:
+            position += 1
+            continue
+        ai = _match_gs1_ai(value, position)
+        if ai is None:
+            return False
+        position += len(ai)
+        if ai == "01":
+            length = _GS1_FIXED_AI_VALUE_LENGTHS[ai]
+            field = value[position : position + length]
+            if len(field) != length or not field.isdigit():
+                return False
+            seen_prefix_ai = True
+            position += length
+            continue
+        if ai in _GS1_FIXED_AI_VALUE_LENGTHS:
+            length = _GS1_FIXED_AI_VALUE_LENGTHS[ai]
+            field = value[position : position + length]
+            if len(field) != length:
+                return False
+            position += length
+            continue
+
+        separator = value.find(_GS, position)
+        end = separator if separator >= 0 else len(value)
+        field = value[position:end]
+        max_length = _GS1_VARIABLE_AI_MAX_LENGTHS[ai]
+        if not field or len(field) > max_length:
+            return False
+        if ai == "21":
+            seen_serial_ai = True
+        if separator < 0:
+            position = end
+            break
+        next_ai = _match_gs1_ai(value, separator + 1)
+        if next_ai is None or not _is_expected_next_ai(ai, next_ai):
+            return False
+        position = separator + 1
+    return seen_prefix_ai and seen_serial_ai
+
+
 def _has_keyboard_layout_noise(value: str) -> bool:
     return any(char in _KEYBOARD_LAYOUT_MARKERS for char in value)
 
@@ -527,11 +582,12 @@ def normalize_scanned_cis(raw: str) -> tuple[str, list[str]]:
     # Последний шаг: разделитель вырезан целиком, без замены (I3). Идёт после
     # всех остальных репаров, на максимально уже вычищенном значении — если
     # раскладка или AIM-префикс мешали, они уже сняты выше.
-    value, gs_structure_restored, gs_unrestorable = _restore_missing_gs_by_structure(value)
-    if gs_structure_restored:
-        hints.append(_GS_STRUCTURE_HINT)
-    elif gs_unrestorable:
-        hints.append(_GS_UNRESTORABLE_HINT)
+    if not _has_complete_gs1_structure(value):
+        value, gs_structure_restored, gs_unrestorable = _restore_missing_gs_by_structure(value)
+        if gs_structure_restored:
+            hints.append(_GS_STRUCTURE_HINT)
+        elif gs_unrestorable:
+            hints.append(_GS_UNRESTORABLE_HINT)
 
     hint_order = {
         "aim_prefix": 0,
