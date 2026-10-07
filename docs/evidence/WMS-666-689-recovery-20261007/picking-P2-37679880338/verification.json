@@ -1,0 +1,25 @@
+{
+  "run": 37679880338,
+  "app_sha": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+  "test_sha": "52caa65e17cf3e19a9040c7439840823b0d622f2",
+  "suites": {
+    "base": {
+      "executed": 29,
+      "passed": 29,
+      "failed": 0,
+      "blocked": 0,
+      "checkpoints": 51,
+      "all_checkpoints_verified": true,
+      "final_db_unchanged": true
+    },
+    "extended": {
+      "executed": 40,
+      "passed": 40,
+      "failed": 0,
+      "blocked": 0,
+      "checkpoints": 74,
+      "all_checkpoints_verified": true,
+      "final_db_unchanged": true
+    }
+  }
+}

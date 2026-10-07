@@ -1,0 +1,153 @@
+{
+  "observed_at_utc": "2026-10-07T20:17:07.403288+00:00",
+  "git_sha": "212f19d548496fef7baf75c83204b771e304281b",
+  "queues": {
+    "active": {
+      "celery@0831eecdc825": [
+        {
+          "id": "4e099760-f84b-4ee6-8912-85068f45384c",
+          "name": "wms.fbs_orders_autopoll",
+          "time_start": 1791404176.4911702
+        },
+        {
+          "id": "de68f6c2-26b3-4751-90ba-a745641f5e0a",
+          "name": "wms.fbs_order_statuses_autopoll",
+          "time_start": 1791403936.482641
+        }
+      ]
+    },
+    "reserved": {
+      "celery@0831eecdc825": []
+    },
+    "scheduled": {
+      "celery@0831eecdc825": [
+        {
+          "id": "89cf9949-877a-4714-95aa-b611ba73fa29",
+          "name": "wms.fbs_zero_refresh",
+          "time_start": null
+        },
+        {
+          "id": "e3c1f07a-046e-4925-a25f-515f24a605b7",
+          "name": "wms.fbs_zero_refresh",
+          "time_start": null
+        },
+        {
+          "id": "e33e1725-475b-42b0-91c5-37c4e09c8a49",
+          "name": "wms.fbs_zero_refresh",
+          "time_start": null
+        },
+        {
+          "id": "76182904-892f-433a-9a9b-1f6fdda77ab7",
+          "name": "wms.fbs_zero_refresh",
+          "time_start": null
+        }
+      ]
+    }
+  },
+  "beat_schedule": {
+    "developer-requests-sync": {
+      "task": "wms.developer_requests_sync",
+      "last_run_at": "2026-10-07 20:16:16.498889+00:00",
+      "total_run_count": 54
+    },
+    "fbs-order-statuses-autopoll": {
+      "task": "wms.fbs_order_statuses_autopoll",
+      "last_run_at": "2026-10-07 20:12:16.478005+00:00",
+      "total_run_count": 5
+    },
+    "fbs-stock-reconcile": {
+      "task": "wms.fbs_stock_reconcile",
+      "last_run_at": "2026-10-07 20:12:16.483436+00:00",
+      "total_run_count": 10
+    },
+    "fbs-orders-full-reconcile": {
+      "task": "wms.fbs_orders_full_reconcile",
+      "last_run_at": "2026-10-07 19:22:16.477550+00:00",
+      "total_run_count": 0
+    },
+    "marking-low-stock": {
+      "task": "wms.marking_low_stock",
+      "last_run_at": "2026-10-07 19:22:16.477601+00:00",
+      "total_run_count": 0
+    },
+    "billing-storage-daily": {
+      "task": "wms.billing_storage_daily",
+      "last_run_at": "2026-10-07 22:22:16.477622+03:00",
+      "total_run_count": 0
+    },
+    "wb-mp-warehouses-daily": {
+      "task": "wms.wb_mp_warehouses_daily_sync",
+      "last_run_at": "2026-10-07 19:22:16.477629+00:00",
+      "total_run_count": 0
+    },
+    "withdrawal-poll": {
+      "task": "wms.withdrawal_poll",
+      "last_run_at": "2026-10-07 20:16:16.939176+00:00",
+      "total_run_count": 1620
+    },
+    "fbs-orders-autopoll": {
+      "task": "wms.fbs_orders_autopoll",
+      "last_run_at": "2026-10-07 20:16:16.480330+00:00",
+      "total_run_count": 18
+    },
+    "fbs-marking-verdicts-autopoll": {
+      "task": "wms.fbs_marking_verdicts_autopoll",
+      "last_run_at": "2026-10-07 20:16:16.513604+00:00",
+      "total_run_count": 54
+    },
+    "celery.backend_cleanup": {
+      "task": "celery.backend_cleanup",
+      "last_run_at": "2026-10-07 19:22:16.483483+00:00",
+      "total_run_count": 0
+    }
+  },
+  "catalog_log_lines": [],
+  "recent_due_task_lines": [
+    "[2026-10-07 20:16:56,942: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:16:58,945: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:00,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:02,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:04,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:06,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:08,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:10,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:12,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:14,946: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:16,483: INFO/MainProcess] Scheduler: Sending due task fbs-stock-reconcile (wms.fbs_stock_reconcile)",
+    "[2026-10-07 20:17:16,499: INFO/MainProcess] Scheduler: Sending due task developer-requests-sync (wms.developer_requests_sync)",
+    "[2026-10-07 20:17:16,516: INFO/MainProcess] Scheduler: Sending due task fbs-marking-verdicts-autopoll (wms.fbs_marking_verdicts_autopoll)",
+    "[2026-10-07 20:17:16,947: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:18,953: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:20,953: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:22,956: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:24,956: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:26,956: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)",
+    "[2026-10-07 20:17:28,959: INFO/MainProcess] Scheduler: Sending due task withdrawal-poll (wms.withdrawal_poll)"
+  ],
+  "containers": {
+    "api": {
+      "Status": "running",
+      "Running": true,
+      "StartedAt": "2026-10-07T17:19:28.187903871Z",
+      "image_id": "sha256:3ce2c183b0de465fc2b6e12095bd5d8de082fa3260a8807821e3aa0a160f54af"
+    },
+    "web": {
+      "Status": "running",
+      "Running": true,
+      "StartedAt": "2026-10-07T17:19:28.602153308Z",
+      "image_id": "sha256:37c150aef354f8dd65f567f3b9949f4a5feef75b65255aed674df37b88478d0f"
+    },
+    "celery_worker": {
+      "Status": "running",
+      "Running": true,
+      "StartedAt": "2026-10-07T17:25:12.85138018Z",
+      "image_id": "sha256:b8d996f23b14be543c7b3dcf0a6d996a991eb0befa95809d28006065f6483d77"
+    },
+    "celery_beat": {
+      "Status": "running",
+      "Running": true,
+      "StartedAt": "2026-10-07T19:22:13.481746863Z",
+      "image_id": "sha256:cbefb4d98ba9b4c177a0159aeb4b97e387c95e072d56605a13fbb6ee27c9a81a"
+    }
+  }
+}
