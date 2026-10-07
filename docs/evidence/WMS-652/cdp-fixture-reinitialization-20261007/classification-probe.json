@@ -1,0 +1,60 @@
+{
+  "scope": "Actual classifier extracted from runner; controlled phase markers with unchanged actual native-error snapshots; not a live browser replay",
+  "cases": [
+    {
+      "name": "controlled marked business-complete exact native failures",
+      "eligible": true,
+      "expected": true
+    },
+    {
+      "name": "unrelated failure never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "business assertion failure never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "blocked request never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "another error never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "pending command never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "no corresponding native refusal never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "incomplete collection never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "passing result never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "different terminal failure never restarts",
+      "eligible": false,
+      "expected": false
+    },
+    {
+      "name": "historical report without new phase marker is not retroactively eligible",
+      "eligible": false,
+      "expected": false
+    }
+  ]
+}

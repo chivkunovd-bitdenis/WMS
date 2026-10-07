@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "b1b9cafd17b9a23e6ffb43eeeee4754a0eeb2a16d1e530f9eaf4e4b790356fc1",
+    ".github/workflows/ci.yml": "9b745631c634a725d081dcfe454f2d58789c81f1597516dc8f5667d5863ffc39",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -157,7 +157,7 @@
     "frontend/src/screens/v2/wms673MarketplaceProjection.json": "3857d4589b28acbd5a9c537cbdfd1a0cf6bcf00f3e7cc24564d1b0abe9095c53",
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
-    "frontend/tests-e2e/wms652-critical/browser.mjs": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "d2b43a3edc189a55e3fe5ed17b961cb520e8b419bc21e31c489eb0caf96fae0e",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
     "frontend/tests-e2e/wms652-critical/fixtures.mjs": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
@@ -183,7 +183,7 @@
     "scripts/ci/process_contracts.py": "209be8fe73f3bc3e0555cbc9e4ef39e446449b8aa236f474fa12d0dd082c2684",
     "scripts/ci/product_scope.py": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
     "scripts/ci/resolve_ci_base.py": "3063a56042f3d196aa6fa0bf6ddc2cdb8d9bdeb33be7883205f3dec259a4e122",
-    "scripts/ci/run_critical_fbs_browser.sh": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
+    "scripts/ci/run_critical_fbs_browser.sh": "6b5b206157568676e141b40115498dbc3cbd4baddb08a0982f1977ad88388970",
     "scripts/ci/run_isolated_pytest.py": "4315343d6b8a62d9f074d49c663b1e1f8b1f38f18ec7a13e983859b7a98f896a",
     "scripts/ci/run_release_postgres.sh": "99c1036ca8b27132767765ce1b8a772a357d060fe7b67048e3a3f5921d07a9d0",
     "scripts/ci/run_release_print.sh": "f7bb1499bc36b25c2d7f1efb234392e6cd7dc32c55035567f8829f8a147a6cd7",

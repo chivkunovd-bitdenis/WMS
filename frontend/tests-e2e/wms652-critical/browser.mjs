@@ -434,6 +434,7 @@ async function flagContracts(){
     receiptMode=variant==='held-receipt'?'held':recovery?'lost':'';
     report.currentCase=`WMS652.realQrFlags[${variant};${entry}]`;
     const url=`${ORIGIN}/app/ff/fbs?${query}&flag=${encodeURIComponent(flag)}`;
+    let businessAssertionsPassed=false;
     try{
       await cdp.send('Page.navigate',{url});
       await until(`document.querySelector('[data-order-id="wb-a-order"]')&&document.querySelector('[data-testid="fbs-unified-scan"]')`);
@@ -504,9 +505,10 @@ async function flagContracts(){
       for(const pack of packs)assert(server?pack.body.idempotency_key===`scan-${pack.body.order_id}:packed`:/^local:.+:packed$/.test(pack.body.idempotency_key));
       if(qr)assert(trace.indexOf('print:scan-wb-a-order')<trace.indexOf('pack:wb-a-order'));
       assert(trace.indexOf('pack:wb-a-order')<trace.indexOf('lookup:wb-next-order'),'next correct order after first pack');
+      businessAssertionsPassed=true;
       assert.equal(blocked.length,0);assert.equal(errors.length,0);
       report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);
-    }catch(e){report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});console.error(`${report.currentCase}: ${e}`);}
+    }catch(e){report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e),businessAssertionsPassed});console.error(`${report.currentCase}: ${e}`);}
     await writeFile(`${dir}/${report.currentCase.replaceAll(/[^a-zA-Z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors,acceptedPrintKeys:[...acceptedPrints.keys()]},null,2));
   }
 }

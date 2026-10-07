@@ -1,0 +1,19 @@
+{
+  "source_sha": "2bba49207b0606e76603dd42fd914ed606b69244",
+  "etalon_sha": "a5df04f1560de0eaaf855199065936cb22a222b1",
+  "trees_equal": true,
+  "command": "./node_modules/.bin/vitest run src/screens/ff/sorting-objects/SortingObjectsScreen.wms650.longlist.dom.test.tsx --maxWorkers=1 --no-file-parallelism",
+  "exit_code": 0,
+  "tests": 4,
+  "passed": 4,
+  "failed": 0,
+  "skipped": 0,
+  "duration_seconds": 6.38,
+  "c21_ms": 1186,
+  "test_expectations_changed": false,
+  "timeout_changed": false,
+  "evidence_source": "exec52427 stdout",
+  "original_ci": 37585303815,
+  "original_ci_frontend_job": 112673944571,
+  "original_first_timeout_ms": 5935
+}
