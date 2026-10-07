@@ -242,15 +242,16 @@ try {
   await cdp.send('Page.navigate',{url:ORIGIN+'/app/ff/fbs?supply_ids=ozon-a'});
   await until(`document.querySelectorAll('[data-order-id]').length===2`);
   await clickElement(`document.querySelector('[data-order-id="ozon-a-order"] input[type=checkbox]').closest('[class*="MuiCheckbox-root"]')`,'select first Ozon posting');
-  const buttonText=await evaluate(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Печать всего')).textContent`);
+  const buttonText=await evaluate(`[...document.querySelectorAll('button')].find(b=>/^Печать (всего|выбранного)/.test(b.textContent)).textContent`);
   trace.push({buttonText});
-  await clickElement(`[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Печать всего'))`,'Ozon print all');
+  await clickElement(`[...document.querySelectorAll('button')].find(b=>/^Печать (всего|выбранного)/.test(b.textContent))`,'Ozon print all');
   await until(`document.querySelector('[data-testid="marking-print-confirm"]')&&!document.querySelector('[data-testid="marking-print-confirm"]').disabled`);
   await click('[data-testid="marking-print-confirm"]');
   for(let i=0;i<100&&!requestLog.some(r=>r.path.endsWith('/order-print-tape'));i++)await sleep(100);
   const tape=requestLog.find(r=>r.path.endsWith('/order-print-tape'));assert(tape,'real constructor requested tape');
   trace.push({label:buttonText,actualOrderIds:tape.body.order_ids});
-  assert.deepEqual([...tape.body.order_ids].sort(),['ozon-a-order','ozon-a-second'],'button labelled all(2) must print both postings');
+  assert(buttonText.includes('выбранного')&&buttonText.includes('1'),'selected one posting must be labelled as selected(1), not all(2)');
+  assert.deepEqual(tape.body.order_ids,['ozon-a-order'],'selected print preserves exact posting scope');
   report.cases.push({id:report.currentCase,status:'PASS'});report.status='PASS';
 }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
 finally{

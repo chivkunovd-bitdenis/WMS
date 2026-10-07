@@ -1,0 +1,9 @@
+AssertionError [ERR_ASSERTION]: selected one posting must be labelled as selected(1), not all(2)
+    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend/tests-e2e/wms652-critical/compatibility-ozon.audit.mjs:253:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

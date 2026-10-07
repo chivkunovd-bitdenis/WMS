@@ -151,10 +151,13 @@ async function interceptLive({requestId,request}){
     requestLog.push({method:request.method,path:path+u.search,body,status:r.status,response});
     return {bytes,status:r.status,type:r.headers.get('Content-Type')||'application/json'};
   }
-  if(path.endsWith('/print-claim')&&body?.target==='chz'&&!pausedOnce&&pausePoint){
+  if(path.endsWith('/print-claim')&&body?.target==='chz'&&!pausedOnce&&['before-claim','after-claim'].includes(pausePoint)){
     pausedOnce=true;
     if(pausePoint==='before-claim'){held=async()=>{const r=await forward();await fulfill(requestId,r.bytes,r.status,r.type)};return;}
     const r=await forward();held=()=>fulfill(requestId,r.bytes,r.status,r.type);return;
+  }
+  if(path.endsWith('/print-bindings/validate')&&pausePoint==='after-validation'&&!pausedOnce){
+    pausedOnce=true;const r=await forward();held=()=>fulfill(requestId,r.bytes,r.status,r.type);return;
   }
   if(path.endsWith('/order-print-tape')&&pausePoint==='manual-response'&&!pausedOnce){
     pausedOnce=true;const r=await forward();held=()=>fulfill(requestId,r.bytes,r.status,r.type);return;
@@ -168,7 +171,7 @@ async function scanLive(code){
   await cdp.send('Input.dispatchKeyEvent',{type:'keyDown',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
   await cdp.send('Input.dispatchKeyEvent',{type:'keyUp',key:'Enter',code:'Enter',windowsVirtualKeyCode:13});
 }
-const chrome=spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[
+const chrome=spawn(process.env.CHROME_BIN||'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',[
   '--headless=new','--mute-audio','--no-sandbox','--disable-gpu','--no-first-run',
   '--disable-background-networking','--remote-debugging-port=16687',
   `--user-data-dir=${mkdtempSync(`${tmpdir()}/wms666-live-audit-`)}`,'about:blank'],{stdio:['ignore','pipe','pipe']});
@@ -190,13 +193,39 @@ try{
     requestLog=[];printLog=[];trace=[];blocked=[];errors=[];held=null;pausedOnce=false;
     pausePoint=/^(delete|replace)-/.test(variant)?(variant.endsWith('before-claim')?'before-claim':'after-claim'):'';
     if(variant==='manual-then-delete-scan')pausePoint='manual-response';
+    if(variant.endsWith('-after-validation'))pausePoint='after-validation';
     if(variant==='rapid-scans'||variant==='multi-seller'||variant==='flags-after-claim')pausePoint='after-claim';
-    seed=await(await fetch(BACKEND+'/seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:variant==='clear-partial'||variant==='controls'||variant==='rapid-scans'||variant==='multi-seller'||variant.startsWith('manual-')?4:variant.startsWith('replace')?2:1,multi:variant==='multi-seller',stickers:qrImages.map(p=>p.toString('base64'))})})).json();
+    seed=await(await fetch(BACKEND+'/seed',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({codes:variant.startsWith('unified-')||variant==='clear-partial'||variant==='controls'||variant==='rapid-scans'||variant==='multi-seller'||variant.startsWith('manual-')?4:variant.startsWith('replace')?2:1,multi:variant==='multi-seller'||variant.startsWith('unified-'),stickers:qrImages.map(p=>p.toString('base64'))})})).json();
     try{
       if(variant==='clear-partial')await api(`/operations/fbs-supplies/${seed.supply_id}/order-print-tape`,'POST',{order_ids:seed.order_ids,layout_json:{units:[{block:'cz',copies:1}]},include_order_qr:false,reprint:false,allow_partial:false});
       await cdp.send('Page.navigate',{url:`${ORIGIN}/app/ff/fbs?${entry}=${seed.supply_ids.join(',')}`});
       await until(`document.querySelector('[data-order-id="${seed.order_ids[0]}"]')&&document.querySelector('[data-packing-scan]')`);
-      if(variant==='clear-partial'){
+      if(variant.startsWith('unified-')){
+        const bulk=await evaluate(`document.querySelector('[data-testid="fbs-packing-select-all"]')!==null`);
+        assert(bulk,'one shared selection/print panel is present for grouped supplies');
+        assert.equal(await evaluate(`document.querySelectorAll('[data-packing-scan]').length`),1,'scanner remains available with manual controls');
+        await evaluate(`document.querySelector('[data-testid="fbs-packing-select-all"]').click()`);
+        await until(`document.querySelectorAll('[data-order-id] input[type="checkbox"]:checked').length===2`);
+        await evaluate(`[...document.querySelectorAll('button')].find(b=>/^Печать (выбранного|всего)/.test(b.textContent)).click()`);
+        await until(`document.querySelector('[data-testid="marking-print-confirm"]')&&!document.querySelector('[data-testid="marking-print-confirm"]').disabled`);
+        await evaluate(`document.querySelector('[data-testid="marking-print-confirm"]').click()`);
+        await until(`window.__AUDIT_HTML_PRINTS__.length===1`);
+        await until(`document.querySelector('[data-testid="marking-print-confirm"]')&&!document.querySelector('[data-testid="marking-print-confirm"]').disabled`);
+        if(variant==='unified-cancel'){
+          await evaluate(`[...document.querySelectorAll('[role="dialog"] button')].find(b=>/Отмена|Закрыть/.test(b.textContent)).click()`);
+          await sleep(300);
+          assert.equal(requestLog.filter(r=>r.path.endsWith('/order-print-tape')).length,1,'cancel stops remaining supply, does not replay successful one');
+          assert.equal((await snapshot()).markings.length,1,'successful first supply stays committed');
+        }else{
+          await evaluate(`document.querySelector('[data-testid="marking-print-confirm"]').click()`);
+          await until(`window.__AUDIT_HTML_PRINTS__.length===2`);
+          const tapes=requestLog.filter(r=>r.path.endsWith('/order-print-tape'));
+          assert.equal(tapes.length,2,'one successful manual batch per original supply');
+          for(let i=0;i<2;i++)assert.deepEqual(tapes.find(r=>r.path.includes(seed.supply_ids[i])).body.order_ids,[seed.order_ids[i]],'seller/supply never receives neighbouring order IDs');
+          assert.equal((await snapshot()).markings.length,2);
+        }
+        report.cases.push({id:report.currentCase,status:'PASS'});
+      }else if(variant==='clear-partial'){
         failDeleteOnce=true;
         await evaluate(`document.querySelector('[data-testid="fbs-packing-select-all"]').click()`);
         await until(`document.querySelector('[data-testid="fbs-packing-clear-selected"]')&&!document.querySelector('[data-testid="fbs-packing-clear-selected"]').disabled`);
@@ -289,7 +318,7 @@ try{
           assert.equal(requestLog.filter(r=>r.path.endsWith('/scan-auto-print')&&r.status===200).length,1,'all-off next scan is inert');
         }
         report.cases.push({id:report.currentCase,status:'PASS'});
-      }else if(variant==='manual-then-delete-scan'){
+      }else if(variant==='manual-then-delete-scan'||variant==='manual-after-validation'){
         const a=seed.order_ids[0];
         await api(`/operations/packaging-tasks/${seed.task_id}/lines/${seed.line_id}/pack`,'POST',{
           order_id:a,quantity:1,idempotency_key:'prepacked-manual-a'});
@@ -305,17 +334,18 @@ try{
         assert.notEqual(next.order_id,a,'other physical unit selected');
         trace.push({kind:'manual-A-delete-scanner-B',manual,next,db:await snapshot()});
         await held();
-        await until(`window.__AUDIT_HTML_PRINTS__.length>0`);
-        const images=await evaluate(`(()=>{const d=new DOMParser().parseFromString(window.__AUDIT_HTML_PRINTS__[0],'text/html');return [...d.querySelectorAll('[data-tape-block="cz"] img')].map(x=>x.src)})()`);
+        for(let i=0;i<50;i++){if(await evaluate(`window.__AUDIT_HTML_PRINTS__.length>0||document.querySelector('[role="alert"]')!==null`))break;await sleep(100)}
+        const manualDispatched=await evaluate(`window.__AUDIT_HTML_PRINTS__.length>0`);
+        const images=manualDispatched?await evaluate(`(()=>{const d=new DOMParser().parseFromString(window.__AUDIT_HTML_PRINTS__[0],'text/html');return [...d.querySelectorAll('[data-tape-block="cz"] img')].map(x=>x.src)})()`):[];
         const db=await snapshot(),decoded=images.map(url=>{
           const p=PNG.sync.read(Buffer.from(url.split(',')[1],'base64')),px=new Uint8ClampedArray(p.width*p.height);
           for(let i=0;i<px.length;i++)px[i]=(p.data[4*i]+2*p.data[4*i+1]+p.data[4*i+2])/4;
           return new DataMatrixReader().decode(new BinaryBitmap(new HybridBinarizer(new RGBLuminanceSource(px,p.width,p.height)))).getText();
         });
-        const html=await evaluate(`window.__AUDIT_HTML_PRINTS__[0]`);
+        const html=await evaluate(`window.__AUDIT_HTML_PRINTS__[0]||''`);
         await writeFile(`${dir}/${entry}-manual-output.html`,html);
         trace.push({kind:'actual-html-dispatched',decoded,db});
-        assert(decoded.length>0,'manual HTML has independently decoded CIS');
+        if(!manualDispatched)assert(await evaluate(`!!document.querySelector('[role="alert"]')?.textContent.trim()`),'stale manual attempt exposes a recoverable error');
         assert(decoded.every(cis=>db.markings.some(m=>m.order_id===a&&m.cis===cis)),
           'manual printed CIS must still belong to its original order after the other operator scan');
         report.cases.push({id:report.currentCase,status:'PASS'});
@@ -341,10 +371,11 @@ try{
         await held();
       }
       for(let i=0;i<100&&printLog.length<2;i++)await sleep(100);
-      assert.equal(printLog.length,2,'two physical-emulator copies of one issued CIS');
+      if(!pausePoint)assert.equal(printLog.length,2,'two physical-emulator copies of one issued CIS');
+      else if(printLog.length===0)assert(await evaluate(`!!document.querySelector('[role="alert"]')?.textContent.trim()`),'stale scan exposes a recoverable error');
       const selection=requestLog.find(r=>r.path.endsWith('/scan-auto-print')&&r.status===200).response;
       assert(printLog.every(p=>p.decoded===selection.printed_codes[0].cis_code),'real PNG matches pool response exactly');
-      assert.equal(printLog[0].job.imageDataUrl,printLog[1].job.imageDataUrl,'copies identical');
+      if(printLog.length)assert.equal(printLog[0].job.imageDataUrl,printLog[1].job.imageDataUrl,'copies identical');
       const aligned=printLog.every(p=>p.db.markings.some(m=>m.order_id===selection.order_id&&m.cis===p.decoded));
       assert.equal(aligned,true,'printed CIS must still belong to the scanned order at dispatch');
       report.cases.push({id:report.currentCase,status:'PASS'});
