@@ -1,0 +1,86 @@
+TAP version 13
+# Subtest: C1/C2 inbound 200: one complete ordered 58x40 tape, real PDF and readable samples
+ok 1 - C1/C2 inbound 200: one complete ordered 58x40 tape, real PDF and readable samples
+  ---
+  duration_ms: 11229.69476
+  type: 'test'
+  ...
+# Subtest: C1/C2 inbound 300: one complete ordered 58x40 tape, real PDF and readable samples
+ok 2 - C1/C2 inbound 300: one complete ordered 58x40 tape, real PDF and readable samples
+  ---
+  duration_ms: 11464.852675
+  type: 'test'
+  ...
+# Subtest: C1/C2 return 200: one complete ordered 58x40 tape, real PDF and readable samples
+ok 3 - C1/C2 return 200: one complete ordered 58x40 tape, real PDF and readable samples
+  ---
+  duration_ms: 7698.590331
+  type: 'test'
+  ...
+# Subtest: C1/C2 return 300: one complete ordered 58x40 tape, real PDF and readable samples
+ok 4 - C1/C2 return 300: one complete ordered 58x40 tape, real PDF and readable samples
+  ---
+  duration_ms: 10990.455447
+  type: 'test'
+  ...
+# Diagnostic capture: page.screenshot: Timeout 3000ms exceeded.
+# Call log:
+#   - taking page screenshot
+#   - waiting for fonts to load...
+#   - fonts loaded
+# Subtest: C3 renderer: short/long CODE128, >99 title, escaped special text and saved alternate size
+ok 5 - C3 renderer: short/long CODE128, >99 title, escaped special text and saved alternate size
+  ---
+  duration_ms: 4845.082149
+  type: 'test'
+  ...
+# Subtest: C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds
+ok 6 - C4 once: measure 1/200/300 preview preparation; decode delays overlap and UI responds
+  ---
+  duration_ms: 58755.246969
+  type: 'test'
+  ...
+# Subtest: C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+ok 7 - C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+  ---
+  duration_ms: 50594.067267
+  type: 'test'
+  ...
+# Diagnostic capture: page.screenshot: Timeout 3000ms exceeded.
+# Call log:
+#   - taking page screenshot
+#   - waiting for fonts to load...
+#   - fonts loaded
+# Subtest: C6 fast double confirmation belongs to one attempt and transfers at most once
+ok 8 - C6 fast double confirmation belongs to one attempt and transfers at most once
+  ---
+  duration_ms: 15520.06545
+  type: 'test'
+  ...
+# Subtest: C7/C8 response lost after transfer: restore source/attempt across reload before another external action
+ok 9 - C7/C8 response lost after transfer: restore source/attempt across reload before another external action
+  ---
+  duration_ms: 14462.278227
+  type: 'test'
+  ...
+# Subtest: C8 mark failure retry repairs original attempt without silently printing another tape
+ok 10 - C8 mark failure retry repairs original attempt without silently printing another tape
+  ---
+  duration_ms: 14481.113812
+  type: 'test'
+  ...
+# Subtest: C10 controls: empty/one/cargo, creation dialog and opening never print
+ok 11 - C10 controls: empty/one/cargo, creation dialog and opening never print
+  ---
+  duration_ms: 3027.787969
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 203457.864078
