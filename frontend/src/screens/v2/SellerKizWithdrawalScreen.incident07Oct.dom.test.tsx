@@ -181,3 +181,39 @@ describe('WMS-517 IC15: initial report count is truthful while reading', () => {
     expect(host.textContent).toContain('fixture signing readiness warning')
   })
 })
+
+describe('WMS-517 R30/R35: an unsuccessful poll cannot hide a manual refresh', () => {
+  it('keeps pending manual refresh visible and reports its failure after a silent poll fails', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+    try {
+      const api = makeApi()
+      const manual = deferred<WithdrawalPage>()
+      const poll = deferred<WithdrawalPage>()
+      const processing: WithdrawalPage = {
+        rows: [{ ...row('processing'), status: 'transferring', operation_id: 'existing-operation' }],
+        total: 1,
+      }
+      api.list.mockResolvedValueOnce(processing)
+        .mockReturnValueOnce(manual.promise)
+        .mockReturnValueOnce(poll.promise)
+      await mount(api)
+      expectFresh('processing')
+      await clickRefresh()
+      expect(host.querySelector('[role="progressbar"]')).not.toBeNull()
+      await act(async () => { await vi.advanceTimersByTimeAsync(5_000) })
+      // Pausing background polling during an explicit refresh is also valid.
+      if (api.list.mock.calls.length === 3) {
+        await fail(poll, new Error('fixture background poll failure'))
+      }
+      expect(host.querySelector('[role="progressbar"]')).not.toBeNull()
+      expect(refresh().disabled).toBe(true)
+      await fail(manual, new Error('fixture manual refresh failure'))
+      expect(host.querySelector('[role="progressbar"]')).toBeNull()
+      expect(refresh().disabled).toBe(false)
+      expect(host.textContent).toContain('fixture manual refresh failure')
+      expect(host.textContent).toContain('Товар processing')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+})
