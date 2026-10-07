@@ -1,0 +1,41 @@
+def _exemplar_id(marking: FbsOrderMarking) -> int | None:
+    details = marking.meta_details_json if isinstance(marking.meta_details_json, dict) else {}
+    value = details.get('exemplar_id')
+    return value if isinstance(value, int) else None
+
+def _created_at_key(marking: FbsOrderMarking) -> float:
+    return marking.created_at.timestamp() if marking.created_at is not None else float('-inf')
+
+def _required_position(order: FbsOrder, position_id: Any, kind: str) -> bool:
+    details = order.meta_details_json if isinstance(order.meta_details_json, dict) else {}
+    requirements = details.get(OZON_REQUIREMENTS_KEY)
+    by_sku = requirements.get('by_sku') if isinstance(requirements, dict) else None
+    if not isinstance(by_sku, dict):
+        return True
+    skus = by_sku.get(kind)
+    if not isinstance(skus, list):
+        return True
+    position = next((p for p in order.product_positions if p.id == position_id), None)
+    return position is not None and str(position.ozon_sku) in skus
+
+def current_markings(order: FbsOrder, markings: list[FbsOrderMarking]) -> list[FbsOrderMarking]:
+    """Select newest expected rows before evaluating their marketplace status."""
+    positions = {position.id: position.quantity for position in order.product_positions}
+    if not positions or any((quantity <= 0 for quantity in positions.values())):
+        return []
+    kinds = {str(kind).strip().lower() for kind in order.required_meta_json or [] if str(kind).strip()} or {marking.kind for marking in markings}
+    candidates = [marking for marking in markings if marking.kind in kinds and marking.order_product_id in positions and _required_position(order, marking.order_product_id, marking.kind) and (_exemplar_id(marking) is not None)]
+    grouped: dict[tuple[str, Any], list[FbsOrderMarking]] = defaultdict(list)
+    for marking in candidates:
+        grouped[marking.kind, marking.order_product_id].append(marking)
+    selected: list[FbsOrderMarking] = []
+    for (kind, position_id), rows in grouped.items():
+        del kind
+        rows.sort(key=_created_at_key, reverse=True)
+        expected = positions[position_id]
+        if len(rows) <= expected:
+            selected.extend(rows)
+            continue
+        cutoff = _created_at_key(rows[expected - 1])
+        selected.extend((row for row in rows if _created_at_key(row) >= cutoff))
+    return selected

@@ -1,0 +1,123 @@
+{
+  "victim": {
+    "raw": "010460601234567821AB91ZZQQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821AB\u001d91ZZQQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821AB91ZZQQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      []
+    ],
+    "candidate_complete_structure": true
+  },
+  "legacy_missing_before_91": {
+    "raw": "010460601234567821aXq7Tz9Km91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      []
+    ],
+    "candidate_complete_structure": true
+  },
+  "legacy_missing_before_92": {
+    "raw": "010460601234567821aXq7Tz9Km\u001d91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      []
+    ],
+    "candidate_complete_structure": true
+  },
+  "no_gs_44": {
+    "raw": "010460601234567821aXq7Tz9Km91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate_complete_structure": false
+  },
+  "complete": {
+    "raw": "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      []
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      []
+    ],
+    "candidate_complete_structure": true
+  },
+  "duplicate_gs": {
+    "raw": "010460601234567821aXq7Tz9Km\u001d\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate_complete_structure": false
+  },
+  "trailing_gs": {
+    "raw": "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=\u001d",
+    "baseline": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate": [
+      "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      [
+        "gs_structure_restored"
+      ]
+    ],
+    "candidate_complete_structure": false
+  },
+  "interpretations": {
+    "legacy_missing_before_91": {
+      "AI21": "aXq7Tz9Km91K7pQ",
+      "AI21_length": 15,
+      "AI92": "MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY="
+    },
+    "legacy_missing_before_92": {
+      "AI21": "aXq7Tz9Km",
+      "AI91": "K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+      "AI91_length": 50
+    }
+  },
+  "metadata": {
+    "baseline": "212f19d548496fef7baf75c83204b771e304281b",
+    "candidate_head": "907510ceaa9b77337e526c3b1553582b1b2b8ef0",
+    "candidate_source_sha256": "adb966be5efd920398b5229456e0b3e04c88a0b1a31788a0e620bdf556690ef6",
+    "candidate_source_git_blob": "5e73abaca93b6e5cd14e4fdec215a79a919ffe6c",
+    "method": "AST-extracted pure actual normalization functions; no API, DB, WB or printer claim"
+  }
+}
