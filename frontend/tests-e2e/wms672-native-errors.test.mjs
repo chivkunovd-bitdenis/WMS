@@ -9,8 +9,10 @@ const ts = require('typescript');
 const screenSource = readFileSync(new URL('../src/screens/ff/FfInboundRequestView.tsx', import.meta.url), 'utf8');
 const utilitySource = readFileSync(new URL('../src/utils/printBarcodeLabel.ts', import.meta.url), 'utf8');
 const tree = ts.createSourceFile('screen.tsx', screenSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-let initializer;
+const documentDisplaySource = readFileSync(new URL('../src/screens/ff/documentDisplay.ts', import.meta.url), 'utf8');
+let initializer, receiptFormatter;
 function visit(node) {
+  if (ts.isFunctionDeclaration(node) && node.name?.text === 'inboundReceiptDate') receiptFormatter = node;
   if (ts.isVariableDeclaration(node) && node.name.getText(tree) === 'printInboundInternalLabels') initializer = node.initializer;
   ts.forEachChild(node, visit);
 }
@@ -34,13 +36,18 @@ async function fixture({n = 300, failedIndex, badAsset = false, malformed, hold 
   const exports = {};
   w.exports = exports;
   w.eval(compile(utilitySource));
+  // Bind the real outer pure formatters used by the extracted receipt operation.
+  assert.ok(receiptFormatter, 'actual inbound receipt date formatter required');
+  w.eval(compile(documentDisplaySource));
+  w.formatHumanDocumentNumber = exports.formatHumanDocumentNumber;
+  w.eval(compile(`globalThis.inboundReceiptDate = ${receiptFormatter.getText(tree)};`));
   Object.assign(w, {
     printBarcodeLabels:exports.printBarcodeLabels, inboundLabelPrinting:{current:false},
     setBusy:value => {state.busy=value;}, setError:value => {state.error=value;},
     readIntake:() => ({}), saveInboundLabelAttempt:(_token, _id, attempt) => {
       state.saves.push({...attempt, readyAtSave:state.ready});
     }, token:'synthetic', requestId:'native-document', authHeaders:{},
-    apiUrl:path => path, randomId:() => 'native-attempt', detail:{boxes},
+    apiUrl:path => path, randomId:() => 'native-attempt', detail:{boxes, display_number:'№000672', document_number:'INB-000672', seller_name:'Synthetic native seller', created_at:'2026-10-06T12:00:00Z'},
     numberedInboundBoxLabels:true, inboundBoxDisplayLabel:number => String(number),
     renderBarcodeDataUrl:barcode => badAsset && barcode===boxes[failedIndex-1]?.barcode
       ? 'data:image/png;base64,AAAA' : validPng,
