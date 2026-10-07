@@ -30,7 +30,7 @@ ToolHandler = Callable[[str, dict[str, Any]], dict[str, Any]]
 def _occupancy(usage: dict[str, Any]) -> int:
     """Only the last context, never cumulative total lifetime token usage."""
     last = usage.get("last") or {}
-    return int(last.get("totalTokens") or 0)
+    return int(last.get("inputTokens") or last.get("totalTokens") or 0)
 
 
 def _configured_mcp_names(argv: list[str], cwd: str, env: dict[str, str]) -> list[str]:
@@ -114,6 +114,12 @@ class AppServerTurn:
         progress_callback: Callable[[str], None] | None = None,
         cancelled: Callable[[], bool] | None = None,
         redact_error: Callable[[str], str] | None = None,
+        session_name: str | None = None,
+        project_id: str | None = None,
+        image_paths: list[str] | None = None,
+        live_inputs: Callable[[], list[dict[str, Any]]] | None = None,
+        inputs_delivered: Callable[[list[dict[str, Any]]], None] | None = None,
+        create_only: bool = False,
     ) -> tuple[str, str, int]:
         if mode not in ("readonly", "write", "owner"):
             raise ValueError(f"unsupported agent mode: {mode}")
@@ -128,14 +134,11 @@ class AppServerTurn:
         env = {key: value for key, value in os.environ.items() if key not in sandbox.SENSITIVE_ENV}
         argv = [self.binary, "app-server", "--stdio", "-c", "web_search=\"disabled\"",
                 "-c", "approval_policy=\"never\""]
-        for feature in ("apps", "plugins", "remote_plugin", "multi_agent", "browser_use",
-                        "computer_use", "image_generation"):
-            argv += ["--disable", feature]
+        # Native investigation, images and explicitly requested delegation stay
+        # available. Client investigations remain in Codex's read-only sandbox.
+        argv += ["--enable", "multi_agent", "-c", "tools.view_image=true"]
         if mode == "readonly":
-            # Client messages get service tools, not native shell/file mutation.
-            argv += ["--disable", "shell_tool", "--disable", "unified_exec"]
-            # Empty mcp_servers={} does not clear inherited entries. Discover
-            # effective names in a tool-free preflight, then disable each one.
+            # Account/connector actions still cross the service tool boundary.
             for server_name in _configured_mcp_names(argv, cwd, env):
                 argv += ["-c", f"mcp_servers.{server_name}.enabled=false"]
         elif mode == "write":
@@ -189,6 +192,8 @@ class AppServerTurn:
                 try:
                     event = inbox.get(timeout=min(remaining, 1.0))
                 except queue.Empty:
+                    if active_turn and live_inputs is not None:
+                        return {"method": "support/idle", "params": {}}
                     continue
                 if event is None:
                     raise AppServerError(f"app-server stopped (exit {proc.poll()})")
@@ -219,38 +224,66 @@ class AppServerTurn:
                     for value in servers.values()
                 ):
                     raise AppServerError("readonly MCP tools are not fully disabled")
+            session_params: Event = {
+                "model": model, "cwd": cwd,
+                "sandbox": {"readonly": "read-only", "write": "workspace-write",
+                            "owner": "danger-full-access"}[mode],
+                "approvalPolicy": "never", "developerInstructions": system,
+            }
             if session_id:
-                raise AppServerError("background turns require bot-owned context, not a desktop thread")
-            else:
-                thread_response = rpc("thread/start", {
-                    "ephemeral": True,
-                    "model": model,
-                    "allowProviderModelFallback": False,
-                    "cwd": cwd, "sandbox": {"readonly": "read-only", "write": "workspace-write",
-                                                "owner": "danger-full-access"}[mode],
-                    "approvalPolicy": "never", "developerInstructions": system,
-                    "dynamicTools": tools,
+                thread_response = rpc("thread/resume", {
+                    **session_params, "threadId": session_id, "excludeTurns": True,
                 })
-                if thread_response.get("model") != model:
-                    raise AppServerError("requested model was not selected")
-                thread = thread_response.get("thread") or {}
+            else:
+                session_params.update({"ephemeral": False,
+                                       "allowProviderModelFallback": False,
+                                       "dynamicTools": tools})
+                if project_id:
+                    session_params["projectId"] = project_id
+                thread_response = rpc("thread/start", session_params)
+            if thread_response.get("model") != model:
+                raise AppServerError("requested model was not selected")
+            thread = thread_response.get("thread") or {}
             thread_id = thread.get("id") or session_id
             if not isinstance(thread_id, str) or not thread_id:
                 raise AppServerError("app-server did not return a thread ID")
             if session_started is not None:
                 session_started(thread_id)
+            if session_name:
+                rpc("thread/name/set", {"threadId": thread_id, "name": session_name})
+            status = thread.get("status") or {}
+            if isinstance(status, dict) and status.get("type") == "active":
+                raise AppServerError("thread busy; keep incoming messages queued")
+            if create_only:
+                return "", thread_id, 0
+            initial_inputs: list[Event] = [{"type": "text", "text": prompt}]
+            for path in image_paths or []:
+                if not Path(path).is_file():
+                    raise AppServerError("input image unavailable; keep message queued")
+                initial_inputs.append({"type": "localImage", "path": str(Path(path).resolve())})
             started_turn = rpc("turn/start", {"threadId": thread_id,
-                                              "input": [{"type": "text", "text": prompt}],
+                                              "input": initial_inputs,
                                               "model": model, "effort": effort})
             turn_id = (started_turn.get("turn") or {}).get("id")
             if isinstance(turn_id, str):
                 active_turn.update({"threadId": thread_id, "turnId": turn_id})
             answer = ""
             occupied = 0
+            last_live_check = 0.0
             while True:
+                if live_inputs is not None and active_turn and time.monotonic() - last_live_check >= 1:
+                    last_live_check = time.monotonic()
+                    additional = live_inputs()
+                    if additional:
+                        rpc("turn/steer", {"threadId": thread_id, "expectedTurnId": turn_id,
+                                           "input": additional})
+                        if inputs_delivered is not None:
+                            inputs_delivered(additional)
                 event = events.pop(0) if events else receive()
                 method = event.get("method")
                 params = event.get("params") or {}
+                if params.get("threadId") not in (None, thread_id):
+                    continue
                 if method == "item/tool/call":
                     call_id = event.get("id")
                     name = params.get("tool")
