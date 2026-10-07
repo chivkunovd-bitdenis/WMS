@@ -1,0 +1,20 @@
+{
+  "source_base": "7bbfafc68ef0834746e63f12a49db31a1977f030",
+  "actual_merge_browser_byte_equal": true,
+  "protected_closure_sha256": {
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+    "frontend/tests-e2e/wms652-critical/fixtures.mjs": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
+    "frontend/tests-e2e/wms652-critical/geometry.mjs": "eeb4a65d08be78e91726b79e60e5ca5bcc57e6ad4c51e31c073a4188626d87c6",
+    "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+    "frontend/tests-e2e/wms652-critical/main.tsx": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621",
+    "frontend/tests-e2e/wms652-critical/index.html": "eb0a95a73e7fbee51f9c7a3400d74bee877fd5998a07bb0d08131799af2073da",
+    "frontend/tests-e2e/wms652-critical/vite.config.ts": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "product_and_frozen_file_diff_empty": true,
+  "prepare_assertions_exit": 0,
+  "node_syntax_exit": 0,
+  "shell_syntax_exit": 0,
+  "actual_browser_not_run_locally": true
+}

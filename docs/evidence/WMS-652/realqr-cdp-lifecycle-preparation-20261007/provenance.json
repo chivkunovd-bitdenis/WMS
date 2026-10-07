@@ -1,0 +1,22 @@
+{
+  "sourcePath": "frontend/tests-e2e/wms652-critical/browser.mjs",
+  "sourceSha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+  "sourceActualTestedMerge": "ac845328b27b5be265962695e10766efddef339e",
+  "sourceBase": "7bbfafc68ef0834746e63f12a49db31a1977f030",
+  "transformedUntrackedPath": "frontend/tests-e2e/wms652-critical/.lifecycle-diagnostic.untracked.mjs",
+  "transformedSha256": "dd4149e6caac3fddd15670a20606d06616df83538a25421902f25c3244521add",
+  "selectedCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+  "transportObserverPath": "frontend/tests-e2e/wms652-critical/.lifecycle-transport-observer.untracked.mjs",
+  "transportObserverSha256": "e84a39e63d4541945cc5e0744efb2d7b882a5cf71355825c092fe65eeffa89f1",
+  "protectedSpansSha256": {
+    "targetBody": "87faa8eb14d8e4cad3e98849fec4ee7c9cd573fb8682d9ba90d50a055ac017a6",
+    "routes": "8caf30da041c66d9827a537f2a8f39bf7e2e2b319cfa945d269d55d121557c98",
+    "fulfillment": "094e4d5e38edd83f779dd4a2cd5c10944de9f1e8a221c2ccde5866a50492ce7c",
+    "timing": "1143302cdd93f980608e26232e3e8e0e4bca17d88eca8439f663ecd4be40e612",
+    "chromeLaunch": "d94e6be2f9763b32c08916205875eb45d07d09033a7ce4fc0fcecefe0ae1bdf9"
+  },
+  "protectedSpansByteEqual": true,
+  "selection": "only invocation list, variant/entry lists and expected selected collection changed; entire target body preserved",
+  "telemetry": "command/result/listener metadata+Network observer domain; all rejects/errors/assertions unchanged",
+  "maxRecords": 20000
+}
