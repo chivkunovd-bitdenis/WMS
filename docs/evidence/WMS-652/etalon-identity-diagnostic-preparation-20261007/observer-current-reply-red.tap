@@ -1,0 +1,59 @@
+TAP version 13
+# Subtest: paused identity and initiator allowlist are observed without mutating ingress
+ok 1 - paused identity and initiator allowlist are observed without mutating ingress
+  ---
+  duration_ms: 2.213459
+  type: 'test'
+  ...
+# Subtest: native success/error identity captured before pending removal; no arbitrary results
+ok 2 - native success/error identity captured before pending removal; no arbitrary results
+  ---
+  duration_ms: 0.709375
+  type: 'test'
+  ...
+# Subtest: event/byte caps count drops while completion and pending state survive
+ok 3 - event/byte caps count drops while completion and pending state survive
+  ---
+  duration_ms: 0.208584
+  type: 'test'
+  ...
+# Subtest: non-synthetic/auth URLs and unobserved data never enter telemetry
+ok 4 - non-synthetic/auth URLs and unobserved data never enter telemetry
+  ---
+  duration_ms: 0.170167
+  type: 'test'
+  ...
+# Subtest: native reply preserves send identity and distinct current reply generation and case
+not ok 5 - native reply preserves send identity and distinct current reply generation and case
+  ---
+  duration_ms: 0.605166
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-two-shards/scripts/ci/wms652-identity-diagnostic/observer.test.mjs:43:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+    
+    undefined !== 8
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 8
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-two-shards/scripts/ci/wms652-identity-diagnostic/observer.test.mjs:53:10)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1103:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:785:18)
+    Test.postRun (node:internal/test_runner/test:1232:19)
+    Test.run (node:internal/test_runner/test:1160:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 4
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 49.114917

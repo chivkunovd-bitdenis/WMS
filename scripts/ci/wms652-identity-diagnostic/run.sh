@@ -19,7 +19,7 @@ bash -n scripts/ci/run_critical_fbs_browser.observed.untracked.sh
   node -p "require(process.env.RUNNER_TEMP+'/print-contract-tools/node_modules/playwright/package.json').version"
   git rev-parse HEAD
 } > "$out/environment.txt"
-"$WMS672_CHROMIUM" --version | rg '141\.' >/dev/null
+"$WMS672_CHROMIUM" --version | grep -Eq '141\.'
 set +e
 bash scripts/ci/run_critical_fbs_browser.observed.untracked.sh > "$out/browser43.log" 2>&1
 browser_exit=$?

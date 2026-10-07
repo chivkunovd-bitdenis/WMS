@@ -1,12 +1,12 @@
 {
   "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
-  "diagnostic_head": "896b9a3fee446728c44b62af7c8bf8422d1e5e08",
+  "diagnostic_head": "ddb5a8b88c54dac8cb6483bb872ecbaf7251841c",
   "insertions": 5,
   "source_browser_sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
   "reverse_recovered_sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
   "reverse_byte_equal": true,
   "generated_browser_sha256": "0d2e77ba56763ccdb3477ca237a3d3ee167203613f17d09f4926e99f3a7e5810",
-  "generated_observer_sha256": "c89ac0e521d96202c75dd4d8886702ee352b859639859e50632bf099bbada109",
+  "generated_observer_sha256": "9a0271e2912b4b16c42598aac13eb474501d3004a7d8587b357817f716aa2645",
   "runner": "frontend/tests-e2e/wms652-critical/browser.identity-diagnostic.untracked.mjs",
   "observer": "frontend/tests-e2e/wms652-critical/identity-observer.untracked.mjs",
   "source_shell_sha256": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
@@ -80,7 +80,7 @@
   },
   "missing_and_duplicate_insertion_anchors_rejected": true,
   "observer_controls": {
-    "pass": 4,
+    "pass": 5,
     "fail": 0,
     "skipped": 0
   },
@@ -92,5 +92,22 @@
   },
   "workflow_yaml_scope": "one workflow_dispatch, one Ubuntu24.04 job, PASS",
   "actual_browser_executed": false,
-  "dispatch_executed": false
+  "dispatch_executed": false,
+  "current_reply_control": {
+    "before_commit": "ddb5a8b88c54dac8cb6483bb872ecbaf7251841c",
+    "before_observer_sha256": "c89ac0e521d96202c75dd4d8886702ee352b859639859e50632bf099bbada109",
+    "before": {
+      "pass": 4,
+      "fail": 1,
+      "skipped": 0,
+      "target_failure": "undefined !== 8",
+      "raw": "observer-current-reply-red.tap"
+    },
+    "after": {
+      "pass": 5,
+      "fail": 0,
+      "skipped": 0,
+      "raw": "observer-controls.tap"
+    }
+  }
 }

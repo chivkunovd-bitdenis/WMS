@@ -26,7 +26,8 @@ export function createObserver({maxEvents=100000,maxBytes=64*1024*1024}={}){
       seen++;
       const utc=Date.now(),line={nodeUtcMs:utc,nodeUtc:new Date(utc).toISOString(),
         nodeMonoMs:performance.now(),nodeTimeOriginMs:performance.timeOrigin,
-        generation:c?.generation,caseId:c?.currentCase(),...value};
+        generation:c?.generation,caseId:c?.currentCase(),...value,
+        currentGeneration:c?.generation,currentCaseId:c?.currentCase()};
       const size=Buffer.byteLength(JSON.stringify(line))+1;
       if(events.length>=maxEvents){dropped.events++;return;}
       if(bytes+size>eventByteBudget){dropped.bytes++;return;}

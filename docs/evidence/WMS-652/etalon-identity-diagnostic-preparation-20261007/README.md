@@ -34,7 +34,10 @@ before the existing native ws.send, without sends/awaits/retries/classification.
 It records paused FetchID/networkId/frameId/exact synthetic URL/method/resourceType/
 redirectedRequestId; Network.requestWillBeSent request/frame/loader/URL/method/type
 and only initiator.type/requestId; loadingFailed/loadingFinished; native command
-IDs/methods/results/timeouts; generation/case and Node UTC/monotonic clocks.
+IDs/methods/results/timeouts; original send generation/case plus distinct current
+`currentGeneration`/`currentCaseId` and Node UTC/monotonic clocks. Current fields
+are written after the metadata spread, retaining the reply context without changing
+the original send identity or finite-driver forwarding.
 Results are limited to empty Fetch native success, navigation identity, and native
 error code/message; arbitrary Runtime results are omitted. No headers, postdata,
 bodies, auth/customer/token values or initiator stacks enter telemetry. URLs outside
@@ -44,9 +47,12 @@ artifact upload selects metadata and strict result only, excluding business-body
 JSON files. A100000-event/64MiB cap reserves summary space and records drop counts,
 pending commands and case completion. Cap/drop observations do not explain errors.
 
-Local controls were written before implementation:4PASS/0FAIL/0skip; ingress
+Local controls were written before implementation:5PASS/0FAIL/0skip; ingress
 preservation/privacy/caps/completion/native-result identity. The initial missing
 module failure was preparation only, **not a frozen behavioral RED contract**.
+The added current-reply control first gave4PASS/1targetFAIL on publishedddb5a8b88
+(`undefined !== 8`, saved `observer-current-reply-red.tap`), then5PASS after the
+collector-only field correction. The shell version check now uses portable `grep -Eq`.
 Generated runner/observer syntax, both shell syntax, one-job dispatch YAML,
 reverse byte equality and missing/duplicate-anchor rejection PASS. See saved
 `observer-controls.tap`, `source-proof.json`, and `generated-insertions.diff`.

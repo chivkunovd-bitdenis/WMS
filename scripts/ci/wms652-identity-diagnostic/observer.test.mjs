@@ -40,3 +40,17 @@ test('non-synthetic/auth URLs and unobserved data never enter telemetry', () => 
   o.message(c,{method:'Runtime.consoleAPICalled',params:{data:'DO_NOT_EMIT'}});
   const r=o.snapshot(c);assert.equal(r.events.length,3);assert(!JSON.stringify(r).includes('DO_NOT_EMIT'));assert(r.events.every(e=>e.urlOmitted===true));
 });
+test('native reply preserves send identity and distinct current reply generation and case', () => {
+  const o=createObserver(),c=context();
+  const sendIdentity={requestId:'F1',networkId:'N1',frameId:'X',generation:7,caseId:'synthetic-case'};
+  c.pending.set(9,{method:'Fetch.fulfillRequest',identity:sendIdentity});
+  o.sent(c,9,'Fetch.fulfillRequest',{requestId:'F1'});
+  c.generation=8;c.currentCase=()=> 'reply-case';
+  o.message(c,{id:9,error:{code:-32602,message:'Invalid InterceptionId.'}});
+  const [send,reply]=o.snapshot(c).events;
+  assert.equal(reply.generation,7);assert.equal(reply.caseId,'synthetic-case');
+  assert.deepEqual(c.pending.get(9).identity,sendIdentity);
+  assert.equal(reply.currentGeneration,8);assert.equal(reply.currentCaseId,'reply-case');
+  assert.equal(send.currentGeneration,7);assert.equal(send.currentCaseId,'synthetic-case');
+  assert.notEqual(reply.currentGeneration,reply.generation);
+});
