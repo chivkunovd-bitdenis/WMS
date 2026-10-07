@@ -15485,6 +15485,22 @@ Ozon присылает SKU в `requirements.products_requiring_*` числам�
 
 ## WMS-652 · Защита от регрессий: ревью плана и первая очередь CI
 
+07.10.2026, отдельный процессный пилот владельца: главный экран FBS имеет
+24 исполняемых браузерных сценария на настоящем тестовом frontend/API/БД;
+на `0bb995be24c96a766c60ea5358f108fdacc2c7cf` прошли 22, два выявили потерю
+позиций/количеств Ozon в выгрузке и исчезновение ошибки QR. Это отдельная
+проверка ветки, не включённая обязательная защита production-выпуска.
+Новые решения WMS-691/692 отменяют прежний желаемый контракт QR и вкладки
+«Просрочены»; тесты старого состояния не заменяют эти требования.
+Следующий экран — «Подбор». По прямому поручению владельца один Sol 6.1
+[описал процессы](../frontend/tests-e2e/fbs-picking/PROCESS_RU.md), ведущий
+проверил описание, отдельный Sol 6.1 пишет браузерные проверки. Акценты:
+сканирование, точный источник ячейки/тары, быстрые и повторные сканы, ручное
+число, раскладка, обновление/сохранность и неизменность физического остатка.
+Жалоба на сканер production пока не воспроизведена: браузер требует входа.
+Реализация продуктовых исправлений и деплой этим исследованием не заявляются.
+
+
 **Актуально07.10.2026: BATCH FIXTURE/ДВЕ EXACT-ПАРЫ И LEDGER ПРИНЯТЫ · FINAL SOURCE/CI/ВЫПУСК ОЖИДАЮТСЯ.** Та же замещающая сессия принялаd5a3 после независимогоe70b PASS: frozen PID2/exact-pair6 PASS0skip/error, оба исторических approvals и owner supersession сохранены в actual353 fixture_corrections. Native PG comparison37563300572 SUCCESS:16 native exit0/37requiredPG+30Linux PASS, batch219/209 и steady225/224; эффективность fixture подтверждена. Prepared238files/22suites/1192IDs/backend-fbs627 сохраняют старые наборы; PRODUCT1cf/приёмкаR52 неизменны. Последний full375616 FAILED779s/12m59 (backend4437PASS/198ordinarySKIP,619requiredFBS PASS0skip); успешная цель10–15 не доказана, исторический SQLite locker UNKNOWN. Main6bd/pinb815/stagecc8e/prod8f11 прежние; следующие finalSOURCE/pin/freshcommon+etalonCI→stage→production exactSHA/runtime. Ручные Mac/подписи после softwaredeploy, доступность Виталия не новый gate. [Текущее заключение](requirements/WMS-652.md#приёмка-batch-fixture-и-точных-коррекций--07102026) · [доказательства](evidence/WMS-652/batch-release-acceptance-20261007/README.md). История ниже сохранена.
 
 **Актуальная приёмка07.10.2026: R52/C66–C68 И FORMAT/LEDGER ПРИНЯТЫ · REFERENCE1cf ОДОБРЕН · SOURCE/FULLCI/ВЫПУСК ОЖИДАЮТСЯ.** Та же отдельная замещающая сессия приняла source17f44649b после независимого4e4819af PASS: frozen native4 дают PASS0skip/error (до guard3RED/1ordinaryPASS), publisher6PASS/1knownPGskip; минимальный nested-commit guard сохраняет заявку до outer commit и не публикует при outer rollback. Точный product-reference `1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333` одобрен без ослабления frozen51. Конечные format/ledger6475/ad22 приняты; prepared233files/22suites/1184IDs сохраняют старые230/1180. Последний full37556521625 FAILED733s/12m13, mandatoryPG не исполнены; исторический SQLite-lock owner UNKNOWN и успешная цель10–15 не доказана. Прежние ff611/25eb/672/517 и actual43/Node12/CDP7/Mac110/frontend1566 PASS сохраняются на своих источниках. Main configddb28/SOURCE321f, stagingcc8e/prod8f11 не активируют новый SOURCE: отдельная finalSOURCE233 проверка/mainconfig/одинfullCI→etalonCI→deploy ещё впереди. [Текущее заключение](requirements/WMS-652.md#приёмка-r52-и-точной-product-reference-миграции--07102026) · [доказательства](evidence/WMS-652/nested-stock-acceptance-20261007/README.md). История ниже сохранена.

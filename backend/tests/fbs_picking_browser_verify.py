@@ -1,0 +1,83 @@
+"""Read-only snapshots of the same DB records mutated through the real browser."""
+
+from __future__ import annotations
+
+import asyncio
+import json
+import sys
+import uuid
+
+from sqlalchemy import select
+
+from app.db.session import SessionLocal
+from app.models.fbs_order import FbsOrderProductPick, FbsOrderReservation
+from app.models.fbs_order_pick import FbsOrderPick
+from app.models.inventory_balance import InventoryBalance
+from tests.fbs_picking_browser_seed import guard
+
+
+async def main() -> None:
+    guard()
+    seed = json.load(sys.stdin)
+    tenant = uuid.UUID(seed["tenant_id"])
+    async with SessionLocal() as session:
+        balances = (
+            await session.scalars(
+                select(InventoryBalance).where(InventoryBalance.tenant_id == tenant)
+            )
+        ).all()
+        picks = (
+            await session.scalars(select(FbsOrderPick).where(FbsOrderPick.tenant_id == tenant))
+        ).all()
+        ozon = (
+            await session.scalars(
+                select(FbsOrderProductPick).where(FbsOrderProductPick.tenant_id == tenant)
+            )
+        ).all()
+        reserves = (
+            await session.scalars(
+                select(FbsOrderReservation).where(FbsOrderReservation.tenant_id == tenant)
+            )
+        ).all()
+        stock = {}
+        for b in balances:
+            stock[str(b.product_id)] = stock.get(str(b.product_id), 0) + b.quantity
+
+        def one(p):
+            return {
+                "id": str(p.id),
+                "supply": str(p.fbs_supply_id),
+                "product": str(p.product_id),
+                "order": str(p.fbs_order_id) if isinstance(p, FbsOrderPick) else None,
+                "position": str(p.order_product_id) if isinstance(p, FbsOrderProductPick) else None,
+                "location": str(p.source_storage_location_id),
+                "container": str(p.source_container_id) if p.source_container_id else None,
+                "sorting": str(p.sorting_storage_location_id),
+                "key": p.scan_idempotency_key,
+                "active": p.undone_at is None,
+                "movement": str(p.inventory_movement_id) if p.inventory_movement_id else None,
+            }
+
+        result = {
+            "stock": stock,
+            "unchanged": stock == seed["stock_by_product"],
+            "balances": [
+                {
+                    "product": str(b.product_id),
+                    "location": str(b.storage_location_id),
+                    "container": str(b.container_id) if b.container_id else None,
+                    "quantity": b.quantity,
+                }
+                for b in balances
+            ],
+            "picks": [one(p) for p in [*picks, *ozon]],
+            "reserves": [
+                {"order": str(r.fbs_order_id), "product": str(r.product_id), "quantity": r.quantity}
+                for r in reserves
+            ],
+        }
+        sys.stdout.write(json.dumps(result))
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

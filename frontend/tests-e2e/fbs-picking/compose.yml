@@ -1,0 +1,14 @@
+# Test-only upstream isolation. WMS API and Celery still execute real services.
+services:
+  api:
+    environment:
+      WILDBERRIES_CONTENT_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_SUPPLIES_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_COMMON_API_BASE: http://wb-emulator:8000
+      WMS_OZON_SELLER_API_BASE: http://wb-emulator:8000
+  celery_worker:
+    environment:
+      WILDBERRIES_CONTENT_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_SUPPLIES_API_BASE: http://wb-emulator:8000
+      WILDBERRIES_COMMON_API_BASE: http://wb-emulator:8000
+      WMS_OZON_SELLER_API_BASE: http://wb-emulator:8000
