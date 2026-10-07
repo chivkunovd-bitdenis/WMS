@@ -1,0 +1,27 @@
+{
+  "start_examined_HEAD": "edd9657de1850cb8e2eff8beecde89fe8ec3f913",
+  "same_dependencies_at_published_checkpoint": "ca06451945ccc87a50a4e68825e8b7a338073adc",
+  "dependencies": {
+    "scripts/ci/check_task_documents.py": "1bdd9b81cabef531c726a6d920d3dd740ff9de81",
+    "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "04e267f19abba06e30b1374f410f10ef4308b95b",
+    "docs/reviews/contract-corrections/WMS-680.json": "5da0eb67efd1f42124e19a761bafe469bad82530",
+    "frontend/src/utils/wms680PrintGeometry.test.ts": "81a83b3794340eadd60abba94594d6ff09d533ae"
+  },
+  "actual_exit": 0,
+  "tests_passed": 3,
+  "subtests_passed": 15,
+  "negative_canaries": 13,
+  "elapsed_seconds": 1163.99,
+  "no_repeat": true,
+  "unrelated_HEAD_advances": "F6fixture/source672merge didnotmodifythe frozen680checker/data/wholeGeometry/ledger dependencies",
+  "still_blocked": [
+    "F6canonical200617→e249 actualreviewed-correctionledger bindingmissing",
+    "NewNative672fixture failsbeforeiframe; scopearrownowmentionsmetadatahelpersnotstubbed",
+    "Existing43CDPInterceptionIdfailure concurrentcoordinator ownsfix",
+    "wholeexactSHAfullCI/source/mainpin/etalon/deploy notdone"
+  ],
+  "raw_sha256": {
+    "680-final-activation-graph.xml": "e2c40ca589c00d8136364ed07550027a5c453460182d44578e7b9b8b7cc61c80",
+    "680-final-activation-graph.log": "35efc42d7c3c2bd74a780599f4bff1c82d0ad8c2c690492baace68998ba996d3"
+  }
+}
