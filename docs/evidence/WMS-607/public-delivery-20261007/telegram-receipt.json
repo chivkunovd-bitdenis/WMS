@@ -1,0 +1,12 @@
+{
+  "chat_id": -5414355172,
+  "title": "Короб ВМС - ArtMaks",
+  "message_id": "261",
+  "status": "sent",
+  "sent_at": "2026-10-07T07:07:18.667405+00:00",
+  "text_sha256": "fb143b151c41166c2db5491a363b60c1052ad8547e86721cc382f5b194bce2f1",
+  "outbox_key": "WMS607-ArtMaks-a475a734-20261007-verified-update",
+  "reconstructed_from_durable_outbox_after_receipt_write_ENOSPC": true,
+  "send_attempts": 1,
+  "recipient_read_or_install_verified": false
+}
