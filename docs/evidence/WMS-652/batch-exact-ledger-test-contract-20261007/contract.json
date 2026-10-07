@@ -1,0 +1,125 @@
+{
+  "task": "WMS-652",
+  "role": "same separate Sol6.1/high TESTWRITER",
+  "base": "76025c5db0c963f5eb2dfbea9bb5989dabcfdd53",
+  "command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B -m pytest --noconftest -c /dev/null --rootdir=backend -q -p no:cacheprovider backend/tests/test_wms662_exact_fixture_pairs_contract.py --junitxml=docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/before.xml",
+  "case_ids": [
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+    "tests/test_wms662_exact_fixture_pairs_contract.py::test_missing_changed_review_or_rebound_source_remains_rejected"
+  ],
+  "xml_ids": [
+    "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_missing_changed_review_or_rebound_source_remains_rejected"
+  ],
+  "proposed_exact_tuples": {
+    "wms662-live-delivery-test-format": [
+      "WMS-662",
+      "backend/tests/test_wms662_live_delivery_substatuses.py",
+      "a6fc67e70364b0c84e9d2d41d734cd5af1cd61b4",
+      "cefb7d8ac635c3da443a6f623c2fef4a1ff75850"
+    ],
+    "wms662-batch-first-wait-pid-snapshot": [
+      "WMS-662",
+      "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "03d744d54222dc6ee13014d1f378bf07e6eb4e8a"
+    ]
+  },
+  "historical_sources": {
+    "wms662-live-delivery-test-format": {
+      "original": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "correction": "5feca959614667eb95e56a85e7b94efa497feeff",
+      "original_context_file_count": 1
+    },
+    "wms662-batch-first-wait-pid-snapshot": {
+      "original": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "correction": "466178698fc47d4eadecc611eeb6039c475da58a",
+      "original_context_file_count": 13
+    }
+  },
+  "before": {
+    "executed": 6,
+    "pass": 3,
+    "fail": 3,
+    "skip": 0,
+    "error": 0,
+    "exit_code": 1,
+    "raw_xml": "before.xml",
+    "raw_log": "before.log",
+    "reason": "Exact legacy pair, exact batch pair and combined ledger all reach actual tuple validation and are denied as unsupported transforms; not setup failures."
+  },
+  "negative_preservation_control": {
+    "command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/failclosed-control.py",
+    "raw_xml": "failclosed-control.xml",
+    "raw_log": "failclosed-control.log",
+    "executed": 3,
+    "pass": 0,
+    "fail": 3,
+    "skip": 0,
+    "error": 0,
+    "deselected": 3,
+    "exit_code": 1,
+    "mutation": "Actual checker source COPY returns no validation errors before checks; all three rejection tests meaningfully fail. No dictionary pin additions, tracked edits, or monkeypatching of positive validation.",
+    "copy_removed": true
+  },
+  "ci_integration": {
+    "suite": "backend-fbs",
+    "report": "backend-all.xml",
+    "format": "junit",
+    "exact": false,
+    "additive_cases": 6,
+    "workflow_changed": false
+  },
+  "source_closure": [
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py",
+    "scripts/ci/check_task_documents.py",
+    "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json",
+    "backend/tests/conftest.py",
+    "backend/pyproject.toml",
+    "backend/uv.lock"
+  ],
+  "closure_sha256": {
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py": "5f505f389a7b0b38838c69df676882a42509d80932c189475a83caa2e84336b9",
+    "scripts/ci/check_task_documents.py": "144dc11f87c97128d5fef773687fa053d4e26d71c42ba81c690a272e7cdeefc6",
+    "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "controlled_boundary": "Real isolated Git repos replay byte-exact original/corrected files and full1/13-file original contexts. Actual complete checker module and exact_fixture_corrections called without patching its algorithm or tuple allowlist. Review SHA/blob bindings are explicitly synthetic protocol fixtures, not new independent approvals.",
+  "validation_scope": "Exact fixture frontiers only. Real owner_supersessions object is retained byte-for-byte in fixture inputs and ledger; its independent validation remains the unchanged outer checker and is not claimed as replayed here.",
+  "preservation_sha256": {
+    "scripts/ci/check_task_documents.py": "144dc11f87c97128d5fef773687fa053d4e26d71c42ba81c690a272e7cdeefc6",
+    "docs/reviews/contract-corrections/WMS-662.json": "24eb0295fb36cf51e0d6a0559c506ceec3bdd26cbbd16703ebb445a3d381274b",
+    "backend/tests/test_wms662_live_delivery_substatuses.py": "3ddd3b9ddde65de0b12cd3f0849998d4f58dc61f0cdec7a8d45f3a4698a675e0",
+    "backend/tests/test_wms662_batch_handoff_lock_order.py": "4b0062901cc0df0da3dc4604fcb72c7619f251dee1182954351564c7f1335ac1",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "prior_fixture_pairs_ast_sha256": "bd0ba4a739ca55d4f230e830732fb317a91c88cf79c77ebc390c6312d8c7aa6a",
+  "owner_supersessions_canonical_sha256": "dd284f3e877c4e7ac2e207168d59d9605968a37fc4afe8ba1970347f62634fb3",
+  "raw_sha256": {
+    "before.xml": "6a5a57bd3e9011586fd6e598c5ace628c9f80146cab2088289fd3bac3608622e",
+    "before.log": "5b5a0f169e9cd9bd961818793ea66b190f666d346af80b7489cc48079370f344",
+    "failclosed-control.xml": "571dcae208c542963a77aa181bd86ace747885584ce6bdce833f1233858a9f53",
+    "failclosed-control.log": "52690816cc4bc64e2e11a2a6aff8c2462880e62076b016dd75b73f3552296c79"
+  },
+  "all_existing_tracked_files_diff": [],
+  "unrelated_stash_retained": "b396ded869bc8932ad25dc448b5f7163aa62a2f7",
+  "new_test_ruff": "PASS",
+  "limits": [
+    "No checker/dictionary/ledger/old fixture/requirements/policy/workflow edits in this contract.",
+    "Two full-file tuple pins are proposed; no generic permission, legacy array waiver or companion scope is introduced.",
+    "No PG, full backend, browser, installs, external service, acceptance or SOURCE approval.",
+    "Real immutable docs/reviews artifact bindings must be supplied by independent reviewer/integrator before actual ledger migration."
+  ]
+}
