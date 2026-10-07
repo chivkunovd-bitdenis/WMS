@@ -260,7 +260,7 @@
     "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": "e409e97054934846973de6c7a0d6418f0cef3316bcb83d283ad05e3d3188bcd4",
     "frontend/src/utils/printInboundReceivingSheet.test.ts": "842f219638f379de60635d76dc1d326cf06a4bd3a1d22ce0907636efbd107086",
     "frontend/src/utils/printShipmentPackagingSheet.test.ts": "79268fd951523f9ed82d90a33823089faf83377457cb54976099891442bb9df7",
-    "frontend/src/test-contracts/inbound684586Harness.tsx": "6fff1f7e1b70f8ff9cbd880af0dac586f21fa0139404ddb3faa987036f811133",
+    "frontend/src/test-contracts/inbound684586Harness.tsx": "8f94973848be0435091ed8496be90fd64e328e3f20bc2682430d93275c85d0fb",
     "backend/tests/test_wms681_postgres_recovery.py": "0cce6ab605f902238f497e4b780fcde24987ba46d6ef91767b0ada52aa891189",
     "backend/tests/test_fbs_packing_box.py": "e2af8bd642ea0136236f9b8a5190a52438e27de37d83169f0d9633b024af8e7d"
   },
