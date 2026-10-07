@@ -232,6 +232,7 @@ export type FbsWorklistOrder = {
     }>
     packaging_instructions?: string | null
     has_packaging_instructions?: boolean
+    requires_honest_sign?: boolean
   }
   positions: Array<{
     id?: string | null
