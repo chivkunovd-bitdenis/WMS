@@ -1,4 +1,5 @@
 import { FbsPackingScanBar } from './FbsPackingScanBar'
+import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import type { PackingScanController } from './fbsSequentialPacking'
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
@@ -88,6 +89,16 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
   // поставка и открытый короб не терялись при переходе между вкладками.
   const [framesMounted, setFramesMounted] = useState(false)
   const [packingHost, setPackingHost] = useState<HTMLDivElement | null>(null)
+  const [packingActions, setPackingActions] = useState<Record<string, FbsPackingActions>>({})
+  const registerPackingActions = useCallback((id: string, actions: FbsPackingActions | null) => {
+    setPackingActions(current => {
+      if (actions) return current[id] === actions ? current : { ...current, [id]: actions }
+      if (!current[id]) return current
+      const next = { ...current }
+      delete next[id]
+      return next
+    })
+  }, [])
   const [packingColumnsBySupply, setPackingColumnsBySupply] = useState<Record<string, { size: boolean; markingAvailable: boolean }>>({})
   const reportPackingColumns = useCallback((id: string, columns: { size: boolean; markingAvailable: boolean }) => {
     setPackingColumnsBySupply(current => current[id]?.size === columns.size && current[id]?.markingAvailable === columns.markingAvailable
@@ -163,6 +174,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     initialStageGeneration.current = openGeneration.current
     const ids = idsKey.split(',')
     setWorkspaces({})
+    setPackingActions({})
     setError(null)
     setBusy(false)
     setHistorySupplyId(null)
@@ -430,6 +442,8 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                   const scanner = scanners.current.get(id)
                   return scanner ? [scanner] : []
                 })} />
+                <FbsPackingActionsToolbar entries={supplyIds.flatMap(id => packingActions[id] ? [packingActions[id]] : [])}
+                  active={open && stage === 'packing'} contextKey={idsKey} />
                 <Box ref={setPackingHost} sx={{ display: 'flex', flexDirection: 'column' }} data-testid="fbs-unified-packing-rows" />
               </Paper>
               {ordered.map((workspace) => {
@@ -443,7 +457,7 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
                     open={open}
                     onClose={() => undefined}
                     assemblyFrame={{
-                      packingHost, registerScanner, onScanChange, promotedSupplyId, onPromotePackingOrder,
+                      packingHost, registerScanner, registerPackingActions, onScanChange, promotedSupplyId, onPromotePackingOrder,
                       packingColumns,
                       onPackingColumnsChange: columns => reportPackingColumns(supplyId, columns),
                       rejectedFilter: { active: rejectedFilterOn, count: rejectedCount, headerSupplyId: rejectedHeaderSupplyId },

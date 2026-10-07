@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
 import { FbsScanPrintToggles } from './FbsScanPrintToggles'
 import { FbsPackingScanBar } from './FbsPackingScanBar'
+import { FbsPackingActionsToolbar, type FbsPackingActions } from './FbsPackingActionsToolbar'
 import { FbsRejectedKizHeader, FbsRejectedKizTriangle, type FbsRejectedKizFilter } from './FbsRejectedKizFilter'
 import { ErrorBoundary } from '../../components/errors/ErrorBoundary'
 import { confirmDiscardChanges } from '../../utils/confirmDiscardChanges'
@@ -12,7 +13,6 @@ import {
   Box,
   Button,
   Checkbox,
-  Chip,
   CircularProgress,
   Collapse,
   Dialog,
@@ -184,6 +184,7 @@ type Props = {
    * карточка поставки, всё как было.
    */
   assemblyFrame?: FbsAssemblyFrameControl & {
+    registerPackingActions?: (id: string, actions: FbsPackingActions | null) => void
     packingColumns?: { size: boolean; markingAvailable: boolean }
     onPackingColumnsChange?: (columns: { size: boolean; markingAvailable: boolean }) => void
   }
@@ -2818,13 +2819,20 @@ export function FfFbsSupplyWorkspace({
       sum + Math.max(0, quantity - (packLineByProduct.get(productId)?.marking_available_count ?? 0)), 0)
   }
 
-  const openBulkOrderMarkingPrint = (orders: Array<FbsWorkspace['orders'][number]>, reprint = false) => {
-    if (!workspace || orders.length === 0) return
+  const openBulkOrderMarkingPrint = (
+    orders: Array<FbsWorkspace['orders'][number]>,
+    reprint = false,
+    onClose?: (completed: boolean) => void,
+  ): boolean => {
+    if (!workspace || orders.length === 0) return false
     const firstOrder = orders[0]
     const firstProductId = firstOrder?.product.id
       ?? (isOzonSupply ? firstOrder?.positions.find((position) => position.product_id)?.product_id : null)
     const firstLine = firstProductId ? packLineByProduct.get(firstProductId) : undefined
-    if (!firstOrder || !firstProductId) return
+    if (!firstOrder || !firstProductId) {
+      setError('У заказа нет товара для печати.')
+      return false
+    }
     const firstOzonPosition = isOzonSupply ? firstOrder.positions[0] : undefined
     const anyHonestSign = orders.some(requiresOrderHonestSign)
     const tapeOrders = orders.map((order) => ({
@@ -2874,8 +2882,9 @@ export function FfFbsSupplyWorkspace({
         },
         onPrinted: () => { void refreshPackagingTask() },
       },
-      { reprint },
+      { reprint, onClose },
     )
+    return true
   }
 
   const clearSelectedMarking = async () => {
@@ -3199,7 +3208,6 @@ export function FfFbsSupplyWorkspace({
   const printedOrdersCount = packingOrders.filter(orderPrintDone).length
   // Выбор сохраняет тот же порядок, что и исходная лента / лист подбора.
   const selectedPackingOrders = fullTapeOrders.filter((order) => packingSelectedIds.has(order.id))
-  const printPackingOrders = selectedPackingOrders.length ? selectedPackingOrders : fullTapeOrders
   const markingNeededByProduct = new Map<string, number>()
   for (const order of packingOrders) {
     const hasWorkingCode = order.metadata.states.some((state) => state.kind === 'sgtin'
@@ -4035,6 +4043,62 @@ export function FfFbsSupplyWorkspace({
                   </Stack>
   ) : null
 
+  // Keep current handlers in the workspace; report a memoized, immutable view to
+  // the assembly. Parent re-renders do not publish a new subscription/state loop.
+  const currentPackingActions = {
+    select: (ids: string[]) => setPackingSelectedIds(new Set(ids)),
+    print: (ids: string[], onClose: (completed: boolean) => void): boolean => {
+      const selectedIds = new Set(ids)
+      const orders = fullTapeOrders.filter(order => selectedIds.has(order.id))
+      if (orders.length !== selectedIds.size) {
+        setError('Состав поставки изменился. Выберите заказы для печати заново.')
+        return false
+      }
+      return openBulkOrderMarkingPrint(orders, orders.every(orderPrintDone), onClose)
+    },
+    verify: checkMarkingsInWb,
+    packAll: () => { void packEverything() },
+    skip: () => setSkipHonestSignOpen(true),
+    transfer: () => setTransferDialogOpen(true),
+    clear: () => setClearMarkingOrders([...selectedPackingOrders]),
+  }
+  const packingActionHandlers = useRef(currentPackingActions)
+  packingActionHandlers.current = currentPackingActions
+  const packingActions = useMemo<FbsPackingActions | null>(() => workspace ? ({
+    id: workspace.supply.id,
+    title: workspace.supply.name,
+    seller: workspace.supply.seller.name,
+    marketplace: workspace.supply.marketplace,
+    orderIds: fullTapeOrders.map(order => order.id),
+    selectedIds: fullTapeOrders.filter(order => packingSelectedIds.has(order.id)).map(order => order.id),
+    printed: printedOrdersCount,
+    packed: workspace.progress.packed,
+    packedTotal: workspace.progress.total,
+    busy,
+    editable: packagingEditable,
+    codes: packingOrdersWithCode,
+    clearable: clearableSelectedCount,
+    honestSignSkipped: Boolean(workspace.supply.honest_sign_skipped),
+    skipBusy: skipHonestSignBusy,
+    packAllDisabled: !packagingEditable || busy || (assemblyWbPacking && !packagingTask),
+    select: ids => packingActionHandlers.current.select(ids),
+    print: (ids, onClose) => packingActionHandlers.current.print(ids, onClose),
+    verify: () => packingActionHandlers.current.verify(),
+    packAll: () => packingActionHandlers.current.packAll(),
+    skip: () => packingActionHandlers.current.skip(),
+    transfer: () => packingActionHandlers.current.transfer(),
+    clear: () => packingActionHandlers.current.clear(),
+  }) : null, [workspace, fullTapeOrders, packingSelectedIds, printedOrdersCount, busy,
+    packagingEditable, packingOrdersWithCode, clearableSelectedCount, skipHonestSignBusy,
+    assemblyWbPacking, packagingTask])
+  const registerPackingActions = assemblyFrame?.registerPackingActions
+  useEffect(() => {
+    if (supplyId && registerPackingActions) registerPackingActions(supplyId, packingActions)
+  }, [supplyId, registerPackingActions, packingActions])
+  useEffect(() => () => {
+    if (supplyId) registerPackingActions?.(supplyId, null)
+  }, [supplyId, registerPackingActions])
+
   const packingPanel = workspace ? (
     <>
               {packagingTask || deliveryConfirmed || useSequentialPacking || ozonPackingScanner || Boolean(assemblyFrame?.registerScanner) ? (
@@ -4049,84 +4113,9 @@ export function FfFbsSupplyWorkspace({
                       rejected={isOzonSupply ? undefined : ownRejectedToggle}
                     />
                   ) : null}
-                  <Box sx={{ px: 2, py: 1.75, borderBottom: 1, borderColor: 'divider' }}>
-                    <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} sx={{ justifyContent: 'space-between', alignItems: { sm: 'center' } }}>
-                      <Box>
-                        <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 0.5 }}>
-                          <Typography variant="h6">Упаковка и маркировка</Typography>
-                          {workspace.supply.honest_sign_skipped ? (
-                            <Chip
-                              size="small"
-                              color="warning"
-                              label="Сдаём без Честного знака"
-                              data-testid="fbs-honest-sign-skipped-chip"
-                            />
-                          ) : null}
-                        </Stack>
-                        <Typography variant="body2" color="text.secondary">
-                          Напечатано {printedOrdersCount} из {packingOrders.length} · упаковано {workspace.progress.packed} из {workspace.progress.total}
-                        </Typography>
-                      </Box>
-                      <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => setPackingSelectedIds(selectedPackingOrders.length === packingOrders.length
-                            ? new Set()
-                            : new Set(packingOrders.map((order) => order.id)))}
-                          data-testid="fbs-packing-select-all"
-                        >
-                          {selectedPackingOrders.length === packingOrders.length && packingOrders.length > 0 ? 'Снять выбор' : 'Выбрать всё'}
-                        </Button>
-                        <Button
-                          disabled={busy || packingOrders.length === 0}
-                          onClick={() => openBulkOrderMarkingPrint(
-                            printPackingOrders,
-                            printPackingOrders.every(orderPrintDone),
-                          )}
-                          data-task-id="FBS-21"
-                        >
-                          {selectedPackingOrders.length ? `Печать выбранного (${selectedPackingOrders.length})` : `Печать всего (${packingOrders.length})`}
-                        </Button>
-                        {!isOzonSupply && packagingEditable ? (
-                          <Button
-                            disabled={busy || packingOrdersWithCode === 0}
-                            onClick={checkMarkingsInWb}
-                            data-testid="fbs-packing-check-wb"
-                          >
-                            Проверить в WB
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button color="error" disabled={!packagingEditable || busy || clearableSelectedCount === 0} onClick={() => setClearMarkingOrders([...selectedPackingOrders])} data-testid="fbs-packing-clear-selected">
-                            Очистить ЧЗ
-                          </Button>
-                        ) : null}
-                        {!isOzonSupply && selectedPackingOrders.length > 0 ? (
-                          <Button
-                            disabled={!packagingEditable || busy}
-                            onClick={() => setTransferDialogOpen(true)}
-                            data-testid="fbs-packing-transfer-supply"
-                          >
-                            Перенести в другую поставку
-                          </Button>
-                        ) : null}
-
-                        <Button variant="contained" disabled={!packagingEditable || busy || (assemblyWbPacking && !packagingTask)} onClick={() => void packEverything()}>
-                          Всё упаковано
-                        </Button>
-                        {!workspace.supply.honest_sign_skipped && packingOrders.length > 0 ? (
-                          <Button
-                            color="warning"
-                            disabled={!packagingEditable || skipHonestSignBusy || busy}
-                            onClick={() => setSkipHonestSignOpen(true)}
-                            data-testid="fbs-skip-honest-sign"
-                          >
-                            Сдать без Честного знака
-                          </Button>
-                        ) : null}
-                      </Stack>
-                    </Stack>
-                  </Box>
+                  {!assemblyFrame && packingActions ? <FbsPackingActionsToolbar
+                    entries={[packingActions]} active={open && stage === 'packing'} contextKey={workspace.supply.id}
+                  /> : null}
                   {workspace.marking_pool && workspace.marking_pool.shortage > 0 ? (
                     <Box sx={{ px: 2, py: 1.25, bgcolor: '#fdf4e7', borderBottom: 1, borderColor: 'divider' }}>
                       <Typography variant="body2" sx={{ color: '#854f0b' }}>
@@ -5077,16 +5066,6 @@ export function FfFbsSupplyWorkspace({
     if (assemblyFrame.registerScanner) {
       return <>
         {assemblyFrame.packingHost ? createPortal(<>
-          {isOzonSupply ? (
-            <Box sx={{ px: 2, py: 1, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button
-                disabled={busy || packingOrders.length === 0}
-                onClick={() => openBulkOrderMarkingPrint(printPackingOrders, printPackingOrders.every(orderPrintDone))}
-              >
-                Печать всего ({packingOrders.length})
-              </Button>
-            </Box>
-          ) : null}
           {packingRows}
         </>, assemblyFrame.packingHost) : null}
         {frameMessages}
