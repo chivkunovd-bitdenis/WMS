@@ -2912,8 +2912,8 @@ export function FfFbsSupplyWorkspace({
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
-          confirmQrApplied: async (asset) => {
-            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          confirmQrApplied: async (asset, idempotencyKey) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, idempotencyKey)
           },
         },
         onPrinted: () => { void refreshPackagingTask() },
@@ -3023,8 +3023,8 @@ export function FfFbsSupplyWorkspace({
             }
             return printFbsOrderTape(token, authHeaders, workspace.supply.id, body)
           },
-          confirmQrApplied: async (asset) => {
-            await confirmFbsPrintApplied(token, authHeaders, asset.id, createFbsIdempotencyKey())
+          confirmQrApplied: async (asset, idempotencyKey) => {
+            await confirmFbsPrintApplied(token, authHeaders, asset.id, idempotencyKey)
           },
         },
         onPrinted: () => { void refreshPackagingTask() },
