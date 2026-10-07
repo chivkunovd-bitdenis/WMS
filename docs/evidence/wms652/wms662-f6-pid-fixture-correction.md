@@ -34,14 +34,37 @@ in `live_pid_trace`. The four existing parameter cases keep all of their
 business assertions; their independent-backend assertion now checks the frozen
 confirmed pair instead of later pool state.
 
-## Local verification and limit
+## Local verification
 
 The existing backend virtual environment ran Ruff on both narrow test files and
 the new regression passed. The regression was red before the fixture correction
 for the expected missing-snapshot reason.
 
-The four real PostgreSQL cases were invoked with the project’s isolated F6
-target, but this checkout had no PostgreSQL service listening on its dedicated
-loopback port (connection refused during fixture setup). They therefore did not
-exercise product logic locally and remain required in CI. No production or
-staging migration/database was contacted.
+The first attempt could not reach the dedicated F6 PostgreSQL port because no
+local service was listening. It was not treated as a product result. A separate
+throwaway PostgreSQL 17 cluster was then initialized under the ignored
+`.agent-runs/night-20261006-01a112a8/f6-local-pg` directory, listening only on
+`127.0.0.1:55467`. It used the test-only `wms_test_662_f6` database and did not
+connect to the existing server on port 5432.
+
+With the existing backend virtual environment and `-n 0`, the real PostgreSQL
+F6 command completed all four cases: `local-normal`, `local-observed`,
+`observed_status-normal`, and `observed_status-observed`. JUnit reports 4 tests,
+0 failures, 0 errors, in 3.389 seconds. The narrow PID-pool-reuse regression
+also passed: 1 test, 0 failures, 0 errors, in 0.040 seconds.
+
+Raw, ignored artifacts are retained at:
+
+- `f6-local-pg/f6-four-cases.xml` — SHA-256
+  `2b461fbff0568a1fb8b67fc809d727407a909a1d7cf44a79771f71bfd23d68a3`;
+- `f6-local-pg/f6-four-cases.log` — SHA-256
+  `d04381cda74c44380fbbe59ac75590dfafe2516430ce90889f64c5f16df8cffa`;
+- `f6-local-pg/f6-pid-regression.xml` — SHA-256
+  `3524cc49ccf48c27b6b71b0da717d30783c475731c5b4184bc37dccb92985b40`;
+- `f6-local-pg/f6-pid-regression.log` — SHA-256
+  `2c44d003d32fa097d8bdcbe88a039d7914d326edebe881dd2a3d76df980d76bb`.
+
+After the runs, `pg_ctl` stopped this owned cluster and port 55467 was confirmed
+free. No production or staging database, migration, Docker daemon, dependency
+installation, or product code was used in this verification. This targeted run
+does not replace the required independent review or CI of the integrated SHA.
