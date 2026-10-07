@@ -1,0 +1,50 @@
+{
+  "synthetic": true,
+  "originalFailureCause": "NOT_PROVEN_BY_THIS_CONTROL",
+  "status": "INCONCLUSIVE",
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "x64",
+    "protocolVersion": "1.3",
+    "product": "Chrome/141.0.7390.37",
+    "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+    "jsVersion": "14.1.146.11"
+  },
+  "observedPaused": {
+    "requestId": "interception-job-3.0",
+    "networkId": "3508.3",
+    "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+    "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+    "method": "GET"
+  },
+  "navigation": {
+    "frame": {
+      "id": "7061164198AA1C50A20B2CBD4BC96469",
+      "loaderId": "AD011209A3655E3579970953FB939520",
+      "url": "about:blank",
+      "domainAndRegistry": "",
+      "securityOrigin": "://",
+      "securityOriginDetails": {
+        "isLocalhost": false
+      },
+      "mimeType": "text/html",
+      "adFrameStatus": {
+        "adFrameType": "none"
+      },
+      "secureContextType": "InsecureScheme",
+      "crossOriginIsolatedContextType": "NotIsolated",
+      "gatedAPIFeatures": []
+    },
+    "type": "Navigation"
+  },
+  "staleFulfillResult": {},
+  "loadingFailedObservation": "Error: control deadline matching loadingFailed",
+  "unknownIdError": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "unknownIdIsUnexplained": true,
+  "listenerErrors": []
+}

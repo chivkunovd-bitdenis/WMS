@@ -1,0 +1,272 @@
+{
+  "run_id": 37550768806,
+  "attempt": 1,
+  "diagnostic_sha": "8754c164be9d3c60567dfce0d319f11a4a66db9b",
+  "source_base": "7bbfafc68ef0834746e63f12a49db31a1977f030",
+  "original_failed_merge": "ac845328b27b5be265962695e10766efddef339e",
+  "selected_case": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+  "selected_status": "PASS",
+  "selected_records": 2285,
+  "selected_dropped": 0,
+  "selected_pending_commands": 0,
+  "selected_protocol_errors": [],
+  "selected_loadingFailed": [
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332027463,
+      "nodeUtc": "2026-10-07T00:13:47.463Z",
+      "nodeMonoMs": 4684.626125,
+      "nodeTimeOriginMs": 1791332022778.578,
+      "method": "Network.loadingFailed",
+      "requestId": "3390.212",
+      "browserTimestamp": 81.013863,
+      "canceled": false,
+      "errorText": "net::ERR_CONNECTION_CLOSED",
+      "type": "Fetch"
+    }
+  ],
+  "transport_records": 44,
+  "transport_dropped": 0,
+  "transport_status": "INCONCLUSIVE",
+  "transport_observedPaused": {
+    "requestId": "interception-job-3.0",
+    "networkId": "3508.3",
+    "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+    "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+    "method": "GET"
+  },
+  "transport_stale_fulfill_result": {},
+  "transport_matching_cancel_observed": false,
+  "transport_unknown_id_error": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "transport_positive_error_chain": [
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031122,
+      "nodeUtc": "2026-10-07T00:13:51.122Z",
+      "nodeMonoMs": 350.537052,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031140,
+      "nodeUtc": "2026-10-07T00:13:51.140Z",
+      "nodeMonoMs": 368.564742,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-1.0",
+      "networkId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031140,
+      "nodeUtc": "2026-10-07T00:13:51.140Z",
+      "nodeMonoMs": 368.848249,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031143,
+      "nodeUtc": "2026-10-07T00:13:51.143Z",
+      "nodeMonoMs": 371.527971,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031145,
+      "nodeUtc": "2026-10-07T00:13:51.145Z",
+      "nodeMonoMs": 373.638787,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031152,
+      "nodeUtc": "2026-10-07T00:13:51.152Z",
+      "nodeMonoMs": 379.937073,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031152,
+      "nodeUtc": "2026-10-07T00:13:51.152Z",
+      "nodeMonoMs": 380.761344,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameNavigated",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "type": "Navigation",
+      "frame": {
+        "id": "7061164198AA1C50A20B2CBD4BC96469",
+        "loaderId": "E7B64674FB924D21FDD61ECD202C7D7D",
+        "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+      }
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031174,
+      "nodeUtc": "2026-10-07T00:13:51.174Z",
+      "nodeMonoMs": 402.138108,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-2.0",
+      "networkId": "3508.2",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/favicon.ico",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031174,
+      "nodeUtc": "2026-10-07T00:13:51.174Z",
+      "nodeMonoMs": 402.222055,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031176,
+      "nodeUtc": "2026-10-07T00:13:51.176Z",
+      "nodeMonoMs": 404.109775,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3508.3",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031176,
+      "nodeUtc": "2026-10-07T00:13:51.176Z",
+      "nodeMonoMs": 404.419451,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 11,
+      "method": "Page.navigate",
+      "url": "about:blank"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031182,
+      "nodeUtc": "2026-10-07T00:13:51.182Z",
+      "nodeMonoMs": 410.309634,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031193,
+      "nodeUtc": "2026-10-07T00:13:51.193Z",
+      "nodeMonoMs": 421.159779,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 11,
+      "method": "Page.navigate",
+      "url": "about:blank"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031224,
+      "nodeUtc": "2026-10-07T00:13:51.224Z",
+      "nodeMonoMs": 451.961946,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031224,
+      "nodeUtc": "2026-10-07T00:13:51.224Z",
+      "nodeMonoMs": 452.193715,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031226,
+      "nodeUtc": "2026-10-07T00:13:51.226Z",
+      "nodeMonoMs": 454.279082,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameNavigated",
+      "url": "about:blank",
+      "type": "Navigation",
+      "frame": {
+        "id": "7061164198AA1C50A20B2CBD4BC96469",
+        "loaderId": "AD011209A3655E3579970953FB939520",
+        "url": "about:blank"
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031226,
+      "nodeUtc": "2026-10-07T00:13:51.226Z",
+      "nodeMonoMs": 454.567486,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 12,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031237,
+      "nodeUtc": "2026-10-07T00:13:51.237Z",
+      "nodeMonoMs": 465.319845,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 12,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332032739,
+      "nodeUtc": "2026-10-07T00:13:52.739Z",
+      "nodeMonoMs": 1967.031562,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 13,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332032739,
+      "nodeUtc": "2026-10-07T00:13:52.739Z",
+      "nodeMonoMs": 1967.790003,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 13,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    }
+  ],
+  "original_cancellation_cause": "NOT_PROVEN"
+}

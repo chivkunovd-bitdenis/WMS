@@ -1,0 +1,23 @@
+{
+  "sha": "8754c164be9d3c60567dfce0d319f11a4a66db9b",
+  "cases": [
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC",
+  "diagnosticEnvironment": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "x64",
+    "protocolVersion": "1.3",
+    "product": "Chrome/141.0.7390.37",
+    "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+    "jsVersion": "14.1.146.11"
+  },
+  "currentCase": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+  "status": "PASS"
+}
