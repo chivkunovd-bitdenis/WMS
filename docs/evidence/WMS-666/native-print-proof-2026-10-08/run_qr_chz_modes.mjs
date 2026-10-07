@@ -1,11 +1,14 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { appendFile, mkdir, readFile, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
 import { setTimeout as sleep } from 'node:timers/promises';
 
 const base = new URL('./run-28a799-final-matrix/', import.meta.url).pathname;
 const seed = JSON.parse(await readFile(`${base}seed-public.json`, 'utf8'));
 await mkdir(`${base}chrome-profile`, { recursive: true });
+await writeFile(`${base}api-events.jsonl`, '');
+await writeFile(`${base}native-http-events.jsonl`, '');
 const chrome = spawn('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome', [
   '--headless=new', '--no-sandbox', '--disable-gpu', '--no-first-run',
   '--disable-background-networking', '--disk-cache-size=1',
@@ -41,6 +44,7 @@ try {
     const url = new URL(request.url);
     if (url.origin === 'http://127.0.0.1:16696' && url.pathname.startsWith('/api/')) {
       if (request.method === 'OPTIONS') {
+        await appendFile(`${base}api-events.jsonl`, `${JSON.stringify({ at: new Date().toISOString(), method: request.method, path: url.pathname + url.search, response_status: 200 })}\n`);
         await cdp.send('Fetch.fulfillRequest', { requestId, responseCode: 200, responseHeaders: [
           { name: 'Access-Control-Allow-Origin', value: '*' },
           { name: 'Access-Control-Allow-Headers', value: '*' },
@@ -58,12 +62,30 @@ try {
       const row = { method: request.method, path, status: response.status, bytes: bytes.length };
       if (path.endsWith('/scan-auto-print') && request.method === 'POST') { row.request = JSON.parse(request.postData); row.response = JSON.parse(bytes.toString()); }
       api.push(row);
+      await appendFile(`${base}api-events.jsonl`, `${JSON.stringify({ at: new Date().toISOString(), ...row })}\n`);
       await cdp.send('Fetch.fulfillRequest', { requestId, responseCode: response.status, responseHeaders: [
         { name: 'Content-Type', value: response.headers.get('Content-Type') || 'application/json' },
         { name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' },
       ], body: bytes.toString('base64') });
       return;
     }
+    const event = { at: new Date().toISOString(), method: request.method, url: request.url };
+    if (url.pathname === '/print' && request.method === 'POST' && request.postData) {
+      const body = JSON.parse(request.postData);
+      const match = /^data:image\/png;base64,(.+)$/.exec(String(body.imageDataUrl ?? ''));
+      const png = match ? Buffer.from(match[1], 'base64') : Buffer.alloc(0);
+      const inputPath = `${base}native-http-input-${String(Date.now())}.png`;
+      if (png.length) await writeFile(inputPath, png);
+      event.print = {
+        idempotencyKey: body.idempotencyKey,
+        widthMm: body.widthMm,
+        heightMm: body.heightMm,
+        pngBytes: png.length,
+        pngSha256: createHash('sha256').update(png).digest('hex'),
+        png: png.length ? inputPath.split('/').at(-1) : null,
+      };
+    }
+    await appendFile(`${base}native-http-events.jsonl`, `${JSON.stringify(event)}\n`);
     await cdp.send('Fetch.continueRequest', { requestId });
   });
   const prefs = { printQr: true, printChz: false, reprintChz: false, printChzCopies: 2, reprintChzCopies: 1 };
