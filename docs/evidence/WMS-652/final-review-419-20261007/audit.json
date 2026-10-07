@@ -1,0 +1,271 @@
+{
+  "target": "4190460c97db0db439712b17a083c5b474ee3d74",
+  "proposed_P": "0b5cde29ed11b2ae8a71b5c8040fbff0609b9d00",
+  "policy": {
+    "paths": 262,
+    "reports": 24,
+    "cases": 1648,
+    "all_hashes_match": true
+  },
+  "old_bindings": [
+    {
+      "suite": "backend-fbs",
+      "cases": 600,
+      "report": "backend-all.xml",
+      "format": "junit",
+      "exact": false
+    },
+    {
+      "suite": "pg-663-retry",
+      "cases": 5,
+      "report": "release-postgres/663-release-retry.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662-f6",
+      "cases": 4,
+      "report": "release-postgres/662-f6.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-663-669-670-683",
+      "cases": 6,
+      "report": "release-postgres/663-669-670-683.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662",
+      "cases": 10,
+      "report": "release-postgres/662.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-fbs-concurrency",
+      "cases": 6,
+      "report": "release-postgres/fbs-concurrency.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "frontend-fbs",
+      "cases": 204,
+      "report": "frontend-all.json",
+      "format": "vitest",
+      "exact": false
+    },
+    {
+      "suite": "print-672",
+      "cases": 11,
+      "report": "print/672.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-672-remaining",
+      "cases": 6,
+      "report": "print/672-remaining.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-673",
+      "cases": 5,
+      "report": "print/673.json",
+      "format": "vitest",
+      "exact": true
+    },
+    {
+      "suite": "native-linux",
+      "cases": 30,
+      "report": "native-print.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "native-windows",
+      "cases": 29,
+      "report": "native-print-windows.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "real-fbs-browser",
+      "cases": 43,
+      "report": "print/critical-fbs/result.json",
+      "format": "browser-json",
+      "exact": true
+    },
+    {
+      "suite": "pg-675",
+      "cases": 1,
+      "report": "release-postgres/675.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-517-withdrawal",
+      "cases": 5,
+      "report": "release-postgres/517-withdrawal.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "ci-shards",
+      "cases": 20,
+      "report": "ci-shards.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "product-scope",
+      "cases": 51,
+      "report": "product-scope.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "mac-517-helper",
+      "cases": 110,
+      "report": "wms517-mac.tap",
+      "format": "node-tap",
+      "exact": true
+    }
+  ],
+  "new_cases": [
+    "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: канарейка не принимает обрезанное название, даже если остальные слова PDF сохранены",
+    "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: реальный PDF не склеивает название из разных строк под одинаковой X-координатой",
+    "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: реальный PDF не склеивает название из соседних колонок одной строки",
+    "src/utils/wms680PrintGeometry.test.ts::WMS-680 · C680-18 реальная PDF-геометрия C680-18: реальный PDF принимает полный перенос названия внутри одной ячейки"
+  ],
+  "moved_new_pg_cases": [
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-auto-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-auto-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-auto]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-auto-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-assign]",
+    "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-auto]"
+  ],
+  "actual_pg_pass": 9,
+  "pg_negative_reports": [
+    {
+      "scenario": "missing-report",
+      "rejected": "Missing required file: release-postgres/658.xml"
+    },
+    {
+      "scenario": "one-missing",
+      "rejected": "pg-658-identity: missing required cases: ['tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]']"
+    },
+    {
+      "scenario": "sqlite-skip",
+      "rejected": "pg-658-identity: required cases did not pass: {'tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]': 'skipped'}"
+    },
+    {
+      "scenario": "failure",
+      "rejected": "pg-658-identity: required cases did not pass: {'tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]': 'failure'}"
+    },
+    {
+      "scenario": "wrong-id",
+      "rejected": "pg-658-identity: missing required cases: ['tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]']"
+    },
+    {
+      "scenario": "extra-id",
+      "rejected": "pg-658-identity: unexpected cases: ['tests.test_wms658_normalized_identity_regression::unregistered']"
+    }
+  ],
+  "unchanged_modules": [
+    "scripts/ci/process_contracts.py",
+    "scripts/ci/backend_shards.py",
+    "scripts/ci/build_process_proof.py",
+    "scripts/ci/product_scope.py",
+    "scripts/ci/check_task_documents.py",
+    "scripts/ci/promote_guards.py",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx",
+    "frontend/src/utils/printBarcodeLabel.ts"
+  ],
+  "product_delta_from_P": [],
+  "approved_template_sha256": {
+    "docs/evidence/WMS-652/final-closure-20261007/wms680-reviewed-activation-template.json": "82d8b5c846a2e32f5d3cce20b035b4719d12d7478b940780730c57297d80cd2d",
+    "docs/evidence/WMS-652/final-closure-20261007/proposed-final-P-S.json": "d25aac979481b1071f5a1f67e81b0d47e894fb72a39422bb5e82d6212e9edbeb"
+  },
+  "exact_two_edges": [
+    {
+      "kind": "exact_fixture_correction",
+      "transform": "wms680-linux-wrapped-text-and-browser-exit",
+      "source": "0df92673934df8768efabe470baeca6f2f4568af",
+      "correction": "4ed0c391135c95b67879c954195034b9c43d4980",
+      "files": {
+        "frontend/src/utils/wms680PrintGeometry.test.ts": [
+          "0c7cc8f9f06fad5df0f7f3bd924dde607179a068",
+          "00162dc5c08858803c5a988c75328dab0f00cfdc"
+        ]
+      }
+    },
+    {
+      "kind": "exact_fixture_correction",
+      "transform": "wms680-real-pdf-cell-isolation",
+      "source": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+      "correction": "535e8a970928e8834147553ad4c0139fcc5f10da",
+      "files": {
+        "frontend/src/utils/wms680PrintGeometry.test.ts": [
+          "00162dc5c08858803c5a988c75328dab0f00cfdc",
+          "81a83b3794340eadd60abba94594d6ff09d533ae"
+        ]
+      }
+    }
+  ],
+  "report_publication": "future real descendant publication only; identical independent report blob required",
+  "replay_metadata": {
+    "genuine_ci_red": {
+      "run": 37547687095,
+      "head": "f61468b0ce7a799d80c00bf1beba80eaadaa1c2b",
+      "merge_sha": "94b4d9e28937a9dd6e067720ce964bdb8ac9813a",
+      "actual_outcomes": 4777,
+      "both_shards_exit_code": 0,
+      "failure": "exact nine required PG658 cases skipped in SQLite shards"
+    },
+    "new_producer": {
+      "job": "backend-checks",
+      "isolated_database": "wms_test_658_identity",
+      "report": "release-postgres/658.xml",
+      "cases": [
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[gs-tab-manual-auto]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[nbsp-manual-auto]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-auto-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-assign]",
+        "tests.test_wms658_normalized_identity_regression::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants[record-separator-manual-auto]"
+      ],
+      "mandatory": "Each of all 9 cases must be present and passed, zero skip; failclosed policy/exact attempt artifact machinery unchanged"
+    },
+    "algorithm_changes": [],
+    "production_data_changes": [],
+    "local_real_pg": {
+      "cases": 9,
+      "passed": 9,
+      "skipped": 0,
+      "junit": "docs/evidence/WMS-652/final-closure-20261007/658-ci-producer-local.xml",
+      "sha256": "c82c30cf57d2ca7b2c689daa06e9d1cc2b606f688bcfb7b4b322e59d8a63c649",
+      "database": "wms_test_658_ci_producer_20261007",
+      "remote_new_producer_status": "PENDING_NEW_FULL_CI"
+    },
+    "original_artifact_replay_with_corrected_report_binding": {
+      "tests": 4777,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 210,
+      "success": true
+    },
+    "replay_limit": "Genuine run37547687095 original policy cases, moving only9PG cases to separate mandatory report. New cases introduced after f614 cannot be evidenced by older run and remain pending new fullCI."
+  },
+  "post_activation_checks": "existing graph positive/13 negative + strict document gate + strict product scope; full remote CI pending"
+}

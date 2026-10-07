@@ -1,0 +1,48 @@
+{
+  "status": "IMMUTABLE_FINAL_CANDIDATE_WITH_ERASED_TYPE_ONLY_DELTA",
+  "final_candidate": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "known_candidate": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "published_candidate": "4190460c97db0db439712b17a083c5b474ee3d74",
+  "remote_readback": "4190460c97db0db439712b17a083c5b474ee3d74",
+  "proposed_P": "98978e667bbc305cc08a9b541016fef06686388e",
+  "strict_product_scope": [],
+  "all_writers_complete": true,
+  "required_review_path": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+  "required_reviewed_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+  "required_reviewed_chain": [
+    "4ed0c391135c95b67879c954195034b9c43d4980",
+    "535e8a970928e8834147553ad4c0139fcc5f10da"
+  ],
+  "review_scope": [
+    "Keep ongoing419 boundedreview results, add ONLY989 one-line type annotation + b6 exactP/template/hash proof. No unchanged browsercase rerun necessary.",
+    "Final535fixedstate within2edge680chain ONLY; standalone4edFAIL retained.",
+    "6840b5c/published58fb + new989type-erasure proof; realbeforeTransfer/markreconcile unchanged.",
+    "PG658producer9passed/0skip unchanged5781, exactreport+mandatorycases preserved.",
+    "FinalP989 and exactmetadata activation templates; aftergenuinePASS only actualreportSHA and Git-derivedblob/data hashes"
+  ],
+  "new_review_blocker": "680corrected535 needsR2independentconfirmation; TS2339resolvedby989 erasedannotation; no outstanding implementationdirtyfiles",
+  "684_pure_commit": "0b5cde29ed11b2ae8a71b5c8040fbff0609b9d00",
+  "684_evidence_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+  "680_evidence_commit": "4190460c97db0db439712b17a083c5b474ee3d74",
+  "producer_commit": "5781b563765b2ba6806ffe983339b3af9643b919",
+  "template_commit": "d099e1c784d5593980f7326f7bf9b2351f3f39c9",
+  "metadata_template_paths": [
+    "docs/evidence/WMS-652/final-closure-20261007/wms680-reviewed-activation-template.json",
+    "docs/evidence/WMS-652/final-closure-20261007/proposed-final-P-S.json"
+  ],
+  "policy": {
+    "files": 262,
+    "reports": 24,
+    "cases": 1648,
+    "oldcases": 1146,
+    "oldreports": 18
+  },
+  "pending": [
+    "GenuineindependentfinalPASSpublication covering b6candidate and exacttemplates",
+    "MechanicalonlyR/Pactivation then13canaries+strictdocgate/fullCI",
+    "rootmain/etalon/deploy aftergates"
+  ],
+  "type_only_commit": "98978e667bbc305cc08a9b541016fef06686388e",
+  "runtime_js_proof": "docs/evidence/WMS-652/final-closure-20261007/684-type-only-proof.json",
+  "type_validation": "Originaltester actual fulltsc and singlefileeslint bothPASS; transpiledJS old419→989 byte-identical"
+}

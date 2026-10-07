@@ -1,0 +1,82 @@
+[
+  {
+    "name": "original-reviewer-121.769526pt",
+    "required_acceptance": false,
+    "checks": [
+      {
+        "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "accepted": true,
+        "error": null
+      },
+      {
+        "source": "4190460c97db0db439712b17a083c5b474ee3d74",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      }
+    ]
+  },
+  {
+    "name": "cross-row",
+    "required_acceptance": false,
+    "checks": [
+      {
+        "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "accepted": true,
+        "error": null
+      },
+      {
+        "source": "4190460c97db0db439712b17a083c5b474ee3d74",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      }
+    ]
+  },
+  {
+    "name": "cross-column",
+    "required_acceptance": false,
+    "checks": [
+      {
+        "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      },
+      {
+        "source": "4190460c97db0db439712b17a083c5b474ee3d74",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      }
+    ]
+  },
+  {
+    "name": "truncated-cell",
+    "required_acceptance": false,
+    "checks": [
+      {
+        "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      },
+      {
+        "source": "4190460c97db0db439712b17a083c5b474ee3d74",
+        "accepted": false,
+        "error": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок"
+      }
+    ]
+  },
+  {
+    "name": "wrapped-cell",
+    "required_acceptance": true,
+    "checks": [
+      {
+        "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "accepted": true,
+        "error": null
+      },
+      {
+        "source": "4190460c97db0db439712b17a083c5b474ee3d74",
+        "accepted": true,
+        "error": null
+      }
+    ]
+  }
+]
