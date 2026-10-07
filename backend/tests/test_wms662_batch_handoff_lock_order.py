@@ -70,6 +70,7 @@ class BatchSchedule:
         self.release = asyncio.Event()
         self.finished = asyncio.Event()
         self.pids = {}
+        self.current_pids = {}
         self.trace = []
         self.errors = []
         self.harness_errors = []
@@ -90,15 +91,15 @@ class BatchSchedule:
             # normal handoff also commits its pre-HTTP checkpoint. The writer
             # PID is the connection executing the CURRENT transaction, not the
             # first connection ever used by that public call.
-            self.pids[worker] = pid
+            self.current_pids[worker] = pid
         if table := resource(clause):
-            self.trace.append((worker, "attempt", table, self.pids[worker]))
+            self.trace.append((worker, "attempt", table, self.current_pids[worker]))
 
     def after(self, conn, clause, multiparams, params, options, result):
         worker, table = role.get(), resource(clause)
         if worker is None or table is None:
             return
-        self.trace.append((worker, "acquired", table, self.pids[worker]))
+        self.trace.append((worker, "acquired", table, self.current_pids[worker]))
         if worker == "batch" and table == "sellers" and not self.held.is_set():
             self.held.set()
 
@@ -123,18 +124,20 @@ class BatchSchedule:
         async with SessionLocal() as observer:
             async with asyncio.timeout(8):
                 while not self.finished.is_set():
-                    if set(self.pids) == {"batch", "ordinary"}:
+                    if set(self.current_pids) == {"batch", "ordinary"}:
                         # pg_stat_activity is cached within the observer's
                         # transaction. Refresh before reading CURRENT writers.
                         await observer.execute(text("select pg_stat_clear_snapshot()"))
+                        writers = dict(self.current_pids)
                         rows = (await observer.execute(text(
                             "select pid, pg_blocking_pids(pid), query from pg_stat_activity "
                             "where pid in (:batch, :ordinary)"
-                        ), self.pids)).all()
+                        ), writers)).all()
                         waits = {pid: blockers for pid, blockers, _ in rows}
-                        batch, ordinary = self.pids["batch"], self.pids["ordinary"]
+                        batch, ordinary = writers["batch"], writers["ordinary"]
                         if batch in waits.get(ordinary, []):
                             if not self.wait_seen:
+                                self.pids = writers
                                 self.wait_queries = [tuple(row) for row in rows]
                             self.wait_seen = True
                             self.release.set()
