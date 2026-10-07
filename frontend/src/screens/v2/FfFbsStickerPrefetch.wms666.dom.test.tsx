@@ -3,6 +3,7 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
+import { FbsApiError } from './fbsApi'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import { FfFbsSupplyAssembly } from './FfFbsSupplyAssembly'
 import { saveFbsAssemblyStage } from './fbsSupplyAssembly'
@@ -168,9 +169,9 @@ it.each(['supply', 'assembly'] as const)('%s: opening a draft displays fetched W
     expect(state.a!.supply.packaging_task_id).toBe('task-a')
     expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81')
   } else {
-    expect(startWork).not.toHaveBeenCalled()
-    expect(state.a!.supply.packaging_task_id).toBeNull()
-    expect(globalThis.fetch).not.toHaveBeenCalled()
+    expect(startWork).toHaveBeenCalledTimes(1)
+    expect(state.a!.supply.packaging_task_id).toBe('task-a')
+    expect(globalThis.fetch).toHaveBeenCalledWith(expect.stringContaining('/operations/packaging-tasks/task-a'), expect.any(Object))
   }
   expect(printQr).not.toHaveBeenCalled()
   expect(printMarking).not.toHaveBeenCalled()
@@ -191,6 +192,34 @@ it('opens two supplies in assembly and shows stickers in both', async () => {
   expect(fetchBatch).toHaveBeenCalledTimes(2)
   expect(document.querySelector('[data-order-id="a-order"] [data-testid="fbs-sticker-code"]')?.textContent).toBe('5877994 0283')
   expect(document.querySelector('[data-order-id="b-order"] [data-testid="fbs-sticker-code"]')?.textContent).toBe('5877994 0284')
+})
+it('bare WB assembly group prepares a task and exposes required CHZ before the first scan', async () => {
+  state.a!.orders[0]!.metadata.required = []
+  state.a!.orders[0]!.metadata.optional = ['sgtin']
+  state.a!.orders[0]!.product.requires_honest_sign = true
+  await render('assembly', ['a'])
+
+  expect(state.a!.supply.packaging_task_id).toBe('task-a')
+  expect(startWork).toHaveBeenCalledTimes(1)
+  expect(printMarking).not.toHaveBeenCalled()
+  expect(printQr).not.toHaveBeenCalled()
+  expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81 · нужно 1')
+  expect(document.querySelector('[aria-label="Печать ЧЗ и ШК"]')).not.toBeNull()
+})
+it('same mounted ordinary workspace can explicitly retry sticker 503 and prepare once', async () => {
+  fetchBatch.mockRejectedValueOnce(new FbsApiError('provider_unavailable', 'WB временно недоступен', null, true, 503))
+  await render('supply')
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
+  expect(startWork).not.toHaveBeenCalled()
+  expect(document.body.textContent).toContain('WB временно недоступен')
+
+  const retry = Array.from(document.querySelectorAll<HTMLButtonElement>('button')).find((button) => button.textContent?.trim() === 'Повторить')
+  expect(retry, 'retry is available without closing/reloading the same workspace').toBeDefined()
+  await act(async () => retry!.click())
+  await settle()
+  expect(fetchBatch).toHaveBeenCalledTimes(2)
+  expect(startWork).toHaveBeenCalledTimes(1)
+  expect(state.a!.supply.packaging_task_id).toBe('task-a')
 })
 it('does not request WB labels for Ozon', async () => {
   state.a = workspace('a', 'ozon', null as unknown as string)
