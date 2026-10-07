@@ -3412,21 +3412,23 @@ def test_gs_restore_never_loses_payload_characters() -> None:
 
 
 @pytest.mark.parametrize("missing_before", ["91", "92"])
-def test_gs_restore_repairs_code_with_only_one_of_two_separators(
+def test_gs_restore_preserves_fully_parseable_half_separator_input(
     missing_before: str,
 ) -> None:
-    # TC-NEW-FBS-KIZ-I3-009: разделители теряются и поодиночке. Половинчатый
-    # код обязан достраиваться до канонического вида с ОБОИМИ разделителями —
-    # раньше он проходил насквозь как «нормальный» и получал от WB sgtinNoGS.
+    # WMS-666 R1008.9: these two inputs are also complete GS1 parses: AI 21
+    # permits a variable value up to 20 characters and AI 91-99 up to 90.
+    # Without a trusted profile, a missing separator cannot be distinguished
+    # from payload bytes; preserve the fully parseable scan exactly. Known
+    # no-GS repairs remain covered independently above.
     full = _kiz("aXq7Tz9Km", "K7pQ", _SIGNATURE_44, with_gs=True)
     half = full.replace(f"{_GS}{missing_before}", missing_before, 1)
     assert half.count(_GS) == 1
 
     value, hints = kiz_svc.normalize_scanned_cis(half)
 
-    assert value == full
-    assert value.count(_GS) == 2
-    assert hints == ["gs_structure_restored"]
+    assert value == half
+    assert value.count(_GS) == 1
+    assert hints == []
 
 
 def test_gs_restore_collapses_duplicated_separators_to_canonical_form() -> None:
