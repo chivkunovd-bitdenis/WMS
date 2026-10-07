@@ -1,0 +1,12 @@
+{
+  "exit": 1,
+  "expected_failures": 3,
+  "all_rejected": true,
+  "change": "Known-key branch protects only failed_before_submit; other states overwritten",
+  "cases": [
+    "test_unknown_same_key_never_resubmits_after_queue_recovery",
+    "test_submitting_same_key_has_one_live_external_submission",
+    "test_accepted_receipt_same_key_never_resubmits"
+  ],
+  "tracked_source_unchanged": true
+}

@@ -1,0 +1,58 @@
+{
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/README.md": {
+    "bytes": 5419,
+    "sha256": "a41e28a643580d8f8b398857cf6d95133767af84686f294148093856b12a09a6"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/contract.json": {
+    "bytes": 2748,
+    "sha256": "f941bbaec62f5b45902abf71372132696198f83505388b986ecc060efb0a0187"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_accepted_receipt_same_key_never_resubmits.json": {
+    "bytes": 5397,
+    "sha256": "86c1b8156920e2bbec446e6094a40a0180a04862a337001d0a84a81d2d22e1c8"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_submitting_same_key_has_one_live_external_submission.json": {
+    "bytes": 4945,
+    "sha256": "97350399e8ec1d915ebd946481034bfbd8e7abaf651c6cdee42067c66ed6611b"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+    "bytes": 5527,
+    "sha256": "6275d617f4063d28a86e9272d95e00f784817a5821e3c0148496e05b8e015809"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-control.py": {
+    "bytes": 2051,
+    "sha256": "a0c0604f34239cb78a59df3a1f46e95f3b935a59cdc159d6c999cde52f971295"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-red.log": {
+    "bytes": 3107,
+    "sha256": "63f5b4685ca579398a812ad59ce38c6923e5f2f26157d5e55d4b4df548722305"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-result.json": {
+    "bytes": 397,
+    "sha256": "f2e37dc578eca50dc1bfeac566e4b7f82fe3347d7cf520369c79e5ca00e9317f"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_accepted_receipt_same_key_never_resubmits.json": {
+    "bytes": 6176,
+    "sha256": "9d08faa7cc7d7c7d446d8b32b4e659544da3d89b802c45e42e832291fbe08a76"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_error_preserves_specific_pre_submit_reason.json": {
+    "bytes": 3531,
+    "sha256": "6010c92b7e0fdc7a4a39970f4d857f72cc733322fa2f78ae3de999852629810a"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json": {
+    "bytes": 9175,
+    "sha256": "7f42512cba69015e821805b982838a8c12fc84226361f7b5a720ab47f6afc8c8"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_submitting_same_key_has_one_live_external_submission.json": {
+    "bytes": 6635,
+    "sha256": "3c2f4dc12938b5cc7f6fbf2e83599c6749668b65e7918fb6b0e287b3ade9fc3b"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+    "bytes": 6511,
+    "sha256": "95a01c0bb69ac6c8c9e2c76bb4ccf4a1d39e68be8f98f149a080d6a8c88daa7c"
+  },
+  "docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode-red.log": {
+    "bytes": 2880,
+    "sha256": "456154ba767e4a2407ca1761f34c62e8fe90732794d94d2004e6daa8c9d21c98"
+  }
+}

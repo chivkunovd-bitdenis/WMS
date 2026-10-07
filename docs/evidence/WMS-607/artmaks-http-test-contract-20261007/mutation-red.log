@@ -1,0 +1,55 @@
+test_unknown_same_key_never_resubmits_after_queue_recovery (__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery) ... FAIL
+test_submitting_same_key_has_one_live_external_submission (__main__.ArtMaksHTTPContract.test_submitting_same_key_has_one_live_external_submission) ... FAIL
+test_accepted_receipt_same_key_never_resubmits (__main__.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits) ... FAIL
+
+======================================================================
+FAIL: test_unknown_same_key_never_resubmits_after_queue_recovery (__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_http_contract.py", line 221, in test_unknown_same_key_never_resubmits_after_queue_recovery
+    self.assertEqual((status, repeat["status"]), (409, "unknown"))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Tuples differ: (200, 'accepted') != (409, 'unknown')
+
+First differing element 0:
+200
+409
+
+- (200, 'accepted')
++ (409, 'unknown')
+
+======================================================================
+FAIL: test_submitting_same_key_has_one_live_external_submission (__main__.ArtMaksHTTPContract.test_submitting_same_key_has_one_live_external_submission)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_http_contract.py", line 235, in test_submitting_same_key_has_one_live_external_submission
+    self.assertEqual((status, replay["status"]), (202, "submitting"))
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Tuples differ: (202, 'saved') != (202, 'submitting')
+
+First differing element 1:
+'saved'
+'submitting'
+
+- (202, 'saved')
++ (202, 'submitting')
+
+======================================================================
+FAIL: test_accepted_receipt_same_key_never_resubmits (__main__.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_artmaks_http_contract.py", line 259, in test_accepted_receipt_same_key_never_resubmits
+    self.assertEqual(self.commands(), before)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: [['lp[398 chars]png'], ['lpstat', '-d'], ['lpstat', '-p', 'Lab[364 chars]ng']] != [['lp[398 chars]png']]
+
+First list contains 3 additional elements.
+First extra element 3:
+['lpstat', '-d']
+
+Diff is 946 characters long. Set self.maxDiff to None to see it.
+
+----------------------------------------------------------------------
+Ran 3 tests in 3.043s
+
+FAILED (failures=3)

@@ -1,0 +1,166 @@
+{
+  "case": "__main__.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery",
+  "provenance": {
+    "source_sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+    "transformed_source_sha256": "6323cc36e64fa6da380eac1af7d66f85e7839ce6362dca8d340d7d63ca97120e",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "app": "WMS Print Direct",
+        "protocolVersion": 2,
+        "historyUrl": "http://127.0.0.1:52035",
+        "physicalConfirmationSupported": false
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "paperStatus": "unconfirmed",
+        "heightMm": 40,
+        "imageAvailable": true,
+        "reprints": [],
+        "physicalConfirmationSupported": false,
+        "queueObservation": {},
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "idempotencyKey": "unknown-scan",
+        "widthMm": 58,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52035",
+        "observations": [
+          "2026-10-07T03:28:34Z saved",
+          "2026-10-07T03:28:35Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:28:35Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "status": "unknown",
+        "createdAt": "2026-10-07T03:28:34Z",
+        "updatedAt": "2026-10-07T03:28:35Z",
+        "legacy": false,
+        "queue": "Label_Printer",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "paperStatus": "unconfirmed",
+        "heightMm": 40,
+        "imageAvailable": true,
+        "reprints": [],
+        "physicalConfirmationSupported": false,
+        "queueObservation": {},
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "idempotencyKey": "unknown-scan",
+        "widthMm": 58,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52035",
+        "observations": [
+          "2026-10-07T03:28:34Z saved",
+          "2026-10-07T03:28:35Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:28:35Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "status": "unknown",
+        "createdAt": "2026-10-07T03:28:34Z",
+        "updatedAt": "2026-10-07T03:28:35Z",
+        "legacy": false,
+        "queue": "Label_Printer",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "paperStatus": "unconfirmed",
+        "updatedAt": "2026-10-07T03:28:35Z",
+        "queueObservation": {},
+        "idempotencyKey": "unknown-scan",
+        "reprints": [],
+        "imageAvailable": true,
+        "context": {},
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:52035",
+        "widthMm": 58,
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "heightMm": 40,
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "queue": "Label_Printer",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "physicalConfirmationSupported": false,
+        "observations": [
+          "2026-10-07T03:28:34Z saved",
+          "2026-10-07T03:28:35Z submitting: Начата передача в системную очередь",
+          "2026-10-07T03:28:35Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "createdAt": "2026-10-07T03:28:34Z",
+        "legacy": false,
+        "status": "unknown"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/662993751d85b5dec6cd6d890495fbc9d50e6a6d55d1da99bda350f489e86314.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "queue": "Label_Printer",
+      "updatedAt": "2026-10-07T03:28:35Z",
+      "createdAt": "2026-10-07T03:28:34Z",
+      "observations": [
+        "2026-10-07T03:28:34Z saved",
+        "2026-10-07T03:28:35Z submitting: Начата передача в системную очередь",
+        "2026-10-07T03:28:35Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      ],
+      "widthMm": 58,
+      "idempotencyKey": "unknown-scan",
+      "legacy": false,
+      "heightMm": 40,
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "status": "unknown",
+      "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+      "queueObservation": {},
+      "context": {},
+      "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190"
+    }
+  ]
+}

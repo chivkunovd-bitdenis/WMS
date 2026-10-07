@@ -1,0 +1,59 @@
+{
+  "task": "WMS-607",
+  "base_sha": "77443e92dba2872993ee358cfb7c4c88279b47c8",
+  "product_sha": "de9f31a464fc09df26c6a77b488c904ea3ec19e2",
+  "test_file": "tools/print-agent/test_macos_artmaks_http_contract.py",
+  "test_sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+  "cases": [
+    "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+    "test_legacy_error_preserves_specific_pre_submit_reason",
+    "test_unknown_same_key_never_resubmits_after_queue_recovery",
+    "test_submitting_same_key_has_one_live_external_submission",
+    "test_accepted_receipt_same_key_never_resubmits"
+  ],
+  "expected_precode": {
+    "passed": 3,
+    "failed": 2,
+    "skipped": 0,
+    "errors": 0,
+    "native_exit": 1
+  },
+  "target_failures": [
+    "test_legacy_error_preserves_specific_pre_submit_reason",
+    "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure"
+  ],
+  "closure": {
+    "tools/print-agent/wms_print_direct_macos.swift": {
+      "git_blob": "df5768574579964966ed5e042cca3c4376d25ced",
+      "sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+      "unchanged": true
+    },
+    "tools/print-agent/test_macos_artmaks_contract.py": {
+      "git_blob": "1a355be40e4c114a316fe85b18b12df57866eddf",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+      "unchanged": true
+    },
+    "tools/print-agent/test_macos_default_printer.py": {
+      "git_blob": "3fa6656ffcaeaefe200f5d0355417bd8cb01c960",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+      "unchanged": true
+    },
+    "tools/print-agent/test_macos_native.py": {
+      "git_blob": "b170b764d82afc5ed545a4aac6dd5491448fd69e",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "unchanged": true
+    },
+    "frontend/src/utils/printDirectQr.ts": {
+      "git_blob": "266ff21c954d8f5696ab46bfee29189d4bed4108",
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc",
+      "unchanged": true
+    }
+  },
+  "boundaries": {
+    "real": "Full normal Swift HTTP server, real Printer journal/digest/worker/Process/readRequest/handle",
+    "fakes": "Only lp/lpstat executables; isolated journal path; CUPS linker trap aborts if invoked (no fake observation)",
+    "live_submission": "Held external lp; real protocol-v2 replay while submitting; legacy replay returns same receipt after release",
+    "recovery": "Both failed-before-submit retries use unchanged legacy POST body without protocolVersion or /retry",
+    "excluded": "No restart here: normal startup reconciles CUPS; existing frozen native3/Printer6 protect restart separately, unchanged and not rerun"
+  }
+}
