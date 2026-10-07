@@ -1,0 +1,21 @@
+{
+  "utc": "2026-10-07T05:00:09.767644+00:00",
+  "scope": "finished own reviewer checkout only; tracked copies sparsified, derived caches removed",
+  "checkout": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-delta-review",
+  "source_head": "d7612cd62beb8c41375c17980c1bbf342dd597d8",
+  "source_tree": "4599d3bddeec0cc6f5b70b8c682d95641b49817c",
+  "remote_verified": true,
+  "before_after_kib": [
+    "216852\t.",
+    "60\t."
+  ],
+  "derived_cache_bytes": 31582779,
+  "derived_cache_file_count": 877,
+  "status_clean": true,
+  "retained_checkout_and_branch": true,
+  "restore_command": "git sparse-checkout disable",
+  "git_objects_untouched": true,
+  "active_checkouts_untouched": true,
+  "untracked_user_files_removed": false,
+  "artifact_zip_removed": false
+}

@@ -1,0 +1,12 @@
+{
+  "utc": "2026-10-07T04:58:41.283862+00:00",
+  "path": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-ci-delta-review/.mypy_cache",
+  "kind": "finished own reviewer derived mypy cache only",
+  "bytes": 2490592,
+  "source_head": "d7612cd62beb8c41375c17980c1bbf342dd597d8",
+  "remote_verified": true,
+  "git_status_clean": true,
+  "no_open_files": true,
+  "git_objects_untouched": true,
+  "code_evidence_preserved": true
+}
