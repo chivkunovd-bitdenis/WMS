@@ -1,0 +1,58 @@
+{
+  "correction": "a0261518f5d292e7f178f1e59ad1d20ec10a051e",
+  "evidence": "05788bae14880fc93171e7c48a65ff825f343415",
+  "parent": "ca6d86bd994b87b87ab9ffd878008cbbdf251860",
+  "original_it_bodies_unchanged_except_three_added_job_assertions": true,
+  "product_pdf_policy_CI_unchanged": true,
+  "own_wait_probes": [
+    {
+      "kind": "fake-success",
+      "attempts": 2,
+      "advances": 1,
+      "realTurns": 0,
+      "result": "observed success"
+    },
+    {
+      "kind": "real-success",
+      "attempts": 2,
+      "advances": 0,
+      "realTurns": 1,
+      "result": "observed success"
+    },
+    {
+      "kind": "business-failure",
+      "attempts": 200,
+      "advances": 200,
+      "realTurns": 0,
+      "result": "business assertion remains RED"
+    },
+    {
+      "kind": "already-aborted",
+      "attempts": 0,
+      "advances": 0,
+      "realTurns": 0,
+      "result": "owned teardown"
+    },
+    {
+      "kind": "abort-during-turn",
+      "attempts": 1,
+      "advances": 1,
+      "realTurns": 0,
+      "result": "owned teardown"
+    }
+  ],
+  "own_onload_adapter_probe": {
+    "explicit_load_calls": 2,
+    "queued_platform_load": true,
+    "delivered": 1,
+    "restored_source": true
+  },
+  "author_log_sha256": {
+    "README.md": "475f90522cb2ffe8665542358b8d4c9e14d427e5d2e3fef3264cfd1c02e7237d",
+    "before.log": "28da4569c900845a5de835e76d45c16f131536f6197bfbd9a2a4dbc75d736782",
+    "after.log": "98e39198aa8bd9951ea341b951f2b5cac3a38fbaef936a88905f1a344a4fef76",
+    "deadline-before.log": "81b0c6cf614caf83e739d76f57e84ea9ecf69b42c3151709349353c7df40bf50",
+    "deadline-after.log": "13cd80576d951fa495276a244d05b9f1fd50fe6fc961684e285ff3256e570e65"
+  },
+  "limit": "Synthetic act/clock and iframe boundary for actual fixture methods only; author eleven-case DOM and fault executions inspected, not duplicated"
+}

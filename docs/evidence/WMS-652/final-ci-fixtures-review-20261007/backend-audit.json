@@ -1,0 +1,22 @@
+{
+  "correction": "bdfea8e006c9dd7a15341b9aef27abeaaefa3b02",
+  "evidence": "1e65ec682c4afd870b98edf85ca723b18115842b",
+  "parent": "ca6d86bd994b87b87ab9ffd878008cbbdf251860",
+  "only_test_file_changed": true,
+  "other_test_functions_and_decorators_unchanged": true,
+  "original_assertions_identical_after_exact_date_LHS_unwrap": true,
+  "own_UTC_negatives_rejected": [
+    "sqlite-wrong-hour",
+    "postgres-wrong-hour",
+    "sqlite-wrong-day",
+    "postgres-lost-tz",
+    "sqlite-unexpected-aware"
+  ],
+  "real_PG_receipt_passed": 1,
+  "raw_PG_sha256": {
+    "ozon-date-roundtrip.xml": "389f8b6b9f8a2df41a996c9e3c3fb4f88ee84daaca38102cc10b8cac47068e4a",
+    "ozon-date-roundtrip.log": "262eb7593124b35872166f12cbc341109c3acd1b0337453b2aadd798c88e8860"
+  },
+  "saved_SQLite_44_PASS_and_refresh_RED_observed": true,
+  "limit": "Own actual helper/AST proof; author SQLite/PG execution readbacks, not reviewer backend execution"
+}

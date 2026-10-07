@@ -1,0 +1,28 @@
+2026-10-07T00:54:08.3995002Z    [33m[2m✓[22m[39m WMS-650 · фокус после окна не отбирается у другого поля[2m > [22mтаймер возврата фокуса не забирает его у поля, где оператор уже печатает [33m 3196[2mms[22m[39m
+2026-10-07T00:54:09.1545650Z  [32m✓[39m src/screens/v2/fbsImagePrintDocument.test.ts [2m([22m[2m9 tests[22m[2m)[22m[32m 110[2mms[22m[39m
+2026-10-07T00:54:11.0438897Z  [32m✓[39m src/screens/v2/FfFbsOrdersScreen.wms588.dom.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[32m 243[2mms[22m[39m
+2026-10-07T00:54:12.8561627Z  [31m❯[39m src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx [2m([22m[2m11 tests[22m[2m | [22m[31m5 failed[39m[2m)[22m[33m 26683[2mms[22m[39m
+2026-10-07T00:54:12.8564745Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22msingle label preserves own box and metadata numbered=true generated=true [33m 1786[2mms[22m[39m
+2026-10-07T00:54:12.8567920Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22msingle label preserves own box and metadata numbered=true generated=false [33m 1177[2mms[22m[39m
+2026-10-07T00:54:12.8570670Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22msingle label preserves own box and metadata numbered=false generated=true [33m 836[2mms[22m[39m
+2026-10-07T00:54:12.8573429Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22msingle label preserves own box and metadata numbered=false generated=false [33m 1189[2mms[22m[39m
+2026-10-07T00:54:12.8576427Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22mbulk is one job with three pages in original order and no trailing break [33m 1587[2mms[22m[39m
+2026-10-07T00:54:12.8579022Z    [33m[2m✓[22m[39m WMS-684 acceptance box labels[2m > [22mrefresh and navigation preserve identities without stale seller/date/box data [33m 4645[2mms[22m[39m
+2026-10-07T00:54:12.8581928Z [31m   [31m×[31m WMS-684 acceptance box labels[2m > [22muses the Moscow document date and handles missing or invalid metadata without refusing print[39m[33m 5112[2mms[22m[39m
+2026-10-07T00:54:12.8583603Z [31m     → Test timed out in 5000ms.
+2026-10-07T00:54:12.8585299Z If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".[39m
+2026-10-07T00:54:12.8587969Z [31m   [31m×[31m WMS-684 acceptance box labels[2m > [22mescapes complete long seller text in single and bulk HTML[39m[33m 3964[2mms[22m[39m
+2026-10-07T00:54:12.8589847Z [31m     → expected false to be true // Object.is equality[39m
+2026-10-07T00:54:12.8592069Z [31m   [31m×[31m WMS-684 acceptance box labels[2m > [22mmark http failure reports error, releases busy and never reprints automatically[39m[33m 2129[2mms[22m[39m
+2026-10-07T00:54:12.8617145Z [31m     → expected 0 to be greater than 0[39m
+2026-10-07T00:54:12.8619678Z [31m   [31m×[31m WMS-684 acceptance box labels[2m > [22mmark lost failure reports error, releases busy and never reprints automatically[39m[33m 2112[2mms[22m[39m
+2026-10-07T00:54:12.8621322Z [31m     → expected 0 to be greater than 0[39m
+2026-10-07T00:54:12.8623189Z [31m   [31m×[31m WMS-684 acceptance box labels[2m > [22mkeeps cargo, default and storageCell printing free of receipt metadata[39m[33m 2144[2mms[22m[39m
+2026-10-07T00:54:12.8624756Z [31m     → expected 0 to be greater than 0[39m
+2026-10-07T00:54:14.1991790Z  [32m✓[39m src/components/MarkingPrintDialog.availability.dom.test.tsx [2m([22m[2m6 tests[22m[2m)[22m[33m 1526[2mms[22m[39m
+2026-10-07T00:54:14.1999601Z    [33m[2m✓[22m[39m WMS-611 FBS print availability[2m > [22msubmits despite a stale empty pool and shows the current server shortage [33m 356[2mms[22m[39m
+2026-10-07T00:54:14.2002398Z    [33m[2m✓[22m[39m WMS-611 FBS print availability[2m > [22mbuilds QR plus barcode for every marked WB product when ЧЗ=0 [33m 310[2mms[22m[39m
+2026-10-07T00:54:14.2004307Z    [33m[2m✓[22m[39m WMS-611 FBS print availability[2m > [22mpreserves busy and empty-selection protection [33m 407[2mms[22m[39m
+2026-10-07T00:54:16.0763733Z  [32m✓[39m src/screens/v2/FbsTransferSupplyDialog.test.tsx [2m([22m[2m2 tests[22m[2m)[22m[33m 1072[2mms[22m[39m
+2026-10-07T00:54:16.0845315Z    [33m[2m✓[22m[39m preserves the original request through network loss, rerender, reopen and partial confirmation [33m 601[2mms[22m[39m
+2026-10-07T00:54:16.0893180Z    [33m[2m✓[22m[39m WMS-581: one dropdown field, typed name for a new supply and the created-supply window [33m 465[2mms[22m[39m
