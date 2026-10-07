@@ -389,11 +389,11 @@ await run('last-unit',async(page,f,{context})=>{
     assert.equal(context.pages().length,1)
   } finally {await other.close()}
 })
-await run('manual-conflict',async(page,f)=>{
+await run('manual-conflict',async(page,f,{observe})=>{
   const other=await browser.newContext({viewport:{width:1440,height:1050}})
   other.setDefaultTimeout(10000);other.setDefaultNavigationTimeout(30000)
   try {
-    await login(other,'operator');const page2=await other.newPage();await open(page2,f)
+    await login(other,'operator');const page2=await other.newPage();observe(page2,'operator2');await open(page2,f)
     await qty(page,f).fill('2');await qty(page,f).press('Tab');await state('manual-conflict-first',f,2)
     // Operator 2 still sees the old zero. Their absolute 1 must not silently erase another pick.
     await qty(page2,f).fill('1');await qty(page2,f).press('Tab');await page2.waitForTimeout(900)
@@ -427,8 +427,7 @@ await run('group',async(page,f)=>{
   for(let i=0;i<4;i++){await scan(page,f.products[0].sku);await expect(scanner(page)).toBeEnabled()}
   const db=await state('group',f,4)
   const active=db.picks.filter(p=>p.active&&f.supplies.includes(p.supply))
-  assert.equal(active.filter(p=>p.supply===f.supplies[0]).length,3)
-  assert.equal(active.filter(p=>p.supply===f.supplies[1]).length,1)
+  assert.deepEqual(f.supplies.map(id=>active.filter(p=>p.supply===id).length).sort((a,b)=>a-b),[1,3],'Task order may differ from fixture insertion order; each supply keeps its plan')
   await page.reload();await expect(qty(page,f)).toHaveValue('4')
 })
 for(const name of ['ozon','ozon-group']) await run(name,async(page,f)=>{

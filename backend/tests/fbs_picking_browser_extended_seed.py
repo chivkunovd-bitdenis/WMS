@@ -96,7 +96,7 @@ async def add_extended(session, tenant, seller, warehouse, warehouse2, actor_id)
             "positions": [],
             "marketplace": "ozon" if name in OZON else "wb",
         }
-        product_count = 3 if name in {"tree-order-photo", "photo-failure"} else 1
+        product_count = 3 if name in {"tree-order-photo", "photo-failure"} else (2 if name == "ozon-group-scan" else 1)
         for pi in range(product_count):
             barcode = str(4900000000000 + index * 100 + pi)
             alt = str(5900000000000 + index * 100 + pi)
@@ -396,6 +396,8 @@ async def add_extended(session, tenant, seller, warehouse, warehouse2, actor_id)
             plan = 1 if name == "foreign-reserve" else 3
             order_ozon = None
             for pi, p in enumerate(f["products"]):
+                if name == "ozon-group-scan":
+                    plan = 2 + pi
                 for oi in range(1 if name in OZON else plan):
                     order = FbsOrder(
                         id=uuid.uuid4(),

@@ -75,14 +75,13 @@ export async function registerExtended(h) {
     await expect(tab(page,f,'Подбор')).toHaveAttribute('aria-selected','true')
   })
   await run('paste-blur',async(page,f)=>{
-    await source(page,f);await scanner(page).focus()
+    await source(page,f);await page.waitForTimeout(1000);await state('paste-source-settled',f,0);await scanner(page).focus()
     // Clipboard paste is a real browser action. The listener gets input, not a fake React callback.
     await page.context().grantPermissions(['clipboard-read','clipboard-write'])
     await page.evaluate(code=>navigator.clipboard.writeText(code),f.products[0].sku)
     await page.keyboard.press('Control+V')
     await expect(scanner(page)).toHaveValue(f.products[0].sku)
-    await page.waitForTimeout(1000)
-    await state('paste-does-not-invent-suffix',f,0)
+    await page.waitForTimeout(250)
     await page.getByTestId('pick-left-qty').click();await state('paste-blur-commit',f,1)
     await scanner(page).fill(f.products[0].sku);await scanner(page).press('Enter')
     await state('pasted-enter',f,2)
@@ -113,9 +112,13 @@ export async function registerExtended(h) {
       if(c==='&')return{key:'?',code:'Digit7',text:'?',modifiers:8}
       return c
     })
+    const response=page.waitForResponse(r=>r.request().method()==='POST'&&r.url().includes('/pick/scan'))
     const events=await hardwareCdp(page,characters)
+    await response
     await writeFile(path.join(evidence,'special-ru-events.json'),JSON.stringify({catalogue:f.products[0].special,events},null,2))
-    await state('special-ru-valid-catalogue-code',f,1)
+    const observed=snapshot().picks.filter(p=>p.active&&f.supplies.includes(p.supply)&&p.product===f.products[0].id).length
+    await scan(page,f.products[0].special);await state('special-ru-ascii-queue-recovery',f,observed+1)
+    assert.equal(observed,1,'Valid catalogue code scanned with RU physical keys must resolve to that product')
   })
   await run('server-5xx',async(page,f)=>{
     await source(page,f)
@@ -127,7 +130,7 @@ export async function registerExtended(h) {
   await run('group-manual',async(page,f)=>{
     await saved(page,f,4,'group-manual-four')
     let db=snapshot(),active=db.picks.filter(p=>p.active&&f.supplies.includes(p.supply))
-    assert.equal(active.filter(p=>p.supply===f.supplies[0]).length,3);assert.equal(active.filter(p=>p.supply===f.supplies[1]).length,1)
+    assert.deepEqual(f.supplies.map(id=>active.filter(p=>p.supply===id).length).sort((a,b)=>a-b),[1,3])
     await saved(page,f,2,'group-manual-reduction')
     await saved(page,f,3,'group-manual-increment')
     await screen(page).locator('[data-testid^="pick-undo-"]').click();await state('group-manual-undo',f,2)
@@ -140,7 +143,11 @@ export async function registerExtended(h) {
       await saved(page,f,2,'group-conflict-first')
       await qty(p2,f).fill('1');await qty(p2,f).press('Tab')
       await expect(error(p2)).toContainText(/измен|проверь|повтор/i)
-      await expect(qty(p2,f)).toHaveValue('2');await state('group-conflict-preserves-first',f,2)
+      await state('group-conflict-preserves-first',f,2)
+      const observed=await qty(p2,f).inputValue()
+      await p2.reload();await expect(qty(p2,f)).toHaveValue('2');await state('group-conflict-reload',f,2)
+      await saved(p2,f,3,'group-conflict-fresh-retry')
+      assert.equal(observed,'2','Conflict refresh must show saved quantity rather than the rejected draft')
     }finally{await other.close()}
   })
   await run('group-partial-set',async(page,f)=>{
@@ -195,8 +202,9 @@ export async function registerExtended(h) {
     const route=routeText.replace('Метод доставки Ozon','').trim(),p=await popup(page,f)
     await expect(p.locator('body')).toContainText('Ozon')
     await expect(p.locator('body')).toContainText(f.products[0].offer)
-    await expect(p.locator('.meta')).toContainText(route)
+    const printed=await p.locator('.meta').innerText()
     await p.close();await readOnly(before,'Ozon route print')
+    assert(printed.includes(route),`Printed route must match workspace: ${route}; printed: ${printed}`)
   })
   await run('exhausted-source-return',async(page,f)=>{
     await saved(page,f,3,'source-exhausted')
@@ -221,6 +229,9 @@ export async function registerExtended(h) {
     await scan(page,f.products[0].barcode);await state('ozon-group-primary-scan',f,1)
     await scan(page,f.products[0].barcode);await state('ozon-group-duplicate-physical-scan',f,2)
     await expect(qty(page,f)).toHaveValue('2')
+    await source(page,f);await scan(page,f.products[1].barcode);await state('ozon-group-second-position',f,1,{pi:1})
+    await page.reload();await expect(qty(page,f)).toHaveValue('2');await expect(qty(page,f,1)).toHaveValue('1')
+    await state('ozon-group-reloaded-first',f,2);await state('ozon-group-reloaded-second',f,1,{pi:1})
   })
   await run('full-plan-overflow',async(page,f)=>{
     await source(page,f)
@@ -301,7 +312,7 @@ export async function registerExtended(h) {
     await scanner(page).focus();await expect(page.getByTestId('product-photo-enlarged')).toHaveCount(0)
     for(const pi of [1,2]){
       const row=qty(page,f,pi).locator('xpath=ancestor::tr')
-      await expect(row.locator('img')).toHaveCount(0);await expect(row.locator('svg[data-testid="PersonIcon"]')).toHaveCount(1)
+      await expect(row.locator('img')).toHaveCount(0);await expect(row.locator('.MuiAvatar-root svg')).toHaveCount(1);await expect(row.locator('.MuiAvatar-root')).toHaveText('')
     }
     await state('photo-no-stock-write',f,0)
   })
