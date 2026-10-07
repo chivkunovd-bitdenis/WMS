@@ -1,0 +1,166 @@
+{
+  "case": "test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery",
+  "provenance": {
+    "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "transformed_source_sha256": "175faaad180dcb06d5f3c2d634fc3ed2ad0c9c397da4b862ee9272d81d9e940f",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "app": "WMS Print Direct",
+        "historyUrl": "http://127.0.0.1:64561",
+        "physicalConfirmationSupported": false,
+        "protocolVersion": 2
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "queueObservation": {},
+        "paperStatus": "unconfirmed",
+        "createdAt": "2026-10-07T06:36:11Z",
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "idempotencyKey": "unknown-scan",
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:64561",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "reprints": [],
+        "status": "unknown",
+        "heightMm": 40,
+        "queue": "Label_Printer",
+        "context": {},
+        "updatedAt": "2026-10-07T06:36:11Z",
+        "observations": [
+          "2026-10-07T06:36:11Z saved",
+          "2026-10-07T06:36:11Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:36:11Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "legacy": false,
+        "imageAvailable": true,
+        "widthMm": 58,
+        "physicalConfirmationSupported": false
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "context": {},
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "legacy": false,
+        "physicalConfirmationSupported": false,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:64561",
+        "reprints": [],
+        "imageAvailable": true,
+        "heightMm": 40,
+        "widthMm": 58,
+        "observations": [
+          "2026-10-07T06:36:11Z saved",
+          "2026-10-07T06:36:11Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:36:11Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "queue": "Label_Printer",
+        "paperStatus": "unconfirmed",
+        "updatedAt": "2026-10-07T06:36:11Z",
+        "queueObservation": {},
+        "status": "unknown",
+        "idempotencyKey": "unknown-scan",
+        "createdAt": "2026-10-07T06:36:11Z",
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "updatedAt": "2026-10-07T06:36:11Z",
+        "createdAt": "2026-10-07T06:36:11Z",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "queue": "Label_Printer",
+        "queueObservation": {},
+        "legacy": false,
+        "paperStatus": "unconfirmed",
+        "context": {},
+        "status": "unknown",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "reprints": [],
+        "imageAvailable": true,
+        "heightMm": 40,
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "observations": [
+          "2026-10-07T06:36:11Z saved",
+          "2026-10-07T06:36:11Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:36:11Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "idempotencyKey": "unknown-scan",
+        "widthMm": 58,
+        "physicalConfirmationSupported": false,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:64561"
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/662993751d85b5dec6cd6d890495fbc9d50e6a6d55d1da99bda350f489e86314.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "idempotencyKey": "unknown-scan",
+      "queueObservation": {},
+      "widthMm": 58,
+      "queue": "Label_Printer",
+      "createdAt": "2026-10-07T06:36:11Z",
+      "observations": [
+        "2026-10-07T06:36:11Z saved",
+        "2026-10-07T06:36:11Z submitting: Начата передача в системную очередь",
+        "2026-10-07T06:36:11Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      ],
+      "heightMm": 40,
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "status": "unknown",
+      "context": {},
+      "updatedAt": "2026-10-07T06:36:11Z",
+      "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "legacy": false,
+      "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+    }
+  ]
+}

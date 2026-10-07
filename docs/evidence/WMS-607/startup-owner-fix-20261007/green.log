@@ -1,0 +1,8 @@
+test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll (__main__.StartupOwnerContract.test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll) ... ok
+test_no_owner_yet_can_warm_until_owned_ready (__main__.StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready) ... ok
+test_owned_healthy_start_succeeds_with_real_health_validation (__main__.StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation) ... ok
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.910s
+
+OK
