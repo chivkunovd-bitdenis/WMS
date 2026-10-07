@@ -1,0 +1,26 @@
+2026-10-07T01:04:14.2843041Z =================================== FAILURES ===================================
+2026-10-07T01:04:14.2843814Z ____ test_posting_barcode_price_and_creation_date_come_from_the_real_fields ____
+2026-10-07T01:04:14.2844522Z [gw2] linux -- Python 3.11.17 /opt/hostedtoolcache/Python/3.11.17/x64/bin/python
+2026-10-07T01:04:14.2844939Z
+2026-10-07T01:04:14.2845396Z db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7f99264b4390>
+2026-10-07T01:04:14.2845867Z
+2026-10-07T01:04:14.2846250Z     async def test_posting_barcode_price_and_creation_date_come_from_the_real_fields(
+2026-10-07T01:04:14.2847165Z         db_session: AsyncSession,
+2026-10-07T01:04:14.2847511Z     ) -> None:
+2026-10-07T01:04:14.2847881Z         ctx = await _seed(db_session)
+2026-10-07T01:04:14.2848323Z         await _sync(db_session, ctx, [posting_row()])
+2026-10-07T01:04:14.2848699Z
+2026-10-07T01:04:14.2848979Z         order = await _order(db_session)
+2026-10-07T01:04:14.2849827Z         # Штрихкоды лежат в объекте `barcodes`; на верхнем уровне поля `barcode` нет.
+2026-10-07T01:04:14.2850555Z         assert order.wb_barcode == "%303%3435"
+2026-10-07T01:04:14.2851187Z         # Цены на верхнем уровне у отправления нет: считаем по позициям, в копейках.
+2026-10-07T01:04:14.2851665Z         assert order.price == 250000
+2026-10-07T01:04:14.2852239Z         # Даты создания у отправления нет — есть `in_process_at`. Раньше сюда молча
+2026-10-07T01:04:14.2852899Z         # подставлялось «сейчас».
+2026-10-07T01:04:14.2853492Z >       assert order.created_at_wb == datetime(2026, 9, 1, 10, 30, tzinfo=UTC)
+2026-10-07T01:04:14.2854140Z E       assert datetime.datetime(2026, 9, 1, 10, 30) == datetime.datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc)
+2026-10-07T01:04:14.2854869Z E        +  where datetime.datetime(2026, 9, 1, 10, 30) = <app.models.fbs_order.FbsOrder object at 0x7f9926985cd0>.created_at_wb
+2026-10-07T01:04:14.2855623Z E        +  and   datetime.datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc) = datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc)
+2026-10-07T01:04:14.2856002Z
+2026-10-07T01:04:14.2856198Z tests/test_ozon_posting_contract.py:324: AssertionError
+2026-10-07T01:04:14.2856579Z =============================== warnings summary ===============================
