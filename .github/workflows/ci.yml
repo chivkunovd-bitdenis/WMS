@@ -34,7 +34,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
-          fetch-depth: 1
+          fetch-depth: 0
           persist-credentials: false
       - uses: actions/setup-python@v5
         with:
@@ -75,7 +75,7 @@ jobs:
           for report, baseline, expected in [('updater.xml','updater.xml',10),('stop.xml','green.xml',4),('existing.xml','existing.xml',19)]:
               def ids(path):
                   root = ET.parse(path).getroot()
-                  assert not any(root.iter('failure')) and not any(root.iter('error')) and not any(root.iter('skipped')), path
+                  assert not list(root.iter('failure')) and not list(root.iter('error')) and not list(root.iter('skipped')), path
                   rows = [f"{case.get('classname')}::{case.get('name')}" for case in root.iter('testcase')]
                   assert len(rows) == expected and len(set(rows)) == expected, path
                   return set(rows)
