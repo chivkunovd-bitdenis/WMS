@@ -1,0 +1,22 @@
+{
+  "proof_commit": "277e8f0f7c9172a8c76664a6657942ecf71284a1",
+  "review_commit": "73f806eb2a9abffccccb1577a807fce848acde77",
+  "review_sha256": "ac2f56cfdc8dd481e2f5f4f0c600a6c12e2c21a50ead522ad8941fb947397daa",
+  "readback_result_sha256": "7db203dff62aa49091e4ca10d15523f54c93bc4c63675abfac3cdb77cf77efab",
+  "manifest_sha256": "e056cc5e21bb2167ef2893044604f11da23cf7a60e47a87cedd40571d9032ad3",
+  "A7_byte_preserved": true,
+  "other_backlog_sections_byte_preserved": true,
+  "backlog_prefix_sha256": "f3b617701c041767d86029f1e41ddafcf510094e50239b3bb6eb0cf20d0c143a",
+  "backlog_suffix_sha256": "9c80c166cf9b7f8a6fffc85bc8e94c181ee7af3f6b0b3015b4402274b2158b0e",
+  "analyst_new_production_actions": 0,
+  "document_gate": {
+    "command": [
+      "python3",
+      "-B",
+      "scripts/ci/check_task_documents.py",
+      "277e8f0f7c9172a8c76664a6657942ecf71284a1"
+    ],
+    "native_exit": 0,
+    "stdout_log": "document-gate.log"
+  }
+}
