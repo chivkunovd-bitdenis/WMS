@@ -23,6 +23,8 @@
     <string>__HOME__</string>
     <key>PYTHONUNBUFFERED</key>
     <string>1</string>
+    <key>PYTHONDONTWRITEBYTECODE</key>
+    <string>1</string>
   </dict>
   <!-- запускать при входе в систему и поднимать после любого завершения процесса -->
   <key>RunAtLoad</key>

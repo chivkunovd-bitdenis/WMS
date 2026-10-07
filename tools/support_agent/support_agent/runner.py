@@ -93,6 +93,9 @@ class Agent:
 
     # ---- запуск ----------------------------------------------------------------------
     def startup(self) -> None:
+        if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
+            self.store.kv_set("heartbeat", self.clock())
+            return
         recover_after_restart(self.store, self.cfg)
         if self.pipe.agent is not None:
             self.pipe.agent.recover_after_restart()
@@ -178,6 +181,21 @@ class Agent:
             except TelegramError as exc:
                 log.warning("telegram poll failed: %s", exc.code)
                 time.sleep(min(5, tg_timeout))
+        if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
+            if self.cfg.agent.visible_moderator:
+                from .case_journal import CaseJournal
+                from .media import archive_pending, archive_root
+                self.pipe.transcribe_pending()
+                self.pipe.pool.submit("media-archive", lambda: archive_pending(self.pipe))
+                if now - float(self.store.kv_get("native_archive_at", 0)) >= 15:
+                    def archive_chats() -> None:
+                        journal = CaseJournal(self.store, archive_root(self.cfg))
+                        for row in self.store.rows("SELECT DISTINCT chat_id FROM messages"):
+                            journal.sync_chat(int(row["chat_id"]))
+                        self.store.kv_set("native_archive_at", self.clock())
+                    self.pipe.pool.submit("conversation-archive", archive_chats)
+            self.store.kv_set("heartbeat", self.clock())
+            return
         if now - self.last_form_poll >= self.cfg.wms.poll_interval_sec:
             self.last_form_poll = now
             before = self.store.row("SELECT COUNT(*) AS n FROM tickets WHERE kind='form'")
@@ -238,7 +256,9 @@ def build_agent(cfg: Config) -> Agent:
         llm.role_ensurer = directory.ensure_scope
         llm.role_alert = pipe.on_role_failure
     pipe.mockups = MockupRunner(pipe, hotfix)
-    if cfg.agent.enabled:
+    from .media import message_image_paths
+    pipe.message_image_paths = lambda message: message_image_paths(pipe, message)
+    if cfg.agent.enabled and not (cfg.agent.intake_only or cfg.agent.visible_moderator):
         from .agent_tools import AgentTools
         pipe.agent = AgentCoordinator(pipe, AgentTools(pipe))
     return Agent(cfg, store, tg, pipe)

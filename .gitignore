@@ -101,3 +101,6 @@ tools/support_agent/.venv/
 tools/support_agent/.pytest_cache/
 tools/support_agent/.mypy_cache/
 tools/support_agent/.ruff_cache/
+
+# Durable local customer conversation archive (not product source)
+var/support-conversations/

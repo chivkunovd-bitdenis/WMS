@@ -1,0 +1,91 @@
+{
+  "checked_at": 1791391585.759267,
+  "installed_before_recovery": "22fecc84420e1100487b671d23cf738fef49fdb4",
+  "cleanup_report": "/Users/deniscivkunov/Projects/WMS/var/support-cache-cleanup-1791390227.json",
+  "preserved": [
+    "database",
+    "history",
+    "attachments",
+    "backups",
+    "source",
+    "uncommitted work"
+  ],
+  "sqlite_quick_check": "ok",
+  "pid": 86383,
+  "samples": [
+    {
+      "at": 1791390543,
+      "heartbeat": 1791390542.565771,
+      "latest_message_id": 916
+    },
+    {
+      "at": 1791390757,
+      "heartbeat": 1791390756.716234,
+      "latest_message_id": 920
+    },
+    {
+      "at": 1791391041,
+      "heartbeat": 1791391039.5678668,
+      "latest_message_id": 931
+    },
+    {
+      "at": 1791391548,
+      "heartbeat": 1791391547.8455591,
+      "latest_message_id": 934
+    }
+  ],
+  "same_pid_all_samples": true,
+  "sending": {
+    "native_paused": false,
+    "native_ready": true,
+    "client_replies_enabled": true
+  },
+  "moderator_thread_id": "01a1173e-cbaa-7363-9e4c-25b6a9c79aaa",
+  "predecessor_thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+  "predecessor_archived": true,
+  "handover": "/Users/deniscivkunov/Projects/WMS/var/support-conversations/moderator/handover-3-to-4.json",
+  "successor_probe_turn_id": "01a1173f-594d-76e3-9533-6d186b69d3d2",
+  "successor_profile": {
+    "model": "gpt-6.1-sol",
+    "approval_policy": "never",
+    "sandbox": "danger-full-access",
+    "pwd_exit": 0,
+    "reported_context": 73054
+  },
+  "permanent_threshold": 250000,
+  "automation": {
+    "id": "wms-4",
+    "status": "ACTIVE",
+    "target_thread_id": "01a1173e-cbaa-7363-9e4c-25b6a9c79aaa",
+    "rrule": "FREQ=MINUTELY;INTERVAL=1",
+    "old_update_error": "Automation does not exist; recreated through supported create, same free id returned"
+  },
+  "scheduler_observed": true,
+  "card_message_ids": [
+    "1004",
+    "1005",
+    "1006",
+    "1007"
+  ],
+  "business_mutations_in_recovery": false,
+  "client_test_messages": false,
+  "scheduler_turn_id": "01a11742-bba6-7792-83db-375435a71057",
+  "scheduler_at": "2026-10-07T16:46:51.813Z",
+  "scheduler_source": "actual <heartbeat> automation_id=wms-4 user message; no manual send after activation",
+  "scheduler_profile": {
+    "model": "gpt-6.1-sol",
+    "approval_policy": "never",
+    "sandbox": "danger-full-access"
+  },
+  "scheduler_inbox": {
+    "after_id": 874,
+    "after_edit_id": 10,
+    "actual_command_exit": 0,
+    "fresh_messages_observed": true
+  },
+  "successor_native_child": {
+    "agent_path": "/root/imperiya_actual_boxes",
+    "agent_thread_id": "01a11743-9f77-7c31-9780-eeaee0c969ff",
+    "replacement_from_saved_context": true
+  }
+}

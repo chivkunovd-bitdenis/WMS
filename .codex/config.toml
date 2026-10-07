@@ -1,0 +1,4 @@
+# WMS-690: штатное сжатие рабочего контекста Codex в области только WMS.
+# Модель, права доступа и настройки других проектов здесь не изменяются.
+model_auto_compact_token_limit = 250000
+model_auto_compact_token_limit_scope = "total"

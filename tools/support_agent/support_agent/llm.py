@@ -30,6 +30,7 @@ log = logging.getLogger(__name__)
 # send the next stage back to a previous model or provider.
 WMS_MODEL = "gpt-6.1-sol"
 WMS_PROVIDER = "codex"
+WMS_REVIEW_MODEL = "gpt-6-astra"
 
 ASTRA_ALLOWED_EFFORT = ("minimal", "low", "medium", "high")
 LIMIT_PATTERNS = re.compile(
@@ -198,6 +199,7 @@ class LlmRouter:
         session_key: str,
         model: str | None = None,
         provider: str | None = None,
+        role: str = "routine",
         system: str = "",
         tool_handler: Callable[[str, dict[str, Any]], dict[str, Any]] | None = None,
         tools: list[dict[str, Any]] | None = None,
@@ -219,8 +221,9 @@ class LlmRouter:
 
         if not session_key:
             raise ValueError("agent session_key is required")
-        model, provider = WMS_MODEL, WMS_PROVIDER
-        chosen_effort = effort or self.cfg.llm.codex_effort
+        model = WMS_REVIEW_MODEL if role == "review" else WMS_MODEL
+        provider = WMS_PROVIDER
+        chosen_effort = "high" if role == "review" else effort or self.cfg.llm.codex_effort
         if provider not in ("codex", "claude"):
             raise LlmUnavailable(f"agent provider {provider!r} is not configured")
         if provider == "codex":
@@ -291,7 +294,7 @@ class LlmRouter:
                                 "legacy_thread_id": state.get("legacy_thread_id") or state.get("thread_id"),
                                 "rollover": False, "capability_signature": signature})
         self.store.log_llm(cli=provider, model=model, effort=chosen_effort,
-                           role="agent", ticket_id=None, ok=True)
+                           role="review" if role == "review" else "agent", ticket_id=None, ok=True)
         return LlmResult(answer, provider, model, thread_id)
 
     def _claude_agent_turn(
@@ -408,7 +411,9 @@ class LlmRouter:
         return [] if self.cooling(WMS_PROVIDER) else [WMS_PROVIDER]
 
     def model_for(self, cli: str, role: str) -> str | None:
-        return WMS_MODEL if cli == WMS_PROVIDER else None
+        if cli != WMS_PROVIDER:
+            return None
+        return WMS_REVIEW_MODEL if role == "review" else WMS_MODEL
 
     def effort_for(self, cli: str, role: str) -> str | None:
         if cli != "codex":

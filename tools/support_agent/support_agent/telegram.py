@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from .case_journal import CaseJournal
 from .config import Config
 from .store import Store
 
@@ -56,6 +57,8 @@ class TelegramClient:
         if response.status_code >= 500:
             raise TelegramError("unknown", f"http_{response.status_code}")
         if not body.get("ok"):
+            if "message is not modified" in str(body.get("description", "")).lower():
+                raise TelegramError("rejected", "message_not_modified")
             raise TelegramError("rejected", f"http_{response.status_code}")
         return body["result"]
 
@@ -74,7 +77,7 @@ class TelegramClient:
         return result
 
     def send_message(self, chat_id: int, text: str, reply_to: str | None = None) -> str:
-        if len(text) > MAX_TEXT:  # молча не обрезаем: клиент и владелец должны видеть одно и то же
+        if len(text.encode("utf-16-le")) // 2 > MAX_TEXT:
             raise TelegramError("rejected", "too_long")
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if reply_to:
@@ -82,12 +85,23 @@ class TelegramClient:
             payload["allow_sending_without_reply"] = True
         return str(self._call("sendMessage", payload)["message_id"])
 
+    def edit_message(self, chat_id: int, message_id: str, text: str) -> None:
+        if len(text.encode("utf-16-le")) // 2 > MAX_TEXT:
+            raise TelegramError("rejected", "too_long")
+        try:
+            self._call("editMessageText", {"chat_id": chat_id,
+                       "message_id": int(message_id), "text": text})
+        except TelegramError as exc:
+            # Telegram rejects an identical edit. Treat only that exact error as success.
+            if exc.code != "message_not_modified":
+                raise
+
     def send_document(
         self, chat_id: int, path: str, caption: str = "", reply_to: str | None = None
     ) -> str:
         payload: dict[str, Any] = {"chat_id": str(chat_id)}
         if caption:
-            payload["caption"] = caption[:1000]
+            payload["caption"] = caption.encode("utf-16-le")[:2000].decode("utf-16-le", errors="ignore")
         if reply_to:
             payload["reply_to_message_id"] = reply_to
             payload["allow_sending_without_reply"] = "true"
@@ -288,13 +302,20 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     )
 
 
-def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
+def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None) -> int:
     """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
 
-    Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма."""
+    Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма.
+    only_ids: явный набор текущего действия; пустой набор не отправляет ничего."""
     bots = as_bots(tg, cfg.telegram.owner_chat_id)
     sent = 0
     for item in store.outbox_pending():
+        # An explicit bridge action must never drain older queued messages.
+        if only_ids is not None and int(item['id']) not in only_ids:
+            continue
+        if (item['chat_id'] != cfg.telegram.owner_chat_id
+                and not getattr(cfg.agent, 'client_replies_enabled', False)):
+            continue
         if not store.claim_outbox(item["id"]):
             continue
         tg = bots.for_chat(item["chat_id"])
@@ -303,7 +324,7 @@ def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
                 message_id = tg.send_document(
                     item["chat_id"], item["file_path"], item["text"], item["reply_to"]
                 )
-            elif len(item["text"]) > MAX_TEXT:
+            elif len(item["text"].encode("utf-16-le")) // 2 > MAX_TEXT:
                 # Длинное служебное сообщение уходит целиком файлом, а не обрезанным текстом.
                 folder = cfg.state_path / "outbox-long"
                 folder.mkdir(parents=True, exist_ok=True)
@@ -331,6 +352,19 @@ def flush_outbox(store: Store, tg: Any, cfg: Config) -> int:
                 store.finish_outbox(item["id"], "failed")
             continue
         store.finish_outbox(item["id"], "sent", message_id)
+        if getattr(cfg.agent, 'visible_moderator', False):
+            journal = CaseJournal(store, getattr(cfg.agent, 'history_dir', '')
+                                  or Path(cfg.repo) / 'var/support-conversations')
+            journal.sync_chat(int(item['chat_id']))
+            linked = store.kv_get(f"reply_case:{item['key']}", {})
+            if linked:
+                is_answer = linked.get('kind') == 'answer'
+                journal.update_card(
+                    bots.owner, cfg.telegram.owner_chat_id, linked['topic_id'], linked['chat_id'],
+                    statuses={'answer_sent': True} if is_answer else {},
+                    event=('Ответ отправлен клиенту: ' if is_answer else 'Уточнение отправлено клиенту: ')
+                          + item['text'], event_key=f"delivered:{item['id']}",
+                )
         sent += 1
     return sent
 

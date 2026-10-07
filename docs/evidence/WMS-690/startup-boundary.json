@@ -1,0 +1,38 @@
+{
+  "thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+  "startup_at": 1791381626.460493,
+  "last_message_id": 874,
+  "last_edit_id": 10,
+  "known_materials": {
+    "859": "v-e0e03511ec9c8a59ef4d",
+    "865": "v-3ca5e0c3b18d7d727942",
+    "871": "v-d4476a5c7700cd1d7eec",
+    "873": "v-b0b0773b6b5d46dabed4"
+  },
+  "startup_scope": {
+    "backlog_through_message_id": 874,
+    "backlog_as_new_tasks": false,
+    "target_chat_id": -4899527415,
+    "primary_message_id": 860,
+    "pending_target_message_ids": [
+      859,
+      860,
+      861,
+      862,
+      863,
+      864,
+      865,
+      866,
+      867,
+      868,
+      869,
+      870,
+      871,
+      872,
+      873
+    ],
+    "owner_instruction": "Only current Imperiya box-distribution request and necessary fresh additions. Other previous chats/issues corrected; do not reopen.",
+    "historical_material_completion_does_not_reopen": true
+  },
+  "assignments": {}
+}
