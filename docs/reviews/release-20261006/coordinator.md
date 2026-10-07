@@ -596,3 +596,12 @@ Cleanexact4c namedbranch codex/wms652-exact-etalon-staging-20261007 ran existing
 OrdinaryDeployProduction37579921135 attempt1 completedSUCCESS06:12:54 onexactetalon4c. Actual06:14:48servercheckout4c/api-worker-beat-webRUNNING/db+redisHEALTHY; runtimeimageIDs andliveStockmodule/main sourcehashesmatch4c inallbackendservices. Freshpublicroot/seller/apihealthHTTP200; publicrootHTMLhashmatcheswebcontainer. Registeredwms.withdrawal_poll+beat2.0seconds verifiedreadonly; no manualtask/signature. Immutable517.command hash6e606 checked/notexecuted. Runtimeproof/Git preservation nowrecorded; userorderedprod-first afterstagealreadydeployed, nowfreshstageALL4SUCCESS4c confirmedafterproduction. No approvalwait/newaudit; mainappold/main6474 configonly. PriortransportinstabilityOPEN, fullattempt2strict1192PASSnotfixclaim.
 
 607 actualpackage37579919987: ARM33PASS/payloadbuilt; Intel10cases9PASS1ERROR TimeoutExpired15s inUC4 wrong-process-health fixture, nopayload. Collectorpreservingfullraw/ARMarchive, no publication/waiver/blindretry. SourceUC4 exposesstart_ownedloop continuingafterconfirmedforeignprocess; boundednewtest-beforecorrection willpreserveallold14/19/15s. Separate607deliverycontinues, primaryreleasecomplete. Nextaddressed675freshaccounting/observations before anyrepair, no copied26.
+
+
+## Checkpoint 06:24 UTC: primary shipped; two bounded remaining lanes actually active
+
+Production4c/normalrun37579921135 andfreshstageALL4SUCCESS verified/preserved1c8810bff603b63ea1e12e07df1b5fc76828df52. README stale03:32 header corrected todeployedactualstate; no releaseCI/deployrepeat. Userproduction-first clarification arrivedafterstagecompleted/productionin_progress, no newstagegate.
+
+607 actualraw71640d0c1160049f085bc6b524581ff25a804b1c: ARM33PASS/payload181772bytesSHA85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab; IntelUC4TimeoutExpired15s/9PASS1ERROR/no payload, source/harness fixeda04/d0 unchanged. OriginalseparatetestwriterCLI01a11389 nowactuallyactive49882: additiveactualstart_ownedforeign-owner-abort semanticRED+ownedready/warmcontrols, old14/19/15s unchanged. Same developer/reviewer thenMacCI/publiccommand/owner delivery.
+
+Addressed675readonlycollectorCLI01a1147b actuallyactive17053: fresh11exacttenantgatewaySQLSELECTs +existingnormalconfigured31Ozonget sanitizedREAD, exactfiveIDs/seedplan/producer4c; no conduct/observations/publish/roles/flags/keys changes. Old26isNOTcurrentdelta. Mutationsonlyafterfreshboundproof+native lock recheck, normalpublish retained. Existingfinishedworktrees reused, no newcheckout/deps.
