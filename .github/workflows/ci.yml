@@ -135,7 +135,7 @@ jobs:
       if: always()
     - name: Printer receipt persistence and unknown-outcome recovery / command09
       working-directory: .
-      run: python ../scripts/ci/pg-comparison/execute.py command09
+      run: python scripts/ci/pg-comparison/execute.py command09
       id: command09
       continue-on-error: true
       if: always()

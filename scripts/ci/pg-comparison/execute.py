@@ -68,7 +68,7 @@ PYREPORT
 started = time.time()
 with (EVIDENCE / (key + '.log')).open('wb') as output:
     child = subprocess.Popen(['bash', '-e', '-o', 'pipefail', '-c', command],
-                             cwd=ROOT / 'backend', stdout=subprocess.PIPE,
+                             cwd=ROOT / SPEC[key]['working_directory'], stdout=subprocess.PIPE,
                              stderr=subprocess.STDOUT)
     while block := child.stdout.read(8192):
         output.write(block)
@@ -77,6 +77,7 @@ with (EVIDENCE / (key + '.log')).open('wb') as output:
         sys.stdout.buffer.flush()
     code = child.wait()
 record = {'id': key, 'name': SPEC[key]['name'], 'command': SPEC[key]['command'],
+          'working_directory': SPEC[key]['working_directory'],
           'command_sha256': SPEC[key]['sha256'], 'exit_code': code,
           'started_epoch': started, 'completed_epoch': time.time(),
           'sha': os.environ['GITHUB_SHA'], 'run_id': os.environ['GITHUB_RUN_ID'],

@@ -2,56 +2,67 @@
   "command01": {
     "name": "WMS-662 isolated batch lock order on real PostgreSQL",
     "command": "pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py",
-    "sha256": "b4c4b660cbb0fab92c4eaeeba0ae96e1da0cc14f93317599f0c60e54e489d820"
+    "sha256": "b4c4b660cbb0fab92c4eaeeba0ae96e1da0cc14f93317599f0c60e54e489d820",
+    "working_directory": "backend"
   },
   "command02": {
     "name": "WMS-662 isolated steady-state lock order on real PostgreSQL",
     "command": "pytest -n 0 -q -s tests/test_wms662_batch_handoff_steady_state.py",
-    "sha256": "a09b03ff778a3dde1dbe1d5ec732156d4c073bbb3719d34f672758c5b1907adb"
+    "sha256": "a09b03ff778a3dde1dbe1d5ec732156d4c073bbb3719d34f672758c5b1907adb",
+    "working_directory": "backend"
   },
   "command03": {
     "name": "PostgreSQL locks and immutable migration guards",
     "command": "pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py --junitxml=\"$RUNNER_TEMP/release-postgres/517-withdrawal.xml\"",
-    "sha256": "84fc8dde562c28e060ff9c3b3f05e21981adf73d74d8bafb125c29244229ba3f"
+    "sha256": "84fc8dde562c28e060ff9c3b3f05e21981adf73d74d8bafb125c29244229ba3f",
+    "working_directory": "backend"
   },
   "command04": {
     "name": "PostgreSQL locks and immutable migration guards",
     "command": "pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe",
-    "sha256": "3cd504270e8d0e68438021db15cdb375d4fee9e37a14a0b2a32257868eb37f52"
+    "sha256": "3cd504270e8d0e68438021db15cdb375d4fee9e37a14a0b2a32257868eb37f52",
+    "working_directory": "backend"
   },
   "command05": {
     "name": "PostgreSQL locks and immutable migration guards",
     "command": "pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply",
-    "sha256": "54cd15743625ff0dbdf3146355f9bdfe605c9e66cad4d5cf06a65da409d95962"
+    "sha256": "54cd15743625ff0dbdf3146355f9bdfe605c9e66cad4d5cf06a65da409d95962",
+    "working_directory": "backend"
   },
   "command06": {
     "name": "Required PostgreSQL handoff cancellation documents and catalog contracts",
     "command": "bash ../scripts/ci/run_release_postgres.sh",
-    "sha256": "5557f2d1db24332b362841d735de7c7c16dda5ca30dd10183eb441be8f774c64"
+    "sha256": "5557f2d1db24332b362841d735de7c7c16dda5ca30dd10183eb441be8f774c64",
+    "working_directory": "backend"
   },
   "command07": {
     "name": "WMS-675 real incident recovery on isolated PostgreSQL",
     "command": "# Keep the frozen Docker-aware database identity guard and bind the\n# service alias only to this runner's published loopback port.\necho '127.0.0.1 postgres' | sudo tee -a /etc/hosts\npython -c \"import socket; assert set(socket.gethostbyname_ex('postgres')[2]) == {'127.0.0.1'}\"\npython -c \"import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_675_incident'); c.close()\"\npytest -n 0 -q -s tests/test_wms675_recovery_scenario.py --junitxml=\"$RUNNER_TEMP/release-postgres/675.xml\"\n",
-    "sha256": "22c6bb534182bcb9f2d996efc201723036952069e7143d541a6ef61a5aa3124e"
+    "sha256": "22c6bb534182bcb9f2d996efc201723036952069e7143d541a6ef61a5aa3124e",
+    "working_directory": "backend"
   },
   "command08": {
     "name": "Fresh PostgreSQL migration chain and withdrawal rollback",
     "command": "python -c \"import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_517_migrations'); c.close()\"\nalembic upgrade head\nalembic downgrade 20260923_0517\nalembic upgrade head\n",
-    "sha256": "d1545b96388bb41140b2340cb6151d5851237532c00eec6cb125d599434853bd"
+    "sha256": "d1545b96388bb41140b2340cb6151d5851237532c00eec6cb125d599434853bd",
+    "working_directory": "backend"
   },
   "command09": {
     "name": "Printer receipt persistence and unknown-outcome recovery",
     "command": "python -m pytest -q tools/print-agent/test_wms_print_direct.py tools/print-agent/test_wms_print_runtime.py -k 'not test_windows_cmd_synthetic_queue_receipt' --junitxml=\"$RUNNER_TEMP/native-print.xml\"",
-    "sha256": "5ea616bac31100fa3a741ae5fd7d7d94df55094dabf115117d2bd774cb912f7a"
+    "sha256": "5ea616bac31100fa3a741ae5fd7d7d94df55094dabf115117d2bd774cb912f7a",
+    "working_directory": "."
   },
   "ruff": {
     "name": "Ruff",
     "command": "ruff check .",
-    "sha256": "a0e3ed3d50f590907493cef09ea66c5b2e93004d9486d41e3d1f4e3531ebcc93"
+    "sha256": "a0e3ed3d50f590907493cef09ea66c5b2e93004d9486d41e3d1f4e3531ebcc93",
+    "working_directory": "backend"
   },
   "mypy": {
     "name": "Mypy",
     "command": "mypy .",
-    "sha256": "779e518417ee16aeb9f097623088a6cdc7b060a9dc1fb05152f8a0de69d1628a"
+    "sha256": "779e518417ee16aeb9f097623088a6cdc7b060a9dc1fb05152f8a0de69d1628a",
+    "working_directory": "backend"
   }
 }
