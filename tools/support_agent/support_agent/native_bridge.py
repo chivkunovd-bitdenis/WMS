@@ -131,7 +131,16 @@ class NativeBridge:
         return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
 
     def context(self, thread_id: str) -> dict[str, Any]:
+        # A literal UUID cannot expand into a search across unrelated sessions.
+        thread_id = str(uuid.UUID(thread_id))
         latest: dict[str, Any] = {}
+        compaction_count = 0
+        last_compaction: dict[str, Any] | None = None
+
+        def occupied(info: dict[str, Any]) -> int | None:
+            usage = info.get("last_token_usage") or {}
+            return (int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))) if usage else None
+
         for path in sorted((Path.home() / ".codex/sessions").rglob(f"*{thread_id}*.jsonl")):
             with path.open(encoding="utf-8") as stream:
                 for line in stream:
@@ -139,13 +148,21 @@ class NativeBridge:
                         record = json.loads(line)
                     except ValueError:
                         continue
+                    if not isinstance(record, dict):
+                        continue
                     payload = record.get("payload") or {}
+                    if record.get("type") == "compacted":
+                        compaction_count += 1
+                        last_compaction = {"timestamp": record.get("timestamp"),
+                                           "before_tokens": occupied(latest), "after_tokens": None}
                     if payload.get("type") == "token_count" and payload.get("info"):
                         latest = payload["info"]
-        usage = latest.get("last_token_usage") or {}
-        occupied = (int(usage.get("input_tokens", 0)) + int(usage.get("output_tokens", 0))) if usage else None
-        return {"thread_id": thread_id, "context_tokens": occupied,
-                "model_context_window": latest.get("model_context_window"), "soft_limit": 250000}
+                        count = occupied(latest)
+                        if last_compaction is not None and last_compaction["after_tokens"] is None and count:
+                            last_compaction["after_tokens"] = count
+        return {"thread_id": thread_id, "context_tokens": occupied(latest),
+                "model_context_window": latest.get("model_context_window"), "soft_limit": 250000,
+                "compaction_count": compaction_count, "last_compaction": last_compaction}
 
 
 def main() -> int:

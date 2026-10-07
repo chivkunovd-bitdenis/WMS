@@ -11,8 +11,8 @@ LABEL="pro.sellerfocus.wms-support-agent"
 PLIST="$HOME/Library/LaunchAgents/$LABEL.plist"
 REPO="$(git -C "$SRC" rev-parse --show-toplevel)"
 SHA="$(git -C "$SRC" rev-parse HEAD)"
-if [ -n "$(git -C "$REPO" status --porcelain -- tools/support_agent)" ]; then
-  echo "Код службы не сохранён в Git. Сначала закоммитьте tools/support_agent."
+if [ -n "$(git -C "$REPO" status --porcelain -- tools/support_agent .codex/config.toml)" ]; then
+  echo "Код службы или WMS context config не сохранены в Git. Сначала закоммитьте изменения."
   exit 1
 fi
 
@@ -60,6 +60,10 @@ temporary.write_text(json.dumps({'sha': sha, 'files': hashes}, indent=2) + '\n')
 temporary.replace(app / 'INSTALLATION.json')
 print(f'Установлен и проверен Git commit {sha}: {len(hashes)} файлов.')
 PY
+
+# The live desktop thread's cwd is the main WMS checkout. Install only its
+# two context settings from the same saved SHA, preserving all owner fields.
+(cd "$APP" && "$APP/.venv/bin/python" -m support_agent.context_config "$REPO" "$SHA" "$APP")
 
 sed -e "s#__APP__#$APP#g" -e "s#__HOME__#$HOME#g" \
   "$SRC/launchd/$LABEL.plist.template" > "$PLIST"
