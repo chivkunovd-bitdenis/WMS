@@ -1,0 +1,1435 @@
+{
+  "source_sha": "0b8d5badc",
+  "backend_collected": [
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr[2]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_exact_auth_contract_uuid_field_expiry_and_no_secret_repr[12]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_auth_does_not_accept_legacy_token_or_leak_auth_body[response0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_auth_does_not_accept_legacy_token_or_leak_auth_body[response1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_sends_original_bytes_exact_four_fields_and_returns_only_id[200-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_sends_original_bytes_exact_four_fields_and_returns_only_id[200-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_sends_original_bytes_exact_four_fields_and_returns_only_id[201-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_sends_original_bytes_exact_four_fields_and_returns_only_id[201-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[400]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[401]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[403]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[422]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[429]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[500]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[502]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[503]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_preserves_error_bytes_and_never_retries_or_redirects[302]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_uncertain_create_never_performs_second_post[timeout]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_uncertain_create_never_performs_second_post[disconnect]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_uncertain_create_never_performs_second_post[connect]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_uncertain_create_never_performs_second_post[bad_json]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_uncertain_create_never_performs_second_post[fake_id]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cises_official_batch_preserves_nullable_facts_and_per_code_errors",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cises_404_is_a_per_code_answer_not_transport_exception",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[CHECKED_OK-succeeded]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[CHECKED_NOT_OK-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[PARSE_ERROR-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[PROCESSING_ERROR-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[IN_PROGRESS-pending]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[WAIT_FOR_CONTINUATION-pending]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[UNDEFINED-unknown]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[ACCEPTED-unknown]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[NEW_STATUS-unknown]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_info_array_exact_query_errors_and_withdrawal_statuses[None-unknown]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_v4_list_exact_reconciliation_filters_and_cursor",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cross_environment_participant_expired_or_jwt_auth_never_leaves_server[auth0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cross_environment_participant_expired_or_jwt_auth_never_leaves_server[auth1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cross_environment_participant_expired_or_jwt_auth_never_leaves_server[auth2]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cross_environment_participant_expired_or_jwt_auth_never_leaves_server[auth3]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_limiter_failure_prevents_outbound_and_does_not_fallback",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_limiter_waits_then_reacquires_same_participant_key",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_boundary_failures_happen_before_http[count]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_boundary_failures_happen_before_http[bytes]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_boundary_failures_happen_before_http[duplicate]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_create_boundary_failures_happen_before_http[signature]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_environment_selects_an_inseparable_pair_of_official_urls",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_document_from_different_type_cannot_succeed",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_atomic_lua_limiter_across_three_clients_with_real_isolated_redis",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_actual_document_code_count_boundary[30000]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_actual_document_code_count_boundary[30001]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change2]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change3]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change4]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_cis_parser_never_discards_facts_required_by_business_preflight[change5]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_info_contract_mismatch_is_not_success[wrong_id]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_info_contract_mismatch_is_not_success[wrong_group]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_info_contract_mismatch_is_not_success[object]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_info_contract_mismatch_is_not_success[multiple]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[False-sign_in-sandbox]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[False-sign_in-production]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[False-create_document-sandbox]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[False-create_document-production]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[True-sign_in-sandbox]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[True-sign_in-production]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[True-create_document-sandbox]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_production_create_gate_does_not_block_auth_or_sandbox[True-create_document-production]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[20260923_0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[20260923_1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[2026-9-23]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[2026-02-30]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[2026-09-23T00:00:00Z]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[2026-09-24]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_invalid_or_missing_action_date_rejected_before_limiter_and_http[2021-09-22]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[invalid]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product4]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product5]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product6]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product7]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product8]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product9]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product10]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product11]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_malformed_product_rows_or_invalid_cost_rejected_before_http[product12]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_inclusive_date_and_cost_boundaries_preserve_original_payload_bytes[2021-09-23-0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_inclusive_date_and_cost_boundaries_preserve_original_payload_bytes[2021-09-23-99999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_inclusive_date_and_cost_boundaries_preserve_original_payload_bytes[2026-09-23-0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_inclusive_date_and_cost_boundaries_preserve_original_payload_bytes[2026-09-23-99999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_five_calendar_year_boundary_on_leap_day",
+      "pg": false
+    },
+    {
+      "id": "tests/test_true_api_withdrawal.py::test_action_date_uses_moscow_calendar_at_utc_day_boundary",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields0-12345]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields1-0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields2-99999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields3-12345]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields4-12345]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_exact_rub_kopecks[fields5-12345]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields0-missing_rub_final_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields1-missing_rub_final_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields2-missing_rub_final_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields3-missing_rub_final_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields4-rub_price_out_of_range]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields5-rub_price_out_of_range]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields6-invalid_rub_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields7-invalid_rub_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields8-invalid_rub_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields9-conflicting_rub_prices]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_invalid_price_is_a_typed_error[fields10-rub_price_out_of_range]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_import_update_persists_versions_and_deduplicates",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_orm_cannot_delete_snapshot",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_migrated_database_retains_snapshot_and_parent_until_downgrade",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_missing_and_bad_fields_never_use_legacy_price",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_partial_new_feed_preserves_snapshot_and_scope",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_imported_price_cases_survive_reload[fields0-99999999999999999-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_imported_price_cases_survive_reload[fields1-0-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_imported_price_cases_survive_reload[fields2-16005-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_imported_price_cases_survive_reload[fields3-None-missing_rub_final_price]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_imported_price_cases_survive_reload[fields4-None-conflicting_rub_prices]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_concurrent_capture_serializes_one_revision",
+      "pg": true
+    },
+    {
+      "id": "tests/test_wb_order_price_snapshot.py::test_existing_orders_backfill_uses_real_paginated_30_day_feed",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[,]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[,not-a-uuid]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[,*]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[, ]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_invalid_configuration_closes_entire_list[,null]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c2_exact_uuid_only_and_settings_default_closed",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c1_c3_every_endpoint_denies_before_runtime_or_ledger",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c2_c4_capability_follows_real_delegated_seller_switch",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c2_c5_allowed_registry_and_idempotent_create",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c6_denied_documents_never_claimed_or_mutated[pending_signature]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c6_denied_documents_never_claimed_or_mutated[submitting]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c6_denied_documents_never_claimed_or_mutated[reconciling]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c6_denied_documents_never_claimed_or_mutated[submitted]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c6_revoked_seller_cannot_execute_or_apply_held_recovery",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c7_master_gate_blocks_create_retry_and_worker",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c10_frontend_contains_no_rollout_identity_or_allowlist",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_access.py::test_c10_compose_processes_share_default_closed_allowlist",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_registry_server_scope_and_moscow_date",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reload_and_overlap_resume_without_duplicate",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_unshipped_and_forged_selection_is_rejected",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_price_less_order_feed_keeps_price_sent_with_new_order",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_registry_missing_price_is_an_actual_local_error",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_partial_success_survives_neighbour_failure_and_retry",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_possible_duplicate_incident_cannot_disappear_on_later_read",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_retry_retains_old_price_error_and_new_attempt",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[CHECKED_OK-succeeded]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[CHECKED_NOT_OK-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[PARSE_ERROR-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[PROCESSING_ERROR-failed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[IN_PROGRESS-submitted]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[WAIT_FOR_CONTINUATION-submitted]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[UNDEFINED-reconciling]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[ACCEPTED-reconciling]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_only_checked_ok_is_success_and_errors_survive_reload[NEW_STATUS-reconciling]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[400]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[401]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[403]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[422]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[500]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[503]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_create_reject_vs_uncertain_keeps_exact_body[None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_lost_create_read_reconciliation_never_posts[0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_lost_create_read_reconciliation_never_posts[1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_lost_create_read_reconciliation_never_posts[2]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_lease_fencing_and_restart_recovery",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_token_expiry_invalidates_secret_without_terminal_failure",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_semantic_reconciliation_requires_exact_cis_cost_and_mod",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_payload_cannot_be_replaced",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_database_prevents_second_claim",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_database_rejects_cross_seller_document_item_link",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_fk_session_stays_enabled_after_commits_and_pool_growth",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_api_gates_signatures_scopes_and_never_returns_tokens",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_self_boundary_enforces_seller_role_and_honest_sign_permission",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_observation_orm_rejects_update_and_delete[response_body]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_observation_orm_rejects_update_and_delete[incident]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_observation_orm_rejects_update_and_delete[reconciliation_ids]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_observation_orm_rejects_update_and_delete[delete]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_migration_upgrade_and_downgrade_match_ledger_schema",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_postgresql_migration_renders_audit_guards_and_cleanup",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_postgresql_concurrent_clicks_share_one_operation[True]",
+      "pg": true
+    },
+    {
+      "id": "tests/test_withdrawal_ledger.py::test_postgresql_concurrent_clicks_share_one_operation[False]",
+      "pg": true
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows0-external_mod_missing]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows1-external_mod_missing]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows2-external_mod_missing]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows3-external_mod_missing]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows4-external_mod_ambiguous]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_exact_cardinality[rows5-external_mod_ambiguous]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_external_mod_unique_valid_scope_and_ip_rules",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[None-None-traceability_mode_unknown]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[started-None-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[started-CONNECT_TAP-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[started-OTHER-cis_status_not_allowed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[not_started-OTHER-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_traceability_requires_explicit_versioned_mode[not_started-MOVING_BY_UD-cis_status_not_allowed]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_builder_group_split_exact_bytes_and_moscow_date",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[None-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[None-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[expired-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[expired-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[401-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_emulator_sign_submit_recover_once[401-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_orchestration.py::test_missing_mod_retry_and_evidence_scope",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_versioned_official_traceability_has_no_invented_dates",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_provider_ki_preserves_original_and_projects_gs1[]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_provider_ki_preserves_original_and_projects_gs1[\\x1d91fixture\\x1d92cryptographic-data]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_ambiguous_provider_codes_fail_before_http[bad]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_ambiguous_provider_codes_fail_before_http[010460123456789021]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_ambiguous_provider_codes_fail_before_http[010460123456789021abc\\x1d10batch]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_ambiguous_provider_codes_fail_before_http[010460123456789021abc\\x1d92]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_ambiguous_provider_codes_fail_before_http[010460123456789021abc\\n]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[200]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[400]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[401]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[403]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[422]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[429]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[500]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_auth_provider_error_fields_survive_without_tokens[503]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_retry_after_defers_shared_participant_without_replay",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_postgresql_real_migration_guards_and_downgrade_cleanup",
+      "pg": true
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_deployment_roles_share_image_and_safe_configuration",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_official_contract_fixture_manifest_is_linked_to_executable_tests",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_postgresql_recovery_skips_a_locked_document",
+      "pg": true
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_old_401_cannot_clear_new_reauthenticated_session",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_sign_in_always_sends_server_inn_and_obeys_crpt_expiry[7701234567]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_sign_in_always_sends_server_inn_and_obeys_crpt_expiry[123456789012]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_readiness.py::test_same_provider_ki_with_different_crypto_tail_cannot_be_claimed_twice",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_production_gate_blocks_submit_but_does_not_block_read_recovery",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_no_persistent_mod_registry_or_api",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_terminal_reject_projects_provider_fields_and_preserves_raw[errors0-None-E42-\\u0424\\u0430\\u043a\\u0442\\u0438\\u0447\\u0435\\u0441\\u043a\\u0430\\u044f \\u043e\\u0448\\u0438\\u0431\\u043a\\u0430]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_terminal_reject_projects_provider_fields_and_preserves_raw[errors1-common1-INTRO_ERROR-\\u041e\\u0448\\u0438\\u0431\\u043a\\u0430 \\u0427\\u0417]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_terminal_reject_projects_provider_fields_and_preserves_raw[errors2-None-29-\\u041d\\u0435\\u0432\\u0435\\u0440\\u043d\\u044b\\u0439 JSON]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages0-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages1-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages2-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages3-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages4-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages5-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages6-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_review_fixes.py::test_mod_pages_require_stable_exact_total[pages7-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[None-None-False-not_withdrawn]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-None-False-not_withdrawn]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-pending_signature-False-not_withdrawn]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-pending_signature-True-transferring]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-submitting-True-transferring]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-submitted-True-awaiting_crpt]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-reconciling-True-awaiting_crpt]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-succeeded-True-transferring]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[pending-failed-True-transferring]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[succeeded-succeeded-True-withdrawn]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_project_item_status_covers_the_full_state_machine[failed-failed-True-error]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_registry_projects_signed_pending_as_transferring",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_registry_marks_in_flight_row_as_resumable_only_when_token_expired",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_row_status.py::test_registry_sql_does_not_select_exact_payload_or_signature_value",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_wms563.py::test_registry_accepts_page_size_from_query_string",
+      "pg": false
+    },
+    {
+      "id": "tests/test_withdrawal_wms563.py::test_create_accepts_selection_larger_than_one_page",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_backfill_order_prices.py::test_backfill_uses_statistics_then_orders_api_and_is_idempotent",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_backfill_order_prices.py::test_backfill_falls_back_to_orders_api_without_statistics_access",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_legacy_price_source_contract.py::test_valid_sale_is_not_blocked_by_missing_or_bad_legacy_snapshot[missing]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_legacy_price_source_contract.py::test_valid_sale_is_not_blocked_by_missing_or_bad_legacy_snapshot[bad_currency]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_integer_price.py::test_raw_integer_finished_price_is_per_item_error[exception-trace-single]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_integer_price.py::test_raw_integer_finished_price_is_per_item_error[exception-trace-healthy-neighbor]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_integer_price.py::test_raw_integer_finished_price_is_per_item_error[http-status-single]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_integer_price.py::test_raw_integer_finished_price_is_per_item_error[http-status-healthy-neighbor]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_numeric_price.py::test_raw_numeric_finished_price_is_per_item_error[exception-trace-single]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_numeric_price.py::test_raw_numeric_finished_price_is_per_item_error[exception-trace-healthy-neighbor]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_numeric_price.py::test_raw_numeric_finished_price_is_per_item_error[http-status-single]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_raw_numeric_price.py::test_raw_numeric_finished_price_is_per_item_error[http-status-healthy-neighbor]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc1_registry_uses_exact_sale_not_wb_status",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc1_forged_unsold_create_rejected",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[wb_rid-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[wb_rid-]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[status-cancelled]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[status-defect]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[pick_status-returned]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[marketplace-ozon]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_local_scope_and_exact_rid[supply_id-None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_foreign_seller_sale_does_not_authorize_same_rid",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc2_foreign_pool_code_is_excluded_even_with_exact_sale",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[return-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[return-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[unknown-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[unknown-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[conflicting_sale-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[conflicting_sale-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[conflicting_rid-False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_returns_unknown_and_conflicts_are_order_independent[conflicting_rid-True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc3_same_sale_update_deduplicates",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc4_return_on_second_page_and_exact_cursor",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc4_stalled_cursor_is_incomplete_not_empty_success",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[401]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[403]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[429]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[timeout]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[json]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_incomplete_transport_cannot_prepare_from_legacy_snapshot[second-page]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc6_old_missing_sale_reports_coverage_not_unsold",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc5_failed_refresh_preserves_prior_useful_attempt",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc7_return_between_view_and_document_blocks_unsigned_attempt[return]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc7_return_between_view_and_document_blocks_unsigned_attempt[binding]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc8_moscow_handover_filters_keep_same_sales_set",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc9_all_pages_and_maximum_selection_keep_every_unique_code[305]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc9_all_pages_and_maximum_selection_keep_every_unique_code[10000]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[-1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[None]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[NaN]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[Infinity]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[123.456]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_invalid_finished_price_never_falls_back[1000000000000000.00]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_exact_cost_and_immutable_source_survive_later_wb_change[123.45_0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc10_exact_cost_and_immutable_source_survive_later_wb_change[123.45_1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc11_certificate_hash_binding_and_reload",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc11_expired_certificate_and_cancel_never_start_auth",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc12_submitted_reauth_recovery_ignores_later_return_without_new_post[False]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc12_submitted_reauth_recovery_ignores_later_return_without_new_post[True]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc12_terminal_retry_rechecks_sale_and_return",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_contract.py::test_sc1_api_registry_products_and_forged_create_share_sale_scope",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_mixed_return_after_create_preserves_selection_and_builds_only_healthy",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_old_missing_history_does_not_block_selected_current_sale[create]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_old_missing_history_does_not_block_selected_current_sale[retry]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_old_missing_history_does_not_block_selected_current_sale[build]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[1.0000000000000000000000000000000001]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[1e999999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[NaN]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[sNaN]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[Infinity]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[-Infinity]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[0]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[-0.01]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_extreme_finished_price_is_per_item_error_and_healthy_continues[1000000000000000.00]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_exact_valid_finished_price_boundaries[0.01-1]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_exact_valid_finished_price_boundaries[999999999999999.99-99999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_exact_valid_finished_price_boundaries[1.0000000000000000000000000000000000-100]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_api_extreme_price_returns_item_error_without_http_500[1e999999999999999999]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_partial_decimal_regressions.py::test_api_extreme_price_returns_item_error_without_http_500[sNaN]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_shared_redis_limits_two_public_callers_and_retry_after",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_complete_cache_serves_products_but_failed_fresh_create_preserves_cache",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_cursor_seventh_fraction_digit_and_latest_saved_source",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_failed_fresh_build_keeps_prior_attempt_exact_document",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_new_request_resumes_saved_claim_without_fresh_sales[created]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_regressions.py::test_new_request_resumes_saved_claim_without_fresh_sales[reconciling]",
+      "pg": false
+    },
+    {
+      "id": "tests/test_wms517_sales_waiting_rate.py::test_waiting_reader_rechecks_shared_retry_after_before_http",
+      "pg": false
+    }
+  ],
+  "frontend_passed_cases": [
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::SameOriginSellerWithdrawalApi uses only the self registry contract and server pagination",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::SameOriginSellerWithdrawalApi binds operation creation to row ids, stable request id and certificate metadata",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::SameOriginSellerWithdrawalApi sends every document signature with immutable payload hash and selected certificate",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::SameOriginSellerWithdrawalApi requests reauthentication for the durable operation with public certificate metadata only",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::SameOriginSellerWithdrawalApi maps the fail-closed production-submit gate to a human message",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::withdrawalErrorMessage shows CRPT document errors and commonErrors returned by the backend",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::withdrawalErrorMessage normalizes snake-case common errors and message-shaped entries",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::withdrawalErrorMessage uses a provider code when no safe message was returned",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::withdrawalErrorMessage shows the factual True API auth error_message",
+    "src/screens/v2/sellerKizWithdrawalApi.test.ts::withdrawalErrorMessage falls back to a human terminal status without exposing unknown object fields",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state reuses the request id only for the exact same selection",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state rejects malformed persisted requests",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state recognises the four durable non-terminal, in-flight and terminal states",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state keeps new production submit fail-closed but permits certificate reauth for read-only recovery",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state hashes the exact bytes represented by base64",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state lets the operator retry only fresh or terminal-error rows",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state copies the accepted-signature per-KIZ projection without rewinding terminal items",
+    "src/screens/v2/sellerKizWithdrawalState.test.ts::seller KIZ withdrawal state opens the in-flight row for the same-operation reauth path but not for a fresh submit"
+  ],
+  "counts": {
+    "sqlite_required": 346,
+    "postgres_required": 5,
+    "frontend_required": 18
+  },
+  "execution_note": "Backend collect-only, no execution claimed. Frontend18 passed locally. Full exact release CI remains required. Existing PG command receives report; no additional database instance."
+}

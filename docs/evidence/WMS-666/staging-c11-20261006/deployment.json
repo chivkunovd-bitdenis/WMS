@@ -1,0 +1,72 @@
+{
+  "checked_at_utc": "2026-10-06T14:27:32.351206+00:00",
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "project_name": "loyal-wonder",
+  "expected_sha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+  "services": [
+    {
+      "name": "WMS",
+      "service_id": "e4a67f11-4318-4386-b9f9-fe5ae0d4f5cc",
+      "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "environment_name": "production",
+      "active": [
+        {
+          "id": "689dd109-8824-43d2-afe0-4c22a239598c",
+          "status": "SUCCESS",
+          "sha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+          "instances": [
+            "RUNNING"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "web",
+      "service_id": "f2ad51a8-009d-488c-9d64-7054072ccac6",
+      "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "environment_name": "production",
+      "active": [
+        {
+          "id": "45d06827-b242-4bee-b92e-7030b5bf3343",
+          "status": "SUCCESS",
+          "sha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+          "instances": [
+            "RUNNING"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wms-beat",
+      "service_id": "d3355f36-aa1e-48c9-b69c-9e6005c4e1d9",
+      "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "environment_name": "production",
+      "active": [
+        {
+          "id": "5ceb2c99-73e7-46de-a55e-15fcdfb55c66",
+          "status": "SUCCESS",
+          "sha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+          "instances": [
+            "RUNNING"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wms-worker",
+      "service_id": "ed8faf85-069f-4e94-8d6c-d76899165687",
+      "environment_id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "environment_name": "production",
+      "active": [
+        {
+          "id": "99ad4eda-f9fd-4257-a6b3-1d171eece941",
+          "status": "SUCCESS",
+          "sha": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+          "instances": [
+            "RUNNING"
+          ]
+        }
+      ]
+    }
+  ]
+}

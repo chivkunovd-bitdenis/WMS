@@ -1,0 +1,8 @@
+src/screens/ff/FfInboundRequestView.tsx(86,10): error TS2300: Duplicate identifier 'randomId'.
+src/screens/ff/FfInboundRequestView.tsx(115,10): error TS2300: Duplicate identifier 'randomId'.
+src/screens/v2/fbsPdfPrintTape.test.ts(2,29): error TS2307: Cannot find module 'pdf-lib' or its corresponding type declarations.
+src/screens/v2/fbsPdfPrintTape.test.ts(27,31): error TS7006: Parameter 'page' implicitly has an 'any' type.
+src/screens/v2/fbsPdfPrintTape.ts(1,29): error TS2307: Cannot find module 'pdf-lib' or its corresponding type declarations.
+src/screens/v2/fbsPickingListPrint.wms657.test.ts(5,29): error TS2307: Cannot find module 'pdf-lib' or its corresponding type declarations.
+src/screens/v2/wms673PrintRenderer.ts(8,29): error TS2307: Cannot find module 'pdf-lib' or its corresponding type declarations.
+src/utils/printMarkingCodeLabel.pagination.test.ts(6,29): error TS2307: Cannot find module 'pdf-lib' or its corresponding type declarations.

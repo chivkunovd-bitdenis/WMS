@@ -1,0 +1,669 @@
+diff --git a/backend/app/services/fbs_shipment_service.py b/backend/app/services/fbs_shipment_service.py
+index 96eb61c4a..56282fa55 100644
+--- a/backend/app/services/fbs_shipment_service.py
++++ b/backend/app/services/fbs_shipment_service.py
+@@ -120,7 +120,6 @@ from app.services.wildberries_errors import (
+     WildberriesClientError,
+     log_wb_client_error,
+     translate_wb_message,
+-    truncate_wb_response_body,
+     wb_error_context,
+     wb_error_ref,
+     wb_operator_message,
+@@ -202,6 +201,92 @@ class FbsShipmentError(Exception):
+         super().__init__(code)
+ 
+ 
++def _append_meta_validation_operator_error(
++    groups: list[dict[str, Any]],
++    *,
++    title: str,
++    order_id: int | None,
++    message: str | None = None,
++) -> None:
++    group = next(
++        (
++            item
++            for item in groups
++            if item["title"] == title and item.get("message") == message
++        ),
++        None,
++    )
++    if group is None:
++        group = {"title": title, "orders": []}
++        if message:
++            group["message"] = message
++        groups.append(group)
++    orders = group["orders"]
++    if order_id not in orders:
++        orders.append(order_id)
++
++
++def _meta_validation_operator_errors(
++    exc: WildberriesBusinessError,
++) -> list[dict[str, Any]]:
++    """Build the safe, human presentation without exposing WB metadata values."""
++    groups: list[dict[str, Any]] = []
++    for item in exc.meta_validation:
++        is_pending_kiz = (
++            item.key.casefold() == "sgtin"
++            and item.decision.casefold() == "pending"
++            and not (item.reason or "").strip()
++        )
++        if is_pending_kiz:
++            _append_meta_validation_operator_error(
++                groups,
++                title="Wildberries ещё обрабатывает КИЗы",
++                order_id=item.order_id,
++            )
++            continue
++
++        title = (
++            "Wildberries не принял КИЗы"
++            if item.key.casefold() == "sgtin"
++            else "Wildberries не принял метаданные заказа"
++        )
++        message: str | None = None
++        if item.reason and item.reason.strip():
++            human_reason = item.reason.strip()
++            if item.value:
++                human_reason = human_reason.replace(item.value, "КИЗ")
++            message = translate_wb_message(item.reason) or human_reason
++        elif item.decision:
++            # Only known translations are safe for the operator. An unknown
++            # decision is a technical value, so the human title remains enough.
++            message = translate_wb_message(item.decision)
++        _append_meta_validation_operator_error(
++            groups,
++            title=title,
++            order_id=item.order_id,
++            message=message,
++        )
++    return groups
++
++
++def _operator_error_orders_text(
++    orders: list[int | None],
++    *,
++    after_for: bool = False,
++) -> str:
++    known = [str(order_id) for order_id in orders if order_id is not None]
++    parts: list[str] = []
++    if known:
++        if after_for:
++            label = "заказа" if len(known) == 1 else "заказов"
++        else:
++            label = "заказ" if len(known) == 1 else "заказы"
++        parts.append(f"{label} № {', '.join(known)}")
++    if None in orders:
++        parts.append("Заказ не указан Wildberries")
++    return ", ".join(parts)
++
++
+ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
+     raw_messages = [
+         value.strip()
+@@ -210,23 +295,51 @@ def _meta_validation_message(exc: WildberriesBusinessError) -> tuple[str, bool]:
+     ]
+     dispatch_pending = any(_WB_DISPATCH_PENDING_MESSAGE in value.lower() for value in raw_messages)
+ 
+-    details: list[str] = []
+-    for item in exc.meta_validation:
+-        prefix = f"Заказ WB {item.order_id}: " if item.order_id is not None else ""
+-        # Причина может приехать и в reason, и в decision — переводим обе.
+-        # Слово `sgtinRetired` кладовщику не говорит ничего, а «код Честного
+-        # знака выведен из оборота» говорит, что делать.
+-        raw_reason = item.reason or item.decision
++    operator_errors = _meta_validation_operator_errors(exc)
++    all_pending_kiz = bool(operator_errors) and all(
++        group["title"] == "Wildberries ещё обрабатывает КИЗы"
++        for group in operator_errors
++    )
++    if all_pending_kiz:
++        orders = _operator_error_orders_text(
++            operator_errors[0]["orders"],
++            after_for=True,
++        )
++        return (
++            f"Wildberries ещё обрабатывает КИЗы для {orders}. "
++            "Подождите несколько минут и повторите передачу поставки",
++            True,
++        )
++
++    # Одна обычная ошибка уже много лет показывается в компактном формате
++    # «Заказ WB …: причина». Сохраняем его для совместимости соседних сценариев,
++    # когда WB дал человеческую причину или известный перевод decision. Новое
++    # групповое представление нужно для смешанных/множественных ответов и для
++    # безопасного случая, когда WB прислал только неизвестное техническое
++    # значение decision.
++    if len(exc.meta_validation) == 1:
++        item = exc.meta_validation[0]
++        human_reason = (item.reason or "").strip()
++        if item.value:
++            human_reason = human_reason.replace(item.value, "КИЗ")
++        raw_reason = (item.reason or item.decision or "").strip()
+         translated = translate_wb_message(raw_reason) if raw_reason else None
+-        if translated:
+-            reason = translated
+-        elif item.reason:
+-            reason = f"Wildberries ответил: {item.reason}"
+-        else:
+-            reason = f"маркировка {item.key} — {item.decision}"
+-        rendered = f"{prefix}{reason}"
+-        if rendered not in details:
+-            details.append(rendered)
++        if item.order_id is not None and (translated or human_reason):
++            reason = translated or f"Wildberries ответил: {human_reason}"
++            head = (
++                "Wildberries не принял поставку и просит исправить заказы: "
++                if dispatch_pending
++                else ""
++            )
++            return f"{head}Заказ WB {item.order_id}: {reason}", True
++
++    details: list[str] = []
++    for group in operator_errors:
++        orders = _operator_error_orders_text(group["orders"])
++        detail = f"{group['title']}: {orders}"
++        if group.get("message"):
++            detail = f"{detail} — {group['message']}"
++        details.append(detail)
+     # ⛔ Подробности по заказам показываем ВСЕГДА, если они есть.
+     #
+     # Раньше фраза WB «fix them to dispatch items» перехватывалась первой и
+@@ -2731,6 +2844,7 @@ async def deliver_supply(
+         )
+     except WildberriesBusinessError as exc:
+         meta_context = _meta_validation_context(exc)
++        operator_errors = _meta_validation_operator_errors(exc)
+         message, retryable = _meta_validation_message(exc)
+         await mark_operation_failed(
+             session,
+@@ -2747,8 +2861,11 @@ async def deliver_supply(
+                 "meta_validation": meta_context,
+                 "wb_code": exc.wb_code,
+                 "wb_message": exc.message,
+-                "wb_response_body": truncate_wb_response_body(exc.response_body),
++                "wb_response_body": exc.response_body,
+                 "wb_endpoint": exc.endpoint,
++                "operator_errors": operator_errors,
++                "operator_message": message,
++                "operator_retryable": retryable,
+             },
+             wb_supply_id=supply.wb_supply_id,
+             local_supply_id=supply.id,
+@@ -2757,7 +2874,7 @@ async def deliver_supply(
+         raise FbsShipmentError(
+             "meta_validation_fail",
+             message=message,
+-            context={"meta_validation": meta_context},
++            context={"operator_errors": operator_errors},
+             retryable=retryable,
+             http_status=409,
+         ) from exc
+diff --git a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+index a22a69752..d07bd3397 100644
+--- a/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
++++ b/frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx
+@@ -42,6 +42,7 @@ import { alpha } from '@mui/material/styles'
+ import { FfUnloadPickPage } from '../ff/unload-pick/FfUnloadPickPage'
+ import CloseIcon from '@mui/icons-material/Close'
+ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutlined'
++import WarningAmberOutlinedIcon from '@mui/icons-material/WarningAmberOutlined'
+ import DeleteOutlinedIcon from '@mui/icons-material/DeleteOutlined'
+ import LocalShippingOutlinedIcon from '@mui/icons-material/LocalShippingOutlined'
+ import MoreVertOutlinedIcon from '@mui/icons-material/MoreVertOutlined'
+@@ -143,6 +144,8 @@ import {
+   type FbsPrintAsset,
+   type FbsPrintBatch,
+   type FbsDeliveryPreflight,
++  type FbsDeliveryError,
++  type FbsDeliveryOperatorError,
+   type FbsScanAutoPrintReprintClaim,
+   type FbsWorkspace,
+   type FbsWorklistOrder,
+@@ -333,6 +336,55 @@ export function fbsPackingShowsSize(orders: PackingSizeOrder[], isOzon: boolean)
+   return orders.some((order) => fbsPackingSizes(order, isOzon).some((size) => size !== null))
+ }
+ 
++function normalizeDeliveryError(value: unknown): FbsDeliveryError | null {
++  if (!value || typeof value !== 'object') return null
++  const source = value as Record<string, unknown>
++  const context = source.context
++  if (!context || typeof context !== 'object') return null
++  const rawGroups = (context as Record<string, unknown>).operator_errors
++  if (!Array.isArray(rawGroups)) return null
++  const groups: FbsDeliveryOperatorError[] = []
++  for (const rawGroup of rawGroups) {
++    if (!rawGroup || typeof rawGroup !== 'object') continue
++    const group = rawGroup as Record<string, unknown>
++    const title = typeof group.title === 'string' ? group.title.trim() : ''
++    if (!title || !Array.isArray(group.orders)) continue
++    const orders: Array<number | null> = []
++    for (const order of group.orders) {
++      if (order !== null && (typeof order !== 'number' || !Number.isFinite(order))) continue
++      if (!orders.includes(order)) orders.push(order)
++    }
++    const message = typeof group.message === 'string' && group.message.trim()
++      ? group.message.trim()
++      : undefined
++    groups.push({ title, orders, ...(message ? { message } : {}) })
++  }
++  if (groups.length === 0) return null
++  return {
++    code: typeof source.code === 'string' ? source.code : 'meta_validation_fail',
++    message: typeof source.message === 'string' ? source.message : groups[0]!.title,
++    retryable: source.retryable === true,
++    context: { operator_errors: groups },
++  }
++}
++
++function deliveryErrorFromCause(cause: unknown): FbsDeliveryError | null {
++  if (!(cause instanceof FbsApiError) || cause.code !== 'meta_validation_fail') return null
++  return normalizeDeliveryError({
++    code: cause.code,
++    message: cause.message,
++    retryable: cause.retryable,
++    context: cause.context,
++  })
++}
++
++function deliveryErrorEntryCount(error: FbsDeliveryError | null): number {
++  return error?.context.operator_errors.reduce(
++    (count, group) => count + Math.max(1, group.orders.length),
++    0,
++  ) ?? 0
++}
++
+ function PackingSizeCell({ value, withCaption, valueColor }: {
+   value: string | null
+   withCaption: boolean
+@@ -471,18 +523,6 @@ function productLabelFromOrder(
+   }
+ }
+ 
+-async function renderBoxQrDataUrl(value: string): Promise<string> {
+-  const bwipjs = await import('bwip-js')
+-  const canvas = document.createElement('canvas')
+-  bwipjs.toCanvas(canvas, {
+-    bcid: 'qrcode',
+-    text: value,
+-    scale: 5,
+-    includetext: false,
+-  })
+-  return canvas.toDataURL('image/png')
+-}
+-
+ function Metric({ label, value }: { label: string; value: string }) {
+   return (
+     <Box>
+@@ -519,6 +559,13 @@ export function FfFbsSupplyWorkspace({
+   const [busy, setBusy] = useState(false)
+   const [error, setError] = useState<string | null>(null)
+   const [notice, setNotice] = useState<string | null>(null)
++  const [deliveryError, setDeliveryError] = useState<FbsDeliveryError | null>(
++    () => normalizeDeliveryError(initialWorkspace?.last_delivery_error),
++  )
++  const [deliveryErrorsOpen, setDeliveryErrorsOpen] = useState(false)
++  const [expandedDeliveryErrorGroups, setExpandedDeliveryErrorGroups] = useState<Set<number>>(
++    () => new Set(initialWorkspace?.last_delivery_error?.context.operator_errors.map((_, index) => index) ?? []),
++  )
+   // История заказа открывается прямо из состава поставки: оператор смотрит,
+   // что с заказом происходило, там же, где увидел сам заказ.
+   const [historyOpen, setHistoryOpen] = useState(false)
+@@ -791,6 +838,12 @@ export function FfFbsSupplyWorkspace({
+         if (!write.isCurrent()) return
+         if (!write.isLatest()) return next
+         setWorkspace(next)
++        const restoredDeliveryError = normalizeDeliveryError(next.last_delivery_error)
++        setDeliveryError(restoredDeliveryError)
++        if (!restoredDeliveryError) setDeliveryErrorsOpen(false)
++        setExpandedDeliveryErrorGroups(new Set(
++          restoredDeliveryError?.context.operator_errors.map((_, index) => index) ?? [],
++        ))
+         onApplied?.(next)
+         if (!silent) {
+           setStage((current) => readFbsWorkspaceStage(supplyId) ?? fbsStageAfterWorkspaceRefresh(
+@@ -811,9 +864,15 @@ export function FfFbsSupplyWorkspace({
+ 
+   useEffect(() => {
+     if (!open || !supplyId) return
++    const restoredDeliveryError = normalizeDeliveryError(initialWorkspace?.last_delivery_error)
+     setBusy(false)
+     setError(null)
+     setNotice(null)
++    setDeliveryError(restoredDeliveryError)
++    setDeliveryErrorsOpen(false)
++    setExpandedDeliveryErrorGroups(new Set(
++      restoredDeliveryError?.context.operator_errors.map((_, index) => index) ?? [],
++    ))
+     // «Повторить» держит операцию прежней поставки. Оставленная кнопка либо
+     // отправила бы её из открытой поставки, либо висела бы мёртвой.
+     setRetryAction(null)
+@@ -996,6 +1055,7 @@ export function FfFbsSupplyWorkspace({
+     // функция сохраняется и для «Повторить», чтобы повтор дал то же уведомление.
+     success: string | ((next: FbsWorkspace) => string),
+     onError?: (cause: unknown) => void,
++    onSuccess?: (next: FbsWorkspace) => void,
+   ) => {
+     const write = beginWorkspaceWrite()
+     setBusy(true)
+@@ -1035,16 +1095,34 @@ export function FfFbsSupplyWorkspace({
+       if (typeof success === 'string') message = success
+       else if (applied) message = success(next)
+       if (message) setNotice(message)
++      onSuccess?.(next)
+       return next
+     } catch (cause) {
+       if (!write.isCurrent()) return null
+       onError?.(cause)
+-      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
++      const structuredDeliveryError = deliveryErrorFromCause(cause)
++      if (structuredDeliveryError) {
++        // A silent workspace read may have started after this delivery request
++        // but completed against the database before the failure was saved. Its
++        // stale last_delivery_error must not overwrite the result the operator
++        // has just received. Advance the shared sequence so every read already
++        // in flight loses the same race as any other stale workspace snapshot.
++        workspaceWriteSeq.current += 1
++        setDeliveryError(structuredDeliveryError)
++        setDeliveryErrorsOpen(false)
++        setExpandedDeliveryErrorGroups(new Set(
++          structuredDeliveryError.context.operator_errors.map((_, index) => index),
++        ))
++      } else {
++        setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Операция не выполнена.')
++      }
+       if (cause instanceof FbsApiError && cause.retryable) {
+         // Кнопка живёт в общем Alert окна. Повторяем только пока открыта та же
+         // поставка, в которой ошибка возникла: иначе нажатие отправило бы её
+         // операцию, а ответ лёг бы на состав открытой сейчас поставки.
+-        setRetryAction(() => () => { if (write.isCurrent()) void run(operation, success, onError) })
++        setRetryAction(() => () => {
++          if (write.isCurrent()) void run(operation, success, onError, onSuccess)
++        })
+       }
+       return null
+     } finally {
+@@ -2108,43 +2186,8 @@ export function FfFbsSupplyWorkspace({
+     setPrintPreviewOpen(true)
+   }
+ 
+-  const openBoxQrPreview = async (box: FbsWorkspace['boxes'][number]) => {
+-    if (boxOperationsDisabled) return
+-    setBusy(true)
+-    setError(null)
+-    try {
+-      const asset: FbsPrintAsset = {
+-        id: `box-qr-${box.id}`,
+-        kind: 'box_qr',
+-        status: 'ready',
+-        content_type: 'image/png',
+-        width_mm: 58,
+-        height_mm: 40,
+-        preview_url: await renderBoxQrDataUrl(box.barcode),
+-        download_url: null,
+-        checksum: null,
+-        applied_at: null,
+-        error: null,
+-      }
+-      setPrintBatch({
+-        requested: 1,
+-        ready: 1,
+-        missing: 0,
+-        failed: 0,
+-        assets: [asset],
+-        order_errors: [],
+-      })
+-      setPrintPreviewOpen(true)
+-    } catch (cause) {
+-      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'QR короба не подготовлен.')
+-    } finally {
+-      setBusy(false)
+-    }
+-  }
+-
+-  // Лента QR всех коробов: то же, что делает кнопка «QR» у отдельного короба,
+-  // только разом. Берём настоящий стикер грузоместа от WB, свой QR из внутреннего
+-  // штрихкода рисуем лишь для коробов без грузоместа — как и в одиночной кнопке.
++  // WMS-681: печатаем только настоящие этикетки WB. Внутренний FBS-штрихкод
++  // не является грузоместом WB и не может заменять отсутствующий стикер.
+   const openAllBoxQrPreview = async () => {
+     if (boxOperationsDisabled) return
+     const boxes = workspace?.boxes ?? []
+@@ -2158,32 +2201,18 @@ export function FfFbsSupplyWorkspace({
+       openAssetPreview(assets)
+       return
+     }
+-    const notReady = boxes.filter((box) => box.wb_trbx_id && !box.qr_asset?.preview_url)
++    const notReady = boxes.filter((box) => !box.wb_trbx_id || box.qr_asset?.status !== 'ready' || !box.qr_asset.preview_url)
+     setBusy(true)
+     setError(null)
+     try {
+       const assets: FbsPrintAsset[] = []
+       for (const box of boxes) {
+-        if (box.wb_trbx_id) {
+-          if (box.qr_asset?.preview_url) assets.push(box.qr_asset)
+-          continue
++        if (box.wb_trbx_id && box.qr_asset?.status === 'ready' && box.qr_asset.preview_url) {
++          assets.push(box.qr_asset)
+         }
+-        assets.push({
+-          id: `box-qr-${box.id}`,
+-          kind: 'box_qr',
+-          status: 'ready',
+-          content_type: 'image/png',
+-          width_mm: 58,
+-          height_mm: 40,
+-          preview_url: await renderBoxQrDataUrl(box.barcode),
+-          download_url: null,
+-          checksum: null,
+-          applied_at: null,
+-          error: null,
+-        })
+       }
+       if (assets.length === 0) {
+-        setError('QR грузомест ещё не получены от WB — откройте QR любого короба, чтобы запросить.')
++        setError('Этикетки грузомест WB не готовы. Проверьте результат создания коробов; внутренние QR WMS вместо них не печатаются.')
+         return
+       }
+       if (notReady.length > 0) {
+@@ -2361,33 +2390,41 @@ export function FfFbsSupplyWorkspace({
+ 
+   const deliver = async () => {
+     if (!workspace || deliveryConfirmed) return
+-    const next = await run(
+-      () =>
+-        deliverFbsSupply(token, authHeaders, workspace.supply.id, {
+-          // RetryAction stores this callback.  Read the current ref at click
+-          // time so a definitive failure cannot replay the key that the error
+-          // handler has already replaced.
+-          idempotency_key: deliveryKeyRef.current,
+-          confirmed_preflight_version: deliveryPreflight?.version,
+-      }),
++    const supplyIdAtStart = workspace.supply.id
++    const performDelivery = async () => {
++      // Каждое ручное нажатие создаёт новый текущий результат. Пока запрос идёт,
++      // прежние причины больше не выдаются за ответ новой попытки.
++      setDeliveryError(null)
++      setDeliveryErrorsOpen(false)
++      const delivered = await deliverFbsSupply(token, authHeaders, supplyIdAtStart, {
++        // RetryAction stores this callback. Read the current ref at click time,
++        // so a definitive failure cannot replay an already replaced key.
++        idempotency_key: deliveryKeyRef.current,
++        confirmed_preflight_version: deliveryPreflight?.version,
++      })
++      return delivered
++    }
++    await run(
++      performDelivery,
+       '',
+       (cause) => {
+         if (
+           cause instanceof FbsApiError
+           && fbsDeliveryErrorKeepsIdempotencyKey(cause)
+         ) return
+-        clearPersistentOperationKey(workspace.supply.id, 'delivery')
+-        const replacementKey = persistentOperationKey(workspace.supply.id, 'delivery')
++        clearPersistentOperationKey(supplyIdAtStart, 'delivery')
++        const replacementKey = persistentOperationKey(supplyIdAtStart, 'delivery')
+         deliveryKeyRef.current = replacementKey
+       },
++      () => {
++        clearPersistentOperationKey(supplyIdAtStart, 'delivery')
++        deliveryKeyRef.current = createFbsIdempotencyKey()
++        setDeliverySubmitted(true)
++        setDeliveryError(null)
++        setDeliveryErrorsOpen(false)
++        selectStage('boxes')
++      },
+     )
+-    if (next) {
+-      clearPersistentOperationKey(workspace.supply.id, 'delivery')
+-      const nextKey = createFbsIdempotencyKey()
+-      deliveryKeyRef.current = nextKey
+-      setDeliverySubmitted(true)
+-      selectStage('boxes')
+-    }
+   }
+ 
+   const openDeliveryConfirmation = async () => {
+@@ -3268,6 +3305,46 @@ export function FfFbsSupplyWorkspace({
+   // Разметка та же; в обычной карточке они стоят на прежних местах.
+   const workspaceMessages = (
+     <>
++          {deliveryError && deliveryErrorEntryCount(deliveryError) === 1 ? (() => {
++            const group = deliveryError.context.operator_errors[0]!
++            const order = group.orders[0] ?? null
++            return (
++              <Alert
++                severity="error"
++                sx={{ mb: 2 }}
++                action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
++              >
++                <Typography variant="subtitle2">{group.title}</Typography>
++                <Typography variant="body2">{deliveryError.message}</Typography>
++                {group.message ? <Typography variant="body2">{group.message}</Typography> : null}
++                <Typography variant="body2">
++                  {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
++                </Typography>
++              </Alert>
++            )
++          })() : null}
++          {deliveryError && deliveryErrorEntryCount(deliveryError) > 1 ? (
++            <Alert
++              severity="error"
++              sx={{ mb: 2 }}
++              action={deliveryError.retryable ? <Button color="inherit" size="small" onClick={() => void deliver()}>Повторить</Button> : undefined}
++            >
++              <Stack direction="row" spacing={1} sx={{ alignItems: 'center' }}>
++                <IconButton
++                  color="error"
++                  size="small"
++                  aria-label="Показать ошибки передачи поставки"
++                  data-testid="fbs-delivery-errors-toggle"
++                  onClick={() => setDeliveryErrorsOpen(true)}
++                >
++                  <WarningAmberOutlinedIcon />
++                </IconButton>
++                <Typography variant="body2">
++                  {`Wildberries не принял передачу: ${deliveryErrorEntryCount(deliveryError)} ошибки`}
++                </Typography>
++              </Stack>
++            </Alert>
++          ) : null}
+           {error ? <Alert severity="error" sx={{ mb: 2 }} action={retryAction ? <Button color="inherit" size="small" onClick={retryAction}>Повторить</Button> : undefined}>{error}</Alert> : null}
+           {notice ? <Alert severity="success" sx={{ mb: 2 }}>{notice}</Alert> : null}
+           {stageIsCurrent && stageBlockers.length ? (
+@@ -3904,16 +3981,13 @@ export function FfFbsSupplyWorkspace({
+                                   else void retryBoxQr(box.id)
+                                   return
+                                 }
+-                                // Real WB cargo-place QR whenever this box has one linked
+-                                // (any delivery_type); otherwise fall back to the local
+-                                // internal-barcode preview (e.g. boxes created before
+-                                // cargo places were enabled for warehouse/SC).
++                                // WMS-681: never substitute a local QR for a WB label.
+                                 if (box.wb_trbx_id) {
+                                   if (box.qr_asset?.preview_url) openAssetPreview([box.qr_asset])
+                                   else void retryBoxQr(box.id)
+                                   return
+                                 }
+-                                void openBoxQrPreview(box)
++                                setError('Грузоместо WB для короба не создано. Проверьте результат создания коробов; внутренний QR WMS не является этикеткой WB.')
+                               }}
+                               data-task-id="FBS-09"
+                             >
+@@ -4024,6 +4098,63 @@ export function FfFbsSupplyWorkspace({
+ 
+   const workspaceDialogs = (
+     <>
++      {deliveryErrorsOpen && deliveryError ? (
++        <Dialog
++          open
++          onClose={() => setDeliveryErrorsOpen(false)}
++          maxWidth="sm"
++          fullWidth
++        >
++          <DialogTitle>Ошибки передачи поставки</DialogTitle>
++          <DialogContent dividers data-testid="fbs-delivery-errors-dialog">
++            <Stack spacing={1}>
++              <Typography variant="body2">{deliveryError.message}</Typography>
++              {deliveryError.context.operator_errors.map((group, index) => {
++                const expanded = expandedDeliveryErrorGroups.has(index)
++                const orders = group.orders.length > 0 ? group.orders : [null]
++                return (
++                  <Box key={`${group.title}-${group.message ?? ''}-${index}`}>
++                    <Button
++                      fullWidth
++                      color="inherit"
++                      aria-expanded={expanded}
++                      onClick={() => setExpandedDeliveryErrorGroups((current) => {
++                        const next = new Set(current)
++                        if (next.has(index)) next.delete(index)
++                        else next.add(index)
++                        return next
++                      })}
++                      sx={{ justifyContent: 'space-between', textAlign: 'left' }}
++                    >
++                      <Typography component="span" variant="subtitle2">{group.title}</Typography>
++                      <Typography component="span" variant="caption" color="text.secondary">
++                        {expanded ? 'Свернуть' : 'Раскрыть'}
++                      </Typography>
++                    </Button>
++                    <Collapse in={expanded}>
++                      {group.message ? (
++                        <Typography variant="body2" sx={{ px: 1, pt: 0.5 }}>
++                          {group.message}
++                        </Typography>
++                      ) : null}
++                      <Box component="ol" sx={{ mt: 1, mb: 0, pl: 4 }}>
++                        {orders.map((order, orderIndex) => (
++                          <Typography component="li" variant="body2" key={`${order ?? 'missing'}-${orderIndex}`}>
++                            {order === null ? 'Заказ не указан Wildberries' : `Заказ № ${order}`}
++                          </Typography>
++                        ))}
++                      </Box>
++                    </Collapse>
++                  </Box>
++                )
++              })}
++            </Stack>
++          </DialogContent>
++          <DialogActions>
++            <Button onClick={() => setDeliveryErrorsOpen(false)}>Закрыть</Button>
++          </DialogActions>
++        </Dialog>
++      ) : null}
+       <ErrorBoundary component="FbsPrintPreviewDialog"><FbsPrintPreviewDialog
+         token={token}
+         authHeaders={authHeaders}
+@@ -4544,7 +4675,7 @@ export function FfFbsSupplyWorkspace({
+   // WMS-574: рамка поставки в окне групповой сборки — та же упаковка, те же
+   // короба и окна этой карточки, только в раскладке макета (FbsAssemblySupplyFrame).
+   if (assemblyFrame) {
+-    const frameMessages = error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
++    const frameMessages = deliveryError || error || notice || (stageIsCurrent && stageBlockers.length) || partialRejectionAlert || !packagingEditable
+       ? (
+         <>
+           {workspaceMessages}

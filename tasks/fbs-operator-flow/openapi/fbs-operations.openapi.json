@@ -622,6 +622,224 @@
         ]
       }
     },
+    "/operations/fbs-orders/{order_id}/ozon-exemplar-documents": {
+      "get": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Get Ozon Exemplar Documents",
+        "operationId": "get_ozon_exemplar_documents_operations_fbs_orders__order_id__ozon_exemplar_documents_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Get Ozon Exemplar Documents Operations Fbs Orders  Order Id  Ozon Exemplar Documents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Put Ozon Exemplar Documents",
+        "operationId": "put_ozon_exemplar_documents_operations_fbs_orders__order_id__ozon_exemplar_documents_put",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OzonExemplarDocumentsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Put Ozon Exemplar Documents Operations Fbs Orders  Order Id  Ozon Exemplar Documents Put"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-orders/{order_id}/ozon-exemplar-documents/prepare": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Prepare Ozon Exemplar Documents",
+        "operationId": "prepare_ozon_exemplar_documents_operations_fbs_orders__order_id__ozon_exemplar_documents_prepare_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Prepare Ozon Exemplar Documents Operations Fbs Orders  Order Id  Ozon Exemplar Documents Prepare Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/operations/fbs-orders/{order_id}/ozon-exemplar-documents/absent": {
+      "post": {
+        "tags": [
+          "operations"
+        ],
+        "summary": "Set Ozon Exemplar Documents Absent",
+        "operationId": "set_ozon_exemplar_documents_absent_operations_fbs_orders__order_id__ozon_exemplar_documents_absent_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "order_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Order Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OzonAbsentDocumentsBody"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true,
+                  "title": "Response Set Ozon Exemplar Documents Absent Operations Fbs Orders  Order Id  Ozon Exemplar Documents Absent Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/operations/fbs-orders/{order_id}/metadata": {
       "get": {
         "tags": [
@@ -8197,6 +8415,16 @@
             "title": "Wb Sync Stale",
             "default": false
           },
+          "last_delivery_error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsLastDeliveryErrorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "server_now": {
             "type": "string",
             "title": "Server Now"
@@ -9017,6 +9245,45 @@
         ],
         "title": "FbsDeliveryCheckOut"
       },
+      "FbsDeliveryOperatorErrorOut": {
+        "properties": {
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "orders": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Orders"
+          },
+          "message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "title",
+          "orders"
+        ],
+        "title": "FbsDeliveryOperatorErrorOut"
+      },
       "FbsDeliveryPreflightOut": {
         "properties": {
           "can_deliver": {
@@ -9141,6 +9408,22 @@
           "replayed": {
             "type": "boolean",
             "title": "Replayed",
+            "default": false
+          },
+          "code_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Id"
+          },
+          "has_label_artifact": {
+            "type": "boolean",
+            "title": "Has Label Artifact",
             "default": false
           }
         },
@@ -9468,6 +9751,49 @@
           "hints"
         ],
         "title": "FbsKizValidateOut"
+      },
+      "FbsLastDeliveryErrorContextOut": {
+        "properties": {
+          "operator_errors": {
+            "items": {
+              "$ref": "#/components/schemas/FbsDeliveryOperatorErrorOut"
+            },
+            "type": "array",
+            "title": "Operator Errors"
+          }
+        },
+        "type": "object",
+        "required": [
+          "operator_errors"
+        ],
+        "title": "FbsLastDeliveryErrorContextOut"
+      },
+      "FbsLastDeliveryErrorOut": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "retryable": {
+            "type": "boolean",
+            "title": "Retryable"
+          },
+          "context": {
+            "$ref": "#/components/schemas/FbsLastDeliveryErrorContextOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message",
+          "retryable",
+          "context"
+        ],
+        "title": "FbsLastDeliveryErrorOut"
       },
       "FbsOrderCancelBody": {
         "properties": {
@@ -11980,6 +12306,22 @@
               }
             ],
             "title": "Kiz"
+          },
+          "code_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Code Id"
+          },
+          "has_label_artifact": {
+            "type": "boolean",
+            "title": "Has Label Artifact",
+            "default": false
           }
         },
         "type": "object",
@@ -15569,6 +15911,16 @@
             "title": "Wb Sync Stale",
             "default": false
           },
+          "last_delivery_error": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FbsLastDeliveryErrorOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "server_now": {
             "type": "string",
             "title": "Server Now"
@@ -16492,6 +16844,33 @@
           "barcode"
         ],
         "title": "InboundBoxBarcodeBody"
+      },
+      "InboundBoxBatchCreate": {
+        "properties": {
+          "quantity": {
+            "type": "integer",
+            "maximum": 1000.0,
+            "minimum": 1.0,
+            "title": "Quantity"
+          },
+          "mutation_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mutation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "quantity"
+        ],
+        "title": "InboundBoxBatchCreate"
       },
       "InboundBoxDamageIn": {
         "properties": {
@@ -23273,6 +23652,19 @@
         ],
         "title": "OutboundShipmentRequestSummaryOut"
       },
+      "OzonAbsentDocumentsBody": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "title": "Expected Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "OzonAbsentDocumentsBody"
+      },
       "OzonAccountPutIn": {
         "properties": {
           "client_id": {
@@ -23496,6 +23888,61 @@
           "last_sync_error"
         ],
         "title": "OzonAccountStatusOut"
+      },
+      "OzonExemplarDocumentsBody": {
+        "properties": {
+          "product_id": {
+            "type": "integer",
+            "title": "Product Id"
+          },
+          "exemplar_id": {
+            "type": "integer",
+            "title": "Exemplar Id"
+          },
+          "gtd": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gtd"
+          },
+          "is_gtd_absent": {
+            "type": "boolean",
+            "title": "Is Gtd Absent",
+            "default": false
+          },
+          "rnpt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rnpt"
+          },
+          "is_rnpt_absent": {
+            "type": "boolean",
+            "title": "Is Rnpt Absent",
+            "default": false
+          },
+          "expected_version": {
+            "type": "integer",
+            "title": "Expected Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "product_id",
+          "exemplar_id",
+          "expected_version"
+        ],
+        "title": "OzonExemplarDocumentsBody"
       },
       "OzonFbsReturnPointOut": {
         "properties": {
@@ -32357,6 +32804,51 @@
           "moved_qty"
         ],
         "title": "SortingScanOut"
+      },
+      "SortingUndoIn": {
+        "properties": {
+          "inbound_request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Inbound Request Id"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Operation Id"
+          },
+          "target_operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Target Operation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "inbound_request_id",
+          "operation_id",
+          "target_operation_id"
+        ],
+        "title": "SortingUndoIn",
+        "description": "WMS-650 «назад»: отменить подтверждённое действие раскладки документа."
+      },
+      "SortingUndoOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "target_operation_id": {
+            "type": "string",
+            "title": "Target Operation Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "target_operation_id"
+        ],
+        "title": "SortingUndoOut"
       },
       "StaffAccountCreate": {
         "properties": {

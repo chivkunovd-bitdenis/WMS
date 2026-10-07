@@ -1,0 +1,13 @@
+{
+  "id": "command05",
+  "name": "PostgreSQL locks and immutable migration guards",
+  "command": "pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply",
+  "working_directory": "backend",
+  "command_sha256": "54cd15743625ff0dbdf3146355f9bdfe605c9e66cad4d5cf06a65da409d95962",
+  "exit_code": 0,
+  "started_epoch": 1791341116.925978,
+  "completed_epoch": 1791341128.5448444,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

@@ -1,0 +1,271 @@
+{
+  "verdict": "PASS R52 source/native contract and exact prepared product-reference migration",
+  "reviewed_source": "dce1b012e0929e227b182863bb14a378d04d3412",
+  "technically_approved_exact_PRODUCT_reference": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "frozen_contract": "f1e355525edbf41177d379c70cc5ee721986c967",
+  "nine_contract_files_byte_preserved": [
+    "backend/tests/test_stock_publish_nested_commit_contract.py",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/README.md",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/before.log",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/before.xml",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/contract.json",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/ordinary-mutation.log",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/ordinary-mutation.xml",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/preservation-proof.json",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/run-target.py"
+  ],
+  "only_product_change": "two-line nested-transaction early return before pending set access/reset",
+  "stock_module_sha256": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
+  "new_test_sha256": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+  "whole_module_other_bytes_preserved": true,
+  "APP_diff_to_PRODUCT": [],
+  "APP_diff_to_old_PRODUCT": [
+    "backend/app/services/fbs_stock_publish_service.py",
+    "frontend/src/integrations/cryptoProCades.test.ts"
+  ],
+  "developer_manifest_members_verified": 8,
+  "saved_receipts": {
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/before.xml": {
+      "sha256": "038f6083280215611c32b2dd65150a4afe493f40058b9b5882c974cb6b0ed93d",
+      "counts": {
+        "failure": 3,
+        "pass": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+          "status": "failure",
+          "detail": "AssertionError: SAVEPOINT commit must not dispatch while the outer document is open\nassert [{'tenant': U...commit', ...}] == []\n  \n  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}\n  Use -v to get more diff"
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+          "status": "failure",
+          "detail": "AssertionError: the original coalesced intent must dispatch once at the true outer commit\nassert [{'tenant': U...commit', ...}] == [{'tenant': U...commit', ...}]\n  \n  At index 0 diff: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', 'nested': True} != {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', 'nested': False}\n  Use -v to get more diff"
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+          "status": "failure",
+          "detail": "AssertionError: a rolled-back outer document must never have dispatched publication\nassert [{'tenant': U...commit', ...}] == []\n  \n  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}\n  Use -v to get more diff"
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/ordinary-mutation.xml": {
+      "sha256": "9c4e89400e05740acabe4b6ba9a77586dc49706279d4bf5e9fc83101a6a852c3",
+      "counts": {
+        "failure": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+          "status": "failure",
+          "detail": "AssertionError: assert [] == [{'tenant': U...commit', ...}]\n  \n  Right contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', ...}\n  Use -v to get more diff"
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/precode-red.xml": {
+      "sha256": "bf4cb62821304194871e7a2049801d731c5d34ba1f75d69538ebe212f16d94d9",
+      "counts": {
+        "failure": 3,
+        "pass": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+          "status": "failure",
+          "detail": "AssertionError: SAVEPOINT commit must not dispatch while the outer document is open\nassert [{'tenant': U...commit', ...}] == []\n  \n  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}\n  Use -v to get more diff"
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+          "status": "failure",
+          "detail": "AssertionError: the original coalesced intent must dispatch once at the true outer commit\nassert [{'tenant': U...commit', ...}] == [{'tenant': U...commit', ...}]\n  \n  At index 0 diff: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', 'nested': True} != {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', 'nested': False}\n  Use -v to get more diff"
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+          "status": "failure",
+          "detail": "AssertionError: a rolled-back outer document must never have dispatched publication\nassert [{'tenant': U...commit', ...}] == []\n  \n  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}\n  Use -v to get more diff"
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/targeted-green.xml": {
+      "sha256": "ed94e84dbfe4dc3dabbd533a824c74d8460f8c1a52c7019059db6bfa384a5e01",
+      "counts": {
+        "pass": 10,
+        "skipped": 1
+      },
+      "cases": [
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_read_only_wb_token_is_reported_distinctly",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_schedule_collapses_duplicates_and_skips_rollback",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_publish_lock_survives_business_commits_and_does_not_block_delivery",
+          "status": "skipped",
+          "detail": "Real PostgreSQL advisory locks required"
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_drain_removes_finished_task_even_when_its_done_callback_has_not_run",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_picking_service_allows_sorting_zone",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_outbound_reservation_publishes_stock",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "tests.test_fbs_stock_publish_on_movement::test_movement_publishes_stock_once_per_seller",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-before.xml": {
+      "sha256": "89f052552cc7d925d908a25b1b2e21c40fb55fd0e82b5bf1953bd2e379245dad",
+      "counts": {
+        "failure": 1,
+        "pass": 2
+      },
+      "cases": [
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+          "status": "failure",
+          "detail": "AssertionError: 'python scripts/ci/product_scope.py --root . --trusted-ref 1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333' not found in '    timeout-minutes: 10\\n    name: охрана\\n    needs: baseline\\n    runs-on: ubuntu-latest\\n    steps:\\n      - uses: actions/checkout@v4\\n        with:\\n          fetch-depth: 0\\n      - uses: actions/setup-python@v5\\n        with:\\n          python-version: \"3.11\"\\n      - name: Install infrastructure test dependencies\\n        run: python -m pip install pytest pytest-xdist\\n      - name: Verify whole candidate against the accepted product reference\\n        run: python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d\\n      - name: Infrastructure tests (not business guards)\\n        run: |\\n          python -m unittest discover -s scripts/ci/tests -p \\'test_*.py\\' -v\\n          python -m unittest discover -s scripts/ci -p \\'test_check_task_documents.py\\' -v\\n      - name: Execute all product-scope contracts and persist receipt\\n        run: |\\n          python -m pytest -q scripts/ci/tests/test_product_scope.py --junitxml=\"$RUNNER_TEMP/product-scope.xml\"\\n          python -c \\'import json,os,pathlib; pathlib.Path(os.environ[\"RUNNER_TEMP\"],\"product-scope-receipt.json\").write_text(json.dumps(dict(version=1,sha=os.environ[\"GITHUB_SHA\"],run_id=int(os.environ[\"GITHUB_RUN_ID\"]),run_attempt=int(os.environ[\"GITHUB_RUN_ATTEMPT\"]),report=\"product-scope.xml\"))+\"\\\\n\")\\'\\n      - name: Persist exact full-backend shard infrastructure cases\\n        run: >-\\n          python -m pytest -q scripts/ci/tests/test_backend_shards.py\\n          scripts/ci/tests/test_backend_shard_failclosed.py\\n          scripts/ci/tests/test_ci_release_additions.py\\n          scripts/ci/tests/test_backend_shard_redis_setup.py\\n          --junitxml=\"$RUNNER_TEMP/ci-shards.xml\"\\n      - uses: actions/upload-artifact@v4\\n        if: always()\\n        with:\\n          name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}\\n          path: |\\n            ${{ runner.temp }}/product-scope.xml\\n            ${{ runner.temp }}/product-scope-receipt.json\\n            ${{ runner.temp }}/ci-shards.xml\\n          if-no-files-found: error\\n          retention-days: 14\\n      - name: Verify against the checker and manifest from trusted BASE\\n        id: integrity\\n        env:\\n          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}\\n        run: |\\n          CHECKER=\"$RUNNER_TEMP/check_regression_guards.py\"\\n          if git cat-file -e \"$BASE_SHA:scripts/ci/check_regression_guards.py\" 2>/dev/null; then\\n            git show \"$BASE_SHA:scripts/ci/check_regression_guards.py\" > \"$CHECKER\"\\n            python \"$CHECKER\" --root \"$GITHUB_WORKSPACE\" --base \"$BASE_SHA\"\\n          else\\n            echo \"Bootstrap only: trusted BASE has no checker; no business guard protection claimed.\"\\n            python scripts/ci/check_regression_guards.py --base \"$BASE_SHA\" --allow-bootstrap\\n          fi\\n      - name: Preserve accepted process tests, fixtures and execution commands\\n        env:\\n          BASE_SHA: ${{ needs.baseline.outputs.base_sha }}\\n        run: |\\n          set -euo pipefail\\n          if git cat-file -e \"$BASE_SHA:guards/PROCESS_CONTRACTS.json\" 2>/dev/null; then\\n            git show \"$BASE_SHA:scripts/ci/process_contracts.py\" > \"$RUNNER_TEMP/process_contracts.py\"\\n            python \"$RUNNER_TEMP/process_contracts.py\" --root \"$GITHUB_WORKSPACE\" --base \"$BASE_SHA\"\\n          else\\n            echo \\'BOOTSTRAP: process protection is being introduced; independent acceptance is still required.\\'\\n            python scripts/ci/process_contracts.py --base \"$BASE_SHA\" --bootstrap\\n          fi\\n      - name: Install backend guard dependencies\\n        if: steps.integrity.outputs.backend_tests != \\'0\\'\\n        run: pip install -e \\'./backend[dev]\\'\\n      - name: Approved backend guards\\n        if: steps.integrity.outputs.backend_tests != \\'0\\'\\n        working-directory: backend\\n        run: pytest -n auto tests/guards\\n      - uses: actions/setup-node@v4\\n        if: steps.integrity.outputs.frontend_tests != \\'0\\'\\n        with:\\n          node-version: \"20\"\\n          cache: npm\\n          cache-dependency-path: frontend/package-lock.json\\n      - name: Approved frontend guards\\n        if: steps.integrity.outputs.frontend_tests != \\'0\\'\\n        working-directory: frontend\\n        run: |\\n          npm ci\\n          npx vitest run src/guards\\n'"
+        },
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-after.xml": {
+      "sha256": "9ff4cebe1ee6b715d71948291dda5eb217203fb16098c34fb1bd0383eeea7ab1",
+      "counts": {
+        "pass": 3
+      },
+      "cases": [
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
+          "status": "pass",
+          "detail": ""
+        },
+        {
+          "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
+          "status": "pass",
+          "detail": ""
+        }
+      ]
+    }
+  },
+  "full_ruff_saved": "PASS",
+  "full_mypy_saved": "PASS563",
+  "existing_PostgreSQL_skip": {
+    "id": "tests.test_fbs_stock_publish_on_movement::test_publish_lock_survives_business_commits_and_does_not_block_delivery",
+    "status": "skipped",
+    "detail": "Real PostgreSQL advisory locks required"
+  },
+  "policy_sha256": "7307bc57f5a585eeb56f5287eb73550a91e54fbda272040e0bba947474f5274c",
+  "protected_regular_files": 233,
+  "modes": {
+    "100644": 226,
+    "100755": 7
+  },
+  "actual_git_rows_sha256": "e3d2d9061317d1b6a05d9b0482f62f97bae0fb0244045cdab08805c7c50cbb4d",
+  "suites": 22,
+  "required_case_ids": 1184,
+  "old230_files_1180_IDs_retained": true,
+  "changed_existing_protected_hashes": [
+    {
+      "path": ".github/workflows/ci.yml",
+      "before": "c21e5fa87d961ffea9e502fd74310386e63b52da15ebce5376dd04bfced7737a",
+      "after": "1888cd23eddfc95d7c3314423f22f2dcef8453371ff4039ce30ddd7023fa9a82"
+    },
+    {
+      "path": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+      "before": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c",
+      "after": "092a798ffa11db86ea3fca9c7194d6a8727a079301c41690d5c9860314afa13c"
+    },
+    {
+      "path": "scripts/ci/tests/test_ci_release_additions.py",
+      "before": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+      "after": "8fc3231a1eee6a90d76543d59ccaa6d07df2b131dcb918e001491d347a1d8e7e"
+    }
+  ],
+  "new_protected_paths": [
+    "backend/app/services/fbs_stock_publish_service.py",
+    "backend/tests/test_stock_publish_nested_commit_contract.py",
+    "backend/uv.lock"
+  ],
+  "backend_required_cases": 619,
+  "appended_exact_JUnit_IDs": [
+    "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+    "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+  ],
+  "scope_script_frozen51_checker_and_other_old_bytes_preserved": true,
+  "source_closure_hashes": {
+    "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+    "backend/app/services/fbs_stock_publish_service.py": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "historical_SQLite_lock_owner": "UNKNOWN",
+  "prior_causal_collector_four_duplicate_labels_outside_target_and_statement_not_lockwait_limits": "RETAINED",
+  "new_test_build_browser_CI_runs": [],
+  "distinct_analyst_acceptance": "NEXT",
+  "final_SOURCE_pin_approval": false,
+  "full_CI_release_or_deploy_PASS": false
+}

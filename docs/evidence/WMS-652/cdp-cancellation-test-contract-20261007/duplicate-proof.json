@@ -1,0 +1,19 @@
+{
+  "review_commit": "5c6fbc5298f1f62575b7b445f602542cf7b74d70",
+  "case": "CDP5",
+  "mutation": "Same existing broad-retirement corruption in actual class source COPY; first retirement is marked, duplicate also incorrectly marked.",
+  "command": "node --require <untracked-copy-reader.cjs> --test --test-reporter=tap --test-name-pattern=CDP5 frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+  "original_sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+  "mutated_copy_sha256": "9d3fe943b4ac0f955a2a36b1a7351f8e7a26dae6e752084282b6eb531ac6f94a",
+  "raw": "mutation-duplicate.tap",
+  "exit_code": 1,
+  "pass": 0,
+  "fail": 1,
+  "skipped": 0,
+  "first_retirement_prerequisite_passed": true,
+  "failure_reason": "strictFailure rejects the second resolved retirement",
+  "observed_native_commands": 2,
+  "no_setup_failure": true,
+  "tracked_browser_unchanged": true,
+  "temporary_copy_removed": true
+}

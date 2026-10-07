@@ -1,0 +1,3 @@
+69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d  frontend/tests-e2e/wms672-box-labels.test.mjs
+2438d01e8a7a7df6ba73e83cbbdfce3bc4123832c3524682e129dd2176032f74  frontend/src/utils/printBarcodeLabel.ts
+b549cda5add9fa01a75ada7528382042c42604610273d67f00549e1a56930504  frontend/src/screens/ff/FfInboundRequestView.tsx

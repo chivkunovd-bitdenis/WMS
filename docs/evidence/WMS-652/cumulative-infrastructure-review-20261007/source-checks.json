@@ -1,0 +1,308 @@
+{
+  "verdict": "TECHNICAL_PASS_FIRST_THREE_INFRASTRUCTURE_CORRECTIONS",
+  "source": "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f",
+  "comparison": "9dae4b19f6d4dca554200e08282579414a110848",
+  "policy_sha256": "48c906d70aa0f2ffa7de856b42acc423dd7fba47bb0a42ee07d8713d662a762b",
+  "protected_files": 229,
+  "regular_file_modes": {
+    "100644": 222,
+    "100755": 7
+  },
+  "all_git_blob_hashes_and_modes_match": true,
+  "protected_rows_sha256": "dd5fd4459d25c6a105b99e902d4623c28436d71344901e4e50406f3271ee29ac",
+  "changed_protected_hashes": {
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": {
+      "old": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+      "new": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c"
+    },
+    "scripts/ci/tests/test_ci_release_additions.py": {
+      "old": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+      "new": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a"
+    }
+  },
+  "unchanged_protected_files": 227,
+  "suites": 21,
+  "case_ids": 1173,
+  "suite_definitions_byte_identical": true,
+  "suite_case_counts": {
+    "backend-fbs": 615,
+    "pg-663-retry": 5,
+    "pg-662-f6": 4,
+    "pg-663-669-670-683": 6,
+    "pg-662": 10,
+    "pg-fbs-concurrency": 6,
+    "frontend-fbs": 204,
+    "print-672": 11,
+    "print-672-remaining": 6,
+    "print-673": 5,
+    "native-linux": 30,
+    "native-windows": 29,
+    "real-fbs-browser": 43,
+    "pg-675": 1,
+    "pg-517-withdrawal": 5,
+    "ci-shards": 20,
+    "product-scope": 51,
+    "mac-517-helper": 110,
+    "print-672-native-errors": 7,
+    "print-672-peer-drain": 2,
+    "print-672-raster-resource": 3
+  },
+  "reference_migration": "Frozen883 bytes; priorab0 three-unit PASS retained; no rerun",
+  "titles": {
+    "only_literal_changed": true,
+    "module_cases": 37,
+    "new_names": [
+      "CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline: {\"pluginVersion\":\"2.0.14999\"}",
+      "CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline: {\"cspVersion\":\"5.0.12999\"}"
+    ],
+    "not_registered_in_protected_policy": true,
+    "strict_parser_unchanged": true,
+    "saved_negative_duplicate_copy_refused": true
+  },
+  "backup": {
+    "original_source_byte_identical": true,
+    "assertions": 23,
+    "parameters": [
+      "",
+      "dump",
+      "archive",
+      "listing",
+      "empty",
+      "network",
+      "retry"
+    ],
+    "full_format_sha256": "0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408",
+    "short_format_sha256": "ddbfe3e8447dd54825fadf01f437a1adb6fa18f2ed583f58172cb1ed962fc3da",
+    "saved_linux_python": "3.11.16",
+    "five_gate_bodies_and_decorators_byte_identical": true,
+    "fixed_single_digest": true,
+    "modern_options": {
+      "show_empty": true
+    },
+    "signature_only_legacy_options": {},
+    "legacy_target_not_reexecuted": true,
+    "saved_target_receipt": {
+      "python": "3.14.3",
+      "target_id": "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+      "execution": "Compile actual function AST only, with real stdlib modules and actual SOURCE binding.",
+      "after": {
+        "pass": 1,
+        "fail": 0,
+        "skipped": 0
+      },
+      "negative": {
+        "expected_fail": 1,
+        "assertions": 23,
+        "failure_line": 34,
+        "reason": "Hardcoded full-format preservation hash rejects changed ordering assertion."
+      },
+      "original_source_sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+      "mutated_copy_sha256": "d0b84d5fcdd3f48b2ccaab8c3c574172879e5b0865e5a2208410e8f0e97daece",
+      "tracked_source_and_boundary_unchanged_by_execution": true,
+      "temporary_copy_removed": true,
+      "command": "python3 -B docs/evidence/WMS-652/portable-backup-preservation-20261007/preservation-proof.py"
+    },
+    "independent_offline_mutation_hash": "4c9bb3aab6f5cd276e73d7b3eb8f824271e4537bfc208c387b2bb3cb3eea1e51"
+  },
+  "ci": {
+    "run": 37548248403,
+    "attempt": 1,
+    "merge": "ac845328b27b5be265962695e10766efddef339e",
+    "head": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+    "merge_tree_equals_head": true,
+    "completed_conclusion": "failure",
+    "elapsed_to_last_job_seconds": 743.0,
+    "frontend_saved_cases": 1566,
+    "old_duplicate_groups": 1,
+    "shards": [
+      {
+        "index": 0,
+        "count": 2316,
+        "counts": {
+          "passed": 2217,
+          "skipped": 99
+        },
+        "receipt_exit": 0,
+        "failure_ids": []
+      },
+      {
+        "index": 1,
+        "count": 2315,
+        "counts": {
+          "passed": 2215,
+          "skipped": 99,
+          "failed": 1
+        },
+        "receipt_exit": 1,
+        "failure_ids": [
+          "tests.test_prod_deploy_backup_gate_boundary::test_all_seven_backup_variants_and_original_assertions_are_preserved"
+        ]
+      }
+    ],
+    "backend_collection_exact_union": 4631,
+    "passed": 4432,
+    "skipped": 198,
+    "failed": 1,
+    "pg_aggregator_execution_not_proven_pass": true,
+    "job_conclusions": {
+      "print-regressions": "failure",
+      "backend-checks": "success",
+      "frontend-build": "success",
+      "backend-shard-1": "failure",
+      "backend-shard-0": "success",
+      "printer-windows": "success",
+      "baseline": "success",
+      "backlog": "success",
+      "охрана": "failure",
+      "backend": "failure",
+      "process-proof": "skipped"
+    }
+  },
+  "fourth_cdp_correction": "PENDING cause/test-contract/code/Linux target; prior743 diagnosis retained",
+  "analyst_acceptance": "Separate role pending; this is technical review plus bounded analytical findings",
+  "final_source_approved": false,
+  "release_approved": false,
+  "new_test_browser_build_dispatch_executions": 0,
+  "inputs": {
+    "9dae4b19f6d4dca554200e08282579414a110848:guards/PROCESS_CONTRACTS.json": {
+      "bytes": 176355,
+      "sha256": "e9d83920496bc11d20b3e3105154d858841d3e8f29a0cfc1027747dbdc1ee0be"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:guards/PROCESS_CONTRACTS.json": {
+      "bytes": 176355,
+      "sha256": "48c906d70aa0f2ffa7de856b42acc423dd7fba47bb0a42ee07d8713d662a762b"
+    },
+    "9dae4b19f6d4dca554200e08282579414a110848:frontend/src/integrations/cryptoProCades.test.ts": {
+      "bytes": 23284,
+      "sha256": "3402be5ab5109e91b20f99957502072a6e7864af155be8e88f88fc741a912b09"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:frontend/src/integrations/cryptoProCades.test.ts": {
+      "bytes": 23288,
+      "sha256": "ad14215c564e233d961a080866d99eefeaa87673a3894acefac2c0b145ece90f"
+    },
+    "8e02998cd6b0b3bbe4d7ec36978910dcb2d2cffb:frontend/src/integrations/cryptoProCades.test.ts": {
+      "bytes": 23288,
+      "sha256": "ad14215c564e233d961a080866d99eefeaa87673a3894acefac2c0b145ece90f"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:scripts/ci/tests/test_ci_release_additions.py": {
+      "bytes": 2165,
+      "sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a"
+    },
+    "88343975e13f8819d6b81cd03cddbba1d67db078:scripts/ci/tests/test_ci_release_additions.py": {
+      "bytes": 2165,
+      "sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a"
+    },
+    "9dae4b19f6d4dca554200e08282579414a110848:scripts/ci/tests/test_ci_release_additions.py": {
+      "bytes": 2165,
+      "sha256": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9"
+    },
+    "9dae4b19f6d4dca554200e08282579414a110848:backend/tests/test_prod_deploy_backup_gate_boundary.py": {
+      "bytes": 4153,
+      "sha256": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:backend/tests/test_prod_deploy_backup_gate_boundary.py": {
+      "bytes": 4391,
+      "sha256": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c"
+    },
+    "62b8b4398cb9c7bf67b507a3f9b29803814a945c:backend/tests/test_prod_deploy_backup_gate_boundary.py": {
+      "bytes": 4391,
+      "sha256": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:backend/tests/test_prod_deploy_backup.py": {
+      "bytes": 8802,
+      "sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f"
+    },
+    "9dae4b19f6d4dca554200e08282579414a110848:backend/tests/test_prod_deploy_backup.py": {
+      "bytes": 8802,
+      "sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/frontend/frontend-all.json": {
+      "bytes": 637089,
+      "sha256": "4c7fd80099a6285b2d92512dd0af8bff26843b99a12b809a2f09f174d9778af8"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/after-module.json": {
+      "bytes": 13059,
+      "sha256": "ffad3ea469cd4c9ccb15430beff2983663b5884eb7b9edbdf806d3b7e0235a29"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/before-parser.log": {
+      "bytes": 330,
+      "sha256": "bc47bb77b18e9cc91726aa7f2eae480eded7c97de1e0d362db01f591f9d7c083"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/negative-parser.log": {
+      "bytes": 241,
+      "sha256": "39878136a3c188545f1de0db3bfa2918a70e13cf258e1d373e0712b0d192a94a"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/after-parser.log": {
+      "bytes": 334,
+      "sha256": "a22b015b04c1221862a959175e35fdd8c12ef2a5b553c1815b0f9272395c2fbb"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/product-scope.log": {
+      "bytes": 33,
+      "sha256": "eab1e9260172818aa5910e02abda069cdfbcb41f55f4a399151144cfcc352b5e"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/target-results.json": {
+      "bytes": 914,
+      "sha256": "920b545ece90171d78d9686947ab7d6c7a503b05d2db08d6c5e3dc3f44ff51bc"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/backend/shard1-job.log": {
+      "bytes": 702221,
+      "sha256": "b7adf88aa829a1eddc9e1ef909a0f90bfb087277ce0ce35ad45b56964a5682f4"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/preservation-proof.py": {
+      "bytes": 3933,
+      "sha256": "b59bb47cd04e0d7557b7e5122cbaad37fc4fb5975e456f04e8b6003ef2bc1df6"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/after-target.log": {
+      "bytes": 279,
+      "sha256": "c0925b159bbfb7d1d07de7c76c4003375a311b55a78407f0d63c811127901fe2"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/negative-copy.log": {
+      "bytes": 1121,
+      "sha256": "c4ead4efa53e8b5be665e6c7a9cce12c7f692653a3e47582380831368a5e2a2f"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/report-proof.py": {
+      "bytes": 4050,
+      "sha256": "5985b2be2a1ab9d8d5074f5db8c33925b57297513952ab4867aa426429329d41"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/byte-ast-proof.json": {
+      "bytes": 4425,
+      "sha256": "0dabe4ea902ef2c3857a7e1dac6d46fd7301d7f9235665709b03fe5946320757"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/frontend-report-identities-20261007/provenance.json": {
+      "bytes": 1090,
+      "sha256": "f9a6b027a55b0cbd2392ae8d7d7fd6baad785e8f6d63f953d5c1c7305ae5169a"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/byte-ast-proof.json": {
+      "bytes": 4716,
+      "sha256": "d3430ecda920360ce9a4a269d3861856de90da5effd2a62b680c3d8603360393"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/portable-backup-preservation-20261007/serialization-proof.json": {
+      "bytes": 2028,
+      "sha256": "894dc234109fdb9c35e6410aafd908f4779ad1c8b61d874e9f915f59a97317af"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/backend/shard0/receipt.json": {
+      "bytes": 761050,
+      "sha256": "ac23d5196ae2178c3d9dc47fe4328c3b0ca23c42e83958a240e1f1d91c65f887"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/backend/shard0/junit.xml": {
+      "bytes": 756360,
+      "sha256": "a9fdf56ac79c8243865ce6083f31aa6e67e9dd03f2ada408c7319d5f5a3641b0"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/backend/shard1/receipt.json": {
+      "bytes": 761149,
+      "sha256": "9cf9faed40d6fafce9d9062d5170f60049608f964e89e37527281665ad7ebb30"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/backend/shard1/junit.xml": {
+      "bytes": 756133,
+      "sha256": "7be63078e3b3866df41e52d37e8cb110f68bfb8edd54926ae941959c74e77751"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/jobs-final.json": {
+      "bytes": 31524,
+      "sha256": "b5283c67646144f08ae8b65eeb453be1dfef4d934c9cea3e2e1ff7f0c1ac80be"
+    },
+    "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f:docs/evidence/WMS-652/common-ci-37548248403/run-final.json": {
+      "bytes": 13490,
+      "sha256": "21650b4f162c485915a11581d7d004331f277841541fff4ccc0c04af940e06fb"
+    }
+  }
+}

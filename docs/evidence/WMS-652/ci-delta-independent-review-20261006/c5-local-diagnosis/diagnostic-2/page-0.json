@@ -1,0 +1,24 @@
+{
+  "diagnostics": [
+    {
+      "boundary": "promise-catch",
+      "name": "Error",
+      "message": "WMS672 decode failed at 299",
+      "stack": "Error: WMS672 decode failed at 299\n    at w.HTMLImageElement.decode (eval at evaluate (:311:30), <anonymous>:26:62)\n    at http://127.0.0.1:16725/src/utils/printBarcodeLabel.ts:136:83\n    at Array.map (<anonymous>)\n    at decodeImages (http://127.0.0.1:16725/src/utils/printBarcodeLabel.ts:136:62)",
+      "parentError": true,
+      "localError": true,
+      "realm": "parent",
+      "started": 300,
+      "decoded": 288,
+      "decodeAt": 299,
+      "frames": 18
+    }
+  ],
+  "started": 600,
+  "decoded": 588,
+  "decodeAt": null,
+  "transferCount": 1,
+  "alerts": [],
+  "frameCount": 1,
+  "printDisabled": true
+}

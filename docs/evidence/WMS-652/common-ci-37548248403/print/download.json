@@ -1,0 +1,9 @@
+{
+  "artifact_id": 11451563468,
+  "job_id": 112557363776,
+  "run_id": 37548248403,
+  "run_attempt": 1,
+  "tested_sha": "ac845328b27b5be265962695e10766efddef339e",
+  "zip_sha256": "8adb7c4602be0b26acaed849af1b0a1f6d9770656ee7d6e4428fe9b0dec275a8",
+  "selective_raw_only": true
+}

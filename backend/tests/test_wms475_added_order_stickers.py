@@ -24,6 +24,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import STICKER_STATUS_ERROR, FbsOrder
 from app.models.fbs_wb_operation import WB_OPERATION_STATE_PENDING_CONFIRMATION
 from app.services import fbs_print_asset_service as print_assets
+from app.services import fbs_supply_reconcile_service as reconcile
 from app.services import fbs_supply_service as supplies
 from app.services.fbs_print_asset_storage import (
     PNG_MAGIC,
@@ -105,6 +106,14 @@ async def test_added_order_sticker_prefetch(
     real_add = supplies._execute_wb_batch_add
     batch_order_ids: list[list[uuid.UUID]] = []
     wb_add_calls: list[list[int]] = []
+    # WMS-683 reads WB before adding: the fixture must expose actual membership,
+    # not echo requested IDs as confirmed before the mocked PATCH has run.
+    wb_supply_members = {475001}
+
+    async def read_supply_members(*args: Any, **kwargs: Any) -> list[int]:
+        return sorted(wb_supply_members)
+
+    monkeypatch.setattr(reconcile, "fetch_wb_supply_order_ids", read_supply_members)
     fetched_codes: dict[int, str] = {}
     storage_failure = scenario.startswith("storage_")
     storage_method = "mkdir" if scenario == "storage_mkdir" else "write_bytes"
@@ -126,6 +135,7 @@ async def test_added_order_sticker_prefetch(
     async def track_add(*args: Any, **kwargs: Any) -> None:
         wb_add_calls.append(kwargs["wb_order_ids"])
         await real_add(*args, **kwargs)
+        wb_supply_members.update(kwargs["wb_order_ids"])
 
     async def fetch_stickers(*args: Any, **kwargs: Any) -> list[dict[str, Any]]:
         if scenario == "transport_error":

@@ -1,0 +1,93 @@
+{
+  "frontend-fbs": {
+    "report": "frontend-all.json",
+    "sha256": "a483cebe0c61eceec7beb8bf36318b6b17a85194d72d0a4ac2dc9b8fda76a391",
+    "executed": 1566,
+    "required_passed": 204,
+    "exact": false
+  },
+  "print-672": {
+    "report": "print/672.tap",
+    "sha256": "cc8c67d55c9909bfa2a5462cea94b08e24334e991b0322eb799caabc9b445175",
+    "executed": 11,
+    "required_passed": 11,
+    "exact": true
+  },
+  "print-672-remaining": {
+    "report": "print/672-remaining.tap",
+    "sha256": "f7647bf83ed19c4064bb2e606da82dbbb980d050b25be1c0694cb1fff0bd4214",
+    "executed": 6,
+    "required_passed": 6,
+    "exact": true
+  },
+  "print-673": {
+    "report": "print/673.json",
+    "sha256": "47a63c89351ecd126f25e696c90a267450335ea271e93feb2862e56c8d916710",
+    "executed": 5,
+    "required_passed": 5,
+    "exact": true
+  },
+  "real-fbs-browser": {
+    "report": "print/critical-fbs/result.json",
+    "sha256": "a9d4cc425737bf9a0b9cf9c0bfb34b4fb152666d7bd2c63b7a3260e4037c9e4b",
+    "executed": 43,
+    "required_passed": 43,
+    "exact": true
+  },
+  "mac-517-helper": {
+    "report": "wms517-mac.tap",
+    "sha256": "c496f7808c5c5ff648e06ba47efb0b3d00bbd3d2bb0742671d53c20b6a39f946",
+    "executed": 110,
+    "required_passed": 110,
+    "exact": true
+  },
+  "print-672-native-errors": {
+    "report": "print/672-native-errors.tap",
+    "sha256": "762a6cdb7b995a9d315f792ed028989e042aa7d9a961c53e1210a86c972d4cf5",
+    "executed": 7,
+    "required_passed": 7,
+    "exact": true
+  },
+  "print-672-peer-drain": {
+    "report": "print/672-peer-drain.tap",
+    "sha256": "f6076bcf0989839dfe04ee3f883dc076a4bc3feae5e4d48e8f97b4e0b2989f00",
+    "executed": 2,
+    "required_passed": 2,
+    "exact": true
+  },
+  "print-672-raster-resource": {
+    "report": "print/672-raster-resource.tap",
+    "sha256": "353ec091a627eb23b9aa544e759571401d2b5fa0b182e5d8bffdb48ef95b64d7",
+    "executed": 3,
+    "required_passed": 3,
+    "exact": true
+  },
+  "fbs-cdp-cancellation": {
+    "report": "print/wms652-cdp-cancellation.tap",
+    "sha256": "6fc2c9d5d7844954018232a45028f3d5d7bf659de9412ab7faef766b6dea2adf",
+    "executed": 7,
+    "required_passed": 7,
+    "exact": true
+  },
+  "ci-shards": {
+    "report": "ci-shards.xml",
+    "sha256": "d1eaf1c3716b3cf5cbd2582d683fd92b4e9118db0a01c1b645346968b461534f",
+    "executed": 20,
+    "required_passed": 20,
+    "exact": true
+  },
+  "product-scope": {
+    "report": "product-scope.xml",
+    "sha256": "d84cfeecab1cdd151871684b1e5280b8f3e7f5b0807db7a782a930701215ffea",
+    "executed": 51,
+    "required_passed": 51,
+    "exact": true
+  },
+  "native-windows": {
+    "report": "native-print-windows.xml",
+    "sha256": "e449f65c328a51772ec1bde3c8bbc3ed3821e74c08b3fbd6f563715d4bb25176",
+    "executed": 29,
+    "required_passed": 29,
+    "exact": true
+  }
+}

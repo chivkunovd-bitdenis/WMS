@@ -1,0 +1,1044 @@
+c5-linux-diagnostic	Set up job	﻿2026-10-06T20:31:14.9176526Z Current runner version: '2.337.0'
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9202118Z ##[group]Runner Image Provisioner
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9202932Z Hosted Compute Agent
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9203540Z Version: 20261002.596
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9204107Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9204749Z Build Date: 2026-10-02T22:28:27Z
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9205400Z Worker ID: {ae9ba020-3dae-4a7f-b73c-fd27d7576409}
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9206044Z Region: westus3
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9206596Z Cloud: Azure
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9207073Z ##[endgroup]
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9208640Z ##[group]Operating System
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9209277Z Ubuntu
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9209749Z 24.04.5
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9210255Z LTS
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9210729Z ##[endgroup]
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9211218Z ##[group]Runner Image
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9211781Z Image: ubuntu-24.04
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9212280Z Version: 20261004.327.1
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9213291Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9214835Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9215736Z ##[endgroup]
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9216760Z ##[group]GITHUB_TOKEN Permissions
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9219425Z Contents: read
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9220003Z Metadata: read
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9220500Z ##[endgroup]
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9222646Z Secret source: Actions
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9223500Z Cache mode: write
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:14.9224207Z Prepare workflow directory
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.0175177Z Prepare all required actions
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.0244722Z Getting action download info
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.3678273Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.4369360Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.5087195Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+c5-linux-diagnostic	Set up job	2026-10-06T20:31:15.7586451Z Complete job name: c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	﻿2026-10-06T20:31:15.9228913Z ##[group]Run actions/checkout@v4
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9229701Z with:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9230109Z   persist-credentials: false
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9230555Z   fetch-depth: 0
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9230961Z   repository: chivkunovd-bitdenis/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9234466Z   token: ***
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9234845Z   ssh-strict: true
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9235221Z   ssh-user: git
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9235594Z   clean: true
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9235989Z   sparse-checkout-cone-mode: true
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9236454Z   fetch-tags: false
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9236860Z   show-progress: true
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9237384Z   lfs: false
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9237769Z   submodules: false
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9238179Z   set-safe-directory: true
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9238626Z   allow-unsafe-pr-checkout: false
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:15.9239305Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0296132Z Syncing repository: chivkunovd-bitdenis/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0298831Z ##[group]Getting Git version info
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0299876Z Working directory is '/home/runner/work/WMS/WMS'
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0301488Z [command]/usr/bin/git version
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0369760Z git version 2.55.0
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0404524Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0411484Z Temporarily overriding HOME='/home/runner/work/_temp/03489ee1-216f-4f90-a3b4-1567aff2df3d' before making global git config changes
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0412735Z Adding repository directory to the temporary git global config as a safe directory
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0418134Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0472511Z Deleting the contents of '/home/runner/work/WMS/WMS'
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0477540Z ##[group]Initializing the repository
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0482353Z [command]/usr/bin/git init /home/runner/work/WMS/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0576664Z hint: Using 'master' as the name for the initial branch. This default branch name
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0579119Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0580821Z hint: to use in all of your new repositories, which will suppress this warning,
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0582102Z hint: call:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0582799Z hint:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0583704Z hint: 	git config --global init.defaultBranch <name>
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0584786Z hint:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0585794Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0587485Z hint: 'development'. The just-created branch can be renamed via this command:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0588846Z hint:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0589565Z hint: 	git branch -m <name>
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0590393Z hint:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0591461Z hint: Disable this message with "git config set advice.defaultBranchName false"
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0598292Z Initialized empty Git repository in /home/runner/work/WMS/WMS/.git/
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0607832Z [command]/usr/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0654049Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0655436Z ##[group]Disabling automatic garbage collection
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0657809Z [command]/usr/bin/git config --local gc.auto 0
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0687193Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0688512Z ##[group]Setting up auth
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0694136Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.0735252Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1058570Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1092425Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1301051Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1332652Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1513017Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1547577Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1548944Z ##[group]Fetching the repository
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:16.1558347Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1329343Z From https://github.com/chivkunovd-bitdenis/WMS
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1331393Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1333261Z  * [new branch]          archive/staging-20260924-93f511ab -> origin/archive/staging-20260924-93f511ab
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1334652Z  * [new branch]          archive/staging-before-wms521-20260924 -> origin/archive/staging-before-wms521-20260924
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1336037Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1336892Z  * [new branch]          backlog/fbs-followups-20260812 -> origin/backlog/fbs-followups-20260812
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1337823Z  * [new branch]          brand/portal-logos-20260811 -> origin/brand/portal-logos-20260811
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1338894Z  * [new branch]          brand/portal-logos-live-20260811 -> origin/brand/portal-logos-live-20260811
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1339874Z  * [new branch]          brand/portal-logos-prod-20260811 -> origin/brand/portal-logos-prod-20260811
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1340938Z  * [new branch]          chore/deploy-smoke-retry-on-main -> origin/chore/deploy-smoke-retry-on-main
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1342329Z  * [new branch]          chore/operator-change-contract-20260901 -> origin/chore/operator-change-contract-20260901
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1343490Z  * [new branch]          chore/railway-toml-fix  -> origin/chore/railway-toml-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1344512Z  * [new branch]          chore/release-via-pr-only-rules -> origin/chore/release-via-pr-only-rules
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1345497Z  * [new branch]          chore/staging-sync-20261003 -> origin/chore/staging-sync-20261003
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1346515Z  * [new branch]          chore/wb-emulator-railway-dockerfile -> origin/chore/wb-emulator-railway-dockerfile
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1347976Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1349115Z  * [new branch]          chore/wms574-stand      -> origin/chore/wms574-stand
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1350061Z  * [new branch]          codex/agent-job-1710a7649a6964db -> origin/codex/agent-job-1710a7649a6964db
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1351317Z  * [new branch]          codex/agent-job-21079e59afb9acdb -> origin/codex/agent-job-21079e59afb9acdb
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1352484Z  * [new branch]          codex/agent-job-6f3e370ab6217c51 -> origin/codex/agent-job-6f3e370ab6217c51
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1353662Z  * [new branch]          codex/agent-job-8c954436cd418999 -> origin/codex/agent-job-8c954436cd418999
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1354764Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac -> origin/codex/agent-job-97af6faf8d8c22ac
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1355789Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5 -> origin/codex/agent-job-bb021d7e007fb8a5
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1356906Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150 -> origin/codex/agent-job-ef71dbb00ee2b150
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1358253Z  * [new branch]          codex/agent-job-fc68bb2705b6850f -> origin/codex/agent-job-fc68bb2705b6850f
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1359498Z  * [new branch]          codex/artmaks-fbo-mockup -> origin/codex/artmaks-fbo-mockup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1360542Z  * [new branch]          codex/backlog40-ci-contracts -> origin/codex/backlog40-ci-contracts
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1361777Z  * [new branch]          codex/backlog40-ci-pdf  -> origin/codex/backlog40-ci-pdf
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1362754Z  * [new branch]          codex/billing-journal-20260825 -> origin/codex/billing-journal-20260825
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1364008Z  * [new branch]          codex/billing-module-20260826 -> origin/codex/billing-module-20260826
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1365325Z  * [new branch]          codex/billing-stage-finish-20260823 -> origin/codex/billing-stage-finish-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1366552Z  * [new branch]          codex/billing-storage-bounds-20260823 -> origin/codex/billing-storage-bounds-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1367835Z  * [new branch]          codex/box-label-bulk-print-20260824 -> origin/codex/box-label-bulk-print-20260824
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1368542Z  * [new branch]          codex/catalog-box-filters-20260824 -> origin/codex/catalog-box-filters-20260824
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1369626Z  * [new branch]          codex/catalog-box-tabs-source-20260823 -> origin/codex/catalog-box-tabs-source-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1370374Z  * [new branch]          codex/cell-contents-scanner-20260824 -> origin/codex/cell-contents-scanner-20260824
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1371048Z  * [new branch]          codex/fbs-qr-only-print-20260823 -> origin/codex/fbs-qr-only-print-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1371745Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1372506Z  * [new branch]          codex/fix-seller-inbound-empty-picker -> origin/codex/fix-seller-inbound-empty-picker
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1373502Z  * [new branch]          codex/fix-wb-done-supply-status-prod -> origin/codex/fix-wb-done-supply-status-prod
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1374718Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820 -> origin/codex/hotfix-fbs-100-orders-20260820
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1375720Z  * [new branch]          codex/hotfix-fbs-packaging-flag -> origin/codex/hotfix-fbs-packaging-flag
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1376612Z  * [new branch]          codex/hotfix-ozon-kiz   -> origin/codex/hotfix-ozon-kiz
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1377175Z  * [new branch]          codex/invoice-row-location -> origin/codex/invoice-row-location
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1378121Z  * [new branch]          codex/knowledge-inbound-guide-20260824 -> origin/codex/knowledge-inbound-guide-20260824
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1378835Z  * [new branch]          codex/mp-dashboard-e2e-20260815 -> origin/codex/mp-dashboard-e2e-20260815
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1379524Z  * [new branch]          codex/night-ready-acceptance-1006 -> origin/codex/night-ready-acceptance-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1380244Z  * [new branch]          codex/night-ready-candidate-1006-inrepo -> origin/codex/night-ready-candidate-1006-inrepo
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1380971Z  * [new branch]          codex/night-ready-exact-staging-1006 -> origin/codex/night-ready-exact-staging-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1381736Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1382520Z  * [new branch]          codex/night-ready-migration-compat-1006 -> origin/codex/night-ready-migration-compat-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1383210Z  * [new branch]          codex/night-ready-staging-1006 -> origin/codex/night-ready-staging-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1383951Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1384829Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1385643Z  * [new branch]          codex/night-ready-staging-rollback-1006 -> origin/codex/night-ready-staging-rollback-1006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1386331Z  * [new branch]          codex/night-release-5beb52da-1 -> origin/codex/night-release-5beb52da-1
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1386965Z  * [new branch]          codex/night-requirements-20261006 -> origin/codex/night-requirements-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1387861Z  * [new branch]          codex/night1007-658     -> origin/codex/night1007-658
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1388373Z  * [new branch]          codex/night1007-671-687 -> origin/codex/night1007-671-687
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1388923Z  * [new branch]          codex/night1007-675-release -> origin/codex/night1007-675-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1389456Z  * [new branch]          codex/night1007-679-680 -> origin/codex/night1007-679-680
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1389947Z  * [new branch]          codex/night1007-681     -> origin/codex/night1007-681
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1390444Z  * [new branch]          codex/night1007-684-586 -> origin/codex/night1007-684-586
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1391132Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1391852Z  * [new branch]          codex/ozon-catalog-20260825 -> origin/codex/ozon-catalog-20260825
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1392429Z  * [new branch]          codex/ozon-fbs-20260825 -> origin/codex/ozon-fbs-20260825
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1392952Z  * [new branch]          codex/ozon-stock-20260825 -> origin/codex/ozon-stock-20260825
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1393561Z  * [new branch]          codex/ozon-test-key-marker-20260824 -> origin/codex/ozon-test-key-marker-20260824
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1394252Z  * [new branch]          codex/priority-five-release-20261006 -> origin/codex/priority-five-release-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1394955Z  * [new branch]          codex/priority-five-review-20261006 -> origin/codex/priority-five-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1395705Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1396446Z  * [new branch]          codex/regress-live-cases-20260825 -> origin/codex/regress-live-cases-20260825
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1397078Z  * [new branch]          codex/release-20261006-astra-a -> origin/codex/release-20261006-astra-a
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1397959Z  * [new branch]          codex/release-20261006-astra-b -> origin/codex/release-20261006-astra-b
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1398577Z  * [new branch]          codex/release-ci-final-20261006 -> origin/codex/release-ci-final-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1399188Z  * [new branch]          codex/release-log-2026-09-27 -> origin/codex/release-log-2026-09-27
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1399854Z  * [new branch]          codex/reporting-backend-core-20260823 -> origin/codex/reporting-backend-core-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1400592Z  * [new branch]          codex/reporting-stage-finish-20260823 -> origin/codex/reporting-stage-finish-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1401290Z  * [new branch]          codex/staging-sync-login-20260914 -> origin/codex/staging-sync-login-20260914
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1401911Z  * [new branch]          codex/storage-stage-20260823 -> origin/codex/storage-stage-20260823
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1402465Z  * [new branch]          codex/trello-wms-20261005 -> origin/codex/trello-wms-20261005
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1403002Z  * [new branch]          codex/trello-wms-20261006 -> origin/codex/trello-wms-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1403571Z  * [new branch]          codex/trello-wms-20261006-1200 -> origin/codex/trello-wms-20261006-1200
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1404139Z  * [new branch]          codex/tsd-package-20260913 -> origin/codex/tsd-package-20260913
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1404733Z  * [new branch]          codex/tsd-package-stage-release -> origin/codex/tsd-package-stage-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1405366Z  * [new branch]          codex/tsd-staging-merge-20260913 -> origin/codex/tsd-staging-merge-20260913
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1405971Z  * [new branch]          codex/volna9-01-backend-only -> origin/codex/volna9-01-backend-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1406538Z  * [new branch]          codex/volna9-02-status-only -> origin/codex/volna9-02-status-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1407095Z  * [new branch]          codex/volna9-03-backend-only -> origin/codex/volna9-03-backend-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1407901Z  * [new branch]          codex/volna9-04-backend-only -> origin/codex/volna9-04-backend-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1408584Z  * [new branch]          codex/volna9-05-backend-only -> origin/codex/volna9-05-backend-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1409183Z  * [new branch]          codex/volna9-06-print-order-only -> origin/codex/volna9-06-print-order-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1409812Z  * [new branch]          codex/weekly-release-20260909 -> origin/codex/weekly-release-20260909
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1410363Z  * [new branch]          codex/wms-chat-20260911 -> origin/codex/wms-chat-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1410923Z  * [new branch]          codex/wms-chat-evening-20260910 -> origin/codex/wms-chat-evening-20260910
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1411539Z  * [new branch]          codex/wms-integrations-20260911 -> origin/codex/wms-integrations-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1412105Z  * [new branch]          codex/wms-ozon-20260911 -> origin/codex/wms-ozon-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1412702Z  * [new branch]          codex/wms-ozon-generator-20260911 -> origin/codex/wms-ozon-generator-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1413342Z  * [new branch]          codex/wms-pick-container-scan -> origin/codex/wms-pick-container-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1414202Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820 -> origin/codex/wms-pipeline-unified-v2-20260820
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1415240Z  * [new branch]          codex/wms-print-20260911 -> origin/codex/wms-print-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1416414Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1417836Z  * [new branch]          codex/wms-psp-backlog-20260921 -> origin/codex/wms-psp-backlog-20260921
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1418975Z  * [new branch]          codex/wms-qr-review-evidence-20261006 -> origin/codex/wms-qr-review-evidence-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1419926Z  * [new branch]          codex/wms-release-20260911 -> origin/codex/wms-release-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1421113Z  * [new branch]          codex/wms-release-ozon-terminal -> origin/codex/wms-release-ozon-terminal
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1422198Z  * [new branch]          codex/wms-storage-20260911 -> origin/codex/wms-storage-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1423303Z  * [new branch]          codex/wms-storage-final-20260911 -> origin/codex/wms-storage-final-20260911
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1424365Z  * [new branch]          codex/wms-transfer-urgent -> origin/codex/wms-transfer-urgent
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1425811Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1427410Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1428555Z  * [new branch]          codex/wms010-backlog40  -> origin/codex/wms010-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1429518Z  * [new branch]          codex/wms011-backlog40  -> origin/codex/wms011-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1430456Z  * [new branch]          codex/wms013-backlog40  -> origin/codex/wms013-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1431381Z  * [new branch]          codex/wms040-backlog40  -> origin/codex/wms040-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1432157Z  * [new branch]          codex/wms045-backlog40  -> origin/codex/wms045-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1433128Z  * [new branch]          codex/wms058-availability-followup -> origin/codex/wms058-availability-followup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1434153Z  * [new branch]          codex/wms058-backlog40  -> origin/codex/wms058-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1435085Z  * [new branch]          codex/wms058-browser-qa -> origin/codex/wms058-browser-qa
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1436083Z  * [new branch]          codex/wms058-mp-box-source -> origin/codex/wms058-mp-box-source
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1437037Z  * [new branch]          codex/wms058-overplan-source -> origin/codex/wms058-overplan-source
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1438354Z  * [new branch]          codex/wms058-review-fix -> origin/codex/wms058-review-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1439025Z  * [new branch]          codex/wms080-392-review-fix -> origin/codex/wms080-392-review-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1439721Z  * [new branch]          codex/wms080-backlog40  -> origin/codex/wms080-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1440217Z  * [new branch]          codex/wms081-backlog40  -> origin/codex/wms081-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1440731Z  * [new branch]          codex/wms081-defect-compat -> origin/codex/wms081-defect-compat
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1441300Z  * [new branch]          codex/wms082-085-emulator-meta -> origin/codex/wms082-085-emulator-meta
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1441842Z  * [new branch]          codex/wms082-backlog40  -> origin/codex/wms082-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1442332Z  * [new branch]          codex/wms083-backlog40  -> origin/codex/wms083-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1442832Z  * [new branch]          codex/wms084-backlog40  -> origin/codex/wms084-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1443359Z  * [new branch]          codex/wms084-emulator-delete -> origin/codex/wms084-emulator-delete
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1444325Z  * [new branch]          codex/wms084-packing-test-contract -> origin/codex/wms084-packing-test-contract
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1445372Z  * [new branch]          codex/wms084-rebind     -> origin/codex/wms084-rebind
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1446180Z  * [new branch]          codex/wms085-backlog40  -> origin/codex/wms085-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1447068Z  * [new branch]          codex/wms086-backlog40  -> origin/codex/wms086-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1448050Z  * [new branch]          codex/wms087-backlog40  -> origin/codex/wms087-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1448815Z  * [new branch]          codex/wms091-backlog40  -> origin/codex/wms091-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1449624Z  * [new branch]          codex/wms092-backlog40  -> origin/codex/wms092-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1450408Z  * [new branch]          codex/wms095-backlog40  -> origin/codex/wms095-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1451468Z  * [new branch]          codex/wms095-import-error-backlog40 -> origin/codex/wms095-import-error-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1452805Z  * [new branch]          codex/wms096-backlog40  -> origin/codex/wms096-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1453688Z  * [new branch]          codex/wms110-backlog40  -> origin/codex/wms110-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1454629Z  * [new branch]          codex/wms115-backlog40  -> origin/codex/wms115-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1455471Z  * [new branch]          codex/wms123-backlog40  -> origin/codex/wms123-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1456296Z  * [new branch]          codex/wms272-backlog40  -> origin/codex/wms272-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1457166Z  * [new branch]          codex/wms272-resume-backlog40 -> origin/codex/wms272-resume-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1458144Z  * [new branch]          codex/wms273-backlog40  -> origin/codex/wms273-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1458905Z  * [new branch]          codex/wms276-backlog40  -> origin/codex/wms276-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1459716Z  * [new branch]          codex/wms277-backlog40  -> origin/codex/wms277-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1460530Z  * [new branch]          codex/wms277-catalog    -> origin/codex/wms277-catalog
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1461534Z  * [new branch]          codex/wms277-import-sku-collision -> origin/codex/wms277-import-sku-collision
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1462500Z  * [new branch]          codex/wms278-backlog40  -> origin/codex/wms278-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1463237Z  * [new branch]          codex/wms387-training   -> origin/codex/wms387-training
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1464046Z  * [new branch]          codex/wms389-backlog40  -> origin/codex/wms389-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1464936Z  * [new branch]          codex/wms390-backlog40  -> origin/codex/wms390-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1465802Z  * [new branch]          codex/wms391-backlog40  -> origin/codex/wms391-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1466647Z  * [new branch]          codex/wms392-backlog40  -> origin/codex/wms392-backlog40
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1467728Z  * [new branch]          codex/wms392-review-tests -> origin/codex/wms392-review-tests
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1468683Z  * [new branch]          codex/wms394-kiz-ui     -> origin/codex/wms394-kiz-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1469785Z  * [new branch]          codex/wms395-pool-inline -> origin/codex/wms395-pool-inline
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1470623Z  * [new branch]          codex/wms396-stage      -> origin/codex/wms396-stage
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1471520Z  * [new branch]          codex/wms396-staging-release -> origin/codex/wms396-staging-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1472492Z  * [new branch]          codex/wms396-true-api   -> origin/codex/wms396-true-api
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1473333Z  * [new branch]          codex/wms397-api        -> origin/codex/wms397-api
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1474123Z  * [new branch]          codex/wms399-chat-design -> origin/codex/wms399-chat-design
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1475109Z  * [new branch]          codex/wms401-android-build-proof -> origin/codex/wms401-android-build-proof
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1476275Z  * [new branch]          codex/wms406-backfill-final-plan -> origin/codex/wms406-backfill-final-plan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1477626Z  * [new branch]          codex/wms406-invoice    -> origin/codex/wms406-invoice
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1478569Z  * [new branch]          codex/wms406-report     -> origin/codex/wms406-report
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1479544Z  * [new branch]          codex/wms408-billing-unification -> origin/codex/wms408-billing-unification
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1480675Z  * [new branch]          codex/wms415-coord-20260910 -> origin/codex/wms415-coord-20260910
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1481348Z  * [new branch]          codex/wms418-catalog-publication-filter -> origin/codex/wms418-catalog-publication-filter
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1481986Z  * [new branch]          codex/wms418-loviana-off -> origin/codex/wms418-loviana-off
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1482575Z  * [new branch]          codex/wms425-marketplace-hotfix -> origin/codex/wms425-marketplace-hotfix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1483172Z  * [new branch]          codex/wms433-stage-user-only -> origin/codex/wms433-stage-user-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1484018Z  * [new branch]          codex/wms433-support-bot-concept -> origin/codex/wms433-support-bot-concept
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1484615Z  * [new branch]          codex/wms437-analyst-cases -> origin/codex/wms437-analyst-cases
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1485215Z  * [new branch]          codex/wms437-small-task-process -> origin/codex/wms437-small-task-process
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1486127Z  * [new branch]          codex/wms440-tsd        -> origin/codex/wms440-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1486938Z  * [new branch]          codex/wms440-tsd-ui     -> origin/codex/wms440-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1487812Z  * [new branch]          codex/wms441-c10-evidence -> origin/codex/wms441-c10-evidence
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1488329Z  * [new branch]          codex/wms441-tsd        -> origin/codex/wms441-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1488807Z  * [new branch]          codex/wms441-tsd-ui     -> origin/codex/wms441-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1489280Z  * [new branch]          codex/wms442-tsd        -> origin/codex/wms442-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1489761Z  * [new branch]          codex/wms442-tsd-ui     -> origin/codex/wms442-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1490230Z  * [new branch]          codex/wms443-tsd        -> origin/codex/wms443-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1490693Z  * [new branch]          codex/wms443-tsd-ui     -> origin/codex/wms443-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1491154Z  * [new branch]          codex/wms444-tsd        -> origin/codex/wms444-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1491621Z  * [new branch]          codex/wms444-tsd-ui     -> origin/codex/wms444-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1492079Z  * [new branch]          codex/wms445-tsd        -> origin/codex/wms445-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1492598Z  * [new branch]          codex/wms445-tsd-server-truth -> origin/codex/wms445-tsd-server-truth
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1493127Z  * [new branch]          codex/wms445-tsd-ui     -> origin/codex/wms445-tsd-ui
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1493712Z  * [new branch]          codex/wms447-full-marketplace-labels -> origin/codex/wms447-full-marketplace-labels
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1494359Z  * [new branch]          codex/wms460-fbs-qr-scan -> origin/codex/wms460-fbs-qr-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1495241Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1495959Z  * [new branch]          codex/wms476-auto-legacy-guard -> origin/codex/wms476-auto-legacy-guard
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1496748Z  * [new branch]          codex/wms476-implementation-sol-high -> origin/codex/wms476-implementation-sol-high
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1497647Z  * [new branch]          codex/wms476-staging-release-20260923 -> origin/codex/wms476-staging-release-20260923
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1498337Z  * [new branch]          codex/wms477-backend-review-fix -> origin/codex/wms477-backend-review-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1498926Z  * [new branch]          codex/wms477-p3-notice  -> origin/codex/wms477-p3-notice
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1499636Z  * [new branch]          codex/wms483-prod-release-20260920 -> origin/codex/wms483-prod-release-20260920
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1500265Z  * [new branch]          codex/wms483-wb-zero-refresh -> origin/codex/wms483-wb-zero-refresh
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1500850Z  * [new branch]          codex/wms489-staging-release -> origin/codex/wms489-staging-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1501660Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1502398Z  * [new branch]          codex/wms502-stock-sorting-incident -> origin/codex/wms502-stock-sorting-incident
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1503043Z  * [new branch]          codex/wms506-silent-kiz-print -> origin/codex/wms506-silent-kiz-print
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1503834Z  * [new branch]          codex/wms508-persistent-form-cards -> origin/codex/wms508-persistent-form-cards
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1504473Z  * [new branch]          codex/wms514-clickable-mockup -> origin/codex/wms514-clickable-mockup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1505133Z  * [new branch]          codex/wms514-staging-release-20260924 -> origin/codex/wms514-staging-release-20260924
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1505870Z  * [new branch]          codex/wms515-client-registry -> origin/codex/wms515-client-registry
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1506760Z  * [new branch]          codex/wms517-current-release-analysis -> origin/codex/wms517-current-release-analysis
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1507743Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1508520Z  * [new branch]          codex/wms517-mac-dynamic-eligible -> origin/codex/wms517-mac-dynamic-eligible
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1509508Z  * [new branch]          codex/wms517-mac-test-contract -> origin/codex/wms517-mac-test-contract
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1510610Z  * [new branch]          codex/wms517-price-by-product-group -> origin/codex/wms517-price-by-product-group
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1511802Z  * [new branch]          codex/wms517-sales-report-contract -> origin/codex/wms517-sales-report-contract
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1512937Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1514137Z  * [new branch]          codex/wms517-staging-20261001 -> origin/codex/wms517-staging-20261001
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1515268Z  * [new branch]          codex/wms519-artifact-pdf-hotfix -> origin/codex/wms519-artifact-pdf-hotfix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1516489Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio -> origin/codex/wms519-kiz-label-aspect-ratio
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1517665Z  * [new branch]          codex/wms519-post-deploy-docs -> origin/codex/wms519-post-deploy-docs
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1518640Z  * [new branch]          codex/wms520-requirements -> origin/codex/wms520-requirements
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1519614Z  * [new branch]          codex/wms521-kiz-release -> origin/codex/wms521-kiz-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1520598Z  * [new branch]          codex/wms523-auto-import-pools -> origin/codex/wms523-auto-import-pools
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1521551Z  * [new branch]          codex/wms524-confirm-order -> origin/codex/wms524-confirm-order
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1522521Z  * [new branch]          codex/wms524-print-blank -> origin/codex/wms524-print-blank
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1523789Z  * [new branch]          codex/wms533-client-hardening -> origin/codex/wms533-client-hardening
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1524896Z  * [new branch]          codex/wms533-five-events -> origin/codex/wms533-five-events
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1525929Z  * [new branch]          codex/wms533-prod-five-events -> origin/codex/wms533-prod-five-events
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1527118Z  * [new branch]          codex/wms533-seller-stock-events -> origin/codex/wms533-seller-stock-events
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1528028Z  * [new branch]          codex/wms537-pg-fixture-review-20261006 -> origin/codex/wms537-pg-fixture-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1528667Z  * [new branch]          codex/wms550-sorting-scan -> origin/codex/wms550-sorting-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1529240Z  * [new branch]          codex/wms582-yandex-market-api -> origin/codex/wms582-yandex-market-api
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1529948Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1530608Z  * [new branch]          codex/wms591-avpack-6300 -> origin/codex/wms591-avpack-6300
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1531114Z  * [new branch]          codex/wms593-597-urgent -> origin/codex/wms593-597-urgent
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1531637Z  * [new branch]          codex/wms602-fbs-cell-scan -> origin/codex/wms602-fbs-cell-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1532151Z  * [new branch]          codex/wms603-box-scan   -> origin/codex/wms603-box-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1533060Z  * [new branch]          codex/wms604-staging-integration -> origin/codex/wms604-staging-integration
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1534061Z  * [new branch]          codex/wms604-unified-packing -> origin/codex/wms604-unified-packing
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1535025Z  * [new branch]          codex/wms607-instant-print -> origin/codex/wms607-instant-print
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1535809Z  * [new branch]          codex/wms607-mac-single-binary -> origin/codex/wms607-mac-single-binary
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1536551Z  * [new branch]          codex/wms607-printer-failure-analysis -> origin/codex/wms607-printer-failure-analysis
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1537197Z  * [new branch]          codex/wms607-staging-print -> origin/codex/wms607-staging-print
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1537971Z  * [new branch]          codex/wms607-windows-x64 -> origin/codex/wms607-windows-x64
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1538539Z  * [new branch]          codex/wms608-scanned-row-first -> origin/codex/wms608-scanned-row-first
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1539169Z  * [new branch]          codex/wms610-fbs-picking-columns -> origin/codex/wms610-fbs-picking-columns
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1539823Z  * [new branch]          codex/wms611-fbs-print-disabled -> origin/codex/wms611-fbs-print-disabled
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1540430Z  * [new branch]          codex/wms612-delivery-checks -> origin/codex/wms612-delivery-checks
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1540981Z  * [new branch]          codex/wms612-staging-all -> origin/codex/wms612-staging-all
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1541540Z  * [new branch]          codex/wms614-616-prod-release -> origin/codex/wms614-616-prod-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1542138Z  * [new branch]          codex/wms617-video-demo -> origin/codex/wms617-video-demo
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1542705Z  * [new branch]          codex/wms618-staging    -> origin/codex/wms618-staging
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1543392Z  * [new branch]          codex/wms622-fbo-kiz-recovery -> origin/codex/wms622-fbo-kiz-recovery
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1544365Z  * [new branch]          codex/wms623-artmaks-unused-pdfs -> origin/codex/wms623-artmaks-unused-pdfs
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1545555Z  * [new branch]          codex/wms624-developer-requests-current -> origin/codex/wms624-developer-requests-current
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1546637Z  * [new branch]          codex/wms624-sync-cadence -> origin/codex/wms624-sync-cadence
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1547692Z  * [new branch]          codex/wms625-print-reliability -> origin/codex/wms625-print-reliability
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1548763Z  * [new branch]          codex/wms626-astra-effort-limit -> origin/codex/wms626-astra-effort-limit
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1583239Z  * [new branch]          codex/wms627-artmaks-stock-reconcile -> origin/codex/wms627-artmaks-stock-reconcile
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1584725Z  * [new branch]          codex/wms628-artmaks-wrong-scan -> origin/codex/wms628-artmaks-wrong-scan
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1585544Z  * [new branch]          codex/wms628-production -> origin/codex/wms628-production
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1586217Z  * [new branch]          codex/wms629-packing-scroll -> origin/codex/wms629-packing-scroll
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1587081Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1588116Z  * [new branch]          codex/wms651-counter-copy -> origin/codex/wms651-counter-copy
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1588895Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1589807Z  * [new branch]          codex/wms652-acceptance-evidence -> origin/codex/wms652-acceptance-evidence
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1590688Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1591430Z  * [new branch]          codex/wms652-bot-night  -> origin/codex/wms652-bot-night
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1592141Z  * [new branch]          codex/wms652-checkpoint-requirements -> origin/codex/wms652-checkpoint-requirements
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1592896Z  * [new branch]          codex/wms652-ci-delta-review -> origin/codex/wms652-ci-delta-review
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1593557Z  * [new branch]          codex/wms652-ci-two-shards -> origin/codex/wms652-ci-two-shards
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1594270Z  * [new branch]          codex/wms652-critical-fbs-contracts -> origin/codex/wms652-critical-fbs-contracts
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1595106Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1596163Z  * [new branch]          codex/wms652-independent-main-check -> origin/codex/wms652-independent-main-check
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1596875Z  * [new branch]          codex/wms652-night-reader -> origin/codex/wms652-night-reader
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1597663Z  * [new branch]          codex/wms652-night-repair -> origin/codex/wms652-night-repair
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1598352Z  * [new branch]          codex/wms652-pdf-probe  -> origin/codex/wms652-pdf-probe
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1599031Z  * [new branch]          codex/wms652-process-gates -> origin/codex/wms652-process-gates
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1599820Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1600630Z  * [new branch]          codex/wms652-regression-guard -> origin/codex/wms652-regression-guard
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1601331Z  * [new branch]          codex/wms652-release-ci-20261006 -> origin/codex/wms652-release-ci-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1602150Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1603077Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1603875Z  * [new branch]          codex/wms652-server-deploy-gate -> origin/codex/wms652-server-deploy-gate
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1604557Z  * [new branch]          codex/wms652-sonnet-frontend -> origin/codex/wms652-sonnet-frontend
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1605260Z  * [new branch]          codex/wms652-trusted-anchor -> origin/codex/wms652-trusted-anchor
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1605892Z  * [new branch]          codex/wms652-ui-gate    -> origin/codex/wms652-ui-gate
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1606682Z  * [new branch]          codex/wms653-scope-attribution-20261006 -> origin/codex/wms653-scope-attribution-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1607839Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1609148Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1610032Z  * [new branch]          codex/wms659-imperia-boxes -> origin/codex/wms659-imperia-boxes
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1610642Z  * [new branch]          codex/wms660-barcodes   -> origin/codex/wms660-barcodes
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1611235Z  * [new branch]          codex/wms661-analyst-20261006 -> origin/codex/wms661-analyst-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1612043Z  * [new branch]          codex/wms661-installed-baseline-tests -> origin/codex/wms661-installed-baseline-tests
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1612932Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1613826Z  * [new branch]          codex/wms661-runtime-preflight-20261006 -> origin/codex/wms661-runtime-preflight-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1614783Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1615710Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1616502Z  * [new branch]          codex/wms662-663-priority -> origin/codex/wms662-663-priority
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1617046Z  * [new branch]          codex/wms662-f6-testwriter -> origin/codex/wms662-f6-testwriter
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1617913Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1618727Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1619413Z  * [new branch]          codex/wms662-prod-handoff -> origin/codex/wms662-prod-handoff
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1620172Z  * [new branch]          codex/wms662-review-c36b8ab -> origin/codex/wms662-review-c36b8ab
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1620843Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1621617Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1622462Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1623403Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1624306Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1625063Z  * [new branch]          codex/wms663-release-retry-acceptance -> origin/codex/wms663-release-retry-acceptance
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1625766Z  * [new branch]          codex/wms663-release-retry-fix -> origin/codex/wms663-release-retry-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1626571Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1627699Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1628551Z  * [new branch]          codex/wms663-retry-contract-20261006 -> origin/codex/wms663-retry-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1629255Z  * [new branch]          codex/wms663-scoped-priority-20261006 -> origin/codex/wms663-scoped-priority-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1629926Z  * [new branch]          codex/wms664-dispatcher-stall -> origin/codex/wms664-dispatcher-stall
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1630677Z  * [new branch]          codex/wms665-avpack-withdrawal-helper -> origin/codex/wms665-avpack-withdrawal-helper
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1631495Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1632434Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1633297Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1634118Z  * [new branch]          codex/wms666-ci-history-scope-20261006 -> origin/codex/wms666-ci-history-scope-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1634815Z  * [new branch]          codex/wms666-ci-qr-finish-20261006 -> origin/codex/wms666-ci-qr-finish-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1635542Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1636337Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1637095Z  * [new branch]          codex/wms666-priority-etalon-20261006 -> origin/codex/wms666-priority-etalon-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1638032Z  * [new branch]          codex/wms666-release-c11-acceptance -> origin/codex/wms666-release-c11-acceptance
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1638767Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1639568Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1640365Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1641084Z  * [new branch]          codex/wms666-unified-fbs-packing -> origin/codex/wms666-unified-fbs-packing
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1641677Z  * [new branch]          codex/wms667-stock-filter -> origin/codex/wms667-stock-filter
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1642496Z  * [new branch]          codex/wms667-visual-runner -> origin/codex/wms667-visual-runner
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1643132Z  * [new branch]          codex/wms668-dispatcher-batch-final -> origin/codex/wms668-dispatcher-batch-final
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1644025Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1644785Z  * [new branch]          codex/wms672-673-analyst-20261006 -> origin/codex/wms672-673-analyst-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1645491Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1646199Z  * [new branch]          codex/wms672-c5-linux-diagnostic -> origin/codex/wms672-c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1646884Z  * [new branch]          codex/wms672-functional-finish-20261006 -> origin/codex/wms672-functional-finish-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1647785Z  * [new branch]          codex/wms675-ci-topology-proof-20261006 -> origin/codex/wms675-ci-topology-proof-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1648564Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1649352Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1650048Z  * [new branch]          codex/wms676-crosscheck-astra -> origin/codex/wms676-crosscheck-astra
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1650688Z  * [new branch]          codex/wms676-night-review-fallback -> origin/codex/wms676-night-review-fallback
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1651313Z  * [new branch]          codex/wms676-sol61-pipeline -> origin/codex/wms676-sol61-pipeline
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1651949Z  * [new branch]          codex/wms679-fbw-analysis-source349 -> origin/codex/wms679-fbw-analysis-source349
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1652656Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1653292Z  * [new branch]          codex/wms681-qr-recovery -> origin/codex/wms681-qr-recovery
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1653972Z  * [new branch]          codex/wms681-real-wb-qr-hotfix -> origin/codex/wms681-real-wb-qr-hotfix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1654609Z  * [new branch]          deploy/wb-emulator-real-order-qr -> origin/deploy/wb-emulator-real-order-qr
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1655258Z  * [new branch]          docs/owner-requirements-20260831 -> origin/docs/owner-requirements-20260831
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1655961Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1656604Z  * [new branch]          docs/wms469-470-backlog -> origin/docs/wms469-470-backlog
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1657160Z  * [new branch]          docs/wms561-ship-by-in-supply -> origin/docs/wms561-ship-by-in-supply
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1658008Z  * [new branch]          docs/wms584-585-tsd-walkthrough -> origin/docs/wms584-585-tsd-walkthrough
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1658657Z  * [new branch]          docs/wms648-ozon-catalog-backlog -> origin/docs/wms648-ozon-catalog-backlog
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1659291Z  * [new branch]          docs/wms649-shk-po-ploshchadke -> origin/docs/wms649-shk-po-ploshchadke
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1659820Z  * [new branch]          etalon                  -> origin/etalon
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1660328Z  * [new branch]          feat/cz-print-split-artifact -> origin/feat/cz-print-split-artifact
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1660966Z  * [new branch]          feat/fbs-warehouse-filter-20260812 -> origin/feat/fbs-warehouse-filter-20260812
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1661620Z  * [new branch]          feat/ff-inbound-create-20260812 -> origin/feat/ff-inbound-create-20260812
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1662241Z  * [new branch]          feat/marking-import-s3-storage -> origin/feat/marking-import-s3-storage
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1662826Z  * [new branch]          feat/mobile-fbs-demo-seed -> origin/feat/mobile-fbs-demo-seed
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1663382Z  * [new branch]          feat/product-barcode-print -> origin/feat/product-barcode-print
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1664039Z  * [new branch]          feat/wms056-audit-trail -> origin/feat/wms056-audit-trail
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1664570Z  * [new branch]          feat/wms062-warehouse-docs -> origin/feat/wms062-warehouse-docs
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1665139Z  * [new branch]          feat/wms111-wb-cancel-return -> origin/feat/wms111-wb-cancel-return
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1665744Z  * [new branch]          feat/wms121-supply-identity -> origin/feat/wms121-supply-identity
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1666320Z  * [new branch]          feat/wms270-login-and-ports -> origin/feat/wms270-login-and-ports
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1666902Z  * [new branch]          feat/wms338-stock-min-formula -> origin/feat/wms338-stock-min-formula
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1667597Z  * [new branch]          feat/wms349-merge-service -> origin/feat/wms349-merge-service
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1668121Z  * [new branch]          feat/wms363-ozon-tsd    -> origin/feat/wms363-ozon-tsd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1668620Z  * [new branch]          feat/wms397-chat-mvp    -> origin/feat/wms397-chat-mvp
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1669143Z  * [new branch]          feat/wms401-mobile-followup -> origin/feat/wms401-mobile-followup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1669723Z  * [new branch]          feat/wms433-assistant-release -> origin/feat/wms433-assistant-release
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1670451Z  * [new branch]          feat/wms433-tenant-rollout -> origin/feat/wms433-tenant-rollout
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1670989Z  * [new branch]          feat/wms447-fbs-box-count -> origin/feat/wms447-fbs-box-count
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1671580Z  * [new branch]          feat/wms453-455-boxes-shared-pool -> origin/feat/wms453-455-boxes-shared-pool
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1672176Z  * [new branch]          feat/wms469-stock-dialog -> origin/feat/wms469-stock-dialog
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1672728Z  * [new branch]          feat/wms529-stock-vs-location -> origin/feat/wms529-stock-vs-location
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1673275Z  * [new branch]          feat/wms534-intake-box  -> origin/feat/wms534-intake-box
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1673786Z  * [new branch]          feat/wms536-scan-layer  -> origin/feat/wms536-scan-layer
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1674456Z  * [new branch]          feat/wms539-artmaks-cells-import -> origin/feat/wms539-artmaks-cells-import
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1675033Z  * [new branch]          feat/wms631-print-agent -> origin/feat/wms631-print-agent
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1675545Z  * [new branch]          feat/wms633-chz-copies  -> origin/feat/wms633-chz-copies
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1676104Z  * [new branch]          feat/wms636-wb-rejected-filter -> origin/feat/wms636-wb-rejected-filter
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1676670Z  * [new branch]          feat/wms641-support-agent -> origin/feat/wms641-support-agent
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1677338Z  * [new branch]          feat/wms650-sorting-impl -> origin/feat/wms650-sorting-impl
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1677934Z  * [new branch]          feat/wms650-sorting-mockup -> origin/feat/wms650-sorting-mockup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1678485Z  * [new branch]          fix/auth-staff-e2e-20260815 -> origin/fix/auth-staff-e2e-20260815
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1679049Z  * [new branch]          fix/cis-pool-full-20260821 -> origin/fix/cis-pool-full-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1679614Z  * [new branch]          fix/cz-artifact-print-scale -> origin/fix/cz-artifact-print-scale
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1680161Z  * [new branch]          fix/deploy-hard-reset   -> origin/fix/deploy-hard-reset
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1680725Z  * [new branch]          fix/fbs-box-controls-20260901 -> origin/fix/fbs-box-controls-20260901
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1681324Z  * [new branch]          fix/fbs-supplier-status-sync -> origin/fix/fbs-supplier-status-sync
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1681959Z  * [new branch]          fix/inventory-owner-block-20260902 -> origin/fix/inventory-owner-block-20260902
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1682743Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1683456Z  * [new branch]          fix/kiz-gs-restore-20260821 -> origin/fix/kiz-gs-restore-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1684118Z  * [new branch]          fix/no-distribution-20260821 -> origin/fix/no-distribution-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1684818Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1685531Z  * [new branch]          fix/packing-optional-20260819 -> origin/fix/packing-optional-20260819
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1686133Z  * [new branch]          fix/packing-optional-to-prod -> origin/fix/packing-optional-to-prod
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1686719Z  * [new branch]          fix/picklist-size-20260819 -> origin/fix/picklist-size-20260819
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1687389Z  * [new branch]          fix/print-pdf-dialog    -> origin/fix/print-pdf-dialog
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1687924Z  * [new branch]          fix/print-restore-proven -> origin/fix/print-restore-proven
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1688494Z  * [new branch]          fix/review-findings-20260902 -> origin/fix/review-findings-20260902
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1689158Z  * [new branch]          fix/seller-honest-sign-sync-20260819 -> origin/fix/seller-honest-sign-sync-20260819
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1689830Z  * [new branch]          fix/warehouse-single-20260821 -> origin/fix/warehouse-single-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1690447Z  * [new branch]          fix/wb-label-seller-line-height -> origin/fix/wb-label-seller-line-height
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1691066Z  * [new branch]          fix/wb-label-seller-line-trim -> origin/fix/wb-label-seller-line-trim
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1691649Z  * [new branch]          fix/wb-meta-method-20260821 -> origin/fix/wb-meta-method-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1692182Z  * [new branch]          fix/wb-token-save-500   -> origin/fix/wb-token-save-500
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1692745Z  * [new branch]          fix/wms-fbs-single-pick-by-cell -> origin/fix/wms-fbs-single-pick-by-cell
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1693335Z  * [new branch]          fix/wms-session-regression -> origin/fix/wms-session-regression
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1693978Z  * [new branch]          fix/wms487-tape-print-missing-codes -> origin/fix/wms487-tape-print-missing-codes
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1694681Z  * [new branch]          fix/wms517-price-snapshot -> origin/fix/wms517-price-snapshot
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1695196Z  * [new branch]          fix/wms517-sold-only    -> origin/fix/wms517-sold-only
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1695732Z  * [new branch]          fix/wms625-on-etalon-20261003 -> origin/fix/wms625-on-etalon-20261003
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1696317Z  * [new branch]          fix/wms634-fbo-date-delegated -> origin/fix/wms634-fbo-date-delegated
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1696874Z  * [new branch]          fix/wms635-kiz-no-wb-wait -> origin/fix/wms635-kiz-no-wb-wait
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1697577Z  * [new branch]          fix/wms639-scan-no-wb-readback -> origin/fix/wms639-scan-no-wb-readback
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1698185Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait -> origin/fix/wms640-scan-kiz-no-wb-wait
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1698803Z  * [new branch]          fix/wms641-kiz-delete-background -> origin/fix/wms641-kiz-delete-background
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1699443Z  * [new branch]          fix/wms642-kiz-no-locks-handover -> origin/fix/wms642-kiz-no-locks-handover
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1700097Z  * [new branch]          fix/wms643-no-print-when-unchecked -> origin/fix/wms643-no-print-when-unchecked
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1700747Z  * [new branch]          fix/wms652-contract-check-merge -> origin/fix/wms652-contract-check-merge
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1701331Z  * [new branch]          fix/wms656-full-kiz-label -> origin/fix/wms656-full-kiz-label
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1701905Z  * [new branch]          fix/wms666-product-stock-scope -> origin/fix/wms666-product-stock-scope
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1702608Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1703264Z  * [new branch]          hotfix/boxes-print-all-qr -> origin/hotfix/boxes-print-all-qr
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1703896Z  * [new branch]          hotfix/cz-print-regression-2026-07-07 -> origin/hotfix/cz-print-regression-2026-07-07
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1704669Z  * [new branch]          hotfix/inbound-qty-blur-v2 -> origin/hotfix/inbound-qty-blur-v2
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1705329Z  * [new branch]          hotfix/inbound-table-header-alignment -> origin/hotfix/inbound-table-header-alignment
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1706023Z  * [new branch]          hotfix/ozon-requirements-int-sku -> origin/hotfix/ozon-requirements-int-sku
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1706677Z  * [new branch]          hotfix/tz-print-landscape-revert -> origin/hotfix/tz-print-landscape-revert
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1707560Z  * [new branch]          hotfix/wb-unified-token-fbs-intake -> origin/hotfix/wb-unified-token-fbs-intake
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1708162Z  * [new branch]          hotfix/wms622-628-restore -> origin/hotfix/wms622-628-restore
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1708737Z  * [new branch]          integration/fbs-fixes-20260821 -> origin/integration/fbs-fixes-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1709251Z  * [new branch]          main                    -> origin/main
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1709758Z  * [new branch]          mobile/android7-v014-recovery -> origin/mobile/android7-v014-recovery
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1710295Z  * [new branch]          mobile/feat-fbs         -> origin/mobile/feat-fbs
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1710801Z  * [new branch]          mockup/psp2-clickable   -> origin/mockup/psp2-clickable
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1711600Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1712512Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1713311Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1714100Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1714877Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1715760Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1716494Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1717498Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1718386Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1719171Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1719837Z  * [new branch]          night/volna-9/lane-1/01-wb-marking -> origin/night/volna-9/lane-1/01-wb-marking
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1720467Z  * [new branch]          night/volna-9/lane-1/07-reporting -> origin/night/volna-9/lane-1/07-reporting
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1721087Z  * [new branch]          night/volna-9/lane-1/defect-01 -> origin/night/volna-9/lane-1/defect-01
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1721674Z  * [new branch]          night/volna-9/lane-1/feature-07 -> origin/night/volna-9/lane-1/feature-07
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1722423Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen -> origin/night/volna-9/lane-2/02-verdikt-screen
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1723151Z  * [new branch]          night/volna-9/lane-2/08-storage -> origin/night/volna-9/lane-2/08-storage
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1723734Z  * [new branch]          night/volna-9/lane-2/defect-02 -> origin/night/volna-9/lane-2/defect-02
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1724404Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1725219Z  * [new branch]          night/volna-9/lane-3/09-billing -> origin/night/volna-9/lane-3/09-billing
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1725810Z  * [new branch]          night/volna-9/lane-3/defect-03 -> origin/night/volna-9/lane-3/defect-03
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1726452Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1727101Z  * [new branch]          night/volna-9/lane-4/defect-04 -> origin/night/volna-9/lane-4/defect-04
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1727834Z  * [new branch]          night/volna-9/lane-5/05-prod-slow -> origin/night/volna-9/lane-5/05-prod-slow
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1728431Z  * [new branch]          night/volna-9/lane-5/defect-05 -> origin/night/volna-9/lane-5/defect-05
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1729081Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1729745Z  * [new branch]          night/volna-9/lane-6/defect-06 -> origin/night/volna-9/lane-6/defect-06
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1730297Z  * [new branch]          night/wms-653-5beb52da  -> origin/night/wms-653-5beb52da
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1730799Z  * [new branch]          night/wms-654-5beb52da  -> origin/night/wms-654-5beb52da
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1731293Z  * [new branch]          night/wms-657-5beb52da  -> origin/night/wms-657-5beb52da
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1731790Z  * [new branch]          night/wms-658-5beb52da  -> origin/night/wms-658-5beb52da
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1732275Z  * [new branch]          night/wms-659-5beb52da  -> origin/night/wms-659-5beb52da
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1732918Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1733704Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1734480Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1735249Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1736127Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1736895Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1737793Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1738564Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1739343Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1740084Z  * [new branch]          process/pipeline-on-etalon-20260821 -> origin/process/pipeline-on-etalon-20260821
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1740756Z  * [new branch]          release/2026-10-02-packing-stock -> origin/release/2026-10-02-packing-stock
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1741331Z  * [new branch]          release/2026-10-03-ready -> origin/release/2026-10-03-ready
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1741881Z  * [new branch]          release/barcode-tall-label -> origin/release/barcode-tall-label
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1742437Z  * [new branch]          release/inbound-print-fix -> origin/release/inbound-print-fix
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1742973Z  * [new branch]          release/wms641-agent-v1 -> origin/release/wms641-agent-v1
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1743477Z  * [new branch]          release/wms641-agent-v2 -> origin/release/wms641-agent-v2
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1743971Z  * [new branch]          release/wms641-agent-v3 -> origin/release/wms641-agent-v3
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1744585Z  * [new branch]          review/pick-and-binding-fixes-20260816 -> origin/review/pick-and-binding-fixes-20260816
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1745445Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1746092Z  * [new branch]          speed/test-infra-20260830 -> origin/speed/test-infra-20260830
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1746575Z  * [new branch]          staging                 -> origin/staging
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1747087Z  * [new branch]          support-task/WMS-651-4  -> origin/support-task/WMS-651-4
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1747787Z  * [new branch]          support-task/WMS-653-6  -> origin/support-task/WMS-653-6
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1748290Z  * [new branch]          support-task/WMS-654-7  -> origin/support-task/WMS-654-7
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1748785Z  * [new branch]          support-task/WMS-657-8  -> origin/support-task/WMS-657-8
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1749288Z  * [new branch]          support-task/WMS-658-9  -> origin/support-task/WMS-658-9
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1749791Z  * [new branch]          support-task/WMS-661-14 -> origin/support-task/WMS-661-14
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1750301Z  * [new branch]          support-task/WMS-667-18 -> origin/support-task/WMS-667-18
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1750810Z  * [new branch]          support-task/WMS-677-22 -> origin/support-task/WMS-677-22
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1751326Z  * [new branch]          support-task/WMS-679-26 -> origin/support-task/WMS-679-26
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1751829Z  * [new branch]          support-task/WMS-680-27 -> origin/support-task/WMS-680-27
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1752334Z  * [new branch]          support-task/WMS-683-29 -> origin/support-task/WMS-683-29
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1752888Z  * [new branch]          test/wms672-c7-c10-c11-20261006 -> origin/test/wms672-c7-c10-c11-20261006
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1753396Z  * [new tag]             tsd-preview             -> tsd-preview
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1753883Z  * [new tag]             wms-print-direct-v2026.09.30.1 -> wms-print-direct-v2026.09.30.1
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1754433Z  * [new tag]             wms-print-direct-v2026.09.30.2 -> wms-print-direct-v2026.09.30.2
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1754995Z  * [new tag]             wms-print-direct-v2026.09.30.3 -> wms-print-direct-v2026.09.30.3
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1755663Z  * [new tag]             wms-print-direct-v2026.09.30.4 -> wms-print-direct-v2026.09.30.4
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1756213Z  * [new tag]             wms-print-direct-v2026.09.30.5 -> wms-print-direct-v2026.09.30.5
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1756794Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1 -> wms-print-direct-v2026.10.01.1-rc1
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1757522Z  * [new tag]             wms-print-v2026.09.13.1 -> wms-print-v2026.09.13.1
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1758041Z  * [new tag]             wms-print-v2026.09.13.2 -> wms-print-v2026.09.13.2
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1758495Z  * [new tag]             wms-print-v2026.09.13.3 -> wms-print-v2026.09.13.3
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1759715Z [command]/usr/bin/git branch --list --remote origin/codex/wms672-c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1760327Z   origin/codex/wms672-c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1761176Z [command]/usr/bin/git rev-parse refs/remotes/origin/codex/wms672-c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1761638Z b44ef10777f8d63555229d575558c6c9a5f3affd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1762492Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1762947Z ##[group]Determining the checkout info
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1763420Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1763710Z [command]/usr/bin/git sparse-checkout disable
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1764525Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1765448Z ##[group]Checking out the ref
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.1766060Z [command]/usr/bin/git checkout --progress --force -B codex/wms672-c5-linux-diagnostic refs/remotes/origin/codex/wms672-c5-linux-diagnostic
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8531055Z Switched to a new branch 'codex/wms672-c5-linux-diagnostic'
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8539232Z branch 'codex/wms672-c5-linux-diagnostic' set up to track 'origin/codex/wms672-c5-linux-diagnostic'.
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8574462Z ##[endgroup]
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8621150Z [command]/usr/bin/git log -1 --format=%H
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8643642Z b44ef10777f8d63555229d575558c6c9a5f3affd
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8656373Z ##[group]Removing auth
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8664243Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8685458Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8872784Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8895630Z http.https://github.com/.extraheader
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8901939Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.8932309Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.9120737Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.9150248Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-linux-diagnostic	Run actions/checkout@v4	2026-10-06T20:31:28.9333782Z ##[endgroup]
+c5-linux-diagnostic	Run actions/setup-node@v4	﻿2026-10-06T20:31:29.0141265Z ##[group]Run actions/setup-node@v4
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0141630Z with:
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0141878Z   node-version: 24.21.0
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0142152Z   always-auth: false
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0142419Z   check-latest: false
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0144970Z   token: ***
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.0145213Z ##[endgroup]
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.1519837Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.1524409Z (node:2314) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.1525306Z (Use `node --trace-deprecation ...` to show where the warning was created)
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.1526660Z ##[group]Environment details
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.5438627Z node: v24.21.0
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.5439597Z npm: 11.19.0
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.5442229Z yarn: 1.22.22
+c5-linux-diagnostic	Run actions/setup-node@v4	2026-10-06T20:31:29.5444003Z ##[endgroup]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	﻿2026-10-06T20:31:29.5799834Z ##[group]Run npm ci --prefix frontend
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5800272Z [36;1mnpm ci --prefix frontend[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5800804Z [36;1mnpm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5801528Z [36;1mnode "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5802021Z [36;1msudo apt-get update[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5802296Z [36;1msudo apt-get install -y poppler-utils[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5802830Z [36;1mecho "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5803840Z [36;1mnode --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"[0m
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5991147Z shell: /usr/bin/bash -e {0}
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:29.5991477Z ##[endgroup]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:31.9215481Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.7950288Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.7958920Z added 329 packages, and audited 330 packages in 12s
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.7959697Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.7960080Z 85 packages are looking for funding
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.7960924Z   run `npm fund` for details
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8408566Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8409502Z 15 vulnerabilities (1 low, 3 moderate, 9 high, 2 critical)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8410016Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8410422Z To address issues that do not require attention, run:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8411045Z   npm audit fix
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8411275Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8411691Z To address all issues (including breaking changes), run:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8412619Z   npm audit fix --force
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8412878Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8413107Z Run `npm audit` for details.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8414495Z npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8415987Z npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8416898Z npm warn install-scripts
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:41.8418511Z npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:43.5030708Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:43.5031334Z added 2 packages in 2s
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.0382915Z Installing dependencies...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.0553593Z Switching to root user to install dependencies...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1241115Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1609205Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1709149Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1713836Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1759743Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.1779004Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.2587830Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [463 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.2790618Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [519 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.3710971Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1373 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.3786363Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [306 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.3876091Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1700 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.3988921Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [341 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.3990804Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1730 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.4099231Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [396 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.4126787Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [13.3 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.4861355Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1072 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.4948830Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [222 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.4950679Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1217 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.5452856Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [245 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:44.5459432Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [11.6 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:47.2535128Z Fetched 9991 kB in 1s (8958 kB/s)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.1509715Z Reading package lists...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.1764747Z Reading package lists...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.3796414Z Building dependency tree...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.3803158Z Reading state information...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5327844Z libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5328997Z libasound2t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5329922Z libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5330778Z libatk-bridge2.0-0t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5331604Z libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5332464Z libatk1.0-0t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5333341Z libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5334220Z libatspi2.0-0t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5335131Z libcairo2 is already the newest version (1.18.0-3build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5336484Z libcairo2 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5337578Z libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5338434Z libcups2t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5339248Z libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5340036Z libdbus-1-3 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5340850Z libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5341593Z libdrm2 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5342354Z libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.4).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5343142Z libgbm1 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5344041Z libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.9).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5344894Z libglib2.0-0t64 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5345749Z libnspr4 is already the newest version (2:4.35-1.1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5346510Z libnspr4 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5347674Z libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5348427Z libnss3 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5349189Z libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5350011Z libpango-1.0-0 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5350799Z libx11-6 is already the newest version (2:1.8.7-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5351515Z libx11-6 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5352246Z libxcb1 is already the newest version (1.15-1ubuntu2).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5352952Z libxcb1 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5353724Z libxcomposite1 is already the newest version (1:0.4.5-1build3).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5354557Z libxcomposite1 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5355416Z libxdamage1 is already the newest version (1:1.1.6-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5356232Z libxdamage1 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5357063Z libxext6 is already the newest version (2:1.3.4-1build2).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5358064Z libxext6 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5358878Z libxfixes3 is already the newest version (1:6.0.0-2build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5359684Z libxfixes3 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5360899Z libxkbcommon0 is already the newest version (1.6.0-1build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5361734Z libxkbcommon0 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5362605Z libxrandr2 is already the newest version (2:1.5.2-2build1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5363400Z libxrandr2 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5364226Z xvfb is already the newest version (2:21.1.12-1ubuntu1.8).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5365312Z fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5366517Z libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5367553Z libfontconfig1 set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5368379Z fonts-liberation is already the newest version (1:2.1.5-3).
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5369222Z fonts-liberation set to manually installed.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5369945Z The following additional packages will be installed:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5370596Z   xfonts-encodings xfonts-utils
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5371102Z Recommended packages:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5371623Z   fonts-ipafont-mincho fonts-tlwg-loma
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5509671Z The following NEW packages will be installed:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5510311Z   fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5519977Z   fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5520507Z   xfonts-utils
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5524633Z The following packages will be upgraded:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5529754Z   libfreetype6
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5675669Z 1 upgraded, 9 newly installed, 0 to remove and 9 not upgraded.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5676179Z Need to get 21.5 MB of archives.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5676592Z After this operation, 79.5 MB of additional disk space will be used.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.5677490Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.6515323Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:48.8528561Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.0947547Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.1694367Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.4210127Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.6351522Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype6 amd64 2.13.2+dfsg-1ubuntu0.2 [403 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.7031330Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.7717702Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.8374696Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:49.9035987Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.1570851Z Fetched 21.5 MB in 1s (16.0 MB/s)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.1986677Z Selecting previously unselected package fonts-ipafont-gothic.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2221919Z (Reading database ... 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2222406Z (Reading database ... 5%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2222744Z (Reading database ... 10%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2223049Z (Reading database ... 15%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2223340Z (Reading database ... 20%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2223636Z (Reading database ... 25%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2223938Z (Reading database ... 30%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2224474Z (Reading database ... 35%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2224930Z (Reading database ... 40%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2225405Z (Reading database ... 45%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2225942Z (Reading database ... 50%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2270527Z (Reading database ... 55%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.2849103Z (Reading database ... 60%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.3526281Z (Reading database ... 65%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.5426285Z (Reading database ... 70%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.7433050Z (Reading database ... 75%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:50.8872957Z (Reading database ... 80%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.0886285Z (Reading database ... 85%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.2979551Z (Reading database ... 90%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.4799314Z (Reading database ... 95%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.4799984Z (Reading database ... 100%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.4800871Z (Reading database ... 203191 files and directories currently installed.)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.4843440Z Preparing to unpack .../0-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.4926562Z Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.7176338Z Selecting previously unselected package fonts-freefont-ttf.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.7288406Z Preparing to unpack .../1-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.7297451Z Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8054639Z Selecting previously unselected package fonts-tlwg-loma-otf.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8162748Z Preparing to unpack .../2-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8167819Z Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8317482Z Selecting previously unselected package fonts-unifont.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8426907Z Preparing to unpack .../3-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.8432582Z Unpacking fonts-unifont (1:15.1.01-1build1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.9395718Z Selecting previously unselected package fonts-wqy-zenhei.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.9516067Z Preparing to unpack .../4-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:51.9599890Z Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.4602973Z Preparing to unpack .../5-libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.4644215Z Unpacking libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) over (2.13.2+dfsg-1ubuntu0.1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.4859460Z Selecting previously unselected package xfonts-encodings.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.4974539Z Preparing to unpack .../6-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.4980751Z Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5176212Z Selecting previously unselected package xfonts-utils.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5288444Z Preparing to unpack .../7-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5294085Z Unpacking xfonts-utils (1:7.7+6build3) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5572116Z Selecting previously unselected package xfonts-cyrillic.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5685909Z Preparing to unpack .../8-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5693987Z Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.5928236Z Selecting previously unselected package xfonts-scalable.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6038703Z Preparing to unpack .../9-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6043699Z Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6378271Z Setting up fonts-wqy-zenhei (0.9.45-8) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6467428Z Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6479535Z Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6493424Z Setting up libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6507867Z Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6520436Z Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6571297Z update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6582171Z Setting up fonts-unifont (1:15.1.01-1build1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6594261Z Setting up xfonts-utils (1:7.7+6build3) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6625340Z Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.6853843Z Setting up xfonts-scalable (1:1.0.3-1.3) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.7056173Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.7285439Z Processing triggers for man-db (2.12.0-4build2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.7303514Z Not building database; man-db/auto-update is not 'true'.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:52.7314787Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.3555847Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.3556793Z Running kernel seems to be up-to-date.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.3557195Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.3557656Z Restarting services...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.3624402Z  systemctl restart php8.3-fpm.service
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4522439Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4528912Z No containers need to be restarted.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4529321Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4529514Z No user sessions are running outdated binaries.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4529767Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:53.4530044Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.3529772Z Downloading Chromium 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-linux.zip
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.4950514Z |                                                                                |   0% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.6571609Z |■■■■■■■■                                                                        |  10% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.7362372Z |■■■■■■■■■■■■■■■■                                                                |  20% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.8658928Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:54.9447601Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.0306833Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.1330763Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.2380589Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.3176379Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.3828877Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:55.4652677Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 173.9 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.6733786Z Chromium 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium-1194
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.6736038Z Downloading FFMPEG playwright build v1011 from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8199685Z |                                                                                |   0% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8240454Z |■■■■■■■■                                                                        |  10% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8284688Z |■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8505043Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8527911Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8574369Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8585709Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8596108Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8624329Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8639566Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.8648063Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.9140560Z FFMPEG playwright build v1011 downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:58.9143526Z Downloading Chromium Headless Shell 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-headless-shell-linux.zip
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.0640641Z |                                                                                |   0% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.1414260Z |■■■■■■■■                                                                        |  10% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.2023107Z |■■■■■■■■■■■■■■■■                                                                |  20% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.2580325Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.3027331Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.3395710Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.3764671Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.4133756Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.4519389Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.4931141Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:31:59.5287459Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 104.3 MiB
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.3209854Z Chromium Headless Shell 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1194
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.4803030Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.5127028Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.5128815Z Hit:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.5134121Z Hit:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.5147981Z Hit:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:01.5157360Z Hit:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:02.7901844Z Reading package lists...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:02.8194408Z Reading package lists...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.0264536Z Building dependency tree...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.0271289Z Reading state information...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.1954837Z The following additional packages will be installed:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.1961508Z   libpoppler134 poppler-data
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.1970517Z Suggested packages:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.1971113Z   ghostscript fonts-japanese-mincho | fonts-ipafont-mincho fonts-arphic-ukai
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.1971561Z   fonts-arphic-uming fonts-nanum
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2133166Z The following NEW packages will be installed:
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2141431Z   libpoppler134 poppler-data poppler-utils
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2299530Z 0 upgraded, 3 newly installed, 0 to remove and 9 not upgraded.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2300022Z Need to get 3389 kB of archives.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2300458Z After this operation, 17.8 MB of additional disk space will be used.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.2300954Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.3566423Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 poppler-data all 0.4.12-1 [2060 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.4521636Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpoppler134 amd64 24.02.0-1ubuntu9.9 [1118 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.5368787Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 poppler-utils amd64 24.02.0-1ubuntu9.9 [212 kB]
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7756731Z Fetched 3389 kB in 0s (10.6 MB/s)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7949873Z Selecting previously unselected package poppler-data.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7980904Z (Reading database ... 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7981350Z (Reading database ... 5%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7981757Z (Reading database ... 10%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7982168Z (Reading database ... 15%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7982443Z (Reading database ... 20%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7982723Z (Reading database ... 25%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7983094Z (Reading database ... 30%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7983447Z (Reading database ... 35%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7983794Z (Reading database ... 40%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7984202Z (Reading database ... 45%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7984641Z (Reading database ... 50%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.7992004Z (Reading database ... 55%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8104260Z (Reading database ... 60%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8130866Z (Reading database ... 65%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8149820Z (Reading database ... 70%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8186504Z (Reading database ... 75%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8213277Z (Reading database ... 80%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8361154Z (Reading database ... 85%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8444966Z (Reading database ... 90%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8696572Z (Reading database ... 95%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8697383Z (Reading database ... 100%
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8698258Z (Reading database ... 203458 files and directories currently installed.)
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8741686Z Preparing to unpack .../poppler-data_0.4.12-1_all.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.8749737Z Unpacking poppler-data (0.4.12-1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.9583164Z Selecting previously unselected package libpoppler134:amd64.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.9699192Z Preparing to unpack .../libpoppler134_24.02.0-1ubuntu9.9_amd64.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:03.9715649Z Unpacking libpoppler134:amd64 (24.02.0-1ubuntu9.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0004650Z Selecting previously unselected package poppler-utils.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0121712Z Preparing to unpack .../poppler-utils_24.02.0-1ubuntu9.9_amd64.deb ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0128623Z Unpacking poppler-utils (24.02.0-1ubuntu9.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0524214Z Setting up libpoppler134:amd64 (24.02.0-1ubuntu9.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0542738Z Setting up poppler-data (0.4.12-1) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0619022Z Setting up poppler-utils (24.02.0-1ubuntu9.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0641347Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0746924Z Processing triggers for man-db (2.12.0-4build2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0761524Z Not building database; man-db/auto-update is not 'true'.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.0773817Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5773851Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5774758Z Running kernel seems to be up-to-date.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5775127Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5775318Z No services need to be restarted.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5775557Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5775741Z No containers need to be restarted.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5775985Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5776237Z No user sessions are running outdated binaries.
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5776504Z 
+c5-linux-diagnostic	Install original frontend and Chrome141 harness dependencies	2026-10-06T20:32:04.5776852Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+c5-linux-diagnostic	Unchanged C5 only with error observations	﻿2026-10-06T20:32:05.8429626Z ##[group]Run bash scripts/ci/wms672-c5-diagnostic/run.sh
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8430106Z [36;1mbash scripts/ci/wms672-c5-diagnostic/run.sh[0m
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8471305Z shell: /usr/bin/bash -e {0}
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8471716Z env:
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8472161Z   PLAYWRIGHT_MODULE: /home/runner/work/_temp/print-contract-tools/node_modules/playwright/index.mjs
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8472803Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:05.8473241Z ##[endgroup]
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:07.5234029Z TAP version 13
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:08.4241986Z # C5 environment {"node":"v24.21.0","platform":"linux","arch":"x64","browser":"141.0.7390.37"}
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6261708Z # Subtest: C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6285364Z not ok 1 - C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6289792Z   ---
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6290614Z   duration_ms: 43546.653008
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6291205Z   type: 'test'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6292005Z   location: '/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:303:1'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6292893Z   failureType: 'testCodeFailure'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6293575Z   error: 'page.waitForFunction: Timeout 30000ms exceeded.'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6294215Z   code: 'ERR_TEST_FAILURE'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6294732Z   name: 'TimeoutError'
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6300869Z   stack: |-
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6301913Z     transfer (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:121:16)
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6303444Z     TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:317:26)
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6304370Z   ...
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6997011Z 1..1
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6997613Z # tests 1
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6998302Z # suites 0
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.6998625Z # pass 0
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.7000466Z # fail 1
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.7000815Z # cancelled 0
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.7001161Z # skipped 0
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.7001738Z # todo 0
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.7002071Z # duration_ms 44190.920207
+c5-linux-diagnostic	Unchanged C5 only with error observations	2026-10-06T20:32:51.8039272Z ##[error]Process completed with exit code 1.
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	﻿2026-10-06T20:32:51.8520419Z ##[group]Run actions/upload-artifact@v4
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8520715Z with:
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8520952Z   name: wms672-c5-linux-diagnostic-37527056184-1
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8521295Z   path: /home/runner/work/_temp/c5-linux-diagnostic
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8521626Z   if-no-files-found: error
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8521866Z   compression-level: 6
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8522094Z   overwrite: false
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8522305Z   include-hidden-files: false
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8522532Z env:
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8522910Z   PLAYWRIGHT_MODULE: /home/runner/work/_temp/print-contract-tools/node_modules/playwright/index.mjs
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8523495Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:51.8523892Z ##[endgroup]
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.0130587Z (node:3770) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.0131934Z (Use `node --trace-deprecation ...` to show where the warning was created)
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.0248922Z With the provided path, there will be 11 files uploaded
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.0257346Z Artifact name is valid!
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.0258229Z Root directory input is valid!
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.4140093Z Beginning upload of artifact content to blob storage
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:52.6409504Z (node:3770) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.3114928Z Uploaded bytes 2460362
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.3803069Z Finished uploading artifact content to blob storage!
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.3804449Z SHA256 digest of uploaded artifact zip is 45f180db03a5671c595b2ff7f459d94c7d90fa1eddf2da0264a7f03b835ebfdf
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.3806334Z Finalizing artifact upload
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.6349924Z Artifact wms672-c5-linux-diagnostic-37527056184-1.zip successfully finalized. Artifact ID 11442174116
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.6351897Z Artifact wms672-c5-linux-diagnostic-37527056184-1 has been successfully uploaded! Final size is 2460362 bytes. Artifact ID is 11442174116
+c5-linux-diagnostic	Save raw diagnostic evidence even on failure	2026-10-06T20:32:53.6358608Z Artifact download URL: https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37527056184/artifacts/11442174116
+c5-linux-diagnostic	Post Run actions/checkout@v4	﻿2026-10-06T20:32:53.6805836Z Post job cleanup.
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7682293Z [command]/usr/bin/git version
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7722317Z git version 2.55.0
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7759407Z Temporarily overriding HOME='/home/runner/work/_temp/49e9cdb9-0eaf-4f50-9667-d25d4eb67cb6' before making global git config changes
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7761274Z Adding repository directory to the temporary git global config as a safe directory
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7762876Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7803268Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.7839804Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.8057679Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.8092194Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.8316176Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-linux-diagnostic	Post Run actions/checkout@v4	2026-10-06T20:32:53.8352136Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-linux-diagnostic	Complete job	﻿2026-10-06T20:32:53.8816024Z Cleaning up orphan processes
+c5-linux-diagnostic	Complete job	2026-10-06T20:32:53.9094416Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

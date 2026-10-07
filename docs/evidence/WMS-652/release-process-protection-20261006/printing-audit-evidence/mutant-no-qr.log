@@ -1,0 +1,69 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/frontend
+
+ ❯ src/guards/scan-print/fbsSequentialPacking.test.ts (37 tests | 1 failed | 36 skipped) 10ms
+   × WMS-604 sequential packing > preloads after barcode, waits for KIZ, then prints/packs that order and advances the next identical barcode 9ms
+     → expected "spy" to be called with arguments: [ …(4) ]
+
+Number of calls: 0
+
+   ↓ WMS-604 sequential packing > prints unmarked products immediately and persists their packing
+   ↓ WMS-604 sequential packing > keeps the same order after invalid KIZ without printing
+   ↓ WMS-604 sequential packing > keeps the saved KIZ and same print identity after printer failure
+   ↓ WMS-604 sequential packing > reconciles a lost KIZ response on the same product barcode before printing
+   ↓ WMS-604 sequential packing > does not use a different product scan to finish the previous failed print
+   ↓ WMS-604 sequential packing > replays a confirmed binding without asking for another KIZ
+   ↓ WMS-643 an unchecked box never prints > packs an order selected with QR on after the operator unchecks QR, without WMS Print
+   ↓ WMS-643 an unchecked box never prints > skips a pool KIZ label and a KIZ copy once their boxes are unchecked
+   ↓ WMS-643 an unchecked box never prints > still prints while the box stays checked
+   ↓ WMS-604 scan routing recovery > WMS-630: resumes routing to the other supply after the selected row gate completes with scan_product_not_found
+   ↓ WMS-604 scan routing recovery > WMS-630: resumes routing to the other supply after the selected row gate completes with scan_product_exhausted
+   ↓ WMS-604 scan routing recovery > WMS-630: keeps pending priority among remaining supplies after a completed row
+   ↓ WMS-604 scan routing recovery > WMS-630: keeps saved priority among remaining supplies after a completed row
+   ↓ WMS-604 scan routing recovery > WMS-630: does not route a still-selected row failure to another supply
+   ↓ WMS-604 scan routing recovery > continues to supply B on the same retry after saved supply A returns scan_product_not_found
+   ↓ WMS-604 scan routing recovery > continues to supply B on the same retry after saved supply A returns scan_product_exhausted
+   ↓ WMS-604 scan routing recovery > keeps a selected order authoritative instead of routing its failure to another supply
+   ↓ WMS-631 one mechanism with the supply checkboxes > M8: all off — sticker, then KIZ binds and packs without any print or scan-auto-print
+   ↓ WMS-631 one mechanism with the supply checkboxes > M10: all off — a product barcode gives the sticker error and selects nothing
+   ↓ WMS-631 one mechanism with the supply checkboxes > M10: all off — a product barcode the sticker lookup matches by the order barcode selects and packs nothing
+   ↓ WMS-631 one mechanism with the supply checkboxes > M12: only «Печатать ЧЗ» — a product without KIZ is selected by the server and packed at once
+   ↓ WMS-631 one mechanism with the supply checkboxes > M4: QR + pool KIZ prints QR then the KIZ label and packs without a KIZ scan
+   ↓ WMS-631 one mechanism with the supply checkboxes > M14: reprint only — KIZ scan binds and prints its exact copy
+   ↓ WMS-631 one mechanism with the supply checkboxes > R20: Escape releases a selection that waits for its KIZ
+   ↓ WMS-631 R19 step back > U1/U2 + WMS-636 R10: one «Назад» undoes the whole KIZ scan (unpack, KIZ, selection); the next press — the previous scan
+   ↓ WMS-631 R19 step back > U8: a failed undo keeps the step for the next press; a final refusal drops it (Д20)
+   ↓ WMS-631 R19 step back > a refused bind leaves no KIZ step; the intent of an unanswered bind stays
+   ↓ WMS-631 R19 step back > R20/P1-08: Escape frees the selection and removes its step
+   ↓ WMS-631 R19 step back > P2-6: Escape also drops an order whose label failed to print
+   ↓ WMS-631 R19 step back > P0-06: «Назад» waits for the scan in progress
+   ↓ WMS-631 R19 step back > P0-08: a saved sticker attempt resumes the same explicit selection after reload
+   ↓ WMS-631 R19 step back > P0-10: a row print failure after the KIZ was saved keeps the attempt keys
+   ↓ WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4) > N2: «Назад» after an unsent QR prints it with the same key on the next KIZ
+   ↓ WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4) > N3: Escape after a print failure keeps the QR key; a printed QR is never repeated
+   ↓ WMS-631 round 3: one QR per order (N2, N3) and Escape target (N4) > N4: Escape in an assembly drops the selection of the supply that scanned
+   ↓ WMS-635 Q4 > the ordinary supply speaks of «поставке», not «сборке»
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/guards/scan-print/fbsSequentialPacking.test.ts > WMS-604 sequential packing > preloads after barcode, waits for KIZ, then prints/packs that order and advances the next identical barcode
+AssertionError: expected "spy" to be called with arguments: [ …(4) ]
+
+Number of calls: 0
+
+ ❯ src/guards/scan-print/fbsSequentialPacking.test.ts:44:24
+     42|     await scanner.scan('kiz-1')
+     43|     expect(deps.bind).toHaveBeenCalledWith(expect.objectContaining({ o…
+     44|     expect(deps.print).toHaveBeenCalledWith(expect.objectContaining({ …
+       |                        ^
+     45|     expect(deps.pack).toHaveBeenCalledWith(expect.objectContaining({ o…
+     46|     expect(scanner.hasPending()).toBe(false)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 36 skipped (37)
+   Start at  22:02:14
+   Duration  321ms (transform 126ms, setup 0ms, collect 174ms, tests 10ms, environment 0ms, prepare 38ms)
+

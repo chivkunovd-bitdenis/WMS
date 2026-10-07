@@ -1,0 +1,26 @@
+warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+INFO:     Started server process [3998]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://127.0.0.1:8000 (Press CTRL+C to quit)
+INFO:     127.0.0.1:41708 - "GET /fixture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41712 - "GET /fixture HTTP/1.1" 200 OK
+INFO:     127.0.0.1:41712 - "POST /fixture/partial HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59174 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59186 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59188 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/pick-options HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59200 - "GET /products/linked-wb-catalog?seller_id=2c491bf0-e854-4981-a01e-fed8f0d48bcc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59202 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59204 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/pick-options HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59208 - "GET /products/linked-wb-catalog?seller_id=2c491bf0-e854-4981-a01e-fed8f0d48bcc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59222 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59236 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59244 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59246 - "POST /fixture/full HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59250 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59260 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59270 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/pick-options HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59272 - "GET /products/linked-wb-catalog?seller_id=2c491bf0-e854-4981-a01e-fed8f0d48bcc HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59280 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/history HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59296 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK
+INFO:     127.0.0.1:59300 - "GET /operations/fbs-supplies/86b38d6f-f161-4acb-8ce1-da8d22d8796b/workspace HTTP/1.1" 200 OK

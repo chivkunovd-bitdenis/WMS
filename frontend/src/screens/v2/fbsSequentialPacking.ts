@@ -93,8 +93,39 @@ export function packingSerialBusy(): boolean {
   return packingQueued > 0
 }
 
+export type PackingSerialQueue = {
+  busy: () => boolean
+  run: <T>(task: () => Promise<T>) => Promise<T>
+}
+
+/**
+ * A serial queue owned by one packing surface. It can outlive the visible bar
+ * while the operator switches tabs, so accepted scans finish in FIFO order;
+ * another screen gets another queue and never waits for this tail.
+ */
+export function createPackingSerialQueue(): PackingSerialQueue {
+  let chain: Promise<unknown> = Promise.resolve()
+  let queued = 0
+
+  return {
+    busy() {
+      return queued > 0
+    },
+    run<T>(task: () => Promise<T>): Promise<T> {
+      queued += 1
+      const run = chain.then(task, task)
+      chain = run.catch(() => undefined).finally(() => { queued -= 1 })
+      return run
+    },
+  }
+}
+
 export type PackingScanController = {
+  /** Called synchronously when the physical scan arrives, before the shared queue. */
+  onReceived?: (raw: string) => void
   hasSelectedRow?: () => boolean
+  /** True only when the visible rows prove that this code belongs to the controller. */
+  matches?: (raw: string) => boolean
   scan: (raw: string) => Promise<void>
   scanOrder?: (orderId: string, raw: string, target?: FbsKizLookup) => Promise<void>
   /** R20: drop the started scan (waiting for KIZ or after a print failure); true when dropped. */
@@ -109,6 +140,7 @@ export type PackingScanController = {
   hasSavedAttempt: (raw: string) => boolean
   view: () => PackingScanView
 }
+
 export type PackingAttempt = {
   key: string
   preferences: FbsScanPrintPreferences
@@ -188,8 +220,11 @@ function poolKizKeys(result: FbsScanAutoPrintResult): string[] {
 /** Resume an uncertain selection first, then continue through the remaining supplies. */
 export function routePackingScan(
   controllers: PackingScanController[], raw: string, place: 'сборке' | 'поставке' = 'сборке',
+  queue?: PackingSerialQueue,
 ): Promise<void> {
-  return runPackingSerial(() => routePackingScanNow(controllers, raw, place))
+  return queue
+    ? queue.run(() => routePackingScanNow(controllers, raw, place))
+    : runPackingSerial(() => routePackingScanNow(controllers, raw, place))
 }
 
 async function routePackingScanNow(
@@ -211,7 +246,12 @@ async function routePackingScanNow(
   const pending = remaining.find((one) => one.hasPending())
   if (pending) return pending.scan(raw)
   const saved = remaining.find((one) => one.hasSavedAttempt(raw))
-  const ordered = saved ? [saved, ...remaining.filter((one) => one !== saved)] : remaining
+  const matching = saved ? [] : remaining.filter((one) => one.matches?.(raw) === true)
+  // A durable unfinished attempt remains authoritative. Otherwise a barcode
+  // already present in visible rows must not be sent to unrelated supplies.
+  // Unknown order stickers retain the existing server lookup across the group.
+  const candidates = matching.length > 0 ? matching : remaining
+  const ordered = saved ? [saved, ...remaining.filter((one) => one !== saved)] : candidates
   let stickerNotFound: FbsApiError | null = null
   for (const controller of ordered) {
     try { await controller.scan(raw); return }
@@ -555,7 +595,7 @@ export function makePackingScanDeps(
   changed: () => void,
   refreshed: () => void,
   active: () => boolean = () => true,
-  currentBox: () => string | null = () => null,
+  currentBox: (raw?: string) => string | null = () => null,
   onBound: (orderId: string, value: string) => void = () => undefined,
   onSelected: (orderId: string) => void = () => undefined,
   preferences: () => FbsScanPrintPreferences = () => ({ printQr: true, printChz: false, reprintChz: false }),
@@ -610,7 +650,7 @@ export function makePackingScanDeps(
       let dirty = false
       // Capture the operator's box before the request: an uncertain selection
       // and a later remount must never substitute the newly opened box.
-      if (attempt.packingBoxId === undefined) { attempt.packingBoxId = currentBox(); dirty = true }
+      if (attempt.packingBoxId === undefined) { attempt.packingBoxId = currentBox(raw); dirty = true }
       // The label size is frozen for every label (and every retry) of this attempt.
       if (!attempt.labelSizeId) { attempt.labelSizeId = loadLabelSizeId(); dirty = true }
       if (explicit && !attempt.explicit) { attempt.explicit = true; dirty = true }

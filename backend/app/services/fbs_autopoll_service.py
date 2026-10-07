@@ -367,6 +367,7 @@ async def poll_marketplace_orders_for_target(
 
 
 MARKING_SYNC_BATCH_SIZE = 100
+OZON_DOCUMENT_STATUS_BATCH_LIMIT = 100
 
 
 async def sync_marking_statuses_for_assembling_supplies(
@@ -561,6 +562,42 @@ async def sync_marketplace_order_statuses_for_target(
 ) -> int:
     if target.marketplace == "wb":
         return await sync_fbs_order_statuses_for_seller(session, target, http_client)
+    from app.services.marketplace_account_service import MarketplaceAccountService
+    from app.services.ozon_exemplar_documents_service import (
+        document_data,
+        resume_exemplar_document_check,
+    )
+
+    pending_orders = list(
+        (
+            await session.scalars(
+                select(FbsOrder)
+                .where(
+                    FbsOrder.tenant_id == target.tenant_id,
+                    FbsOrder.seller_id == target.seller_id,
+                    FbsOrder.marketplace == "ozon",
+                    FbsOrder.meta_details_json["ozon_exemplar_documents"]["state"]
+                    .as_string()
+                    .in_(["preparing", "checking", "unknown"]),
+                )
+                .limit(OZON_DOCUMENT_STATUS_BATCH_LIMIT)
+            )
+        ).all()
+    )
+    if pending_orders:
+        client_id, api_key = await MarketplaceAccountService(session).stored_credentials(
+            target.tenant_id, target.seller_id
+        )
+        for pending_order in pending_orders:
+            if document_data(pending_order):
+                await resume_exemplar_document_check(
+                    session,
+                    tenant_id=target.tenant_id,
+                    order_id=pending_order.id,
+                    provider=ozon_provider or _blocked_ozon_provider("fetch_statuses"),
+                    client_id=client_id,
+                    api_key=api_key,
+                )
     provider = ozon_provider or _blocked_ozon_provider("fetch_statuses")
     return await sync_ozon_order_statuses(
         session,

@@ -1,0 +1,41 @@
+{
+  "task": "WMS-652",
+  "role": "independent bounded collector peer review; reviewer did not implement this collector",
+  "verdict": "PASS for isolated collection source only",
+  "source_sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "comparison_base": "76025c5db",
+  "initial_source": "a27a203a55ea5bb14e81354b78f5c7a419ad938c",
+  "resolved_defect": {
+    "initial": "command09 invoked ../scripts from repository root and collector forced native subprocess cwd=backend; print-agent paths would not execute",
+    "correction": "b568 corrects root invocation and records/uses the original explicit working directory for each group",
+    "resolved": true
+  },
+  "source_sha256": {
+    ".github/workflows/ci.yml": "625f2a69857c2dc6749f05efa6f86c9ab7fd16b59fab4176f2b134936b878502",
+    "scripts/ci/pg-comparison/commands.json": "f931eeb36195bedfa6fc119f8989af0364f7a7c800432865cce238f3d9be3567",
+    "scripts/ci/pg-comparison/execute.py": "290b47be6a73327eacb76af0aad8f64db054253eb78950b71889cda92d7f51bd"
+  },
+  "checks": {
+    "python_AST_parse": true,
+    "workflow_YAML_parse": true,
+    "generated_adjacent_shell_bash_n": true,
+    "ordinary_PostgreSQL_services_exact": true,
+    "eleven_command_hashes_verified": true,
+    "eleven_original_working_directories_and_invocations_verified": true,
+    "command09_repo_root_other_groups_backend": true,
+    "original_release_postgres_script_byte_identical": true,
+    "five_native_wrappers_only_prefix_changes_all_args_env_setup_cleanup_JUnit_asserts_preserved": true,
+    "native_PIPESTATUS_zero_index_retained": true,
+    "sticky_pg_failed_and_outer_original_parser_refusal_retained": true,
+    "final_requires_all_eleven_groups_and_every_record_exit_zero_and_five_inner_outcomes": true,
+    "continue_on_error_only_collection_with_strict_final_gate": true
+  },
+  "method": "Read immutable Git blobs; parse Python AST/YAML; reconstruct generated wrapper and check bash syntax; compare command digests, cwd, workflow invocations and ordinary services. Native commands not executed.",
+  "limits": [
+    "No PostgreSQL/test/browser/install/dispatch/full CI or synthetic result execution by reviewer.",
+    "This is not an ordinary full-CI/release/process-proof success or product acceptance.",
+    "Collector branch is isolated workflow_dispatch preparation; no common/main/production edits.",
+    "No source or frozen expectations changed by reviewer.",
+    "Runtime outcome completeness must be assessed from the actual sole dispatched job and its raw exit/report artifacts."
+  ]
+}

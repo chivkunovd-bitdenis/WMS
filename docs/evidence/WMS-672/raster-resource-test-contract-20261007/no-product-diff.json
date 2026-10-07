@@ -1,0 +1,12 @@
+{
+  "checkout_base_sha": "ea001a77653053624cc73acc00e622c155447292",
+  "unchanged_product_sha": "47817f76589701ea36ba1f8b30fca84b6a136208",
+  "product_comparison_command": "git diff 47817f76589701ea36ba1f8b30fca84b6a136208 -- frontend/src frontend/package.json frontend/package-lock.json",
+  "product_diff": "",
+  "tracked_diff_before_add": "",
+  "existing_tests_helpers_configs_byte_identical": true,
+  "status_before_add": [
+    "?? docs/evidence/WMS-672/raster-resource-test-contract-20261007/",
+    "?? frontend/tests-e2e/wms672-raster-resource.test.mjs"
+  ]
+}

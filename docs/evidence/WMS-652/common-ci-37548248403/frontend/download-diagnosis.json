@@ -1,0 +1,20 @@
+{
+  "artifact_id": 11452435031,
+  "job_id": 112557363963,
+  "run_id": 37548248403,
+  "run_attempt": 1,
+  "tested_sha": "ac845328b27b5be265962695e10766efddef339e",
+  "zip_sha256": "28e02f9f2776bb325674b21945bdd89c2acbcf45733afe90e9b1be2f2b22ebc6",
+  "mac_exact_pass": 110,
+  "mandatory_vitest_uniquely_passed": {
+    "frontend-fbs": 204
+  },
+  "total_assertions": 1566,
+  "duplicate_groups": {
+    "src/integrations/cryptoProCades.test.ts::CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline": [
+      "passed",
+      "passed"
+    ]
+  },
+  "raw_parser_verdict": "FAIL duplicate CryptoPro param-case identity; partial mandatory diagnosis is not final process proof"
+}

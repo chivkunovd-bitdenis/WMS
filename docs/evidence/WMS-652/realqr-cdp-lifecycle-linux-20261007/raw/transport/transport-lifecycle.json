@@ -1,0 +1,480 @@
+{
+  "lifecycle": [
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031104,
+      "nodeUtc": "2026-10-07T00:13:51.104Z",
+      "nodeMonoMs": 332.728321,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 1,
+      "method": "Browser.getVersion"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031113,
+      "nodeUtc": "2026-10-07T00:13:51.113Z",
+      "nodeMonoMs": 341.569328,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 1,
+      "method": "Browser.getVersion",
+      "result": {
+        "protocolVersion": "1.3",
+        "product": "Chrome/141.0.7390.37",
+        "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+        "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+        "jsVersion": "14.1.146.11"
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031113,
+      "nodeUtc": "2026-10-07T00:13:51.113Z",
+      "nodeMonoMs": 341.744612,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 2,
+      "method": "Page.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031115,
+      "nodeUtc": "2026-10-07T00:13:51.115Z",
+      "nodeMonoMs": 343.340613,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 2,
+      "method": "Page.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031115,
+      "nodeUtc": "2026-10-07T00:13:51.115Z",
+      "nodeMonoMs": 343.424099,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 3,
+      "method": "Runtime.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031120,
+      "nodeUtc": "2026-10-07T00:13:51.120Z",
+      "nodeMonoMs": 348.535019,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 3,
+      "method": "Runtime.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031120,
+      "nodeUtc": "2026-10-07T00:13:51.120Z",
+      "nodeMonoMs": 348.59542,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 4,
+      "method": "Network.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031121,
+      "nodeUtc": "2026-10-07T00:13:51.121Z",
+      "nodeMonoMs": 349.325298,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 4,
+      "method": "Network.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031121,
+      "nodeUtc": "2026-10-07T00:13:51.121Z",
+      "nodeMonoMs": 349.493261,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 5,
+      "method": "Fetch.enable"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031122,
+      "nodeUtc": "2026-10-07T00:13:51.122Z",
+      "nodeMonoMs": 350.4698,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 5,
+      "method": "Fetch.enable"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031122,
+      "nodeUtc": "2026-10-07T00:13:51.122Z",
+      "nodeMonoMs": 350.537052,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031124,
+      "nodeUtc": "2026-10-07T00:13:51.124Z",
+      "nodeMonoMs": 352.494377,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameStartedLoading",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031126,
+      "nodeUtc": "2026-10-07T00:13:51.126Z",
+      "nodeMonoMs": 354.631482,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Network.requestWillBeSent",
+      "requestId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "loaderId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "requestMethod": "GET",
+      "browserTimestamp": 84.677662,
+      "browserWallTime": 1791332031.126208,
+      "type": "Document"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031140,
+      "nodeUtc": "2026-10-07T00:13:51.140Z",
+      "nodeMonoMs": 368.564742,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-1.0",
+      "networkId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031140,
+      "nodeUtc": "2026-10-07T00:13:51.140Z",
+      "nodeMonoMs": 368.848249,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031143,
+      "nodeUtc": "2026-10-07T00:13:51.143Z",
+      "nodeMonoMs": 371.527971,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 7,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-1.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031145,
+      "nodeUtc": "2026-10-07T00:13:51.145Z",
+      "nodeMonoMs": 373.638787,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 6,
+      "method": "Page.navigate",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031145,
+      "nodeUtc": "2026-10-07T00:13:51.145Z",
+      "nodeMonoMs": 373.705397,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 8,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031152,
+      "nodeUtc": "2026-10-07T00:13:51.152Z",
+      "nodeMonoMs": 379.937073,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031152,
+      "nodeUtc": "2026-10-07T00:13:51.152Z",
+      "nodeMonoMs": 380.761344,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameNavigated",
+      "url": "http://127.0.0.1:16686/__wms652_transport_document__",
+      "type": "Navigation",
+      "frame": {
+        "id": "7061164198AA1C50A20B2CBD4BC96469",
+        "loaderId": "E7B64674FB924D21FDD61ECD202C7D7D",
+        "url": "http://127.0.0.1:16686/__wms652_transport_document__"
+      }
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031163,
+      "nodeUtc": "2026-10-07T00:13:51.163Z",
+      "nodeMonoMs": 391.633983,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Network.loadingFinished",
+      "requestId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "browserTimestamp": 84.692871
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031168,
+      "nodeUtc": "2026-10-07T00:13:51.168Z",
+      "nodeMonoMs": 396.852866,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameStoppedLoading",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031169,
+      "nodeUtc": "2026-10-07T00:13:51.169Z",
+      "nodeMonoMs": 397.099066,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 8,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031169,
+      "nodeUtc": "2026-10-07T00:13:51.169Z",
+      "nodeMonoMs": 397.287089,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 9,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031169,
+      "nodeUtc": "2026-10-07T00:13:51.169Z",
+      "nodeMonoMs": 397.72636,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Network.requestWillBeSent",
+      "requestId": "3508.2",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "loaderId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "url": "http://127.0.0.1:16686/favicon.ico",
+      "requestMethod": "GET",
+      "browserTimestamp": 84.717518,
+      "browserWallTime": 1791332031.166103,
+      "type": "Other"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031174,
+      "nodeUtc": "2026-10-07T00:13:51.174Z",
+      "nodeMonoMs": 402.138108,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-2.0",
+      "networkId": "3508.2",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/favicon.ico",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031174,
+      "nodeUtc": "2026-10-07T00:13:51.174Z",
+      "nodeMonoMs": 402.222055,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031175,
+      "nodeUtc": "2026-10-07T00:13:51.175Z",
+      "nodeMonoMs": 403.0097,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Network.requestWillBeSent",
+      "requestId": "3508.3",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "loaderId": "E7B64674FB924D21FDD61ECD202C7D7D",
+      "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+      "requestMethod": "GET",
+      "browserTimestamp": 84.72469,
+      "browserWallTime": 1791332031.173249,
+      "type": "Fetch"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031175,
+      "nodeUtc": "2026-10-07T00:13:51.175Z",
+      "nodeMonoMs": 403.624835,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 9,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031176,
+      "nodeUtc": "2026-10-07T00:13:51.176Z",
+      "nodeMonoMs": 404.109775,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3508.3",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "control-stage",
+      "nodeUtcMs": 1791332031176,
+      "nodeUtc": "2026-10-07T00:13:51.176Z",
+      "nodeMonoMs": 404.368945,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "stage": "navigate-with-observed-request-paused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3508.3",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469",
+      "url": "http://127.0.0.1:16686/__wms652_paused_transport__",
+      "method": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031176,
+      "nodeUtc": "2026-10-07T00:13:51.176Z",
+      "nodeMonoMs": 404.419451,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 11,
+      "method": "Page.navigate",
+      "url": "about:blank"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031182,
+      "nodeUtc": "2026-10-07T00:13:51.182Z",
+      "nodeMonoMs": 410.309634,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 10,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-2.0",
+      "responseCode": 204
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031183,
+      "nodeUtc": "2026-10-07T00:13:51.183Z",
+      "nodeMonoMs": 410.939211,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Network.loadingFinished",
+      "requestId": "3508.2",
+      "browserTimestamp": 84.726183
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031183,
+      "nodeUtc": "2026-10-07T00:13:51.183Z",
+      "nodeMonoMs": 411.210089,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameStartedLoading",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031193,
+      "nodeUtc": "2026-10-07T00:13:51.193Z",
+      "nodeMonoMs": 421.159779,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 11,
+      "method": "Page.navigate",
+      "url": "about:blank"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031224,
+      "nodeUtc": "2026-10-07T00:13:51.224Z",
+      "nodeMonoMs": 451.961946,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031224,
+      "nodeUtc": "2026-10-07T00:13:51.224Z",
+      "nodeMonoMs": 452.193715,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Runtime.executionContextsCleared"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031226,
+      "nodeUtc": "2026-10-07T00:13:51.226Z",
+      "nodeMonoMs": 454.279082,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameNavigated",
+      "url": "about:blank",
+      "type": "Navigation",
+      "frame": {
+        "id": "7061164198AA1C50A20B2CBD4BC96469",
+        "loaderId": "AD011209A3655E3579970953FB939520",
+        "url": "about:blank"
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332031226,
+      "nodeUtc": "2026-10-07T00:13:51.226Z",
+      "nodeMonoMs": 454.567486,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 12,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332031235,
+      "nodeUtc": "2026-10-07T00:13:51.235Z",
+      "nodeMonoMs": 463.830374,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "method": "Page.frameStoppedLoading",
+      "frameId": "7061164198AA1C50A20B2CBD4BC96469"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332031237,
+      "nodeUtc": "2026-10-07T00:13:51.237Z",
+      "nodeMonoMs": 465.319845,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 12,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332032739,
+      "nodeUtc": "2026-10-07T00:13:52.739Z",
+      "nodeMonoMs": 1967.031562,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 13,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332032739,
+      "nodeUtc": "2026-10-07T00:13:52.739Z",
+      "nodeMonoMs": 1967.790003,
+      "nodeTimeOriginMs": 1791332030772.137,
+      "commandId": 13,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    }
+  ],
+  "lifecycleDropped": 0
+}

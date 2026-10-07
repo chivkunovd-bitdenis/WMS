@@ -1,0 +1,1651 @@
+﻿2026-10-07T02:21:45.2368740Z Current runner version: '2.337.0'
+2026-10-07T02:21:45.2392982Z ##[group]Runner Image Provisioner
+2026-10-07T02:21:45.2393857Z Hosted Compute Agent
+2026-10-07T02:21:45.2394464Z Version: 20261002.596
+2026-10-07T02:21:45.2395185Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+2026-10-07T02:21:45.2395928Z Build Date: 2026-10-02T22:28:27Z
+2026-10-07T02:21:45.2396904Z Worker ID: {804bdbb8-25dd-4d9a-a1f5-e5434e0e2dbe}
+2026-10-07T02:21:45.2397650Z Region: westus
+2026-10-07T02:21:45.2398241Z Cloud: Azure
+2026-10-07T02:21:45.2398837Z ##[endgroup]
+2026-10-07T02:21:45.2400326Z ##[group]Operating System
+2026-10-07T02:21:45.2401090Z Ubuntu
+2026-10-07T02:21:45.2401631Z 24.04.5
+2026-10-07T02:21:45.2402176Z LTS
+2026-10-07T02:21:45.2402738Z ##[endgroup]
+2026-10-07T02:21:45.2403381Z ##[group]Runner Image
+2026-10-07T02:21:45.2403959Z Image: ubuntu-24.04
+2026-10-07T02:21:45.2404585Z Version: 20261004.327.1
+2026-10-07T02:21:45.2405867Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+2026-10-07T02:21:45.2407741Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+2026-10-07T02:21:45.2408719Z ##[endgroup]
+2026-10-07T02:21:45.2409896Z ##[group]GITHUB_TOKEN Permissions
+2026-10-07T02:21:45.2411764Z Contents: read
+2026-10-07T02:21:45.2412484Z Metadata: read
+2026-10-07T02:21:45.2413097Z ##[endgroup]
+2026-10-07T02:21:45.2415601Z Secret source: Actions
+2026-10-07T02:21:45.2416841Z Cache mode: write
+2026-10-07T02:21:45.2417578Z Prepare workflow directory
+2026-10-07T02:21:45.2874126Z Prepare all required actions
+2026-10-07T02:21:45.2922331Z Getting action download info
+2026-10-07T02:21:45.6614341Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+2026-10-07T02:21:45.7555355Z Download action repository 'actions/setup-python@v5' (SHA:a26af69be951a213d495a4c3e4e4022e16d87065)
+2026-10-07T02:21:45.8329162Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+2026-10-07T02:21:45.9150842Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+2026-10-07T02:21:46.1357548Z Complete job name: backend-checks
+2026-10-07T02:21:46.1949961Z ##[group]Checking docker version
+2026-10-07T02:21:46.1962971Z ##[command]/usr/bin/docker version --format '{{.Server.APIVersion}}'
+2026-10-07T02:21:46.2773303Z '1.48'
+2026-10-07T02:21:46.2790894Z Docker daemon API version: '1.48'
+2026-10-07T02:21:46.2791745Z ##[command]/usr/bin/docker version --format '{{.Client.APIVersion}}'
+2026-10-07T02:21:46.2954218Z '1.48'
+2026-10-07T02:21:46.2978861Z Docker client API version: '1.48'
+2026-10-07T02:21:46.2983711Z ##[endgroup]
+2026-10-07T02:21:46.2987569Z ##[group]Clean up resources from previous jobs
+2026-10-07T02:21:46.2993927Z ##[command]/usr/bin/docker ps --all --quiet --no-trunc --filter "label=3f9719"
+2026-10-07T02:21:46.3170189Z ##[command]/usr/bin/docker network prune --force --filter "label=3f9719"
+2026-10-07T02:21:46.3312663Z ##[endgroup]
+2026-10-07T02:21:46.3313729Z ##[group]Create local container network
+2026-10-07T02:21:46.3328064Z ##[command]/usr/bin/docker network create --label 3f9719 github_network_869bd7af465243d3b3c31c5da3be86cc
+2026-10-07T02:21:46.3937064Z aee10ce3612ee46b9edb563eb13a7529a3368e0c44b5553a6432638b2339852b
+2026-10-07T02:21:46.3957184Z ##[endgroup]
+2026-10-07T02:21:46.3982969Z ##[group]Starting postgres service container
+2026-10-07T02:21:46.4006724Z ##[command]/usr/bin/docker pull postgres:16
+2026-10-07T02:21:47.3221064Z 16: Pulling from library/postgres
+2026-10-07T02:21:47.5773160Z ecc510c1e359: Pulling fs layer
+2026-10-07T02:21:47.5774860Z 79faf13a8736: Pulling fs layer
+2026-10-07T02:21:47.5776469Z 6456bfbf35e7: Pulling fs layer
+2026-10-07T02:21:47.5777804Z b353db459ed1: Pulling fs layer
+2026-10-07T02:21:47.5779440Z 99f49de4fe2b: Pulling fs layer
+2026-10-07T02:21:47.5781096Z 83d1a2a3917c: Pulling fs layer
+2026-10-07T02:21:47.5782334Z 715ea0948cb1: Pulling fs layer
+2026-10-07T02:21:47.5783131Z 486e8305f56f: Pulling fs layer
+2026-10-07T02:21:47.5784273Z e7d675f11ded: Pulling fs layer
+2026-10-07T02:21:47.5785057Z c49864c27f35: Pulling fs layer
+2026-10-07T02:21:47.5785865Z 770ef8b308ea: Pulling fs layer
+2026-10-07T02:21:47.5787103Z 50c25daa0302: Pulling fs layer
+2026-10-07T02:21:47.5788138Z 8309db3ae5b6: Pulling fs layer
+2026-10-07T02:21:47.5789167Z 9731e27f2541: Pulling fs layer
+2026-10-07T02:21:47.5790135Z b353db459ed1: Waiting
+2026-10-07T02:21:47.5790956Z 99f49de4fe2b: Waiting
+2026-10-07T02:21:47.5791919Z e7d675f11ded: Waiting
+2026-10-07T02:21:47.5792864Z c49864c27f35: Waiting
+2026-10-07T02:21:47.5793778Z 83d1a2a3917c: Waiting
+2026-10-07T02:21:47.5794697Z 770ef8b308ea: Waiting
+2026-10-07T02:21:47.5795835Z 715ea0948cb1: Waiting
+2026-10-07T02:21:47.5797265Z 486e8305f56f: Waiting
+2026-10-07T02:21:47.5798478Z 50c25daa0302: Waiting
+2026-10-07T02:21:47.5799697Z 9731e27f2541: Waiting
+2026-10-07T02:21:47.5800952Z 8309db3ae5b6: Waiting
+2026-10-07T02:21:47.8009533Z 79faf13a8736: Verifying Checksum
+2026-10-07T02:21:47.8010824Z 79faf13a8736: Download complete
+2026-10-07T02:21:47.8305359Z 6456bfbf35e7: Verifying Checksum
+2026-10-07T02:21:47.8306374Z 6456bfbf35e7: Download complete
+2026-10-07T02:21:47.9069713Z ecc510c1e359: Verifying Checksum
+2026-10-07T02:21:47.9071172Z ecc510c1e359: Download complete
+2026-10-07T02:21:48.0334751Z b353db459ed1: Verifying Checksum
+2026-10-07T02:21:48.0335328Z b353db459ed1: Download complete
+2026-10-07T02:21:48.0748210Z 99f49de4fe2b: Verifying Checksum
+2026-10-07T02:21:48.0781295Z 99f49de4fe2b: Download complete
+2026-10-07T02:21:48.1186768Z 83d1a2a3917c: Verifying Checksum
+2026-10-07T02:21:48.1187400Z 83d1a2a3917c: Download complete
+2026-10-07T02:21:48.2571511Z 715ea0948cb1: Verifying Checksum
+2026-10-07T02:21:48.2572043Z 715ea0948cb1: Download complete
+2026-10-07T02:21:48.2990916Z 486e8305f56f: Verifying Checksum
+2026-10-07T02:21:48.2995668Z 486e8305f56f: Download complete
+2026-10-07T02:21:48.4559359Z c49864c27f35: Download complete
+2026-10-07T02:21:48.5154684Z 770ef8b308ea: Verifying Checksum
+2026-10-07T02:21:48.5161698Z 770ef8b308ea: Download complete
+2026-10-07T02:21:48.6765424Z 50c25daa0302: Verifying Checksum
+2026-10-07T02:21:48.6782208Z 50c25daa0302: Download complete
+2026-10-07T02:21:48.7019221Z e7d675f11ded: Verifying Checksum
+2026-10-07T02:21:48.7020243Z e7d675f11ded: Download complete
+2026-10-07T02:21:48.7450253Z 8309db3ae5b6: Download complete
+2026-10-07T02:21:48.9011420Z 9731e27f2541: Verifying Checksum
+2026-10-07T02:21:48.9013135Z 9731e27f2541: Download complete
+2026-10-07T02:21:49.0150335Z ecc510c1e359: Pull complete
+2026-10-07T02:21:51.7813816Z 79faf13a8736: Pull complete
+2026-10-07T02:21:51.9580589Z 6456bfbf35e7: Pull complete
+2026-10-07T02:21:51.9974640Z b353db459ed1: Pull complete
+2026-10-07T02:21:52.2977036Z 99f49de4fe2b: Pull complete
+2026-10-07T02:21:52.3739515Z 83d1a2a3917c: Pull complete
+2026-10-07T02:21:52.3820632Z 715ea0948cb1: Pull complete
+2026-10-07T02:21:52.3914570Z 486e8305f56f: Pull complete
+2026-10-07T02:21:55.3883662Z e7d675f11ded: Pull complete
+2026-10-07T02:21:55.4045954Z c49864c27f35: Pull complete
+2026-10-07T02:21:55.4129820Z 770ef8b308ea: Pull complete
+2026-10-07T02:21:55.4218757Z 50c25daa0302: Pull complete
+2026-10-07T02:21:55.4312673Z 8309db3ae5b6: Pull complete
+2026-10-07T02:21:55.4387570Z 9731e27f2541: Pull complete
+2026-10-07T02:21:55.4424021Z Digest: sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65
+2026-10-07T02:21:55.4436448Z Status: Downloaded newer image for postgres:16
+2026-10-07T02:21:55.4444335Z docker.io/library/postgres:16
+2026-10-07T02:21:55.4505282Z ##[command]/usr/bin/docker create --name 789eaa8e01184815ae527de36ae514f0_postgres16_fac502 --label 3f9719 --network github_network_869bd7af465243d3b3c31c5da3be86cc --network-alias postgres -p 5432:5432 --health-cmd "pg_isready -U postgres -d wms_test_517" --health-interval 5s --health-timeout 3s --health-retries 20 -e "POSTGRES_DB=wms_test_517" -e "POSTGRES_USER=postgres" -e "POSTGRES_PASSWORD=fixture-only" -e GITHUB_ACTIONS=true -e CI=true postgres:16
+2026-10-07T02:21:55.4761561Z df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:55.4785363Z ##[command]/usr/bin/docker start df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:55.6849212Z df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:55.6911162Z ##[command]/usr/bin/docker ps --all --filter id=df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-10-07T02:21:55.7068043Z df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab Up Less than a second (health: starting)
+2026-10-07T02:21:55.7078384Z ##[command]/usr/bin/docker port df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:55.7219384Z 5432/tcp -> 0.0.0.0:5432
+2026-10-07T02:21:55.7220564Z 5432/tcp -> [::]:5432
+2026-10-07T02:21:55.7271101Z ##[endgroup]
+2026-10-07T02:21:55.7272499Z ##[group]Starting postgres662batch service container
+2026-10-07T02:21:55.7273973Z ##[command]/usr/bin/docker pull postgres:16
+2026-10-07T02:21:56.3409412Z 16: Pulling from library/postgres
+2026-10-07T02:21:56.3465398Z Digest: sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65
+2026-10-07T02:21:56.3466535Z Status: Image is up to date for postgres:16
+2026-10-07T02:21:56.3470472Z docker.io/library/postgres:16
+2026-10-07T02:21:56.3487317Z ##[command]/usr/bin/docker create --name cd87aa1d32674034ab7881c7a0d89c1c_postgres16_5f6915 --label 3f9719 --network github_network_869bd7af465243d3b3c31c5da3be86cc --network-alias postgres662batch -p 55466:5432 --health-cmd "pg_isready -U wms_test -d wms_test_662_batch" --health-interval 5s --health-timeout 3s --health-retries 20 -e "POSTGRES_DB=wms_test_662_batch" -e "POSTGRES_USER=wms_test" -e "POSTGRES_PASSWORD=fixture-only" -e GITHUB_ACTIONS=true -e CI=true postgres:16
+2026-10-07T02:21:56.3776193Z 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:21:56.3790034Z ##[command]/usr/bin/docker start 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:21:56.5482711Z 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:21:56.5515432Z ##[command]/usr/bin/docker ps --all --filter id=48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-10-07T02:21:56.5683424Z 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2 Up Less than a second (health: starting)
+2026-10-07T02:21:56.5698433Z ##[command]/usr/bin/docker port 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:21:56.5855570Z 5432/tcp -> 0.0.0.0:55466
+2026-10-07T02:21:56.5856964Z 5432/tcp -> [::]:55466
+2026-10-07T02:21:56.5858856Z ##[endgroup]
+2026-10-07T02:21:56.5860678Z ##[group]Starting postgres662steady service container
+2026-10-07T02:21:56.5861609Z ##[command]/usr/bin/docker pull postgres:16
+2026-10-07T02:21:57.1733355Z 16: Pulling from library/postgres
+2026-10-07T02:21:57.1792064Z Digest: sha256:65b16a8b326e0cfbdf33fa7e783f2a0cb352a61448616ccccfd616ef42aa0f65
+2026-10-07T02:21:57.1795234Z Status: Image is up to date for postgres:16
+2026-10-07T02:21:57.1798932Z docker.io/library/postgres:16
+2026-10-07T02:21:57.1815472Z ##[command]/usr/bin/docker create --name 441a505a17d24950abfe738346acf438_postgres16_2500ce --label 3f9719 --network github_network_869bd7af465243d3b3c31c5da3be86cc --network-alias postgres662steady -p 55468:5432 --health-cmd "pg_isready -U wms_test -d wms_test_662_steady" --health-interval 5s --health-timeout 3s --health-retries 20 -e "POSTGRES_DB=wms_test_662_steady" -e "POSTGRES_USER=wms_test" -e "POSTGRES_PASSWORD=fixture-only" -e GITHUB_ACTIONS=true -e CI=true postgres:16
+2026-10-07T02:21:57.2132876Z 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:21:57.2147394Z ##[command]/usr/bin/docker start 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:21:57.3595930Z 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:21:57.3613311Z ##[command]/usr/bin/docker ps --all --filter id=66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8 --filter status=running --no-trunc --format "{{.ID}} {{.Status}}"
+2026-10-07T02:21:57.3772018Z 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8 Up Less than a second (health: starting)
+2026-10-07T02:21:57.3789975Z ##[command]/usr/bin/docker port 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:21:57.3955867Z 5432/tcp -> 0.0.0.0:55468
+2026-10-07T02:21:57.3956760Z 5432/tcp -> [::]:55468
+2026-10-07T02:21:57.3970549Z ##[endgroup]
+2026-10-07T02:21:57.3981984Z ##[group]Waiting for all services to be ready
+2026-10-07T02:21:57.3996676Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:57.4217266Z starting
+2026-10-07T02:21:57.4247612Z postgres service is starting, waiting 2 seconds before checking again.
+2026-10-07T02:21:59.4259338Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:21:59.4383127Z starting
+2026-10-07T02:21:59.4395824Z postgres service is starting, waiting 4 seconds before checking again.
+2026-10-07T02:22:03.6615395Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:22:03.6749973Z healthy
+2026-10-07T02:22:03.6767786Z postgres service is healthy.
+2026-10-07T02:22:03.6768653Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:22:03.6887316Z healthy
+2026-10-07T02:22:03.6899189Z postgres662batch service is healthy.
+2026-10-07T02:22:03.6900024Z ##[command]/usr/bin/docker inspect --format="{{if .Config.Healthcheck}}{{print .State.Health.Status}}{{end}}" 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:22:03.7017454Z healthy
+2026-10-07T02:22:03.7030310Z postgres662steady service is healthy.
+2026-10-07T02:22:03.7031103Z ##[endgroup]
+2026-10-07T02:22:03.7335636Z ##[group]Run actions/checkout@v4
+2026-10-07T02:22:03.7336434Z with:
+2026-10-07T02:22:03.7336648Z   fetch-depth: 0
+2026-10-07T02:22:03.7336889Z   repository: chivkunovd-bitdenis/WMS
+2026-10-07T02:22:03.7339492Z   token: ***
+2026-10-07T02:22:03.7339710Z   ssh-strict: true
+2026-10-07T02:22:03.7339962Z   ssh-user: git
+2026-10-07T02:22:03.7340223Z   persist-credentials: true
+2026-10-07T02:22:03.7340514Z   clean: true
+2026-10-07T02:22:03.7340775Z   sparse-checkout-cone-mode: true
+2026-10-07T02:22:03.7341064Z   fetch-tags: false
+2026-10-07T02:22:03.7341283Z   show-progress: true
+2026-10-07T02:22:03.7341500Z   lfs: false
+2026-10-07T02:22:03.7341732Z   submodules: false
+2026-10-07T02:22:03.7341989Z   set-safe-directory: true
+2026-10-07T02:22:03.7342296Z   allow-unsafe-pr-checkout: false
+2026-10-07T02:22:03.7342797Z ##[endgroup]
+2026-10-07T02:22:03.8367266Z Syncing repository: chivkunovd-bitdenis/WMS
+2026-10-07T02:22:03.8369115Z ##[group]Getting Git version info
+2026-10-07T02:22:03.8369733Z Working directory is '/home/runner/work/WMS/WMS'
+2026-10-07T02:22:03.8370545Z [command]/usr/bin/git version
+2026-10-07T02:22:03.8428434Z git version 2.55.0
+2026-10-07T02:22:03.8451654Z ##[endgroup]
+2026-10-07T02:22:03.8469773Z Temporarily overriding HOME='/home/runner/work/_temp/3d912c0c-aba9-4a57-b0eb-6ccbe4992379' before making global git config changes
+2026-10-07T02:22:03.8471547Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-07T02:22:03.8476564Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+2026-10-07T02:22:03.8533721Z Deleting the contents of '/home/runner/work/WMS/WMS'
+2026-10-07T02:22:03.8543274Z ##[group]Initializing the repository
+2026-10-07T02:22:03.8551933Z [command]/usr/bin/git init /home/runner/work/WMS/WMS
+2026-10-07T02:22:03.8655078Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-10-07T02:22:03.8656345Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-10-07T02:22:03.8657566Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-10-07T02:22:03.8658369Z hint: call:
+2026-10-07T02:22:03.8658801Z hint:
+2026-10-07T02:22:03.8659703Z hint: 	git config --global init.defaultBranch <name>
+2026-10-07T02:22:03.8660247Z hint:
+2026-10-07T02:22:03.8660740Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-10-07T02:22:03.8661577Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-10-07T02:22:03.8661996Z hint:
+2026-10-07T02:22:03.8662205Z hint: 	git branch -m <name>
+2026-10-07T02:22:03.8662442Z hint:
+2026-10-07T02:22:03.8662782Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-10-07T02:22:03.8663334Z Initialized empty Git repository in /home/runner/work/WMS/WMS/.git/
+2026-10-07T02:22:03.8677071Z [command]/usr/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+2026-10-07T02:22:03.8725582Z ##[endgroup]
+2026-10-07T02:22:03.8726635Z ##[group]Disabling automatic garbage collection
+2026-10-07T02:22:03.8730888Z [command]/usr/bin/git config --local gc.auto 0
+2026-10-07T02:22:03.8765531Z ##[endgroup]
+2026-10-07T02:22:03.8766764Z ##[group]Setting up auth
+2026-10-07T02:22:03.8774835Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-07T02:22:03.8815699Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-07T02:22:03.9190289Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-07T02:22:03.9229151Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-07T02:22:03.9476560Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-07T02:22:03.9512287Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-07T02:22:03.9736719Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-10-07T02:22:03.9777898Z ##[endgroup]
+2026-10-07T02:22:03.9778471Z ##[group]Fetching the repository
+2026-10-07T02:22:03.9790099Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/* +4a118aea00ec3995d98f70d337245260b291ca7f:refs/remotes/pull/387/merge
+2026-10-07T02:22:15.6285573Z From https://github.com/chivkunovd-bitdenis/WMS
+2026-10-07T02:22:15.6288880Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+2026-10-07T02:22:15.6291653Z  * [new branch]          archive/staging-20260924-93f511ab        -> origin/archive/staging-20260924-93f511ab
+2026-10-07T02:22:15.6293475Z  * [new branch]          archive/staging-before-wms521-20260924   -> origin/archive/staging-before-wms521-20260924
+2026-10-07T02:22:15.6295399Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+2026-10-07T02:22:15.6297219Z  * [new branch]          backlog/fbs-followups-20260812           -> origin/backlog/fbs-followups-20260812
+2026-10-07T02:22:15.6298348Z  * [new branch]          brand/portal-logos-20260811              -> origin/brand/portal-logos-20260811
+2026-10-07T02:22:15.6299660Z  * [new branch]          brand/portal-logos-live-20260811         -> origin/brand/portal-logos-live-20260811
+2026-10-07T02:22:15.6301185Z  * [new branch]          brand/portal-logos-prod-20260811         -> origin/brand/portal-logos-prod-20260811
+2026-10-07T02:22:15.6302477Z  * [new branch]          chore/deploy-smoke-retry-on-main         -> origin/chore/deploy-smoke-retry-on-main
+2026-10-07T02:22:15.6303655Z  * [new branch]          chore/operator-change-contract-20260901  -> origin/chore/operator-change-contract-20260901
+2026-10-07T02:22:15.6304689Z  * [new branch]          chore/railway-toml-fix                   -> origin/chore/railway-toml-fix
+2026-10-07T02:22:15.6305651Z  * [new branch]          chore/release-via-pr-only-rules          -> origin/chore/release-via-pr-only-rules
+2026-10-07T02:22:15.6307045Z  * [new branch]          chore/staging-sync-20261003              -> origin/chore/staging-sync-20261003
+2026-10-07T02:22:15.6308113Z  * [new branch]          chore/wb-emulator-railway-dockerfile     -> origin/chore/wb-emulator-railway-dockerfile
+2026-10-07T02:22:15.6309288Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+2026-10-07T02:22:15.6310322Z  * [new branch]          chore/wms574-stand                       -> origin/chore/wms574-stand
+2026-10-07T02:22:15.6311309Z  * [new branch]          codex/agent-job-1710a7649a6964db         -> origin/codex/agent-job-1710a7649a6964db
+2026-10-07T02:22:15.6312328Z  * [new branch]          codex/agent-job-21079e59afb9acdb         -> origin/codex/agent-job-21079e59afb9acdb
+2026-10-07T02:22:15.6313435Z  * [new branch]          codex/agent-job-6f3e370ab6217c51         -> origin/codex/agent-job-6f3e370ab6217c51
+2026-10-07T02:22:15.6314570Z  * [new branch]          codex/agent-job-8c954436cd418999         -> origin/codex/agent-job-8c954436cd418999
+2026-10-07T02:22:15.6315702Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac         -> origin/codex/agent-job-97af6faf8d8c22ac
+2026-10-07T02:22:15.6316983Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5         -> origin/codex/agent-job-bb021d7e007fb8a5
+2026-10-07T02:22:15.6318132Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150         -> origin/codex/agent-job-ef71dbb00ee2b150
+2026-10-07T02:22:15.6319611Z  * [new branch]          codex/agent-job-fc68bb2705b6850f         -> origin/codex/agent-job-fc68bb2705b6850f
+2026-10-07T02:22:15.6320911Z  * [new branch]          codex/artmaks-fbo-mockup                 -> origin/codex/artmaks-fbo-mockup
+2026-10-07T02:22:15.6321963Z  * [new branch]          codex/backlog40-ci-contracts             -> origin/codex/backlog40-ci-contracts
+2026-10-07T02:22:15.6323019Z  * [new branch]          codex/backlog40-ci-pdf                   -> origin/codex/backlog40-ci-pdf
+2026-10-07T02:22:15.6324035Z  * [new branch]          codex/billing-journal-20260825           -> origin/codex/billing-journal-20260825
+2026-10-07T02:22:15.6325266Z  * [new branch]          codex/billing-module-20260826            -> origin/codex/billing-module-20260826
+2026-10-07T02:22:15.6326745Z  * [new branch]          codex/billing-stage-finish-20260823      -> origin/codex/billing-stage-finish-20260823
+2026-10-07T02:22:15.6328087Z  * [new branch]          codex/billing-storage-bounds-20260823    -> origin/codex/billing-storage-bounds-20260823
+2026-10-07T02:22:15.6329425Z  * [new branch]          codex/box-label-bulk-print-20260824      -> origin/codex/box-label-bulk-print-20260824
+2026-10-07T02:22:15.6330628Z  * [new branch]          codex/catalog-box-filters-20260824       -> origin/codex/catalog-box-filters-20260824
+2026-10-07T02:22:15.6331830Z  * [new branch]          codex/catalog-box-tabs-source-20260823   -> origin/codex/catalog-box-tabs-source-20260823
+2026-10-07T02:22:15.6333042Z  * [new branch]          codex/cell-contents-scanner-20260824     -> origin/codex/cell-contents-scanner-20260824
+2026-10-07T02:22:15.6334359Z  * [new branch]          codex/fbs-qr-only-print-20260823         -> origin/codex/fbs-qr-only-print-20260823
+2026-10-07T02:22:15.6335677Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+2026-10-07T02:22:15.6337540Z  * [new branch]          codex/fix-seller-inbound-empty-picker    -> origin/codex/fix-seller-inbound-empty-picker
+2026-10-07T02:22:15.6338772Z  * [new branch]          codex/fix-wb-done-supply-status-prod     -> origin/codex/fix-wb-done-supply-status-prod
+2026-10-07T02:22:15.6339885Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820     -> origin/codex/hotfix-fbs-100-orders-20260820
+2026-10-07T02:22:15.6340984Z  * [new branch]          codex/hotfix-fbs-packaging-flag          -> origin/codex/hotfix-fbs-packaging-flag
+2026-10-07T02:22:15.6341960Z  * [new branch]          codex/hotfix-ozon-kiz                    -> origin/codex/hotfix-ozon-kiz
+2026-10-07T02:22:15.6342961Z  * [new branch]          codex/invoice-row-location               -> origin/codex/invoice-row-location
+2026-10-07T02:22:15.6344142Z  * [new branch]          codex/knowledge-inbound-guide-20260824   -> origin/codex/knowledge-inbound-guide-20260824
+2026-10-07T02:22:15.6345271Z  * [new branch]          codex/mp-dashboard-e2e-20260815          -> origin/codex/mp-dashboard-e2e-20260815
+2026-10-07T02:22:15.6346779Z  * [new branch]          codex/night-ready-acceptance-1006        -> origin/codex/night-ready-acceptance-1006
+2026-10-07T02:22:15.6347775Z  * [new branch]          codex/night-ready-candidate-1006-inrepo  -> origin/codex/night-ready-candidate-1006-inrepo
+2026-10-07T02:22:15.6348517Z  * [new branch]          codex/night-ready-exact-staging-1006     -> origin/codex/night-ready-exact-staging-1006
+2026-10-07T02:22:15.6349270Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+2026-10-07T02:22:15.6350038Z  * [new branch]          codex/night-ready-migration-compat-1006  -> origin/codex/night-ready-migration-compat-1006
+2026-10-07T02:22:15.6350751Z  * [new branch]          codex/night-ready-staging-1006           -> origin/codex/night-ready-staging-1006
+2026-10-07T02:22:15.6351536Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+2026-10-07T02:22:15.6352600Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+2026-10-07T02:22:15.6353428Z  * [new branch]          codex/night-ready-staging-rollback-1006  -> origin/codex/night-ready-staging-rollback-1006
+2026-10-07T02:22:15.6354130Z  * [new branch]          codex/night-release-5beb52da-1           -> origin/codex/night-release-5beb52da-1
+2026-10-07T02:22:15.6354796Z  * [new branch]          codex/night-requirements-20261006        -> origin/codex/night-requirements-20261006
+2026-10-07T02:22:15.6355428Z  * [new branch]          codex/night1007-658                      -> origin/codex/night1007-658
+2026-10-07T02:22:15.6356642Z  * [new branch]          codex/night1007-671-687                  -> origin/codex/night1007-671-687
+2026-10-07T02:22:15.6357665Z  * [new branch]          codex/night1007-675-release              -> origin/codex/night1007-675-release
+2026-10-07T02:22:15.6358609Z  * [new branch]          codex/night1007-679-680                  -> origin/codex/night1007-679-680
+2026-10-07T02:22:15.6359171Z  * [new branch]          codex/night1007-681                      -> origin/codex/night1007-681
+2026-10-07T02:22:15.6359719Z  * [new branch]          codex/night1007-684-586                  -> origin/codex/night1007-684-586
+2026-10-07T02:22:15.6360295Z  * [new branch]          codex/night1007-integration              -> origin/codex/night1007-integration
+2026-10-07T02:22:15.6360991Z  * [new branch]          codex/night1007-print-regressions-646cb4 -> origin/codex/night1007-print-regressions-646cb4
+2026-10-07T02:22:15.6361701Z  * [new branch]          codex/night1007-wms652-ci-fix            -> origin/codex/night1007-wms652-ci-fix
+2026-10-07T02:22:15.6362451Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+2026-10-07T02:22:15.6363369Z  * [new branch]          codex/ozon-catalog-20260825              -> origin/codex/ozon-catalog-20260825
+2026-10-07T02:22:15.6363965Z  * [new branch]          codex/ozon-fbs-20260825                  -> origin/codex/ozon-fbs-20260825
+2026-10-07T02:22:15.6364544Z  * [new branch]          codex/ozon-stock-20260825                -> origin/codex/ozon-stock-20260825
+2026-10-07T02:22:15.6365178Z  * [new branch]          codex/ozon-test-key-marker-20260824      -> origin/codex/ozon-test-key-marker-20260824
+2026-10-07T02:22:15.6365872Z  * [new branch]          codex/priority-five-release-20261006     -> origin/codex/priority-five-release-20261006
+2026-10-07T02:22:15.6366853Z  * [new branch]          codex/priority-five-review-20261006      -> origin/codex/priority-five-review-20261006
+2026-10-07T02:22:15.6367596Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+2026-10-07T02:22:15.6368321Z  * [new branch]          codex/regress-live-cases-20260825        -> origin/codex/regress-live-cases-20260825
+2026-10-07T02:22:15.6368998Z  * [new branch]          codex/release-20261006-astra-a           -> origin/codex/release-20261006-astra-a
+2026-10-07T02:22:15.6369619Z  * [new branch]          codex/release-20261006-astra-b           -> origin/codex/release-20261006-astra-b
+2026-10-07T02:22:15.6370249Z  * [new branch]          codex/release-ci-final-20261006          -> origin/codex/release-ci-final-20261006
+2026-10-07T02:22:15.6370871Z  * [new branch]          codex/release-log-2026-09-27             -> origin/codex/release-log-2026-09-27
+2026-10-07T02:22:15.6371534Z  * [new branch]          codex/reporting-backend-core-20260823    -> origin/codex/reporting-backend-core-20260823
+2026-10-07T02:22:15.6372247Z  * [new branch]          codex/reporting-stage-finish-20260823    -> origin/codex/reporting-stage-finish-20260823
+2026-10-07T02:22:15.6372934Z  * [new branch]          codex/staging-sync-login-20260914        -> origin/codex/staging-sync-login-20260914
+2026-10-07T02:22:15.6373589Z  * [new branch]          codex/storage-stage-20260823             -> origin/codex/storage-stage-20260823
+2026-10-07T02:22:15.6374324Z  * [new branch]          codex/trello-wms-20261005                -> origin/codex/trello-wms-20261005
+2026-10-07T02:22:15.6374914Z  * [new branch]          codex/trello-wms-20261006                -> origin/codex/trello-wms-20261006
+2026-10-07T02:22:15.6375514Z  * [new branch]          codex/trello-wms-20261006-1200           -> origin/codex/trello-wms-20261006-1200
+2026-10-07T02:22:15.6376409Z  * [new branch]          codex/tsd-package-20260913               -> origin/codex/tsd-package-20260913
+2026-10-07T02:22:15.6377128Z  * [new branch]          codex/tsd-package-stage-release          -> origin/codex/tsd-package-stage-release
+2026-10-07T02:22:15.6377904Z  * [new branch]          codex/tsd-staging-merge-20260913         -> origin/codex/tsd-staging-merge-20260913
+2026-10-07T02:22:15.6378604Z  * [new branch]          codex/volna9-01-backend-only             -> origin/codex/volna9-01-backend-only
+2026-10-07T02:22:15.6379216Z  * [new branch]          codex/volna9-02-status-only              -> origin/codex/volna9-02-status-only
+2026-10-07T02:22:15.6379822Z  * [new branch]          codex/volna9-03-backend-only             -> origin/codex/volna9-03-backend-only
+2026-10-07T02:22:15.6380420Z  * [new branch]          codex/volna9-04-backend-only             -> origin/codex/volna9-04-backend-only
+2026-10-07T02:22:15.6381014Z  * [new branch]          codex/volna9-05-backend-only             -> origin/codex/volna9-05-backend-only
+2026-10-07T02:22:15.6381755Z  * [new branch]          codex/volna9-06-print-order-only         -> origin/codex/volna9-06-print-order-only
+2026-10-07T02:22:15.6382415Z  * [new branch]          codex/weekly-release-20260909            -> origin/codex/weekly-release-20260909
+2026-10-07T02:22:15.6383004Z  * [new branch]          codex/wms-chat-20260911                  -> origin/codex/wms-chat-20260911
+2026-10-07T02:22:15.6383934Z  * [new branch]          codex/wms-chat-evening-20260910          -> origin/codex/wms-chat-evening-20260910
+2026-10-07T02:22:15.6384592Z  * [new branch]          codex/wms-integrations-20260911          -> origin/codex/wms-integrations-20260911
+2026-10-07T02:22:15.6385467Z  * [new branch]          codex/wms-ozon-20260911                  -> origin/codex/wms-ozon-20260911
+2026-10-07T02:22:15.6386957Z  * [new branch]          codex/wms-ozon-generator-20260911        -> origin/codex/wms-ozon-generator-20260911
+2026-10-07T02:22:15.6388169Z  * [new branch]          codex/wms-pick-container-scan            -> origin/codex/wms-pick-container-scan
+2026-10-07T02:22:15.6389472Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820   -> origin/codex/wms-pipeline-unified-v2-20260820
+2026-10-07T02:22:15.6390667Z  * [new branch]          codex/wms-print-20260911                 -> origin/codex/wms-print-20260911
+2026-10-07T02:22:15.6391926Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+2026-10-07T02:22:15.6393249Z  * [new branch]          codex/wms-psp-backlog-20260921           -> origin/codex/wms-psp-backlog-20260921
+2026-10-07T02:22:15.6394544Z  * [new branch]          codex/wms-qr-review-evidence-20261006    -> origin/codex/wms-qr-review-evidence-20261006
+2026-10-07T02:22:15.6395762Z  * [new branch]          codex/wms-release-20260911               -> origin/codex/wms-release-20260911
+2026-10-07T02:22:15.6397188Z  * [new branch]          codex/wms-release-ozon-terminal          -> origin/codex/wms-release-ozon-terminal
+2026-10-07T02:22:15.6398276Z  * [new branch]          codex/wms-storage-20260911               -> origin/codex/wms-storage-20260911
+2026-10-07T02:22:15.6399345Z  * [new branch]          codex/wms-storage-final-20260911         -> origin/codex/wms-storage-final-20260911
+2026-10-07T02:22:15.6400416Z  * [new branch]          codex/wms-transfer-urgent                -> origin/codex/wms-transfer-urgent
+2026-10-07T02:22:15.6401805Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+2026-10-07T02:22:15.6403569Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+2026-10-07T02:22:15.6404806Z  * [new branch]          codex/wms010-backlog40                   -> origin/codex/wms010-backlog40
+2026-10-07T02:22:15.6405388Z  * [new branch]          codex/wms011-backlog40                   -> origin/codex/wms011-backlog40
+2026-10-07T02:22:15.6405940Z  * [new branch]          codex/wms013-backlog40                   -> origin/codex/wms013-backlog40
+2026-10-07T02:22:15.6406829Z  * [new branch]          codex/wms040-backlog40                   -> origin/codex/wms040-backlog40
+2026-10-07T02:22:15.6407368Z  * [new branch]          codex/wms045-backlog40                   -> origin/codex/wms045-backlog40
+2026-10-07T02:22:15.6407990Z  * [new branch]          codex/wms058-availability-followup       -> origin/codex/wms058-availability-followup
+2026-10-07T02:22:15.6408611Z  * [new branch]          codex/wms058-backlog40                   -> origin/codex/wms058-backlog40
+2026-10-07T02:22:15.6409168Z  * [new branch]          codex/wms058-browser-qa                  -> origin/codex/wms058-browser-qa
+2026-10-07T02:22:15.6409761Z  * [new branch]          codex/wms058-mp-box-source               -> origin/codex/wms058-mp-box-source
+2026-10-07T02:22:15.6410365Z  * [new branch]          codex/wms058-overplan-source             -> origin/codex/wms058-overplan-source
+2026-10-07T02:22:15.6410948Z  * [new branch]          codex/wms058-review-fix                  -> origin/codex/wms058-review-fix
+2026-10-07T02:22:15.6411520Z  * [new branch]          codex/wms080-392-review-fix              -> origin/codex/wms080-392-review-fix
+2026-10-07T02:22:15.6412193Z  * [new branch]          codex/wms080-backlog40                   -> origin/codex/wms080-backlog40
+2026-10-07T02:22:15.6413396Z  * [new branch]          codex/wms081-backlog40                   -> origin/codex/wms081-backlog40
+2026-10-07T02:22:15.6414408Z  * [new branch]          codex/wms081-defect-compat               -> origin/codex/wms081-defect-compat
+2026-10-07T02:22:15.6415060Z  * [new branch]          codex/wms082-085-emulator-meta           -> origin/codex/wms082-085-emulator-meta
+2026-10-07T02:22:15.6415665Z  * [new branch]          codex/wms082-backlog40                   -> origin/codex/wms082-backlog40
+2026-10-07T02:22:15.6416542Z  * [new branch]          codex/wms083-backlog40                   -> origin/codex/wms083-backlog40
+2026-10-07T02:22:15.6417097Z  * [new branch]          codex/wms084-backlog40                   -> origin/codex/wms084-backlog40
+2026-10-07T02:22:15.6417686Z  * [new branch]          codex/wms084-emulator-delete             -> origin/codex/wms084-emulator-delete
+2026-10-07T02:22:15.6418352Z  * [new branch]          codex/wms084-packing-test-contract       -> origin/codex/wms084-packing-test-contract
+2026-10-07T02:22:15.6418984Z  * [new branch]          codex/wms084-rebind                      -> origin/codex/wms084-rebind
+2026-10-07T02:22:15.6419536Z  * [new branch]          codex/wms085-backlog40                   -> origin/codex/wms085-backlog40
+2026-10-07T02:22:15.6420082Z  * [new branch]          codex/wms086-backlog40                   -> origin/codex/wms086-backlog40
+2026-10-07T02:22:15.6420623Z  * [new branch]          codex/wms087-backlog40                   -> origin/codex/wms087-backlog40
+2026-10-07T02:22:15.6421159Z  * [new branch]          codex/wms091-backlog40                   -> origin/codex/wms091-backlog40
+2026-10-07T02:22:15.6421695Z  * [new branch]          codex/wms092-backlog40                   -> origin/codex/wms092-backlog40
+2026-10-07T02:22:15.6422227Z  * [new branch]          codex/wms095-backlog40                   -> origin/codex/wms095-backlog40
+2026-10-07T02:22:15.6423123Z  * [new branch]          codex/wms095-import-error-backlog40      -> origin/codex/wms095-import-error-backlog40
+2026-10-07T02:22:15.6423766Z  * [new branch]          codex/wms096-backlog40                   -> origin/codex/wms096-backlog40
+2026-10-07T02:22:15.6424563Z  * [new branch]          codex/wms110-backlog40                   -> origin/codex/wms110-backlog40
+2026-10-07T02:22:15.6425861Z  * [new branch]          codex/wms115-backlog40                   -> origin/codex/wms115-backlog40
+2026-10-07T02:22:15.6427332Z  * [new branch]          codex/wms123-backlog40                   -> origin/codex/wms123-backlog40
+2026-10-07T02:22:15.6428413Z  * [new branch]          codex/wms272-backlog40                   -> origin/codex/wms272-backlog40
+2026-10-07T02:22:15.6429531Z  * [new branch]          codex/wms272-resume-backlog40            -> origin/codex/wms272-resume-backlog40
+2026-10-07T02:22:15.6430601Z  * [new branch]          codex/wms273-backlog40                   -> origin/codex/wms273-backlog40
+2026-10-07T02:22:15.6431555Z  * [new branch]          codex/wms276-backlog40                   -> origin/codex/wms276-backlog40
+2026-10-07T02:22:15.6432531Z  * [new branch]          codex/wms277-backlog40                   -> origin/codex/wms277-backlog40
+2026-10-07T02:22:15.6433671Z  * [new branch]          codex/wms277-catalog                     -> origin/codex/wms277-catalog
+2026-10-07T02:22:15.6434841Z  * [new branch]          codex/wms277-import-sku-collision        -> origin/codex/wms277-import-sku-collision
+2026-10-07T02:22:15.6435949Z  * [new branch]          codex/wms278-backlog40                   -> origin/codex/wms278-backlog40
+2026-10-07T02:22:15.6437226Z  * [new branch]          codex/wms387-training                    -> origin/codex/wms387-training
+2026-10-07T02:22:15.6438191Z  * [new branch]          codex/wms389-backlog40                   -> origin/codex/wms389-backlog40
+2026-10-07T02:22:15.6439122Z  * [new branch]          codex/wms390-backlog40                   -> origin/codex/wms390-backlog40
+2026-10-07T02:22:15.6440062Z  * [new branch]          codex/wms391-backlog40                   -> origin/codex/wms391-backlog40
+2026-10-07T02:22:15.6441216Z  * [new branch]          codex/wms392-backlog40                   -> origin/codex/wms392-backlog40
+2026-10-07T02:22:15.6442192Z  * [new branch]          codex/wms392-review-tests                -> origin/codex/wms392-review-tests
+2026-10-07T02:22:15.6443213Z  * [new branch]          codex/wms394-kiz-ui                      -> origin/codex/wms394-kiz-ui
+2026-10-07T02:22:15.6444236Z  * [new branch]          codex/wms395-pool-inline                 -> origin/codex/wms395-pool-inline
+2026-10-07T02:22:15.6444823Z  * [new branch]          codex/wms396-stage                       -> origin/codex/wms396-stage
+2026-10-07T02:22:15.6445409Z  * [new branch]          codex/wms396-staging-release             -> origin/codex/wms396-staging-release
+2026-10-07T02:22:15.6446237Z  * [new branch]          codex/wms396-true-api                    -> origin/codex/wms396-true-api
+2026-10-07T02:22:15.6446871Z  * [new branch]          codex/wms397-api                         -> origin/codex/wms397-api
+2026-10-07T02:22:15.6447435Z  * [new branch]          codex/wms399-chat-design                 -> origin/codex/wms399-chat-design
+2026-10-07T02:22:15.6448067Z  * [new branch]          codex/wms401-android-build-proof         -> origin/codex/wms401-android-build-proof
+2026-10-07T02:22:15.6448733Z  * [new branch]          codex/wms406-backfill-final-plan         -> origin/codex/wms406-backfill-final-plan
+2026-10-07T02:22:15.6449338Z  * [new branch]          codex/wms406-invoice                     -> origin/codex/wms406-invoice
+2026-10-07T02:22:15.6449878Z  * [new branch]          codex/wms406-report                      -> origin/codex/wms406-report
+2026-10-07T02:22:15.6450474Z  * [new branch]          codex/wms408-billing-unification         -> origin/codex/wms408-billing-unification
+2026-10-07T02:22:15.6451102Z  * [new branch]          codex/wms415-coord-20260910              -> origin/codex/wms415-coord-20260910
+2026-10-07T02:22:15.6452264Z  * [new branch]          codex/wms418-catalog-publication-filter  -> origin/codex/wms418-catalog-publication-filter
+2026-10-07T02:22:15.6453472Z  * [new branch]          codex/wms418-loviana-off                 -> origin/codex/wms418-loviana-off
+2026-10-07T02:22:15.6454311Z  * [new branch]          codex/wms425-marketplace-hotfix          -> origin/codex/wms425-marketplace-hotfix
+2026-10-07T02:22:15.6454987Z  * [new branch]          codex/wms433-stage-user-only             -> origin/codex/wms433-stage-user-only
+2026-10-07T02:22:15.6455640Z  * [new branch]          codex/wms433-support-bot-concept         -> origin/codex/wms433-support-bot-concept
+2026-10-07T02:22:15.6456550Z  * [new branch]          codex/wms437-analyst-cases               -> origin/codex/wms437-analyst-cases
+2026-10-07T02:22:15.6457178Z  * [new branch]          codex/wms437-small-task-process          -> origin/codex/wms437-small-task-process
+2026-10-07T02:22:15.6457757Z  * [new branch]          codex/wms440-tsd                         -> origin/codex/wms440-tsd
+2026-10-07T02:22:15.6458281Z  * [new branch]          codex/wms440-tsd-ui                      -> origin/codex/wms440-tsd-ui
+2026-10-07T02:22:15.6458845Z  * [new branch]          codex/wms441-c10-evidence                -> origin/codex/wms441-c10-evidence
+2026-10-07T02:22:15.6459386Z  * [new branch]          codex/wms441-tsd                         -> origin/codex/wms441-tsd
+2026-10-07T02:22:15.6459889Z  * [new branch]          codex/wms441-tsd-ui                      -> origin/codex/wms441-tsd-ui
+2026-10-07T02:22:15.6460390Z  * [new branch]          codex/wms442-tsd                         -> origin/codex/wms442-tsd
+2026-10-07T02:22:15.6460888Z  * [new branch]          codex/wms442-tsd-ui                      -> origin/codex/wms442-tsd-ui
+2026-10-07T02:22:15.6461385Z  * [new branch]          codex/wms443-tsd                         -> origin/codex/wms443-tsd
+2026-10-07T02:22:15.6462122Z  * [new branch]          codex/wms443-tsd-ui                      -> origin/codex/wms443-tsd-ui
+2026-10-07T02:22:15.6462685Z  * [new branch]          codex/wms444-tsd                         -> origin/codex/wms444-tsd
+2026-10-07T02:22:15.6463548Z  * [new branch]          codex/wms444-tsd-ui                      -> origin/codex/wms444-tsd-ui
+2026-10-07T02:22:15.6464080Z  * [new branch]          codex/wms445-tsd                         -> origin/codex/wms445-tsd
+2026-10-07T02:22:15.6464847Z  * [new branch]          codex/wms445-tsd-server-truth            -> origin/codex/wms445-tsd-server-truth
+2026-10-07T02:22:15.6465479Z  * [new branch]          codex/wms445-tsd-ui                      -> origin/codex/wms445-tsd-ui
+2026-10-07T02:22:15.6466300Z  * [new branch]          codex/wms447-full-marketplace-labels     -> origin/codex/wms447-full-marketplace-labels
+2026-10-07T02:22:15.6467138Z  * [new branch]          codex/wms460-fbs-qr-scan                 -> origin/codex/wms460-fbs-qr-scan
+2026-10-07T02:22:15.6467939Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+2026-10-07T02:22:15.6468721Z  * [new branch]          codex/wms476-auto-legacy-guard           -> origin/codex/wms476-auto-legacy-guard
+2026-10-07T02:22:15.6469558Z  * [new branch]          codex/wms476-implementation-sol-high     -> origin/codex/wms476-implementation-sol-high
+2026-10-07T02:22:15.6470410Z  * [new branch]          codex/wms476-staging-release-20260923    -> origin/codex/wms476-staging-release-20260923
+2026-10-07T02:22:15.6471107Z  * [new branch]          codex/wms477-backend-review-fix          -> origin/codex/wms477-backend-review-fix
+2026-10-07T02:22:15.6471870Z  * [new branch]          codex/wms477-p3-notice                   -> origin/codex/wms477-p3-notice
+2026-10-07T02:22:15.6472561Z  * [new branch]          codex/wms483-prod-release-20260920       -> origin/codex/wms483-prod-release-20260920
+2026-10-07T02:22:15.6473287Z  * [new branch]          codex/wms483-wb-zero-refresh             -> origin/codex/wms483-wb-zero-refresh
+2026-10-07T02:22:15.6474052Z  * [new branch]          codex/wms489-staging-release             -> origin/codex/wms489-staging-release
+2026-10-07T02:22:15.6474752Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+2026-10-07T02:22:15.6475798Z  * [new branch]          codex/wms502-stock-sorting-incident      -> origin/codex/wms502-stock-sorting-incident
+2026-10-07T02:22:15.6476808Z  * [new branch]          codex/wms506-silent-kiz-print            -> origin/codex/wms506-silent-kiz-print
+2026-10-07T02:22:15.6477623Z  * [new branch]          codex/wms508-persistent-form-cards       -> origin/codex/wms508-persistent-form-cards
+2026-10-07T02:22:15.6478293Z  * [new branch]          codex/wms514-clickable-mockup            -> origin/codex/wms514-clickable-mockup
+2026-10-07T02:22:15.6479103Z  * [new branch]          codex/wms514-staging-release-20260924    -> origin/codex/wms514-staging-release-20260924
+2026-10-07T02:22:15.6479892Z  * [new branch]          codex/wms515-client-registry             -> origin/codex/wms515-client-registry
+2026-10-07T02:22:15.6480563Z  * [new branch]          codex/wms517-current-release-analysis    -> origin/codex/wms517-current-release-analysis
+2026-10-07T02:22:15.6481466Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+2026-10-07T02:22:15.6482349Z  * [new branch]          codex/wms517-mac-dynamic-eligible        -> origin/codex/wms517-mac-dynamic-eligible
+2026-10-07T02:22:15.6483004Z  * [new branch]          codex/wms517-mac-test-contract           -> origin/codex/wms517-mac-test-contract
+2026-10-07T02:22:15.6483809Z  * [new branch]          codex/wms517-price-by-product-group      -> origin/codex/wms517-price-by-product-group
+2026-10-07T02:22:15.6484648Z  * [new branch]          codex/wms517-sales-report-contract       -> origin/codex/wms517-sales-report-contract
+2026-10-07T02:22:15.6485366Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+2026-10-07T02:22:15.6486477Z  * [new branch]          codex/wms517-staging-20261001            -> origin/codex/wms517-staging-20261001
+2026-10-07T02:22:15.6487346Z  * [new branch]          codex/wms519-artifact-pdf-hotfix         -> origin/codex/wms519-artifact-pdf-hotfix
+2026-10-07T02:22:15.6488162Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio      -> origin/codex/wms519-kiz-label-aspect-ratio
+2026-10-07T02:22:15.6488838Z  * [new branch]          codex/wms519-post-deploy-docs            -> origin/codex/wms519-post-deploy-docs
+2026-10-07T02:22:15.6489583Z  * [new branch]          codex/wms520-requirements                -> origin/codex/wms520-requirements
+2026-10-07T02:22:15.6490179Z  * [new branch]          codex/wms521-kiz-release                 -> origin/codex/wms521-kiz-release
+2026-10-07T02:22:15.6490927Z  * [new branch]          codex/wms523-auto-import-pools           -> origin/codex/wms523-auto-import-pools
+2026-10-07T02:22:15.6491678Z  * [new branch]          codex/wms524-confirm-order               -> origin/codex/wms524-confirm-order
+2026-10-07T02:22:15.6492297Z  * [new branch]          codex/wms524-print-blank                 -> origin/codex/wms524-print-blank
+2026-10-07T02:22:15.6493096Z  * [new branch]          codex/wms533-client-hardening            -> origin/codex/wms533-client-hardening
+2026-10-07T02:22:15.6493695Z  * [new branch]          codex/wms533-five-events                 -> origin/codex/wms533-five-events
+2026-10-07T02:22:15.6494430Z  * [new branch]          codex/wms533-prod-five-events            -> origin/codex/wms533-prod-five-events
+2026-10-07T02:22:15.6495185Z  * [new branch]          codex/wms533-seller-stock-events         -> origin/codex/wms533-seller-stock-events
+2026-10-07T02:22:15.6495900Z  * [new branch]          codex/wms537-pg-fixture-review-20261006  -> origin/codex/wms537-pg-fixture-review-20261006
+2026-10-07T02:22:15.6496909Z  * [new branch]          codex/wms550-sorting-scan                -> origin/codex/wms550-sorting-scan
+2026-10-07T02:22:15.6497656Z  * [new branch]          codex/wms582-yandex-market-api           -> origin/codex/wms582-yandex-market-api
+2026-10-07T02:22:15.6498363Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+2026-10-07T02:22:15.6499361Z  * [new branch]          codex/wms591-avpack-6300                 -> origin/codex/wms591-avpack-6300
+2026-10-07T02:22:15.6500106Z  * [new branch]          codex/wms593-597-urgent                  -> origin/codex/wms593-597-urgent
+2026-10-07T02:22:15.6500689Z  * [new branch]          codex/wms602-fbs-cell-scan               -> origin/codex/wms602-fbs-cell-scan
+2026-10-07T02:22:15.6501393Z  * [new branch]          codex/wms603-box-scan                    -> origin/codex/wms603-box-scan
+2026-10-07T02:22:15.6501995Z  * [new branch]          codex/wms604-staging-integration         -> origin/codex/wms604-staging-integration
+2026-10-07T02:22:15.6502785Z  * [new branch]          codex/wms604-unified-packing             -> origin/codex/wms604-unified-packing
+2026-10-07T02:22:15.6503686Z  * [new branch]          codex/wms607-artmaks-acceptance-updater-contract -> origin/codex/wms607-artmaks-acceptance-updater-contract
+2026-10-07T02:22:15.6504596Z  * [new branch]          codex/wms607-artmaks-direct-repair       -> origin/codex/wms607-artmaks-direct-repair
+2026-10-07T02:22:15.6505355Z  * [new branch]          codex/wms607-artmaks-installer-findings  -> origin/codex/wms607-artmaks-installer-findings
+2026-10-07T02:22:15.6506310Z  * [new branch]          codex/wms607-artmaks-repair-review       -> origin/codex/wms607-artmaks-repair-review
+2026-10-07T02:22:15.6507158Z  * [new branch]          codex/wms607-artmaks-test-contract       -> origin/codex/wms607-artmaks-test-contract
+2026-10-07T02:22:15.6507790Z  * [new branch]          codex/wms607-instant-print               -> origin/codex/wms607-instant-print
+2026-10-07T02:22:15.6508539Z  * [new branch]          codex/wms607-mac-single-binary           -> origin/codex/wms607-mac-single-binary
+2026-10-07T02:22:15.6509546Z  * [new branch]          codex/wms607-printer-failure-analysis    -> origin/codex/wms607-printer-failure-analysis
+2026-10-07T02:22:15.6510211Z  * [new branch]          codex/wms607-staging-print               -> origin/codex/wms607-staging-print
+2026-10-07T02:22:15.6510943Z  * [new branch]          codex/wms607-windows-x64                 -> origin/codex/wms607-windows-x64
+2026-10-07T02:22:15.6511653Z  * [new branch]          codex/wms608-scanned-row-first           -> origin/codex/wms608-scanned-row-first
+2026-10-07T02:22:15.6512330Z  * [new branch]          codex/wms610-fbs-picking-columns         -> origin/codex/wms610-fbs-picking-columns
+2026-10-07T02:22:15.6513130Z  * [new branch]          codex/wms611-fbs-print-disabled          -> origin/codex/wms611-fbs-print-disabled
+2026-10-07T02:22:15.6513762Z  * [new branch]          codex/wms612-delivery-checks             -> origin/codex/wms612-delivery-checks
+2026-10-07T02:22:15.6514496Z  * [new branch]          codex/wms612-staging-all                 -> origin/codex/wms612-staging-all
+2026-10-07T02:22:15.6515220Z  * [new branch]          codex/wms614-616-prod-release            -> origin/codex/wms614-616-prod-release
+2026-10-07T02:22:15.6515826Z  * [new branch]          codex/wms617-video-demo                  -> origin/codex/wms617-video-demo
+2026-10-07T02:22:15.6516700Z  * [new branch]          codex/wms618-staging                     -> origin/codex/wms618-staging
+2026-10-07T02:22:15.6517281Z  * [new branch]          codex/wms622-fbo-kiz-recovery            -> origin/codex/wms622-fbo-kiz-recovery
+2026-10-07T02:22:15.6518068Z  * [new branch]          codex/wms623-artmaks-unused-pdfs         -> origin/codex/wms623-artmaks-unused-pdfs
+2026-10-07T02:22:15.6518902Z  * [new branch]          codex/wms624-developer-requests-current  -> origin/codex/wms624-developer-requests-current
+2026-10-07T02:22:15.6519577Z  * [new branch]          codex/wms624-sync-cadence                -> origin/codex/wms624-sync-cadence
+2026-10-07T02:22:15.6520326Z  * [new branch]          codex/wms625-print-reliability           -> origin/codex/wms625-print-reliability
+2026-10-07T02:22:15.6521077Z  * [new branch]          codex/wms626-astra-effort-limit          -> origin/codex/wms626-astra-effort-limit
+2026-10-07T02:22:15.6521958Z  * [new branch]          codex/wms627-artmaks-stock-reconcile     -> origin/codex/wms627-artmaks-stock-reconcile
+2026-10-07T02:22:15.6522807Z  * [new branch]          codex/wms628-artmaks-wrong-scan          -> origin/codex/wms628-artmaks-wrong-scan
+2026-10-07T02:22:15.6523411Z  * [new branch]          codex/wms628-production                  -> origin/codex/wms628-production
+2026-10-07T02:22:15.6524167Z  * [new branch]          codex/wms629-packing-scroll              -> origin/codex/wms629-packing-scroll
+2026-10-07T02:22:15.6524878Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+2026-10-07T02:22:15.6525558Z  * [new branch]          codex/wms651-counter-copy                -> origin/codex/wms651-counter-copy
+2026-10-07T02:22:15.6526511Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+2026-10-07T02:22:15.6527446Z  * [new branch]          codex/wms652-abort-boundary-review-20261007 -> origin/codex/wms652-abort-boundary-review-20261007
+2026-10-07T02:22:15.6528184Z  * [new branch]          codex/wms652-acceptance-evidence         -> origin/codex/wms652-acceptance-evidence
+2026-10-07T02:22:15.6528969Z  * [new branch]          codex/wms652-accepted-reference-contract-20261007 -> origin/codex/wms652-accepted-reference-contract-20261007
+2026-10-07T02:22:15.6529850Z  * [new branch]          codex/wms652-backup-boundary-format      -> origin/codex/wms652-backup-boundary-format
+2026-10-07T02:22:15.6530662Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+2026-10-07T02:22:15.6531415Z  * [new branch]          codex/wms652-backup-fixture-review       -> origin/codex/wms652-backup-fixture-review
+2026-10-07T02:22:15.6532346Z  * [new branch]          codex/wms652-backup-format-ledger-review-20261007 -> origin/codex/wms652-backup-format-ledger-review-20261007
+2026-10-07T02:22:15.6533076Z  * [new branch]          codex/wms652-bot-night                   -> origin/codex/wms652-bot-night
+2026-10-07T02:22:15.6533794Z  * [new branch]          codex/wms652-cdp-ambiguity-contract-20261007 -> origin/codex/wms652-cdp-ambiguity-contract-20261007
+2026-10-07T02:22:15.6534571Z  * [new branch]          codex/wms652-cdp-cancel-contract-20261007 -> origin/codex/wms652-cdp-cancel-contract-20261007
+2026-10-07T02:22:15.6535325Z  * [new branch]          codex/wms652-cdp-contract-review-20261007 -> origin/codex/wms652-cdp-contract-review-20261007
+2026-10-07T02:22:15.6536293Z  * [new branch]          codex/wms652-cdp-explicit-abort-diagnostic -> origin/codex/wms652-cdp-explicit-abort-diagnostic
+2026-10-07T02:22:15.6537116Z  * [new branch]          codex/wms652-cdp-fixture-source-review-20261007 -> origin/codex/wms652-cdp-fixture-source-review-20261007
+2026-10-07T02:22:15.6538049Z  * [new branch]          codex/wms652-cdp-known-cancel-fixture    -> origin/codex/wms652-cdp-known-cancel-fixture
+2026-10-07T02:22:15.6538755Z  * [new branch]          codex/wms652-cdp-r1-rereview-20261007    -> origin/codex/wms652-cdp-r1-rereview-20261007
+2026-10-07T02:22:15.6539450Z  * [new branch]          codex/wms652-checkpoint-requirements     -> origin/codex/wms652-checkpoint-requirements
+2026-10-07T02:22:15.6540117Z  * [new branch]          codex/wms652-ci-delta-review             -> origin/codex/wms652-ci-delta-review
+2026-10-07T02:22:15.6540734Z  * [new branch]          codex/wms652-ci-two-shards               -> origin/codex/wms652-ci-two-shards
+2026-10-07T02:22:15.6541382Z  * [new branch]          codex/wms652-critical-fbs-contracts      -> origin/codex/wms652-critical-fbs-contracts
+2026-10-07T02:22:15.6542118Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+2026-10-07T02:22:15.6542892Z  * [new branch]          codex/wms652-final-bootstrap-pin-20261007 -> origin/codex/wms652-final-bootstrap-pin-20261007
+2026-10-07T02:22:15.6543921Z  * [new branch]          codex/wms652-final-infrastructure-pin-review-20261007 -> origin/codex/wms652-final-infrastructure-pin-review-20261007
+2026-10-07T02:22:15.6544825Z  * [new branch]          codex/wms652-final-source-pin-review-20261007 -> origin/codex/wms652-final-source-pin-review-20261007
+2026-10-07T02:22:15.6545649Z  * [new branch]          codex/wms652-final-stock-source-pin-20261007 -> origin/codex/wms652-final-stock-source-pin-20261007
+2026-10-07T02:22:15.6546700Z  * [new branch]          codex/wms652-frontend-report-identities-20261007 -> origin/codex/wms652-frontend-report-identities-20261007
+2026-10-07T02:22:15.6547491Z  * [new branch]          codex/wms652-independent-main-check      -> origin/codex/wms652-independent-main-check
+2026-10-07T02:22:15.6548268Z  * [new branch]          codex/wms652-infrastructure-acceptance-20261007 -> origin/codex/wms652-infrastructure-acceptance-20261007
+2026-10-07T02:22:15.6549209Z  * [new branch]          codex/wms652-infrastructure-corrections-review-20261007 -> origin/codex/wms652-infrastructure-corrections-review-20261007
+2026-10-07T02:22:15.6550119Z  * [new branch]          codex/wms652-nested-stock-acceptance-20261007 -> origin/codex/wms652-nested-stock-acceptance-20261007
+2026-10-07T02:22:15.6551109Z  * [new branch]          codex/wms652-nested-stock-causal-review-20261007 -> origin/codex/wms652-nested-stock-causal-review-20261007
+2026-10-07T02:22:15.6551949Z  * [new branch]          codex/wms652-nested-stock-fix-review-20261007 -> origin/codex/wms652-nested-stock-fix-review-20261007
+2026-10-07T02:22:15.6552851Z  * [new branch]          codex/wms652-nested-stock-publish-requirements-20261007 -> origin/codex/wms652-nested-stock-publish-requirements-20261007
+2026-10-07T02:22:15.6553775Z  * [new branch]          codex/wms652-nested-stock-test-contract-20261007 -> origin/codex/wms652-nested-stock-test-contract-20261007
+2026-10-07T02:22:15.6554810Z  * [new branch]          codex/wms652-night-reader                -> origin/codex/wms652-night-reader
+2026-10-07T02:22:15.6555402Z  * [new branch]          codex/wms652-night-repair                -> origin/codex/wms652-night-repair
+2026-10-07T02:22:15.6556159Z  * [new branch]          codex/wms652-pdf-probe                   -> origin/codex/wms652-pdf-probe
+2026-10-07T02:22:15.6556885Z  * [new branch]          codex/wms652-portable-backup-proof-20261007 -> origin/codex/wms652-portable-backup-proof-20261007
+2026-10-07T02:22:15.6557672Z  * [new branch]          codex/wms652-process-fixes-review-20261007 -> origin/codex/wms652-process-fixes-review-20261007
+2026-10-07T02:22:15.6558356Z  * [new branch]          codex/wms652-process-gates               -> origin/codex/wms652-process-gates
+2026-10-07T02:22:15.6559058Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+2026-10-07T02:22:15.6559891Z  * [new branch]          codex/wms652-prod-env-negative-canary-20261007 -> origin/codex/wms652-prod-env-negative-canary-20261007
+2026-10-07T02:22:15.6560717Z  * [new branch]          codex/wms652-realqr-cdp-lifecycle-diagnostic -> origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+2026-10-07T02:22:15.6561553Z  * [new branch]          codex/wms652-reference-migration-review-20261007 -> origin/codex/wms652-reference-migration-review-20261007
+2026-10-07T02:22:15.6562302Z  * [new branch]          codex/wms652-regression-guard            -> origin/codex/wms652-regression-guard
+2026-10-07T02:22:15.6562940Z  * [new branch]          codex/wms652-release-ci-20261006         -> origin/codex/wms652-release-ci-20261006
+2026-10-07T02:22:15.6563697Z  * [new branch]          codex/wms652-release-execution-evidence-20261007 -> origin/codex/wms652-release-execution-evidence-20261007
+2026-10-07T02:22:15.6564601Z  * [new branch]          codex/wms652-remount-interception-diagnosis-20261007 -> origin/codex/wms652-remount-interception-diagnosis-20261007
+2026-10-07T02:22:15.6565468Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+2026-10-07T02:22:15.6566641Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+2026-10-07T02:22:15.6567495Z  * [new branch]          codex/wms652-reviewed-infrastructure-pin-20261007 -> origin/codex/wms652-reviewed-infrastructure-pin-20261007
+2026-10-07T02:22:15.6568363Z  * [new branch]          codex/wms652-reviewed-stock-source-pin-20261007 -> origin/codex/wms652-reviewed-stock-source-pin-20261007
+2026-10-07T02:22:15.6569127Z  * [new branch]          codex/wms652-server-deploy-gate          -> origin/codex/wms652-server-deploy-gate
+2026-10-07T02:22:15.6569768Z  * [new branch]          codex/wms652-sonnet-frontend             -> origin/codex/wms652-sonnet-frontend
+2026-10-07T02:22:15.6570443Z  * [new branch]          codex/wms652-stock-outer-commit-guard    -> origin/codex/wms652-stock-outer-commit-guard
+2026-10-07T02:22:15.6571109Z  * [new branch]          codex/wms652-trusted-anchor              -> origin/codex/wms652-trusted-anchor
+2026-10-07T02:22:15.6571685Z  * [new branch]          codex/wms652-ui-gate                     -> origin/codex/wms652-ui-gate
+2026-10-07T02:22:15.6572362Z  * [new branch]          codex/wms652-warehouse-sc-sqlite-diagnostic -> origin/codex/wms652-warehouse-sc-sqlite-diagnostic
+2026-10-07T02:22:15.6573135Z  * [new branch]          codex/wms653-scope-attribution-20261006  -> origin/codex/wms653-scope-attribution-20261006
+2026-10-07T02:22:15.6573926Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+2026-10-07T02:22:15.6574829Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+2026-10-07T02:22:15.6575637Z  * [new branch]          codex/wms654-product-20261006            -> origin/codex/wms654-product-20261006
+2026-10-07T02:22:15.6576607Z  * [new branch]          codex/wms659-imperia-boxes               -> origin/codex/wms659-imperia-boxes
+2026-10-07T02:22:15.6577247Z  * [new branch]          codex/wms660-barcodes                    -> origin/codex/wms660-barcodes
+2026-10-07T02:22:15.6577940Z  * [new branch]          codex/wms661-analyst-20261006            -> origin/codex/wms661-analyst-20261006
+2026-10-07T02:22:15.6578744Z  * [new branch]          codex/wms661-installed-baseline-tests    -> origin/codex/wms661-installed-baseline-tests
+2026-10-07T02:22:15.6579507Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+2026-10-07T02:22:15.6580274Z  * [new branch]          codex/wms661-runtime-preflight-20261006  -> origin/codex/wms661-runtime-preflight-20261006
+2026-10-07T02:22:15.6581021Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+2026-10-07T02:22:15.6581840Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+2026-10-07T02:22:15.6582567Z  * [new branch]          codex/wms662-663-priority                -> origin/codex/wms662-663-priority
+2026-10-07T02:22:15.6583150Z  * [new branch]          codex/wms662-f6-testwriter               -> origin/codex/wms662-f6-testwriter
+2026-10-07T02:22:15.6583841Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+2026-10-07T02:22:15.6584638Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+2026-10-07T02:22:15.6585331Z  * [new branch]          codex/wms662-prod-handoff                -> origin/codex/wms662-prod-handoff
+2026-10-07T02:22:15.6585922Z  * [new branch]          codex/wms662-review-c36b8ab              -> origin/codex/wms662-review-c36b8ab
+2026-10-07T02:22:15.6586804Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+2026-10-07T02:22:15.6587719Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+2026-10-07T02:22:15.6588573Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+2026-10-07T02:22:15.6589454Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+2026-10-07T02:22:15.6590272Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+2026-10-07T02:22:15.6591026Z  * [new branch]          codex/wms663-release-retry-acceptance    -> origin/codex/wms663-release-retry-acceptance
+2026-10-07T02:22:15.6591705Z  * [new branch]          codex/wms663-release-retry-fix           -> origin/codex/wms663-release-retry-fix
+2026-10-07T02:22:15.6592510Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+2026-10-07T02:22:15.6593503Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+2026-10-07T02:22:15.6594354Z  * [new branch]          codex/wms663-retry-contract-20261006     -> origin/codex/wms663-retry-contract-20261006
+2026-10-07T02:22:15.6595058Z  * [new branch]          codex/wms663-scoped-priority-20261006    -> origin/codex/wms663-scoped-priority-20261006
+2026-10-07T02:22:15.6595725Z  * [new branch]          codex/wms664-dispatcher-stall            -> origin/codex/wms664-dispatcher-stall
+2026-10-07T02:22:15.6596635Z  * [new branch]          codex/wms665-avpack-withdrawal-helper    -> origin/codex/wms665-avpack-withdrawal-helper
+2026-10-07T02:22:15.6597437Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+2026-10-07T02:22:15.6598410Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+2026-10-07T02:22:15.6599288Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+2026-10-07T02:22:15.6600111Z  * [new branch]          codex/wms666-ci-history-scope-20261006   -> origin/codex/wms666-ci-history-scope-20261006
+2026-10-07T02:22:15.6600802Z  * [new branch]          codex/wms666-ci-qr-finish-20261006       -> origin/codex/wms666-ci-qr-finish-20261006
+2026-10-07T02:22:15.6601525Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+2026-10-07T02:22:15.6602301Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+2026-10-07T02:22:15.6603040Z  * [new branch]          codex/wms666-priority-etalon-20261006    -> origin/codex/wms666-priority-etalon-20261006
+2026-10-07T02:22:15.6603739Z  * [new branch]          codex/wms666-release-c11-acceptance      -> origin/codex/wms666-release-c11-acceptance
+2026-10-07T02:22:15.6604469Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+2026-10-07T02:22:15.6605255Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+2026-10-07T02:22:15.6606256Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+2026-10-07T02:22:15.6607042Z  * [new branch]          codex/wms666-unified-fbs-packing         -> origin/codex/wms666-unified-fbs-packing
+2026-10-07T02:22:15.6607675Z  * [new branch]          codex/wms667-stock-filter                -> origin/codex/wms667-stock-filter
+2026-10-07T02:22:15.6608279Z  * [new branch]          codex/wms667-visual-runner               -> origin/codex/wms667-visual-runner
+2026-10-07T02:22:15.6608926Z  * [new branch]          codex/wms668-dispatcher-batch-final      -> origin/codex/wms668-dispatcher-batch-final
+2026-10-07T02:22:15.6609835Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+2026-10-07T02:22:15.6610597Z  * [new branch]          codex/wms672-673-analyst-20261006        -> origin/codex/wms672-673-analyst-20261006
+2026-10-07T02:22:15.6611301Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+2026-10-07T02:22:15.6612006Z  * [new branch]          codex/wms672-c5-cache-clock-trace        -> origin/codex/wms672-c5-cache-clock-trace
+2026-10-07T02:22:15.6612654Z  * [new branch]          codex/wms672-c5-cache-debug-trace        -> origin/codex/wms672-c5-cache-debug-trace
+2026-10-07T02:22:15.6613274Z  * [new branch]          codex/wms672-c5-cache-trace              -> origin/codex/wms672-c5-cache-trace
+2026-10-07T02:22:15.6613906Z  * [new branch]          codex/wms672-c5-linux-diagnostic         -> origin/codex/wms672-c5-linux-diagnostic
+2026-10-07T02:22:15.6614555Z  * [new branch]          codex/wms672-c5-linux-fix-check          -> origin/codex/wms672-c5-linux-fix-check
+2026-10-07T02:22:15.6615194Z  * [new branch]          codex/wms672-c5-peer-drain-check         -> origin/codex/wms672-c5-peer-drain-check
+2026-10-07T02:22:15.6615910Z  * [new branch]          codex/wms672-c5-raster-resource-comparison -> origin/codex/wms672-c5-raster-resource-comparison
+2026-10-07T02:22:15.6616866Z  * [new branch]          codex/wms672-c5-target-cache-trace       -> origin/codex/wms672-c5-target-cache-trace
+2026-10-07T02:22:15.6617569Z  * [new branch]          codex/wms672-functional-finish-20261006  -> origin/codex/wms672-functional-finish-20261006
+2026-10-07T02:22:15.6618249Z  * [new branch]          codex/wms672-native-decode-fix           -> origin/codex/wms672-native-decode-fix
+2026-10-07T02:22:15.6619093Z  * [new branch]          codex/wms672-native-error-contract-20261007 -> origin/codex/wms672-native-error-contract-20261007
+2026-10-07T02:22:15.6619803Z  * [new branch]          codex/wms672-native-fix-review           -> origin/codex/wms672-native-fix-review
+2026-10-07T02:22:15.6620492Z  * [new branch]          codex/wms672-peer-drain-contract-20261007 -> origin/codex/wms672-peer-drain-contract-20261007
+2026-10-07T02:22:15.6621223Z  * [new branch]          codex/wms672-peer-drain-source-review    -> origin/codex/wms672-peer-drain-source-review
+2026-10-07T02:22:15.6622011Z  * [new branch]          codex/wms672-raster-analyst-acceptance-20261007 -> origin/codex/wms672-raster-analyst-acceptance-20261007
+2026-10-07T02:22:15.6622856Z  * [new branch]          codex/wms672-raster-resource-contract-20261007 -> origin/codex/wms672-raster-resource-contract-20261007
+2026-10-07T02:22:15.6623598Z  * [new branch]          codex/wms672-raster-resource-fix         -> origin/codex/wms672-raster-resource-fix
+2026-10-07T02:22:15.6624330Z  * [new branch]          codex/wms672-raster-resource-review-20261007 -> origin/codex/wms672-raster-resource-review-20261007
+2026-10-07T02:22:15.6625100Z  * [new branch]          codex/wms675-ci-topology-proof-20261006  -> origin/codex/wms675-ci-topology-proof-20261006
+2026-10-07T02:22:15.6625847Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+2026-10-07T02:22:15.6626810Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+2026-10-07T02:22:15.6627506Z  * [new branch]          codex/wms676-crosscheck-astra            -> origin/codex/wms676-crosscheck-astra
+2026-10-07T02:22:15.6628162Z  * [new branch]          codex/wms676-night-review-fallback       -> origin/codex/wms676-night-review-fallback
+2026-10-07T02:22:15.6628810Z  * [new branch]          codex/wms676-sol61-pipeline              -> origin/codex/wms676-sol61-pipeline
+2026-10-07T02:22:15.6629464Z  * [new branch]          codex/wms679-fbw-analysis-source349      -> origin/codex/wms679-fbw-analysis-source349
+2026-10-07T02:22:15.6630294Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+2026-10-07T02:22:15.6630952Z  * [new branch]          codex/wms681-qr-recovery                 -> origin/codex/wms681-qr-recovery
+2026-10-07T02:22:15.6631548Z  * [new branch]          codex/wms681-real-wb-qr-hotfix           -> origin/codex/wms681-real-wb-qr-hotfix
+2026-10-07T02:22:15.6632199Z  * [new branch]          deploy/wb-emulator-real-order-qr         -> origin/deploy/wb-emulator-real-order-qr
+2026-10-07T02:22:15.6632859Z  * [new branch]          docs/owner-requirements-20260831         -> origin/docs/owner-requirements-20260831
+2026-10-07T02:22:15.6633601Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+2026-10-07T02:22:15.6634267Z  * [new branch]          docs/wms469-470-backlog                  -> origin/docs/wms469-470-backlog
+2026-10-07T02:22:15.6634861Z  * [new branch]          docs/wms561-ship-by-in-supply            -> origin/docs/wms561-ship-by-in-supply
+2026-10-07T02:22:15.6635498Z  * [new branch]          docs/wms584-585-tsd-walkthrough          -> origin/docs/wms584-585-tsd-walkthrough
+2026-10-07T02:22:15.6636352Z  * [new branch]          docs/wms648-ozon-catalog-backlog         -> origin/docs/wms648-ozon-catalog-backlog
+2026-10-07T02:22:15.6637004Z  * [new branch]          docs/wms649-shk-po-ploshchadke           -> origin/docs/wms649-shk-po-ploshchadke
+2026-10-07T02:22:15.6637555Z  * [new branch]          etalon                                   -> origin/etalon
+2026-10-07T02:22:15.6638088Z  * [new branch]          feat/cz-print-split-artifact             -> origin/feat/cz-print-split-artifact
+2026-10-07T02:22:15.6638741Z  * [new branch]          feat/fbs-warehouse-filter-20260812       -> origin/feat/fbs-warehouse-filter-20260812
+2026-10-07T02:22:15.6639533Z  * [new branch]          feat/ff-inbound-create-20260812          -> origin/feat/ff-inbound-create-20260812
+2026-10-07T02:22:15.6640172Z  * [new branch]          feat/marking-import-s3-storage           -> origin/feat/marking-import-s3-storage
+2026-10-07T02:22:15.6640790Z  * [new branch]          feat/mobile-fbs-demo-seed                -> origin/feat/mobile-fbs-demo-seed
+2026-10-07T02:22:15.6641396Z  * [new branch]          feat/product-barcode-print               -> origin/feat/product-barcode-print
+2026-10-07T02:22:15.6641978Z  * [new branch]          feat/wms056-audit-trail                  -> origin/feat/wms056-audit-trail
+2026-10-07T02:22:15.6642554Z  * [new branch]          feat/wms062-warehouse-docs               -> origin/feat/wms062-warehouse-docs
+2026-10-07T02:22:15.6643152Z  * [new branch]          feat/wms111-wb-cancel-return             -> origin/feat/wms111-wb-cancel-return
+2026-10-07T02:22:15.6643757Z  * [new branch]          feat/wms121-supply-identity              -> origin/feat/wms121-supply-identity
+2026-10-07T02:22:15.6644359Z  * [new branch]          feat/wms270-login-and-ports              -> origin/feat/wms270-login-and-ports
+2026-10-07T02:22:15.6644971Z  * [new branch]          feat/wms338-stock-min-formula            -> origin/feat/wms338-stock-min-formula
+2026-10-07T02:22:15.6645573Z  * [new branch]          feat/wms349-merge-service                -> origin/feat/wms349-merge-service
+2026-10-07T02:22:15.6646370Z  * [new branch]          feat/wms363-ozon-tsd                     -> origin/feat/wms363-ozon-tsd
+2026-10-07T02:22:15.6646912Z  * [new branch]          feat/wms397-chat-mvp                     -> origin/feat/wms397-chat-mvp
+2026-10-07T02:22:15.6647474Z  * [new branch]          feat/wms401-mobile-followup              -> origin/feat/wms401-mobile-followup
+2026-10-07T02:22:15.6648103Z  * [new branch]          feat/wms433-assistant-release            -> origin/feat/wms433-assistant-release
+2026-10-07T02:22:15.6648705Z  * [new branch]          feat/wms433-tenant-rollout               -> origin/feat/wms433-tenant-rollout
+2026-10-07T02:22:15.6649289Z  * [new branch]          feat/wms447-fbs-box-count                -> origin/feat/wms447-fbs-box-count
+2026-10-07T02:22:15.6650045Z  * [new branch]          feat/wms453-455-boxes-shared-pool        -> origin/feat/wms453-455-boxes-shared-pool
+2026-10-07T02:22:15.6650665Z  * [new branch]          feat/wms469-stock-dialog                 -> origin/feat/wms469-stock-dialog
+2026-10-07T02:22:15.6651257Z  * [new branch]          feat/wms529-stock-vs-location            -> origin/feat/wms529-stock-vs-location
+2026-10-07T02:22:15.6651840Z  * [new branch]          feat/wms534-intake-box                   -> origin/feat/wms534-intake-box
+2026-10-07T02:22:15.6652385Z  * [new branch]          feat/wms536-scan-layer                   -> origin/feat/wms536-scan-layer
+2026-10-07T02:22:15.6652985Z  * [new branch]          feat/wms539-artmaks-cells-import         -> origin/feat/wms539-artmaks-cells-import
+2026-10-07T02:22:15.6653597Z  * [new branch]          feat/wms631-print-agent                  -> origin/feat/wms631-print-agent
+2026-10-07T02:22:15.6654159Z  * [new branch]          feat/wms633-chz-copies                   -> origin/feat/wms633-chz-copies
+2026-10-07T02:22:15.6654747Z  * [new branch]          feat/wms636-wb-rejected-filter           -> origin/feat/wms636-wb-rejected-filter
+2026-10-07T02:22:15.6655352Z  * [new branch]          feat/wms641-support-agent                -> origin/feat/wms641-support-agent
+2026-10-07T02:22:15.6655927Z  * [new branch]          feat/wms650-sorting-impl                 -> origin/feat/wms650-sorting-impl
+2026-10-07T02:22:15.6656728Z  * [new branch]          feat/wms650-sorting-mockup               -> origin/feat/wms650-sorting-mockup
+2026-10-07T02:22:15.6657337Z  * [new branch]          fix/auth-staff-e2e-20260815              -> origin/fix/auth-staff-e2e-20260815
+2026-10-07T02:22:15.6657930Z  * [new branch]          fix/cis-pool-full-20260821               -> origin/fix/cis-pool-full-20260821
+2026-10-07T02:22:15.6658694Z  * [new branch]          fix/cz-artifact-print-scale              -> origin/fix/cz-artifact-print-scale
+2026-10-07T02:22:15.6659293Z  * [new branch]          fix/deploy-hard-reset                    -> origin/fix/deploy-hard-reset
+2026-10-07T02:22:15.6659884Z  * [new branch]          fix/fbs-box-controls-20260901            -> origin/fix/fbs-box-controls-20260901
+2026-10-07T02:22:15.6660507Z  * [new branch]          fix/fbs-supplier-status-sync             -> origin/fix/fbs-supplier-status-sync
+2026-10-07T02:22:15.6661161Z  * [new branch]          fix/inventory-owner-block-20260902       -> origin/fix/inventory-owner-block-20260902
+2026-10-07T02:22:15.6661934Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+2026-10-07T02:22:15.6662666Z  * [new branch]          fix/kiz-gs-restore-20260821              -> origin/fix/kiz-gs-restore-20260821
+2026-10-07T02:22:15.6663503Z  * [new branch]          fix/no-distribution-20260821             -> origin/fix/no-distribution-20260821
+2026-10-07T02:22:15.6664640Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+2026-10-07T02:22:15.6665499Z  * [new branch]          fix/packing-optional-20260819            -> origin/fix/packing-optional-20260819
+2026-10-07T02:22:15.6666355Z  * [new branch]          fix/packing-optional-to-prod             -> origin/fix/packing-optional-to-prod
+2026-10-07T02:22:15.6666977Z  * [new branch]          fix/picklist-size-20260819               -> origin/fix/picklist-size-20260819
+2026-10-07T02:22:15.6667549Z  * [new branch]          fix/print-pdf-dialog                     -> origin/fix/print-pdf-dialog
+2026-10-07T02:22:15.6668130Z  * [new branch]          fix/print-restore-proven                 -> origin/fix/print-restore-proven
+2026-10-07T02:22:15.6668726Z  * [new branch]          fix/review-findings-20260902             -> origin/fix/review-findings-20260902
+2026-10-07T02:22:15.6669389Z  * [new branch]          fix/seller-honest-sign-sync-20260819     -> origin/fix/seller-honest-sign-sync-20260819
+2026-10-07T02:22:15.6670198Z  * [new branch]          fix/warehouse-single-20260821            -> origin/fix/warehouse-single-20260821
+2026-10-07T02:22:15.6670846Z  * [new branch]          fix/wb-label-seller-line-height          -> origin/fix/wb-label-seller-line-height
+2026-10-07T02:22:15.6671489Z  * [new branch]          fix/wb-label-seller-line-trim            -> origin/fix/wb-label-seller-line-trim
+2026-10-07T02:22:15.6672095Z  * [new branch]          fix/wb-meta-method-20260821              -> origin/fix/wb-meta-method-20260821
+2026-10-07T02:22:15.6672665Z  * [new branch]          fix/wb-token-save-500                    -> origin/fix/wb-token-save-500
+2026-10-07T02:22:15.6673263Z  * [new branch]          fix/wms-fbs-single-pick-by-cell          -> origin/fix/wms-fbs-single-pick-by-cell
+2026-10-07T02:22:15.6673886Z  * [new branch]          fix/wms-session-regression               -> origin/fix/wms-session-regression
+2026-10-07T02:22:15.6674542Z  * [new branch]          fix/wms487-tape-print-missing-codes      -> origin/fix/wms487-tape-print-missing-codes
+2026-10-07T02:22:15.6675186Z  * [new branch]          fix/wms517-price-snapshot                -> origin/fix/wms517-price-snapshot
+2026-10-07T02:22:15.6675748Z  * [new branch]          fix/wms517-sold-only                     -> origin/fix/wms517-sold-only
+2026-10-07T02:22:15.6676603Z  * [new branch]          fix/wms625-on-etalon-20261003            -> origin/fix/wms625-on-etalon-20261003
+2026-10-07T02:22:15.6677242Z  * [new branch]          fix/wms634-fbo-date-delegated            -> origin/fix/wms634-fbo-date-delegated
+2026-10-07T02:22:15.6677833Z  * [new branch]          fix/wms635-kiz-no-wb-wait                -> origin/fix/wms635-kiz-no-wb-wait
+2026-10-07T02:22:15.6678427Z  * [new branch]          fix/wms639-scan-no-wb-readback           -> origin/fix/wms639-scan-no-wb-readback
+2026-10-07T02:22:15.6679169Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait           -> origin/fix/wms640-scan-kiz-no-wb-wait
+2026-10-07T02:22:15.6679801Z  * [new branch]          fix/wms641-kiz-delete-background         -> origin/fix/wms641-kiz-delete-background
+2026-10-07T02:22:15.6680452Z  * [new branch]          fix/wms642-kiz-no-locks-handover         -> origin/fix/wms642-kiz-no-locks-handover
+2026-10-07T02:22:15.6681114Z  * [new branch]          fix/wms643-no-print-when-unchecked       -> origin/fix/wms643-no-print-when-unchecked
+2026-10-07T02:22:15.6681769Z  * [new branch]          fix/wms652-contract-check-merge          -> origin/fix/wms652-contract-check-merge
+2026-10-07T02:22:15.6682376Z  * [new branch]          fix/wms656-full-kiz-label                -> origin/fix/wms656-full-kiz-label
+2026-10-07T02:22:15.6682981Z  * [new branch]          fix/wms666-product-stock-scope           -> origin/fix/wms666-product-stock-scope
+2026-10-07T02:22:15.6683686Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+2026-10-07T02:22:15.6684361Z  * [new branch]          hotfix/boxes-print-all-qr                -> origin/hotfix/boxes-print-all-qr
+2026-10-07T02:22:15.6685038Z  * [new branch]          hotfix/cz-print-regression-2026-07-07    -> origin/hotfix/cz-print-regression-2026-07-07
+2026-10-07T02:22:15.6685691Z  * [new branch]          hotfix/inbound-qty-blur-v2               -> origin/hotfix/inbound-qty-blur-v2
+2026-10-07T02:22:15.6686585Z  * [new branch]          hotfix/inbound-table-header-alignment    -> origin/hotfix/inbound-table-header-alignment
+2026-10-07T02:22:15.6687282Z  * [new branch]          hotfix/ozon-requirements-int-sku         -> origin/hotfix/ozon-requirements-int-sku
+2026-10-07T02:22:15.6687948Z  * [new branch]          hotfix/tz-print-landscape-revert         -> origin/hotfix/tz-print-landscape-revert
+2026-10-07T02:22:15.6688628Z  * [new branch]          hotfix/wb-unified-token-fbs-intake       -> origin/hotfix/wb-unified-token-fbs-intake
+2026-10-07T02:22:15.6689257Z  * [new branch]          hotfix/wms622-628-restore                -> origin/hotfix/wms622-628-restore
+2026-10-07T02:22:15.6689856Z  * [new branch]          integration/fbs-fixes-20260821           -> origin/integration/fbs-fixes-20260821
+2026-10-07T02:22:15.6690505Z  * [new branch]          main                                     -> origin/main
+2026-10-07T02:22:15.6691037Z  * [new branch]          mobile/android7-v014-recovery            -> origin/mobile/android7-v014-recovery
+2026-10-07T02:22:15.6691602Z  * [new branch]          mobile/feat-fbs                          -> origin/mobile/feat-fbs
+2026-10-07T02:22:15.6692137Z  * [new branch]          mockup/psp2-clickable                    -> origin/mockup/psp2-clickable
+2026-10-07T02:22:15.6692957Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+2026-10-07T02:22:15.6693865Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+2026-10-07T02:22:15.6694671Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+2026-10-07T02:22:15.6695466Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+2026-10-07T02:22:15.6696476Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+2026-10-07T02:22:15.6697259Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+2026-10-07T02:22:15.6697982Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+2026-10-07T02:22:15.6698794Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+2026-10-07T02:22:15.6699826Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+2026-10-07T02:22:15.6700613Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+2026-10-07T02:22:15.6701291Z  * [new branch]          night/volna-9/lane-1/01-wb-marking       -> origin/night/volna-9/lane-1/01-wb-marking
+2026-10-07T02:22:15.6701930Z  * [new branch]          night/volna-9/lane-1/07-reporting        -> origin/night/volna-9/lane-1/07-reporting
+2026-10-07T02:22:15.6702552Z  * [new branch]          night/volna-9/lane-1/defect-01           -> origin/night/volna-9/lane-1/defect-01
+2026-10-07T02:22:15.6703161Z  * [new branch]          night/volna-9/lane-1/feature-07          -> origin/night/volna-9/lane-1/feature-07
+2026-10-07T02:22:15.6703818Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen   -> origin/night/volna-9/lane-2/02-verdikt-screen
+2026-10-07T02:22:15.6704469Z  * [new branch]          night/volna-9/lane-2/08-storage          -> origin/night/volna-9/lane-2/08-storage
+2026-10-07T02:22:15.6705069Z  * [new branch]          night/volna-9/lane-2/defect-02           -> origin/night/volna-9/lane-2/defect-02
+2026-10-07T02:22:15.6705755Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+2026-10-07T02:22:15.6706655Z  * [new branch]          night/volna-9/lane-3/09-billing          -> origin/night/volna-9/lane-3/09-billing
+2026-10-07T02:22:15.6707253Z  * [new branch]          night/volna-9/lane-3/defect-03           -> origin/night/volna-9/lane-3/defect-03
+2026-10-07T02:22:15.6707915Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+2026-10-07T02:22:15.6708570Z  * [new branch]          night/volna-9/lane-4/defect-04           -> origin/night/volna-9/lane-4/defect-04
+2026-10-07T02:22:15.6709185Z  * [new branch]          night/volna-9/lane-5/05-prod-slow        -> origin/night/volna-9/lane-5/05-prod-slow
+2026-10-07T02:22:15.6709803Z  * [new branch]          night/volna-9/lane-5/defect-05           -> origin/night/volna-9/lane-5/defect-05
+2026-10-07T02:22:15.6710592Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+2026-10-07T02:22:15.6711264Z  * [new branch]          night/volna-9/lane-6/defect-06           -> origin/night/volna-9/lane-6/defect-06
+2026-10-07T02:22:15.6711839Z  * [new branch]          night/wms-653-5beb52da                   -> origin/night/wms-653-5beb52da
+2026-10-07T02:22:15.6712394Z  * [new branch]          night/wms-654-5beb52da                   -> origin/night/wms-654-5beb52da
+2026-10-07T02:22:15.6712933Z  * [new branch]          night/wms-657-5beb52da                   -> origin/night/wms-657-5beb52da
+2026-10-07T02:22:15.6713478Z  * [new branch]          night/wms-658-5beb52da                   -> origin/night/wms-658-5beb52da
+2026-10-07T02:22:15.6714018Z  * [new branch]          night/wms-659-5beb52da                   -> origin/night/wms-659-5beb52da
+2026-10-07T02:22:15.6714677Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+2026-10-07T02:22:15.6715456Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+2026-10-07T02:22:15.6716437Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+2026-10-07T02:22:15.6717207Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+2026-10-07T02:22:15.6717969Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+2026-10-07T02:22:15.6718731Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+2026-10-07T02:22:15.6719643Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+2026-10-07T02:22:15.6720408Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+2026-10-07T02:22:15.6721171Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+2026-10-07T02:22:15.6721903Z  * [new branch]          process/pipeline-on-etalon-20260821      -> origin/process/pipeline-on-etalon-20260821
+2026-10-07T02:22:15.6722575Z  * [new branch]          release/2026-10-02-packing-stock         -> origin/release/2026-10-02-packing-stock
+2026-10-07T02:22:15.6723171Z  * [new branch]          release/2026-10-03-ready                 -> origin/release/2026-10-03-ready
+2026-10-07T02:22:15.6723752Z  * [new branch]          release/barcode-tall-label               -> origin/release/barcode-tall-label
+2026-10-07T02:22:15.6724351Z  * [new branch]          release/inbound-print-fix                -> origin/release/inbound-print-fix
+2026-10-07T02:22:15.6724925Z  * [new branch]          release/wms641-agent-v1                  -> origin/release/wms641-agent-v1
+2026-10-07T02:22:15.6725483Z  * [new branch]          release/wms641-agent-v2                  -> origin/release/wms641-agent-v2
+2026-10-07T02:22:15.6726253Z  * [new branch]          release/wms641-agent-v3                  -> origin/release/wms641-agent-v3
+2026-10-07T02:22:15.6726989Z  * [new branch]          review/pick-and-binding-fixes-20260816   -> origin/review/pick-and-binding-fixes-20260816
+2026-10-07T02:22:15.6727750Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+2026-10-07T02:22:15.6728424Z  * [new branch]          speed/test-infra-20260830                -> origin/speed/test-infra-20260830
+2026-10-07T02:22:15.6728940Z  * [new branch]          staging                                  -> origin/staging
+2026-10-07T02:22:15.6729445Z  * [new branch]          support-task/WMS-651-4                   -> origin/support-task/WMS-651-4
+2026-10-07T02:22:15.6730127Z  * [new branch]          support-task/WMS-653-6                   -> origin/support-task/WMS-653-6
+2026-10-07T02:22:15.6730680Z  * [new branch]          support-task/WMS-654-7                   -> origin/support-task/WMS-654-7
+2026-10-07T02:22:15.6731216Z  * [new branch]          support-task/WMS-657-8                   -> origin/support-task/WMS-657-8
+2026-10-07T02:22:15.6731755Z  * [new branch]          support-task/WMS-658-9                   -> origin/support-task/WMS-658-9
+2026-10-07T02:22:15.6732301Z  * [new branch]          support-task/WMS-661-14                  -> origin/support-task/WMS-661-14
+2026-10-07T02:22:15.6732851Z  * [new branch]          support-task/WMS-667-18                  -> origin/support-task/WMS-667-18
+2026-10-07T02:22:15.6733433Z  * [new branch]          support-task/WMS-677-22                  -> origin/support-task/WMS-677-22
+2026-10-07T02:22:15.6733984Z  * [new branch]          support-task/WMS-679-26                  -> origin/support-task/WMS-679-26
+2026-10-07T02:22:15.6734534Z  * [new branch]          support-task/WMS-680-27                  -> origin/support-task/WMS-680-27
+2026-10-07T02:22:15.6735073Z  * [new branch]          support-task/WMS-683-29                  -> origin/support-task/WMS-683-29
+2026-10-07T02:22:15.6735663Z  * [new branch]          test/wms672-c7-c10-c11-20261006          -> origin/test/wms672-c7-c10-c11-20261006
+2026-10-07T02:22:15.6736366Z  * [new tag]             tsd-preview                              -> tsd-preview
+2026-10-07T02:22:15.6736860Z  * [new tag]             wms-print-direct-v2026.09.30.1           -> wms-print-direct-v2026.09.30.1
+2026-10-07T02:22:15.6737420Z  * [new tag]             wms-print-direct-v2026.09.30.2           -> wms-print-direct-v2026.09.30.2
+2026-10-07T02:22:15.6738000Z  * [new tag]             wms-print-direct-v2026.09.30.3           -> wms-print-direct-v2026.09.30.3
+2026-10-07T02:22:15.6738699Z  * [new tag]             wms-print-direct-v2026.09.30.4           -> wms-print-direct-v2026.09.30.4
+2026-10-07T02:22:15.6739264Z  * [new tag]             wms-print-direct-v2026.09.30.5           -> wms-print-direct-v2026.09.30.5
+2026-10-07T02:22:15.6739850Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1       -> wms-print-direct-v2026.10.01.1-rc1
+2026-10-07T02:22:15.6740408Z  * [new tag]             wms-print-v2026.09.13.1                  -> wms-print-v2026.09.13.1
+2026-10-07T02:22:15.6740914Z  * [new tag]             wms-print-v2026.09.13.2                  -> wms-print-v2026.09.13.2
+2026-10-07T02:22:15.6741413Z  * [new tag]             wms-print-v2026.09.13.3                  -> wms-print-v2026.09.13.3
+2026-10-07T02:22:15.6741907Z  * [new ref]             4a118aea00ec3995d98f70d337245260b291ca7f -> pull/387/merge
+2026-10-07T02:22:15.6742908Z ##[endgroup]
+2026-10-07T02:22:15.6743260Z ##[group]Determining the checkout info
+2026-10-07T02:22:15.6743663Z ##[endgroup]
+2026-10-07T02:22:15.6743889Z [command]/usr/bin/git sparse-checkout disable
+2026-10-07T02:22:15.6744557Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-10-07T02:22:15.6745332Z ##[group]Checking out the ref
+2026-10-07T02:22:15.6745693Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/387/merge
+2026-10-07T02:22:16.6860543Z Updating files:  97% (6326/6516)
+2026-10-07T02:22:16.6931012Z Updating files:  98% (6386/6516)
+2026-10-07T02:22:16.7012764Z Updating files:  99% (6451/6516)
+2026-10-07T02:22:16.7013254Z Updating files: 100% (6516/6516)
+2026-10-07T02:22:16.7013786Z Updating files: 100% (6516/6516), done.
+2026-10-07T02:22:16.7095959Z Note: switching to 'refs/remotes/pull/387/merge'.
+2026-10-07T02:22:16.7096619Z 
+2026-10-07T02:22:16.7097220Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-10-07T02:22:16.7097857Z changes and commit them, and you can discard any commits you make in this
+2026-10-07T02:22:16.7098920Z state without impacting any branches by switching back to a branch.
+2026-10-07T02:22:16.7099687Z 
+2026-10-07T02:22:16.7100072Z If you want to create a new branch to retain commits you create, you may
+2026-10-07T02:22:16.7101256Z do so (now or later) by using -c with the switch command. Example:
+2026-10-07T02:22:16.7101776Z 
+2026-10-07T02:22:16.7102136Z   git switch -c <new-branch-name>
+2026-10-07T02:22:16.7102455Z 
+2026-10-07T02:22:16.7102695Z Or undo this operation with:
+2026-10-07T02:22:16.7102980Z 
+2026-10-07T02:22:16.7103227Z   git switch -
+2026-10-07T02:22:16.7103582Z 
+2026-10-07T02:22:16.7103960Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-10-07T02:22:16.7104521Z 
+2026-10-07T02:22:16.7105143Z HEAD is now at 4a118aea0 Merge a09e34fc7ec3dcfbdceeaf4916a8535fcbffc8ed into 4b298efc95be7b4b6b7fe5665be9f3671f1fe747
+2026-10-07T02:22:16.7172207Z ##[endgroup]
+2026-10-07T02:22:16.7228814Z [command]/usr/bin/git log -1 --format=%H
+2026-10-07T02:22:16.7257976Z 4a118aea00ec3995d98f70d337245260b291ca7f
+2026-10-07T02:22:16.7511045Z ##[group]Run actions/setup-python@v5
+2026-10-07T02:22:16.7511342Z with:
+2026-10-07T02:22:16.7511544Z   python-version: 3.11
+2026-10-07T02:22:16.7511759Z   cache: pip
+2026-10-07T02:22:16.7512006Z   cache-dependency-path: backend/pyproject.toml
+2026-10-07T02:22:16.7512308Z   check-latest: false
+2026-10-07T02:22:16.7514817Z   token: ***
+2026-10-07T02:22:16.7515215Z   update-environment: true
+2026-10-07T02:22:16.7515618Z   allow-prereleases: false
+2026-10-07T02:22:16.7515848Z   freethreaded: false
+2026-10-07T02:22:16.7516271Z ##[endgroup]
+2026-10-07T02:22:16.8967239Z ##[group]Installed versions
+2026-10-07T02:22:16.9106603Z (node:3306) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:22:16.9107859Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:22:16.9108602Z Successfully set up CPython (3.11.17)
+2026-10-07T02:22:16.9109773Z ##[endgroup]
+2026-10-07T02:22:16.9415127Z [command]/opt/hostedtoolcache/Python/3.11.17/x64/bin/pip cache dir
+2026-10-07T02:22:17.2419375Z /home/runner/.cache/pip
+2026-10-07T02:22:17.5169689Z Cache hit for: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.17-pip-b895c9babfda1d10249511c619da3d95ed37f7d44247c5dff5f74d855af284be
+2026-10-07T02:22:17.5279583Z (node:3306) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-07T02:22:18.7873390Z Received 4194304 of 120285844 (3.5%), 4.0 MBs/sec
+2026-10-07T02:22:19.7800536Z Received 120285844 of 120285844 (100.0%), 57.6 MBs/sec
+2026-10-07T02:22:19.7801879Z Cache Size: ~115 MB (120285844 B)
+2026-10-07T02:22:19.7922062Z [command]/usr/bin/tar -xf /home/runner/work/_temp/8139d836-1880-4626-bc67-bbd4a75e6d11/cache.tzst -P -C /home/runner/work/WMS/WMS --use-compress-program unzstd
+2026-10-07T02:22:20.0142111Z Cache restored successfully
+2026-10-07T02:22:20.0200782Z Cache restored from key: setup-python-Linux-x64-24.04-Ubuntu-python-3.11.17-pip-b895c9babfda1d10249511c619da3d95ed37f7d44247c5dff5f74d855af284be
+2026-10-07T02:22:20.0360138Z ##[group]Run python -m pip install -U pip
+2026-10-07T02:22:20.0360552Z [36;1mpython -m pip install -U pip[0m
+2026-10-07T02:22:20.0360855Z [36;1mpip install -e ".[dev]"[0m
+2026-10-07T02:22:20.0558386Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:22:20.0558729Z env:
+2026-10-07T02:22:20.0559071Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:20.0559668Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:22:20.0560249Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:20.0560752Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:20.0561249Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:20.0561760Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:22:20.0562203Z ##[endgroup]
+2026-10-07T02:22:20.5421422Z Requirement already satisfied: pip in /opt/hostedtoolcache/Python/3.11.17/x64/lib/python3.11/site-packages (26.2.1)
+2026-10-07T02:22:21.0183014Z Obtaining file:///home/runner/work/WMS/WMS/backend
+2026-10-07T02:22:21.0220881Z   Installing build dependencies: started
+2026-10-07T02:22:21.6439093Z   Installing build dependencies: finished with status 'done'
+2026-10-07T02:22:21.6444892Z   Checking if build backend supports build_editable: started
+2026-10-07T02:22:21.9609319Z   Checking if build backend supports build_editable: finished with status 'done'
+2026-10-07T02:22:21.9617530Z   Getting requirements to build editable: started
+2026-10-07T02:22:22.2888606Z   Getting requirements to build editable: finished with status 'done'
+2026-10-07T02:22:22.2897944Z   Preparing editable metadata (pyproject.toml): started
+2026-10-07T02:22:22.4794071Z   Preparing editable metadata (pyproject.toml): finished with status 'done'
+2026-10-07T02:22:22.7059326Z Collecting fastapi>=0.110 (from wms-backend==0.1.0)
+2026-10-07T02:22:22.7077742Z   Using cached fastapi-0.142.2-py3-none-any.whl.metadata (27 kB)
+2026-10-07T02:22:22.7905957Z Collecting uvicorn>=0.27 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:22.7919333Z   Using cached uvicorn-0.54.0-py3-none-any.whl.metadata (6.6 kB)
+2026-10-07T02:22:22.8487298Z Collecting python-multipart>=0.0.9 (from wms-backend==0.1.0)
+2026-10-07T02:22:22.8502858Z   Using cached python_multipart-0.0.32-py3-none-any.whl.metadata (2.1 kB)
+2026-10-07T02:22:22.9858358Z Collecting pydantic>=2.6 (from wms-backend==0.1.0)
+2026-10-07T02:22:22.9875739Z   Using cached pydantic-2.13.5-py3-none-any.whl.metadata (110 kB)
+2026-10-07T02:22:23.0483084Z Collecting pydantic-settings>=2.2 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.0498133Z   Using cached pydantic_settings-2.15.0-py3-none-any.whl.metadata (3.9 kB)
+2026-10-07T02:22:23.3521902Z Collecting sqlalchemy<2.1,>=2.0 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.3539385Z   Using cached sqlalchemy-2.0.54-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (9.7 kB)
+2026-10-07T02:22:23.5441076Z Collecting greenlet>=3.0 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.5457303Z   Using cached greenlet-3.5.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl.metadata (3.8 kB)
+2026-10-07T02:22:23.6148222Z Collecting alembic>=1.13 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.6163024Z   Using cached alembic-1.20.0-py3-none-any.whl.metadata (7.3 kB)
+2026-10-07T02:22:23.6763656Z Collecting psycopg>=3.1 (from psycopg[binary]>=3.1->wms-backend==0.1.0)
+2026-10-07T02:22:23.6778461Z   Using cached psycopg-3.3.6-py3-none-any.whl.metadata (4.4 kB)
+2026-10-07T02:22:23.7564094Z Collecting bcrypt>=4.1 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.7579222Z   Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl.metadata (10 kB)
+2026-10-07T02:22:23.8155184Z Collecting pyjwt>=2.8 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.8170403Z   Using cached pyjwt-2.15.1-py3-none-any.whl.metadata (3.5 kB)
+2026-10-07T02:22:23.8719345Z Collecting email-validator>=2.1 (from wms-backend==0.1.0)
+2026-10-07T02:22:23.8734620Z   Using cached email_validator-2.3.0-py3-none-any.whl.metadata (26 kB)
+2026-10-07T02:22:23.9403803Z Collecting celery>=5.3 (from celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:23.9418915Z   Using cached celery-5.6.3-py3-none-any.whl.metadata (23 kB)
+2026-10-07T02:22:24.0105725Z Collecting httpx>=0.27 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.0121055Z   Using cached httpx-0.28.1-py3-none-any.whl.metadata (7.1 kB)
+2026-10-07T02:22:24.2175122Z Collecting cryptography>=42.0 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.2192344Z   Using cached cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl.metadata (4.4 kB)
+2026-10-07T02:22:24.4067026Z Collecting pymupdf>=1.24 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.4084065Z   Using cached pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl.metadata (26 kB)
+2026-10-07T02:22:24.4736619Z Collecting zxing-cpp>=3.0 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.4751900Z   Using cached zxing_cpp-3.1.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (2.3 kB)
+2026-10-07T02:22:24.5309474Z Collecting openpyxl>=3.1 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.5323896Z   Using cached openpyxl-3.1.5-py2.py3-none-any.whl.metadata (2.5 kB)
+2026-10-07T02:22:24.7667398Z Collecting boto3>=1.34 (from wms-backend==0.1.0)
+2026-10-07T02:22:24.7684331Z   Using cached boto3-1.43.108-py3-none-any.whl.metadata (6.6 kB)
+2026-10-07T02:22:25.1430611Z Collecting ruff>=0.4 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.1451968Z   Using cached ruff-0.16.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (20 kB)
+2026-10-07T02:22:25.2844028Z Collecting mypy>=1.10 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.2860831Z   Using cached mypy-2.4.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+2026-10-07T02:22:25.3845339Z Collecting pytest>=8.0 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.3864583Z   Using cached pytest-9.1.1-py3-none-any.whl.metadata (7.6 kB)
+2026-10-07T02:22:25.4462400Z Collecting pytest-asyncio>=0.23 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.4477354Z   Using cached pytest_asyncio-1.4.0-py3-none-any.whl.metadata (4.1 kB)
+2026-10-07T02:22:25.5047999Z Collecting pytest-xdist>=3.5 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.5062493Z   Using cached pytest_xdist-3.8.0-py3-none-any.whl.metadata (3.0 kB)
+2026-10-07T02:22:25.5696988Z Collecting types-requests>=2.32.0.20240622 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.5711623Z   Using cached types_requests-2.33.0.20261006-py3-none-any.whl.metadata (2.2 kB)
+2026-10-07T02:22:25.6252893Z Collecting aiosqlite>=0.20 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.6267744Z   Using cached aiosqlite-0.22.1-py3-none-any.whl.metadata (4.3 kB)
+2026-10-07T02:22:25.6819648Z Collecting qrcode>=7.4 (from qrcode[pil]>=7.4; extra == "dev"->wms-backend==0.1.0)
+2026-10-07T02:22:25.6834638Z   Using cached qrcode-8.2-py3-none-any.whl.metadata (17 kB)
+2026-10-07T02:22:25.7391869Z Collecting pypng>=0.20220615 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.7405908Z   Using cached pypng-0.20220715.0-py3-none-any.whl.metadata (13 kB)
+2026-10-07T02:22:25.7955859Z Collecting python-barcode>=0.15 (from wms-backend==0.1.0)
+2026-10-07T02:22:25.7971390Z   Using cached python_barcode-0.16.1-py3-none-any.whl.metadata (2.7 kB)
+2026-10-07T02:22:25.8578957Z Collecting typing-extensions>=4.6.0 (from sqlalchemy<2.1,>=2.0->wms-backend==0.1.0)
+2026-10-07T02:22:25.8593915Z   Using cached typing_extensions-4.16.0-py3-none-any.whl.metadata (3.3 kB)
+2026-10-07T02:22:25.9182779Z Collecting Mako (from alembic>=1.13->wms-backend==0.1.0)
+2026-10-07T02:22:25.9198423Z   Using cached mako-1.4.3-py3-none-any.whl.metadata (2.9 kB)
+2026-10-07T02:22:26.1771646Z Collecting botocore<1.44.0,>=1.43.108 (from boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.1788675Z   Using cached botocore-1.43.108-py3-none-any.whl.metadata (5.6 kB)
+2026-10-07T02:22:26.2331906Z Collecting jmespath<2.0.0,>=0.7.1 (from boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.2347501Z   Using cached jmespath-1.1.0-py3-none-any.whl.metadata (7.6 kB)
+2026-10-07T02:22:26.2924375Z Collecting s3transfer<0.20.0,>=0.19.0 (from boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.2939619Z   Using cached s3transfer-0.19.2-py3-none-any.whl.metadata (1.7 kB)
+2026-10-07T02:22:26.3518564Z Collecting python-dateutil<3.0.0,>=2.1 (from botocore<1.44.0,>=1.43.108->boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.3533776Z   Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl.metadata (8.4 kB)
+2026-10-07T02:22:26.4167063Z Collecting urllib3!=2.2.0,<3,>=1.25.4 (from botocore<1.44.0,>=1.43.108->boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.4182078Z   Using cached urllib3-2.8.0-py3-none-any.whl.metadata (7.4 kB)
+2026-10-07T02:22:26.4753060Z Collecting six>=1.5 (from python-dateutil<3.0.0,>=2.1->botocore<1.44.0,>=1.43.108->boto3>=1.34->wms-backend==0.1.0)
+2026-10-07T02:22:26.4767876Z   Using cached six-1.17.0-py2.py3-none-any.whl.metadata (1.7 kB)
+2026-10-07T02:22:26.5543768Z Collecting billiard<5.0,>=4.2.1 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.5559207Z   Using cached billiard-4.3.1-py3-none-any.whl.metadata (5.0 kB)
+2026-10-07T02:22:26.6202374Z Collecting kombu>=5.6.0 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.6218225Z   Using cached kombu-5.6.2-py3-none-any.whl.metadata (3.5 kB)
+2026-10-07T02:22:26.6796365Z Collecting vine<6.0,>=5.1.0 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.6812248Z   Using cached vine-5.1.0-py3-none-any.whl.metadata (2.7 kB)
+2026-10-07T02:22:26.7400539Z Collecting click<9.0,>=8.1.2 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.7416948Z   Using cached click-8.5.0-py3-none-any.whl.metadata (2.6 kB)
+2026-10-07T02:22:26.7963228Z Collecting click-didyoumean>=0.3.0 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.7978542Z   Using cached click_didyoumean-0.3.1-py3-none-any.whl.metadata (3.9 kB)
+2026-10-07T02:22:26.8513666Z Collecting click-repl>=0.2.0 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.8528983Z   Using cached click_repl-0.4.1-py3-none-any.whl.metadata (3.7 kB)
+2026-10-07T02:22:26.9103158Z Collecting click-plugins>=1.1.1 (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.9124469Z   Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl.metadata (6.5 kB)
+2026-10-07T02:22:26.9738736Z Collecting tzlocal (from celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:26.9754325Z   Using cached tzlocal-5.4.4-py3-none-any.whl.metadata (7.7 kB)
+2026-10-07T02:22:27.0491143Z Collecting prompt_toolkit>=3.0.36 (from click-repl>=0.2.0->celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:27.0505734Z   Using cached prompt_toolkit-3.0.53-py3-none-any.whl.metadata (6.4 kB)
+2026-10-07T02:22:27.2364789Z Collecting cffi>=2.0.0 (from cryptography>=42.0->wms-backend==0.1.0)
+2026-10-07T02:22:27.2382877Z   Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.5 kB)
+2026-10-07T02:22:27.2922155Z Collecting pycparser (from cffi>=2.0.0->cryptography>=42.0->wms-backend==0.1.0)
+2026-10-07T02:22:27.2937487Z   Using cached pycparser-3.0-py3-none-any.whl.metadata (8.2 kB)
+2026-10-07T02:22:27.3495166Z Collecting dnspython>=2.0.0 (from email-validator>=2.1->wms-backend==0.1.0)
+2026-10-07T02:22:27.3510666Z   Using cached dnspython-2.8.0-py3-none-any.whl.metadata (5.7 kB)
+2026-10-07T02:22:27.4084312Z Collecting idna>=2.0.0 (from email-validator>=2.1->wms-backend==0.1.0)
+2026-10-07T02:22:27.4099543Z   Using cached idna-3.20-py3-none-any.whl.metadata (7.2 kB)
+2026-10-07T02:22:27.4770142Z Collecting starlette>=0.46.0 (from fastapi>=0.110->wms-backend==0.1.0)
+2026-10-07T02:22:27.4785499Z   Using cached starlette-1.7.0-py3-none-any.whl.metadata (6.6 kB)
+2026-10-07T02:22:27.5355699Z Collecting typing-inspection>=0.4.2 (from fastapi>=0.110->wms-backend==0.1.0)
+2026-10-07T02:22:27.5371205Z   Using cached typing_inspection-0.4.4-py3-none-any.whl.metadata (2.6 kB)
+2026-10-07T02:22:27.5897252Z Collecting annotated-doc>=0.0.2 (from fastapi>=0.110->wms-backend==0.1.0)
+2026-10-07T02:22:27.5913488Z   Using cached annotated_doc-0.0.5-py3-none-any.whl.metadata (6.5 kB)
+2026-10-07T02:22:27.6504270Z Collecting opentelemetry-api>=1.44.0 (from fastapi>=0.110->wms-backend==0.1.0)
+2026-10-07T02:22:27.6519794Z   Using cached opentelemetry_api-1.45.1-py3-none-any.whl.metadata (1.4 kB)
+2026-10-07T02:22:27.7170228Z Collecting anyio (from httpx>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:27.7186171Z   Using cached anyio-4.15.1-py3-none-any.whl.metadata (4.7 kB)
+2026-10-07T02:22:27.7806792Z Collecting certifi (from httpx>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:27.7822671Z   Using cached certifi-2026.7.22-py3-none-any.whl.metadata (2.5 kB)
+2026-10-07T02:22:28.0186575Z Collecting httpcore==1.* (from httpx>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:28.0202358Z   Using cached httpcore-1.0.9-py3-none-any.whl.metadata (21 kB)
+2026-10-07T02:22:28.0761365Z Collecting h11>=0.16 (from httpcore==1.*->httpx>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:28.0776014Z   Using cached h11-0.16.0-py3-none-any.whl.metadata (8.3 kB)
+2026-10-07T02:22:28.1380237Z Collecting amqp<6.0.0,>=5.1.1 (from kombu>=5.6.0->celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:28.1395120Z   Using cached amqp-5.4.1-py3-none-any.whl.metadata (9.4 kB)
+2026-10-07T02:22:28.1959545Z Collecting tzdata>=2025.2 (from kombu>=5.6.0->celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:28.1973854Z   Using cached tzdata-2026.5-py2.py3-none-any.whl.metadata (1.4 kB)
+2026-10-07T02:22:28.2551461Z Collecting packaging (from kombu>=5.6.0->celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:28.2566743Z   Using cached packaging-26.3-py3-none-any.whl.metadata (3.5 kB)
+2026-10-07T02:22:28.3115507Z Collecting mypy_extensions>=1.0.0 (from mypy>=1.10->wms-backend==0.1.0)
+2026-10-07T02:22:28.3130357Z   Using cached mypy_extensions-1.1.0-py3-none-any.whl.metadata (1.1 kB)
+2026-10-07T02:22:28.3676750Z Collecting pathspec>=1.0.0 (from mypy>=1.10->wms-backend==0.1.0)
+2026-10-07T02:22:28.3692091Z   Using cached pathspec-1.1.1-py3-none-any.whl.metadata (14 kB)
+2026-10-07T02:22:28.5340470Z Collecting librt>=0.16.0 (from mypy>=1.10->wms-backend==0.1.0)
+2026-10-07T02:22:28.5357743Z   Using cached librt-0.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (1.3 kB)
+2026-10-07T02:22:28.6230976Z Collecting ast-serialize<1.0.0,>=0.11.2 (from mypy>=1.10->wms-backend==0.1.0)
+2026-10-07T02:22:28.6247337Z   Using cached ast_serialize-0.12.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.4 kB)
+2026-10-07T02:22:28.6799442Z Collecting et-xmlfile (from openpyxl>=3.1->wms-backend==0.1.0)
+2026-10-07T02:22:28.6814427Z   Using cached et_xmlfile-2.0.0-py3-none-any.whl.metadata (2.7 kB)
+2026-10-07T02:22:28.7437743Z Collecting wcwidth>=0.1.4 (from prompt_toolkit>=3.0.36->click-repl>=0.2.0->celery>=5.3->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:28.7452557Z   Using cached wcwidth-0.9.2-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (23 kB)
+2026-10-07T02:22:28.9778226Z Collecting psycopg-binary==3.3.6 (from psycopg[binary]>=3.1->wms-backend==0.1.0)
+2026-10-07T02:22:28.9795515Z   Using cached psycopg_binary-3.3.6-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl.metadata (2.7 kB)
+2026-10-07T02:22:29.0340337Z Collecting annotated-types>=0.6.0 (from pydantic>=2.6->wms-backend==0.1.0)
+2026-10-07T02:22:29.0355849Z   Using cached annotated_types-0.8.0-py3-none-any.whl.metadata (15 kB)
+2026-10-07T02:22:29.7591750Z Collecting pydantic-core==2.46.5 (from pydantic>=2.6->wms-backend==0.1.0)
+2026-10-07T02:22:29.7608855Z   Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (6.6 kB)
+2026-10-07T02:22:29.8240586Z Collecting python-dotenv>=0.21.0 (from pydantic-settings>=2.2->wms-backend==0.1.0)
+2026-10-07T02:22:29.8255381Z   Using cached python_dotenv-1.2.4-py3-none-any.whl.metadata (29 kB)
+2026-10-07T02:22:29.8831654Z Collecting iniconfig>=1.0.1 (from pytest>=8.0->wms-backend==0.1.0)
+2026-10-07T02:22:29.8847860Z   Using cached iniconfig-2.3.1-py3-none-any.whl.metadata (2.8 kB)
+2026-10-07T02:22:29.9398229Z Collecting pluggy<2,>=1.5 (from pytest>=8.0->wms-backend==0.1.0)
+2026-10-07T02:22:29.9412740Z   Using cached pluggy-1.6.0-py3-none-any.whl.metadata (4.8 kB)
+2026-10-07T02:22:30.0010452Z Collecting pygments>=2.7.2 (from pytest>=8.0->wms-backend==0.1.0)
+2026-10-07T02:22:30.0025514Z   Using cached pygments-2.21.0-py3-none-any.whl.metadata (2.5 kB)
+2026-10-07T02:22:30.0629677Z Collecting execnet>=2.1 (from pytest-xdist>=3.5->wms-backend==0.1.0)
+2026-10-07T02:22:30.0645351Z   Using cached execnet-2.1.2-py3-none-any.whl.metadata (2.9 kB)
+2026-10-07T02:22:30.2589475Z Collecting pillow>=9.1.0 (from qrcode[pil]>=7.4; extra == "dev"->wms-backend==0.1.0)
+2026-10-07T02:22:30.2606595Z   Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl.metadata (9.1 kB)
+2026-10-07T02:22:30.3544912Z Collecting httptools>=0.8.0 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:30.3564089Z   Using cached httptools-0.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (3.5 kB)
+2026-10-07T02:22:30.4345745Z Collecting pyyaml>=5.1 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:30.4363264Z   Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.4 kB)
+2026-10-07T02:22:30.5168450Z Collecting uvloop>=0.15.1 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:30.5184524Z   Using cached uvloop-0.23.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (5.1 kB)
+2026-10-07T02:22:30.7020654Z Collecting watchfiles>=0.20 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:30.7037984Z   Using cached watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (4.9 kB)
+2026-10-07T02:22:30.8502757Z Collecting websockets>=13.0 (from uvicorn[standard]>=0.27->wms-backend==0.1.0)
+2026-10-07T02:22:30.8519441Z   Using cached websockets-17.2-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata (6.3 kB)
+2026-10-07T02:22:30.9264643Z Collecting redis!=4.5.5,!=5.0.2,<6.5,>=4.5.2 (from kombu[redis]; extra == "redis"->celery[redis]>=5.3->wms-backend==0.1.0)
+2026-10-07T02:22:30.9279713Z   Using cached redis-6.4.0-py3-none-any.whl.metadata (10 kB)
+2026-10-07T02:22:31.0244378Z Collecting MarkupSafe>=2.0 (from Mako->alembic>=1.13->wms-backend==0.1.0)
+2026-10-07T02:22:31.0260460Z   Using cached markupsafe-3.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (2.7 kB)
+2026-10-07T02:22:31.0327162Z Using cached sqlalchemy-2.0.54-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.4 MB)
+2026-10-07T02:22:31.0355050Z Using cached aiosqlite-0.22.1-py3-none-any.whl (17 kB)
+2026-10-07T02:22:31.0369514Z Using cached alembic-1.20.0-py3-none-any.whl (268 kB)
+2026-10-07T02:22:31.0384522Z Using cached bcrypt-5.0.0-cp39-abi3-manylinux_2_34_x86_64.whl (278 kB)
+2026-10-07T02:22:31.0399681Z Using cached boto3-1.43.108-py3-none-any.whl (140 kB)
+2026-10-07T02:22:31.0413765Z Using cached botocore-1.43.108-py3-none-any.whl (16.0 MB)
+2026-10-07T02:22:31.0485354Z Using cached jmespath-1.1.0-py3-none-any.whl (20 kB)
+2026-10-07T02:22:31.0499991Z Using cached python_dateutil-2.9.0.post0-py2.py3-none-any.whl (229 kB)
+2026-10-07T02:22:31.0514333Z Using cached s3transfer-0.19.2-py3-none-any.whl (90 kB)
+2026-10-07T02:22:31.0528583Z Using cached urllib3-2.8.0-py3-none-any.whl (135 kB)
+2026-10-07T02:22:31.0542633Z Using cached celery-5.6.3-py3-none-any.whl (451 kB)
+2026-10-07T02:22:31.0558262Z Using cached billiard-4.3.1-py3-none-any.whl (90 kB)
+2026-10-07T02:22:31.0572186Z Using cached click-8.5.0-py3-none-any.whl (125 kB)
+2026-10-07T02:22:31.0586289Z Using cached vine-5.1.0-py3-none-any.whl (9.6 kB)
+2026-10-07T02:22:31.0600748Z Using cached click_didyoumean-0.3.1-py3-none-any.whl (3.6 kB)
+2026-10-07T02:22:31.0614118Z Using cached click_plugins-1.1.1.2-py2.py3-none-any.whl (11 kB)
+2026-10-07T02:22:31.0627841Z Using cached click_repl-0.4.1-py3-none-any.whl (14 kB)
+2026-10-07T02:22:31.0641979Z Using cached cryptography-50.0.2-cp311-abi3-manylinux_2_34_x86_64.whl (4.8 MB)
+2026-10-07T02:22:31.0673515Z Using cached cffi-2.1.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (217 kB)
+2026-10-07T02:22:31.0687914Z Using cached email_validator-2.3.0-py3-none-any.whl (35 kB)
+2026-10-07T02:22:31.0701797Z Using cached dnspython-2.8.0-py3-none-any.whl (331 kB)
+2026-10-07T02:22:31.0716634Z Using cached fastapi-0.142.2-py3-none-any.whl (144 kB)
+2026-10-07T02:22:31.0731011Z Using cached annotated_doc-0.0.5-py3-none-any.whl (5.3 kB)
+2026-10-07T02:22:31.0745191Z Using cached greenlet-3.5.6-cp311-cp311-manylinux_2_24_x86_64.manylinux_2_28_x86_64.whl (624 kB)
+2026-10-07T02:22:31.0761418Z Using cached httpx-0.28.1-py3-none-any.whl (73 kB)
+2026-10-07T02:22:31.0775416Z Using cached httpcore-1.0.9-py3-none-any.whl (78 kB)
+2026-10-07T02:22:31.0790157Z Using cached h11-0.16.0-py3-none-any.whl (37 kB)
+2026-10-07T02:22:31.0804056Z Using cached idna-3.20-py3-none-any.whl (69 kB)
+2026-10-07T02:22:31.0818144Z Using cached kombu-5.6.2-py3-none-any.whl (214 kB)
+2026-10-07T02:22:31.0832841Z Using cached amqp-5.4.1-py3-none-any.whl (51 kB)
+2026-10-07T02:22:31.0847616Z Using cached mypy-2.4.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (15.4 MB)
+2026-10-07T02:22:31.0915393Z Using cached ast_serialize-0.12.1-cp39-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (1.3 MB)
+2026-10-07T02:22:31.0942275Z Using cached librt-0.16.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (515 kB)
+2026-10-07T02:22:31.0964849Z Using cached mypy_extensions-1.1.0-py3-none-any.whl (5.0 kB)
+2026-10-07T02:22:31.0982336Z Using cached openpyxl-3.1.5-py2.py3-none-any.whl (250 kB)
+2026-10-07T02:22:31.1002764Z Using cached opentelemetry_api-1.45.1-py3-none-any.whl (60 kB)
+2026-10-07T02:22:31.1024684Z Using cached pathspec-1.1.1-py3-none-any.whl (57 kB)
+2026-10-07T02:22:31.1060334Z Using cached prompt_toolkit-3.0.53-py3-none-any.whl (392 kB)
+2026-10-07T02:22:31.1067921Z Using cached psycopg-3.3.6-py3-none-any.whl (215 kB)
+2026-10-07T02:22:31.1091415Z Using cached psycopg_binary-3.3.6-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (5.3 MB)
+2026-10-07T02:22:31.1135759Z Using cached pydantic-2.13.5-py3-none-any.whl (472 kB)
+2026-10-07T02:22:31.1158551Z Using cached pydantic_core-2.46.5-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (2.1 MB)
+2026-10-07T02:22:31.1186808Z Using cached annotated_types-0.8.0-py3-none-any.whl (13 kB)
+2026-10-07T02:22:31.1205948Z Using cached pydantic_settings-2.15.0-py3-none-any.whl (69 kB)
+2026-10-07T02:22:31.1225057Z Using cached pyjwt-2.15.1-py3-none-any.whl (33 kB)
+2026-10-07T02:22:31.1245220Z Using cached pymupdf-1.28.2-cp310-abi3-manylinux_2_28_x86_64.whl (25.8 MB)
+2026-10-07T02:22:31.1383188Z Using cached pypng-0.20220715.0-py3-none-any.whl (58 kB)
+2026-10-07T02:22:31.1398359Z Using cached pytest-9.1.1-py3-none-any.whl (386 kB)
+2026-10-07T02:22:31.1418458Z Using cached pluggy-1.6.0-py3-none-any.whl (20 kB)
+2026-10-07T02:22:31.1433455Z Using cached iniconfig-2.3.1-py3-none-any.whl (7.6 kB)
+2026-10-07T02:22:31.1448894Z Using cached packaging-26.3-py3-none-any.whl (129 kB)
+2026-10-07T02:22:31.1463991Z Using cached pygments-2.21.0-py3-none-any.whl (1.3 MB)
+2026-10-07T02:22:31.1483355Z Using cached pytest_asyncio-1.4.0-py3-none-any.whl (16 kB)
+2026-10-07T02:22:31.1498297Z Using cached pytest_xdist-3.8.0-py3-none-any.whl (46 kB)
+2026-10-07T02:22:31.1512966Z Using cached execnet-2.1.2-py3-none-any.whl (40 kB)
+2026-10-07T02:22:31.1528074Z Using cached python_barcode-0.16.1-py3-none-any.whl (228 kB)
+2026-10-07T02:22:31.1543185Z Using cached python_dotenv-1.2.4-py3-none-any.whl (23 kB)
+2026-10-07T02:22:31.1558146Z Using cached python_multipart-0.0.32-py3-none-any.whl (30 kB)
+2026-10-07T02:22:31.1573174Z Using cached qrcode-8.2-py3-none-any.whl (45 kB)
+2026-10-07T02:22:31.1588184Z Using cached pillow-12.3.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (6.9 MB)
+2026-10-07T02:22:31.1631112Z Using cached ruff-0.16.10-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (10.4 MB)
+2026-10-07T02:22:31.1701632Z Using cached six-1.17.0-py2.py3-none-any.whl (11 kB)
+2026-10-07T02:22:31.1714530Z Using cached starlette-1.7.0-py3-none-any.whl (78 kB)
+2026-10-07T02:22:31.1729673Z Using cached anyio-4.15.1-py3-none-any.whl (132 kB)
+2026-10-07T02:22:31.1744499Z Using cached types_requests-2.33.0.20261006-py3-none-any.whl (21 kB)
+2026-10-07T02:22:31.1759058Z Using cached typing_extensions-4.16.0-py3-none-any.whl (45 kB)
+2026-10-07T02:22:31.1773150Z Using cached typing_inspection-0.4.4-py3-none-any.whl (14 kB)
+2026-10-07T02:22:31.1787458Z Using cached tzdata-2026.5-py2.py3-none-any.whl (347 kB)
+2026-10-07T02:22:31.1802682Z Using cached uvicorn-0.54.0-py3-none-any.whl (87 kB)
+2026-10-07T02:22:31.1817694Z Using cached httptools-0.8.0-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (464 kB)
+2026-10-07T02:22:31.1833348Z Using cached pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (806 kB)
+2026-10-07T02:22:31.1851298Z Using cached uvloop-0.23.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (4.0 MB)
+2026-10-07T02:22:31.1879515Z Using cached watchfiles-1.3.0-cp310-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.whl (458 kB)
+2026-10-07T02:22:31.1895519Z Using cached wcwidth-0.9.2-cp310-abi3-manylinux2014_x86_64.manylinux_2_17_x86_64.whl (769 kB)
+2026-10-07T02:22:31.1912884Z Using cached websockets-17.2-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl (225 kB)
+2026-10-07T02:22:31.1928617Z Using cached zxing_cpp-3.1.1-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl (1.1 MB)
+2026-10-07T02:22:31.1946483Z Using cached certifi-2026.7.22-py3-none-any.whl (136 kB)
+2026-10-07T02:22:31.1961086Z Using cached et_xmlfile-2.0.0-py3-none-any.whl (18 kB)
+2026-10-07T02:22:31.1975000Z Using cached redis-6.4.0-py3-none-any.whl (279 kB)
+2026-10-07T02:22:31.1990335Z Using cached mako-1.4.3-py3-none-any.whl (80 kB)
+2026-10-07T02:22:31.2005126Z Using cached markupsafe-3.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (22 kB)
+2026-10-07T02:22:31.2019095Z Using cached pycparser-3.0-py3-none-any.whl (48 kB)
+2026-10-07T02:22:31.2032882Z Using cached tzlocal-5.4.4-py3-none-any.whl (18 kB)
+2026-10-07T02:22:31.4595624Z Building wheels for collected packages: wms-backend
+2026-10-07T02:22:31.4604194Z   Building editable for wms-backend (pyproject.toml): started
+2026-10-07T02:22:31.6882386Z   Building editable for wms-backend (pyproject.toml): finished with status 'done'
+2026-10-07T02:22:31.6890199Z   Created wheel for wms-backend: filename=wms_backend-0.1.0-0.editable-py3-none-any.whl size=3077 sha256=a62233cdc5253d153a42d50430fc3e2383f35d84d7c6888f023675c0ad5112ae
+2026-10-07T02:22:31.6892429Z   Stored in directory: /tmp/pip-ephem-wheel-cache-_whrofp_/wheels/26/11/5b/89ad3c9e29691b924ee9e05063c147a3e1befbcc743214281d
+2026-10-07T02:22:31.6907301Z Successfully built wms-backend
+2026-10-07T02:22:31.8255210Z Installing collected packages: pypng, zxing-cpp, websockets, wcwidth, vine, uvloop, urllib3, tzlocal, tzdata, typing-extensions, six, ruff, redis, qrcode, pyyaml, python-multipart, python-dotenv, python-barcode, pymupdf, pyjwt, pygments, pycparser, psycopg-binary, pluggy, pillow, pathspec, packaging, mypy_extensions, MarkupSafe, librt, jmespath, iniconfig, idna, httptools, h11, greenlet, execnet, et-xmlfile, dnspython, click, certifi, billiard, bcrypt, ast-serialize, annotated-types, annotated-doc, aiosqlite, uvicorn, typing-inspection, types-requests, sqlalchemy, python-dateutil, pytest, pydantic-core, psycopg, prompt_toolkit, opentelemetry-api, openpyxl, mypy, Mako, httpcore, email-validator, click-plugins, click-didyoumean, cffi, anyio, amqp, watchfiles, starlette, pytest-xdist, pytest-asyncio, pydantic, kombu, httpx, cryptography, click-repl, botocore, alembic, s3transfer, pydantic-settings, fastapi, celery, boto3, wms-backend
+2026-10-07T02:22:41.3934605Z 
+2026-10-07T02:22:41.3973894Z Successfully installed Mako-1.4.3 MarkupSafe-3.0.4 aiosqlite-0.22.1 alembic-1.20.0 amqp-5.4.1 annotated-doc-0.0.5 annotated-types-0.8.0 anyio-4.15.1 ast-serialize-0.12.1 bcrypt-5.0.0 billiard-4.3.1 boto3-1.43.108 botocore-1.43.108 celery-5.6.3 certifi-2026.7.22 cffi-2.1.1 click-8.5.0 click-didyoumean-0.3.1 click-plugins-1.1.1.2 click-repl-0.4.1 cryptography-50.0.2 dnspython-2.8.0 email-validator-2.3.0 et-xmlfile-2.0.0 execnet-2.1.2 fastapi-0.142.2 greenlet-3.5.6 h11-0.16.0 httpcore-1.0.9 httptools-0.8.0 httpx-0.28.1 idna-3.20 iniconfig-2.3.1 jmespath-1.1.0 kombu-5.6.2 librt-0.16.0 mypy-2.4.0 mypy_extensions-1.1.0 openpyxl-3.1.5 opentelemetry-api-1.45.1 packaging-26.3 pathspec-1.1.1 pillow-12.3.0 pluggy-1.6.0 prompt_toolkit-3.0.53 psycopg-3.3.6 psycopg-binary-3.3.6 pycparser-3.0 pydantic-2.13.5 pydantic-core-2.46.5 pydantic-settings-2.15.0 pygments-2.21.0 pyjwt-2.15.1 pymupdf-1.28.2 pypng-0.20220715.0 pytest-9.1.1 pytest-asyncio-1.4.0 pytest-xdist-3.8.0 python-barcode-0.16.1 python-dateutil-2.9.0.post0 python-dotenv-1.2.4 python-multipart-0.0.32 pyyaml-6.0.3 qrcode-8.2 redis-6.4.0 ruff-0.16.10 s3transfer-0.19.2 six-1.17.0 sqlalchemy-2.0.54 starlette-1.7.0 types-requests-2.33.0.20261006 typing-extensions-4.16.0 typing-inspection-0.4.4 tzdata-2026.5 tzlocal-5.4.4 urllib3-2.8.0 uvicorn-0.54.0 uvloop-0.23.0 vine-5.1.0 watchfiles-1.3.0 wcwidth-0.9.2 websockets-17.2 wms-backend-0.1.0 zxing-cpp-3.1.1
+2026-10-07T02:22:41.7433401Z ##[group]Run ruff check .
+2026-10-07T02:22:41.7433710Z [36;1mruff check .[0m
+2026-10-07T02:22:41.7497746Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:22:41.7498022Z env:
+2026-10-07T02:22:41.7498297Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:41.7498766Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:22:41.7499223Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:41.7499631Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:41.7500030Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:41.7500436Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:22:41.7500773Z ##[endgroup]
+2026-10-07T02:22:42.0294408Z All checks passed!
+2026-10-07T02:22:42.0348692Z ##[group]Run mypy .
+2026-10-07T02:22:42.0348967Z [36;1mmypy .[0m
+2026-10-07T02:22:42.0412493Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:22:42.0412754Z env:
+2026-10-07T02:22:42.0413042Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:42.0413492Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:22:42.0414126Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:42.0414519Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:42.0414906Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:22:42.0415293Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:22:42.0415632Z ##[endgroup]
+2026-10-07T02:23:02.0304217Z Success: no issues found in 563 source files
+2026-10-07T02:23:02.0813289Z ##[group]Run actions/setup-node@v4
+2026-10-07T02:23:02.0813604Z with:
+2026-10-07T02:23:02.0813808Z   node-version: 20
+2026-10-07T02:23:02.0814020Z   cache: npm
+2026-10-07T02:23:02.0814274Z   cache-dependency-path: frontend/package-lock.json
+2026-10-07T02:23:02.0814604Z   always-auth: false
+2026-10-07T02:23:02.0814823Z   check-latest: false
+2026-10-07T02:23:02.0817745Z   token: ***
+2026-10-07T02:23:02.0817957Z env:
+2026-10-07T02:23:02.0818218Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:02.0818674Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:23:02.0819103Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:02.0819494Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:02.0819874Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:02.0820264Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:23:02.0820671Z ##[endgroup]
+2026-10-07T02:23:02.2335804Z Attempting to download 20...
+2026-10-07T02:23:02.2446770Z (node:4043) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:23:02.2448006Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:23:02.8332796Z Acquiring 20.20.2 - x64 from https://github.com/actions/node-versions/releases/download/20.20.2-23521894959/node-20.20.2-linux-x64.tar.gz
+2026-10-07T02:23:03.3029579Z Extracting ...
+2026-10-07T02:23:03.3154966Z [command]/usr/bin/tar xz --strip 1 --warning=no-unknown-keyword --overwrite -C /home/runner/work/_temp/02b34440-47d3-4cff-a29f-a5b899d8edc8 -f /home/runner/work/_temp/40bdf569-0235-422e-8e17-641ba350e353
+2026-10-07T02:23:04.3355013Z Adding to the cache ...
+2026-10-07T02:23:06.3308485Z ##[group]Environment details
+2026-10-07T02:23:06.5597828Z node: v20.20.2
+2026-10-07T02:23:06.5598534Z npm: 10.8.2
+2026-10-07T02:23:06.5598878Z yarn: 1.22.22
+2026-10-07T02:23:06.5599526Z ##[endgroup]
+2026-10-07T02:23:06.5622759Z [command]/opt/hostedtoolcache/node/20.20.2/x64/bin/npm config get cache
+2026-10-07T02:23:06.6838800Z /home/runner/.npm
+2026-10-07T02:23:06.9527936Z Cache hit for: node-cache-Linux-x64-npm-85763e8c3cd51fb20d591991ef5fa0a023b0d9aaf6756079ffb1291716056b32
+2026-10-07T02:23:06.9675181Z (node:4043) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+2026-10-07T02:23:08.2415925Z Received 0 of 75426797 (0.0%), 0.0 MBs/sec
+2026-10-07T02:23:08.9575281Z Received 75426797 of 75426797 (100.0%), 41.9 MBs/sec
+2026-10-07T02:23:08.9576701Z Cache Size: ~72 MB (75426797 B)
+2026-10-07T02:23:08.9640492Z [command]/usr/bin/tar -xf /home/runner/work/_temp/97f74477-f160-4b79-a306-b94a9c8d63bb/cache.tzst -P -C /home/runner/work/WMS/WMS --use-compress-program unzstd
+2026-10-07T02:23:09.1825353Z Cache restored successfully
+2026-10-07T02:23:09.1867302Z Cache restored from key: node-cache-Linux-x64-npm-85763e8c3cd51fb20d591991ef5fa0a023b0d9aaf6756079ffb1291716056b32
+2026-10-07T02:23:09.2053350Z ##[group]Run npm ci --prefix ../frontend
+2026-10-07T02:23:09.2053722Z [36;1mnpm ci --prefix ../frontend[0m
+2026-10-07T02:23:09.2119030Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:23:09.2119312Z env:
+2026-10-07T02:23:09.2119596Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:09.2120075Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:23:09.2120722Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:09.2121125Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:09.2121533Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:09.2121938Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:23:09.2122289Z ##[endgroup]
+2026-10-07T02:23:12.0540830Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+2026-10-07T02:23:20.1128746Z 
+2026-10-07T02:23:20.1129642Z added 329 packages, and audited 330 packages in 11s
+2026-10-07T02:23:20.1130120Z 
+2026-10-07T02:23:20.1130418Z 85 packages are looking for funding
+2026-10-07T02:23:20.1130933Z   run `npm fund` for details
+2026-10-07T02:23:20.1605843Z 
+2026-10-07T02:23:20.1607300Z 15 vulnerabilities (1 low, 3 moderate, 9 high, 2 critical)
+2026-10-07T02:23:20.1607772Z 
+2026-10-07T02:23:20.1608305Z To address issues that do not require attention, run:
+2026-10-07T02:23:20.1608876Z   npm audit fix
+2026-10-07T02:23:20.1609088Z 
+2026-10-07T02:23:20.1609458Z To address all issues (including breaking changes), run:
+2026-10-07T02:23:20.1610024Z   npm audit fix --force
+2026-10-07T02:23:20.1610257Z 
+2026-10-07T02:23:20.1610468Z Run `npm audit` for details.
+2026-10-07T02:23:20.2219254Z ##[group]Run pip install asyncpg==0.31.0
+2026-10-07T02:23:20.2219636Z [36;1mpip install asyncpg==0.31.0[0m
+2026-10-07T02:23:20.2220033Z [36;1mpytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py[0m
+2026-10-07T02:23:20.2285132Z shell: /usr/bin/bash -e {0}
+2026-10-07T02:23:20.2285415Z env:
+2026-10-07T02:23:20.2285720Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:20.2286498Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:23:20.2287003Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:20.2287438Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:20.2287892Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:20.2288338Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:23:20.2289134Z   WMS_TEST_DATABASE_URL: ***127.0.0.1:55466/wms_test_662_batch
+2026-10-07T02:23:20.2289512Z ##[endgroup]
+2026-10-07T02:23:20.7667110Z Collecting asyncpg==0.31.0
+2026-10-07T02:23:20.7685492Z   Using cached asyncpg-0.31.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl.metadata (4.4 kB)
+2026-10-07T02:23:20.7722783Z Using cached asyncpg-0.31.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl (3.0 MB)
+2026-10-07T02:23:20.8550026Z Installing collected packages: asyncpg
+2026-10-07T02:23:20.9581956Z Successfully installed asyncpg-0.31.0
+2026-10-07T02:23:23.8066449Z warning: The `fitz` API is deprecated and will be removed in future. Use `import pymupdf` instead.
+2026-10-07T02:23:29.1417592Z BATCH PG evidence: writer_pids={'batch': 219, 'ordinary': 219}; pg_cycle=False; actual_wait=[(209, [219], 'INSERT INTO fbs_shipment_reversal_ledger (id, tenant_id, fbs_order_id, product_id, storage_location_id, source_warehouse_id, container_kind, container_id, source_mode, quantity, shortage_quantity, negative_quantity, ozon_positions_json, wb_operation_id, written_off_by_user_id, written_off_at, shipment_movement_id, reversed_at, reversal_movement_id) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::UUID, $6::UUID, $7::VARCHAR, $8::UUID, $9::VARCHAR, $10::INTEGER, $11::INTEGER, $12::INTEGER, $13::JSON, $14::UUID, $15::UUID, $16::TIMESTAMP WITH TIME ZONE, $17::UUID, $18::TIMESTAMP WITH TIME ZONE, $19::UUID) RETURNING fbs_shipment_reversal_ledger.created_at'), (219, [], 'SELECT sellers.id \nFROM sellers \nWHERE sellers.id = $1::UUID AND sellers.tenant_id = $2::UUID FOR NO KEY UPDATE')]; trace=[('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'sellers', 219), ('ordinary', 'acquired', 'sellers', 219)]; sqlstates=[]; results=[None, None]; balances={'662-0-1': 1800, '662-1-1': 1800, '662-2-1': 1800}; stock={UUID('5941f27a-37fc-4ddc-b277-5cecfd53df13'): 12, UUID('35b0ff12-4d8f-47d4-a402-f5c95f417d2c'): 10}; reserves={}; issues=[]
+2026-10-07T02:23:29.1557308Z F
+2026-10-07T02:23:29.1557773Z =================================== FAILURES ===================================
+2026-10-07T02:23:29.1558410Z ___ test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_money ___
+2026-10-07T02:23:29.1558757Z 
+2026-10-07T02:23:29.1558882Z isolated_pg = None
+2026-10-07T02:23:29.1559411Z db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7ff62f372210>
+2026-10-07T02:23:29.1560135Z monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x7ff62f385250>
+2026-10-07T02:23:29.1560503Z 
+2026-10-07T02:23:29.1560840Z     async def test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_money(
+2026-10-07T02:23:29.1561403Z         isolated_pg, db_session, monkeypatch,
+2026-10-07T02:23:29.1561734Z     ):
+2026-10-07T02:23:29.1562034Z         case = await seed(db_session, "ozon", count=3)
+2026-10-07T02:23:29.1562396Z         a, b, c = case.orders
+2026-10-07T02:23:29.1562688Z         p1 = case.products[0]
+2026-10-07T02:23:29.1565490Z         p2 = Product(tenant_id=case.tenant.id, seller_id=case.seller.id,
+2026-10-07T02:23:29.1566756Z                      name="Batch P2", sku_code=f"batch-p2-{case.tenant.id}")
+2026-10-07T02:23:29.1567422Z         db_session.add(p2)
+2026-10-07T02:23:29.1567956Z         await db_session.flush()
+2026-10-07T02:23:29.1568521Z         db_session.add(InventoryBalance(
+2026-10-07T02:23:29.1569451Z             tenant_id=case.tenant.id, product_id=p2.id, storage_location_id=case.location.id,
+2026-10-07T02:23:29.1570406Z             quantity=12, quantity_unpacked=12, quantity_packed=0,
+2026-10-07T02:23:29.1570994Z         ))
+2026-10-07T02:23:29.1571459Z         supplies = [case.supply]
+2026-10-07T02:23:29.1572236Z         # Production loop sorts supply UUIDs; choose B/C after A without patching it.
+2026-10-07T02:23:29.1573045Z         for offset, order in enumerate((b, c), 1):
+2026-10-07T02:23:29.1573613Z             supply = FbsSupply(
+2026-10-07T02:23:29.1574355Z                 id=uuid.UUID(int=case.supply.id.int + offset), tenant_id=case.tenant.id,
+2026-10-07T02:23:29.1575178Z                 seller_id=case.seller.id, warehouse_id=case.warehouse.id,
+2026-10-07T02:23:29.1575743Z                 marketplace="ozon", source="wms", name=f"Batch {'B' if offset == 1 else 'C'}",
+2026-10-07T02:23:29.1576733Z                 status="assembling", delivery_type="warehouse_sc",
+2026-10-07T02:23:29.1577293Z             )
+2026-10-07T02:23:29.1577737Z             db_session.add(supply)
+2026-10-07T02:23:29.1578277Z             await db_session.flush()
+2026-10-07T02:23:29.1579136Z             await inventory.update_fbs_order_reservation(db_session, order, reserve=False)
+2026-10-07T02:23:29.1580276Z             order.supply_id = supply.id
+2026-10-07T02:23:29.1580825Z             order.product_id = p2.id
+2026-10-07T02:23:29.1581432Z             order.product_positions[0].product_id = p2.id
+2026-10-07T02:23:29.1582132Z             order.product_positions[0].offer_id = p2.sku_code
+2026-10-07T02:23:29.1582748Z             await db_session.flush()
+2026-10-07T02:23:29.1583408Z             await inventory.update_fbs_order_reservation(db_session, order, reserve=True)
+2026-10-07T02:23:29.1583888Z             supplies.append(supply)
+2026-10-07T02:23:29.1584213Z         a.status = b.status = "in_delivery"
+2026-10-07T02:23:29.1584685Z         a.wb_status = b.wb_status = "delivering"  # no transition/FK audit before conduct
+2026-10-07T02:23:29.1585161Z         c.last_wb_sync_at = datetime.now(UTC)
+2026-10-07T02:23:29.1585554Z         a.deadline_at = datetime.now(UTC) + timedelta(days=1)
+2026-10-07T02:23:29.1585977Z         b.deadline_at = a.deadline_at + timedelta(seconds=1)
+2026-10-07T02:23:29.1586759Z         for code, rate in (("fbs_order", 1000), ("packing", 800)):
+2026-10-07T02:23:29.1587177Z             db_session.add(BillingTariffVersion(
+2026-10-07T02:23:29.1587659Z                 tenant_id=case.tenant.id, seller_id=case.seller.id, service_code=code,
+2026-10-07T02:23:29.1588337Z                 unit="item", amount=rate, valid_from=date(2020, 1, 1),
+2026-10-07T02:23:29.1588690Z             ))
+2026-10-07T02:23:29.1588952Z         await db_session.commit()
+2026-10-07T02:23:29.1589430Z         ccase = SimpleNamespace(**{**vars(case), "supply": supplies[2], "orders": [c],
+2026-10-07T02:23:29.1589943Z                                   "products": [p2]})
+2026-10-07T02:23:29.1590311Z         await ready_order(db_session, ccase, c, 1)
+2026-10-07T02:23:29.1590667Z         case.products = [p1, p2]
+2026-10-07T02:23:29.1590972Z         before = await saved(case)
+2026-10-07T02:23:29.1591287Z         initial_tariffs = await tariffs(case)
+2026-10-07T02:23:29.1591695Z         assert before.position_reserves == {p1.id: 1, p2.id: 2}
+2026-10-07T02:23:29.1592204Z         assert before.reserves == {} and not before.charges and not before.moves
+2026-10-07T02:23:29.1592812Z         assert len({o.supply_id for o in case.orders}) == len({o.id for o in case.orders}) == 3
+2026-10-07T02:23:29.1593391Z         monkeypatch.setattr(ozon_sync, "OZON_STATUS_SYNC_BATCH_LIMIT", 2)
+2026-10-07T02:23:29.1593950Z         acase = SimpleNamespace(**{**vars(case), "products": [p1], "orders": [a]})
+2026-10-07T02:23:29.1594506Z         bcase = SimpleNamespace(**{**vars(case), "products": [p2], "orders": [b]})
+2026-10-07T02:23:29.1594940Z         batch_api = OzonCards(acase)
+2026-10-07T02:23:29.1595260Z         batch_api.set(bcase, b, "delivering")
+2026-10-07T02:23:29.1595535Z     
+2026-10-07T02:23:29.1595760Z         async def no_change():
+2026-10-07T02:23:29.1596248Z             pass
+2026-10-07T02:23:29.1596508Z     
+2026-10-07T02:23:29.1596815Z         ordinary_api = BatchOrdinaryTransport(ccase, no_change)
+2026-10-07T02:23:29.1597150Z     
+2026-10-07T02:23:29.1597436Z         async def worker(name, operation):
+2026-10-07T02:23:29.1597753Z             token = role.set(name)
+2026-10-07T02:23:29.1598010Z             try:
+2026-10-07T02:23:29.1598261Z                 return await operation()
+2026-10-07T02:23:29.1598541Z             finally:
+2026-10-07T02:23:29.1598801Z                 role.reset(token)
+2026-10-07T02:23:29.1599050Z     
+2026-10-07T02:23:29.1599276Z         schedule = BatchSchedule()
+2026-10-07T02:23:29.1599546Z         tasks = []
+2026-10-07T02:23:29.1599766Z         observer = None
+2026-10-07T02:23:29.1600067Z         for name, callback in schedule.listeners():
+2026-10-07T02:23:29.1600470Z             event.listen(engine.sync_engine, name, callback)
+2026-10-07T02:23:29.1600982Z         try:
+2026-10-07T02:23:29.1601773Z             tasks.append(asyncio.create_task(worker("batch", lambda: sync(case, batch_api))))
+2026-10-07T02:23:29.1602723Z             held = asyncio.create_task(schedule.held.wait())
+2026-10-07T02:23:29.1603335Z             try:
+2026-10-07T02:23:29.1604263Z                 done, _ = await asyncio.wait([tasks[0], held], timeout=8,
+2026-10-07T02:23:29.1605157Z                                              return_when=asyncio.FIRST_COMPLETED)
+2026-10-07T02:23:29.1606314Z                 assert done, f"HARNESS: no batch Seller lock; {schedule.trace}"
+2026-10-07T02:23:29.1607121Z                 if tasks[0] in done:
+2026-10-07T02:23:29.1607684Z                     await tasks[0]
+2026-10-07T02:23:29.1609107Z                     pytest.fail(f"HARNESS: batch finished before Seller barrier; {schedule.trace}")
+2026-10-07T02:23:29.1610079Z             finally:
+2026-10-07T02:23:29.1610495Z                 held.cancel()
+2026-10-07T02:23:29.1611117Z                 await asyncio.gather(held, return_exceptions=True)
+2026-10-07T02:23:29.1611868Z             tasks.append(asyncio.create_task(worker(
+2026-10-07T02:23:29.1612890Z                 "ordinary", lambda: normal_handoff(ccase, ordinary_api),
+2026-10-07T02:23:29.1613489Z             )))
+2026-10-07T02:23:29.1614045Z             observer = asyncio.create_task(schedule.observe())
+2026-10-07T02:23:29.1615039Z             results = await asyncio.wait_for(asyncio.gather(*tasks, return_exceptions=True), 15)
+2026-10-07T02:23:29.1615901Z             schedule.finished.set()
+2026-10-07T02:23:29.1616620Z             try:
+2026-10-07T02:23:29.1617332Z                 await observer
+2026-10-07T02:23:29.1617873Z             except TimeoutError:
+2026-10-07T02:23:29.1618628Z                 pytest.fail(f"HARNESS: observer timeout; pids={schedule.pids}; "
+2026-10-07T02:23:29.1619549Z                             f"trace={schedule.trace}; errors={schedule.errors}; "
+2026-10-07T02:23:29.1620442Z                             f"wait={schedule.wait_queries}; results={results}; "
+2026-10-07T02:23:29.1621289Z                             f"barrier_errors={schedule.harness_errors}")
+2026-10-07T02:23:29.1621927Z         finally:
+2026-10-07T02:23:29.1622406Z             schedule.release.set()
+2026-10-07T02:23:29.1622810Z             schedule.finished.set()
+2026-10-07T02:23:29.1623232Z             for task in [*tasks, *([observer] if observer else [])]:
+2026-10-07T02:23:29.1623621Z                 if not task.done():
+2026-10-07T02:23:29.1623920Z                     task.cancel()
+2026-10-07T02:23:29.1624420Z             await asyncio.gather(*tasks, *([observer] if observer else []), return_exceptions=True)
+2026-10-07T02:23:29.1625053Z             for name, callback in schedule.listeners():
+2026-10-07T02:23:29.1625622Z                 event.remove(engine.sync_engine, name, callback)
+2026-10-07T02:23:29.1626655Z     
+2026-10-07T02:23:29.1627202Z         final = await saved(case)
+2026-10-07T02:23:29.1627738Z         ledger = await headers(case)
+2026-10-07T02:23:29.1628312Z         issues = business_issues(case, final, ledger, before)
+2026-10-07T02:23:29.1629016Z         balances = {o.external_order_id: sum(r["amount"] or 0 for r in order_entries(ledger, o.id))
+2026-10-07T02:23:29.1629685Z                     for o in case.orders}
+2026-10-07T02:23:29.1630300Z         diagnostic = (f"writer_pids={schedule.pids}; pg_cycle={schedule.cycle_seen}; "
+2026-10-07T02:23:29.1631007Z                       f"actual_wait={schedule.wait_queries}; trace={schedule.trace}; "
+2026-10-07T02:23:29.1631761Z                       f"sqlstates={schedule.errors}; results={results}; balances={balances}; "
+2026-10-07T02:23:29.1632452Z                       f"stock={final.stock}; reserves={final.position_reserves}; issues={issues}")
+2026-10-07T02:23:29.1633136Z         print(f"BATCH PG evidence: {diagnostic}")
+2026-10-07T02:23:29.1633709Z         assert not schedule.harness_errors, f"HARNESS: {diagnostic}"
+2026-10-07T02:23:29.1634589Z >       assert schedule.wait_seen and len(set(schedule.pids.values())) == 2, f"HARNESS: {diagnostic}"
+2026-10-07T02:23:29.5252601Z E       AssertionError: HARNESS: writer_pids={'batch': 219, 'ordinary': 219}; pg_cycle=False; actual_wait=[(209, [219], 'INSERT INTO fbs_shipment_reversal_ledger (id, tenant_id, fbs_order_id, product_id, storage_location_id, source_warehouse_id, container_kind, container_id, source_mode, quantity, shortage_quantity, negative_quantity, ozon_positions_json, wb_operation_id, written_off_by_user_id, written_off_at, shipment_movement_id, reversed_at, reversal_movement_id) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::UUID, $6::UUID, $7::VARCHAR, $8::UUID, $9::VARCHAR, $10::INTEGER, $11::INTEGER, $12::INTEGER, $13::JSON, $14::UUID, $15::UUID, $16::TIMESTAMP WITH TIME ZONE, $17::UUID, $18::TIMESTAMP WITH TIME ZONE, $19::UUID) RETURNING fbs_shipment_reversal_ledger.created_at'), (219, [], 'SELECT sellers.id \nFROM sellers \nWHERE sellers.id = $1::UUID AND sellers.tenant_id = $2::UUID FOR NO KEY UPDATE')]; trace=[('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'sellers', 219), ('ordinary', 'acquired', 'sellers', 219)]; sqlstates=[]; results=[None, None]; balances={'662-0-1': 1800, '662-1-1': 1800, '662-2-1': 1800}; stock={UUID('5941f27a-37fc-4ddc-b277-5cecfd53df13'): 12, UUID('35b0ff12-4d8f-47d4-a402-f5c95f417d2c'): 10}; reserves={}; issues=[]
+2026-10-07T02:23:29.5265741Z E       assert (True and 1 == 2)
+2026-10-07T02:23:29.5267091Z E        +  where True = <test_wms662_batch_handoff_lock_order.BatchSchedule object at 0x7ff62e8f3350>.wait_seen
+2026-10-07T02:23:29.5268188Z E        +  and   1 = len({219})
+2026-10-07T02:23:29.5268970Z E        +    where {219} = set(dict_values([219, 219]))
+2026-10-07T02:23:29.5270112Z E        +      where dict_values([219, 219]) = <built-in method values of dict object at 0x7ff62e8ef440>()
+2026-10-07T02:23:29.5271554Z E        +        where <built-in method values of dict object at 0x7ff62e8ef440> = {'batch': 219, 'ordinary': 219}.values
+2026-10-07T02:23:29.5273188Z E        +          where {'batch': 219, 'ordinary': 219} = <test_wms662_batch_handoff_lock_order.BatchSchedule object at 0x7ff62e8f3350>.pids
+2026-10-07T02:23:29.5274071Z 
+2026-10-07T02:23:29.5274577Z tests/test_wms662_batch_handoff_lock_order.py:346: AssertionError
+2026-10-07T02:23:29.5275454Z =============================== warnings summary ===============================
+2026-10-07T02:23:29.5276461Z app/main.py:19
+2026-10-07T02:23:29.5277867Z   /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+2026-10-07T02:23:29.5279736Z     from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+2026-10-07T02:23:29.5280433Z 
+2026-10-07T02:23:29.5280993Z -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+2026-10-07T02:23:29.5282046Z =========================== short test summary info ============================
+2026-10-07T02:23:29.5299593Z FAILED tests/test_wms662_batch_handoff_lock_order.py::test_public_sync_batch_and_outside_ordinary_handoff_keep_stock_and_money - AssertionError: HARNESS: writer_pids={'batch': 219, 'ordinary': 219}; pg_cycle=False; actual_wait=[(209, [219], 'INSERT INTO fbs_shipment_reversal_ledger (id, tenant_id, fbs_order_id, product_id, storage_location_id, source_warehouse_id, container_kind, container_id, source_mode, quantity, shortage_quantity, negative_quantity, ozon_positions_json, wb_operation_id, written_off_by_user_id, written_off_at, shipment_movement_id, reversed_at, reversal_movement_id) VALUES ($1::UUID, $2::UUID, $3::UUID, $4::UUID, $5::UUID, $6::UUID, $7::VARCHAR, $8::UUID, $9::VARCHAR, $10::INTEGER, $11::INTEGER, $12::INTEGER, $13::JSON, $14::UUID, $15::UUID, $16::TIMESTAMP WITH TIME ZONE, $17::UUID, $18::TIMESTAMP WITH TIME ZONE, $19::UUID) RETURNING fbs_shipment_reversal_ledger.created_at'), (219, [], 'SELECT sellers.id \nFROM sellers \nWHERE sellers.id = $1::UUID AND sellers.tenant_id = $2::UUID FOR NO KEY UPDATE')]; trace=[('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'products', 219), ('batch', 'acquired', 'products', 219), ('batch', 'attempt', 'sellers', 219), ('batch', 'acquired', 'sellers', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'products', 219), ('ordinary', 'acquired', 'products', 219), ('ordinary', 'attempt', 'sellers', 219), ('ordinary', 'acquired', 'sellers', 219)]; sqlstates=[]; results=[None, None]; balances={'662-0-1': 1800, '662-1-1': 1800, '662-2-1': 1800}; stock={UUID('5941f27a-37fc-4ddc-b277-5cecfd53df13'): 12, UUID('35b0ff12-4d8f-47d4-a402-f5c95f417d2c'): 10}; reserves={}; issues=[]
+2026-10-07T02:23:29.5312696Z assert (True and 1 == 2)
+2026-10-07T02:23:29.5313712Z  +  where True = <test_wms662_batch_handoff_lock_order.BatchSchedule object at 0x7ff62e8f3350>.wait_seen
+2026-10-07T02:23:29.5314591Z  +  and   1 = len({219})
+2026-10-07T02:23:29.5315230Z  +    where {219} = set(dict_values([219, 219]))
+2026-10-07T02:23:29.5316425Z  +      where dict_values([219, 219]) = <built-in method values of dict object at 0x7ff62e8ef440>()
+2026-10-07T02:23:29.5317694Z  +        where <built-in method values of dict object at 0x7ff62e8ef440> = {'batch': 219, 'ordinary': 219}.values
+2026-10-07T02:23:29.5319196Z  +          where {'batch': 219, 'ordinary': 219} = <test_wms662_batch_handoff_lock_order.BatchSchedule object at 0x7ff62e8f3350>.pids
+2026-10-07T02:23:29.5320259Z 1 failed, 1 warning in 3.16s
+2026-10-07T02:23:30.4434440Z ##[error]Process completed with exit code 1.
+2026-10-07T02:23:30.4614058Z ##[group]Run actions/upload-artifact@v4
+2026-10-07T02:23:30.4614684Z with:
+2026-10-07T02:23:30.4615537Z   name: backend-checks-contracts-4a118aea00ec3995d98f70d337245260b291ca7f-37561608930-1
+2026-10-07T02:23:30.4616934Z   path: /home/runner/work/_temp/release-postgres
+/home/runner/work/_temp/native-print.xml
+
+2026-10-07T02:23:30.4617822Z   retention-days: 14
+2026-10-07T02:23:30.4618211Z   if-no-files-found: warn
+2026-10-07T02:23:30.4618624Z   compression-level: 6
+2026-10-07T02:23:30.4618998Z   overwrite: false
+2026-10-07T02:23:30.4619274Z   include-hidden-files: false
+2026-10-07T02:23:30.4619525Z env:
+2026-10-07T02:23:30.4619778Z   pythonLocation: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:30.4620223Z   PKG_CONFIG_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib/pkgconfig
+2026-10-07T02:23:30.4620855Z   Python_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:30.4621242Z   Python2_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:30.4621668Z   Python3_ROOT_DIR: /opt/hostedtoolcache/Python/3.11.17/x64
+2026-10-07T02:23:30.4622086Z   LD_LIBRARY_PATH: /opt/hostedtoolcache/Python/3.11.17/x64/lib
+2026-10-07T02:23:30.4622430Z ##[endgroup]
+2026-10-07T02:23:30.6367427Z (node:4535) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+2026-10-07T02:23:30.6368453Z (Use `node --trace-deprecation ...` to show where the warning was created)
+2026-10-07T02:23:30.6408716Z Multiple search paths detected. Calculating the least common ancestor of all paths
+2026-10-07T02:23:30.6412018Z The least common ancestor is /home/runner/work/_temp. This will be the root directory of the artifact
+2026-10-07T02:23:30.6427078Z ##[warning]No files were found with the provided path: /home/runner/work/_temp/release-postgres
+/home/runner/work/_temp/native-print.xml. No artifacts will be uploaded.
+2026-10-07T02:23:30.6661679Z Post job cleanup.
+2026-10-07T02:23:30.7594851Z [command]/usr/bin/git version
+2026-10-07T02:23:30.7640004Z git version 2.55.0
+2026-10-07T02:23:30.7679678Z Temporarily overriding HOME='/home/runner/work/_temp/a4a7f422-850b-46b7-8f64-73bc1bc7a0e9' before making global git config changes
+2026-10-07T02:23:30.7681253Z Adding repository directory to the temporary git global config as a safe directory
+2026-10-07T02:23:30.7686531Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+2026-10-07T02:23:30.7729401Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-10-07T02:23:30.7767880Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-10-07T02:23:30.8039570Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-10-07T02:23:30.8069667Z http.https://github.com/.extraheader
+2026-10-07T02:23:30.8082314Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-10-07T02:23:30.8119321Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-10-07T02:23:30.8397388Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-10-07T02:23:30.8440736Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-10-07T02:23:30.8907623Z Print service container logs: 789eaa8e01184815ae527de36ae514f0_postgres16_fac502
+2026-10-07T02:23:30.8912516Z ##[command]/usr/bin/docker logs --details df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:23:30.9058458Z  The files belonging to this database system will be owned by user "postgres".
+2026-10-07T02:23:30.9059297Z  This user must also own the server process.
+2026-10-07T02:23:30.9059808Z  
+2026-10-07T02:23:30.9060354Z  The database cluster will be initialized with locale "en_US.utf8".
+2026-10-07T02:23:30.9061177Z  The default database encoding has accordingly been set to "UTF8".
+2026-10-07T02:23:30.9081028Z  The default text search configuration will be set to "english".
+2026-10-07T02:23:30.9082490Z  
+2026-10-07T02:23:30.9082722Z  Data page checksums are disabled.
+2026-10-07T02:23:30.9083009Z  
+2026-10-07T02:23:30.9083331Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2026-10-07T02:23:30.9083793Z  creating subdirectories ... ok
+2026-10-07T02:23:30.9084130Z  selecting dynamic shared memory implementation ... posix
+2026-10-07T02:23:30.9084488Z  selecting default max_connections ... 100
+2026-10-07T02:23:30.9084810Z  selecting default shared_buffers ... 128MB
+2026-10-07T02:23:30.9085373Z  selecting default time zone ... Etc/UTC
+2026-10-07T02:23:30.9085671Z  creating configuration files ... ok
+2026-10-07T02:23:30.9085953Z  running bootstrap script ... ok
+2026-10-07T02:23:30.9086572Z  performing post-bootstrap initialization ... ok
+2026-10-07T02:23:30.9086893Z  syncing data to disk ... ok
+2026-10-07T02:23:30.9087131Z  
+2026-10-07T02:23:30.9087313Z  
+2026-10-07T02:23:30.9087554Z  Success. You can now start the database server using:
+2026-10-07T02:23:30.9087871Z  
+2026-10-07T02:23:30.9088115Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2026-10-07T02:23:30.9088432Z  
+2026-10-07T02:23:30.9089105Z  waiting for server to start....2026-10-07 02:21:56.314 UTC [48] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:30.9090018Z  2026-10-07 02:21:56.314 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:30.9091475Z  initdb: warning: enabling "trust" authentication for local connections
+2026-10-07T02:23:30.9092222Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2026-10-07T02:23:30.9093179Z  2026-10-07 02:21:56.650 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:30.9093921Z  2026-10-07 02:21:56.650 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-10-07T02:23:30.9094406Z  2026-10-07 02:21:56.650 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-10-07T02:23:30.9094946Z  2026-10-07 02:21:56.651 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:30.9095514Z  2026-10-07 02:21:56.655 UTC [64] LOG:  database system was shut down at 2026-10-07 02:21:56 UTC
+2026-10-07T02:23:30.9096327Z  2026-10-07 02:21:56.659 UTC [1] LOG:  database system is ready to accept connections
+2026-10-07T02:23:30.9096907Z  2026-10-07 02:21:56.317 UTC [51] LOG:  database system was shut down at 2026-10-07 02:21:56 UTC
+2026-10-07T02:23:30.9097434Z  2026-10-07 02:21:56.322 UTC [48] LOG:  database system is ready to accept connections
+2026-10-07T02:23:30.9097813Z   done
+2026-10-07T02:23:30.9098004Z  server started
+2026-10-07T02:23:30.9098216Z  CREATE DATABASE
+2026-10-07T02:23:30.9098410Z  
+2026-10-07T02:23:30.9098590Z  
+2026-10-07T02:23:30.9098911Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2026-10-07T02:23:30.9099315Z  
+2026-10-07T02:23:30.9099682Z  waiting for server to shut down....2026-10-07 02:21:56.531 UTC [48] LOG:  received fast shutdown request
+2026-10-07T02:23:30.9100468Z  2026-10-07 02:21:56.531 UTC [48] LOG:  aborting any active transactions
+2026-10-07T02:23:30.9101079Z  2026-10-07 02:21:56.534 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+2026-10-07T02:23:30.9101624Z  2026-10-07 02:21:56.534 UTC [49] LOG:  shutting down
+2026-10-07T02:23:30.9102030Z  2026-10-07 02:21:56.535 UTC [49] LOG:  checkpoint starting: shutdown immediate
+2026-10-07T02:23:30.9103137Z  2026-10-07 02:21:56.552 UTC [49] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.014 s, sync=0.002 s, total=0.018 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4273 kB, estimate=4273 kB; lsn=0/191F0F0, redo lsn=0/191F0F0
+2026-10-07T02:23:30.9104212Z  2026-10-07 02:21:56.560 UTC [48] LOG:  database system is shut down
+2026-10-07T02:23:30.9104547Z   done
+2026-10-07T02:23:30.9104740Z  server stopped
+2026-10-07T02:23:30.9104942Z  
+2026-10-07T02:23:30.9105190Z  PostgreSQL init process complete; ready for start up.
+2026-10-07T02:23:30.9105496Z  
+2026-10-07T02:23:30.9111064Z Stop and remove container: 789eaa8e01184815ae527de36ae514f0_postgres16_fac502
+2026-10-07T02:23:30.9116472Z ##[command]/usr/bin/docker rm --force df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:23:32.6331600Z df709e598fcb5ff7d3c2289d833de98d825fcc095fdf1eb20a083f11b0ef80ab
+2026-10-07T02:23:32.6352316Z Print service container logs: cd87aa1d32674034ab7881c7a0d89c1c_postgres16_5f6915
+2026-10-07T02:23:32.6353777Z ##[command]/usr/bin/docker logs --details 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:23:32.6483115Z  The files belonging to this database system will be owned by user "postgres".
+2026-10-07T02:23:32.6483945Z  This user must also own the server process.
+2026-10-07T02:23:32.6484471Z  
+2026-10-07T02:23:32.6484967Z  The database cluster will be initialized with locale "en_US.utf8".
+2026-10-07T02:23:32.6485766Z  The default database encoding has accordingly been set to "UTF8".
+2026-10-07T02:23:32.6486780Z  The default text search configuration will be set to "english".
+2026-10-07T02:23:32.6487367Z  
+2026-10-07T02:23:32.6487731Z  Data page checksums are disabled.
+2026-10-07T02:23:32.6488227Z  
+2026-10-07T02:23:32.6488775Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2026-10-07T02:23:32.6489246Z  creating subdirectories ... ok
+2026-10-07T02:23:32.6489671Z  initdb: warning: enabling "trust" authentication for local connections
+2026-10-07T02:23:32.6490456Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2026-10-07T02:23:32.6491451Z  2026-10-07 02:21:57.528 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:32.6492211Z  2026-10-07 02:21:57.528 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-10-07T02:23:32.6492713Z  2026-10-07 02:21:57.528 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-10-07T02:23:32.6493263Z  2026-10-07 02:21:57.529 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:32.6493850Z  2026-10-07 02:21:57.532 UTC [65] LOG:  database system was shut down at 2026-10-07 02:21:57 UTC
+2026-10-07T02:23:32.6494382Z  2026-10-07 02:21:57.535 UTC [1] LOG:  database system is ready to accept connections
+2026-10-07T02:23:32.6494846Z  selecting dynamic shared memory implementation ... posix
+2026-10-07T02:23:32.6495203Z  selecting default max_connections ... 100
+2026-10-07T02:23:32.6495516Z  selecting default shared_buffers ... 128MB
+2026-10-07T02:23:32.6495844Z  selecting default time zone ... Etc/UTC
+2026-10-07T02:23:32.6496453Z  creating configuration files ... ok
+2026-10-07T02:23:32.6496785Z  running bootstrap script ... ok
+2026-10-07T02:23:32.6497097Z  performing post-bootstrap initialization ... ok
+2026-10-07T02:23:32.6497412Z  syncing data to disk ... ok
+2026-10-07T02:23:32.6497653Z  
+2026-10-07T02:23:32.6497827Z  
+2026-10-07T02:23:32.6498324Z  Success. You can now start the database server using:
+2026-10-07T02:23:32.6498800Z  
+2026-10-07T02:23:32.6499221Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2026-10-07T02:23:32.6499923Z  
+2026-10-07T02:23:32.6500940Z  waiting for server to start....2026-10-07 02:21:57.193 UTC [49] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:32.6501973Z  2026-10-07 02:21:57.193 UTC [49] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:32.6502556Z  2026-10-07 02:21:57.196 UTC [52] LOG:  database system was shut down at 2026-10-07 02:21:57 UTC
+2026-10-07T02:23:32.6503088Z  2026-10-07 02:21:57.203 UTC [49] LOG:  database system is ready to accept connections
+2026-10-07T02:23:32.6503468Z   done
+2026-10-07T02:23:32.6503658Z  server started
+2026-10-07T02:23:32.6503868Z  CREATE DATABASE
+2026-10-07T02:23:32.6504067Z  
+2026-10-07T02:23:32.6504249Z  
+2026-10-07T02:23:32.6504579Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2026-10-07T02:23:32.6504992Z  
+2026-10-07T02:23:32.6505259Z  2026-10-07 02:21:57.407 UTC [49] LOG:  received fast shutdown request
+2026-10-07T02:23:32.6505801Z  waiting for server to shut down....2026-10-07 02:21:57.408 UTC [49] LOG:  aborting any active transactions
+2026-10-07T02:23:32.6506963Z  2026-10-07 02:21:57.410 UTC [49] LOG:  background worker "logical replication launcher" (PID 55) exited with exit code 1
+2026-10-07T02:23:32.6507517Z  2026-10-07 02:21:57.412 UTC [50] LOG:  shutting down
+2026-10-07T02:23:32.6507913Z  2026-10-07 02:21:57.413 UTC [50] LOG:  checkpoint starting: shutdown immediate
+2026-10-07T02:23:32.6509014Z  2026-10-07 02:21:57.430 UTC [50] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.015 s, sync=0.002 s, total=0.018 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4273 kB, estimate=4273 kB; lsn=0/191F0F8, redo lsn=0/191F0F8
+2026-10-07T02:23:32.6510088Z  2026-10-07 02:21:57.439 UTC [49] LOG:  database system is shut down
+2026-10-07T02:23:32.6510423Z   done
+2026-10-07T02:23:32.6510612Z  server stopped
+2026-10-07T02:23:32.6510811Z  
+2026-10-07T02:23:32.6511058Z  PostgreSQL init process complete; ready for start up.
+2026-10-07T02:23:32.6511375Z  
+2026-10-07T02:23:32.6512255Z Stop and remove container: cd87aa1d32674034ab7881c7a0d89c1c_postgres16_5f6915
+2026-10-07T02:23:32.6513289Z ##[command]/usr/bin/docker rm --force 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:23:32.7680839Z 48df09617982ff42bcade78d9ec3cfcc3ff11d9421d24b0b5c58b4d931c8c0d2
+2026-10-07T02:23:32.7695586Z Print service container logs: 441a505a17d24950abfe738346acf438_postgres16_2500ce
+2026-10-07T02:23:32.7696650Z ##[command]/usr/bin/docker logs --details 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:23:32.7821283Z  The files belonging to this database system will be owned by user "postgres".
+2026-10-07T02:23:32.7822423Z  initdb: warning: enabling "trust" authentication for local connections
+2026-10-07T02:23:32.7823838Z  initdb: hint: You can change this by editing pg_hba.conf or using the option -A, or --auth-local and --auth-host, the next time you run initdb.
+2026-10-07T02:23:32.7825644Z  2026-10-07 02:21:58.326 UTC [1] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:32.7827197Z  2026-10-07 02:21:58.326 UTC [1] LOG:  listening on IPv4 address "0.0.0.0", port 5432
+2026-10-07T02:23:32.7828029Z  2026-10-07 02:21:58.326 UTC [1] LOG:  listening on IPv6 address "::", port 5432
+2026-10-07T02:23:32.7828963Z  2026-10-07 02:21:58.327 UTC [1] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:32.7830010Z  2026-10-07 02:21:58.329 UTC [64] LOG:  database system was shut down at 2026-10-07 02:21:58 UTC
+2026-10-07T02:23:32.7831170Z  2026-10-07 02:21:58.333 UTC [1] LOG:  database system is ready to accept connections
+2026-10-07T02:23:32.7832176Z  This user must also own the server process.
+2026-10-07T02:23:32.7832860Z  
+2026-10-07T02:23:32.7833396Z  The database cluster will be initialized with locale "en_US.utf8".
+2026-10-07T02:23:32.7834100Z  The default database encoding has accordingly been set to "UTF8".
+2026-10-07T02:23:32.7834888Z  The default text search configuration will be set to "english".
+2026-10-07T02:23:32.7835298Z  
+2026-10-07T02:23:32.7835510Z  Data page checksums are disabled.
+2026-10-07T02:23:32.7835781Z  
+2026-10-07T02:23:32.7836392Z  fixing permissions on existing directory /var/lib/postgresql/data ... ok
+2026-10-07T02:23:32.7836820Z  creating subdirectories ... ok
+2026-10-07T02:23:32.7837144Z  selecting dynamic shared memory implementation ... posix
+2026-10-07T02:23:32.7837508Z  selecting default max_connections ... 100
+2026-10-07T02:23:32.7837816Z  selecting default shared_buffers ... 128MB
+2026-10-07T02:23:32.7838120Z  selecting default time zone ... Etc/UTC
+2026-10-07T02:23:32.7838416Z  creating configuration files ... ok
+2026-10-07T02:23:32.7838701Z  running bootstrap script ... ok
+2026-10-07T02:23:32.7839085Z  performing post-bootstrap initialization ... ok
+2026-10-07T02:23:32.7839650Z  syncing data to disk ... ok
+2026-10-07T02:23:32.7840244Z  
+2026-10-07T02:23:32.7840562Z  
+2026-10-07T02:23:32.7840978Z  Success. You can now start the database server using:
+2026-10-07T02:23:32.7841380Z  
+2026-10-07T02:23:32.7841626Z      pg_ctl -D /var/lib/postgresql/data -l logfile start
+2026-10-07T02:23:32.7841932Z  
+2026-10-07T02:23:32.7842756Z  waiting for server to start....2026-10-07 02:21:58.022 UTC [48] LOG:  starting PostgreSQL 16.15 (Debian 16.15-1.pgdg13+2) on x86_64-pc-linux-gnu, compiled by gcc (Debian 14.2.0-19) 14.2.0, 64-bit
+2026-10-07T02:23:32.7843873Z  2026-10-07 02:21:58.022 UTC [48] LOG:  listening on Unix socket "/var/run/postgresql/.s.PGSQL.5432"
+2026-10-07T02:23:32.7844559Z  2026-10-07 02:21:58.025 UTC [51] LOG:  database system was shut down at 2026-10-07 02:21:57 UTC
+2026-10-07T02:23:32.7845171Z  2026-10-07 02:21:58.028 UTC [48] LOG:  database system is ready to accept connections
+2026-10-07T02:23:32.7845701Z   done
+2026-10-07T02:23:32.7845944Z  server started
+2026-10-07T02:23:32.7846157Z  CREATE DATABASE
+2026-10-07T02:23:32.7846362Z  
+2026-10-07T02:23:32.7846668Z  
+2026-10-07T02:23:32.7847165Z  /usr/local/bin/docker-entrypoint.sh: ignoring /docker-entrypoint-initdb.d/*
+2026-10-07T02:23:32.7847575Z  
+2026-10-07T02:23:32.7847886Z  2026-10-07 02:21:58.207 UTC [48] LOG:  received fast shutdown request
+2026-10-07T02:23:32.7848562Z  waiting for server to shut down....2026-10-07 02:21:58.207 UTC [48] LOG:  aborting any active transactions
+2026-10-07T02:23:32.7849400Z  2026-10-07 02:21:58.210 UTC [48] LOG:  background worker "logical replication launcher" (PID 54) exited with exit code 1
+2026-10-07T02:23:32.7849952Z  2026-10-07 02:21:58.210 UTC [49] LOG:  shutting down
+2026-10-07T02:23:32.7850425Z  2026-10-07 02:21:58.210 UTC [49] LOG:  checkpoint starting: shutdown immediate
+2026-10-07T02:23:32.7851680Z  2026-10-07 02:21:58.224 UTC [49] LOG:  checkpoint complete: wrote 926 buffers (5.7%); 0 WAL file(s) added, 0 removed, 0 recycled; write=0.012 s, sync=0.002 s, total=0.015 s; sync files=301, longest=0.001 s, average=0.001 s; distance=4273 kB, estimate=4273 kB; lsn=0/191F0F8, redo lsn=0/191F0F8
+2026-10-07T02:23:32.7852809Z  2026-10-07 02:21:58.231 UTC [48] LOG:  database system is shut down
+2026-10-07T02:23:32.7853142Z   done
+2026-10-07T02:23:32.7853332Z  server stopped
+2026-10-07T02:23:32.7853536Z  
+2026-10-07T02:23:32.7853777Z  PostgreSQL init process complete; ready for start up.
+2026-10-07T02:23:32.7854095Z  
+2026-10-07T02:23:32.7854863Z Stop and remove container: 441a505a17d24950abfe738346acf438_postgres16_2500ce
+2026-10-07T02:23:32.7855567Z ##[command]/usr/bin/docker rm --force 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:23:32.9114415Z 66afd0b4905c3d3e2ddfba94070280d9399787886ba563de08a725ee40ca9cb8
+2026-10-07T02:23:32.9144785Z Remove container network: github_network_869bd7af465243d3b3c31c5da3be86cc
+2026-10-07T02:23:32.9150245Z ##[command]/usr/bin/docker network rm github_network_869bd7af465243d3b3c31c5da3be86cc
+2026-10-07T02:23:33.0281692Z github_network_869bd7af465243d3b3c31c5da3be86cc
+2026-10-07T02:23:33.0353047Z Cleaning up orphan processes
+2026-10-07T02:23:33.0697425Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/setup-python@v5, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

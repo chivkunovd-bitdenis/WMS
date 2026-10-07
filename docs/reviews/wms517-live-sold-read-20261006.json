@@ -1,0 +1,2950 @@
+{
+  "seller_id": "0b8da5d8-f43a-42f5-a2ec-43173ea844bd",
+  "tenant_id": "d6e1ad21-8afa-4acf-8d0b-907b9f2adcfe",
+  "started_at": "2026-10-06T11:24:46.658567+00:00",
+  "complete": true,
+  "external_actions": "GET supplier/sales only",
+  "requests": [
+    {
+      "dateFrom": "2026-09-17T21:52:52+03:00",
+      "flag": "0",
+      "status": 200,
+      "at": "2026-10-06T11:24:48.194538+00:00",
+      "rows": 215,
+      "terminal_empty": false,
+      "lastChangeDate": "2026-10-06T13:45:05",
+      "kinds": {
+        "S": 201,
+        "R": 14
+      }
+    },
+    {
+      "dateFrom": "2026-10-06T13:45:05",
+      "flag": "0",
+      "status": 200,
+      "at": "2026-10-06T11:25:48.955364+00:00",
+      "rows": 0,
+      "terminal_empty": true,
+      "kinds": {}
+    }
+  ],
+  "source_sha256": {
+    "app.services.wb_sales_report": "247825c8f13fac3ef05e9bc4ccafd37cc6924bd8d0163080737c4614d3f3817a",
+    "wms517_audit_repository": "42a8b2830584e81e38bda9e95aca15cc296458703e47bdd4452702139a307994"
+  },
+  "seller_name": "ИП Горячкина Т.И.",
+  "participant_inn_present": true,
+  "candidate_count": 246,
+  "distinct_order_count": 246,
+  "received_at": "2026-10-06T11:25:48.958679+00:00",
+  "date_from": "2026-09-17T21:52:52+03:00",
+  "pages": 2,
+  "source_row_count": 215,
+  "coverage_missing": [],
+  "rows": [
+    {
+      "marking_id": "d4b5f1a2-e4be-49db-9e3d-dff90107dbad",
+      "order_id": "84e36337-b87b-4ca2-92c6-4cc4a72cb512",
+      "srid": "eca.r45be6463ca56453baf1a582152e474d1.0.0",
+      "cis_sha256": "f9ee777c7a5db17d075b27f85ca108389e91a14a42f721fd5b0991fae087b06a",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25414262545",
+        "date": "2026-09-27T18:03:59",
+        "lastChangeDate": "2026-09-27T18:29:01",
+        "finishedPrice": 1468
+      },
+      "product_cost_kopecks": 146800
+    },
+    {
+      "marking_id": "4fc226b3-24a9-4aa2-be32-85328bcd8dc6",
+      "order_id": "5a57f005-dcd3-4758-beb8-454bd5506610",
+      "srid": "eAB.i8ea61f96491e484b02e0cf6805a3c172.0.0",
+      "cis_sha256": "4d3c3625b3f10848802b1f3d6c2eeebfc0106fe56ceaed4be7d07d9d16c36b7e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "b7aabc1f-37dc-41a8-9df2-66e13641dcd8",
+      "order_id": "31f1e68f-4e4e-4aa3-8c67-9b1af73041db",
+      "srid": "eb0.r89309afe181b441b96944bf328bab2ce.0.0",
+      "cis_sha256": "93051de7b0d458ecceab48ae6d806fb3e169b82e53925ec8001da110f6ee93cb",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "124be503-9a4b-49ac-b4bc-2c3665be0494",
+      "order_id": "cec76ea6-a985-4127-acc1-bd31b0aa7ba3",
+      "srid": "ebj.i40417eae6700b7b033093d85a73ee878.0.0",
+      "cis_sha256": "12e56ffe2413e43981167d1827dea6aad6202a0d4bdb20e39a9808a1d8c15639",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "db7494dc-6ff7-423e-8b87-eb0037342d9e",
+      "order_id": "0f1b121d-7cc4-4157-8a60-ad436206c42e",
+      "srid": "ebC.r420c6293aa2f437caca238711909573d.0.0",
+      "cis_sha256": "8d27c3704963326ce01869f65f6d23f78a7d3eaa2f4c90223d57312083b82c3d",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8b1a50cf-378c-4e51-9515-7b519da59131",
+      "order_id": "a3df4c9c-dea4-471b-8728-6d7a6dd8014b",
+      "srid": "eAB.rb23ce856d7b248deae39810396a0e25b.1.0",
+      "cis_sha256": "c9e036a9ebb5d237ce434e92b5b7b04b462e473877895cfedfc091940ae41263",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d5c03468-d3b1-47b7-add6-d1143773c83f",
+      "order_id": "939d479f-6463-4abc-9ec5-8e30da29febc",
+      "srid": "eS.i05e925747cc762c76259a224b23af134.0.0",
+      "cis_sha256": "aa962dd1793e25a8983dc37dbbfe731739ffe2f8af26504a39b2478943be2e41",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dd975d2b-34ed-4452-96f4-35df221bc25a",
+      "order_id": "281f7927-b99a-4f01-af05-71de061586eb",
+      "srid": "ebM.i3d6383285d71a842327268d072fc6856.0.0",
+      "cis_sha256": "ea282cf632d52768383b420594cfb8efecc17a37a0f9e611ea0736aa37f12993",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "85accf40-b406-424d-80b6-1aa6a7c0dfdd",
+      "order_id": "0a5761ac-caaf-4664-b5c6-8ebc8a16f43b",
+      "srid": "eB5.icfa411499d88a95bd9a552964f5b1343.0.0",
+      "cis_sha256": "cb910c1df4d01dfec88e8bbea0e4af75c1262e1af69c2cedb8e76dd27d6b34de",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f001732e-4c6e-48b2-8c5b-7f2160346efd",
+      "order_id": "5229b50d-0a20-4443-a93f-18e03b20e1cf",
+      "srid": "eB.r125ce45b586642cd89a3dc9e7a1306e3.0.0",
+      "cis_sha256": "2cf839c52366362d083f949d7a970f1329e1db8953e0353e42c29aeba0265228",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "bf747f51-b142-43b5-b899-b236993f6834",
+      "order_id": "65250d65-7d0c-41c3-8df3-51cbcda3a39d",
+      "srid": "eBP.i6c11ecc98e502b9f4081001f0a76e6b3.0.0",
+      "cis_sha256": "3728f88e428d96088111aaac70c9076971cfed0882aa7f7bde5fb88b7ba4368c",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "172a4ec1-678f-41bf-9f7a-db360f9f3ff6",
+      "order_id": "207560af-634d-4fdd-8949-9e156f09072b",
+      "srid": "eM.red4af4b88dca48039fa2da05fe8fd7bc.1.0",
+      "cis_sha256": "652a68d37bd5655c83108b0381c0be7f4e988b819a314d28df7cc71e6b10a717",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "980d7c44-eff4-4daf-9d53-0d13ca67f457",
+      "order_id": "7d864785-a84f-43a7-8b04-470490a5f439",
+      "srid": "eN.rd0d85223d83449cbb381a17e2c505062.1.0",
+      "cis_sha256": "2529c460ee57ffa624b7d9c7529837612a157a61ae35b09a5a766cf8eb370870",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3ad40552-4459-4c85-8174-8638b6c7d2f2",
+      "order_id": "49e78e61-7780-49f6-9d2f-fc3e7e011c4a",
+      "srid": "eb1.i0c03ee4f021fc95216a3d6576938dc4b.0.0",
+      "cis_sha256": "3303f4ab0599b39b565c58904844857acec243f8f28dd3aa0b6c58e6a8c397c1",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "1d597d23-3ac8-493e-affa-3e4c8ff5262f",
+      "order_id": "b91e6acf-1948-4114-a3fc-b582b461c7c5",
+      "srid": "eY.rae0d671a11cd4ab18c589a81a5afd147.0.0",
+      "cis_sha256": "90dbe6481570e48d8e2e302899abc59701bfde78578bd2d8e12da35befa474ae",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "050ad58b-c931-4bc6-8bdd-6f0b7e378eb3",
+      "order_id": "95ecc3c0-18dc-471d-956b-a47ac1370f69",
+      "srid": "eBF.i4712d4df1374a3b92ea97817ccc67fc6.0.0",
+      "cis_sha256": "91daa8fc2b23fdb126961f40ddc33d96453fa292a893e73a30a226840107b960",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "17e8288b-500f-4958-a2b6-36ac33d50c6e",
+      "order_id": "7027c3f4-39fb-4d66-81d6-ab750aff5ca1",
+      "srid": "eAk.reb7ae01854954328b55fc27b2853c413.0.0",
+      "cis_sha256": "f4c22713d52f3ec39adeaf81bd748c67ac6930dd728a6ee3ee07f912d7e9388e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "7274d12f-82f3-4c94-9dfc-0b1dcc11a037",
+      "order_id": "e3b168db-9f38-4952-a2dd-1ca528724fa1",
+      "srid": "eE.ic42b27f7dd32165d0565f68fa37ed8f0.0.0",
+      "cis_sha256": "d48c71a5b4c4544575d4a3106605853245f5de286e8b188c36cdac5e947f8384",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "4fadceea-c262-47a8-a70d-bf6624dd6ada",
+      "order_id": "4893313f-4d24-4eda-94dd-0882121a6ba6",
+      "srid": "ebV.rfe9ba66442e740c6b7035f070f824c4d.0.0",
+      "cis_sha256": "86d346732f957b6c82a428cfc39133cc3192bf3505a9acb7dcd854b7015870e3",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "607814a6-f0c0-43d4-b34b-7ae4cecca4c2",
+      "order_id": "97017c1b-62f7-423a-9848-cdfbc508a4a9",
+      "srid": "en.re05ecfae4ae04191a1851884326fe71d.3.0",
+      "cis_sha256": "56c58fef07d8651f85196aa2476930c48b3b309ea3e7529e0c1be42f4e6709a8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a97d5335-a7f7-437d-8d1c-6e13757a10fc",
+      "order_id": "58496757-5536-49cf-b195-7254b5bd0b46",
+      "srid": "ebp.r7cee306c82a9435b94b3c29bcc5e2feb.0.0",
+      "cis_sha256": "ce5943776e8120a5844a4915535cf5b9eb22b121a18c5d46d3225d96f17c5bc9",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "07129acf-3cd6-41f1-ad77-fb98589da728",
+      "order_id": "703823c6-b127-42b4-a48c-fc98baa264fc",
+      "srid": "eba.r8bd985f2ea93433dbfa85fc8bd92bc9f.0.0",
+      "cis_sha256": "723b435c8e660a3fda78a3f3c7a4604cd9fad6fd6bf69b7d5c5df5f45394b559",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "532f6208-6ce9-4a97-95ff-6ced58846e68",
+      "order_id": "f97e7d08-19e6-49b9-902e-3a88934a5ec6",
+      "srid": "eAq.i4264ee2f5046f91fb960b88b57ddd1aa.0.0",
+      "cis_sha256": "3eeeaf08f3647bcdad8a5b5ec816ae94b9406537afbd292ec8357b1e248057a5",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f910e623-420c-4c1d-be61-3e997a39cbc8",
+      "order_id": "df6300f1-46b3-4a73-81e4-3f5789693b6d",
+      "srid": "eA6.r32f86aabd0f14291a93a7f7ee6c21559.0.0",
+      "cis_sha256": "105da32dcb2101adc9b191ae3f399c91f505c01c7b13f63c7f9bfc572544629e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3592c93d-3520-43a7-9097-2b6dbc3112fc",
+      "order_id": "60b44428-1d5a-4e30-9852-aba5582c00e0",
+      "srid": "eAf.ib83858d1d1f71407dcb77e0a2b831273.0.0",
+      "cis_sha256": "9df4a1478bb0f2e6bd6a9f3c2aaae326a184c3326b70fd095689dd7808a12e3b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "92a3cf94-380c-47e5-8bc9-b1131d6edb91",
+      "order_id": "26f0dd66-6987-486b-a641-dd6490416dc0",
+      "srid": "eg.i26156831cc4264e15863cabe2fbdc64c.1.0",
+      "cis_sha256": "4be9e2f20ffdc0afa2aacd158c1f1cba3e3121d3f9d9941596af658d6e193912",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25531083120",
+        "date": "2026-10-06T10:12:55",
+        "lastChangeDate": "2026-10-06T10:27:39",
+        "finishedPrice": 1490
+      },
+      "product_cost_kopecks": 149000
+    },
+    {
+      "marking_id": "3639a777-628f-4268-9309-0f561d769f98",
+      "order_id": "774d721b-27a0-432e-9115-082f2860044a",
+      "srid": "eX.m1c6a3fb4304944279c22f64e6bffdcda.0.0",
+      "cis_sha256": "3494e7be4b8cdb49e9e8cefa7ebe434a144e9aa63d236695fe32cfe8fbc441dd",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "679fef91-9f19-47f8-9749-51af2c413c68",
+      "order_id": "583d7a6a-48a4-405a-a8e7-0f7fd65b6de3",
+      "srid": "eG.r3d7fa555486b491fbdb325add9fb3c35.0.0",
+      "cis_sha256": "8266bf4039437f2e83ffe2960fd772dd384e2f4f05a939b871d42867c1c469ec",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "6b608ac2-8d2a-42ad-8595-c5c056b24dc9",
+      "order_id": "ae703807-651a-4180-9c78-53af509f8db4",
+      "srid": "eAR.i1d7eedb035014932ad178e2bb0bbb77c.0.0",
+      "cis_sha256": "96ce4d9c3ed9d898786a0f8b325e2e54dcb88f9ec8230f86837c079091165fa1",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "0247489e-2345-4cfc-8c72-2de2a9651338",
+      "order_id": "01751eed-4b67-46db-9144-02e68f01785a",
+      "srid": "ebA.rc6f37e6ffe864e2c8e5e205449491af9.0.0",
+      "cis_sha256": "caa5b5ebae95c30e9d54b4a87d818a2ed102d57bdb81c453b0c5af80a0e0ff21",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "41810cd2-3bd2-401f-811d-5a796a8b46ab",
+      "order_id": "57c082a1-6a7d-4dbe-9b44-cb968686316b",
+      "srid": "eb9.rc9e3bc02faef4a859d90f1330e55a40b.0.0",
+      "cis_sha256": "39d0870c502101421017fd7c4ef94d8a1402f6c869d6c0326daf62e308123790",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8f6da422-f8b4-4338-926a-f207cfe646c5",
+      "order_id": "970967ed-dd0e-4ca6-bad7-f53b2226a1c1",
+      "srid": "eca.r57e2ee02c84b4826921d36f6b7c2da68.4.0",
+      "cis_sha256": "b436f7cd68df4671f852eecbd590cd6d8efe3ab74fc19cff94d32f7d7210ea2d",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3ba7d8d0-b447-41dc-90e1-a78acde67f92",
+      "order_id": "d83becb6-78b5-4c4e-9f3b-22123f72b1e8",
+      "srid": "eca.r57e2ee02c84b4826921d36f6b7c2da68.5.0",
+      "cis_sha256": "d866612e062ee91ae070d88b27cabe89c67f658f86502d8fce8196d513664f94",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "795b2d3d-f142-41ff-9fd7-e31d2f0e52f2",
+      "order_id": "ba9f7640-be7f-4e21-aa02-577447c609db",
+      "srid": "eb5.i95ddde59cbcfe3b227b738ebddb53589.0.0",
+      "cis_sha256": "f0d3159b4d9c5333b1c1d4db84d84ceba7c5b2a845882edda08b6a2de5eb7ea6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "aed06c4e-5c41-4b4f-bbd2-a160c318628e",
+      "order_id": "ca0685b9-b949-4f08-b799-a06381d6ea07",
+      "srid": "eB2.r0c857dfaa9a84d98b3482fed3c182dcc.2.0",
+      "cis_sha256": "296104f6831c2e57a234a805d7229d4f3892f3059f4f3dd0b943d8a7114ad5ee",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "4742f113-6e6d-41bc-9468-a952341d4fc2",
+      "order_id": "e43ee60d-3f8c-49b1-a666-6073feb87214",
+      "srid": "eAw.r868e07b0fe974a93b7165f68817a4215.0.0",
+      "cis_sha256": "a32ccf70675d6adc7988fe983d0d08bff4405f9917d5dbcb1cc4e7e0b33aa64f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "30716632-fc47-4bf9-b90a-05fa7cce3c50",
+      "order_id": "9122a35f-4401-455c-aba1-1e50cbd4955c",
+      "srid": "ebn.r168d5d6deb4d41eb934dac47af32d15d.0.0",
+      "cis_sha256": "94e239388f333d03354799a4c439b3b85a5fa5a63546555c21b29dcbc027fc60",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "5142e5c7-6987-4a40-9dd1-4c929d3d9f55",
+      "order_id": "7ad8dace-aa92-4484-8c60-06076fef9efa",
+      "srid": "ew.r6bcd46a871224c19be54391f0d66d397.0.0",
+      "cis_sha256": "20d5da2ece2d93bb9ce2aa15bd04426c3e4825f8f906486638b7e33ac3877bbf",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3e047e7d-41dd-407e-81e4-0801bd471605",
+      "order_id": "536d3f2e-ca86-49c6-90b9-db93a74201d8",
+      "srid": "ebT.r78c9ef3cce35443a8b9560a2628385c7.2.0",
+      "cis_sha256": "1de0ef8a3fd337c6209ca90da9351295b7e17423ecf4b06c22aee9b1c667465b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ce9001f8-2704-4776-8b18-fd6476c5e0ca",
+      "order_id": "e0c149ab-b004-49dc-96d0-8aeed9372d10",
+      "srid": "eb0.if9e7f2b46d483f4cb2025dfc1b5e53be.0.0",
+      "cis_sha256": "4720af3dd3c7b960893cd37e9c59e37f86aebb1faa5971cbf0df20ba6184b216",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e0afc396-d5df-419d-9227-bf91b38cabf4",
+      "order_id": "fc2c8392-b86f-4897-9bcb-7b50f282dba2",
+      "srid": "eb0.i6543aab60faa88f607f55aae5aff855a.0.0",
+      "cis_sha256": "8623e4063dc21069370f21b1fc9227734087245d9883368343d1a3af32b0d571",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "cbc6d8e2-ed32-4f0d-bfa1-81e78f0d9bce",
+      "order_id": "34b33cac-1106-4395-89e3-9c5839976f70",
+      "srid": "eB.m782c53c9abcd49a784ed87b80b8e43ab.0.0",
+      "cis_sha256": "3c5940c1e8940c8dc3c37ee154b8eb8f00ee0d6ffacc7a8ddc589881e8b5f528",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ba161850-7498-4675-8007-961b68dc0ce4",
+      "order_id": "59655b12-740a-44e7-a604-b44ac5d93d9f",
+      "srid": "eb.rdf189e28ae0042189029b0d85356a757.1.0",
+      "cis_sha256": "d9ac1fdc053d745f19b6d32dcfcf46bc80d97703eea25262ca1fa8ba137e0c59",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3ddf7969-661f-493e-bf30-1af94f77757a",
+      "order_id": "10af7618-8919-4c5f-a5dd-1c4debaf2d9a",
+      "srid": "em.r3131ae28676546ad8ba731f16c6b558d.1.0",
+      "cis_sha256": "edb9ab03aa01d76d56f1763b7d57e843559b0fa3c99777ccf3306bcdf9c5e7c3",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "5075359e-ceb8-4598-906f-1520004c105c",
+      "order_id": "4846648f-21cf-41f5-ade2-3f6b0c20d979",
+      "srid": "eAM.r04cbdf25f2c244d390a3792fe1e1a110.0.0",
+      "cis_sha256": "e5f10a90cd4d4ee7b5a496f19c64524e975afeaabb75b7a8476870dca4507fcf",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "476ab2f1-c1c0-4a5c-bb5a-a93b03132b5b",
+      "order_id": "5ebea9d2-99ab-4285-a19a-6647a1df8fc9",
+      "srid": "eB0.i202606bad32f84db7a60e6ec9697f0d8.0.0",
+      "cis_sha256": "95f60b2547eef484cf387e0ef359fb72ac00a3c832788ff8c5b6958d02323347",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "81a42d48-6231-466a-98c8-480f07ca0eb8",
+      "order_id": "005cdc84-08d5-4dab-9e88-f7c7a1111846",
+      "srid": "ecD.rc99965dbfe9c45b1829bb29fad0ceccb.0.0",
+      "cis_sha256": "e1d299220e3a5b1055e42b4336eaf458cfa9f5eb13957ac9dbc4c4236a0127f1",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25461371807",
+        "date": "2026-10-01T11:08:06",
+        "lastChangeDate": "2026-10-01T11:28:13",
+        "finishedPrice": 1139
+      },
+      "product_cost_kopecks": 113900
+    },
+    {
+      "marking_id": "908632b3-03b5-4a3b-a460-8a5cd660eb38",
+      "order_id": "8ad7f282-317e-4458-8751-1420886a3d0f",
+      "srid": "eBl.ref4af06757d5445895560fdcf3ac900e.0.0",
+      "cis_sha256": "38af11b61e304386e0068e8f725f8bc667015b9861c5230bd810d9a45a344002",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "76dbb4e8-a225-4b9e-ac26-3263dd4eaef3",
+      "order_id": "c1cc0186-f09c-4b0d-93a7-709c4e149606",
+      "srid": "ebO.id425bf06485b1fc293c3a8cee3f8a460.0.0",
+      "cis_sha256": "a1241c651ead43d12e91e040145842bcb811252029d4380cddfd27f0f64381fe",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25425132045",
+        "date": "2026-09-28T15:46:11",
+        "lastChangeDate": "2026-09-28T16:03:19",
+        "finishedPrice": 1485
+      },
+      "product_cost_kopecks": 148500
+    },
+    {
+      "marking_id": "d4265905-b9fe-4366-b979-7071d54ded6a",
+      "order_id": "e6ea99f9-9d50-4756-a39c-1d0537c3684e",
+      "srid": "ebg.ia233382b7ca57214750e41899b2bb4b3.0.0",
+      "cis_sha256": "7402344cf2c50745480ab8faf8fd5eac55cb0c5a429d703495a3dea7fd5d8be1",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25473127790",
+        "date": "2026-10-02T06:46:48",
+        "lastChangeDate": "2026-10-02T07:08:38",
+        "finishedPrice": 1489
+      },
+      "product_cost_kopecks": 148900
+    },
+    {
+      "marking_id": "c47b0880-2283-496d-80be-dc6127aa347c",
+      "order_id": "065d0239-68d4-4879-8d5d-8658d66510cb",
+      "srid": "ebf.i6a63da05d796a2d136d9b2c9da7ca63e.1.0",
+      "cis_sha256": "2a857907766257739d47c21a2646c82aea9c65e83a59e03656937437d020752b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f149cee5-b6d7-4f6a-964a-dfb7f2930e04",
+      "order_id": "bb944125-4e80-4d3e-a3d3-7547d73ec639",
+      "srid": "eB2.i0f428e140f1104dbaa482f709f8efa04.0.0",
+      "cis_sha256": "97a3770ed1f837e08a4af7a391e7df275315d673e56bc6111ef9f4d2a5ed3f86",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25410567630",
+        "date": "2026-09-27T15:07:37",
+        "lastChangeDate": "2026-09-27T15:28:41",
+        "finishedPrice": 1354
+      },
+      "product_cost_kopecks": 135400
+    },
+    {
+      "marking_id": "795de647-69e7-402f-aef7-d94686d21181",
+      "order_id": "09963d04-33d2-4176-8c7f-6d479d38f4ea",
+      "srid": "eAI.i8c63420e2d3bae32c04c7270319fc687.1.0",
+      "cis_sha256": "593d3fa9e54935fd958bae592888310043a8ed2413f06491e34aaf1ce2c15910",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25501198288",
+        "date": "2026-10-04T06:17:12",
+        "lastChangeDate": "2026-10-04T07:05:42",
+        "finishedPrice": 1136
+      },
+      "product_cost_kopecks": 113600
+    },
+    {
+      "marking_id": "cf6cd709-d7f3-457a-9d84-7526b89997fa",
+      "order_id": "369d76f5-25dc-46f6-a92c-5723c8a1633a",
+      "srid": "eBi.ie03027ac1022abcc9cd6274723aaa4ef.1.0",
+      "cis_sha256": "0d48aa4d53ad0de3579fe1caf4aa8384b995bb37adeb742c966e03e9133ed9b6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a61f1b1a-8c0a-4e56-b078-60fad85a5359",
+      "order_id": "e3b3f250-99f8-40d5-b1bf-2c2ca7cd58b5",
+      "srid": "e4.de50bedbe2293428bbc716f67a7c03fd5.0.0",
+      "cis_sha256": "160f75cdab95329d2230d264ddef2772dca116336a1a906a261e4915d76cae3f",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25500777729",
+        "date": "2026-10-03T20:51:03",
+        "lastChangeDate": "2026-10-03T21:04:14",
+        "finishedPrice": 1291
+      },
+      "product_cost_kopecks": 129100
+    },
+    {
+      "marking_id": "10217818-0e0e-4f10-ada4-e9beb466ab4e",
+      "order_id": "771a4497-8bd8-40a2-96c4-d1bd2e100264",
+      "srid": "er.if7cc85376c41b47a7016c6eebeb721a4.0.0",
+      "cis_sha256": "c0cbbfa11c41bd775c333133daff8522c39a4f0a577333110b3162257cd39aff",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "05fc1080-81e1-424d-b307-d862a517a8f2",
+      "order_id": "b28de66a-b8de-49e0-8e25-b936c399cd1f",
+      "srid": "ebf.i6a63da05d796a2d136d9b2c9da7ca63e.0.0",
+      "cis_sha256": "8365f0c3725c910e45ed928bce75a03256c6adee09faf2208126a1c09bf77037",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e324a9e0-0d68-42ba-a423-61afebe28378",
+      "order_id": "464dbb2f-ff74-4cc0-8632-fa5c2a8ab045",
+      "srid": "ecd.ia8eaabcc9345dc3283e032e28f8eafef.0.0",
+      "cis_sha256": "afe4a640a7890a60545026e4aab16227e0e9b4c00941a296eb5b03265dabec58",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25461371394",
+        "date": "2026-10-01T11:08:54",
+        "lastChangeDate": "2026-10-01T11:28:13",
+        "finishedPrice": "1845.72"
+      },
+      "product_cost_kopecks": 184572
+    },
+    {
+      "marking_id": "35af912c-6ff5-42a1-ad56-eac9f9f3c90e",
+      "order_id": "6d4deb64-1458-40e0-8336-4a582edb60cd",
+      "srid": "ep.i7cc1494f3b2036cc36598a77849c53b3.1.0",
+      "cis_sha256": "85aeceed3f5db912c5d7eb6dfa83bd3887a9c04f4dce27a33d523f4c59c5f5f9",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e03e5e9b-2e8a-49bf-9c4b-f820ee14c559",
+      "order_id": "82debb19-9a5b-4d4a-9586-d160d7ed9e1d",
+      "srid": "ef.i79b66828da875d8c88156aaa9942a96c.0.0",
+      "cis_sha256": "b4ab2db4ae6cb59d0a27dae4e9ef12290e962b53570f1dc6aca4c522edb136b2",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25491302495",
+        "date": "2026-10-03T11:38:06",
+        "lastChangeDate": "2026-10-03T11:52:48",
+        "finishedPrice": 1285
+      },
+      "product_cost_kopecks": 128500
+    },
+    {
+      "marking_id": "a206f0b3-13cf-4b25-ac16-4249e56df79d",
+      "order_id": "4eebe894-415f-4455-8656-030c1ef2c0db",
+      "srid": "ebf.if3ddca00fa8d3fb8f240eee5e23eee89.0.0",
+      "cis_sha256": "763ae1ba69a0325764a7bf7a37d706cd0b2587f010d7dd7520e1363de284cb02",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9d2c7535-e3e7-4228-a155-06de1143cc3e",
+      "order_id": "79f17db7-1626-4bfc-a9eb-c6a483343dd8",
+      "srid": "eAL.r433c37516bd049b88aec70b3a93974a0.0.0",
+      "cis_sha256": "4ad50a576c5dffa94cba7fe1011c6ec28283713e15fa5898140e94cb47089d60",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25456646390",
+        "date": "2026-09-30T18:42:51",
+        "lastChangeDate": "2026-09-30T18:57:01",
+        "finishedPrice": 1267
+      },
+      "product_cost_kopecks": 126700
+    },
+    {
+      "marking_id": "ee3f9ce2-515b-4141-9b8a-03220b45b317",
+      "order_id": "769ea625-0d88-478d-8bf1-9895110dddd9",
+      "srid": "eBG.r977a9f726ed849968ff0bb42c37173da.0.0",
+      "cis_sha256": "74db02dcd1ae33af8460e83077e118c5d1874cc79dcbac18e96e038bddfa033a",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25468995919",
+        "date": "2026-10-01T17:40:22",
+        "lastChangeDate": "2026-10-01T18:00:09",
+        "finishedPrice": 1259
+      },
+      "product_cost_kopecks": 125900
+    },
+    {
+      "marking_id": "50a0b7ae-ae00-4399-88cc-333d46709889",
+      "order_id": "203369bf-7947-466f-8b94-799e0237986a",
+      "srid": "eAF.i71e9032c4024441ddbe4a741b05caf1d.0.0",
+      "cis_sha256": "9b8a55e6afd275101c6baf015e0812d4da592067a3987fa5b12669416d81a76f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "68b5caae-b6f4-4551-8fd4-5c582cd67861",
+      "order_id": "ee630fee-d144-4405-8fb2-91af08f10945",
+      "srid": "et.i30797424b77aa8651d9b9a2c1044513b.0.0",
+      "cis_sha256": "be74dcc12211cbb6b8e6dfcdb78655c2ec4109853e72cb2ce75d55df688e388f",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25466149014",
+        "date": "2026-10-01T15:30:55",
+        "lastChangeDate": "2026-10-01T15:50:56",
+        "finishedPrice": "1689.06"
+      },
+      "product_cost_kopecks": 168906
+    },
+    {
+      "marking_id": "6990f114-490f-4c26-9e27-9c2a01d68535",
+      "order_id": "acd021ed-37b9-41e7-9f6b-c3bcf0a764b4",
+      "srid": "eA7.r60bab8826fe744b4940dcc6710755c85.0.0",
+      "cis_sha256": "b8f94f2ef4c3feec00a0b54dfa6d4dfec479799be937bcc5ac0431dec6596519",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25491551170",
+        "date": "2026-10-03T11:50:46",
+        "lastChangeDate": "2026-10-03T12:06:39",
+        "finishedPrice": "1942.79"
+      },
+      "product_cost_kopecks": 194279
+    },
+    {
+      "marking_id": "959b6839-d874-4871-9cf1-e88989fa5572",
+      "order_id": "b7de02da-e19d-4d25-9428-71bf90a5134f",
+      "srid": "eBH.ibce398fa45f2d4e607ecdd0d92d18817.1.0",
+      "cis_sha256": "41dc44f06f5ece710838d47e0565b44552f2447814dc0dcc6ced3cc2d815476c",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a6b56802-ad6b-4262-94ea-276ee4b8d892",
+      "order_id": "181d597b-a3f7-449a-b013-b71ddab62ba9",
+      "srid": "ebk.ia824d8cb206421bfca20e4682517976c.0.0",
+      "cis_sha256": "ffab6800684a967a6767f48e1a17d94e744cba7c7481b7a9ca7ac237a20b7bb8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "88afc350-952a-4fa9-8a37-ef31ae8aa8ac",
+      "order_id": "0cccbb81-e181-4916-8d25-eed212c563ef",
+      "srid": "eBQ.icab25108b683632851414792dad726bb.1.0",
+      "cis_sha256": "61fe30e6510f1abf6193ea15dc6acf8fd11f513c32c6b1505a4ac6d22c3885d5",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "25949e45-b899-464b-bd65-efb5e44dabcd",
+      "order_id": "eb0fc1d4-500c-4ae7-bef2-c237307d03f4",
+      "srid": "ebd.i42f2d8391c9e50cf862b5e278cb1669a.0.0",
+      "cis_sha256": "6a81bbd5dcac3c80c9bfd1763781cf00288a56e920300b7c6db5cfb822f7313b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "b8489102-34ac-460e-8cbf-b51a2f66f3ee",
+      "order_id": "9db0359b-d6b4-4dce-9242-68a0dfdf109b",
+      "srid": "ebd.icb82b9316cb214abc894d41e9674c610.0.0",
+      "cis_sha256": "1d7bfe2e401218d53013ebf25c256c8ca3421c6c384cc787b7e291a80c4d13af",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25387992096",
+        "date": "2026-09-25T18:18:27",
+        "lastChangeDate": "2026-09-25T18:36:40",
+        "finishedPrice": 1454
+      },
+      "product_cost_kopecks": 145400
+    },
+    {
+      "marking_id": "e90bd500-b3a5-4081-86d9-d880842a87a0",
+      "order_id": "3cf666af-a958-4dad-9f28-6e9924426f6d",
+      "srid": "et.i6644d2f73834152ef51fbcd7f21bac43.0.0",
+      "cis_sha256": "13e76e65fe5c0da9ac21f881f61b62c96dddec371611df67a66b74b8e515df92",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2dc9344b-0445-43e6-a142-703018d48631",
+      "order_id": "b83ab8d0-6da5-48e5-8e59-900868207021",
+      "srid": "ebl.i61617f73b8d62c5ecacfe8e852b7d637.0.0",
+      "cis_sha256": "441dea9043122950abea70c6d02aa4718b556ffc3d1c4dc72b3c41113e444a4d",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25446878462",
+        "date": "2026-09-30T10:22:06",
+        "lastChangeDate": "2026-09-30T10:35:22",
+        "finishedPrice": 1485
+      },
+      "product_cost_kopecks": 148500
+    },
+    {
+      "marking_id": "4c2424e6-8694-4ce8-a4ae-bf8c26ff12f5",
+      "order_id": "c0ab4ab3-d1d4-4fb8-b557-395d95f81a53",
+      "srid": "ebE.ia87b47cf45759e26de6aeff98360b2a2.0.0",
+      "cis_sha256": "8c3fd54afbf1177dcf6e1563a659333169bd51a0bcfd49a946883715b2f59cd1",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25465409896",
+        "date": "2026-10-01T14:55:42",
+        "lastChangeDate": "2026-10-01T15:15:39",
+        "finishedPrice": 1515
+      },
+      "product_cost_kopecks": 151500
+    },
+    {
+      "marking_id": "31de276b-9cff-43cc-942d-e6733c96aa69",
+      "order_id": "0d60c0c5-de71-444f-bab1-83c917e74050",
+      "srid": "eBa.m015a1594efbd4ca4955abe9250e884ad.0.0",
+      "cis_sha256": "523c25f4392eacceaaa2c9104503844bbeb40cf31a6be62f9e71e0d3c253bfb6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9813ef39-3ae3-4506-84a3-8c6806543ead",
+      "order_id": "d85ec2a6-b771-470b-bedf-ce94f74e427d",
+      "srid": "ecc.i7b5875fbaaa2eddba37c79acde506151.0.0",
+      "cis_sha256": "776651aafea2e473f1a18e5283579643dbc3e2de7d5b1b8b2afba2bd45242eb2",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "39281325-87f0-4cdd-a968-6e1abe55cdbe",
+      "order_id": "5ba45015-71ed-49fa-ad3f-0c9a5d1ec4b1",
+      "srid": "eT.i5f17cd75742586fce0cf4c26466542fb.0.0",
+      "cis_sha256": "cc085882cdcc8ae811889806e483f144fcae1ae31b2c9f256c21565c32d78e54",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25529261660",
+        "date": "2026-10-05T20:34:07",
+        "lastChangeDate": "2026-10-05T20:57:28",
+        "finishedPrice": 1540
+      },
+      "product_cost_kopecks": 154000
+    },
+    {
+      "marking_id": "9d8b62f7-f9ec-4858-b4a2-be425058228e",
+      "order_id": "231c30f1-ae8d-446b-b1e9-9efb8429a7ac",
+      "srid": "eBy.ia657f741067ee9b1d5602cc64771e169.0.0",
+      "cis_sha256": "1f0a866be9191999111b08b21747bccf28bf6f5af71ff42d64fc55dfe89620e5",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25489938829",
+        "date": "2026-10-03T10:24:41",
+        "lastChangeDate": "2026-10-03T10:45:08",
+        "finishedPrice": 1295
+      },
+      "product_cost_kopecks": 129500
+    },
+    {
+      "marking_id": "a65fd61d-8e78-46ec-b854-a6eae83bd3ad",
+      "order_id": "c5bf7924-a463-4ffa-a29d-e5f69b402b49",
+      "srid": "eb5.ibfc404dd2c6406f8f1dcb3b1b7fc52f6.0.0",
+      "cis_sha256": "3fe290af52adeda0f6d1ea4275eaebd75c18796b7d70a1f44c305a78ebb50ff6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "c03394b0-6264-491c-8b99-6ec5ca5c7174",
+      "order_id": "e22c7422-c13e-4507-a0b4-fcb7d1df805d",
+      "srid": "eAp.rfb3120768b1c4a39a9a0e3555475ed8c.0.0",
+      "cis_sha256": "242bb270c7d03806fe6503ea7750dbd96547022bc5e341c66fb7f9a47313703d",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25448210978",
+        "date": "2026-09-30T11:45:01",
+        "lastChangeDate": "2026-09-30T12:02:55",
+        "finishedPrice": 1129
+      },
+      "product_cost_kopecks": 112900
+    },
+    {
+      "marking_id": "ea17ae7f-1470-46d8-85cf-ca495c5bb554",
+      "order_id": "9c4b7eea-6958-47d0-9abe-f7dfe39ae63f",
+      "srid": "eb4.if11e397b776a8737865356fda51e88bb.3.0",
+      "cis_sha256": "89a88975a15ee58cde80656d551d7d60e91f2fe004bfbaea77200a2b3a13e5ff",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25429716790",
+        "date": "2026-09-28T18:54:47",
+        "lastChangeDate": "2026-09-28T19:13:40",
+        "finishedPrice": 1297
+      },
+      "product_cost_kopecks": 129700
+    },
+    {
+      "marking_id": "ab8be18b-bee1-4c36-b8a9-5391ead3ec28",
+      "order_id": "9efea525-3ea5-4bbb-a5c3-2391b39a1a6a",
+      "srid": "eAr.ra7727baf20034884949787385fbb5558.0.0",
+      "cis_sha256": "81460b264ef5fbe1f577ad50745618fefcff57399220760e23afbbce5689a959",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25490556329",
+        "date": "2026-10-03T10:59:32",
+        "lastChangeDate": "2026-10-03T11:17:27",
+        "finishedPrice": 1199
+      },
+      "product_cost_kopecks": 119900
+    },
+    {
+      "marking_id": "2d7f9070-3296-4e0a-9b37-f9caa732fa64",
+      "order_id": "ea6a74e0-c325-4c57-b2fa-ea35f87ff7bd",
+      "srid": "eb7.r7ecf6c4cac5540589aec32ea413eb791.1.0",
+      "cis_sha256": "b3784c7fc93031f89ea87ecc6b5a7dc384b37786a8435634263d48928145d498",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25458091701",
+        "date": "2026-09-30T19:53:52",
+        "lastChangeDate": "2026-09-30T20:11:44",
+        "finishedPrice": 1367
+      },
+      "product_cost_kopecks": 136700
+    },
+    {
+      "marking_id": "c5892d2c-c29c-4e7e-9826-893581bcb7f1",
+      "order_id": "4b119102-396d-4267-bd32-79f6e9ace062",
+      "srid": "eBu.if46f3c92af5be48188a2a18421b930df.0.0",
+      "cis_sha256": "caa3e8064750d57e85f5b0378f99c3ffcd28915c843e540a08a1ad93bc4dc70b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3db6a144-c80d-4ffe-82ff-48fd464c9b9e",
+      "order_id": "4404a023-d281-4843-a12d-71a2df39393f",
+      "srid": "eBh.r6a555e146e18467a8d1638d550de6b1a.0.0",
+      "cis_sha256": "7d4fdf19d41db2351216da6bf1539cdd36237bd045c6082e3d83af760b181373",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25442854863",
+        "date": "2026-09-29T18:33:45",
+        "lastChangeDate": "2026-09-30T05:31:48",
+        "finishedPrice": 1336
+      },
+      "product_cost_kopecks": 133600
+    },
+    {
+      "marking_id": "5f2ab33c-8977-4004-b933-cc9e659f081a",
+      "order_id": "18c0faf3-da21-455d-9fcf-0f25e7d3d42f",
+      "srid": "eAM.i3de8e911093505a2ba21bab8c93ccb5c.0.0",
+      "cis_sha256": "f58ac42ba97db948260b3e47da20b19c9492ebbd2f873c36df3bb0b77971f78d",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25454373005",
+        "date": "2026-09-30T17:02:45",
+        "lastChangeDate": "2026-09-30T17:22:18",
+        "finishedPrice": 1258
+      },
+      "product_cost_kopecks": 125800
+    },
+    {
+      "marking_id": "f5bedf17-4c1c-4cd1-a8ef-27409af61b48",
+      "order_id": "c15975f3-db5d-49dd-8d65-3b218be3fd31",
+      "srid": "eA0.r82e248a9d5704487ab79dab279c3c4cd.0.0",
+      "cis_sha256": "497aae0adf247500b160dba94487657a4e17fd38759668cbdc8724f6f61780ca",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25459895951",
+        "date": "2026-10-01T09:06:43",
+        "lastChangeDate": "2026-10-01T09:22:22",
+        "finishedPrice": 1208
+      },
+      "product_cost_kopecks": 120800
+    },
+    {
+      "marking_id": "34480e73-b1d6-40c6-bc45-8ef0d0c3a81f",
+      "order_id": "21e707ec-c215-4b82-988c-b1c581502395",
+      "srid": "ebw.ib9955c42da1b82ede8832705349c1ee5.0.0",
+      "cis_sha256": "8bc63e280c50438020d5f017d2e58de1b5fd65e44a55bfe95e50f554bc8ca0a4",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "5ee9d804-ef1e-4ee8-ada9-8bc09b034051",
+      "order_id": "920b740c-db98-459a-a47d-a22cf4e42862",
+      "srid": "ebw.ib9955c42da1b82ede8832705349c1ee5.1.0",
+      "cis_sha256": "d5d8dc9015691c26d2b3140c923a9449909196a6c8e4143a1691047f0f3cc248",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3d8f85cc-9de5-43d9-bfe9-c073801b9b51",
+      "order_id": "4c67a773-91b1-4e69-ac86-62591dc8aba4",
+      "srid": "eB0.i00d61367e65c6f330b9b27e947d93b96.0.0",
+      "cis_sha256": "69a14e42f5b8e6cd7641e31d26ba3492de3f630b725a9930719265b1d87436f8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "3bb90f51-e57b-4d62-858f-f9893e4700cf",
+      "order_id": "8ce826ab-21eb-4e74-9203-0a90a4cf42b2",
+      "srid": "eBQ.i996820472e69686a8d34cb3980f4028c.0.0",
+      "cis_sha256": "691184200aa35191d7c0ee6e05c7a561e124f893b59e0898a9198cbd04ba064c",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25448741830",
+        "date": "2026-09-30T12:18:35",
+        "lastChangeDate": "2026-09-30T12:33:18",
+        "finishedPrice": 1419
+      },
+      "product_cost_kopecks": 141900
+    },
+    {
+      "marking_id": "c215df68-78de-4dcf-82ab-7788d8e3b419",
+      "order_id": "6a2360c4-5c10-404c-adb3-9f9df269196f",
+      "srid": "eBG.i70bb440f568f71c436e2bb08ce8a8a21.1.0",
+      "cis_sha256": "5e0f2ad80660d0cf0addccdd50a3c0c042e66611e29ba8ac8ab1ea1804bf4f8c",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25457508557",
+        "date": "2026-09-30T19:23:28",
+        "lastChangeDate": "2026-09-30T19:39:01",
+        "finishedPrice": 1167
+      },
+      "product_cost_kopecks": 116700
+    },
+    {
+      "marking_id": "20765aea-1118-41c0-83b2-539747460d80",
+      "order_id": "1919614e-a02b-4197-b0f3-19f49d18896b",
+      "srid": "eQ.r21441f935495425fab65b78b2c7f03e6.1.0",
+      "cis_sha256": "56dcbf26a69b02b0bb8c734756634debf9506d9097bebabd01d45e5f91640a0c",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25485468981",
+        "date": "2026-10-02T18:30:35",
+        "lastChangeDate": "2026-10-02T18:51:22",
+        "finishedPrice": 1014
+      },
+      "product_cost_kopecks": 101400
+    },
+    {
+      "marking_id": "9cfeb72a-197c-41cf-9402-89792a729d8e",
+      "order_id": "1517491c-e009-41a0-8ad3-3f5bfcbaceb6",
+      "srid": "eba.r88f96a4c085745cea0eab2d5509c886f.0.0",
+      "cis_sha256": "0c5c0a0968a33284e0f1345b7ecd9e60e6bf83cd9be3ddea17c4ad32ef1dc031",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25457209022",
+        "date": "2026-09-30T19:08:04",
+        "lastChangeDate": "2026-09-30T19:21:34",
+        "finishedPrice": 1513
+      },
+      "product_cost_kopecks": 151300
+    },
+    {
+      "marking_id": "a506f6d1-b940-4045-aab1-4f55e0f50ef6",
+      "order_id": "23eca46a-6427-4115-8ca8-04ec4f51350d",
+      "srid": "eN.ra583924084ee46aca9d071e320a1aa38.0.0",
+      "cis_sha256": "74a48d6365ccd49fdcae51519d71f1e76ef42e8c0d55cd668460455a699e329d",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "036ca57e-3323-4749-a7ac-5d7e708ae2fb",
+      "order_id": "d0af397b-eab2-43d7-817f-bf74d5c91a9c",
+      "srid": "eAr.r3b557828731841f3a1922f3ec7eb4b0a.0.0",
+      "cis_sha256": "18b275b6a1bedb9fe21ab63d64bd3318fd6bc21112f8d9636edd8aae68478841",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8adb7728-8fa5-4a99-a6b9-a8335f176668",
+      "order_id": "0832dc47-d5a3-4f99-963d-19729732f4e2",
+      "srid": "ei.ra0cc9fdc7d8c4ccea045d1696c0975ef.29.0",
+      "cis_sha256": "58e06fb483a6bbb6ae6b860156ccb1f3e5a11d93b2e5da0fb7bab00ac3f3c614",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25527498925",
+        "date": "2026-10-05T18:48:07",
+        "lastChangeDate": "2026-10-05T19:08:47",
+        "finishedPrice": 1236
+      },
+      "product_cost_kopecks": 123600
+    },
+    {
+      "marking_id": "6840b330-5ab5-4883-a41f-a7d3a9b3317c",
+      "order_id": "67bfbbf2-a76e-4904-92b8-1e36de7db361",
+      "srid": "e3.d30a2542ee4a2445d9e685b802aa85505.3.0",
+      "cis_sha256": "1128627c562912b6971e777795e6abdfd9e4ccd8c7e3cc91ff44e8fc9097a026",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dcf8853c-c496-40f3-828c-79268e671887",
+      "order_id": "3c6fc8e3-4cdf-464b-99f6-77d5927cd5e5",
+      "srid": "eBi.i4ac9a5c0445b25b2604633b08d9517b2.0.0",
+      "cis_sha256": "40e22b446c3682c588414d82e41da03d4df14e36fe34976ffdc5b2e356455569",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25481155637",
+        "date": "2026-10-02T15:36:39",
+        "lastChangeDate": "2026-10-02T15:54:04",
+        "finishedPrice": 1304
+      },
+      "product_cost_kopecks": 130400
+    },
+    {
+      "marking_id": "194cec2f-a1fe-455f-adea-8c18c47af7c4",
+      "order_id": "da16c12c-7774-4451-a5f5-7ae3c21380b0",
+      "srid": "eb3.id7b782d93442bd3717a6212ff1768190.0.0",
+      "cis_sha256": "bf3f59758fa100cb1b799c49e9f4b0164b0d61618c778fa807450dc8ef56cf89",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25483808515",
+        "date": "2026-10-02T17:24:09",
+        "lastChangeDate": "2026-10-02T17:43:55",
+        "finishedPrice": 1374
+      },
+      "product_cost_kopecks": 137400
+    },
+    {
+      "marking_id": "cda5fad8-0b4b-48e1-98dd-23a46216853d",
+      "order_id": "625a22ea-74f2-4907-b19d-743626e87f4e",
+      "srid": "eAu.r81c8067838be427994f4e31e3f67b503.0.0",
+      "cis_sha256": "e847fc67fd4a0c2e408f1aa1bd8493316176fc446cbc25a5a1328ec0843c70fc",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25505079269",
+        "date": "2026-10-04T12:27:42",
+        "lastChangeDate": "2026-10-04T12:45:34",
+        "finishedPrice": 1453
+      },
+      "product_cost_kopecks": 145300
+    },
+    {
+      "marking_id": "f7251b64-5cd7-4291-9caf-86a383eb5c3f",
+      "order_id": "d7a6c772-cdd7-48eb-a96a-7193eb6fd246",
+      "srid": "eBS.i021ff3117c4e8840dd711de924568b6c.0.0",
+      "cis_sha256": "49b0295f378ae76720398c673c6d7794e87fe8fd0cdc96c31fba62d462f0ae65",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "b20a4b16-d410-43f8-a8d9-e37e27d2003e",
+      "order_id": "26332c1d-fe09-4187-ab66-6de4c07bf3b2",
+      "srid": "eBS.i4db4211e013c3e73b7f105454035dd16.0.0",
+      "cis_sha256": "ad22ce28c3fe2cba642267f642bdeead12d9ae5a9e6c22ffae003c0677cfee18",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d713c7eb-4ef7-472e-95de-794400536b0e",
+      "order_id": "9ced9049-ae78-40e3-91ff-13413bf4a421",
+      "srid": "eBq.i8eeb12cefb7988b5080aca040336d189.0.0",
+      "cis_sha256": "3425481e4718c2c39d02875bc64bf864439270addb577a7077188a1d9ad61ec8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_returned",
+      "source_kinds": [
+        "S",
+        "R"
+      ]
+    },
+    {
+      "marking_id": "1d31f59a-61c1-44fe-aabf-d8fed9393f22",
+      "order_id": "90c95220-94d6-4008-b445-4c78606e891b",
+      "srid": "er.rb7f7a1d56f654813bbebc854679fd955.2.0",
+      "cis_sha256": "fb4d8ca366ebe90cb539c871c29c133d9686aad0f1bdc9e4631cebd2f0f3136d",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25486659331",
+        "date": "2026-10-02T19:32:15",
+        "lastChangeDate": "2026-10-02T19:50:59",
+        "finishedPrice": "1677.16"
+      },
+      "product_cost_kopecks": 167716
+    },
+    {
+      "marking_id": "39a5f808-f7ed-4b26-8857-fff5b166a1d0",
+      "order_id": "daef9795-27ef-4f03-be1b-db0900b75a47",
+      "srid": "ecb.ra770b1faea5d4519841374157e3d177e.0.0",
+      "cis_sha256": "d5472561a68675b5bcb133a53ba7ca99ca03a3b46af5d2e9f2b59724e55407e8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dad0c1f2-8289-4b43-9003-73d188aa9c49",
+      "order_id": "acf1a3ea-e4de-4506-b5af-691690649f77",
+      "srid": "eBR.reac3411ea5b741c3a7ec6db90a5c66de.0.0",
+      "cis_sha256": "1edd2758808a3756e56b0cbbabf40198df236fdd1703ffd3b329a79595c98f6d",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "1b7364c8-3cd5-4df2-8f82-6d5920686b67",
+      "order_id": "94bd79e0-cc5e-412f-a1f4-721aebc12d3c",
+      "srid": "ebI.r6e15db4e226f410eb023e52e8e3469d8.1.0",
+      "cis_sha256": "a9424bfa852f35a84ecfb3e556fe0fab097a67ca75c13dd4546b3a9c6b5286b1",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25519729941",
+        "date": "2026-10-05T13:00:50",
+        "lastChangeDate": "2026-10-05T13:20:40",
+        "finishedPrice": 1632
+      },
+      "product_cost_kopecks": 163200
+    },
+    {
+      "marking_id": "81892e40-c34f-4417-bbc1-c85688454ae8",
+      "order_id": "b9dff07c-a296-4873-a932-2a9012631c18",
+      "srid": "eX.rccc2cb45a6ef41fa8bd06d65c05c3f1a.5.0",
+      "cis_sha256": "f1f16dbf26352511f13863b58978b58f1129d970142aa1fc607e6e8d52436b67",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25513787322",
+        "date": "2026-10-04T19:35:01",
+        "lastChangeDate": "2026-10-04T19:57:43",
+        "finishedPrice": 1324
+      },
+      "product_cost_kopecks": 132400
+    },
+    {
+      "marking_id": "8d2fc7a1-171d-4063-92e6-f3feafdfbacb",
+      "order_id": "dbb12d99-0932-44a5-b188-1e1414490d65",
+      "srid": "en.re05ecfae4ae04191a1851884326fe71d.2.0",
+      "cis_sha256": "f937fe1345a5e294fd4637ad3637c047b5affcace3f61e21e52418bdbd544ea4",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8a94cb30-20a6-41bb-ad65-6205785b72d9",
+      "order_id": "c9e9d29c-59e7-496f-9e56-66f2ad5136d1",
+      "srid": "eAU.r9567420db52b4cc7bb486c77de6fb55d.0.0",
+      "cis_sha256": "777234c2c67c815043fee9f9183df77fbdf5a17eca7cd80b4eb7a8a3183c37b2",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "1f84dbb0-683d-45eb-a720-2c4cd6a52502",
+      "order_id": "04f3d717-9dd4-4031-aaa1-ef9219b0a523",
+      "srid": "eb0.r8bead813688a483693793d326bb46e03.4.0",
+      "cis_sha256": "e9f310dcc5c2c719dec77e706b4fef5b9b3bade877a55527a7b3db492ac1dbed",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ee537dda-50c2-40c9-80cf-e89b364a9e3e",
+      "order_id": "35f1c582-1cb7-4566-b1ad-05bdffd0f9fc",
+      "srid": "eAx.i65aff87e22b8c54740c1b3c808335ba1.0.0",
+      "cis_sha256": "637172ac7b87ae06b879e1199b3a778498f7f04883908f54d4cb94cde0578cb0",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dd4c00d0-5c18-4ca8-bebb-1dddc1bdbaa6",
+      "order_id": "382b7a75-f255-4373-9d34-e5af5eff0c19",
+      "srid": "eq.r63c749bb7fbb4849a3df796e1ac01b34.0.0",
+      "cis_sha256": "0249039afd95c38f9da8d7ee3adc7cbd13fe49d5eabf8b8a1c1c693f09c1c212",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "b0b78a7a-db22-4716-90ae-0a1e3c43a58d",
+      "order_id": "0c6181c1-e687-4679-9c2c-66821b031a33",
+      "srid": "eF.i290670e28be4b71b2db58627b286d12b.0.0",
+      "cis_sha256": "8d3b75c9bb9056dbe70eedfb05a5cd915ca57d16623a2a75fd963a2d21c1a980",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25511406068",
+        "date": "2026-10-04T17:28:51",
+        "lastChangeDate": "2026-10-04T17:45:12",
+        "finishedPrice": 1425
+      },
+      "product_cost_kopecks": 142500
+    },
+    {
+      "marking_id": "9b2671d2-c7c2-4ef2-bb7d-b0307d7cf1a5",
+      "order_id": "4175abad-83f6-4a2e-9f89-13ffdaee25a5",
+      "srid": "er.r6b25d515a5ae417293201a7169d0b3a4.6.0",
+      "cis_sha256": "5f1070fdec1c9b2aefd5e724cb5a9303b38fe461440637f51c407eaedf2b3308",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "21d1c9e5-627e-4b24-8586-e0f16f423a84",
+      "order_id": "87e6b8bd-b6da-4625-84ab-94e500669f24",
+      "srid": "ebd.r2032bbf48e724f399cb367799a54f700.0.0",
+      "cis_sha256": "9070cbb1949831e617d262a181a01331c7eba43712eb95ed677ef44f22a551c9",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e3fdd4af-f613-45d6-87b4-5cd1ec6c4985",
+      "order_id": "d70ec17f-7742-41a3-92d7-5a91461f5f41",
+      "srid": "eAE.r2572064f351345e19c994e7fae1e6f1e.2.0",
+      "cis_sha256": "02690962895212245ad8f0e0a0c34cbf76280f04697d8f98d371bd89819541a1",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "c39620d6-e135-48ad-881a-eb63a992d672",
+      "order_id": "b5807fcc-5ce4-4c0f-8bc3-bbeb95dc1e22",
+      "srid": "eAp.i5300c8cc21f205c011ae0e97a2517f57.0.0",
+      "cis_sha256": "05537c80c07055673b4c8aca244499ad00d626a8ba97dae440dac8f7b7b71538",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a715f08a-ca05-4fd7-bd39-ffaddfedf5c7",
+      "order_id": "25a54b52-e574-4122-a49d-16bb7af03887",
+      "srid": "eAh.i00a8cca00ec5aa23bda89981fa20dacf.1.0",
+      "cis_sha256": "ac1472b900f21c3a5be116b90c16b1fadf445a1f8c85a2e58f9e92043d4328c1",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "7db8c60a-8a6e-4c0a-ad9f-c444a64332c4",
+      "order_id": "87dd3983-c967-49d3-a220-24b6fad06ff2",
+      "srid": "eJ.r2baea3a396494c619ca365366dd67957.2.0",
+      "cis_sha256": "aa81f06b75a8c0be4e8d9794ac7eebea630f0dbde0ae2365c68b83b9198f4e0f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "7b63d385-42de-420a-bfde-ca764c55c0d3",
+      "order_id": "e99efc48-dbad-4627-9913-d35f914dfbb7",
+      "srid": "ebE.if709c45d9f8fe543c2e73acc10de0663.1.0",
+      "cis_sha256": "fb86fb5f6dab8d567156a9ca8bfebc65b49b763222ea3b52ca845c1741b0335d",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dd9e0fa5-cd9f-4bbc-9d70-c098cb9a569f",
+      "order_id": "afbdda75-ce24-413d-bf0f-06c863f6576a",
+      "srid": "eC.r192cfb564bb742b281877fc1d235b9c0.2.0",
+      "cis_sha256": "acb921ab26749377bb21489e806abe0596b4aaf53d05800a7d0dbccc6c726bb2",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "5c66cb5d-9ea8-472f-a7cb-507ac7381590",
+      "order_id": "8404936e-4ab7-42b1-8cdf-72862ebdcd30",
+      "srid": "eba.macbb454b3db443c38c5003687fa22fad.1.0",
+      "cis_sha256": "8693dd3f119a568e372fbaf03a6adbb2c257962c98def4f3627638340efb1fbb",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "c2d125f5-52c4-4bd5-9205-6a54ac8d67d4",
+      "order_id": "287551eb-8d2f-4278-8da0-fd5d44e82011",
+      "srid": "ebz.r810cde07c2e444b38d9f5843039a74f0.0.0",
+      "cis_sha256": "b5bbdbd4cb4bcabd1476492d916ae2a538cf141b527959ad724b02cafecb958e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "79aeadef-2c39-4bc0-ab9f-69b55bf20175",
+      "order_id": "f18431a2-ed7f-4c97-8c99-19fea92ff8d9",
+      "srid": "ebV.iee41e29a6f28b9aa80012040a72b6e22.1.0",
+      "cis_sha256": "2df0ff69ea34e5debc5e49afc2b6778ee9d0b42498b0c3ed66cdb88367f07392",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e42b5d03-38cd-43f4-8197-158d304d819c",
+      "order_id": "02b860e9-3ae1-44fa-b654-156d3d14172b",
+      "srid": "eB3.i848576f369bd8ec4b3c2dd9c36cc69b9.0.0",
+      "cis_sha256": "5c2762bec4c65072087aa5499a33570d404db994869ec174c949b408b6dc4af5",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25532225889",
+        "date": "2026-10-06T11:24:10",
+        "lastChangeDate": "2026-10-06T11:44:24",
+        "finishedPrice": 1194
+      },
+      "product_cost_kopecks": 119400
+    },
+    {
+      "marking_id": "35c49116-12c2-4e30-802f-4e4ec7e4ef26",
+      "order_id": "1a58b5a9-fff3-45e7-b39f-a651f2224ad9",
+      "srid": "eA4.iac6d12694437a85dd46bb08797aadfc0.0.0",
+      "cis_sha256": "281a6d7b3b5cf70a185534855b448c15a9a85e64d85232b96409fca44a9ddfbd",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "821b4d75-e323-426c-b001-03828c586c59",
+      "order_id": "70439079-1abd-47a6-8904-518f330adaa0",
+      "srid": "eBH.iab103909f68dc5a9d87b235b2ba9fad5.0.0",
+      "cis_sha256": "780ab33d2028600c5965b9b4d00b6f2ec9bb415110833debc2a0efca2c42c708",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "4e7d9860-af10-4e94-ac80-69d477cf4732",
+      "order_id": "1ed9dc6c-7cd6-4dd5-81e6-f1ae8aef31c5",
+      "srid": "ebO.r28115e62d71f4d3da22b077b67073b1b.2.0",
+      "cis_sha256": "630e0c2723fa3df461c6c62324d719c7a8b24774792fd4fbf4a4f34f45e9fa5f",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25507028257",
+        "date": "2026-10-04T13:56:24",
+        "lastChangeDate": "2026-10-04T14:15:20",
+        "finishedPrice": 1053
+      },
+      "product_cost_kopecks": 105300
+    },
+    {
+      "marking_id": "17a441e2-be5c-46ee-be6c-5373bae800bf",
+      "order_id": "a71a1710-9f4c-4784-bb37-0878583c0d55",
+      "srid": "eB9.rf9dade4820974a4ba07c797bc441b367.0.0",
+      "cis_sha256": "0d2ffa3ace64c812c75b9a229257364d95f6bab3e7d412e4ea060006d68109b8",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "5b6ee456-d8f4-44ef-806c-44e3dab6bb73",
+      "order_id": "c59d8840-ff7a-49b3-9ed7-8f6d15601940",
+      "srid": "eca.iaea1ab67b92c89aa2a47d13dae2cffa7.5.0",
+      "cis_sha256": "fba71a0ce7083b599375e6dc4355edc3e45d61a80b3f8f8028e491551301ef38",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9a8be6df-a837-4098-aba2-ee137f3551e9",
+      "order_id": "459ab327-3f15-4632-ab5a-00da45d3cf5d",
+      "srid": "ebB.i6b9b685c04db3814c2c6a5a1013dec17.0.0",
+      "cis_sha256": "dcebd29048d5b55981b51cb59cac01753506219436132f4737d37f669f3bab9b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "0c741294-e72c-449b-8c75-554b6e63344a",
+      "order_id": "4317ba46-2110-413a-931d-05a2b32f15ea",
+      "srid": "ebk.ieda3d1aa82a94b2a8a3edaf99873a4f6.0.0",
+      "cis_sha256": "924b7a849b8d0975e44a69f3c816d6c3ca47c1f40680ab97fcecd4bce39d5231",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "94421797-cfc2-4166-95f5-d68e19931953",
+      "order_id": "e595608f-9f03-4001-a040-52457588d4df",
+      "srid": "e3.rba73cd1281df4edf9689070d31f913dc.0.0",
+      "cis_sha256": "d3c3381a9ae22225cad6efded88921db6f15a9b448c0714019f2b949de569483",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "aee615ad-5bdd-49c3-8df4-26f3984f7d63",
+      "order_id": "2c8971c5-f9bf-47b4-80a9-0ee79e66c2fe",
+      "srid": "eA6.r68f20f71b05a4763acd8cf9b1c786f9a.1.0",
+      "cis_sha256": "02530b5acb0c1c7621668b83c8c7e8837a514e3c1cc8a62e116409da98a1c838",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25500615875",
+        "date": "2026-10-03T20:30:19",
+        "lastChangeDate": "2026-10-03T20:46:38",
+        "finishedPrice": "1555.87"
+      },
+      "product_cost_kopecks": 155587
+    },
+    {
+      "marking_id": "924d6a02-b1a9-49ce-9fe2-095d9339209f",
+      "order_id": "97d7e5fa-9641-4bc9-90fe-4c1e40317f9e",
+      "srid": "eAS.rbe3a1e45772540efa01c4063a2e66164.0.0",
+      "cis_sha256": "ad1aaf6925ab00b126ab430cbc8321954b1fbccb7caa336e38eea1952d4fde61",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25508254205",
+        "date": "2026-10-04T14:57:39",
+        "lastChangeDate": "2026-10-04T15:14:51",
+        "finishedPrice": 1292
+      },
+      "product_cost_kopecks": 129200
+    },
+    {
+      "marking_id": "6b666902-daba-4147-83ea-26cb770290dc",
+      "order_id": "425ecc75-48e8-45c4-95d8-666aabee2fc0",
+      "srid": "ebO.r5f80ee80d3244866ad786f39659c5900.0.0",
+      "cis_sha256": "2b52f9cb7770d69abe582f3382d5880f1b78edab3d6c7f30737d1287afc1bdb8",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25530259620",
+        "date": "2026-10-06T08:25:32",
+        "lastChangeDate": "2026-10-06T08:40:05",
+        "finishedPrice": 1342
+      },
+      "product_cost_kopecks": 134200
+    },
+    {
+      "marking_id": "aeb7d277-8eb0-430f-bb9c-fdb2cb9c4980",
+      "order_id": "300425e4-32df-4047-91ff-c336f21f1da1",
+      "srid": "eB6.ieef5c5ba166213270d510e7ec3e06e5c.0.0",
+      "cis_sha256": "52ab4263c6312a04c1d34b018deebb6d326caf0fabf9769a75db59213a7e7601",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2203a0ff-70fd-4bc5-a1dd-cf2e2b99f865",
+      "order_id": "a9da7480-eaac-43b1-afbe-44e47296a453",
+      "srid": "ev.r3b8c253b9bed4554bf3644a16410caed.0.0",
+      "cis_sha256": "36dc14491050ff5cc2cda1a60273aa5c79cf11a4d8a67d4c7a06d79d91930be9",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25526812062",
+        "date": "2026-10-05T18:15:58",
+        "lastChangeDate": "2026-10-05T18:34:10",
+        "finishedPrice": 1506
+      },
+      "product_cost_kopecks": 150600
+    },
+    {
+      "marking_id": "32623f3a-a8e7-40f6-b2db-a8dcdc531ec4",
+      "order_id": "8e86051a-e715-4787-a051-9a6e085e7bd8",
+      "srid": "eT.i4f1de5b08a95ea9ee6c64dd78a83342a.1.0",
+      "cis_sha256": "87d9de59ed3f54ac480add898f19b2f687cbeb531b5735d181a14d2bf77e022f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2f04d5ad-c659-4ab2-ab9c-3f6e86f4b248",
+      "order_id": "10435b6d-c461-4aec-b7f8-3939e1267bb1",
+      "srid": "eb9.r175842d072304bbdad83de908f98fc88.0.0",
+      "cis_sha256": "050ed39a362b2cb47c3542256b012abb1efd22d5409a65a106c6be741bbc8810",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8c644297-7502-4ff5-8f45-d5fcacf95328",
+      "order_id": "3f35c2fd-3ba3-4a88-b1ba-71f232c96296",
+      "srid": "ebT.rd76c549a38924476a4fc49ac216b50ee.0.0",
+      "cis_sha256": "0aa2b68f7fe6ac6a6aca360dc173d12d6563a562d4195790a151a4b7a08ad912",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "7697768b-42a9-49dd-ad86-dd5fbfacf1dc",
+      "order_id": "cf34e1d2-04f7-4710-ba34-a5826ae1dabe",
+      "srid": "eBo.icef3403ba3d70483907bd3e69270571f.2.0",
+      "cis_sha256": "6f716a1921bb4c3f89315207f712308e2c6f67ac3ff8211a28a62862c19091d3",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "fed1c2b6-f1c8-43b6-abcc-58aee9f822c3",
+      "order_id": "8a194b42-f371-48f9-9ef6-c5ae95c7d481",
+      "srid": "ebz.rd096ab6d89724b909b9badb61ee4659a.0.0",
+      "cis_sha256": "4f424ee5f9200c08e6b7ec16869ae61b08f8dd07a8f4f4d020ee783977bf5d65",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "4a86f5dd-b03d-4084-b6c6-ec87eabe0474",
+      "order_id": "f2b77218-a8c6-4698-97f7-9a3db8076dbe",
+      "srid": "ebt.i39caca72a5251267ac13def3bac7ea38.0.0",
+      "cis_sha256": "e57248f773f7196f2ceece2b11fe6e7ca89af75182f684f36087dc25533aea1a",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "b5d5a534-2c98-4bfc-9434-8b51663b03ee",
+      "order_id": "8fad8e5f-8675-4b80-a7f4-8c84372e3ed5",
+      "srid": "eBG.r1a81c3c02b4d4bc69a61007a54b3e4ac.0.0",
+      "cis_sha256": "91384da76ce81a4c59c20a040aee6f99e312db5e2deb3daa8903e394f7afb5fe",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "60bac4fb-d916-4f97-9eea-878fa3ac8136",
+      "order_id": "99edccbe-c74f-4445-bb4f-87690523833f",
+      "srid": "eAO.i5ac1a33beabc5fbd548210de1b720354.0.0",
+      "cis_sha256": "366464c165260c47c22296c032fe0095b26fd2379315337d4e60726c10825903",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "62b20604-216f-4f59-92b9-8abc5d88d217",
+      "order_id": "d22853c0-238d-42c5-a604-5427488a4a63",
+      "srid": "ebT.r6d89737ebe8a4649b5f209217b3a4d8c.0.0",
+      "cis_sha256": "96ae4b4ba85a437ea540d77f40ffe134a030cfd592dd1af6f401a5d388209529",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ca919c7b-faf8-49cd-96bc-8dab50da29f7",
+      "order_id": "06b9a546-381c-4a69-84b0-705d3a16fb94",
+      "srid": "eBZ.i9fe5161595b5f817c32978f80df65231.0.0",
+      "cis_sha256": "335944d2431450829be233a85a056d88666b6bde794cbabc76465640877d2ff9",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "22d4764b-001f-4459-8054-ba27d8e0d48d",
+      "order_id": "f05cfdd5-2815-469f-a0b5-ae5bc187c02b",
+      "srid": "ex.id943a21253e6afe9c569c95f9e6040c9.0.0",
+      "cis_sha256": "034582c2033be2e47cd8dfb6cefd40573ff69c17b3b192be65e38d1c242aa2ce",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "0a991790-0fd5-4e88-9d7c-37683c512d9a",
+      "order_id": "2a2144c1-5c82-4451-b03c-37357269a5bd",
+      "srid": "ex.i93a850e4e7e311c4dfd3b5dd55c817cb.0.0",
+      "cis_sha256": "72e6c7942191e32028608c13f661771adaa93c179e07a7e68bc6a777b1d80a19",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a7d0916d-35ac-4904-a74b-7dcfe0e06c44",
+      "order_id": "05e82d67-3507-48cc-a43c-45b0a9b53bbc",
+      "srid": "eL.rcad9c07f2ca348eeb96916ba45c6e253.0.0",
+      "cis_sha256": "78fd2ae0f15e855650b41ca8f722fd211851a394d5f86bb062e83bb46db4b9a5",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d5b9a8a2-c8bd-45e3-9725-cd927631cef7",
+      "order_id": "1cf6f362-ac01-49b2-a944-b8329720b3c1",
+      "srid": "eQ.r33a1c9e19f9d4f24ae0fdd5e678badce.0.0",
+      "cis_sha256": "da2b81c8831909d965d36e2eab2dba5377c82a454ddfb4f70904ea95de9a5900",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "dfe9d8b3-b5c4-437b-a002-76e3035ac031",
+      "order_id": "5495bce4-a39a-4da2-90d4-daecda6fe843",
+      "srid": "eS.r50755185e1c1422d949fe259b81498d6.0.0",
+      "cis_sha256": "8029fdaf073ed952c2ab0f8aaa5c00ccd840df540d3071d569012135256c219a",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ffc15fe2-9dd7-4319-bcef-35cf97e36725",
+      "order_id": "133c3d90-1edc-4c09-8a99-d8bcc11a46c5",
+      "srid": "ebK.ie1644c378e3e9fb70e24778813d583c4.0.0",
+      "cis_sha256": "684674b4cec0b84ac9c81bec114c861349037bba96573137d4cb0ca723c1e57a",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "43bf9fb1-bfdf-496e-8c59-85753600607b",
+      "order_id": "27d27687-f616-4eca-a322-47dfa38fe7cd",
+      "srid": "ebz.re4e5a8ae63b54c799c8162aac86c5527.1.0",
+      "cis_sha256": "3ab67794a4bd74103e65a9ad2a992daa00c3d1ca356de5ce4d13bffa83309e48",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "63f09ef4-6b73-4218-a5a7-6ddca835a2bb",
+      "order_id": "89cbaeb3-18e0-4ebe-8de1-f5b166b50022",
+      "srid": "eAd.if092ff3722c04d2a8a77748fafa91b27.0.0",
+      "cis_sha256": "fc166f994825336deda064651f6d0caf23a515f7f8d7138d28e132fd73ce7575",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "cab0879f-50d6-4cb6-8036-850f1a4fc417",
+      "order_id": "6337c17c-a412-41ed-a2c0-d8130497738e",
+      "srid": "em.i691518015daeea37203913d56ac2e7d9.0.0",
+      "cis_sha256": "1d3e7aa84f671bb24d8697ecf0d3f9f67e1a45a6955539485b7feebd2a5f7799",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9ed56935-1af3-4605-b9f2-f3859e6b82ed",
+      "order_id": "dd7f6c1e-e5d4-44c6-bf1a-7fe39914b556",
+      "srid": "eBO.r12e9c558bff04f0c855e562da31b0487.0.0",
+      "cis_sha256": "7d9f3f3aded3420ddc673efba180dcc8c165bfbdc3a86b1716b9ad808fd7a6c2",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d22ad93a-7b65-4291-bcd1-71615f0c75da",
+      "order_id": "eda3cd64-b6cb-4619-8d29-6655e2f82f96",
+      "srid": "ebi.ica067aecfac046d7ac1178d31cd8313b.0.0",
+      "cis_sha256": "98fd9204a290085a8a0ae3f9639cecbcee899e7271ab7213cf5dd8f26007a64f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8da28b91-6c7a-4205-a79d-627bd772e42c",
+      "order_id": "457c2f1b-ceb8-4e75-b6db-873b5969a33d",
+      "srid": "eAK.d1e5b81f2c53044c7b19136a3224d50b9.0.0",
+      "cis_sha256": "34f0309b46f461358cb737459d315d078c3c942efd3ada51f616e78e72c46459",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8f889368-cf42-44aa-822d-8ff6bef9b01f",
+      "order_id": "e37f11a5-e224-4bdf-a556-3fbeadf0693c",
+      "srid": "eBt.i08b7abe4b724eb4d218079c8818d4814.0.0",
+      "cis_sha256": "8f92fca8acc8ebcf4b793cfc9b3d7ce741a89d896317cb350d23b2d545f06b72",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2797064e-6eb8-4591-9f10-b8c158d78573",
+      "order_id": "d20041ec-079c-47bb-bad8-5d309bdbf242",
+      "srid": "ebi.id7771808fc9a3cf906aa8cd0594e2777.0.0",
+      "cis_sha256": "1ff6854feb0beacb3b50e63f30b45e96692b756c70a1e2594469b4a426e71af3",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_returned",
+      "source_kinds": [
+        "S",
+        "R"
+      ]
+    },
+    {
+      "marking_id": "dd9a7558-6cc6-43db-abbc-e7a5e378aa55",
+      "order_id": "6d701237-4286-424c-a3a6-a9da7bab87c8",
+      "srid": "ebY.i93438472d3ad256be592dd65104db6e4.0.0",
+      "cis_sha256": "28b41ebcab19a54a5b5bb5a55dc3d79ae6125dd93f87cee88d8742dcbf717cb2",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "16ac02f7-d28c-4ad7-a2d1-1de398b91b10",
+      "order_id": "24a1520b-f3d9-4ea2-a9f0-54961181be3f",
+      "srid": "eBA.rc1095bd429b84b3f911943c483df397e.0.0",
+      "cis_sha256": "3051873cddd737c48eeeac7a5cd0345d51ca33f39801a15191f4a2ba450230b2",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25490665034",
+        "date": "2026-10-03T11:05:40",
+        "lastChangeDate": "2026-10-03T11:28:39",
+        "finishedPrice": 1321
+      },
+      "product_cost_kopecks": 132100
+    },
+    {
+      "marking_id": "d92b6072-c1e3-4fe7-9243-1d6f2d6b35ee",
+      "order_id": "016bf137-9f2e-41b9-95a7-8e25823ca69a",
+      "srid": "e6.i7a3d2e53982f6bd72541ed4533f85160.1.0",
+      "cis_sha256": "d85a941a9f98a6dd407d159cbb46b293ed723255e65c43c4e56d2e3d24e9743a",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_returned",
+      "source_kinds": [
+        "S",
+        "R"
+      ]
+    },
+    {
+      "marking_id": "45e08372-1173-47a3-9a17-6721318a6526",
+      "order_id": "3b38a7b6-87fc-464f-aa5f-44d94a717ee9",
+      "srid": "ebk.i0f3ec4ed5457ecfae5e34f6ae87777ad.0.0",
+      "cis_sha256": "fe247a2176b8ba572592402eb341900fbb9ef1cb24025a97af8b3c7a92cfc52e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d8335f67-75e7-44c2-8f48-42ee90f8e42b",
+      "order_id": "a2f1caf4-86d2-4826-88e0-368bc3ace42a",
+      "srid": "eAl.i06f7f498001447b50bdbe5c0b2ce8046.0.0",
+      "cis_sha256": "45deaa9afbbba2a00bf0ef4e468ee5537c813a36c3eac5cc7391c7ff9f15b685",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "25997d2a-b911-4f21-89cc-fcaa44a3fa51",
+      "order_id": "ef762e67-06a2-419d-a614-4756185d96af",
+      "srid": "e5.rd696468a683c4a578abb754640244a59.0.0",
+      "cis_sha256": "8821d5dda4a33c4f31652955b067028e4ece8bca03723abbc211f3bff91a8f66",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9f716261-f43a-441f-a830-bc4fff829619",
+      "order_id": "d1f570da-7cbb-4629-82e9-ba24a101bff2",
+      "srid": "e5.r8b7c13b5c0914f2f8f0133adef8b66f8.0.0",
+      "cis_sha256": "6695d5ecf4a9e5aa2326f8fbc7522fe6d1e9d7ce00761d343a19eeae9f12e81e",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "8a55696a-0cd5-4325-af2b-50500acb2cfc",
+      "order_id": "96de9335-d5c5-4e50-8a9a-f057e45e8558",
+      "srid": "e1.r5d24dc9c8297469581ff94999194fb6f.0.0",
+      "cis_sha256": "10e0f9f458e9383296f9ec3cab2cfebc3fecf948c5a743436922eda5ec63b9e7",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25490249898",
+        "date": "2026-10-03T10:47:37",
+        "lastChangeDate": "2026-10-03T11:03:00",
+        "finishedPrice": 1297
+      },
+      "product_cost_kopecks": 129700
+    },
+    {
+      "marking_id": "0d2b2f9f-799c-476c-b4f8-8090efff5ddb",
+      "order_id": "2fe7f08b-d536-4547-bfc9-d58291624290",
+      "srid": "eN.re107d525a1d14235a0841403f2bac26b.0.0",
+      "cis_sha256": "0e14ecb021c1b35eb5cf2469a6b178a768fb53c88638213d36cfcf3e7fbc0581",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25525050499",
+        "date": "2026-10-05T17:05:21",
+        "lastChangeDate": "2026-10-05T17:30:23",
+        "finishedPrice": 1401
+      },
+      "product_cost_kopecks": 140100
+    },
+    {
+      "marking_id": "cc5e2db9-eef5-4f0a-88e4-237c9add2b15",
+      "order_id": "ca2c5b1f-e00d-4256-9466-d3dc1c42568b",
+      "srid": "eBY.r972e0039692e47d99f73e98cb10282fd.0.0",
+      "cis_sha256": "2e4d95cbaf384d241dc397abe9dd005c9ec837969e853821ba40fc744ca00a13",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25479251196",
+        "date": "2026-10-02T14:05:59",
+        "lastChangeDate": "2026-10-02T14:29:12",
+        "finishedPrice": 1310
+      },
+      "product_cost_kopecks": 131000
+    },
+    {
+      "marking_id": "7c8880ee-fe16-43c0-9db5-47dda2c3a5e0",
+      "order_id": "df6515f3-d03b-454a-9bba-fa46ec68dbdd",
+      "srid": "eAy.radbd7d03a7324fb3975ce0a260bf72a4.0.0",
+      "cis_sha256": "2390ddb72c7e3e81532f5c7be6f11e1603ba4832207e1cd9e47d0da01159002e",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25498382253",
+        "date": "2026-10-03T17:44:39",
+        "lastChangeDate": "2026-10-03T18:02:57",
+        "finishedPrice": 1493
+      },
+      "product_cost_kopecks": 149300
+    },
+    {
+      "marking_id": "076e540e-a663-4b4e-acac-c76f1bc32b47",
+      "order_id": "a95233d9-be7c-4c73-8a01-d02956f6c987",
+      "srid": "eA0.d7ea38d62be444342bc7cf72f3c90244f.0.0",
+      "cis_sha256": "f3e8e4628220edbd5d00aa6ded6af18ecfa4d0aeb7f4f409141481e6c402b6fb",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25506745283",
+        "date": "2026-10-04T13:45:19",
+        "lastChangeDate": "2026-10-04T14:03:49",
+        "finishedPrice": 1275
+      },
+      "product_cost_kopecks": 127500
+    },
+    {
+      "marking_id": "249ccc60-7b88-4c4f-9951-1645943d62d2",
+      "order_id": "8a93d603-6d5f-4a55-9220-73fc6aa8976d",
+      "srid": "ecb.rd0abf372cbef48b9a4a384c8426be99f.1.0",
+      "cis_sha256": "14291c7ae2bbb501e8780a3258b14f24cf307f4d403f82fe20bbbed93c436f7e",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25479372745",
+        "date": "2026-10-02T14:12:54",
+        "lastChangeDate": "2026-10-02T14:29:13",
+        "finishedPrice": 1321
+      },
+      "product_cost_kopecks": 132100
+    },
+    {
+      "marking_id": "f4db935a-0472-4b71-a5ed-d98dfd034881",
+      "order_id": "7fca22a2-593d-4421-8344-2371f57b6ef8",
+      "srid": "eBI.r33bf318729a44772b920d838c437d357.0.0",
+      "cis_sha256": "3132c911b2397f8627f551a34aa398fd4ec1ffccd501c48e7d05b0650b73d257",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "959f8d1c-63c3-4725-aa67-c05c730c60b5",
+      "order_id": "467c29b0-a744-4a91-977c-bd9586259531",
+      "srid": "eAf.r91cdf2bcf45c4cd38376b804e9f17330.0.0",
+      "cis_sha256": "28a8c080b21ee38939180915d5f1d8e4838c2756e49a53e81f20d8e09e89b4af",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2eabd329-a905-4b0d-b42e-9c19d1620f43",
+      "order_id": "d1501055-d2a0-41b1-b7c1-502eb45ecefe",
+      "srid": "eBi.rf09f06573fdf4afebb779e9268e2143f.0.0",
+      "cis_sha256": "0f75c00331eb6efac3a126004a15c5ef3fc54223a6263670fe28d178a7a509e1",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "654d84c2-2e3b-4666-81d8-1d3de30a5ddf",
+      "order_id": "90e9cea1-54d2-408c-9e9a-a32f1ce00a39",
+      "srid": "ebK.r8e0cb79001e04e1e92d98fd2233279a5.0.0",
+      "cis_sha256": "4f643499d3999f0455c3712276cc847690280edff10e51e0bbc0fa60414271e8",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25483119941",
+        "date": "2026-10-02T17:03:00",
+        "lastChangeDate": "2026-10-02T17:21:12",
+        "finishedPrice": 1372
+      },
+      "product_cost_kopecks": 137200
+    },
+    {
+      "marking_id": "6715f91a-3dd4-403f-830e-4872ffbec08c",
+      "order_id": "a0f000ea-3838-4c73-bc8d-13cf725b3684",
+      "srid": "eAg.rb72b7227aaec485b8d995d69b59e9d30.0.0",
+      "cis_sha256": "1946dd06f1e3cc33b2628744727f8d26b332a0e0bcc7acac4709236e434af62a",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25528041415",
+        "date": "2026-10-05T19:18:37",
+        "lastChangeDate": "2026-10-05T19:32:59",
+        "finishedPrice": 1339
+      },
+      "product_cost_kopecks": 133900
+    },
+    {
+      "marking_id": "e89f20a1-ee5c-49c7-970e-5693ec3b478f",
+      "order_id": "1b5ff194-6de1-4470-8101-4e5c729b49f0",
+      "srid": "eAW.rfe6606b05d2e4455bf0f693567762275.0.0",
+      "cis_sha256": "aa8b6f8b0c0bc550adfa966a301d0da38f7f9fb4e48c35dbd841d25ac3905b2f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "fca14802-f8cd-4221-9f62-e853d8bfaedf",
+      "order_id": "b0aca702-da5a-498a-979e-961ac6795430",
+      "srid": "eBx.d9edbf05f6e594241bc5a3346e3940e20.0.0",
+      "cis_sha256": "4143be1bc7ab78454077cabfa4536b6fe47879fe283002705e9025591ff31484",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25490222947",
+        "date": "2026-10-03T10:40:08",
+        "lastChangeDate": "2026-10-03T10:56:53",
+        "finishedPrice": 1453
+      },
+      "product_cost_kopecks": 145300
+    },
+    {
+      "marking_id": "f8c488e6-d6b8-464b-86c6-9d25d6b1e87b",
+      "order_id": "5efabd6f-d6ad-4e6d-bfa8-82434617f1bd",
+      "srid": "eBL.ie253eff893246ab89376cf008b409bcb.0.0",
+      "cis_sha256": "01defea638be323d33d5a3dab66244824a9e446f5e7a64af9d4a5d99bb49d07f",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25511266664",
+        "date": "2026-10-04T17:19:22",
+        "lastChangeDate": "2026-10-04T17:35:45",
+        "finishedPrice": 1240
+      },
+      "product_cost_kopecks": 124000
+    },
+    {
+      "marking_id": "1448adff-ab8f-4b98-bb93-ff1c94884354",
+      "order_id": "ec657990-4f1a-4f38-b45a-1134dfc698fa",
+      "srid": "eD.r8317eb46ad53493c8922c14751d774fa.1.0",
+      "cis_sha256": "214e35e21431590c5af4f0147e5f3dffd48949fedad9b103a02f8ca777328a50",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25498423696",
+        "date": "2026-10-03T17:43:50",
+        "lastChangeDate": "2026-10-03T18:03:03",
+        "finishedPrice": 1280
+      },
+      "product_cost_kopecks": 128000
+    },
+    {
+      "marking_id": "981a0f36-14ad-41dc-9c51-96a69b2e83ac",
+      "order_id": "cf80ab66-4898-40fa-bf9b-dd5fbec9bdb9",
+      "srid": "eAX.r3d520a57d93d4703a886745709df9ce0.0.0",
+      "cis_sha256": "25377734c9c01ee55e9cb158e34a40949465f092127b2d98fb7b045f96a643fa",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "bb09b9a2-7ee1-476c-b786-c1938ad58f33",
+      "order_id": "5608dbdf-d199-41fd-aeff-d0f17670287a",
+      "srid": "eBa.red74b857bd314586a2eb27f59ff6237d.0.0",
+      "cis_sha256": "4a5ca65f51dbc12624def20ddb0acb3eb755436f4514d4b1fb14921bb8d13ad6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e690a619-15aa-4675-8610-969751142d7a",
+      "order_id": "1b1a6ced-cf5a-46a3-9ba2-c39f20d3028d",
+      "srid": "eT.rde1d74937287407e9bec163050cb1d7a.0.0",
+      "cis_sha256": "c8bfe99cf908fb17041cb28d5e2589674dfb068912980e2f65cae1eb64bafad2",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25494682966",
+        "date": "2026-10-03T14:22:59",
+        "lastChangeDate": "2026-10-03T14:36:23",
+        "finishedPrice": 1378
+      },
+      "product_cost_kopecks": 137800
+    },
+    {
+      "marking_id": "a83a66e7-78bb-4ec5-9324-80ca9cf31dba",
+      "order_id": "48e6a252-9024-499e-bf8e-d2d4f8a1be53",
+      "srid": "eT.r80f86dfaa30d40a7976827bad4331ca5.0.0",
+      "cis_sha256": "3c21c163221bdb01f18dc18ad4e2b59361293711363196c704928f9661e6c217",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25494682843",
+        "date": "2026-10-03T14:22:59",
+        "lastChangeDate": "2026-10-03T14:36:23",
+        "finishedPrice": 1378
+      },
+      "product_cost_kopecks": 137800
+    },
+    {
+      "marking_id": "8cb4ac19-699b-4ff1-aa94-53c6e790874e",
+      "order_id": "ae4fe56a-ed11-49f3-a3f4-78a6ced77c39",
+      "srid": "ebJ.rc17a816965574ba6bc95b38a11b9013d.0.0",
+      "cis_sha256": "d07c59480ec66a07418afda10e538987c21f6a3354c68289eceb54c26b71d289",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25475412521",
+        "date": "2026-10-02T11:13:18",
+        "lastChangeDate": "2026-10-02T11:28:28",
+        "finishedPrice": 1223
+      },
+      "product_cost_kopecks": 122300
+    },
+    {
+      "marking_id": "5358c1aa-8ec1-45b6-8575-c5929eaa1a50",
+      "order_id": "0b4d63df-e46d-454b-bf80-74fa90b851f5",
+      "srid": "eBr.m258a016340594bff9ff1cb851cc328f1.3.0",
+      "cis_sha256": "2047afec09956e0a1a5ba0eec1d9eddb941a58cd8849c80371307630fff0fb84",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25505128818",
+        "date": "2026-10-04T12:24:12",
+        "lastChangeDate": "2026-10-04T12:45:40",
+        "finishedPrice": 1457
+      },
+      "product_cost_kopecks": 145700
+    },
+    {
+      "marking_id": "b4d6df8e-46f4-4f40-b391-de7d456e0ef3",
+      "order_id": "9ef647b8-348a-4910-b51a-f4f3081cf844",
+      "srid": "eBO.r7a7ad11d825e405f9e87e35795c2d7d9.0.0",
+      "cis_sha256": "bdfd19cd8461286a5d1d26a85977133d7088af9cf4ed5b93ed81b9f839023fdb",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25531438341",
+        "date": "2026-10-06T10:35:55",
+        "lastChangeDate": "2026-10-06T10:53:24",
+        "finishedPrice": 1400
+      },
+      "product_cost_kopecks": 140000
+    },
+    {
+      "marking_id": "7974f60d-1989-4318-a67c-fd6a8099f83c",
+      "order_id": "1b733fff-a77b-4d5e-9d5b-fe529fcd1281",
+      "srid": "eq.i067877888054d1543209b6571733505d.0.0",
+      "cis_sha256": "509841c3244c711feb8ad06b62fb23a4a183ae9c035e4e6ebc454040aeef412c",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f890b31f-a15a-44d0-b726-d8956dff702c",
+      "order_id": "c8002c18-9aec-4f7b-ac0f-d254dd9ed814",
+      "srid": "eAR.i99e2f49f2de4c35e9eedc0d6ec3df3e0.0.0",
+      "cis_sha256": "e3266c48ee5af470bcd03a1234c1a3e23d5215743c3e27873f7aca7dce1267e9",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "005b26dd-6b43-4f1c-b27e-824fac6a0963",
+      "order_id": "a44cbf57-6aba-4a23-b755-36ba7bcb23b1",
+      "srid": "eBf.i4e915cec1505e5be8237bb83538af048.0.0",
+      "cis_sha256": "299bb6b53dc31ce33189831a0e0af46a5a837c6f13da1199a0a0419d2dfaa2ec",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "6c5b9ad3-d9d9-47af-a62e-5fe00cdde91a",
+      "order_id": "034e8081-0a25-4df1-905c-e2091e2433b2",
+      "srid": "eBN.rb9d2f808826040edbf481404dfa0882d.0.0",
+      "cis_sha256": "b7a70ba06506bf922c38a9b7596ede35bdb95962df3e89b2b22e0eb171e48c54",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25500538506",
+        "date": "2026-10-03T20:19:35",
+        "lastChangeDate": "2026-10-03T20:37:40",
+        "finishedPrice": 1241
+      },
+      "product_cost_kopecks": 124100
+    },
+    {
+      "marking_id": "58b67ab6-cefd-439d-971b-4b6d739978c6",
+      "order_id": "e44b0b66-1060-4055-99b9-e9bb85541066",
+      "srid": "eBH.r8222fe9a2213483882b46322506c4786.0.0",
+      "cis_sha256": "2efa1b55079040e71162dc1ad01a4c558f2e432d7b8cdd7172f4cae65ff6546c",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "7389967b-1e87-4b66-9797-c9d641b99e9f",
+      "order_id": "85f9bf69-fc5f-4fb4-ae87-4c8b9e200277",
+      "srid": "eBy.ra01e8e30570443b885c05a19681f854b.0.0",
+      "cis_sha256": "128662ba71e93f0f575cc12a7ae43265ca5ead6950f1573eedc19b23cca28258",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25464117133",
+        "date": "2026-10-01T13:45:56",
+        "lastChangeDate": "2026-10-01T14:03:22",
+        "finishedPrice": 1425
+      },
+      "product_cost_kopecks": 142500
+    },
+    {
+      "marking_id": "fd6c1d72-0fda-4119-a1b8-34fe71b0e692",
+      "order_id": "4b51a1a9-feeb-422d-a3d2-de03cf6addc1",
+      "srid": "eAF.r8e6c840f38d94500a6265e7fef98f2f4.2.0",
+      "cis_sha256": "d9ff1cece8754ae198533f710e1e4124e1a99c04c8ac59e5805ef9e55d44f5de",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "701500df-3409-4292-8c77-e6c388942bcc",
+      "order_id": "a54b90b3-abd5-4955-9494-b8c17c09288f",
+      "srid": "ek.id36af2f634bf729022cf7b906d212323.0.0",
+      "cis_sha256": "63d88ef83b905474d8688430fab06ff1b1450f818059ec0ca29a58e04e462b14",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ed83befd-973e-44b5-9be2-7302ee926625",
+      "order_id": "1883eccc-aab2-4ca6-bdb7-979a8b65a781",
+      "srid": "ebD.r72240ae8726444a8b51d232e197b0b08.0.0",
+      "cis_sha256": "3c4b4ed54bdbc178c8ecde1f28c23a7605918e9759b8d592deb426b37115def5",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "cecbc538-7c28-47a8-8c38-52d1dbae1b5e",
+      "order_id": "3ce7f824-2fba-427b-99ee-9a2d767c49ae",
+      "srid": "eAK.rae78a20776e045da96dc342d860736a3.0.0",
+      "cis_sha256": "1c41a4d9c959b01caf3705acce0fd1967efcb946f7150fdb5504ca88aceaba7b",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25510320241",
+        "date": "2026-10-04T16:35:01",
+        "lastChangeDate": "2026-10-04T16:58:48",
+        "finishedPrice": 1469
+      },
+      "product_cost_kopecks": 146900
+    },
+    {
+      "marking_id": "54db74a1-214b-4ca6-9f7b-bad7f9cc22ec",
+      "order_id": "58db4455-619c-4f06-89f9-da0f9bffb218",
+      "srid": "eA7.id1d9ea38852a5e9f18492c00f9a46583.0.0",
+      "cis_sha256": "59bbcb4c9628cb8d184e429becc5ea681439f8ce1780b23bb5f7f718d513933b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "9680c1e7-45c7-4199-a31f-4166c2e8ba5c",
+      "order_id": "44940a63-51e8-48d7-bc7c-90d654bbd5a0",
+      "srid": "eH.r102b0dd4add7403ab70b45abf357fdb1.0.0",
+      "cis_sha256": "a94a555d3d5f5f16e6f3f05d1371f1c8dadac3c6420dc821c47720b1b5249714",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25507057741",
+        "date": "2026-10-04T13:54:17",
+        "lastChangeDate": "2026-10-04T14:15:26",
+        "finishedPrice": 1349
+      },
+      "product_cost_kopecks": 134900
+    },
+    {
+      "marking_id": "943280fe-2324-42cf-8d48-f3eeb2d472a3",
+      "order_id": "52caea32-1688-4575-9396-b6092da4450d",
+      "srid": "eAO.if5b62d574bb3e354a978f64786b237b5.0.0",
+      "cis_sha256": "b0ecd893f2629d65cf50ccda7424d379aaa84fd816e5edf484474cad8d830bcc",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25495410068",
+        "date": "2026-10-03T15:02:16",
+        "lastChangeDate": "2026-10-03T15:17:34",
+        "finishedPrice": 1196
+      },
+      "product_cost_kopecks": 119600
+    },
+    {
+      "marking_id": "5ace981a-716f-4776-80cf-4e7d3a5e964a",
+      "order_id": "956e3f70-3c79-4ec3-b426-532ffe8228e2",
+      "srid": "eAq.r63a08b6dde9b48c2a550d9f7cfa2f1a0.0.0",
+      "cis_sha256": "bca64ebf6b87dcf63956cf2f814f384714cc3c8e9d3a19c83d00052fb5cd4532",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25523483234",
+        "date": "2026-10-05T16:01:30",
+        "lastChangeDate": "2026-10-05T16:23:09",
+        "finishedPrice": 1330
+      },
+      "product_cost_kopecks": 133000
+    },
+    {
+      "marking_id": "7f6a806d-088c-4dba-9e70-5d4f3cfc7d44",
+      "order_id": "18889c52-7f74-4f5d-9bab-96a7d84ea929",
+      "srid": "eAn.ie4e80b03bf71ba04847141b0913044fb.1.0",
+      "cis_sha256": "e06900d7aa1cd109819051c446f18892f357be7e9212075bf75ba47898e2335b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e2f0849f-0abc-470d-a137-137273f90a1f",
+      "order_id": "ef767e4d-aa5d-4979-b0f6-b608064054f9",
+      "srid": "eAn.ie4e80b03bf71ba04847141b0913044fb.2.0",
+      "cis_sha256": "dde71165d06003f2e42d80107e79bacb08c5f1a2db81e5774957ed05e6998a42",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "c1716e47-e2e3-490f-bbf8-e1291558a824",
+      "order_id": "9dfc29e0-627c-4362-9444-8b11a1dd9d3d",
+      "srid": "eBn.i2442972411c264c9e19caf7de779d9b1.0.0",
+      "cis_sha256": "0ef45de1368972e7907f311975605d51aadba572943e830c0e2478edce72d555",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25484121901",
+        "date": "2026-10-02T17:36:42",
+        "lastChangeDate": "2026-10-02T17:54:12",
+        "finishedPrice": 1469
+      },
+      "product_cost_kopecks": 146900
+    },
+    {
+      "marking_id": "8f174987-f7cf-4f23-99f3-63ef54584a97",
+      "order_id": "85a051ee-6bf7-445a-af4b-e29b2e8e4077",
+      "srid": "ecC.icabb17e2c14e703acf8ae0949cf4a9db.0.0",
+      "cis_sha256": "e6d0797101ed10bba8ffc95b56cd7bbf2b2eed95df4c05b8e26296e968ff0ba5",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25458046939",
+        "date": "2026-09-30T19:51:39",
+        "lastChangeDate": "2026-09-30T20:08:33",
+        "finishedPrice": 1430
+      },
+      "product_cost_kopecks": 143000
+    },
+    {
+      "marking_id": "fd2599f8-acd7-4207-a3f0-fdc3ede7d3dc",
+      "order_id": "b41a1271-ad73-4c4a-a772-328f8b1feb80",
+      "srid": "ebK.rfda3d02c79e54762823c7936a427b71d.0.0",
+      "cis_sha256": "6972183567e5b504ecd7e7306b76976a126a3ec87aa128945a2d42ce6ca79e11",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_returned",
+      "source_kinds": [
+        "S",
+        "R"
+      ]
+    },
+    {
+      "marking_id": "2f47bddf-0f62-453c-a90f-4b016c9ccea0",
+      "order_id": "59aaa7e7-47a7-438b-b7aa-2d1eda7170f9",
+      "srid": "e0.ie81e5b6eb3aa451c05d6f49a74028896.0.0",
+      "cis_sha256": "2a3d04528ebb2f3a886c16b2a4b52fdf62176b735e0b9caa1d2ca4bdce916f45",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25356050191",
+        "date": "2026-09-23T14:37:02",
+        "lastChangeDate": "2026-09-23T14:58:12",
+        "finishedPrice": 1590
+      },
+      "product_cost_kopecks": 159000
+    },
+    {
+      "marking_id": "79ea2e70-afc8-4ac4-a778-b6271f9f2ef8",
+      "order_id": "092478a4-df78-4357-82f5-591d715dfa60",
+      "srid": "eAs.r90758f134924418287429f0167879ba7.1.0",
+      "cis_sha256": "eb215ad69f135bc0981507ebc3cc5ea9064230cfc629b8873d985d90fab579d9",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25476756900",
+        "date": "2026-10-02T12:16:54",
+        "lastChangeDate": "2026-10-02T12:33:19",
+        "finishedPrice": 1425
+      },
+      "product_cost_kopecks": 142500
+    },
+    {
+      "marking_id": "210233fa-8336-44e3-bc09-90e76372a496",
+      "order_id": "617ca6e5-0150-48a3-afdd-b0f49ebbb828",
+      "srid": "eAj.i5a587434114c0d969cd47c4a5a1d4632.0.0",
+      "cis_sha256": "6a93777cedaa1ebf096f2d3034a5f5d75f342598fed09564d568e8120fdb52fd",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "2a711328-07d8-4d18-98b3-de5d5286cb8e",
+      "order_id": "d95709eb-a2bf-4895-bcd4-d0c46ac0de4d",
+      "srid": "eBw.dde94ea5a63b04506aeab240ef1efffdb.0.0",
+      "cis_sha256": "b1ad2f8f4d55eda3a693c2d170743457a0c0552ff29e8e556b4b14d11ae55158",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25483138708",
+        "date": "2026-10-02T16:59:02",
+        "lastChangeDate": "2026-10-02T17:21:14",
+        "finishedPrice": 1445
+      },
+      "product_cost_kopecks": 144500
+    },
+    {
+      "marking_id": "e3900a60-ddc1-4d65-8496-34cb9b51e186",
+      "order_id": "b60b94b1-65f5-4aae-84ee-615584a83d0e",
+      "srid": "ebC.rbb581a604f8749d791b830e5bb0e99f4.0.0",
+      "cis_sha256": "57a1dad3213d533bd985838fdb39d5f13f9b14285010977c22acaf77cd9b518f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_returned",
+      "source_kinds": [
+        "S",
+        "R"
+      ]
+    },
+    {
+      "marking_id": "ef41b79c-d4ff-41f5-ac8e-ca0618721f83",
+      "order_id": "4339ead4-6d9b-459b-8773-31c809d705a5",
+      "srid": "eX.i81b48d4ee15c26e27864781d19edd824.0.0",
+      "cis_sha256": "c93da660b0fa2827a01dea09866a5538a29f6e86e5ec81aef53be61d5284a153",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "406e71ac-a88a-4952-97f5-cf00fc7c0ca0",
+      "order_id": "a65b8acd-d9d5-46af-8a28-4e1863e155a4",
+      "srid": "ey.i913e5ac39a52cf18985b04abe96821c1.0.0",
+      "cis_sha256": "8e9c9a5a7c969ae216e68a45cb5330f399fa8142fc9b6a1e34e4b36748e8ff3b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "cd3c5b6b-3533-4753-b3a7-fe6995c983be",
+      "order_id": "aa760a24-b123-46a3-92fd-416a4df9b7bd",
+      "srid": "eB0.i42ed8c6660e9e197ba37eb6025bf7c02.0.0",
+      "cis_sha256": "a840fabad0b87323bd1f75965761ceb6ce56f72f4aceebcbb06fec97e69e8fd6",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "ec520550-4df9-43d3-87b6-3328b8e15a9c",
+      "order_id": "243c7e27-77c2-4b99-9da0-4d297ee68a14",
+      "srid": "eBL.i7ed95d483c5ef7dc6e293c9f297b6b39.0.0",
+      "cis_sha256": "78352b672e6227cb9502bc58ee89e00b444e94b5a139d4a14e5a4d4e050d32ae",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "0e5da374-ea22-4b50-9f69-2319c921e366",
+      "order_id": "4a010e74-e591-4815-ae91-5e6deea5c86e",
+      "srid": "ebW.iebcc80fd7a85c1505f7bfff845426eca.0.0",
+      "cis_sha256": "08bf83b72fe93bb3411d5c78a76e6d3c480e00a86c156fecce6502aa35ab2c27",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "895b16d1-0b18-4e88-9a40-7ef5f3c2bf3c",
+      "order_id": "2a021a8b-1761-49c1-b279-05aabb8a8615",
+      "srid": "eO.i70c274288ebec516259b1a566afecc43.2.0",
+      "cis_sha256": "ffca5d542c1af6e21c0bcc358a39260d148bc31a56b5da66bec15a411423a6bf",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25458268663",
+        "date": "2026-09-30T20:08:45",
+        "lastChangeDate": "2026-09-30T20:23:09",
+        "finishedPrice": 1468
+      },
+      "product_cost_kopecks": 146800
+    },
+    {
+      "marking_id": "61ccae09-7fba-4d12-b07a-64f77199e888",
+      "order_id": "829a4824-2554-41bb-8b32-18356567ac4e",
+      "srid": "eBy.raed59705cb074fb2842e770f911c0375.0.0",
+      "cis_sha256": "2cb6410bf3b01c31acdfa7ca55c07b49e8949723925800608896d820cf3ecbd3",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25482316975",
+        "date": "2026-10-02T16:27:50",
+        "lastChangeDate": "2026-10-02T16:43:36",
+        "finishedPrice": 1276
+      },
+      "product_cost_kopecks": 127600
+    },
+    {
+      "marking_id": "a6d27c01-1453-4815-9c20-70e0e3077873",
+      "order_id": "a32beed8-0875-42d2-9665-82ee354d8606",
+      "srid": "e4.ra5c8c32f0e874ce7bac6c1fd894c2412.0.0",
+      "cis_sha256": "3e85dd307105118862b36d9cf81713585e78299589b43243a6f5990737d2925b",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25469768301",
+        "date": "2026-10-01T18:16:30",
+        "lastChangeDate": "2026-10-01T18:33:58",
+        "finishedPrice": 1372
+      },
+      "product_cost_kopecks": 137200
+    },
+    {
+      "marking_id": "a7e9b9a5-55f9-4814-b035-2305f3fbec99",
+      "order_id": "0bd51456-2f75-4e21-8123-30fbad397843",
+      "srid": "es.ra35a810221a94fc0a37cd389ab1f9dbe.0.0",
+      "cis_sha256": "71004dbc94210f159a796bb302428acfc06456869af654af35a6ab833f1bb0da",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25468664855",
+        "date": "2026-10-01T17:25:06",
+        "lastChangeDate": "2026-10-01T17:45:12",
+        "finishedPrice": 1542
+      },
+      "product_cost_kopecks": 154200
+    },
+    {
+      "marking_id": "473612f5-6eee-41c8-9e25-88e515d33ca1",
+      "order_id": "708c40d5-58ac-4b3c-b07d-f0ca42ffcb01",
+      "srid": "ebJ.i3ad4852098f82d2c01b9c7f098c6f596.0.0",
+      "cis_sha256": "bb59ac8aa95394bba84ff24565529fc786c65e5c1d625df3f6e62f061ae94b76",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "a3759be9-50a0-4a06-b883-98e52174ccde",
+      "order_id": "b0499a2b-9bc5-4dec-8c71-8b2dcbd83d51",
+      "srid": "ebJ.ife4afa8386e6fe8978b206a000bda809.0.0",
+      "cis_sha256": "a3f839e87b84edf61f079a8d2464a3fb9f8309513bf48571995f22353551e534",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "22c8da44-6926-4990-afc7-9dc17597d4b1",
+      "order_id": "c2121534-e4c9-4921-91d7-e9be6f63bc52",
+      "srid": "ebP.r536621b763084b7da3dfaf224831d83e.0.0",
+      "cis_sha256": "832347eaba2ed0680d6a4eaad8eaad098a668096a0f984f53e77edd12b7a4140",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25528802808",
+        "date": "2026-10-05T19:58:54",
+        "lastChangeDate": "2026-10-05T20:20:08",
+        "finishedPrice": 1315
+      },
+      "product_cost_kopecks": 131500
+    },
+    {
+      "marking_id": "73bb1c3a-9605-424a-a981-4048ffe16c3c",
+      "order_id": "f0020c5d-7401-4a4a-9791-e2ca2bcae1a4",
+      "srid": "eb9.i6eecc9b8bb346daa1eb1aa2ace16700b.0.0",
+      "cis_sha256": "6441750f0fec8ad0e3c8a684ca717039af79b3e07dc17b0656c0e677011b492b",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "e1cc7fcb-b41f-410a-814d-9ce4c034d1fb",
+      "order_id": "1435b8c7-5de8-4465-b264-970498e53863",
+      "srid": "ebz.i997e27ece5a96fe6c21903e2d611ac46.0.0",
+      "cis_sha256": "9700db7cbda0286ad9a225c4d573c58551cb55713ac248e72b6f5aecb8519b17",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "c6cc10d5-5475-4eac-b889-8191047ee691",
+      "order_id": "6e8275d0-afdd-4715-881f-c1d1691fdfa7",
+      "srid": "eK.i720060a53a62375cc6457436825fbafd.0.0",
+      "cis_sha256": "477ceb00d139aa88685863c743ab514b3c863187789adbe31aeced1451aeb816",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "efd1f6a2-8903-4942-b79e-168b46176454",
+      "order_id": "a2b7cdea-c06c-4c0b-b732-a94c34632127",
+      "srid": "eBo.r0d633f619d2f4fc2a4b1d068fd9a23b3.3.0",
+      "cis_sha256": "688e0203589bb797d8255649feec836c3da71e2e0a9439502c4f59450e815d56",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f4861452-2d21-40a4-adba-a23684d0b886",
+      "order_id": "f2f76c88-a612-409f-993d-5bb97f4f916a",
+      "srid": "e7.r2bdbc16142a04cb38dc884ce6f6120e8.0.0",
+      "cis_sha256": "c4b4d2bdc3a54ce46ceb9e6f391c599e5967c1dfda877b1eb22675f718b4faad",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25529722461",
+        "date": "2026-10-06T05:15:17",
+        "lastChangeDate": "2026-10-06T07:05:45",
+        "finishedPrice": 1363
+      },
+      "product_cost_kopecks": 136300
+    },
+    {
+      "marking_id": "6afa8a4c-7290-4c3c-8153-c00a4f9e0b7c",
+      "order_id": "7a8ba2ae-2587-4a40-8518-6aba54b115c8",
+      "srid": "eBh.i1a922028487b8f7bfbe25ac63e1d5596.0.0",
+      "cis_sha256": "523d315bc332d6ae6b7728887a2cbcda3e1d14aab45b14cf7df93248d5cdf7c4",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "f9c5fafb-740e-4bec-ac49-beab5e2b8544",
+      "order_id": "bfcd2558-1da9-40c6-a8ea-b06aa4a06883",
+      "srid": "ed.i4d553b15529741786f1aaa2dd8161329.1.0",
+      "cis_sha256": "162282cd9540c27162af234c32401a3da027fc7d030411116467b5a07e69b94f",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d1762e7f-e541-4751-bdde-e6b1548455ef",
+      "order_id": "2f5618fd-ec21-42bc-8bd9-3246a3784fa7",
+      "srid": "eAj.i4049a9346e25ebf036fd050ee99590ca.0.0",
+      "cis_sha256": "553a12987c1600fb36a0b30a256b791dd1c413eb2ba39ba765bd0b03344dde44",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "bfb5e4ff-dbfb-406e-b81a-0c03c6ca9a6b",
+      "order_id": "0018e2d4-a9b9-4bb8-bf82-4290ceb12604",
+      "srid": "eb1.i0ebd5a23455bce177a0c9631423c9b12.4.0",
+      "cis_sha256": "86f7d2da48f31f42eb138134eda29754729b9f918096c0f98cf8b725fcb30786",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25411272430",
+        "date": "2026-09-27T15:41:19",
+        "lastChangeDate": "2026-09-27T15:58:30",
+        "finishedPrice": 1508
+      },
+      "product_cost_kopecks": 150800
+    },
+    {
+      "marking_id": "4f780e3e-e7b6-481f-9523-8819e50597a2",
+      "order_id": "cbb9b9f5-af1e-4bc1-8e95-8c586391c606",
+      "srid": "ebG.rec378c3b599c49688470167569641d22.0.0",
+      "cis_sha256": "e867ae51743efdc7f60cd48419d904ae29d7a9264a9d32c51a420cd8f4b9e938",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "677a666e-bc7a-454b-8854-b54db56e0773",
+      "order_id": "40f9a6a0-b3dd-40c2-9918-b0a9591b0e3e",
+      "srid": "ea.r3299bde654a84a3797812770e6dff5b1.0.0",
+      "cis_sha256": "3a7e97b3f402567b6b1295c6af21a2da367eccdda6308f89ad6d78c977badf30",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25370005913",
+        "date": "2026-09-24T15:17:10",
+        "lastChangeDate": "2026-09-24T15:33:00",
+        "finishedPrice": 1590
+      },
+      "product_cost_kopecks": 159000
+    },
+    {
+      "marking_id": "fb8b5faf-cbcb-4f84-a95e-600064a938f3",
+      "order_id": "c0be1f74-77f7-43d1-8572-e70a0fec0230",
+      "srid": "eAu.i38adcc8ac178b611970407e5a0b2737f.0.0",
+      "cis_sha256": "431dd32fb8f10965716d67d8291bb3d2d07e30215c157593067249504573c425",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25411873426",
+        "date": "2026-09-27T16:09:20",
+        "lastChangeDate": "2026-09-27T16:27:18",
+        "finishedPrice": 1522
+      },
+      "product_cost_kopecks": 152200
+    },
+    {
+      "marking_id": "c5219133-721a-41b3-b6a4-093c575daeeb",
+      "order_id": "e8d4409d-6c22-4473-831e-c50a589a493b",
+      "srid": "eBB.i8973369c6d90e3001a1730080de21820.0.0",
+      "cis_sha256": "8e797ad3ee98979b48a5d2c05c6d3afde54838181a3815109dc658bc2d251430",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25343349131",
+        "date": "2026-09-22T14:56:53",
+        "lastChangeDate": "2026-09-22T15:11:59",
+        "finishedPrice": 1471
+      },
+      "product_cost_kopecks": 147100
+    },
+    {
+      "marking_id": "863de31f-236e-45c9-a5fd-23849f9bc72a",
+      "order_id": "e5e7e2c6-7477-43c5-9604-93211ed5466c",
+      "srid": "eU.i2f81d16cdcedc7034245657bc1924ead.2.0",
+      "cis_sha256": "68359fb25c90f5fc9bc891713a48284c52dceae18a714c7e291d95a8c44eaf87",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "0a415198-0baf-479b-b0f8-3bfbb787b98b",
+      "order_id": "8e4ea523-0602-4e78-b1a8-dd65a5b54c0d",
+      "srid": "eU.i2f81d16cdcedc7034245657bc1924ead.4.0",
+      "cis_sha256": "d5fd707641dfeda8e2011645b5f4527a41423128679a23a8dafd2c9974f0ec35",
+      "active_claim": false,
+      "sold": false,
+      "exclusion": "wb_sales_sale_not_found",
+      "source_kinds": []
+    },
+    {
+      "marking_id": "d79b900c-7bdb-4cbf-840c-3abe6efb9299",
+      "order_id": "f59964b7-3454-4083-9d05-9693409a0b65",
+      "srid": "ee.rced302e307ef4fe2b83bce750421aa66.0.0",
+      "cis_sha256": "3aebf0bda923c787a5e5667f582df99729939ef2b0313adb445e84cd99c1b5ad",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25441274096",
+        "date": "2026-09-29T17:24:15",
+        "lastChangeDate": "2026-09-29T19:21:48",
+        "finishedPrice": 1181
+      },
+      "product_cost_kopecks": 118100
+    },
+    {
+      "marking_id": "c9391ebe-21f5-4b1a-89c4-1607563e341a",
+      "order_id": "3f42fc7f-a23c-4416-acff-7695e9347cc9",
+      "srid": "ebe.raf9b3af6fe63445d9a1a5f3ae44102ae.0.0",
+      "cis_sha256": "062c1f410f5acd669d14e874fa67a2b4eda6fec70a70af2a27a27dbbadbaba12",
+      "active_claim": false,
+      "sold": true,
+      "sale": {
+        "saleID": "S25449900780",
+        "date": "2026-09-30T13:20:41",
+        "lastChangeDate": "2026-09-30T13:36:08",
+        "finishedPrice": 1744
+      },
+      "product_cost_kopecks": 174400
+    }
+  ],
+  "sold_count": 84,
+  "ready_count": 84,
+  "unique_cis_count": 246,
+  "exclusion_counts": {
+    "sale": 84,
+    "wb_sales_sale_not_found": 157,
+    "wb_sales_returned": 5
+  },
+  "finished_at": "2026-10-06T11:25:49.023728+00:00"
+}

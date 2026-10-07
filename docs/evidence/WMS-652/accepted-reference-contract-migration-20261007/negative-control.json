@@ -1,0 +1,15 @@
+{
+  "case": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+  "reproduce": "python3 -B docs/evidence/WMS-652/accepted-reference-contract-migration-20261007/negative-control.py",
+  "boundary": "Only module.ROOT points to an automatically removed untracked workflow copy.",
+  "mutation": "python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d -> python scripts/ci/product_scope.py --root . --trusted-ref d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "original_workflow_sha256": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+  "counterexample_workflow_sha256": "92644b0d610d22ee1728d312bb1a20b8c8c7a630ced4fd1b301cd161dbf45742",
+  "tests": 1,
+  "pass": 0,
+  "fail": 1,
+  "errors": 0,
+  "skipped": 0,
+  "tracked_workflow_and_test_unchanged": true,
+  "temporary_copy_removed": true
+}

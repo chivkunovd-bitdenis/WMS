@@ -1,0 +1,40 @@
+Browser tab: 1, Title: "WMS · Фулфилмент", URL: "https://web-production-9e7c1.up.railway.app/app/ff/fbs?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57".
+1 AXWebArea WMS · Фулфилмент, URL: web-production-9e7c1.up.railway.app/app/ff/fbs?supply_id=9b3993c3-dffd-5f14-b7b0-2ccf0f495b57
+	2 container
+		3 heading WMS617 ozon, Value: 6
+			4 text WMS617 ozon
+		5 text WMS617 · Видео селлер 1 Склад WMS Тестовый Метод доставки Ozon Метод доставки 617001
+		6 text Дата отгрузки
+		7 date field (settable) Дата отгрузки, Value: 2026-10-01
+			8 container
+				9 stepper
+				10 stepper
+				11 stepper
+			12 pop up button Показать окно выбора даты Показать окно выбора даты
+		13 button (disabled) Сохранить
+		14 button Очистить
+		15 progress indicator 0
+		16 text 0  из  5  подготовлено к отгрузке Сдать в  Ozon  до  02.10.2026, 09:43:10
+		17 button Закрыть
+		18 button История поставки
+		19 tab group
+			20 tab (selectable, settable, boolean) Состав ✓, Value: 0
+			21 tab (selectable, settable, boolean) Подбор, Value: 0
+			22 tab (selectable, settable, boolean) Упаковка и маркировка, Value: 0
+			23 tab (selected, settable, boolean) Короба, Value: 1
+		37 text У продавца не подключён кабинет Ozon: нет Client-Id и Api-Key.
+		24 heading Короба · Ozon, Value: 6
+			25 text Короба ·  Ozon
+		26 text Распределено 0 из 5 шт · осталось 5
+		27 button (disabled) Печать всех этикеток Ozon (0)
+		28 button Создать автоматически
+		29 checkbox (settable, integer) Description: Без ГТД и РНПТ, Value: 0
+		30 text Без ГТД и РНПТ
+		31 text Коробов
+		32 stepper (settable, integer) Коробов, Value: 1
+		33 button Добавить короба
+		34 button Передать в Ozon
+			35 text Передать в 
+			36 text Ozon
+
+The focused UI element is 23 tab (selected, settable, boolean) Короба, Value: 1

@@ -1,0 +1,83 @@
+{
+  "task": "WMS-662",
+  "fixture_corrections": [
+    {
+      "contract_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "source_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "correction_commit": "5feca959614667eb95e56a85e7b94efa497feeff",
+      "files": [
+        {
+          "transform": "wms662-live-delivery-test-format",
+          "path": "backend/tests/test_wms662_live_delivery_substatuses.py",
+          "before_blob": "a6fc67e70364b0c84e9d2d41d734cd5af1cd61b4",
+          "after_blob": "cefb7d8ac635c3da443a6f623c2fef4a1ff75850"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+        "correction_commit": "5feca959614667eb95e56a85e7b94efa497feeff",
+        "evidence": "docs/reviews/wms652-batch-exact-fixture-review-20261007.md",
+        "evidence_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
+        "evidence_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e"
+      }
+    },
+    {
+      "contract_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "correction_commit": "466178698fc47d4eadecc611eeb6039c475da58a",
+      "files": [
+        {
+          "transform": "wms662-batch-first-wait-pid-snapshot",
+          "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+          "before_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+          "after_blob": "03d744d54222dc6ee13014d1f378bf07e6eb4e8a"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+        "correction_commit": "466178698fc47d4eadecc611eeb6039c475da58a",
+        "evidence": "docs/reviews/wms652-batch-exact-fixture-review-20261007.md",
+        "evidence_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
+        "evidence_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e"
+      }
+    }
+  ],
+  "owner_supersessions": [
+    {
+      "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+      "contract_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "prior_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "before_blob": "04379c221c29e9a70ae195ff3d834e1855b375de",
+      "changes": [
+        [
+          "667a136a2760ff62fc181f47772290a8388587c6",
+          "eda2d0d82663c76a3042e3a161fb47f164ad4f08"
+        ]
+      ],
+      "owner_request": {
+        "commit": "4c9e1238c85a50a9238bc109651c79cac5f10e03",
+        "path": "docs/reviews/wms663-666-frontend-rollback-scope-20261006.md",
+        "blob": "664aa8ea5e279c04f9b6219a8440142fd7bc142a"
+      },
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "585877bedf948faf7e38d14acc7e89acbf4feab3",
+        "correction_commit": "667a136a2760ff62fc181f47772290a8388587c6",
+        "evidence": "docs/reviews/wms663-666-owner-correction-independent-review-20261006.md",
+        "evidence_commit": "764701a36738170b255cb2faf8fdab3a77609e4d",
+        "evidence_blob": "b92b8a9e0b041f4e1253d4b89037c9271aad6f7f"
+      }
+    }
+  ]
+}

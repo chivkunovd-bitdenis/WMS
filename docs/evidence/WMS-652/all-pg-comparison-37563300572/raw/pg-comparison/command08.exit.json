@@ -1,0 +1,13 @@
+{
+  "id": "command08",
+  "name": "Fresh PostgreSQL migration chain and withdrawal rollback",
+  "command": "python -c \"import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_517_migrations'); c.close()\"\nalembic upgrade head\nalembic downgrade 20260923_0517\nalembic upgrade head\n",
+  "working_directory": "backend",
+  "command_sha256": "d1545b96388bb41140b2340cb6151d5851237532c00eec6cb125d599434853bd",
+  "exit_code": 0,
+  "started_epoch": 1791341202.0269103,
+  "completed_epoch": 1791341207.6487298,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

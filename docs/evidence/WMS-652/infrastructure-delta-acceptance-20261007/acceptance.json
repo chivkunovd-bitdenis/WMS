@@ -1,0 +1,23 @@
+{
+  "role": "same distinct replacement Sol6.1/high analyst",
+  "session": "01a11390-1014-76a0-9302-fbe0fd46ed1f",
+  "source": "972da18be97cab8c41b14b0aa00a3d30773e4492",
+  "independent_review_commit": "7c4670975d7e70cbbfe28fb0cd4ee66f39018007",
+  "independent_review_path": "docs/evidence/WMS-652/cdp-cancellation-source-review-20261007/r1-rereview.md",
+  "technical_verdict": "PASS; R1 CLOSED",
+  "bounded_analyst_verdict": "ACCEPTED prepared cumulative four infrastructure corrections",
+  "final_SOURCE_approval": false,
+  "release_accepted": false,
+  "new_runtime_actions": [],
+  "backlog_before_sha256": "78410ae6fec803d30d80eee6b31d9c31d84f37e508caf3eaf5395f7b820b44f5",
+  "coordination_readback": {
+    "source_review_pending": false,
+    "technical_verdict": "PASS; R1 CLOSED",
+    "source": "972da18be97cab8c41b14b0aa00a3d30773e4492",
+    "review_commit": "7c4670975d7e70cbbfe28fb0cd4ee66f39018007",
+    "review_path": "docs/evidence/WMS-652/cdp-cancellation-source-review-20261007/r1-rereview.md",
+    "current_common_review_import": "2d27c76d350fa7e51a50e0294f90a730501c366e",
+    "original_historical_ci_cause": "UNKNOWN",
+    "full43_after_patch": "NEXT REQUIRED COMMON CI"
+  }
+}

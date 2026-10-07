@@ -1,0 +1,24 @@
+{
+  "product_sha": "47817f76589701ea36ba1f8b30fca84b6a136208",
+  "testwriter_sha": "a0e4409300d4897234c501474de2bfe45478e488",
+  "test_cherry_pick_sha": "97fc3ff72",
+  "node": "v24.13.1",
+  "precode_peer_cases": {
+    "pass": 0,
+    "fail": 2,
+    "skip": 0
+  },
+  "after_peer_cases": {
+    "pass": 2,
+    "fail": 0,
+    "skip": 0
+  },
+  "unchanged_native_cases": {
+    "pass": 7,
+    "fail": 0,
+    "skip": 0
+  },
+  "typecheck_exit": 0,
+  "build_exit": 0,
+  "linux_comparison": "pending, coordinator only"
+}

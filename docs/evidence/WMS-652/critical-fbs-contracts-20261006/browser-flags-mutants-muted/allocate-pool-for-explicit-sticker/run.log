@@ -1,0 +1,42 @@
+WMS652.realQr[supply_id=A]: PASS
+WMS652.realQr[supply_ids=A]: PASS
+WMS652.realQr[supply_ids=A,B]: PASS
+WMS652.selection[single-create]: PASS
+WMS652.selection[seller-warehouse-group-retry]: PASS
+WMS652.selection[add-existing-refusal-retry]: PASS
+WMS652.realQrFlags[alloff;supply_id=A]: PASS
+WMS652.realQrFlags[alloff;supply_ids=A]: PASS
+WMS652.realQrFlags[alloff;supply_ids=A,B]: PASS
+WMS652.realQrFlags[qr;supply_id=A]: PASS
+WMS652.realQrFlags[qr;supply_ids=A]: PASS
+WMS652.realQrFlags[qr;supply_ids=A,B]: PASS
+WMS652.realQrFlags[reprint;supply_id=A]: PASS
+WMS652.realQrFlags[reprint;supply_ids=A]: PASS
+WMS652.realQrFlags[reprint;supply_ids=A,B]: PASS
+WMS652.realQrFlags[qr+reprint;supply_id=A]: PASS
+WMS652.realQrFlags[qr+reprint;supply_ids=A]: PASS
+WMS652.realQrFlags[qr+reprint;supply_ids=A,B]: PASS
+WMS652.realQrFlags[pool;supply_id=A]: PASS
+WMS652.realQrFlags[pool;supply_ids=A]: PASS
+WMS652.realQrFlags[pool;supply_ids=A,B]: PASS
+WMS652.realQrFlags[qr+pool;supply_id=A]: AssertionError [ERR_ASSERTION]: explicit sticker may never allocate pool CIS
+WMS652.realQrFlags[qr+pool;supply_ids=A]: AssertionError [ERR_ASSERTION]: explicit sticker may never allocate pool CIS
+WMS652.realQrFlags[qr+pool;supply_ids=A,B]: AssertionError [ERR_ASSERTION]: explicit sticker may never allocate pool CIS
+WMS652.realQrFlags[held-receipt;supply_id=A]: PASS
+WMS652.realQrFlags[held-receipt;supply_ids=A]: PASS
+WMS652.realQrFlags[held-receipt;supply_ids=A,B]: PASS
+WMS652.realQrFlags[lost-accepted-ack;supply_id=A]: PASS
+WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]: PASS
+WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]: PASS
+WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]: PASS
+WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]: PASS
+WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]: PASS
+AssertionError [ERR_ASSERTION]: one or more real-screen cases failed
+    at file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/frontend/tests-e2e/wms652-critical/browser.mjs:214:3 {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: false,
+  expected: true,
+  operator: '==',
+  diff: 'simple'
+}

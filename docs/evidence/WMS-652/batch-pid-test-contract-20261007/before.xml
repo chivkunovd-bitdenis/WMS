@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="2" time="0.318" timestamp="2026-10-07T06:29:25.654164+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_wms662_batch_pid_snapshot_contract" name="test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse" time="0.074"><failure message="AssertionError: first proven concurrent writer snapshot must survive later pooled PID reuse&#10;assert {'batch': 219...rdinary': 219} == {'batch': 219...rdinary': 209}&#10;  &#10;  Omitting 1 identical items, use -vv to show&#10;  Differing items:&#10;  {'ordinary': 219} != {'ordinary': 209}&#10;  Use -v to get more diff">@pytest.mark.asyncio
+    async def test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse():
+        observer = ObserverBoundary()
+        schedule, role = actual_schedule(observer)
+        writer(schedule, role, "batch", 101, locked_select=True)
+        writer(schedule, role, "ordinary", 202)
+        at_release = []
+        native_release = schedule.release.set
+    
+        def record_release():
+            if not at_release:
+                at_release.append(dict(schedule.pids))
+            native_release()
+    
+        schedule.release.set = record_release
+    
+        def advance_before_real_wait():
+            if observer.poll == 1:
+                assert not schedule.wait_seen and not schedule.release.is_set()
+                writer(schedule, role, "batch", 219)
+                writer(schedule, role, "ordinary", 209)
+    
+        observer.before_poll = advance_before_real_wait
+        observer.reply = lambda: ([(101, [], "initial batch"), (202, [], "initial ordinary")]
+                                  if observer.poll == 0 else
+                                  [(219, [], "seller lock"), (209, [219], "reversal-ledger INSERT")])
+        task = asyncio.create_task(schedule.observe())
+        try:
+            await await_release(schedule, task)
+            assert schedule.wait_seen
+            assert observer.parameters[:2] == [
+                {"batch": 101, "ordinary": 202}, {"batch": 219, "ordinary": 209},
+            ]
+            assert at_release == [{"batch": 219, "ordinary": 209}], (
+                "the writer evidence must be captured at the first proven wait, before release"
+            )
+            assert schedule.wait_queries == [
+                (219, [], "seller lock"), (209, [219], "reversal-ledger INSERT"),
+            ]
+            writer(schedule, role, "ordinary", 219)
+            print(f"First wait={at_release}; later exposed pids={schedule.pids}")
+&gt;           assert schedule.pids == at_release[0], (
+                "first proven concurrent writer snapshot must survive later pooled PID reuse"
+            )
+E           AssertionError: first proven concurrent writer snapshot must survive later pooled PID reuse
+E           assert {'batch': 219...rdinary': 219} == {'batch': 219...rdinary': 209}
+E             
+E             Omitting 1 identical items, use -vv to show
+E             Differing items:
+E             {'ordinary': 219} != {'ordinary': 209}
+E             Use -v to get more diff
+
+backend/tests/test_wms662_batch_pid_snapshot_contract.py:130: AssertionError</failure></testcase><testcase classname="tests.test_wms662_batch_pid_snapshot_contract" name="test_live_cycle_observation_after_pid_change_uses_current_writer_connections" time="0.070" /></testsuite></testsuites>

@@ -1,0 +1,1794 @@
+[
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@vite/client"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.html?html-proxy&index=0.js"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@react-refresh"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/node_modules/vite/dist/client/env.mjs"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/tests-e2e/wms672-harness.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react.js?v=aa34cc23"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react-dom_client.js?v=aa34cc23"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/FfInboundRequestView.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react_jsx-dev-runtime.js?v=aa34cc23"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/renderBarcodeDataUrl.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printBarcodeLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/labelSize.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/chunk-BoAXSpZd.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/jsbarcode.js?v=f9d6a16e"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundDraftPersistence.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundDraftMarketplace.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/confirmDiscardChanges.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/hooks/useBarcodeScanner.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_ErrorOutlineOutlined.js?v=bd450c3b"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundMarkingCodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/useInboundMarkingCodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_EditOutlined.js?v=9b811cdb"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_CloseOutlined.js?v=326b60af"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_ExpandMoreOutlined.js?v=6184d4c5"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_PrintOutlined.js?v=bf069448"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_DownloadOutlined.js?v=debd3b41"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_StraightenOutlined.js?v=83b12bf0"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_material.js?v=f17a8707"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_material_styles.js?v=d6dc1592"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/api.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/FfProductMarkingPrintProvider.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/KizReprintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductBarcodePrintButton.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductPhotoThumb.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WbProductPickerDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WmsDateField.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/OzonReturnDocumentUi.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ozonReturnPickerHelpers.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/index.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/types/wbProductCatalog.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productBarcodes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/BoxLabelPrintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printInboundReceivingSheet.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/readApiErrorMessage.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/inboundOperationType.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/FfInboundBoxAddDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/FfSortingObjectsPage.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundScanLookup.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/BoxImportDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundReceivingHelpers.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/suggestNextLocationCode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/resolveProductByBarcode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/randomId.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/documentDisplay.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/useOzonReturnWorkflow.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/inboundReceivingRuntime.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react-dom.js?v=aa34cc23"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react_jsx-runtime.js?v=aa34cc23"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/createSvgIcon-0nXf5NP8.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/useFfProductMarkingPrint.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/kizReprintApi.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/kizReprintPrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printMarkingCodeLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/styled-DWcxSF1x.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/styles-DNfM__Kl.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/DefaultPropsProvider-DsPLvr3h.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/useMediaQuery-ChxqrE1-.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/Typography-D4mAOJ9j.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_Person.js?v=d81285e7"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/OzonReturnPickerDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/dayjs.js?v=aa988d43"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_x-date-pickers_DatePicker.js?v=fad01237"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/StatusChip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/MarketplaceChip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/Actions.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/DataTable.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/States.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/Cells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/FilterBar.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/PercentSlider.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/PeriodPicker.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/ReportMetricStrip.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/MovementFlowChart.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/ScannerLine.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/FormFields.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/ui-kit/AppDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/errors/ErrorBoundary.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/FfProductLineCells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/ProductBarcodeCell.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/LabelSizeSelect.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productLabelText.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/scanFeedback.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/boxFillDialogLayout.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/react-router-dom.js?v=97f88342"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/pendingPlacement.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/SortingObjectsScreen.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/pendingScan.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/sortingScan.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/scanResult.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/objectsStub.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/sortingUndo.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_CloudUploadOutlined.js?v=3af72a2e"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/plural.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printOzonReturnReconciliation.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/extends-Daicd7Hx.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/objectWithoutPropertiesLoose-DwrrYcIJ.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/productBarcodePrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/useMarkingCodePrint.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/markingPrintPresets.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/parseGs1Cis.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printProductThermalLabel.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_ExpandMore.js?v=341c1a40"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/warning-D2VFiL9f.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/LocalizationProvider-BzlvQQyK.js?v=ab259c01"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/WmsBrandMark.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/errorRecovery.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/clientErrorReport.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_material_Typography.js?v=4cc8981b"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_UndoOutlined.js?v=913aaec3"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapToolbar.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/ObjectsTree.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/PlacedByCells.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/sorting-objects/objectsRows.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/v2/fbsUx.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/MarkingPrintDialog.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_AddOutlined.js?v=46ff8970"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapRows.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/formatLocationCode.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapWarehouseSwitch.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_ArrowUpwardOutlined.js?v=23efe5a8"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_RemoveOutlined.js?v=0b415a94"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_DragIndicator.js?v=1f9000e0"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_Inventory2Outlined.js?v=d096dc91"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_LayersOutlined.js?v=17facd35"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/@fs/home/runner/work/_temp/wms672-c5-diagnostic-vite-cache/deps/@mui_icons-material_WidgetsOutlined.js?v=1fa33969"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/screens/ff/warehouse-map/WarehouseMapTypes.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/PrintQuantityField.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/printTemplate.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/utils/separateMarkingPrint.ts"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/src/components/MarkingLabelPreview.tsx"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/marking-codes"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/marking-codes"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/products/linked-wb-catalog?seller_id=672-seller"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/warehouses/672-warehouse/locations?exclude_sorting_zone=true"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/warehouses"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-1/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-2/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-3/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-4/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-5/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-6/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-7/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-8/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-9/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-10/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-11/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-12/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-13/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-14/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-15/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-16/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-17/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-18/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-19/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-20/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-21/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-22/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-23/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-24/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-25/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-26/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-27/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-28/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-29/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-30/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-31/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-32/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-33/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-34/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-35/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-36/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-37/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-38/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-39/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-40/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-41/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-42/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-43/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-44/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-45/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-46/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-47/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-48/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-49/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-50/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-51/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-52/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-53/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-54/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-55/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-56/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-57/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-58/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-59/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-60/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-61/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-62/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-63/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-64/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-65/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-66/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-67/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-68/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-69/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-70/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-71/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-72/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-73/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-74/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-75/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-76/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-77/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-78/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-79/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-80/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-81/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-82/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-83/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-84/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-85/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-86/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-87/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-88/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-89/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-90/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-91/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-92/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-93/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-94/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-95/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-96/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-97/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-98/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-99/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-100/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-101/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-102/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-103/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-104/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-105/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-106/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-107/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-108/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-109/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-110/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-111/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-112/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-113/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-114/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-115/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-116/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-117/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-118/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-119/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-120/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-121/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-122/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-123/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-124/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-125/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-126/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-127/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-128/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-129/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-130/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-131/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-132/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-133/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-134/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-135/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-136/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-137/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-138/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-139/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-140/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-141/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-142/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-143/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-144/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-145/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-146/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-147/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-148/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-149/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-150/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-151/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-152/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-153/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-154/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-155/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-156/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-157/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-158/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-159/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-160/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-161/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-162/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-163/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-164/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-165/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-166/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-167/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-168/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-169/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-170/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-171/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-172/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-173/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-174/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-175/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-176/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-177/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-178/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-179/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-180/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-181/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-182/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-183/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-184/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-185/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-186/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-187/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-188/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-189/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-190/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-191/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-192/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-193/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-194/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-195/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-196/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-197/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-198/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-199/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-200/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-201/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-202/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-203/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-204/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-205/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-206/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-207/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-208/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-209/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-210/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-211/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-212/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-213/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-214/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-215/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-216/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-217/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-218/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-219/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-220/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-221/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-222/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-223/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-224/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-225/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-226/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-227/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-228/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-229/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-230/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-231/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-232/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-233/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-234/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-235/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-236/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-237/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-238/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-239/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-240/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-241/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-242/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-243/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-244/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-245/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-246/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-247/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-248/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-249/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-250/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-251/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-252/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-253/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-254/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-255/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-256/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-257/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-258/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-259/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-260/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-261/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-262/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-263/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-264/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-265/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-266/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-267/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-268/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-269/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-270/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-271/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-272/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-273/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-274/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-275/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-276/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-277/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-278/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-279/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-280/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-281/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-282/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-283/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-284/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-285/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-286/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-287/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-288/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-289/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-290/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-291/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-292/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-293/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-294/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-295/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-296/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-297/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-298/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-299/mark-label-printed"
+  },
+  {
+    "method": "POST",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document/boxes/672-box-300/mark-label-printed"
+  },
+  {
+    "method": "GET",
+    "url": "http://127.0.0.1:16724/api/operations/inbound-intake-requests/672-document"
+  }
+]

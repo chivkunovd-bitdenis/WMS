@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.441" timestamp="2026-10-07T06:29:52.976937+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_wms662_batch_pid_snapshot_contract" name="test_live_cycle_observation_after_pid_change_uses_current_writer_connections" time="0.031"><failure message="AssertionError: cycle observation must query live connections, not frozen historical writers&#10;assert {'batch': 219...rdinary': 209} == {'batch': 301...rdinary': 302}&#10;  &#10;  Differing items:&#10;  {'batch': 219} != {'batch': 301}&#10;  {'ordinary': 209} != {'ordinary': 302}&#10;  Use -v to get more diff">@pytest.mark.asyncio
+    async def test_live_cycle_observation_after_pid_change_uses_current_writer_connections():
+        observer = ObserverBoundary()
+        schedule, role = actual_schedule(observer)
+        writer(schedule, role, "batch", 219)
+        writer(schedule, role, "ordinary", 209)
+    
+        def reply():
+            if observer.poll == 0:
+                return [(219, [], "seller lock"), (209, [219], "first INSERT wait")]
+            schedule.finished.set()
+            return [(301, [302], "current batch wait"), (302, [301], "current ordinary wait")]
+    
+        observer.reply = reply
+        task = asyncio.create_task(schedule.observe())
+        try:
+            await await_release(schedule, task)
+            assert schedule.wait_seen and not schedule.cycle_seen
+            writer(schedule, role, "batch", 301, locked_select=True)
+            writer(schedule, role, "ordinary", 302)
+            await task
+            print(f"Current observer parameters={observer.parameters}; cycle={schedule.cycle_seen}")
+&gt;           assert observer.parameters[-1] == {"batch": 301, "ordinary": 302}, (
+                "cycle observation must query live connections, not frozen historical writers"
+            )
+E           AssertionError: cycle observation must query live connections, not frozen historical writers
+E           assert {'batch': 219...rdinary': 209} == {'batch': 301...rdinary': 302}
+E             
+E             Differing items:
+E             {'batch': 219} != {'batch': 301}
+E             {'ordinary': 209} != {'ordinary': 302}
+E             Use -v to get more diff
+
+/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms652-batch-pid-iyuli7bh/tests/test_wms662_batch_pid_snapshot_contract.py:161: AssertionError</failure></testcase></testsuite></testsuites>

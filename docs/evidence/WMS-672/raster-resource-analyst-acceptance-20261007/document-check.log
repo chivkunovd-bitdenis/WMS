@@ -1,0 +1,6 @@
+Checker immutable source: d61805978b3e7878d1056c99b4e6e0823edf49a5
+Scope: only edited WMS-672.md/WMS-652.md; missing sparse test files read from saved HEAD Git blobs. No test execution.
+WMS-672: errors=0
+WMS-652: errors=0
+AGENTS/CLAUDE Git HEAD bytes equal: True
+Verdict: PASS

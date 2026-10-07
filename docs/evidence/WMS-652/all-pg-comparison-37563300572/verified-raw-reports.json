@@ -1,0 +1,58 @@
+{
+  "pg-663-retry": {
+    "report": "release-postgres/663-release-retry.xml",
+    "executed": 5,
+    "required_passed": 5,
+    "sha256": "50d0ddc9fb90982f0414a94d30a4161acca1f551cbe4621e42534758098835d2",
+    "skipped": 0
+  },
+  "pg-662-f6": {
+    "report": "release-postgres/662-f6.xml",
+    "executed": 4,
+    "required_passed": 4,
+    "sha256": "95c4432149fb25599b18199e0357f27986fc68ec845554aa20388dec3104931b",
+    "skipped": 0
+  },
+  "pg-663-669-670-683": {
+    "report": "release-postgres/663-669-670-683.xml",
+    "executed": 6,
+    "required_passed": 6,
+    "sha256": "10618e43255ec5842b95fe438ad1513f2ff14114ff3fe8d820f40b4f931ce8cd",
+    "skipped": 0
+  },
+  "pg-662": {
+    "report": "release-postgres/662.xml",
+    "executed": 10,
+    "required_passed": 10,
+    "sha256": "1e3ee96d38a50915d50e8caff88ca3436a529f611aba35bd55db6537e1ca6ac8",
+    "skipped": 0
+  },
+  "pg-fbs-concurrency": {
+    "report": "release-postgres/fbs-concurrency.xml",
+    "executed": 6,
+    "required_passed": 6,
+    "sha256": "44f4318fd71739696cc9a44de356114ac72eb41d2cfcbaf84dbe82255acf50d5",
+    "skipped": 0
+  },
+  "native-linux": {
+    "report": "native-print.xml",
+    "executed": 30,
+    "required_passed": 30,
+    "sha256": "80167732976309b271b90510ef042567da35c580956aaba0aa4b758f44acc659",
+    "skipped": 0
+  },
+  "pg-675": {
+    "report": "release-postgres/675.xml",
+    "executed": 1,
+    "required_passed": 1,
+    "sha256": "c4e7bbff7779f87c43d597413abfdd7ed94e1ae3bc815cab1dd701cb3568b47b",
+    "skipped": 0
+  },
+  "pg-517-withdrawal": {
+    "report": "release-postgres/517-withdrawal.xml",
+    "executed": 5,
+    "required_passed": 5,
+    "sha256": "91957d8e4d9918a82f7b464d553ad272fb9bf761c74215b56767a81d8699cf5b",
+    "skipped": 0
+  }
+}

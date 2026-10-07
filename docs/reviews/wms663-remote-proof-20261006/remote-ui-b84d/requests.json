@@ -1,0 +1,12 @@
+[
+  {
+    "path": "/operations/packaging-tasks/task-wms663",
+    "method": "GET",
+    "body": null
+  },
+  {
+    "path": "/operations/fbs-orders/order-wms663/ozon-exemplar-documents",
+    "method": "GET",
+    "body": null
+  }
+]

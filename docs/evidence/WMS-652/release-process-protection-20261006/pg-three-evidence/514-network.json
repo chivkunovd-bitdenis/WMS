@@ -1,0 +1,9 @@
+{
+  "allowed_endpoint": [
+    "127.0.0.1",
+    55473
+  ],
+  "allowed_connections": 2,
+  "blocked_attempts": [],
+  "pytest_exit_code": 0
+}

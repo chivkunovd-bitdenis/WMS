@@ -1,0 +1,235 @@
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade  -> 0001, initial tenants users sellers
+INFO  [alembic.runtime.migration] Running upgrade 0001 -> 0002, warehouse location product
+INFO  [alembic.runtime.migration] Running upgrade 0002 -> 0003, inbound intake requests
+INFO  [alembic.runtime.migration] Running upgrade 0003 -> 0004, inventory balances and inbound posted_at
+INFO  [alembic.runtime.migration] Running upgrade 0004 -> 0005, inbound line storage, posted_qty, inventory movements
+INFO  [alembic.runtime.migration] Running upgrade 0005 -> 0006, outbound shipment, stock transfer, nullable movement refs
+INFO  [alembic.runtime.migration] Running upgrade 0006 -> 0007, background_jobs table
+INFO  [alembic.runtime.migration] Running upgrade 0007 -> 0008, outbound shipment line shipped_qty (partial ship)
+INFO  [alembic.runtime.migration] Running upgrade 0008 -> 0009, inbound intake request created_by_seller_id
+INFO  [alembic.runtime.migration] Running upgrade 0009 -> 0010, inbound seller_id rename; outbound request seller_id
+INFO  [alembic.runtime.migration] Running upgrade 0010 -> 0011, seller wildberries credentials (encrypted tokens)
+INFO  [alembic.runtime.migration] Running upgrade 0011 -> 0012, background_jobs.payload_json for job input (e.g. WB seller_id)
+INFO  [alembic.runtime.migration] Running upgrade 0012 -> 0013, seller_wildberries_imported_cards
+INFO  [alembic.runtime.migration] Running upgrade 0013 -> 0014, products: wb_nm_id, wb_vendor_code
+INFO  [alembic.runtime.migration] Running upgrade 0014 -> 0015, seller_wildberries_imported_supplies
+INFO  [alembic.runtime.migration] Running upgrade 0015 -> 0016, inventory_reservations for outbound holds
+INFO  [alembic.runtime.migration] Running upgrade 0016 -> 0017, inbound planned_delivery_date
+INFO  [alembic.runtime.migration] Running upgrade 0017 -> 0018, inbound verification actual_qty and statuses
+INFO  [alembic.runtime.migration] Running upgrade 0018 -> 0019, users.must_set_password for seller first-login password setup
+INFO  [alembic.runtime.migration] Running upgrade 0019 -> 0020, outbound_shipment_requests.planned_shipment_date
+INFO  [alembic.runtime.migration] Running upgrade 0020 -> 0021, marketplace_unload_requests and discrepancy_acts
+INFO  [alembic.runtime.migration] Running upgrade 0021 -> 0022, marketplace_unload_lines and discrepancy_act_lines
+INFO  [alembic.runtime.migration] Running upgrade 0022 -> 0023, discrepancy_act_lines.inbound_intake_line_id
+INFO  [alembic.runtime.migration] Running upgrade 0023 -> 0024, Tenant WB MP warehouse cache, unload wb warehouse id, scan boxes/lines.
+INFO  [alembic.runtime.migration] Running upgrade 0024 -> a06ee1327d13, storage_locations barcode
+INFO  [alembic.runtime.migration] Running upgrade a06ee1327d13 -> 126fb26be297, inbound intake distribution lines
+INFO  [alembic.runtime.migration] Running upgrade 0024 -> 0025, Marketplace unload pick allocations and movement link.
+INFO  [alembic.runtime.migration] Running upgrade 0025, 126fb26be297 -> 0026, merge alembic heads 0025 and 126fb26be297
+INFO  [alembic.runtime.migration] Running upgrade 0026 -> 0027, inbound intake planned and actual box counts
+INFO  [alembic.runtime.migration] Running upgrade 0027 -> 0028, inbound intake boxes with internal barcodes
+INFO  [alembic.runtime.migration] Running upgrade 0028 -> 0029, inbound box intake lines and box open/close timestamps
+INFO  [alembic.runtime.migration] Running upgrade 0029 -> 0030, warehouse storage racks and rack-side-position on locations
+INFO  [alembic.runtime.migration] Running upgrade 0030 -> 0031, marketplace unload seller plan flow: dates, ff_modified, reservations
+INFO  [alembic.runtime.migration] Running upgrade 0031 -> 0032, warehouse-level outbound inventory reservations
+INFO  [alembic.runtime.migration] Running upgrade 0032 -> 0033, inbound box putaway: posted_qty on box lines, box_id on distribution
+INFO  [alembic.runtime.migration] Running upgrade 0033 -> 0034, warehouse_boxes and marketplace unload box links
+INFO  [alembic.runtime.migration] Running upgrade 0034 -> 0035, ff_staff_permissions for fulfillment staff access blocks
+INFO  [alembic.runtime.migration] Running upgrade 0035 -> 0036, packaging tasks + inventory unpacked/packed split
+INFO  [alembic.runtime.migration] Running upgrade 0036 -> 0037, packaging task pick resync warning flag
+INFO  [alembic.runtime.migration] Running upgrade 0037 -> 0038, staff packaging rate, task billing snapshot, packaging permission
+INFO  [alembic.runtime.migration] Running upgrade 0038 -> 20260614_0039, products: wb size variant fields (barcode, chrt_id, size)
+INFO  [alembic.runtime.migration] Running upgrade 20260614_0039 -> 20260615_0040, seller shop delegations + can_manage_seller_shops on users
+INFO  [alembic.runtime.migration] Running upgrade 20260615_0040 -> 20260616_0041, honest sign marking codes + product flag + packaging line qty_marking_printed
+INFO  [alembic.runtime.migration] Running upgrade 20260616_0041 -> 20260626_0042, document sequences and document_number on operational docs
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0042 -> 20260626_0043, marking pools, pool products, extended marking_codes + backfill
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0043 -> 20260626_0044, marking_code_events journal
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0044 -> 20260626_0045, marking_code_imports document_number
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0045 -> 20260626_0046, print_templates
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0046 -> 20260626_0047, ff_staff_permissions shift_lead for marking reprint queue
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0047 -> 20260626_0048, marking_reprint_requests for defect / reprint queue
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0048 -> 20260626_0049, notifications table for in-app notification bus
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0049 -> 20260626_0050, marking_pools.forecast_days_threshold
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0050 -> 20260626_0051, seller_marking_credentials (encrypted ЧЗ/СУЗ/МП tokens)
+INFO  [alembic.runtime.migration] Running upgrade 20260626_0051 -> 20260627_0052, tenant address_storage_enabled flag
+INFO  [alembic.runtime.migration] Running upgrade 20260627_0052 -> 20260628_0053, print_templates user_id
+INFO  [alembic.runtime.migration] Running upgrade 20260628_0053 -> 20260629_0054, marketplace unload has_discrepancy flag
+INFO  [alembic.runtime.migration] Running upgrade 20260629_0054 -> 20260630_0055, marking_code label_artifact_pdf — seller PDF page per CIS from PDF import.
+INFO  [alembic.runtime.migration] Running upgrade 20260630_0055 -> 20260701_0056, document display sequences and backfill display_number
+INFO  [alembic.runtime.migration] Running upgrade 20260701_0056 -> 20260705_0057, tenant separate_marking_print_enabled flag
+INFO  [alembic.runtime.migration] Running upgrade 20260705_0057 -> 20260707_0058, marking_code_import_files — durable storage metadata for source PDF uploads.
+INFO  [alembic.runtime.migration] Running upgrade 20260707_0058 -> 20260709_0059, Allow NULL product dimensions (unknown volume for billing).
+INFO  [alembic.runtime.migration] Running upgrade 20260709_0059 -> 20260710_0060, Add durable product TZ import idempotency records.
+INFO  [alembic.runtime.migration] Running upgrade 20260710_0060 -> 20260710_0061, Add marking print batches ('iterations') and link marking_code_events to them.
+INFO  [alembic.runtime.migration] Running upgrade 20260710_0061 -> 20260730_0062, FBS orders intake: fbs_orders, markings, reservations.
+INFO  [alembic.runtime.migration] Running upgrade 20260730_0062 -> 20260730_0063, FBS marketplace token on seller_wildberries_credentials.
+INFO  [alembic.runtime.migration] Running upgrade 20260730_0063 -> 20260730_0064, FBS supply assembly: fbs_supplies, order supply FK, stickers.
+INFO  [alembic.runtime.migration] Running upgrade 20260730_0064 -> 20260730_0065, FBS order marking unique constraint (order_id, kind, value).
+INFO  [alembic.runtime.migration] Running upgrade 20260730_0065 -> 20260730_0066, FBS PVZ trbx (cargo places) and order.trbx_id FK.
+INFO  [alembic.runtime.migration] Running upgrade 20260730_0066 -> 20260731_0067, Down_revision: 20260730_0066
+INFO  [alembic.runtime.migration] Running upgrade 20260731_0067 -> 20260802_0068, FBS warehouse binding, stock sync items, and FbsOrder warehouse fields.
+INFO  [alembic.runtime.migration] Running upgrade 20260802_0068 -> 20260803_0069, FBS operator flow models: picks, print assets, WB ops, packaging fulfillments.
+INFO  [alembic.runtime.migration] Running upgrade 20260803_0069 -> 20260804_0070, Add the PVZ trbx packaging-box foreign key.
+INFO  [alembic.runtime.migration] Running upgrade 20260804_0070 -> 20260804_0071, FBS shipment reversal ledger.
+INFO  [alembic.runtime.migration] Running upgrade 20260804_0071 -> 20260804_0072, Prevent reuse of Chestny Znak codes and physical boxes in FBS shipments.
+INFO  [alembic.runtime.migration] Running upgrade 20260804_0072 -> 20260806_0073, FBS local physical packing boxes and explicit operator finish.
+INFO  [alembic.runtime.migration] Running upgrade 20260806_0073 -> 20260806_0074, Bring previously applied FBS packing boxes to the PVZ-aware schema.
+INFO  [alembic.runtime.migration] Running upgrade 20260806_0074 -> 20260809_0075, Add per-product FBS stock sync flag and limit.
+INFO  [alembic.runtime.migration] Running upgrade 20260809_0075 -> 20260809_0076, Включить выгрузку остатков на существующих привязках складов ФБС.
+INFO  [alembic.runtime.migration] Running upgrade 20260809_0076 -> 20260810_0077, Разделить seller-side и WB-side статусы FBS-заказа.
+INFO  [alembic.runtime.migration] Running upgrade 20260810_0077 -> 20260811_0077, Track FBS supply source.
+INFO  [alembic.runtime.migration] Running upgrade 20260811_0077 -> 20260811_0078, Store WB supply id on FBS orders.
+INFO  [alembic.runtime.migration] Running upgrade 20260811_0078 -> 20260812_0077, Stock directions and monthly stock snapshots.
+INFO  [alembic.runtime.migration] Running upgrade 20260812_0077 -> 20260812_0078, seller staff permissions for seller cabinet users
+INFO  [alembic.runtime.migration] Running upgrade 20260812_0078 -> 20260812_0079, Inbound returns, stored product volume, and FF-added fact lines.
+INFO  [alembic.runtime.migration] Running upgrade 20260812_0079 -> 20260813_0080, Packaging task operator events.
+INFO  [alembic.runtime.migration] Running upgrade 20260813_0080 -> 20260814_0081, Inbound seller waybill number.
+INFO  [alembic.runtime.migration] Running upgrade 20260814_0081 -> 20260814_0082, Storage location soft delete.
+INFO  [alembic.runtime.migration] Running upgrade 20260814_0082 -> 20260814_0083, Inbound cargo places and product weight.
+INFO  [alembic.runtime.migration] Running upgrade 20260814_0083 -> 20260814_0084, Add schema fields for manual FBS KIZ binding.
+INFO  [alembic.runtime.migration] Running upgrade 20260814_0084 -> 20260814_0085, Track seller-created inbound requests.
+INFO  [alembic.runtime.migration] Running upgrade 20260814_0085 -> 20260815_0086, Add FBS shipment calendar planning fields.
+INFO  [alembic.runtime.migration] Running upgrade 20260815_0086 -> 20260816_0087, Drop one-WMS-warehouse-per-seller unique constraint on FBS bindings.
+INFO  [alembic.runtime.migration] Running upgrade 20260816_0087 -> 20260816_0088, Track WB marketplace-scope check result on seller_wildberries_credentials.
+INFO  [alembic.runtime.migration] Running upgrade 20260816_0088 -> 20260816_0089, Add fbs_binding_stock_pools table.
+INFO  [alembic.runtime.migration] Running upgrade 20260816_0089 -> 20260816_0090, Add fbs_stock_pool_debits table (idempotency ledger for order-driven pool debits).
+INFO  [alembic.runtime.migration] Running upgrade 20260816_0090 -> 20260816_0091, products: wb country of origin and shelf life fields
+INFO  [alembic.runtime.migration] Running upgrade 20260816_0091 -> 20260820_0092, fbs_orders: технический код стикера WB (тот, что читает сканер)
+INFO  [alembic.runtime.migration] Running upgrade 20260820_0092 -> 20260821_0093, fbs_supplies: флаг пропуска требования маркировки Честный знак
+INFO  [alembic.runtime.migration] Running upgrade 20260821_0093 -> 20260822_0094, Add operational warehouse flag and generated scan barcode.
+INFO  [alembic.runtime.migration] Running upgrade 20260821_0093 -> 20260821_0094, fbs_supplies: сохраняемый режим «без распределения»
+INFO  [alembic.runtime.migration] Running upgrade 20260821_0094, 20260822_0094 -> 20260823_0095, Merge the no-distribution and operational-warehouse migration heads.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0095 -> 20260822_09a, Billing financial core: profiles, tariff versions and immutable ledger.
+INFO  [alembic.runtime.migration] Running upgrade 20260822_09a -> 20260822_09b, Add immutable billing invoices and run issues.
+INFO  [alembic.runtime.migration] Running upgrade 20260822_09b -> 20260822_09c, Add the explicit tenant billing activation date.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0095 -> 20260823_0096, Закрепить селлера и склад в факте движения.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0096, 20260822_09c -> 20260823_0097, Merge canonical reporting and billing heads before storage tables.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0097 -> 20260823_0098, Exclude technical FBS routing warehouses from physical storage billing.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0098 -> 20260823_0099, Store immutable product dimension observations and active source snapshot.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0099 -> 20260823_0100, Add immutable storage measurements and monthly statements.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0100 -> 20260825_0111, add generic marketplace account storage
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0111 -> 20260825_0102, add marketplace identity to shared FBS entities
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0102 -> 20260825_0103, support Ozon FBS carriage and product country
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0103 -> 20260825_0104, store complete Ozon FBS posting composition
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0104 -> 20260825_0105, preserve Ozon FBS composition through packaging and reversal
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0105 -> 20260825_0106, store Ozon return giveouts and their imported items for inbound intake
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0106 -> 20260825_0107, add append-only document status and data journal
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0107 -> 20260825_0108, preserve the operator route order of imported Ozon giveouts
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0108 -> 20260825_0109, link Ozon marking codes to their posting positions
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0109 -> 20260826_0110, add reliable operation facts
+INFO  [alembic.runtime.migration] Running upgrade 20260826_0110 -> 20260826_0111, enforce operation fact tenant boundaries and durable unload recovery markers
+INFO  [alembic.runtime.migration] Running upgrade 20260826_0111 -> 20260826_0112, add tariff matrix v2 and immutable ledger lines
+INFO  [alembic.runtime.migration] Running upgrade 20260826_0112 -> 20260827_0113, backfill tariff matrix history and enforce tenant-safe ledger lines.
+INFO  [alembic.runtime.migration] Running upgrade 20260827_0113 -> 20260827_0114, add immutable additive invoice v2 snapshots
+INFO  [alembic.runtime.migration] Running upgrade 20260827_0114 -> 20260827_0115, allow the storage service inside the tariff matrix
+INFO  [alembic.runtime.migration] Running upgrade 20260827_0115 -> 20260828_0116, FBS stock as a percentage rule instead of a stored absolute number
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0116 -> 20260828_0130, Warehouse structure wave 1: pallets, containers, cargo-place contents.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0130 -> 20260828_0170, Warehouse map placement journal.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0116 -> 20260828_0160, Add inventory count documents and movement linkage.
+INFO  [alembic.runtime.migration] Running upgrade 20260823_0100 -> 20260825_0101, Артикул товара уникален внутри продавца, а не на весь тенант.
+INFO  [alembic.runtime.migration] Running upgrade 20260825_0101 -> 20260826_0102, WB-штрихкод товара уникален внутри продавца, а не на весь тенант.
+INFO  [alembic.runtime.migration] Running upgrade 20260826_0102 -> 20260826_0103, Link every FBS shipment ledger row to its physical write-off movement.
+INFO  [alembic.runtime.migration] Running upgrade 20260826_0103 -> 20260827_0104, Record which user initiated an FBS WB operation, when known.
+INFO  [alembic.runtime.migration] Running upgrade 20260827_0104, 20260828_0116 -> 20260828_0120, Свести две линии миграций в одну: эталон и невлитую цепочку 23–28.08.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0120, 20260828_0160, 20260828_0170 -> 20260828_0190, Свести головы всех волн 28.08 в одну.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0190 -> 20260828_0210, Снять запрет отрицательного остатка: минус нужен подтверждённой доставке FBS.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0210 -> 20260828_0220, Record the user who initiated an inventory movement, when known.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0220 -> 20260828_0221, Add the nullable WB product category.
+INFO  [alembic.runtime.migration] Running upgrade 20260828_0221 -> 20260829_0230, Distinguish warehouse boxes from warehouse cargo places.
+INFO  [alembic.runtime.migration] Running upgrade 20260829_0230 -> 20260829_0240, Подбор помнит, из какой тары сняли товар.
+INFO  [alembic.runtime.migration] Running upgrade 20260829_0240 -> 20260829_0241, Подбор ФБС помнит, из какой тары сняли штуку.
+INFO  [alembic.runtime.migration] Running upgrade 20260829_0241 -> 20260830_0242, Привязать созданную в раскладке тару к документу приёмки.
+INFO  [alembic.runtime.migration] Running upgrade 20260830_0242 -> 20260830_0243, Хранить ячейку пустой приёмочной тары.
+INFO  [alembic.runtime.migration] Running upgrade 20260830_0243 -> 20260831_0244, Enable stock sync on active served bindings with configured FBS rules.
+INFO  [alembic.runtime.migration] Running upgrade 20260831_0244 -> 20260901_0245, Add exact FBS shipment source and write-off audit fields.
+INFO  [alembic.runtime.migration] Running upgrade 20260901_0245 -> 20260901_0246, Record the physical container on every inventory movement.
+INFO  [alembic.runtime.migration] Running upgrade 20260901_0246 -> 20260902_0247, Idempotency for inventory "found" scans.
+INFO  [alembic.runtime.migration] Running upgrade 20260902_0247 -> 20260902_0248, FBS order assembly as a billable service
+INFO  [alembic.runtime.migration] Running upgrade 20260902_0248 -> 20260904_0251, fbs units allocation mode: per-warehouse quota in pieces
+INFO  [alembic.runtime.migration] Running upgrade 20260904_0251 -> 20260905_0252, WMS-060: migrate the old displayed remainder into available FBS stock.
+INFO  [alembic.runtime.migration] Running upgrade 20260902_0248 -> 20260903_0249, Уникальность привязки склада учитывает маркетплейс
+INFO  [alembic.runtime.migration] Running upgrade 20260903_0249 -> 20260903_0250, Тара, заведённая прямо в документе пересчёта.
+INFO  [alembic.runtime.migration] Running upgrade 20260903_0250, 20260905_0252 -> 20260905_0253, Свести две линии миграций в одну: остатки WMS-060 и цепочку стенда.
+INFO  [alembic.runtime.migration] Running upgrade 20260905_0253 -> 20260905_0254, WMS-355: assign whole Ozon positions to boxes, keeping WB orders indivisible.
+INFO  [alembic.runtime.migration] Running upgrade 20260905_0254 -> 20260908_0256, WMS-351: independent Ozon publication switch with unchanged legacy values.
+INFO  [alembic.runtime.migration] Running upgrade 20260905_0254 -> 20260906_1100, WMS-381: дата оплаченной подписки у организации.
+INFO  [alembic.runtime.migration] Running upgrade 20260906_1100 -> 20260906_2300, WMS-382: платежи за подписку через ЮKassa.
+INFO  [alembic.runtime.migration] Running upgrade 20260906_2300 -> 20260908_0255, WMS-058: preserve actual Ozon pick source when no transfer is needed.
+INFO  [alembic.runtime.migration] Running upgrade 20260908_0255, 20260908_0256 -> 20260908_0257, WMS-351 WMS-058: join independent production and staging migrations.
+INFO  [alembic.runtime.migration] Running upgrade 20260908_0257 -> 20260910_0100, WMS-174: is_damaged flag on inbound boxes.
+INFO  [alembic.runtime.migration] Running upgrade 20260910_0100 -> 20260910_0101, WMS-154: confirmed empty places belong to the existing count document.
+INFO  [alembic.runtime.migration] Running upgrade 20260908_0257 -> 20260910_1500, WMS-423: tenant_wb_mp_warehouses.wb_warehouse_id -> bigint
+INFO  [alembic.runtime.migration] Running upgrade 20260908_0257 -> 20260910_0261, WMS-338 remove the retired order-debit ledger and FBS direction flag.
+INFO  [alembic.runtime.migration] Running upgrade 20260910_0261, 20260910_0101 -> 20260910_0302, WMS-415 join accepted stock and warehouse changes without the separate chat release.
+INFO  [alembic.runtime.migration] Running upgrade 20260910_0302, 20260910_1500 -> 20260911_0304, WMS-429: merge accepted evening schema and deployed Ozon warehouse width.
+INFO  [alembic.runtime.migration] Running upgrade 20260911_0304 -> 20260913_0443, WMS-443: real employee names without changing account identity.
+INFO  [alembic.runtime.migration] Running upgrade 20260913_0443 -> 20260913_0305, WMS-442: narrowly scoped computer/OS queue pairing.
+INFO  [alembic.runtime.migration] Running upgrade 20260913_0305 -> 20260913_0306, WMS-444: retain the picked packed source in MP boxes.
+INFO  [alembic.runtime.migration] Running upgrade 20260913_0306 -> 20260921_0488, WMS-488: preserve existing delegated managers as explicit grants.
+INFO  [alembic.runtime.migration] Running upgrade 20260913_0306 -> 20260920_0255, WMS-483: distinguish explicit operator units rules from legacy zero pools.
+INFO  [alembic.runtime.migration] Running upgrade 20260920_0255, 20260921_0488 -> 20260921_0489, WMS-488: merge shop grants with the production WMS-483 migration.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0489 -> 20260921_0490, WMS-489: persist scanned KIZ reprints outside marking pools.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0490 -> 20260924_0525, Allow one email in the FF portal and one in the seller portal.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0490 -> 20260921_0491, Recognize the historic staging WMS-489 merge stamp without its assistant branch.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0491 -> 20260920_0307, WMS-469: per-product publication switch on an existing binding pool row.
+INFO  [alembic.runtime.migration] Running upgrade 20260920_0307, 20260924_0525 -> 20260924_0526, Merge the WMS-469 and WMS-525 migration lines.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0526 -> 20260925_0535, Store every WB barcode for a product size.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0490 -> 20260923_0517, WMS-517: immutable WB final-price versions; no legacy-price backfill.
+INFO  [alembic.runtime.migration] Running upgrade 20260923_0517 -> 20260923_0518, WMS-517: durable tenant-scoped withdrawal attempts and read recovery.
+INFO  [alembic.runtime.migration] Running upgrade 20260923_0518 -> 20260924_0519, WMS-517: durable preparation state and per-attempt preflight evidence.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0519 -> 20260924_0520, WMS-517: preserve original GS1 while claiming the provider KI identity.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0526, 20260924_0520 -> 20260927_0556, WMS-556: join withdrawal and current etalon migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260921_0490 -> 20260923_0516, WMS-516: guard physical writes; legacy data repair is an explicit manifest run.
+INFO  [alembic.runtime.migration] Running upgrade 20260923_0516, 20260924_0526 -> 20260925_0530, Merge the WMS-516 and WMS-526 migration lines.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0526 -> 20260927_0548, seller_ozon_imported_cards
+INFO  [alembic.runtime.migration] Running upgrade 20260927_0548, 20260927_0556, 20260925_0535 -> 20260927_0561, PSP-2: join WMS-548, WMS-535 and etalon migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260925_0530, 20260927_0561 -> 20260928_0563, PSP-2-2: join WMS-530 (single stock) and PSP-2 migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260925_0530 -> 20260927_0497, WMS-497: inventory count remembers the products selected at creation.
+INFO  [alembic.runtime.migration] Running upgrade 20260927_0497, 20260928_0563 -> 20260928_0564, PSP-2-2: join WMS-497 (inventory print sheet) and PSP-2-2 migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260911_0304 -> 20260912_0305, WMS-433: таблица переписки AI-помощника
+INFO  [alembic.runtime.migration] Running upgrade 20260912_0305 -> 20260913_2200, WMS-433: счётчик попыток захвата исполнителем
+INFO  [alembic.runtime.migration] Running upgrade 20260913_2200, 20260924_0526 -> 20260925_0433, WMS-433: merge assistant queue and current staging migrations.
+INFO  [alembic.runtime.migration] Running upgrade 20260925_0433, 20260928_0564 -> 20260929_0589, Merge staging-only WMS-433 history with the current etalon history.
+INFO  [alembic.runtime.migration] Running upgrade 20260928_0564 -> 20260929_0565, WMS-588: persistent FBS assembly task aggregate.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565 -> 20260930_0566, WMS-594: independent fulfillment staff section access.
+INFO  [alembic.runtime.migration] Running upgrade 20260930_0566 -> 20260930_0567, WMS-593: operator-selected product label barcode.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565 -> 20261001_2301, WMS-624: durable developer requests and recoverable Trello delivery.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565, 20260929_0589 -> 20260929_0590, Merge the WMS-588 and staging migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0590, 20260930_0567 -> 20261001_0612, WMS-612 merge staging assistant and reviewed warehouse migrations.
+INFO  [alembic.runtime.migration] Running upgrade 20261001_0612, 20261001_2301 -> 20261003_0001, Merge staging and production etalon heads after the 03.10.2026 sync.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running downgrade 20261003_0001 -> 20261001_0612, 20261001_2301, Merge staging and production etalon heads after the 03.10.2026 sync.
+INFO  [alembic.runtime.migration] Running downgrade 20261001_0612 -> 20260929_0590, 20260930_0567, WMS-612 merge staging assistant and reviewed warehouse migrations.
+INFO  [alembic.runtime.migration] Running downgrade 20260929_0590 -> 20260929_0565, 20260929_0589, Merge the WMS-588 and staging migration histories.
+INFO  [alembic.runtime.migration] Running downgrade 20261001_2301 -> 20260929_0565, WMS-624: durable developer requests and recoverable Trello delivery.
+INFO  [alembic.runtime.migration] Running downgrade 20260930_0567 -> 20260930_0566, WMS-593: operator-selected product label barcode.
+INFO  [alembic.runtime.migration] Running downgrade 20260930_0566 -> 20260929_0565, WMS-594: independent fulfillment staff section access.
+INFO  [alembic.runtime.migration] Running downgrade 20260929_0565 -> 20260928_0564, WMS-588: persistent FBS assembly task aggregate.
+INFO  [alembic.runtime.migration] Running downgrade 20260929_0589 -> 20260925_0433, 20260928_0564, Merge staging-only WMS-433 history with the current etalon history.
+INFO  [alembic.runtime.migration] Running downgrade 20260928_0564 -> 20260927_0497, 20260928_0563, PSP-2-2: join WMS-497 (inventory print sheet) and PSP-2-2 migration histories.
+INFO  [alembic.runtime.migration] Running downgrade 20260928_0563 -> 20260925_0530, 20260927_0561, PSP-2-2: join WMS-530 (single stock) and PSP-2 migration histories.
+INFO  [alembic.runtime.migration] Running downgrade 20260927_0561 -> 20260927_0548, 20260927_0556, 20260925_0535, PSP-2: join WMS-548, WMS-535 and etalon migration histories.
+INFO  [alembic.runtime.migration] Running downgrade 20260927_0556 -> 20260924_0526, 20260924_0520, WMS-556: join withdrawal and current etalon migration histories.
+INFO  [alembic.runtime.migration] Running downgrade 20260924_0520 -> 20260924_0519, WMS-517: preserve original GS1 while claiming the provider KI identity.
+INFO  [alembic.runtime.migration] Running downgrade 20260924_0519 -> 20260923_0518, WMS-517: durable preparation state and per-attempt preflight evidence.
+INFO  [alembic.runtime.migration] Running downgrade 20260923_0518 -> 20260923_0517, WMS-517: durable tenant-scoped withdrawal attempts and read recovery.
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20260923_0517 -> 20260923_0518, WMS-517: durable tenant-scoped withdrawal attempts and read recovery.
+INFO  [alembic.runtime.migration] Running upgrade 20260923_0518 -> 20260924_0519, WMS-517: durable preparation state and per-attempt preflight evidence.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0519 -> 20260924_0520, WMS-517: preserve original GS1 while claiming the provider KI identity.
+INFO  [alembic.runtime.migration] Running upgrade 20260924_0526, 20260924_0520 -> 20260927_0556, WMS-556: join withdrawal and current etalon migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260927_0548, 20260927_0556, 20260925_0535 -> 20260927_0561, PSP-2: join WMS-548, WMS-535 and etalon migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260925_0530, 20260927_0561 -> 20260928_0563, PSP-2-2: join WMS-530 (single stock) and PSP-2 migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260927_0497, 20260928_0563 -> 20260928_0564, PSP-2-2: join WMS-497 (inventory print sheet) and PSP-2-2 migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260925_0433, 20260928_0564 -> 20260929_0589, Merge staging-only WMS-433 history with the current etalon history.
+INFO  [alembic.runtime.migration] Running upgrade 20260928_0564 -> 20260929_0565, WMS-588: persistent FBS assembly task aggregate.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565 -> 20260930_0566, WMS-594: independent fulfillment staff section access.
+INFO  [alembic.runtime.migration] Running upgrade 20260930_0566 -> 20260930_0567, WMS-593: operator-selected product label barcode.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565 -> 20261001_2301, WMS-624: durable developer requests and recoverable Trello delivery.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0565, 20260929_0589 -> 20260929_0590, Merge the WMS-588 and staging migration histories.
+INFO  [alembic.runtime.migration] Running upgrade 20260929_0590, 20260930_0567 -> 20261001_0612, WMS-612 merge staging assistant and reviewed warehouse migrations.
+INFO  [alembic.runtime.migration] Running upgrade 20261001_0612, 20261001_2301 -> 20261003_0001, Merge staging and production etalon heads after the 03.10.2026 sync.

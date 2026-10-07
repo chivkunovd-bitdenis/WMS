@@ -1,0 +1,625 @@
+{
+  "source_accepted_sha": "d640d6da1e5ddb16a5628b480ac893b541e3644b",
+  "historical_base": "0f1460b023700a99f17b504d6af3934a02bc68cc",
+  "integration_base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "source_paths": [
+    {
+      "path": ".github/workflows/wms662-c19.yml",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d6110a6f1bcb554b29b606496014f40add34e4fa",
+      "integration_blob": "d6110a6f1bcb554b29b606496014f40add34e4fa"
+    },
+    {
+      "path": "backend/app/services/billing_ledger_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "197f2eb4a16eb8bd22eb42177a7e33b614fbc33c",
+      "integration_blob": "197f2eb4a16eb8bd22eb42177a7e33b614fbc33c"
+    },
+    {
+      "path": "backend/app/services/fbs_cancellation_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "57d6921e2dffbab84cd80375eea446d8d3823cb2",
+      "integration_blob": "57d6921e2dffbab84cd80375eea446d8d3823cb2"
+    },
+    {
+      "path": "backend/app/services/fbs_observed_handoff_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "bd22d651d6911de0de6d217ee14450f493a3f3ff",
+      "integration_blob": "bd22d651d6911de0de6d217ee14450f493a3f3ff"
+    },
+    {
+      "path": "backend/app/services/fbs_order_billing_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "bf1a904cdfad2a4ebcf82e0645e9a0a3b04a2a54",
+      "integration_blob": "bf1a904cdfad2a4ebcf82e0645e9a0a3b04a2a54"
+    },
+    {
+      "path": "backend/app/services/fbs_ozon_packaging_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "62aa99accd773600a5c0b6fc9f6937c16f795bfe",
+      "integration_blob": "62aa99accd773600a5c0b6fc9f6937c16f795bfe"
+    },
+    {
+      "path": "backend/app/services/fbs_shipment_service.py",
+      "decision": "exact source changed-line payload retained on fresh etalon; base changes preserved",
+      "source_blob": "96eb61c4a6832bd5d8cdba4190bd69279372c837",
+      "integration_blob": "56282fa556d5dce0c5194d08c0ee92fdb02edae2",
+      "added_removed_line_payload_identical": true
+    },
+    {
+      "path": "backend/app/services/operation_fact_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "2a215ed1833eb905518933ae09797c544f527000",
+      "integration_blob": "2a215ed1833eb905518933ae09797c544f527000"
+    },
+    {
+      "path": "backend/app/services/ozon_fbs_sync_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "0a744b4a4889c1eb00f8321b81c614b15b29ddff",
+      "integration_blob": "0a744b4a4889c1eb00f8321b81c614b15b29ddff"
+    },
+    {
+      "path": "backend/app/services/wb_marketplace_orders_service.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "fc5e9b12ae179b7a953d6052566e0fe818fc4c5d",
+      "integration_blob": "fc5e9b12ae179b7a953d6052566e0fe818fc4c5d"
+    },
+    {
+      "path": "backend/tests/test_wms662_approve_scope_race.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "f599d34fb3b33c66368630e73faf34931c882a2c",
+      "integration_blob": "f599d34fb3b33c66368630e73faf34931c882a2c"
+    },
+    {
+      "path": "backend/tests/test_wms662_astra_regressions.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "f9aca4b41325a0a9cf8dc39491d06eab771c13b2",
+      "integration_blob": "f9aca4b41325a0a9cf8dc39491d06eab771c13b2"
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "integration_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0"
+    },
+    {
+      "path": "backend/tests/test_wms662_batch_handoff_steady_state.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6f60ecd6c0cd8550857d671a2368f4119b28db4c",
+      "integration_blob": "6f60ecd6c0cd8550857d671a2368f4119b28db4c"
+    },
+    {
+      "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+      "integration_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0"
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "31b3d9c3652ba7db33990f781c881c502171c0b8",
+      "integration_blob": "31b3d9c3652ba7db33990f781c881c502171c0b8"
+    },
+    {
+      "path": "backend/tests/test_wms662_continued_billing_cancellation.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "04fc690830267d5ee926ac1a73fe42b7ea4bcfa8",
+      "integration_blob": "04fc690830267d5ee926ac1a73fe42b7ea4bcfa8"
+    },
+    {
+      "path": "backend/tests/test_wms662_invoiced_continuation.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6a5cba444d47e107f0e100f8bd94b2eebd58ec7a",
+      "integration_blob": "6a5cba444d47e107f0e100f8bd94b2eebd58ec7a"
+    },
+    {
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73",
+      "integration_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73"
+    },
+    {
+      "path": "backend/tests/test_wms662_postgres.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d99830af1e103017e8bbb235c1c2220971816f83",
+      "integration_blob": "d99830af1e103017e8bbb235c1c2220971816f83"
+    },
+    {
+      "path": "docs/KANONICHESKIY_BACKLOG.md",
+      "decision": "only exact WMS-662 entry inserted into fresh backlog; unrelated introductions omitted"
+    },
+    {
+      "path": "docs/requirements/WMS-662.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "7af9aecc75aa8db653a3fa815efa988010f247ec",
+      "integration_blob": "7af9aecc75aa8db653a3fa815efa988010f247ec"
+    },
+    {
+      "path": "docs/requirements/WMS-663.md",
+      "decision": "excluded unrelated unfinished introduction; retained in source branch"
+    },
+    {
+      "path": "docs/requirements/WMS-675.md",
+      "decision": "excluded unrelated unfinished introduction; retained in source branch"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/analysis.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "f37fd21f09fba6494f775c5b088feaa2e836e97f",
+      "integration_blob": "f37fd21f09fba6494f775c5b088feaa2e836e97f"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-batch-causality-7f62e184.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "21c8fcb8fd69388da14a05b182d8ee80342d8827",
+      "integration_blob": "21c8fcb8fd69388da14a05b182d8ee80342d8827"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "0cf2c3c924c08672df38fe978a65209dd45fb910",
+      "integration_blob": "0cf2c3c924c08672df38fe978a65209dd45fb910"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-956cd8a.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "7f241b23de52726e59339eecb79be787a53b81d3",
+      "integration_blob": "7f241b23de52726e59339eecb79be787a53b81d3"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-c19-7fb13f78.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "c3256a0df8a279b2a1fcd56fe19cc028429a815c",
+      "integration_blob": "c3256a0df8a279b2a1fcd56fe19cc028429a815c"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-ca4808f.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "23fc628943c02f42c885fe09e1a9a8a744cc6451",
+      "integration_blob": "23fc628943c02f42c885fe09e1a9a8a744cc6451"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/astra-review-ef9225bb.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "c4fc6964e7ead6f0aee06d17499cd1885586c3d4",
+      "integration_blob": "c4fc6964e7ead6f0aee06d17499cd1885586c3d4"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/batch-handoff-tester.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d110adec69542819bb34b24a42dd5d581a5245ee",
+      "integration_blob": "d110adec69542819bb34b24a42dd5d581a5245ee"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/api.log",
+      "decision": "byte-identical accepted source",
+      "source_blob": "8c01facf99f004219315ec958346d4d7e94a716c",
+      "integration_blob": "8c01facf99f004219315ec958346d4d7e94a716c"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/artifact-sha256.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "a54c28406c8a52973fd8d4b891598aaeb36e06ba",
+      "integration_blob": "a54c28406c8a52973fd8d4b891598aaeb36e06ba"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/facts.json",
+      "decision": "byte-identical accepted source",
+      "source_blob": "955e7557c0807c406c3f09a6f820e21d39793793",
+      "integration_blob": "955e7557c0807c406c3f09a6f820e21d39793793"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/fixture.json",
+      "decision": "byte-identical accepted source",
+      "source_blob": "da9b4ade0ebfb33eee500abe858de5b3e2288b42",
+      "integration_blob": "da9b4ade0ebfb33eee500abe858de5b3e2288b42"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/frontend-package-lock.json",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d1a759767447ad4eb6b73f9fcece047ca602e444",
+      "integration_blob": "d1a759767447ad4eb6b73f9fcece047ca602e444"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/frontend.log",
+      "decision": "byte-identical accepted source",
+      "source_blob": "fe32201ed48334375abb9e7dfe60c990b43871cb",
+      "integration_blob": "fe32201ed48334375abb9e7dfe60c990b43871cb"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-composition.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6",
+      "integration_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-history.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "9be9021e223ebce7a839c6613d615ba95ab19a60",
+      "integration_blob": "9be9021e223ebce7a839c6613d615ba95ab19a60"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-refresh.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6",
+      "integration_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-reopen.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6",
+      "integration_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-Короба.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "255dacc48f6411d21b9d33f9f0c3b91e9e17c297",
+      "integration_blob": "255dacc48f6411d21b9d33f9f0c3b91e9e17c297"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-Подбор.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "ca08f2c0bda548fa6774f3c35fcbccf9058cff3a",
+      "integration_blob": "ca08f2c0bda548fa6774f3c35fcbccf9058cff3a"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/full-Упаковка и маркировка.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "b777733bb3cc1d5b1dd4a04f86bedeac36e30161",
+      "integration_blob": "b777733bb3cc1d5b1dd4a04f86bedeac36e30161"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/last-state.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6",
+      "integration_blob": "6dbd10b4a45812ecde5d0eb4344898c4ac51a9e6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-composition.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc",
+      "integration_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-history.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "a85582aac5d14eca7a661a8077135cdb3bfe20c2",
+      "integration_blob": "a85582aac5d14eca7a661a8077135cdb3bfe20c2"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-refresh.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc",
+      "integration_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-reopen.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc",
+      "integration_blob": "9f9359be67006219e16d53d0d41b9e32554df7fc"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-Короба.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "bcaea01e2ad48ceffc27c2ad2c124a2fe9734d85",
+      "integration_blob": "bcaea01e2ad48ceffc27c2ad2c124a2fe9734d85"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-Подбор.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "3230427372dea052a53e356484055c308a7bcd3e",
+      "integration_blob": "3230427372dea052a53e356484055c308a7bcd3e"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/partial-Упаковка и маркировка.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d87490a8ff51039d08f863196528e9769cf5a86c",
+      "integration_blob": "d87490a8ff51039d08f863196528e9769cf5a86c"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/product-manifest.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "efbd5c6f5852538d7e7ca3feb1276a7f3bc2c09d",
+      "integration_blob": "efbd5c6f5852538d7e7ca3feb1276a7f3bc2c09d"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/product-sha.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "0d7c1096ec9ad2b74aca960988ecb892b07901c4",
+      "integration_blob": "0d7c1096ec9ad2b74aca960988ecb892b07901c4"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/proof-sha.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "29e739e563d64e8949c37f4ba5b93445bdc1fae0",
+      "integration_blob": "29e739e563d64e8949c37f4ba5b93445bdc1fae0"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37440990542/python-dependencies.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "18cf03c36e1f56a64f907075da363c85828763f2",
+      "integration_blob": "18cf03c36e1f56a64f907075da363c85828763f2"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/artifact-sha256.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "1c7201b60fe4b099b976a5fb4f2a488f5699e395",
+      "integration_blob": "1c7201b60fe4b099b976a5fb4f2a488f5699e395"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/facts.json",
+      "decision": "byte-identical accepted source",
+      "source_blob": "1557a5eeed434ff81aa28935129f38f47faf17aa",
+      "integration_blob": "1557a5eeed434ff81aa28935129f38f47faf17aa"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-composition.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "77d30df2f272a99026509e210968372c0cd8da54",
+      "integration_blob": "77d30df2f272a99026509e210968372c0cd8da54"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-refresh.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "77d30df2f272a99026509e210968372c0cd8da54",
+      "integration_blob": "77d30df2f272a99026509e210968372c0cd8da54"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/full-reopen.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "77d30df2f272a99026509e210968372c0cd8da54",
+      "integration_blob": "77d30df2f272a99026509e210968372c0cd8da54"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-composition.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "e5cbdd3df6c6e087a8fe39bd7fb23bd9c27b44d1",
+      "integration_blob": "e5cbdd3df6c6e087a8fe39bd7fb23bd9c27b44d1"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-refresh.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "cd8d890a18ccf15b8adcae10a6641ad17d1affc2",
+      "integration_blob": "cd8d890a18ccf15b8adcae10a6641ad17d1affc2"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/partial-reopen.png",
+      "decision": "byte-identical accepted source",
+      "source_blob": "cd8d890a18ccf15b8adcae10a6641ad17d1affc2",
+      "integration_blob": "cd8d890a18ccf15b8adcae10a6641ad17d1affc2"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/product-sha.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "ad5060edb53adfd67addedec88b99084b09269f6",
+      "integration_blob": "ad5060edb53adfd67addedec88b99084b09269f6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/c19-run-37443974022/proof-sha.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "f493f18cd109d129b598b86726ddb7523ba3f3f3",
+      "integration_blob": "f493f18cd109d129b598b86726ddb7523ba3f3f3"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-developer-fix-evidence.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "34b3bfbe91cb93b2a80ad61dc06bb95462ad489d",
+      "integration_blob": "34b3bfbe91cb93b2a80ad61dc06bb95462ad489d"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-developer-fix.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "7f56c98a6599c5f88460260a2086eeb825d2555d",
+      "integration_blob": "7f56c98a6599c5f88460260a2086eeb825d2555d"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-handoff-tester.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "7661f9757b5af2e778a57e53be7c4d0093dd4b41",
+      "integration_blob": "7661f9757b5af2e778a57e53be7c4d0093dd4b41"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/steady-state-single-run-evidence.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "e12f6f2a0751fa380ba275dfcacc1be4dae470f5",
+      "integration_blob": "e12f6f2a0751fa380ba275dfcacc1be4dae470f5"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-approve-scope-tester-handoff.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "694d417e4c87695c9105dd9f4a44052f09905797",
+      "integration_blob": "694d417e4c87695c9105dd9f4a44052f09905797"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-astra-review-6330ec83.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "65fa42dac509411bd0885851147d7ae84822094e",
+      "integration_blob": "65fa42dac509411bd0885851147d7ae84822094e"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-acceptance-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "dab3a9776be3b99f6858f938834d25d1b14c15c6",
+      "integration_blob": "dab3a9776be3b99f6858f938834d25d1b14c15c6"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-developer-handoff.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "9608ebfbcbca32d26688a7735be7686c17681040",
+      "integration_blob": "9608ebfbcbca32d26688a7735be7686c17681040"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-final-acceptance-7fb13f78.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "63620ec3c44f7ef8079840cb2ead1ddbe8abfca3",
+      "integration_blob": "63620ec3c44f7ef8079840cb2ead1ddbe8abfca3"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-tester-proof-7fb13f7.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "2df7105d3178efbc9a7c3a37e797882f85dd192f",
+      "integration_blob": "2df7105d3178efbc9a7c3a37e797882f85dd192f"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-c19-testwriter-handoff.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "387d6924d20d8186f1b2df370332e130dcae5dbb",
+      "integration_blob": "387d6924d20d8186f1b2df370332e130dcae5dbb"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-developer.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "0c8a53896fc80db64faaacaa387a4316214a2f93",
+      "integration_blob": "0c8a53896fc80db64faaacaa387a4316214a2f93"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f3-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "562f6300ad5fc34254dda3aecc9a8bce4543f3f4",
+      "integration_blob": "562f6300ad5fc34254dda3aecc9a8bce4543f3f4"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f4-f5-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "94026ed69e7141bdad8e15109301db3579471606",
+      "integration_blob": "94026ed69e7141bdad8e15109301db3579471606"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f6-testcorrection-handoff.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "530ea71e648b770f14f0a36a34a87f67662d4912",
+      "integration_blob": "530ea71e648b770f14f0a36a34a87f67662d4912"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-f6-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "bc28a72bff67a0076c14c802bd517c1471f39562",
+      "integration_blob": "bc28a72bff67a0076c14c802bd517c1471f39562"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-final-acceptance-245b09e2.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "be80b733e8b67626b751f1cee3008c4636b84ddd",
+      "integration_blob": "be80b733e8b67626b751f1cee3008c4636b84ddd"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-invoiced-continuation-testwriter.md",
+      "decision": "byte-identical accepted source",
+      "source_blob": "69ef1e22244f4269c7e3c5a3040e963fbdf6b423",
+      "integration_blob": "69ef1e22244f4269c7e3c5a3040e963fbdf6b423"
+    },
+    {
+      "path": "docs/reviews/wms662-663-priority/wms662-regression-tester-handoff.txt",
+      "decision": "byte-identical accepted source",
+      "source_blob": "c8632a31ddff4b49ede65dfedaf43f0e9991a090",
+      "integration_blob": "c8632a31ddff4b49ede65dfedaf43f0e9991a090"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "decision": "exact source changed-line payload retained on fresh etalon; base changes preserved",
+      "source_blob": "a22a697527d0a44a37eab9a2f2437c82d1e339dd",
+      "integration_blob": "d07bd33973db42c3e7c44b6b7f35d2d908adb919",
+      "added_removed_line_payload_identical": true
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx",
+      "decision": "byte-identical accepted source",
+      "source_blob": "04379c221c29e9a70ae195ff3d834e1855b375de",
+      "integration_blob": "04379c221c29e9a70ae195ff3d834e1855b375de"
+    },
+    {
+      "path": "scripts/wms662-c19/browser.mjs",
+      "decision": "byte-identical accepted source",
+      "source_blob": "d9d6154f111d6c4c181c8dd476f8b456e40a4736",
+      "integration_blob": "d9d6154f111d6c4c181c8dd476f8b456e40a4736"
+    },
+    {
+      "path": "scripts/wms662-c19/entry.tsx",
+      "decision": "byte-identical accepted source",
+      "source_blob": "bed79a91f459a6444b44123398fb9eb122e958fd",
+      "integration_blob": "bed79a91f459a6444b44123398fb9eb122e958fd"
+    },
+    {
+      "path": "scripts/wms662-c19/server.py",
+      "decision": "byte-identical accepted source",
+      "source_blob": "913de2190bd281e7fe4d4312691eaf4fe4cbb273",
+      "integration_blob": "913de2190bd281e7fe4d4312691eaf4fe4cbb273"
+    }
+  ],
+  "unchanged_etalon_paths": [
+    ".github/workflows/ci.yml",
+    "AGENTS.md",
+    "CLAUDE.md",
+    "backend/app/api/fbs_supplies.py",
+    "backend/app/api/inbound_intake.py",
+    "backend/app/services/fbs_packing_box_service.py",
+    "backend/app/services/fbs_workspace_service.py",
+    "backend/app/services/inbound_intake_box_service.py",
+    "backend/tests/conftest.py",
+    "backend/tests/test_fbs_packing_box.py",
+    "backend/tests/test_fbs_shipment_deliver_gate_unit.py",
+    "backend/tests/test_fbs_shipment_warehouse_sc.py",
+    "backend/tests/test_wms653_delivery_error_contract.py",
+    "backend/tests/test_wms653_scope_contract.py",
+    "backend/tests/test_wms659_bulk_inbound_boxes.py",
+    "docs/requirements/WMS-652.md",
+    "docs/requirements/WMS-653.md",
+    "docs/requirements/WMS-657.md",
+    "docs/requirements/WMS-659.md",
+    "docs/requirements/WMS-664.md",
+    "docs/requirements/WMS-666.md",
+    "docs/requirements/WMS-668.md",
+    "docs/requirements/WMS-670.md",
+    "docs/requirements/WMS-676.md",
+    "docs/requirements/WMS-681.md",
+    "docs/reviews/HANDOFF-2026-10-06-NIGHT-RELEASE.md",
+    "docs/reviews/artifacts/wms-676/install_sol61.py",
+    "docs/reviews/artifacts/wms-676/local-install.json",
+    "docs/reviews/contract-corrections/WMS-653.json",
+    "docs/reviews/contract-corrections/WMS-657.json",
+    "docs/reviews/contract-corrections/WMS-659.json",
+    "docs/reviews/contract-corrections/WMS-664.json",
+    "docs/reviews/night-candidate-astra-delta-563510a.md",
+    "docs/reviews/night-candidate-astra-e7a8485.md",
+    "docs/reviews/night-candidate-astra-wms660.md",
+    "docs/reviews/night-candidate-release-evidence-2026-10-06.md",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx",
+    "frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx",
+    "frontend/src/screens/ff/inboundDraftPersistence.ts",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialog.dom.test.tsx",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialog.render.test.tsx",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx",
+    "frontend/src/screens/ff/products-fbs/FbsStockDialogContainer.tsx",
+    "frontend/src/screens/ff/products-fbs/fbsStockBlocks.test.ts",
+    "frontend/src/screens/ff/products-fbs/fbsStockBlocks.ts",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.load.test.ts",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms477.test.ts",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms653.dom.test.tsx",
+    "frontend/src/screens/v2/fbsApi.ts",
+    "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts",
+    "frontend/src/screens/v2/fbsUx.ts",
+    "scripts/ci/check_task_documents.py",
+    "scripts/ci/test_check_task_documents.py",
+    "scripts/ci/test_review_fallback_policy.py",
+    "tools/support_agent/README.md",
+    "tools/support_agent/config.example.json",
+    "tools/support_agent/support_agent/agent_coordinator.py",
+    "tools/support_agent/support_agent/agent_dispatcher.py",
+    "tools/support_agent/support_agent/agent_instructions.md",
+    "tools/support_agent/support_agent/config.py",
+    "tools/support_agent/support_agent/hotfix.py",
+    "tools/support_agent/support_agent/llm.py",
+    "tools/support_agent/support_agent/mockups.py",
+    "tools/support_agent/support_agent/night.py",
+    "tools/support_agent/support_agent/prompts.py",
+    "tools/support_agent/tests/test_agent_coordinator.py",
+    "tools/support_agent/tests/test_agent_dispatcher.py",
+    "tools/support_agent/tests/test_agent_dispatcher_batch_topics.py",
+    "tools/support_agent/tests/test_agent_runtime.py",
+    "tools/support_agent/tests/test_llm_router.py",
+    "tools/support_agent/tests/test_model_migration.py",
+    "tools/support_agent/tests/test_night.py",
+    "tools/support_agent/tests/test_owner_and_hotfix.py"
+  ]
+}

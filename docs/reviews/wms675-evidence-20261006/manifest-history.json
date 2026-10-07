@@ -1,0 +1,41 @@
+{
+  "started_at": "2026-10-06T06:54:09.321604+00:00",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "role": "wms_agent_t_b80a893bab8742b68fd76d41502c900f",
+  "queries": [
+    {
+      "name": "historical_fbs_attribution",
+      "started_at": "2026-10-06T06:54:09.322005+00:00",
+      "sql_file": "historical_fbs_attribution.sql",
+      "status": "ok",
+      "csv_file": "historical_fbs_attribution.csv",
+      "rows": 5,
+      "truncated": false,
+      "sha256": "f7045cbc3f81ec8ca954029e1e409f5727ccf7f6e31fdee849bd34a852128ead",
+      "finished_at": "2026-10-06T06:54:11.067195+00:00"
+    },
+    {
+      "name": "balances_vs_all_movements",
+      "started_at": "2026-10-06T06:54:11.067437+00:00",
+      "sql_file": "balances_vs_all_movements.sql",
+      "status": "ok",
+      "csv_file": "balances_vs_all_movements.csv",
+      "rows": 6,
+      "truncated": false,
+      "sha256": "29990543950625b7145e5e52c6bdb3bb28008eee6e13de47aa89d2c3f5d1b05c",
+      "finished_at": "2026-10-06T06:54:12.608014+00:00"
+    },
+    {
+      "name": "other_negative_movements_all_history",
+      "started_at": "2026-10-06T06:54:12.608178+00:00",
+      "sql_file": "other_negative_movements_all_history.sql",
+      "status": "ok",
+      "csv_file": "other_negative_movements_all_history.csv",
+      "rows": 4,
+      "truncated": false,
+      "sha256": "e29042e90756877dd66bab90fbd48853da249dbd25d88f422e5388a935e38255",
+      "finished_at": "2026-10-06T06:54:14.138194+00:00"
+    }
+  ],
+  "finished_at": "2026-10-06T06:54:14.138250+00:00"
+}

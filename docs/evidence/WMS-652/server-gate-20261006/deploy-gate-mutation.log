@@ -1,0 +1,26 @@
+.FF
+======================================================================
+FAIL: test_successful_server_verification_precedes_first_build (scripts.ci.tests.test_server_process_gate.ServerScriptTests.test_successful_server_verification_precedes_first_build)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-server-deploy-gate/scripts/ci/tests/test_server_process_gate.py", line 163, in test_successful_server_verification_precedes_first_build
+    self.assertEqual(calls[0], f'gate:scripts/ci/verify_server_process_ci.py --sha {SHA}')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 'docker:compose -f docker-compose.prod.yml[13 chars]ions' != 'gate:scripts/ci/verify_server_process_ci.[45 chars]aaaa'
+- docker:compose -f docker-compose.prod.yml build migrations
++ gate:scripts/ci/verify_server_process_ci.py --sha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+
+======================================================================
+FAIL: test_unverified_server_stops_before_every_docker_action_even_with_verified_env_flags (scripts.ci.tests.test_server_process_gate.ServerScriptTests.test_unverified_server_stops_before_every_docker_action_even_with_verified_env_flags)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-server-deploy-gate/scripts/ci/tests/test_server_process_gate.py", line 152, in test_unverified_server_stops_before_every_docker_action_even_with_verified_env_flags
+    self.assertEqual(result.returncode, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 95 != 2
+
+----------------------------------------------------------------------
+Ran 3 tests in 2.232s
+
+FAILED (failures=2)

@@ -1,0 +1,13 @@
+diff --git a/frontend/src/screens/v2/fbsSequentialPacking.ts b/frontend/src/screens/v2/fbsSequentialPacking.ts
+index 9d97ad3d0..b68670efe 100644
+--- a/frontend/src/screens/v2/fbsSequentialPacking.ts
++++ b/frontend/src/screens/v2/fbsSequentialPacking.ts
+@@ -323,7 +323,7 @@ export function createPackingScanController(deps: PackingScanDeps): PackingScanC
+     // WMS-643: a box unchecked now never sends a label, even for an order selected
+     // while it was checked; without labels the scan does not need WMS Print.
+     const live = deps.preferences()
+-    const printQr = current.preferences.printQr && live.printQr
++    const printQr = false
+     const poolKiz = !current.explicit && current.preferences.printChz && live.printChz && requiresKiz(current.result)
+     if (poolKiz && !current.result.printed_codes[0]) {
+       current.refresh = true

@@ -1,9 +1,11 @@
 // @vitest-environment jsdom
-import { act, useState } from 'react'
+import { act, useCallback, useState } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest'
 import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
+import { FbsPackingScanBar } from './FbsPackingScanBar'
 import type { FbsWorkspace } from './fbsApi'
+import type { PackingScanController } from './fbsSequentialPacking'
 import { saveFbsScanPrintPreferences } from './fbsScanAutoPrint'
 
 // WMS-574 · рамка поставки в окне групповой сборки — настоящая карточка
@@ -162,6 +164,11 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
       requires_honest_sign: orderId === 'order-a',
     })
   }
+  if (path === '/operations/fbs-orders/kiz/validate') return json({ ok: true, hints: [] })
+  if (path === '/operations/fbs-orders/kiz/commit') {
+    const pair = (body as { pairs: Array<{ order_id: string; value: string }> }).pairs[0]!
+    return json([{ order_id: pair.order_id, status: 'ok', code: 'ok', message: 'ok', newly_bound: true, bound_kiz: pair.value }])
+  }
   const assign = path.match(new RegExp(`^/operations/fbs-supplies/${SUPPLY_ID}/boxes/([^/]+)/orders$`))
   if (assign && method === 'POST') {
     const target = boxes.find((one) => one.id === assign[1])!
@@ -178,6 +185,7 @@ async function server(input: RequestInfo | URL, init?: RequestInit): Promise<Res
 }
 
 let host: HTMLDivElement
+let packingHost: HTMLDivElement
 let root: Root
 
 beforeEach(() => {
@@ -194,12 +202,15 @@ beforeEach(() => {
   globalThis.fetch = server as typeof fetch
   host = document.createElement('div')
   document.body.appendChild(host)
+  packingHost = document.createElement('div')
+  document.body.appendChild(packingHost)
   root = createRoot(host)
 })
 
 afterEach(() => {
   act(() => root.unmount())
   host.remove()
+  packingHost.remove()
   document.body.innerHTML = ''
   globalThis.fetch = originalFetch
 })
@@ -223,9 +234,15 @@ function scan(code: string) {
   })
 }
 
-function Frame({ alwaysExpanded = false }: { alwaysExpanded?: boolean }) {
-  const [active, setActive] = useState(false)
-  return (
+function Frame({ stage = 'packing' }: { stage?: 'packing' | 'boxes' }) {
+  const [controller, setController] = useState<PackingScanController | null>(null)
+  const [, setScanVersion] = useState(0)
+  const registerScanner = useCallback((_supplyId: string, scanner: PackingScanController | null) => setController(scanner), [])
+  const onScanChange = useCallback(() => setScanVersion((version) => version + 1), [])
+  return <>
+    {stage === 'packing' ? (
+      <FbsPackingScanBar token="t-574" enabled={Boolean(controller)} controllers={controller ? [controller] : []} />
+    ) : null}
     <FfFbsSupplyWorkspace
       token="t-574"
       authHeaders={() => ({ Authorization: 'Bearer t-574' })}
@@ -234,43 +251,57 @@ function Frame({ alwaysExpanded = false }: { alwaysExpanded?: boolean }) {
       open
       onClose={() => undefined}
       assemblyFrame={{
-        active,
-        expanded: alwaysExpanded || active,
+        stage,
+        packingHost,
+        registerScanner,
+        onScanChange,
+        active: true,
+        expanded: true,
         visible: true,
         onToggleExpanded: () => undefined,
-        onActivate: () => setActive(true),
-        onDeactivate: () => setActive(false),
+        onActivate: () => undefined,
+        onDeactivate: () => undefined,
         onWorkspaceChange: () => undefined,
         registerEscape: () => undefined,
       }}
     />
-  )
+  </>
+}
+
+async function renderFrame(stage: 'packing' | 'boxes', waitMs = 20) {
+  await act(async () => {
+    root.render(<Frame stage={stage} />)
+  })
+  await settle(waitMs)
 }
 
 async function startFrame() {
-  await act(async () => {
-    root.render(<Frame />)
-  })
-  await settle(30)
-  const start = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-start-${SUPPLY_ID}"]`)!
-  await act(async () => start.click())
-  await settle(80)
-  expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).not.toBeNull()
+  await renderFrame('packing', 80)
+  expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
+  expect(document.querySelector('[data-testid="fbs-kiz-scan-bar"]')).toBeNull()
+  expect(document.querySelector(`[data-testid="fbs-assembly-supply-start-${SUPPLY_ID}"]`)).toBeNull()
+  expect(document.querySelector(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)).toBeNull()
   act(() => (document.activeElement as HTMLElement | null)?.blur())
 }
 
-const boxLine = (number: number) => Array.from(document.querySelectorAll(`[data-testid="fbs-assembly-boxes-${SUPPLY_ID}"] p`))
+const showBoxes = () => renderFrame('boxes')
+const showPacking = () => renderFrame('packing')
+
+const boxesRoot = () => document.querySelector(`[data-testid="fbs-assembly-boxes-panel-${SUPPLY_ID}"] [data-testid="fbs-boxes"]`)
+const boxLine = (number: number) => Array.from(boxesRoot()?.querySelectorAll('p') ?? [])
   .map((node) => node.textContent ?? '')
   .find((text) => text.startsWith(`Короб ${number}`)) ?? ''
 const assignCalls = () => calls.filter((call) => /\/boxes\/[^/]+\/orders$/.test(call.path))
-const scanMessage = () => document.querySelector('[data-testid="fbs-kiz-scan-message"]')?.textContent ?? ''
+const scanMessage = () => document.querySelector('[data-testid="fbs-unified-scan"]')?.textContent ?? ''
+const scanError = () => document.querySelector('[data-testid="fbs-unified-scan"] [role="alert"]')?.textContent ?? ''
 
-describe('WMS-574 · скан в активной рамке окна сборки', () => {
-  it('R17: «Начать работу» открывает последний короб без создания нового и без start-work', async () => {
+describe('WMS-574 · скан в единой поверхности сборки', () => {
+  it('R17/WMS-666: единая поверхность использует последний короб без отдельного старта и без start-work', async () => {
     boxes = [box('box-1', 1, [], true), box('box-2', 2, [], true)]
     await startFrame()
     expect(calls.some((call) => call.path.endsWith('/start-work'))).toBe(false)
     expect(calls.some((call) => call.method === 'POST' && call.path.endsWith('/boxes'))).toBe(false)
+    await showBoxes()
     expect(boxLine(2)).toContain('открыт — сканы идут сюда')
     expect(boxLine(1)).not.toContain('открыт')
   })
@@ -284,14 +315,20 @@ describe('WMS-574 · скан в активной рамке окна сборк
     expect(assignCalls().map((call) => [call.path, call.body])).toEqual([
       [`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-1/orders`, { order_ids: ['order-c'] }],
     ])
-    expect(scanMessage()).not.toContain('активен')
+    expect(scanMessage()).not.toContain('сканируйте ЧЗ')
+    await showBoxes()
     expect(boxLine(1)).toContain('1 шт')
+    await showPacking()
 
     scan(STICKER_KIZ)
     await settle(80)
+    expect(assignCalls()).toHaveLength(1)
+    expect(scanMessage()).toContain('сканируйте ЧЗ')
+    scan('0104600000000017215AbCdEfGh1234')
+    await settle(80)
     expect(assignCalls()).toHaveLength(2)
     expect(assignCalls()[1]!.body).toEqual({ order_ids: ['order-a'] })
-    expect(scanMessage()).toContain('активен')
+    expect(scanMessage()).not.toContain('сканируйте ЧЗ')
   })
 
   it('Д8: заказ, уже лежащий в коробе, не перекладывается в открытый', async () => {
@@ -300,6 +337,7 @@ describe('WMS-574 · скан в активной рамке окна сборк
     scan(STICKER_PLAIN)
     await settle(80)
     expect(assignCalls()).toHaveLength(0)
+    await showBoxes()
     expect(boxLine(1)).toContain('1 шт')
   })
 
@@ -308,65 +346,77 @@ describe('WMS-574 · скан в активной рамке окна сборк
     await startFrame()
     scan(STICKER_FOREIGN)
     await settle(80)
-    expect(document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent).toBe('Этого товара нет в поставке WB-GI-574')
+    expect(scanError()).toBe('Этого товара нет в поставке WB-GI-574')
     expect(assignCalls()).toHaveLength(0)
   })
 
-  it('Д11: нет открытого короба — скан выполняется, заказ не кладётся, подсказка «Откройте или создайте короб.»', async () => {
+  it('Д11/WMS-666: нет открытого короба — общий скан выполняется без новой блокировки и заказ не кладётся', async () => {
     boxes = [box('box-1', 1, [], true)]
     await startFrame()
-    const close = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')!
-    await act(async () => close.click())
+    await showBoxes()
+    const close = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')
+    expect(close).not.toBeNull()
+    await act(async () => close!.click())
+    await showPacking()
     scan(STICKER_KIZ)
     await settle(80)
     expect(calls.some((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup'))).toBe(true)
     expect(assignCalls()).toHaveLength(0)
-    expect(document.querySelector('[data-testid="fbs-assembly-box-hint"]')?.textContent).toBe('Откройте или создайте короб.')
-    expect(scanMessage()).toContain('активен')
+    expect(scanError()).toBe('')
+    expect(scanMessage()).toContain('сканируйте ЧЗ')
   })
 
-  it('WMS-589: «Начать работу» без коробов создаёт и открывает один короб, но не запрашивает и не печатает QR', async () => {
+  it('WMS-589/WMS-666: без коробов общий скан остаётся доступен и не создаёт короб или QR сам', async () => {
     boxes = []
     await startFrame()
+    scan(STICKER_KIZ)
+    await settle(80)
     const created = calls.filter((call) => call.method === 'POST' && call.path === `/operations/fbs-supplies/${SUPPLY_ID}/boxes`)
-    expect(created).toHaveLength(1)
-    expect(created[0]!.body).toMatchObject({ count: 1, without_distribution: false })
+    expect(created).toHaveLength(0)
     expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
-    expect(boxLine(1)).toContain('открыт — сканы идут сюда')
+    expect(calls.some((call) => call.path.startsWith('/operations/fbs-orders/kiz/lookup'))).toBe(true)
+    expect(scanMessage()).toContain('сканируйте ЧЗ')
   })
 
-  it('WMS-589: «Создать короб» создаёт и открывает короб без печати QR', async () => {
+  it('WMS-589/WMS-666: новый короб становится открытым, принимает следующий скан и не печатает QR', async () => {
     boxes = [box('box-1', 1, [], true)]
     await startFrame()
-    const create = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-create-box-${SUPPLY_ID}"]`)!
+    await showBoxes()
+    const create = Array.from(boxesRoot()!.querySelectorAll<HTMLButtonElement>('button'))
+      .find((button) => button.textContent === 'Добавить короба')!
     await act(async () => create.click())
     await settle(80)
 
     expect(calls.filter((call) => call.method === 'POST' && call.path === `/operations/fbs-supplies/${SUPPLY_ID}/boxes`)).toHaveLength(1)
     expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
     expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+    await showPacking()
+    scan(STICKER_PLAIN)
+    await settle(80)
+    expect(assignCalls().map((call) => call.path)).toEqual([
+      `/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-2/orders`,
+    ])
   })
 
-  it('WMS-589: завершение работы и переключатель рамки не открывают печать', async () => {
+  it('WMS-589/WMS-666: переход между общей упаковкой и коробами не открывает печать и не возвращает рамку', async () => {
     boxes = [box('box-1', 1, [], true)]
     await startFrame()
     calls = []
 
-    const finish = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)!
-    await act(async () => finish.click())
-    const toggle = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-toggle-${SUPPLY_ID}"]`)!
-    await act(async () => toggle.click())
-    await settle(20)
+    await showBoxes()
+    await showPacking()
 
     expect(calls.filter((call) => call.path.endsWith('/retry-qr'))).toHaveLength(0)
     expect(document.body.textContent).not.toContain('Проверка перед печатью')
+    expect(document.querySelector(`[data-testid="fbs-assembly-supply-start-${SUPPLY_ID}"]`)).toBeNull()
+    expect(document.querySelector(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)).toBeNull()
   })
 
   it('WMS-589: явная кнопка «QR» короба по-прежнему открывает предпросмотр печати', async () => {
     boxes = [box('box-1', 1, [], true)]
     await startFrame()
-    const boxesRoot = document.querySelector(`[data-testid="fbs-assembly-boxes-${SUPPLY_ID}"]`)!
-    const qr = Array.from(boxesRoot.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
+    await showBoxes()
+    const qr = Array.from(boxesRoot()!.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
     await act(async () => qr.click())
 
     expect(document.body.textContent).toContain('Проверка перед печатью')
@@ -375,8 +425,8 @@ describe('WMS-574 · скан в активной рамке окна сборк
   it('WMS-681: короб без грузоместа WB не печатает внутренний QR вместо этикетки WB', async () => {
     boxes = [{ ...box('box-1', 1, [], false), wb_trbx_id: null }]
     await startFrame()
-    const boxesRoot = document.querySelector(`[data-testid="fbs-assembly-boxes-${SUPPLY_ID}"]`)!
-    const qr = Array.from(boxesRoot.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
+    await showBoxes()
+    const qr = Array.from(boxesRoot()!.querySelectorAll('button')).find((button) => button.textContent === 'QR') as HTMLButtonElement
     await act(async () => qr.click())
     await settle(30)
     expect(document.body.textContent).not.toContain('Проверка перед печатью')
@@ -387,7 +437,8 @@ describe('WMS-574 · скан в активной рамке окна сборк
   it('WMS-681: массовая печать не подменяет отсутствующие этикетки WB внутренними QR', async () => {
     boxes = [{ ...box('box-1', 1, [], false), wb_trbx_id: null }]
     await startFrame()
-    const printAll = Array.from(document.querySelectorAll('button')).find((button) => button.textContent?.includes('Печать всех QR')) as HTMLButtonElement
+    await showBoxes()
+    const printAll = Array.from(boxesRoot()!.querySelectorAll('button')).find((button) => button.textContent?.includes('Печать всех QR')) as HTMLButtonElement
     expect(printAll).toBeTruthy()
     await act(async () => printAll.click())
     await settle(30)
@@ -401,27 +452,33 @@ describe('WMS-574 · итоговое ревью', () => {
     boxes = [box('box-1', 1, [], true), box('box-2', 2, [], true)]
     delays = { lookup: 160 }
     await startFrame()
+    await showBoxes()
     expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+    await showPacking()
 
     scan(STICKER_PLAIN)
     await settle(30)
-    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')!
-    await act(async () => openFirst.click())
+    await showBoxes()
+    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')
+    expect(openFirst).not.toBeNull()
+    await act(async () => openFirst!.click())
     expect(boxLine(1)).toContain('открыт — сканы идут сюда')
+    await showPacking()
     await settle(250)
 
     expect(assignCalls().map((call) => call.path)).toEqual([`/operations/fbs-supplies/${SUPPLY_ID}/boxes/box-2/orders`])
   })
 
-  it('R22 (F1): оператор завершил работу с поставкой, пока шёл поиск стикера, — заказ всё равно ложится в короб, открытый при скане', async () => {
+  it('R22 (F1): оператор открыл вкладку коробов, пока шёл поиск, — заказ ложится в короб, открытый при скане', async () => {
     boxes = [box('box-1', 1, [], true)]
     delays = { lookup: 160 }
     await startFrame()
 
     scan(STICKER_PLAIN)
     await settle(30)
-    const finish = document.querySelector<HTMLButtonElement>(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)!
-    await act(async () => finish.click())
+    await showBoxes()
+    expect(document.querySelector(`[data-testid="fbs-assembly-supply-finish-${SUPPLY_ID}"]`)).toBeNull()
+    await showPacking()
     await settle(250)
 
     expect(assignCalls().map((call) => [call.path, call.body])).toEqual([
@@ -437,14 +494,19 @@ describe('WMS-574 · итоговое ревью', () => {
     boxes = [box('box-1', 1, [], true), box('box-2', 2, [], true)]
     delays = { lookup: 150, autoPrint: 150 }
     await startFrame()
+    await showBoxes()
     expect(boxLine(2)).toContain('открыт — сканы идут сюда')
+    await showPacking()
 
     scan('4600000000017')
     await settle(20)
     scan('4600000000017')
     await settle(20)
-    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')!
-    await act(async () => openFirst.click())
+    await showBoxes()
+    const openFirst = document.querySelector<HTMLButtonElement>('[data-testid="fbs-assembly-box-toggle-box-1"]')
+    expect(openFirst).not.toBeNull()
+    await act(async () => openFirst!.click())
+    await showPacking()
     scan('4600000000017')
     await settle(1200)
 
@@ -460,27 +522,26 @@ describe('WMS-574 · итоговое ревью', () => {
   it('Д19: ШК товара этой поставки при выключенных галках — прежний текст карточки, чужой код — «Этого товара нет…»', async () => {
     boxes = [box('box-1', 1, [], true)]
     await startFrame()
-    const errorText = () => document.querySelector('[data-testid="fbs-kiz-scan-error"]')?.textContent
 
     scan('4600000000017')
     await settle(80)
-    expect(errorText()).toBe('Номер или стикер заказа не найден в этой поставке')
+    expect(scanError()).toBe('Номер или стикер заказа не найден в этой поставке')
 
     // ЧЗ товара этой поставки: GTIN 04600000000017 совпадает с ШК товара заказа.
     scan('0104600000000017215AbCdEfGh1234')
     await settle(80)
-    expect(errorText()).toBe('Номер или стикер заказа не найден в этой поставке')
+    expect(scanError()).toBe('Номер или стикер заказа не найден в этой поставке')
 
     scan('4600000099999')
     await settle(80)
-    expect(errorText()).toBe('Этого товара нет в поставке WB-GI-574')
+    expect(scanError()).toBe('Этого товара нет в поставке WB-GI-574')
   })
 
   it('F4: после передачи в рамке — печать QR всей поставки, как на вкладке «Короба» карточки', async () => {
     transferred = { assetReady: true }
     boxes = [box('box-1', 1, ['order-a'], true)]
     await act(async () => {
-      root.render(<Frame alwaysExpanded />)
+      root.render(<Frame stage="boxes" />)
     })
     await settle(50)
     expect(document.querySelector('[data-testid="fbs-supply-qr"]')).not.toBeNull()
@@ -491,7 +552,7 @@ describe('WMS-574 · итоговое ревью', () => {
     transferred = { assetReady: false }
     boxes = [box('box-1', 1, ['order-a'], true)]
     await act(async () => {
-      root.render(<Frame alwaysExpanded />)
+      root.render(<Frame stage="boxes" />)
     })
     await settle(50)
     expect(document.querySelector('[data-testid="fbs-supply-qr-retry"]')).not.toBeNull()
@@ -499,8 +560,8 @@ describe('WMS-574 · итоговое ревью', () => {
   })
 })
 
-describe('WMS-574 · обычная карточка поставки не меняется', () => {
-  it('скан стикера в карточке не кладёт заказ в короб и не снимает ожидание ЧЗ', async () => {
+describe('WMS-574/WMS-666 · карточка поставки использует ту же единую полосу', () => {
+  it('скан стикера в карточке не кладёт заказ в короб и не создаёт legacy-рамку', async () => {
     boxes = [box('box-1', 1, [], true)]
     window.sessionStorage.setItem(`wms:fbs:${SUPPLY_ID}:stage`, 'packing')
     await act(async () => {
@@ -521,9 +582,11 @@ describe('WMS-574 · обычная карточка поставки не ме�
     await settle(80)
     expect(assignCalls()).toHaveLength(0)
     // WMS-631 M9: a sticker of an order without KIZ is packed at once — nothing waits.
-    expect(scanMessage()).not.toContain('активен')
+    expect(scanMessage()).not.toContain('сканируйте ЧЗ')
     expect(document.body.textContent).not.toContain('Создать короб')
-    expect(document.body.textContent).toContain('Внесение КИЗ со стикера — только если Честный знак уже наклеен селлером')
+    expect(document.querySelectorAll('[data-testid="fbs-unified-scan"]')).toHaveLength(1)
+    expect(document.body.textContent).not.toContain('Начать работу с поставкой')
+    expect(document.body.textContent).not.toContain('Завершить работу с поставкой')
   })
 
   it('WMS-589: явная кнопка «QR» обычной поставки по-прежнему открывает предпросмотр', async () => {
@@ -555,7 +618,7 @@ describe('WMS-574 · обычная карточка поставки не ме�
 // «/», «?», «&» уходил на сервер искажённым — клиент переводил только буквы,
 // и серверный ремонт раскладки не включался. Теперь рамка, как и карточка,
 // отдаёт серверу сырую пачку — ровно то, что легло бы в поле скана.
-describe('WMS-575 · ЧЗ в русской раскладке в активной рамке', () => {
+describe('WMS-575 · ЧЗ в русской раскладке в единой поверхности', () => {
   const LAT = "qwertyuiop[]asdfghjkl;'zxcvbnm,./"
   const RUS = 'йцукенгшщзхъфывапролджэячсмитьбю.'
   const ruKey = (ch: string): { key: string; code: string; shiftKey: boolean } => {

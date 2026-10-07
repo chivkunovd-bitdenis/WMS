@@ -1,0 +1,76 @@
+[
+  {
+    "mutation": "hide-packing-print-action",
+    "sourceSha": "695a429cd08b4a0b3675cb2d4af0d3f33eeaf9f5",
+    "failed": [
+      {
+        "id": "WMS652.geometry[wb-single;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: wb-a-order print action; {\"x\":1460.25,\"y\":529.1875,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[wb-group-one;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: wb-a-order print action; {\"x\":1460.25,\"y\":337.515625,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[wb-group-many;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: wb-a-order print action; {\"x\":1460.25,\"y\":337.515625,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[ozon-single;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: ozon-a-order print action; {\"x\":1460.25,\"y\":672.4375,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[ozon-group-one;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: ozon-a-order print action; {\"x\":1460.25,\"y\":473.71875,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[ozon-group-many;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: ozon-a-order print action; {\"x\":1460.25,\"y\":473.71875,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      },
+      {
+        "id": "WMS652.geometry[mixed-group-many;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: wb-a-order print action; {\"x\":1460.25,\"y\":337.515625,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      }
+    ],
+    "otherCasesPass": 36,
+    "productBytesRestoredInFinally": true
+  },
+  {
+    "mutation": "overlap-order-seller-header",
+    "sourceSha": "695a429cd08b4a0b3675cb2d4af0d3f33eeaf9f5",
+    "failed": [
+      {
+        "id": "WMS652.geometry[orders-expired;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: order table columns must not overlap"
+      },
+      {
+        "id": "WMS652.geometry[orders-cancelled;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: order table columns must not overlap"
+      }
+    ],
+    "otherCasesPass": 41,
+    "productBytesRestoredInFinally": true
+  },
+  {
+    "mutation": "hide-selected-action-only-for-long-data",
+    "sourceSha": "695a429cd08b4a0b3675cb2d4af0d3f33eeaf9f5",
+    "failed": [
+      {
+        "id": "WMS652.geometry[selection;1600x1000-long]",
+        "status": "FAIL",
+        "failure": "AssertionError [ERR_ASSERTION]: action must have visible unobscured bounds: [data-testid=\"fbs-selected-open\"]; {\"x\":703.5546875,\"y\":945.4375,\"visible\":false,\"reachable\":true,\"disabled\":false}"
+      }
+    ],
+    "otherCasesPass": 42,
+    "productBytesRestoredInFinally": true
+  }
+]

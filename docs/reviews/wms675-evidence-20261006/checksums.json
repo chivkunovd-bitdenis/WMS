@@ -1,0 +1,170 @@
+{
+  "generated_at": "2026-10-06T06:58:01.212792+00:00",
+  "files": [
+    {
+      "name": "balances_locations.csv",
+      "bytes": 1549,
+      "sha256": "d4105aa47b4b326eb4a8dfb56eff164c962a8932a7a8d72b78f64f31a25cb7d4"
+    },
+    {
+      "name": "balances_locations.failed.sql",
+      "bytes": 700,
+      "sha256": "a5ad432a3c6ef2bf13758c39bf2243181d537682add15db56bf560036c8f2ad0"
+    },
+    {
+      "name": "balances_locations.sql",
+      "bytes": 706,
+      "sha256": "5f15e48433139306c7f11f3d1409817d6a1529636ad7d7fe9c286f61a97e0150"
+    },
+    {
+      "name": "balances_vs_all_movements.csv",
+      "bytes": 706,
+      "sha256": "29990543950625b7145e5e52c6bdb3bb28008eee6e13de47aa89d2c3f5d1b05c"
+    },
+    {
+      "name": "balances_vs_all_movements.sql",
+      "bytes": 1056,
+      "sha256": "f0a3f45bbea547b43a7ffff9fd73693d5d9feebe9046f689766ba923236c9e5c"
+    },
+    {
+      "name": "collect_history_detail.py",
+      "bytes": 3736,
+      "sha256": "08efaf68000258f10754643625396d4ea65e7c2464f618443d495b51e80f2f05"
+    },
+    {
+      "name": "collect_scoped.py",
+      "bytes": 9833,
+      "sha256": "4b3ee408f5bd116a611857c25882fa307dbb70d6513474b10711a8884fdb35ab"
+    },
+    {
+      "name": "fbs_movements_all_history_links.csv",
+      "bytes": 934,
+      "sha256": "9eacc18ffa3df0d8f7fcb44932f85075b67981af6cebd6bd314bb265e4739240"
+    },
+    {
+      "name": "fbs_movements_all_history_links.sql",
+      "bytes": 1551,
+      "sha256": "0dac7e9b4d28211d5b6245ef78a8c827d62709f81c8a384827b6fa10dda3b085"
+    },
+    {
+      "name": "historical_fbs_attribution.csv",
+      "bytes": 884,
+      "sha256": "f7045cbc3f81ec8ca954029e1e409f5727ccf7f6e31fdee849bd34a852128ead"
+    },
+    {
+      "name": "historical_fbs_attribution.sql",
+      "bytes": 1327,
+      "sha256": "426d091c493207d6d72b79a8bb18bf94a849579af996b615dbcd34c7709970b4"
+    },
+    {
+      "name": "identity.csv",
+      "bytes": 471,
+      "sha256": "53fe147739be8845357a0f34e64afd28023751fbb8d28471a7c67d9649ed1f4a"
+    },
+    {
+      "name": "identity.sql",
+      "bytes": 388,
+      "sha256": "b2a7c9119e4600225725d0d9559c891dce90d64bf438196b1cc2107fa8c92401"
+    },
+    {
+      "name": "ledger.csv",
+      "bytes": 18807,
+      "sha256": "a5da212616b94df25a0105668e63663f718d85fb4fd3a2ade6a77bd478c715c6"
+    },
+    {
+      "name": "ledger.sql",
+      "bytes": 643,
+      "sha256": "dfc54a1cd29e1361046fdee8f987f2722fd00264308c4ba72975a4a053949684"
+    },
+    {
+      "name": "manifest-balances_locations.json",
+      "bytes": 788,
+      "sha256": "c8106077a3ee8f46f76d07680efecdae76068967ed534a4f40f25c9872fca99d"
+    },
+    {
+      "name": "manifest-history.json",
+      "bytes": 1533,
+      "sha256": "c57f8a6380a82ae5e58ce12542be8a1a72478e8ed90f220d93a4757dd98dc197"
+    },
+    {
+      "name": "manifest.json",
+      "bytes": 3987,
+      "sha256": "02a17c782041fdc15a17e8bb0e77f4f9d087418d89d9c5bbec3a590d8bfb56ee"
+    },
+    {
+      "name": "movements_types_all_history.csv",
+      "bytes": 2762,
+      "sha256": "38995ff956d073f673934b4f2de054841f1d74fbe84fbc343b5dd6e0c4b06c46"
+    },
+    {
+      "name": "movements_types_all_history.sql",
+      "bytes": 706,
+      "sha256": "fca9af2a431a37c20f3361273f4a03353471e5694a42fe80f24ac2e275eb59fa"
+    },
+    {
+      "name": "negative_other_movements_after_orders.csv",
+      "bytes": 146,
+      "sha256": "499a55f8e23b2ce4c32bab656e701ffb686e6491a3d8335842e1841ad341c592"
+    },
+    {
+      "name": "negative_other_movements_after_orders.sql",
+      "bytes": 1194,
+      "sha256": "c7176821d9f9761b1f4a97007a336ff4310c52b14f7a76459396cbd119d4f14c"
+    },
+    {
+      "name": "orders_positions_reserves.csv",
+      "bytes": 11096,
+      "sha256": "a40f1b5b3ee58e0ed12b7474a90dc43b1f24e941c8d4421367846bc993a6b7dd"
+    },
+    {
+      "name": "orders_positions_reserves.sql",
+      "bytes": 834,
+      "sha256": "53c68807abc951c29bbc40b114f284fd12fdbacc50ef735da513cecd134fd27a"
+    },
+    {
+      "name": "other_negative_movements_all_history.csv",
+      "bytes": 1361,
+      "sha256": "e29042e90756877dd66bab90fbd48853da249dbd25d88f422e5388a935e38255"
+    },
+    {
+      "name": "other_negative_movements_all_history.sql",
+      "bytes": 687,
+      "sha256": "9cd3610c62f3d00df0e63eea5554b74327c3133f5720d0beaf998ca57dfcca35"
+    },
+    {
+      "name": "ozon_read_plan.json",
+      "bytes": 10862,
+      "sha256": "cccfb2d7c024f02309f23424a67473723cfcb6d7d85312f138f1b152e04bc00b"
+    },
+    {
+      "name": "position_picks.csv",
+      "bytes": 113,
+      "sha256": "401b897533344302451caef677d444f7c1fe446415f800fa9bb872504f329ffd"
+    },
+    {
+      "name": "position_picks.sql",
+      "bytes": 512,
+      "sha256": "cbf2d31857fa81b05af724e2efc61cc817166b1cd9d4fb7c89789bb89873e3e3"
+    },
+    {
+      "name": "posting_reconciliation.csv",
+      "bytes": 6034,
+      "sha256": "1ca1945e330f0c5cf26e1d18431af72faa73d40c0f60a4f83d0b28821250fe7f"
+    },
+    {
+      "name": "telegram_identity.json",
+      "bytes": 685,
+      "sha256": "9048700b6e4024e219fff5da86e267071e6bc30517dcc810f418d900d364e191"
+    },
+    {
+      "name": "unlinked_fbs_movements.csv",
+      "bytes": 147,
+      "sha256": "5dd344d4192b2b16662607b2315dcc8b9d56f3ee0826aa1f73739f0e3964d4dd"
+    },
+    {
+      "name": "unlinked_fbs_movements.sql",
+      "bytes": 1069,
+      "sha256": "937bd9a92cd79e3ca4a7f1e121247c0a9840f9ebd0f6fe952fc4289a2f8ced2b"
+    }
+  ]
+}

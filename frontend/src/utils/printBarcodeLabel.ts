@@ -49,8 +49,10 @@ function labelPageHtml(options: BarcodeLabelPrintOptions, index: number, total: 
  * Массовая печать намеренно собирает все страницы в один iframe: термопринтер
  * получает непрерывную ленту, а не набор отдельных браузерных заданий.
  */
-export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void {
-  if (optionsList.length === 0) return
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): void
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff: { beforeTransfer: (html: string) => void }): Promise<void>
+export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[], handoff?: { beforeTransfer: (html: string) => void }): void | Promise<void> {
+  if (optionsList.length === 0) return handoff ? Promise.resolve() : undefined
   const first = optionsList[0]!
   const { labelSize, layout = 'default' } = first
   if (optionsList.some((options) => options.labelSize?.id !== labelSize?.id || (options.layout ?? 'default') !== layout)) {
@@ -101,6 +103,15 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     window.__WMS_LAST_PRINT_HTML__ = html
   }
 
+  // Awaitable only for inbound batches. Existing scan-to-print callers retain
+  // their fire-and-forget contract and do not acquire a new rejected promise.
+  let resolveTransfer: (() => void) | undefined
+  let rejectTransfer: ((error: unknown) => void) | undefined
+  const transferred = handoff ? new Promise<void>((resolve, reject) => {
+    resolveTransfer = resolve
+    rejectTransfer = reject
+  }) : undefined
+
   const iframe = document.createElement('iframe')
   iframe.setAttribute('aria-hidden', 'true')
   iframe.style.position = 'fixed'
@@ -129,6 +140,7 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     const w = iframe.contentWindow
     if (!w) {
       cleanup('image-error')
+      rejectTransfer?.(new Error('Не удалось открыть источник этикеток.'))
       return
     }
     try {
@@ -138,32 +150,117 @@ export function printBarcodeLabels(optionsList: BarcodeLabelPrintOptions[]): voi
     }
     setTimeout(() => {
       // Нельзя удалять iframe сразу после print(): системное окно предпросмотра
-      // ещё читает data URL из этого документа. afterprint — единственный
-      // успешный конец печати; до него источник этикетки обязан оставаться жив.
+      // ещё читает data URL из этого документа. До afterprint источник обязан
+      // оставаться жив; само событие не подтверждает выход этикеток на бумаге.
       w.addEventListener('afterprint', () => cleanup('afterprint'), { once: true })
       try {
+        handoff?.beforeTransfer(html)
         if (window.__WMS_CAPTURE_PRINT_HTML__) {
           window.__WMS_PRINT_JOB_COUNT__ = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) + 1
         }
         w.print()
-      } catch {
+        resolveTransfer?.()
+      } catch (error) {
         cleanup('image-error')
+        rejectTransfer?.(error)
       }
     }, 100)
   }
 
-  iframe.srcdoc = html
   iframe.onload = () => {
     const doc = iframe.contentDocument
     const images = Array.from(doc?.querySelectorAll<HTMLImageElement>('img.barcode') ?? [])
     if (images.length === 0) {
       cleanup('image-error')
+      rejectTransfer?.(new Error('Не удалось загрузить этикетки.'))
       return
     }
-    Promise.all(images.map((image) => image.decode()))
+    const decodeImages = async () => {
+      if (!handoff) {
+        // Preserve the existing scan-to-print path, including its timing.
+        await Promise.all(images.map((image) => image.decode()))
+        return
+      }
+      // Successful decode() retains resources until the image is rendered.
+      // Let each original cohort participate in raster preparation instead of
+      // accumulating full-size decodes in a zero-sized, unpainted document.
+      // The source HTML and every temporary style are restored before handoff.
+      const groupSize = 16
+      const originalFrameStyle = iframe.getAttribute('style')
+      const originalImageStyles = images.map((image) => image.getAttribute('style'))
+      const stagingStyle = images[0]!.ownerDocument.createElement('style')
+      // Preparation is a viewport of thumbnails, not the long page flow.
+      // Keep the original print stylesheet and source document unchanged.
+      stagingStyle.textContent = '.label { position: fixed; top: 0; left: 0; } .title, .code { display: none; }'
+      images[0]!.ownerDocument.head.appendChild(stagingStyle)
+      iframe.style.width = `${groupSize}px`
+      iframe.style.height = '1px'
+      iframe.style.pointerEvents = 'none'
+      iframe.style.opacity = '0.01'
+      try {
+        for (let start = 0; start < images.length; start += groupSize) {
+          images.forEach((image, index) => {
+            image.style.display = index >= start && index < start + groupSize ? 'block' : 'none'
+            if (index < start || index >= start + groupSize) return
+            image.style.position = 'fixed'
+            image.style.left = `${index - start}px`
+            image.style.top = '0'
+            image.style.width = '1px'
+            image.style.height = '1px'
+            image.style.maxWidth = 'none'
+            image.style.maxHeight = 'none'
+            image.style.zIndex = '1'
+            // Nearest-neighbor filtering would keep the original-size raster
+            // even for a thumbnail. Print retains its original pixelated CSS.
+            image.style.imageRendering = 'auto'
+          })
+          // Capture synchronous decode throws as cohort failures too.
+          const active = images.slice(start, start + groupSize).map(async (image) => { await image.decode() })
+          try {
+            await Promise.all(active)
+          } catch (error) {
+            // Removing the iframe must not abandon its still-running peers.
+            // Keep the first failure while every already-started worker settles.
+            await Promise.allSettled(active)
+            throw error
+          }
+          if (start + groupSize < images.length) {
+            await new Promise<void>((resolve) => {
+              // A background tab can suspend animation frames. Still yield a
+              // task there, without leaving preparation waiting indefinitely.
+              let frame = 0
+              const done = () => {
+                window.cancelAnimationFrame(frame)
+                clearTimeout(timer)
+                resolve()
+              }
+              const timer = setTimeout(done, 100)
+              frame = window.requestAnimationFrame(() => {
+                frame = window.requestAnimationFrame(done)
+              })
+            })
+          }
+        }
+      } finally {
+        stagingStyle.remove()
+        images.forEach((image, index) => {
+          const style = originalImageStyles[index]
+          if (style == null) image.removeAttribute('style')
+          else image.setAttribute('style', style)
+        })
+        if (originalFrameStyle === null) iframe.removeAttribute('style')
+        else iframe.setAttribute('style', originalFrameStyle)
+      }
+    }
+    decodeImages()
       .then(printNow)
-      .catch(() => cleanup('image-error'))
+      .catch((error) => {
+        cleanup('image-error')
+        rejectTransfer?.(error)
+      })
   }
+  iframe.srcdoc = html
+  return transferred
 }
 
 /** Обратная совместимость для одиночной печати. */

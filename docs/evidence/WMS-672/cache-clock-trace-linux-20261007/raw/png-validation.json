@@ -1,0 +1,122 @@
+[
+  {
+    "file": "rejected-10.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7657,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000250"
+  },
+  {
+    "file": "rejected-11.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7653,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000251"
+  },
+  {
+    "file": "rejected-12.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7619,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000252"
+  },
+  {
+    "file": "rejected-13.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7632,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000253"
+  },
+  {
+    "file": "rejected-14.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7663,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000254"
+  },
+  {
+    "file": "rejected-15.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7642,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000255"
+  },
+  {
+    "file": "rejected-16.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7666,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000256"
+  },
+  {
+    "file": "rejected-2.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7646,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000242"
+  },
+  {
+    "file": "rejected-3.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7662,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000243"
+  },
+  {
+    "file": "rejected-4.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7648,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000244"
+  },
+  {
+    "file": "rejected-5.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7641,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000245"
+  },
+  {
+    "file": "rejected-6.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7672,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000246"
+  },
+  {
+    "file": "rejected-7.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7649,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000247"
+  },
+  {
+    "file": "rejected-8.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7634,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000248"
+  },
+  {
+    "file": "rejected-9.png",
+    "width": 836,
+    "height": 356,
+    "bytes": 7628,
+    "crcAndPixelDecode": true,
+    "barcode": "INB-000000000249"
+  }
+]

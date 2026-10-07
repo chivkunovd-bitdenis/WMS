@@ -1,0 +1,23 @@
+{
+  "contract_sha": "40df0d2d17187cc86d63cb5fbe0efef2b5ae47a1",
+  "protected_file_count": 229,
+  "suite_count": 21,
+  "case_count": 1173,
+  "all_previous_228_files_retained": true,
+  "only_existing_digest_change": ".github/workflows/ci.yml",
+  "all_previous_20_suites_1170_case_ids_unchanged": true,
+  "added_case_ids": [
+    "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
+    "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
+    "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
+  ],
+  "closure_verified": [
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+    "frontend/src/utils/printBarcodeLabel.ts",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "test_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+  "policy_sha256": "00f3e258e196a4dbb7f5c580fb6bf0a2400958aec142f6b6d8b78d500db78b6b",
+  "readiness": "Prepared only; resource RR1 precode RED; Source/ref/fullCI/runtime upgrade not approved"
+}

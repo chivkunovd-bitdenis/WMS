@@ -1,0 +1,1000 @@
+realqr-lifecycle-diagnostic	Set up job	﻿2026-10-07T00:12:55.3428867Z Current runner version: '2.337.0'
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3464720Z ##[group]Runner Image Provisioner
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3466556Z Hosted Compute Agent
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3467691Z Version: 20261002.596
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3468912Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3470116Z Build Date: 2026-10-02T22:28:27Z
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3471388Z Worker ID: {a2064c0e-c3da-4593-b400-8032dabeb638}
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3472652Z Region: eastus2
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3473678Z Cloud: Azure
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3474719Z ##[endgroup]
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3476849Z ##[group]Operating System
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3477929Z Ubuntu
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3478986Z 24.04.5
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3480004Z LTS
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3480999Z ##[endgroup]
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3481945Z ##[group]Runner Image
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3482904Z Image: ubuntu-24.04
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3483971Z Version: 20261004.327.1
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3486034Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3489031Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3490656Z ##[endgroup]
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3493229Z ##[group]GITHUB_TOKEN Permissions
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3496470Z Contents: read
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3497528Z Metadata: read
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3498711Z ##[endgroup]
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3501468Z Secret source: Actions
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3503199Z Cache mode: write
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3504813Z Prepare workflow directory
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.3952712Z Prepare all required actions
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.4020009Z Getting action download info
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.5989000Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.6877630Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.7763328Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+realqr-lifecycle-diagnostic	Set up job	2026-10-07T00:12:55.9965832Z Complete job name: realqr-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	﻿2026-10-07T00:12:56.0738289Z ##[group]Run actions/checkout@v4
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0739231Z with:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0739770Z   fetch-depth: 0
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0740359Z   persist-credentials: false
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0740999Z   repository: chivkunovd-bitdenis/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0745057Z   token: ***
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0745793Z   ssh-strict: true
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0746354Z   ssh-user: git
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0746890Z   clean: true
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0747442Z   sparse-checkout-cone-mode: true
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0748079Z   fetch-tags: false
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0748687Z   show-progress: true
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0749242Z   lfs: false
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0749761Z   submodules: false
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0750315Z   set-safe-directory: true
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0750931Z   allow-unsafe-pr-checkout: false
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.0751742Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1797509Z Syncing repository: chivkunovd-bitdenis/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1800322Z ##[group]Getting Git version info
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1801138Z Working directory is '/home/runner/work/WMS/WMS'
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1802387Z [command]/usr/bin/git version
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1866748Z git version 2.55.0
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1887416Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1903223Z Temporarily overriding HOME='/home/runner/work/_temp/f38c8509-915d-4df7-8052-aca69ebeaba0' before making global git config changes
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1906004Z Adding repository directory to the temporary git global config as a safe directory
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1914322Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1966443Z Deleting the contents of '/home/runner/work/WMS/WMS'
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1974753Z ##[group]Initializing the repository
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.1987581Z [command]/usr/bin/git init /home/runner/work/WMS/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2083559Z hint: Using 'master' as the name for the initial branch. This default branch name
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2086216Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2088054Z hint: to use in all of your new repositories, which will suppress this warning,
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2089504Z hint: call:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2091694Z hint:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2094038Z hint: 	git config --global init.defaultBranch <name>
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2095489Z hint:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2096945Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2098584Z hint: 'development'. The just-created branch can be renamed via this command:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2099903Z hint:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2100624Z hint: 	git branch -m <name>
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2101231Z hint:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2101981Z hint: Disable this message with "git config set advice.defaultBranchName false"
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2103022Z Initialized empty Git repository in /home/runner/work/WMS/WMS/.git/
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2104841Z [command]/usr/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2154181Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2155151Z ##[group]Disabling automatic garbage collection
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2159425Z [command]/usr/bin/git config --local gc.auto 0
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2200104Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2201034Z ##[group]Setting up auth
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2201875Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2234862Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2611794Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2648746Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2900521Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.2939028Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.3191872Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.3234493Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.3236733Z ##[group]Fetching the repository
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:12:56.3246454Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6444038Z From https://github.com/chivkunovd-bitdenis/WMS
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6448617Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6452478Z  * [new branch]          archive/staging-20260924-93f511ab -> origin/archive/staging-20260924-93f511ab
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6454973Z  * [new branch]          archive/staging-before-wms521-20260924 -> origin/archive/staging-before-wms521-20260924
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6457935Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6460242Z  * [new branch]          backlog/fbs-followups-20260812 -> origin/backlog/fbs-followups-20260812
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6461566Z  * [new branch]          brand/portal-logos-20260811 -> origin/brand/portal-logos-20260811
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6462947Z  * [new branch]          brand/portal-logos-live-20260811 -> origin/brand/portal-logos-live-20260811
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6465205Z  * [new branch]          brand/portal-logos-prod-20260811 -> origin/brand/portal-logos-prod-20260811
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6477796Z  * [new branch]          chore/deploy-smoke-retry-on-main -> origin/chore/deploy-smoke-retry-on-main
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6480570Z  * [new branch]          chore/operator-change-contract-20260901 -> origin/chore/operator-change-contract-20260901
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6482895Z  * [new branch]          chore/railway-toml-fix  -> origin/chore/railway-toml-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6484583Z  * [new branch]          chore/release-via-pr-only-rules -> origin/chore/release-via-pr-only-rules
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6486435Z  * [new branch]          chore/staging-sync-20261003 -> origin/chore/staging-sync-20261003
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6488405Z  * [new branch]          chore/wb-emulator-railway-dockerfile -> origin/chore/wb-emulator-railway-dockerfile
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6490756Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6492821Z  * [new branch]          chore/wms574-stand      -> origin/chore/wms574-stand
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6494393Z  * [new branch]          codex/agent-job-1710a7649a6964db -> origin/codex/agent-job-1710a7649a6964db
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6496405Z  * [new branch]          codex/agent-job-21079e59afb9acdb -> origin/codex/agent-job-21079e59afb9acdb
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6498258Z  * [new branch]          codex/agent-job-6f3e370ab6217c51 -> origin/codex/agent-job-6f3e370ab6217c51
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6500086Z  * [new branch]          codex/agent-job-8c954436cd418999 -> origin/codex/agent-job-8c954436cd418999
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6502027Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac -> origin/codex/agent-job-97af6faf8d8c22ac
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6503953Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5 -> origin/codex/agent-job-bb021d7e007fb8a5
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6506086Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150 -> origin/codex/agent-job-ef71dbb00ee2b150
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6508037Z  * [new branch]          codex/agent-job-fc68bb2705b6850f -> origin/codex/agent-job-fc68bb2705b6850f
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6509832Z  * [new branch]          codex/artmaks-fbo-mockup -> origin/codex/artmaks-fbo-mockup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6511588Z  * [new branch]          codex/backlog40-ci-contracts -> origin/codex/backlog40-ci-contracts
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6513682Z  * [new branch]          codex/backlog40-ci-pdf  -> origin/codex/backlog40-ci-pdf
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6515651Z  * [new branch]          codex/billing-journal-20260825 -> origin/codex/billing-journal-20260825
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6517623Z  * [new branch]          codex/billing-module-20260826 -> origin/codex/billing-module-20260826
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6519753Z  * [new branch]          codex/billing-stage-finish-20260823 -> origin/codex/billing-stage-finish-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6521891Z  * [new branch]          codex/billing-storage-bounds-20260823 -> origin/codex/billing-storage-bounds-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6524075Z  * [new branch]          codex/box-label-bulk-print-20260824 -> origin/codex/box-label-bulk-print-20260824
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6526400Z  * [new branch]          codex/catalog-box-filters-20260824 -> origin/codex/catalog-box-filters-20260824
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6528895Z  * [new branch]          codex/catalog-box-tabs-source-20260823 -> origin/codex/catalog-box-tabs-source-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6531065Z  * [new branch]          codex/cell-contents-scanner-20260824 -> origin/codex/cell-contents-scanner-20260824
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6533129Z  * [new branch]          codex/fbs-qr-only-print-20260823 -> origin/codex/fbs-qr-only-print-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6535282Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6537834Z  * [new branch]          codex/fix-seller-inbound-empty-picker -> origin/codex/fix-seller-inbound-empty-picker
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6540030Z  * [new branch]          codex/fix-wb-done-supply-status-prod -> origin/codex/fix-wb-done-supply-status-prod
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6542186Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820 -> origin/codex/hotfix-fbs-100-orders-20260820
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6544253Z  * [new branch]          codex/hotfix-fbs-packaging-flag -> origin/codex/hotfix-fbs-packaging-flag
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6546745Z  * [new branch]          codex/hotfix-ozon-kiz   -> origin/codex/hotfix-ozon-kiz
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6548448Z  * [new branch]          codex/invoice-row-location -> origin/codex/invoice-row-location
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6550432Z  * [new branch]          codex/knowledge-inbound-guide-20260824 -> origin/codex/knowledge-inbound-guide-20260824
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6552542Z  * [new branch]          codex/mp-dashboard-e2e-20260815 -> origin/codex/mp-dashboard-e2e-20260815
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6554518Z  * [new branch]          codex/night-ready-acceptance-1006 -> origin/codex/night-ready-acceptance-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6556867Z  * [new branch]          codex/night-ready-candidate-1006-inrepo -> origin/codex/night-ready-candidate-1006-inrepo
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6559072Z  * [new branch]          codex/night-ready-exact-staging-1006 -> origin/codex/night-ready-exact-staging-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6561461Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6563926Z  * [new branch]          codex/night-ready-migration-compat-1006 -> origin/codex/night-ready-migration-compat-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6566265Z  * [new branch]          codex/night-ready-staging-1006 -> origin/codex/night-ready-staging-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6568586Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6571295Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6573831Z  * [new branch]          codex/night-ready-staging-rollback-1006 -> origin/codex/night-ready-staging-rollback-1006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6576168Z  * [new branch]          codex/night-release-5beb52da-1 -> origin/codex/night-release-5beb52da-1
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6578158Z  * [new branch]          codex/night-requirements-20261006 -> origin/codex/night-requirements-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6580342Z  * [new branch]          codex/night1007-658     -> origin/codex/night1007-658
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6581912Z  * [new branch]          codex/night1007-671-687 -> origin/codex/night1007-671-687
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6583579Z  * [new branch]          codex/night1007-675-release -> origin/codex/night1007-675-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6585484Z  * [new branch]          codex/night1007-679-680 -> origin/codex/night1007-679-680
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6587035Z  * [new branch]          codex/night1007-681     -> origin/codex/night1007-681
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6588582Z  * [new branch]          codex/night1007-684-586 -> origin/codex/night1007-684-586
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6590365Z  * [new branch]          codex/night1007-integration -> origin/codex/night1007-integration
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6592644Z  * [new branch]          codex/night1007-print-regressions-646cb4 -> origin/codex/night1007-print-regressions-646cb4
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6594917Z  * [new branch]          codex/night1007-wms652-ci-fix -> origin/codex/night1007-wms652-ci-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6597748Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6599958Z  * [new branch]          codex/ozon-catalog-20260825 -> origin/codex/ozon-catalog-20260825
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6601652Z  * [new branch]          codex/ozon-fbs-20260825 -> origin/codex/ozon-fbs-20260825
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6603427Z  * [new branch]          codex/ozon-stock-20260825 -> origin/codex/ozon-stock-20260825
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6605739Z  * [new branch]          codex/ozon-test-key-marker-20260824 -> origin/codex/ozon-test-key-marker-20260824
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6607950Z  * [new branch]          codex/priority-five-release-20261006 -> origin/codex/priority-five-release-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6610329Z  * [new branch]          codex/priority-five-review-20261006 -> origin/codex/priority-five-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6613098Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6615717Z  * [new branch]          codex/regress-live-cases-20260825 -> origin/codex/regress-live-cases-20260825
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6617836Z  * [new branch]          codex/release-20261006-astra-a -> origin/codex/release-20261006-astra-a
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6620462Z  * [new branch]          codex/release-20261006-astra-b -> origin/codex/release-20261006-astra-b
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6623117Z  * [new branch]          codex/release-ci-final-20261006 -> origin/codex/release-ci-final-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6626141Z  * [new branch]          codex/release-log-2026-09-27 -> origin/codex/release-log-2026-09-27
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6628924Z  * [new branch]          codex/reporting-backend-core-20260823 -> origin/codex/reporting-backend-core-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6631764Z  * [new branch]          codex/reporting-stage-finish-20260823 -> origin/codex/reporting-stage-finish-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6634402Z  * [new branch]          codex/staging-sync-login-20260914 -> origin/codex/staging-sync-login-20260914
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6636935Z  * [new branch]          codex/storage-stage-20260823 -> origin/codex/storage-stage-20260823
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6639032Z  * [new branch]          codex/trello-wms-20261005 -> origin/codex/trello-wms-20261005
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6641049Z  * [new branch]          codex/trello-wms-20261006 -> origin/codex/trello-wms-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6643212Z  * [new branch]          codex/trello-wms-20261006-1200 -> origin/codex/trello-wms-20261006-1200
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6645566Z  * [new branch]          codex/tsd-package-20260913 -> origin/codex/tsd-package-20260913
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6647829Z  * [new branch]          codex/tsd-package-stage-release -> origin/codex/tsd-package-stage-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6650243Z  * [new branch]          codex/tsd-staging-merge-20260913 -> origin/codex/tsd-staging-merge-20260913
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6652546Z  * [new branch]          codex/volna9-01-backend-only -> origin/codex/volna9-01-backend-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6655277Z  * [new branch]          codex/volna9-02-status-only -> origin/codex/volna9-02-status-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6657559Z  * [new branch]          codex/volna9-03-backend-only -> origin/codex/volna9-03-backend-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6659626Z  * [new branch]          codex/volna9-04-backend-only -> origin/codex/volna9-04-backend-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6661740Z  * [new branch]          codex/volna9-05-backend-only -> origin/codex/volna9-05-backend-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6663989Z  * [new branch]          codex/volna9-06-print-order-only -> origin/codex/volna9-06-print-order-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6666433Z  * [new branch]          codex/weekly-release-20260909 -> origin/codex/weekly-release-20260909
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6668413Z  * [new branch]          codex/wms-chat-20260911 -> origin/codex/wms-chat-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6670420Z  * [new branch]          codex/wms-chat-evening-20260910 -> origin/codex/wms-chat-evening-20260910
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6672675Z  * [new branch]          codex/wms-integrations-20260911 -> origin/codex/wms-integrations-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6674731Z  * [new branch]          codex/wms-ozon-20260911 -> origin/codex/wms-ozon-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6676991Z  * [new branch]          codex/wms-ozon-generator-20260911 -> origin/codex/wms-ozon-generator-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6679306Z  * [new branch]          codex/wms-pick-container-scan -> origin/codex/wms-pick-container-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6681723Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820 -> origin/codex/wms-pipeline-unified-v2-20260820
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6683978Z  * [new branch]          codex/wms-print-20260911 -> origin/codex/wms-print-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6686671Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6689666Z  * [new branch]          codex/wms-psp-backlog-20260921 -> origin/codex/wms-psp-backlog-20260921
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6692099Z  * [new branch]          codex/wms-qr-review-evidence-20261006 -> origin/codex/wms-qr-review-evidence-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6694401Z  * [new branch]          codex/wms-release-20260911 -> origin/codex/wms-release-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6696693Z  * [new branch]          codex/wms-release-ozon-terminal -> origin/codex/wms-release-ozon-terminal
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6698753Z  * [new branch]          codex/wms-storage-20260911 -> origin/codex/wms-storage-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6700812Z  * [new branch]          codex/wms-storage-final-20260911 -> origin/codex/wms-storage-final-20260911
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6702882Z  * [new branch]          codex/wms-transfer-urgent -> origin/codex/wms-transfer-urgent
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6705835Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6709198Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6711405Z  * [new branch]          codex/wms010-backlog40  -> origin/codex/wms010-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6713078Z  * [new branch]          codex/wms011-backlog40  -> origin/codex/wms011-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6714788Z  * [new branch]          codex/wms013-backlog40  -> origin/codex/wms013-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6716686Z  * [new branch]          codex/wms040-backlog40  -> origin/codex/wms040-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6718435Z  * [new branch]          codex/wms045-backlog40  -> origin/codex/wms045-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6720493Z  * [new branch]          codex/wms058-availability-followup -> origin/codex/wms058-availability-followup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6722535Z  * [new branch]          codex/wms058-backlog40  -> origin/codex/wms058-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6724276Z  * [new branch]          codex/wms058-browser-qa -> origin/codex/wms058-browser-qa
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6726316Z  * [new branch]          codex/wms058-mp-box-source -> origin/codex/wms058-mp-box-source
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6728654Z  * [new branch]          codex/wms058-overplan-source -> origin/codex/wms058-overplan-source
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6730692Z  * [new branch]          codex/wms058-review-fix -> origin/codex/wms058-review-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6732970Z  * [new branch]          codex/wms080-392-review-fix -> origin/codex/wms080-392-review-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6735115Z  * [new branch]          codex/wms080-backlog40  -> origin/codex/wms080-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6737186Z  * [new branch]          codex/wms081-backlog40  -> origin/codex/wms081-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6739103Z  * [new branch]          codex/wms081-defect-compat -> origin/codex/wms081-defect-compat
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6741196Z  * [new branch]          codex/wms082-085-emulator-meta -> origin/codex/wms082-085-emulator-meta
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6743233Z  * [new branch]          codex/wms082-backlog40  -> origin/codex/wms082-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6745201Z  * [new branch]          codex/wms083-backlog40  -> origin/codex/wms083-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6747359Z  * [new branch]          codex/wms084-backlog40  -> origin/codex/wms084-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6749289Z  * [new branch]          codex/wms084-emulator-delete -> origin/codex/wms084-emulator-delete
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6751626Z  * [new branch]          codex/wms084-packing-test-contract -> origin/codex/wms084-packing-test-contract
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6753738Z  * [new branch]          codex/wms084-rebind     -> origin/codex/wms084-rebind
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6755739Z  * [new branch]          codex/wms085-backlog40  -> origin/codex/wms085-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6757668Z  * [new branch]          codex/wms086-backlog40  -> origin/codex/wms086-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6759603Z  * [new branch]          codex/wms087-backlog40  -> origin/codex/wms087-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6761861Z  * [new branch]          codex/wms091-backlog40  -> origin/codex/wms091-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6855900Z  * [new branch]          codex/wms092-backlog40  -> origin/codex/wms092-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6857701Z  * [new branch]          codex/wms095-backlog40  -> origin/codex/wms095-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6859165Z  * [new branch]          codex/wms095-import-error-backlog40 -> origin/codex/wms095-import-error-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6860669Z  * [new branch]          codex/wms096-backlog40  -> origin/codex/wms096-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6861864Z  * [new branch]          codex/wms110-backlog40  -> origin/codex/wms110-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6863170Z  * [new branch]          codex/wms115-backlog40  -> origin/codex/wms115-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6864578Z  * [new branch]          codex/wms123-backlog40  -> origin/codex/wms123-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6866493Z  * [new branch]          codex/wms272-backlog40  -> origin/codex/wms272-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6868228Z  * [new branch]          codex/wms272-resume-backlog40 -> origin/codex/wms272-resume-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6869978Z  * [new branch]          codex/wms273-backlog40  -> origin/codex/wms273-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6871536Z  * [new branch]          codex/wms276-backlog40  -> origin/codex/wms276-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6873007Z  * [new branch]          codex/wms277-backlog40  -> origin/codex/wms277-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6874640Z  * [new branch]          codex/wms277-catalog    -> origin/codex/wms277-catalog
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6876853Z  * [new branch]          codex/wms277-import-sku-collision -> origin/codex/wms277-import-sku-collision
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6878754Z  * [new branch]          codex/wms278-backlog40  -> origin/codex/wms278-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6880328Z  * [new branch]          codex/wms387-training   -> origin/codex/wms387-training
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6881974Z  * [new branch]          codex/wms389-backlog40  -> origin/codex/wms389-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6883836Z  * [new branch]          codex/wms390-backlog40  -> origin/codex/wms390-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6886077Z  * [new branch]          codex/wms391-backlog40  -> origin/codex/wms391-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6887915Z  * [new branch]          codex/wms392-backlog40  -> origin/codex/wms392-backlog40
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6889800Z  * [new branch]          codex/wms392-review-tests -> origin/codex/wms392-review-tests
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6891652Z  * [new branch]          codex/wms394-kiz-ui     -> origin/codex/wms394-kiz-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6893444Z  * [new branch]          codex/wms395-pool-inline -> origin/codex/wms395-pool-inline
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6895224Z  * [new branch]          codex/wms396-stage      -> origin/codex/wms396-stage
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6897271Z  * [new branch]          codex/wms396-staging-release -> origin/codex/wms396-staging-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6899216Z  * [new branch]          codex/wms396-true-api   -> origin/codex/wms396-true-api
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6900872Z  * [new branch]          codex/wms397-api        -> origin/codex/wms397-api
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6902573Z  * [new branch]          codex/wms399-chat-design -> origin/codex/wms399-chat-design
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6904725Z  * [new branch]          codex/wms401-android-build-proof -> origin/codex/wms401-android-build-proof
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6907389Z  * [new branch]          codex/wms406-backfill-final-plan -> origin/codex/wms406-backfill-final-plan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6909419Z  * [new branch]          codex/wms406-invoice    -> origin/codex/wms406-invoice
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6911065Z  * [new branch]          codex/wms406-report     -> origin/codex/wms406-report
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6913080Z  * [new branch]          codex/wms408-billing-unification -> origin/codex/wms408-billing-unification
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6915155Z  * [new branch]          codex/wms415-coord-20260910 -> origin/codex/wms415-coord-20260910
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6917752Z  * [new branch]          codex/wms418-catalog-publication-filter -> origin/codex/wms418-catalog-publication-filter
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6920272Z  * [new branch]          codex/wms418-loviana-off -> origin/codex/wms418-loviana-off
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6922322Z  * [new branch]          codex/wms425-marketplace-hotfix -> origin/codex/wms425-marketplace-hotfix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6924461Z  * [new branch]          codex/wms433-stage-user-only -> origin/codex/wms433-stage-user-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6926917Z  * [new branch]          codex/wms433-support-bot-concept -> origin/codex/wms433-support-bot-concept
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6929036Z  * [new branch]          codex/wms437-analyst-cases -> origin/codex/wms437-analyst-cases
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6931114Z  * [new branch]          codex/wms437-small-task-process -> origin/codex/wms437-small-task-process
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6932996Z  * [new branch]          codex/wms440-tsd        -> origin/codex/wms440-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6934563Z  * [new branch]          codex/wms440-tsd-ui     -> origin/codex/wms440-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6936345Z  * [new branch]          codex/wms441-c10-evidence -> origin/codex/wms441-c10-evidence
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6938006Z  * [new branch]          codex/wms441-tsd        -> origin/codex/wms441-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6939526Z  * [new branch]          codex/wms441-tsd-ui     -> origin/codex/wms441-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6941049Z  * [new branch]          codex/wms442-tsd        -> origin/codex/wms442-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6942561Z  * [new branch]          codex/wms442-tsd-ui     -> origin/codex/wms442-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6944078Z  * [new branch]          codex/wms443-tsd        -> origin/codex/wms443-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6945697Z  * [new branch]          codex/wms443-tsd-ui     -> origin/codex/wms443-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6947214Z  * [new branch]          codex/wms444-tsd        -> origin/codex/wms444-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6948745Z  * [new branch]          codex/wms444-tsd-ui     -> origin/codex/wms444-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6950269Z  * [new branch]          codex/wms445-tsd        -> origin/codex/wms445-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6952079Z  * [new branch]          codex/wms445-tsd-server-truth -> origin/codex/wms445-tsd-server-truth
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6954104Z  * [new branch]          codex/wms445-tsd-ui     -> origin/codex/wms445-tsd-ui
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6956311Z  * [new branch]          codex/wms447-full-marketplace-labels -> origin/codex/wms447-full-marketplace-labels
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6958481Z  * [new branch]          codex/wms460-fbs-qr-scan -> origin/codex/wms460-fbs-qr-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6960913Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6963463Z  * [new branch]          codex/wms476-auto-legacy-guard -> origin/codex/wms476-auto-legacy-guard
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6965959Z  * [new branch]          codex/wms476-implementation-sol-high -> origin/codex/wms476-implementation-sol-high
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6968516Z  * [new branch]          codex/wms476-staging-release-20260923 -> origin/codex/wms476-staging-release-20260923
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6970885Z  * [new branch]          codex/wms477-backend-review-fix -> origin/codex/wms477-backend-review-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6972815Z  * [new branch]          codex/wms477-p3-notice  -> origin/codex/wms477-p3-notice
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6974775Z  * [new branch]          codex/wms483-prod-release-20260920 -> origin/codex/wms483-prod-release-20260920
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6977006Z  * [new branch]          codex/wms483-wb-zero-refresh -> origin/codex/wms483-wb-zero-refresh
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6978953Z  * [new branch]          codex/wms489-staging-release -> origin/codex/wms489-staging-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6981304Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6983876Z  * [new branch]          codex/wms502-stock-sorting-incident -> origin/codex/wms502-stock-sorting-incident
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6986167Z  * [new branch]          codex/wms506-silent-kiz-print -> origin/codex/wms506-silent-kiz-print
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6988577Z  * [new branch]          codex/wms508-persistent-form-cards -> origin/codex/wms508-persistent-form-cards
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6990773Z  * [new branch]          codex/wms514-clickable-mockup -> origin/codex/wms514-clickable-mockup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6993015Z  * [new branch]          codex/wms514-staging-release-20260924 -> origin/codex/wms514-staging-release-20260924
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6995208Z  * [new branch]          codex/wms515-client-registry -> origin/codex/wms515-client-registry
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.6997586Z  * [new branch]          codex/wms517-current-release-analysis -> origin/codex/wms517-current-release-analysis
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7000281Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7002828Z  * [new branch]          codex/wms517-mac-dynamic-eligible -> origin/codex/wms517-mac-dynamic-eligible
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7004975Z  * [new branch]          codex/wms517-mac-test-contract -> origin/codex/wms517-mac-test-contract
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7007359Z  * [new branch]          codex/wms517-price-by-product-group -> origin/codex/wms517-price-by-product-group
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7009699Z  * [new branch]          codex/wms517-sales-report-contract -> origin/codex/wms517-sales-report-contract
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7012198Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7014557Z  * [new branch]          codex/wms517-staging-20261001 -> origin/codex/wms517-staging-20261001
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7016856Z  * [new branch]          codex/wms519-artifact-pdf-hotfix -> origin/codex/wms519-artifact-pdf-hotfix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7019223Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio -> origin/codex/wms519-kiz-label-aspect-ratio
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7021417Z  * [new branch]          codex/wms519-post-deploy-docs -> origin/codex/wms519-post-deploy-docs
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7023362Z  * [new branch]          codex/wms520-requirements -> origin/codex/wms520-requirements
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7025470Z  * [new branch]          codex/wms521-kiz-release -> origin/codex/wms521-kiz-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7027381Z  * [new branch]          codex/wms523-auto-import-pools -> origin/codex/wms523-auto-import-pools
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7029352Z  * [new branch]          codex/wms524-confirm-order -> origin/codex/wms524-confirm-order
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7031168Z  * [new branch]          codex/wms524-print-blank -> origin/codex/wms524-print-blank
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7033066Z  * [new branch]          codex/wms533-client-hardening -> origin/codex/wms533-client-hardening
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7034969Z  * [new branch]          codex/wms533-five-events -> origin/codex/wms533-five-events
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7036968Z  * [new branch]          codex/wms533-prod-five-events -> origin/codex/wms533-prod-five-events
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7039073Z  * [new branch]          codex/wms533-seller-stock-events -> origin/codex/wms533-seller-stock-events
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7041485Z  * [new branch]          codex/wms537-pg-fixture-review-20261006 -> origin/codex/wms537-pg-fixture-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7043674Z  * [new branch]          codex/wms550-sorting-scan -> origin/codex/wms550-sorting-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7045699Z  * [new branch]          codex/wms582-yandex-market-api -> origin/codex/wms582-yandex-market-api
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7048089Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7050307Z  * [new branch]          codex/wms591-avpack-6300 -> origin/codex/wms591-avpack-6300
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7051976Z  * [new branch]          codex/wms593-597-urgent -> origin/codex/wms593-597-urgent
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7053686Z  * [new branch]          codex/wms602-fbs-cell-scan -> origin/codex/wms602-fbs-cell-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7055488Z  * [new branch]          codex/wms603-box-scan   -> origin/codex/wms603-box-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7057569Z  * [new branch]          codex/wms604-staging-integration -> origin/codex/wms604-staging-integration
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7059643Z  * [new branch]          codex/wms604-unified-packing -> origin/codex/wms604-unified-packing
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7062271Z  * [new branch]          codex/wms607-artmaks-acceptance-updater-contract -> origin/codex/wms607-artmaks-acceptance-updater-contract
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7064979Z  * [new branch]          codex/wms607-artmaks-direct-repair -> origin/codex/wms607-artmaks-direct-repair
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7067543Z  * [new branch]          codex/wms607-artmaks-installer-findings -> origin/codex/wms607-artmaks-installer-findings
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7069986Z  * [new branch]          codex/wms607-artmaks-repair-review -> origin/codex/wms607-artmaks-repair-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7072252Z  * [new branch]          codex/wms607-artmaks-test-contract -> origin/codex/wms607-artmaks-test-contract
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7074288Z  * [new branch]          codex/wms607-instant-print -> origin/codex/wms607-instant-print
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7076305Z  * [new branch]          codex/wms607-mac-single-binary -> origin/codex/wms607-mac-single-binary
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7078550Z  * [new branch]          codex/wms607-printer-failure-analysis -> origin/codex/wms607-printer-failure-analysis
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7080678Z  * [new branch]          codex/wms607-staging-print -> origin/codex/wms607-staging-print
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7082412Z  * [new branch]          codex/wms607-windows-x64 -> origin/codex/wms607-windows-x64
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7084243Z  * [new branch]          codex/wms608-scanned-row-first -> origin/codex/wms608-scanned-row-first
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7086408Z  * [new branch]          codex/wms610-fbs-picking-columns -> origin/codex/wms610-fbs-picking-columns
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7088519Z  * [new branch]          codex/wms611-fbs-print-disabled -> origin/codex/wms611-fbs-print-disabled
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7090496Z  * [new branch]          codex/wms612-delivery-checks -> origin/codex/wms612-delivery-checks
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7092296Z  * [new branch]          codex/wms612-staging-all -> origin/codex/wms612-staging-all
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7094249Z  * [new branch]          codex/wms614-616-prod-release -> origin/codex/wms614-616-prod-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7096159Z  * [new branch]          codex/wms617-video-demo -> origin/codex/wms617-video-demo
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7097711Z  * [new branch]          codex/wms618-staging    -> origin/codex/wms618-staging
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7099437Z  * [new branch]          codex/wms622-fbo-kiz-recovery -> origin/codex/wms622-fbo-kiz-recovery
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7101443Z  * [new branch]          codex/wms623-artmaks-unused-pdfs -> origin/codex/wms623-artmaks-unused-pdfs
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7103770Z  * [new branch]          codex/wms624-developer-requests-current -> origin/codex/wms624-developer-requests-current
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7106159Z  * [new branch]          codex/wms624-sync-cadence -> origin/codex/wms624-sync-cadence
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7108178Z  * [new branch]          codex/wms625-print-reliability -> origin/codex/wms625-print-reliability
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7110223Z  * [new branch]          codex/wms626-astra-effort-limit -> origin/codex/wms626-astra-effort-limit
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7112425Z  * [new branch]          codex/wms627-artmaks-stock-reconcile -> origin/codex/wms627-artmaks-stock-reconcile
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7114605Z  * [new branch]          codex/wms628-artmaks-wrong-scan -> origin/codex/wms628-artmaks-wrong-scan
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7116563Z  * [new branch]          codex/wms628-production -> origin/codex/wms628-production
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7118284Z  * [new branch]          codex/wms629-packing-scroll -> origin/codex/wms629-packing-scroll
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7120507Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7122677Z  * [new branch]          codex/wms651-counter-copy -> origin/codex/wms651-counter-copy
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7125068Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7127567Z  * [new branch]          codex/wms652-acceptance-evidence -> origin/codex/wms652-acceptance-evidence
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7130094Z  * [new branch]          codex/wms652-accepted-reference-contract-20261007 -> origin/codex/wms652-accepted-reference-contract-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7132984Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7135565Z  * [new branch]          codex/wms652-backup-fixture-review -> origin/codex/wms652-backup-fixture-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7137439Z  * [new branch]          codex/wms652-bot-night  -> origin/codex/wms652-bot-night
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7139373Z  * [new branch]          codex/wms652-checkpoint-requirements -> origin/codex/wms652-checkpoint-requirements
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7141444Z  * [new branch]          codex/wms652-ci-delta-review -> origin/codex/wms652-ci-delta-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7143216Z  * [new branch]          codex/wms652-ci-two-shards -> origin/codex/wms652-ci-two-shards
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7145189Z  * [new branch]          codex/wms652-critical-fbs-contracts -> origin/codex/wms652-critical-fbs-contracts
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7147764Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7150368Z  * [new branch]          codex/wms652-final-bootstrap-pin-20261007 -> origin/codex/wms652-final-bootstrap-pin-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7153027Z  * [new branch]          codex/wms652-final-source-pin-review-20261007 -> origin/codex/wms652-final-source-pin-review-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7156067Z  * [new branch]          codex/wms652-frontend-report-identities-20261007 -> origin/codex/wms652-frontend-report-identities-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7158637Z  * [new branch]          codex/wms652-independent-main-check -> origin/codex/wms652-independent-main-check
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7161442Z  * [new branch]          codex/wms652-infrastructure-corrections-review-20261007 -> origin/codex/wms652-infrastructure-corrections-review-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7164077Z  * [new branch]          codex/wms652-night-reader -> origin/codex/wms652-night-reader
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7165810Z  * [new branch]          codex/wms652-night-repair -> origin/codex/wms652-night-repair
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7167383Z  * [new branch]          codex/wms652-pdf-probe  -> origin/codex/wms652-pdf-probe
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7169424Z  * [new branch]          codex/wms652-portable-backup-proof-20261007 -> origin/codex/wms652-portable-backup-proof-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7171992Z  * [new branch]          codex/wms652-process-fixes-review-20261007 -> origin/codex/wms652-process-fixes-review-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7174121Z  * [new branch]          codex/wms652-process-gates -> origin/codex/wms652-process-gates
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7176438Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7179168Z  * [new branch]          codex/wms652-prod-env-negative-canary-20261007 -> origin/codex/wms652-prod-env-negative-canary-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7181865Z  * [new branch]          codex/wms652-realqr-cdp-lifecycle-diagnostic -> origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7184603Z  * [new branch]          codex/wms652-reference-migration-review-20261007 -> origin/codex/wms652-reference-migration-review-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7187065Z  * [new branch]          codex/wms652-regression-guard -> origin/codex/wms652-regression-guard
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7188958Z  * [new branch]          codex/wms652-release-ci-20261006 -> origin/codex/wms652-release-ci-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7191348Z  * [new branch]          codex/wms652-release-execution-evidence-20261007 -> origin/codex/wms652-release-execution-evidence-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7194488Z  * [new branch]          codex/wms652-remount-interception-diagnosis-20261007 -> origin/codex/wms652-remount-interception-diagnosis-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7197567Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7200145Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7202399Z  * [new branch]          codex/wms652-server-deploy-gate -> origin/codex/wms652-server-deploy-gate
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7204257Z  * [new branch]          codex/wms652-sonnet-frontend -> origin/codex/wms652-sonnet-frontend
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7206110Z  * [new branch]          codex/wms652-trusted-anchor -> origin/codex/wms652-trusted-anchor
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7207705Z  * [new branch]          codex/wms652-ui-gate    -> origin/codex/wms652-ui-gate
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7209625Z  * [new branch]          codex/wms653-scope-attribution-20261006 -> origin/codex/wms653-scope-attribution-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7212183Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7215162Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7217777Z  * [new branch]          codex/wms654-product-20261006 -> origin/codex/wms654-product-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7219506Z  * [new branch]          codex/wms659-imperia-boxes -> origin/codex/wms659-imperia-boxes
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7221068Z  * [new branch]          codex/wms660-barcodes   -> origin/codex/wms660-barcodes
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7222697Z  * [new branch]          codex/wms661-analyst-20261006 -> origin/codex/wms661-analyst-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7224726Z  * [new branch]          codex/wms661-installed-baseline-tests -> origin/codex/wms661-installed-baseline-tests
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7227213Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7229800Z  * [new branch]          codex/wms661-runtime-preflight-20261006 -> origin/codex/wms661-runtime-preflight-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7232214Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7234857Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7237282Z  * [new branch]          codex/wms662-663-priority -> origin/codex/wms662-663-priority
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7238918Z  * [new branch]          codex/wms662-f6-testwriter -> origin/codex/wms662-f6-testwriter
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7241050Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7243635Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7245861Z  * [new branch]          codex/wms662-prod-handoff -> origin/codex/wms662-prod-handoff
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7247535Z  * [new branch]          codex/wms662-review-c36b8ab -> origin/codex/wms662-review-c36b8ab
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7249603Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7252095Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7254835Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7257806Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7260473Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7263071Z  * [new branch]          codex/wms663-release-retry-acceptance -> origin/codex/wms663-release-retry-acceptance
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7265171Z  * [new branch]          codex/wms663-release-retry-fix -> origin/codex/wms663-release-retry-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7267806Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7271047Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7273759Z  * [new branch]          codex/wms663-retry-contract-20261006 -> origin/codex/wms663-retry-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7276050Z  * [new branch]          codex/wms663-scoped-priority-20261006 -> origin/codex/wms663-scoped-priority-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7278083Z  * [new branch]          codex/wms664-dispatcher-stall -> origin/codex/wms664-dispatcher-stall
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7280136Z  * [new branch]          codex/wms665-avpack-withdrawal-helper -> origin/codex/wms665-avpack-withdrawal-helper
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7282700Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7285479Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7288227Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7290842Z  * [new branch]          codex/wms666-ci-history-scope-20261006 -> origin/codex/wms666-ci-history-scope-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7292977Z  * [new branch]          codex/wms666-ci-qr-finish-20261006 -> origin/codex/wms666-ci-qr-finish-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7295233Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7298013Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7300382Z  * [new branch]          codex/wms666-priority-etalon-20261006 -> origin/codex/wms666-priority-etalon-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7302560Z  * [new branch]          codex/wms666-release-c11-acceptance -> origin/codex/wms666-release-c11-acceptance
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7304861Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7307478Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7310017Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7312280Z  * [new branch]          codex/wms666-unified-fbs-packing -> origin/codex/wms666-unified-fbs-packing
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7314078Z  * [new branch]          codex/wms667-stock-filter -> origin/codex/wms667-stock-filter
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7315792Z  * [new branch]          codex/wms667-visual-runner -> origin/codex/wms667-visual-runner
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7317671Z  * [new branch]          codex/wms668-dispatcher-batch-final -> origin/codex/wms668-dispatcher-batch-final
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7320097Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7322451Z  * [new branch]          codex/wms672-673-analyst-20261006 -> origin/codex/wms672-673-analyst-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7324638Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7326947Z  * [new branch]          codex/wms672-c5-cache-clock-trace -> origin/codex/wms672-c5-cache-clock-trace
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7329078Z  * [new branch]          codex/wms672-c5-cache-debug-trace -> origin/codex/wms672-c5-cache-debug-trace
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7330905Z  * [new branch]          codex/wms672-c5-cache-trace -> origin/codex/wms672-c5-cache-trace
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7332730Z  * [new branch]          codex/wms672-c5-linux-diagnostic -> origin/codex/wms672-c5-linux-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7334655Z  * [new branch]          codex/wms672-c5-linux-fix-check -> origin/codex/wms672-c5-linux-fix-check
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7336696Z  * [new branch]          codex/wms672-c5-peer-drain-check -> origin/codex/wms672-c5-peer-drain-check
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7338908Z  * [new branch]          codex/wms672-c5-raster-resource-comparison -> origin/codex/wms672-c5-raster-resource-comparison
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7341176Z  * [new branch]          codex/wms672-c5-target-cache-trace -> origin/codex/wms672-c5-target-cache-trace
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7343357Z  * [new branch]          codex/wms672-functional-finish-20261006 -> origin/codex/wms672-functional-finish-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7345541Z  * [new branch]          codex/wms672-native-decode-fix -> origin/codex/wms672-native-decode-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7347726Z  * [new branch]          codex/wms672-native-error-contract-20261007 -> origin/codex/wms672-native-error-contract-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7349885Z  * [new branch]          codex/wms672-native-fix-review -> origin/codex/wms672-native-fix-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7352007Z  * [new branch]          codex/wms672-peer-drain-contract-20261007 -> origin/codex/wms672-peer-drain-contract-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7354314Z  * [new branch]          codex/wms672-peer-drain-source-review -> origin/codex/wms672-peer-drain-source-review
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7356866Z  * [new branch]          codex/wms672-raster-analyst-acceptance-20261007 -> origin/codex/wms672-raster-analyst-acceptance-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7359551Z  * [new branch]          codex/wms672-raster-resource-contract-20261007 -> origin/codex/wms672-raster-resource-contract-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7361907Z  * [new branch]          codex/wms672-raster-resource-fix -> origin/codex/wms672-raster-resource-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7364296Z  * [new branch]          codex/wms672-raster-resource-review-20261007 -> origin/codex/wms672-raster-resource-review-20261007
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7366818Z  * [new branch]          codex/wms675-ci-topology-proof-20261006 -> origin/codex/wms675-ci-topology-proof-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7369174Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7371572Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7373664Z  * [new branch]          codex/wms676-crosscheck-astra -> origin/codex/wms676-crosscheck-astra
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7375711Z  * [new branch]          codex/wms676-night-review-fallback -> origin/codex/wms676-night-review-fallback
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7377580Z  * [new branch]          codex/wms676-sol61-pipeline -> origin/codex/wms676-sol61-pipeline
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7379477Z  * [new branch]          codex/wms679-fbw-analysis-source349 -> origin/codex/wms679-fbw-analysis-source349
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7381666Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7383582Z  * [new branch]          codex/wms681-qr-recovery -> origin/codex/wms681-qr-recovery
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7385265Z  * [new branch]          codex/wms681-real-wb-qr-hotfix -> origin/codex/wms681-real-wb-qr-hotfix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7387244Z  * [new branch]          deploy/wb-emulator-real-order-qr -> origin/deploy/wb-emulator-real-order-qr
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7389268Z  * [new branch]          docs/owner-requirements-20260831 -> origin/docs/owner-requirements-20260831
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7391475Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7393584Z  * [new branch]          docs/wms469-470-backlog -> origin/docs/wms469-470-backlog
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7395222Z  * [new branch]          docs/wms561-ship-by-in-supply -> origin/docs/wms561-ship-by-in-supply
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7397170Z  * [new branch]          docs/wms584-585-tsd-walkthrough -> origin/docs/wms584-585-tsd-walkthrough
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7399068Z  * [new branch]          docs/wms648-ozon-catalog-backlog -> origin/docs/wms648-ozon-catalog-backlog
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7400942Z  * [new branch]          docs/wms649-shk-po-ploshchadke -> origin/docs/wms649-shk-po-ploshchadke
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7402450Z  * [new branch]          etalon                  -> origin/etalon
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7403884Z  * [new branch]          feat/cz-print-split-artifact -> origin/feat/cz-print-split-artifact
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7405871Z  * [new branch]          feat/fbs-warehouse-filter-20260812 -> origin/feat/fbs-warehouse-filter-20260812
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7407830Z  * [new branch]          feat/ff-inbound-create-20260812 -> origin/feat/ff-inbound-create-20260812
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7409691Z  * [new branch]          feat/marking-import-s3-storage -> origin/feat/marking-import-s3-storage
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7411417Z  * [new branch]          feat/mobile-fbs-demo-seed -> origin/feat/mobile-fbs-demo-seed
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7413051Z  * [new branch]          feat/product-barcode-print -> origin/feat/product-barcode-print
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7414634Z  * [new branch]          feat/wms056-audit-trail -> origin/feat/wms056-audit-trail
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7416303Z  * [new branch]          feat/wms062-warehouse-docs -> origin/feat/wms062-warehouse-docs
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7417977Z  * [new branch]          feat/wms111-wb-cancel-return -> origin/feat/wms111-wb-cancel-return
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7419685Z  * [new branch]          feat/wms121-supply-identity -> origin/feat/wms121-supply-identity
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7421347Z  * [new branch]          feat/wms270-login-and-ports -> origin/feat/wms270-login-and-ports
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7423081Z  * [new branch]          feat/wms338-stock-min-formula -> origin/feat/wms338-stock-min-formula
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7424907Z  * [new branch]          feat/wms349-merge-service -> origin/feat/wms349-merge-service
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7426503Z  * [new branch]          feat/wms363-ozon-tsd    -> origin/feat/wms363-ozon-tsd
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7427889Z  * [new branch]          feat/wms397-chat-mvp    -> origin/feat/wms397-chat-mvp
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7429407Z  * [new branch]          feat/wms401-mobile-followup -> origin/feat/wms401-mobile-followup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7431121Z  * [new branch]          feat/wms433-assistant-release -> origin/feat/wms433-assistant-release
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7432810Z  * [new branch]          feat/wms433-tenant-rollout -> origin/feat/wms433-tenant-rollout
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7434385Z  * [new branch]          feat/wms447-fbs-box-count -> origin/feat/wms447-fbs-box-count
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7436218Z  * [new branch]          feat/wms453-455-boxes-shared-pool -> origin/feat/wms453-455-boxes-shared-pool
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7437954Z  * [new branch]          feat/wms469-stock-dialog -> origin/feat/wms469-stock-dialog
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7439588Z  * [new branch]          feat/wms529-stock-vs-location -> origin/feat/wms529-stock-vs-location
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7441170Z  * [new branch]          feat/wms534-intake-box  -> origin/feat/wms534-intake-box
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7442610Z  * [new branch]          feat/wms536-scan-layer  -> origin/feat/wms536-scan-layer
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7444274Z  * [new branch]          feat/wms539-artmaks-cells-import -> origin/feat/wms539-artmaks-cells-import
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7446108Z  * [new branch]          feat/wms631-print-agent -> origin/feat/wms631-print-agent
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7447621Z  * [new branch]          feat/wms633-chz-copies  -> origin/feat/wms633-chz-copies
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7449285Z  * [new branch]          feat/wms636-wb-rejected-filter -> origin/feat/wms636-wb-rejected-filter
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7451153Z  * [new branch]          feat/wms641-support-agent -> origin/feat/wms641-support-agent
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7452723Z  * [new branch]          feat/wms650-sorting-impl -> origin/feat/wms650-sorting-impl
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7454290Z  * [new branch]          feat/wms650-sorting-mockup -> origin/feat/wms650-sorting-mockup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7456035Z  * [new branch]          fix/auth-staff-e2e-20260815 -> origin/fix/auth-staff-e2e-20260815
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7457655Z  * [new branch]          fix/cis-pool-full-20260821 -> origin/fix/cis-pool-full-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7459296Z  * [new branch]          fix/cz-artifact-print-scale -> origin/fix/cz-artifact-print-scale
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7460910Z  * [new branch]          fix/deploy-hard-reset   -> origin/fix/deploy-hard-reset
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7462506Z  * [new branch]          fix/fbs-box-controls-20260901 -> origin/fix/fbs-box-controls-20260901
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7464260Z  * [new branch]          fix/fbs-supplier-status-sync -> origin/fix/fbs-supplier-status-sync
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7466241Z  * [new branch]          fix/inventory-owner-block-20260902 -> origin/fix/inventory-owner-block-20260902
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7468592Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7470740Z  * [new branch]          fix/kiz-gs-restore-20260821 -> origin/fix/kiz-gs-restore-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7472406Z  * [new branch]          fix/no-distribution-20260821 -> origin/fix/no-distribution-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7474477Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7476726Z  * [new branch]          fix/packing-optional-20260819 -> origin/fix/packing-optional-20260819
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7478500Z  * [new branch]          fix/packing-optional-to-prod -> origin/fix/packing-optional-to-prod
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7480188Z  * [new branch]          fix/picklist-size-20260819 -> origin/fix/picklist-size-20260819
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7481731Z  * [new branch]          fix/print-pdf-dialog    -> origin/fix/print-pdf-dialog
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7483374Z  * [new branch]          fix/print-restore-proven -> origin/fix/print-restore-proven
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7485015Z  * [new branch]          fix/review-findings-20260902 -> origin/fix/review-findings-20260902
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7487031Z  * [new branch]          fix/seller-honest-sign-sync-20260819 -> origin/fix/seller-honest-sign-sync-20260819
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7488977Z  * [new branch]          fix/warehouse-single-20260821 -> origin/fix/warehouse-single-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7490802Z  * [new branch]          fix/wb-label-seller-line-height -> origin/fix/wb-label-seller-line-height
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7492614Z  * [new branch]          fix/wb-label-seller-line-trim -> origin/fix/wb-label-seller-line-trim
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7494300Z  * [new branch]          fix/wb-meta-method-20260821 -> origin/fix/wb-meta-method-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7495969Z  * [new branch]          fix/wb-token-save-500   -> origin/fix/wb-token-save-500
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7497619Z  * [new branch]          fix/wms-fbs-single-pick-by-cell -> origin/fix/wms-fbs-single-pick-by-cell
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7499351Z  * [new branch]          fix/wms-session-regression -> origin/fix/wms-session-regression
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7501191Z  * [new branch]          fix/wms487-tape-print-missing-codes -> origin/fix/wms487-tape-print-missing-codes
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7502995Z  * [new branch]          fix/wms517-price-snapshot -> origin/fix/wms517-price-snapshot
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7504452Z  * [new branch]          fix/wms517-sold-only    -> origin/fix/wms517-sold-only
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7506067Z  * [new branch]          fix/wms625-on-etalon-20261003 -> origin/fix/wms625-on-etalon-20261003
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7507780Z  * [new branch]          fix/wms634-fbo-date-delegated -> origin/fix/wms634-fbo-date-delegated
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7509419Z  * [new branch]          fix/wms635-kiz-no-wb-wait -> origin/fix/wms635-kiz-no-wb-wait
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7511227Z  * [new branch]          fix/wms639-scan-no-wb-readback -> origin/fix/wms639-scan-no-wb-readback
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7512998Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait -> origin/fix/wms640-scan-kiz-no-wb-wait
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7514837Z  * [new branch]          fix/wms641-kiz-delete-background -> origin/fix/wms641-kiz-delete-background
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7516811Z  * [new branch]          fix/wms642-kiz-no-locks-handover -> origin/fix/wms642-kiz-no-locks-handover
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7518733Z  * [new branch]          fix/wms643-no-print-when-unchecked -> origin/fix/wms643-no-print-when-unchecked
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7520671Z  * [new branch]          fix/wms652-contract-check-merge -> origin/fix/wms652-contract-check-merge
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7522359Z  * [new branch]          fix/wms656-full-kiz-label -> origin/fix/wms656-full-kiz-label
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7524034Z  * [new branch]          fix/wms666-product-stock-scope -> origin/fix/wms666-product-stock-scope
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7526214Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7528193Z  * [new branch]          hotfix/boxes-print-all-qr -> origin/hotfix/boxes-print-all-qr
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7530047Z  * [new branch]          hotfix/cz-print-regression-2026-07-07 -> origin/hotfix/cz-print-regression-2026-07-07
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7531917Z  * [new branch]          hotfix/inbound-qty-blur-v2 -> origin/hotfix/inbound-qty-blur-v2
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7533812Z  * [new branch]          hotfix/inbound-table-header-alignment -> origin/hotfix/inbound-table-header-alignment
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7536013Z  * [new branch]          hotfix/ozon-requirements-int-sku -> origin/hotfix/ozon-requirements-int-sku
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7537951Z  * [new branch]          hotfix/tz-print-landscape-revert -> origin/hotfix/tz-print-landscape-revert
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7539903Z  * [new branch]          hotfix/wb-unified-token-fbs-intake -> origin/hotfix/wb-unified-token-fbs-intake
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7541659Z  * [new branch]          hotfix/wms622-628-restore -> origin/hotfix/wms622-628-restore
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7543454Z  * [new branch]          integration/fbs-fixes-20260821 -> origin/integration/fbs-fixes-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7544901Z  * [new branch]          main                    -> origin/main
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7546404Z  * [new branch]          mobile/android7-v014-recovery -> origin/mobile/android7-v014-recovery
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7547920Z  * [new branch]          mobile/feat-fbs         -> origin/mobile/feat-fbs
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7549283Z  * [new branch]          mockup/psp2-clickable   -> origin/mockup/psp2-clickable
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7551649Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7554407Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7557098Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7559554Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7561979Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7564382Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7566692Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7569176Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7572089Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7574538Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7576691Z  * [new branch]          night/volna-9/lane-1/01-wb-marking -> origin/night/volna-9/lane-1/01-wb-marking
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7578548Z  * [new branch]          night/volna-9/lane-1/07-reporting -> origin/night/volna-9/lane-1/07-reporting
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7580313Z  * [new branch]          night/volna-9/lane-1/defect-01 -> origin/night/volna-9/lane-1/defect-01
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7582050Z  * [new branch]          night/volna-9/lane-1/feature-07 -> origin/night/volna-9/lane-1/feature-07
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7583970Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen -> origin/night/volna-9/lane-2/02-verdikt-screen
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7585965Z  * [new branch]          night/volna-9/lane-2/08-storage -> origin/night/volna-9/lane-2/08-storage
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7587696Z  * [new branch]          night/volna-9/lane-2/defect-02 -> origin/night/volna-9/lane-2/defect-02
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7589736Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7591785Z  * [new branch]          night/volna-9/lane-3/09-billing -> origin/night/volna-9/lane-3/09-billing
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7593508Z  * [new branch]          night/volna-9/lane-3/defect-03 -> origin/night/volna-9/lane-3/defect-03
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7595649Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7597623Z  * [new branch]          night/volna-9/lane-4/defect-04 -> origin/night/volna-9/lane-4/defect-04
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7599394Z  * [new branch]          night/volna-9/lane-5/05-prod-slow -> origin/night/volna-9/lane-5/05-prod-slow
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7601170Z  * [new branch]          night/volna-9/lane-5/defect-05 -> origin/night/volna-9/lane-5/defect-05
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7603335Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7605436Z  * [new branch]          night/volna-9/lane-6/defect-06 -> origin/night/volna-9/lane-6/defect-06
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7607011Z  * [new branch]          night/wms-653-5beb52da  -> origin/night/wms-653-5beb52da
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7608493Z  * [new branch]          night/wms-654-5beb52da  -> origin/night/wms-654-5beb52da
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7609879Z  * [new branch]          night/wms-657-5beb52da  -> origin/night/wms-657-5beb52da
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7611261Z  * [new branch]          night/wms-658-5beb52da  -> origin/night/wms-658-5beb52da
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7612650Z  * [new branch]          night/wms-659-5beb52da  -> origin/night/wms-659-5beb52da
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7614580Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7617159Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7619577Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7621978Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7624367Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7626839Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7629219Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7631785Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7634157Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7636583Z  * [new branch]          process/pipeline-on-etalon-20260821 -> origin/process/pipeline-on-etalon-20260821
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7638531Z  * [new branch]          release/2026-10-02-packing-stock -> origin/release/2026-10-02-packing-stock
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7640167Z  * [new branch]          release/2026-10-03-ready -> origin/release/2026-10-03-ready
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7641694Z  * [new branch]          release/barcode-tall-label -> origin/release/barcode-tall-label
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7643288Z  * [new branch]          release/inbound-print-fix -> origin/release/inbound-print-fix
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7644811Z  * [new branch]          release/wms641-agent-v1 -> origin/release/wms641-agent-v1
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7646375Z  * [new branch]          release/wms641-agent-v2 -> origin/release/wms641-agent-v2
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7647823Z  * [new branch]          release/wms641-agent-v3 -> origin/release/wms641-agent-v3
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7649638Z  * [new branch]          review/pick-and-binding-fixes-20260816 -> origin/review/pick-and-binding-fixes-20260816
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7651892Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7653826Z  * [new branch]          speed/test-infra-20260830 -> origin/speed/test-infra-20260830
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7655172Z  * [new branch]          staging                 -> origin/staging
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7656627Z  * [new branch]          support-task/WMS-651-4  -> origin/support-task/WMS-651-4
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7658062Z  * [new branch]          support-task/WMS-653-6  -> origin/support-task/WMS-653-6
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7659477Z  * [new branch]          support-task/WMS-654-7  -> origin/support-task/WMS-654-7
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7660937Z  * [new branch]          support-task/WMS-657-8  -> origin/support-task/WMS-657-8
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7662511Z  * [new branch]          support-task/WMS-658-9  -> origin/support-task/WMS-658-9
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7663941Z  * [new branch]          support-task/WMS-661-14 -> origin/support-task/WMS-661-14
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7665488Z  * [new branch]          support-task/WMS-667-18 -> origin/support-task/WMS-667-18
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7666928Z  * [new branch]          support-task/WMS-677-22 -> origin/support-task/WMS-677-22
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7668366Z  * [new branch]          support-task/WMS-679-26 -> origin/support-task/WMS-679-26
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7669795Z  * [new branch]          support-task/WMS-680-27 -> origin/support-task/WMS-680-27
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7671224Z  * [new branch]          support-task/WMS-683-29 -> origin/support-task/WMS-683-29
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7672780Z  * [new branch]          test/wms672-c7-c10-c11-20261006 -> origin/test/wms672-c7-c10-c11-20261006
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7674211Z  * [new tag]             tsd-preview             -> tsd-preview
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7675627Z  * [new tag]             wms-print-direct-v2026.09.30.1 -> wms-print-direct-v2026.09.30.1
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7677219Z  * [new tag]             wms-print-direct-v2026.09.30.2 -> wms-print-direct-v2026.09.30.2
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7678791Z  * [new tag]             wms-print-direct-v2026.09.30.3 -> wms-print-direct-v2026.09.30.3
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7680358Z  * [new tag]             wms-print-direct-v2026.09.30.4 -> wms-print-direct-v2026.09.30.4
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7681923Z  * [new tag]             wms-print-direct-v2026.09.30.5 -> wms-print-direct-v2026.09.30.5
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7683593Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1 -> wms-print-direct-v2026.10.01.1-rc1
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7685113Z  * [new tag]             wms-print-v2026.09.13.1 -> wms-print-v2026.09.13.1
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7686455Z  * [new tag]             wms-print-v2026.09.13.2 -> wms-print-v2026.09.13.2
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7687842Z  * [new tag]             wms-print-v2026.09.13.3 -> wms-print-v2026.09.13.3
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7690683Z [command]/usr/bin/git branch --list --remote origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7692387Z   origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7694694Z [command]/usr/bin/git rev-parse refs/remotes/origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7696284Z 8754c164be9d3c60567dfce0d319f11a4a66db9b
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7698266Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7699284Z ##[group]Determining the checkout info
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7700444Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7701101Z [command]/usr/bin/git sparse-checkout disable
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7703141Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7705567Z ##[group]Checking out the ref
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:05.7707627Z [command]/usr/bin/git checkout --progress --force -B codex/wms652-realqr-cdp-lifecycle-diagnostic refs/remotes/origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.6849247Z Updating files:  85% (5426/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.6886258Z Updating files:  86% (5428/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.6930103Z Updating files:  87% (5491/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.6978827Z Updating files:  88% (5554/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7032646Z Updating files:  89% (5617/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7074226Z Updating files:  90% (5680/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7108699Z Updating files:  91% (5744/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7151288Z Updating files:  92% (5807/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7399654Z Updating files:  93% (5870/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7459174Z Updating files:  94% (5933/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7523034Z Updating files:  95% (5996/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7636493Z Updating files:  96% (6059/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.7972014Z Updating files:  97% (6122/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8047779Z Updating files:  98% (6185/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8128533Z Updating files:  99% (6248/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8129136Z Updating files: 100% (6311/6311)
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8129873Z Updating files: 100% (6311/6311), done.
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8226547Z Switched to a new branch 'codex/wms652-realqr-cdp-lifecycle-diagnostic'
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8232377Z branch 'codex/wms652-realqr-cdp-lifecycle-diagnostic' set up to track 'origin/codex/wms652-realqr-cdp-lifecycle-diagnostic'.
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8314733Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8370872Z [command]/usr/bin/git log -1 --format=%H
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8403838Z 8754c164be9d3c60567dfce0d319f11a4a66db9b
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8414098Z ##[group]Removing auth
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8417979Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8452232Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8701749Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8733158Z http.https://github.com/.extraheader
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8742581Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.8784076Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.9031229Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.9066558Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+realqr-lifecycle-diagnostic	Run actions/checkout@v4	2026-10-07T00:13:06.9312222Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	﻿2026-10-07T00:13:06.9570260Z ##[group]Run actions/setup-node@v4
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9570582Z with:
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9570802Z   node-version: 24.21.0
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9571048Z   always-auth: false
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9571471Z   check-latest: false
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9573902Z   token: ***
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:06.9574124Z ##[endgroup]
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.0943261Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.0948471Z (node:2380) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.0949686Z (Use `node --trace-deprecation ...` to show where the warning was created)
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.0951108Z ##[group]Environment details
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.4753333Z node: v24.21.0
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.4753745Z npm: 11.19.0
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.4754063Z yarn: 1.22.22
+realqr-lifecycle-diagnostic	Run actions/setup-node@v4	2026-10-07T00:13:07.4755685Z ##[endgroup]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	﻿2026-10-07T00:13:07.4930798Z ##[group]Run npm ci --prefix frontend
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.4931193Z [36;1mnpm ci --prefix frontend[0m
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.4931760Z [36;1mnpm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1[0m
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.4932538Z [36;1mnode "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium[0m
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.4933577Z [36;1mnode --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"[0m
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.5191468Z shell: /usr/bin/bash -e {0}
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:07.5191771Z ##[endgroup]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:09.0382246Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1585464Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1586398Z added 329 packages, and audited 330 packages in 13s
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1587022Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1587389Z 85 packages are looking for funding
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1588128Z   run `npm fund` for details
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1972006Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1973013Z 15 vulnerabilities (1 low, 3 moderate, 9 high, 2 critical)
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1973443Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1973835Z To address issues that do not require attention, run:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1974365Z   npm audit fix
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1974564Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1974903Z To address all issues (including breaking changes), run:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1975647Z   npm audit fix --force
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1975884Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1976078Z Run `npm audit` for details.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1982363Z npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1983580Z npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1984416Z npm warn install-scripts
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:20.1985756Z npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:21.7624791Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:21.7625707Z added 2 packages in 1s
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.3078738Z Installing dependencies...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.3140537Z Switching to root user to install dependencies...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.3880044Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.4418625Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.5146124Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [463 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.5170618Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.5184406Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.5213242Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.5316094Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6289619Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1373 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6387485Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [306 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6396685Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1700 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6526806Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [341 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6547988Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1730 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6648158Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [396 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.6676766Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [13.3 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.7538838Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1073 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.7599183Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [223 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.7617508Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1218 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.8094545Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [245 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.8113019Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [11.6 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:22.9580086Z Get:20 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [519 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:25.4811203Z Fetched 9994 kB in 1s (8791 kB/s)
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.2842515Z Reading package lists...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.3102634Z Reading package lists...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.5012253Z Building dependency tree...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.5019907Z Reading state information...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6570048Z libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6570821Z libasound2t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6571500Z libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6572219Z libatk-bridge2.0-0t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6572850Z libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6573448Z libatk1.0-0t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6574147Z libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6574839Z libatspi2.0-0t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6575711Z libcairo2 is already the newest version (1.18.0-3build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6576338Z libcairo2 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6577007Z libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6577639Z libcups2t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6578274Z libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6578906Z libdbus-1-3 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6579649Z libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6580338Z libdrm2 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6581002Z libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.4).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6581638Z libgbm1 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6582395Z libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.9).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6583115Z libglib2.0-0t64 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6583795Z libnspr4 is already the newest version (2:4.35-1.1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6584425Z libnspr4 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6585070Z libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6585889Z libnss3 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6586543Z libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6587226Z libpango-1.0-0 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6587844Z libx11-6 is already the newest version (2:1.8.7-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6588462Z libx11-6 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6589104Z libxcb1 is already the newest version (1.15-1ubuntu2).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6589704Z libxcb1 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6590404Z libxcomposite1 is already the newest version (1:0.4.5-1build3).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6591094Z libxcomposite1 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6592236Z libxdamage1 is already the newest version (1:1.1.6-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6592912Z libxdamage1 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6593600Z libxext6 is already the newest version (2:1.3.4-1build2).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6594215Z libxext6 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6594881Z libxfixes3 is already the newest version (1:6.0.0-2build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6595730Z libxfixes3 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6596410Z libxkbcommon0 is already the newest version (1.6.0-1build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6597069Z libxkbcommon0 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6597743Z libxrandr2 is already the newest version (2:1.5.2-2build1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6598689Z libxrandr2 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6599339Z xvfb is already the newest version (2:21.1.12-1ubuntu1.8).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6600215Z fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6601151Z libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6601807Z libfontconfig1 set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6602499Z fonts-liberation is already the newest version (1:2.1.5-3).
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6603196Z fonts-liberation set to manually installed.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6603820Z The following additional packages will be installed:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6604397Z   xfonts-encodings xfonts-utils
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6604835Z Recommended packages:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6605287Z   fonts-ipafont-mincho fonts-tlwg-loma
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6770334Z The following NEW packages will be installed:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6771175Z   fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6775818Z   fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6776222Z   xfonts-utils
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6779959Z The following packages will be upgraded:
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6784264Z   libfreetype6
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6956680Z 1 upgraded, 9 newly installed, 0 to remove and 9 not upgraded.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6957199Z Need to get 21.5 MB of archives.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6957653Z After this operation, 79.5 MB of additional disk space will be used.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.6958258Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:26.7993480Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:27.3317004Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:27.5793549Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:27.6616930Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:27.8008915Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.1022962Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype6 amd64 2.13.2+dfsg-1ubuntu0.2 [403 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.2221805Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.3650285Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.4532883Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.5650749Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8508551Z Fetched 21.5 MB in 2s (11.3 MB/s)
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8726933Z Selecting previously unselected package fonts-ipafont-gothic.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8969831Z (Reading database ... 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8970360Z (Reading database ... 5%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8970769Z (Reading database ... 10%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8971324Z (Reading database ... 15%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8971577Z (Reading database ... 20%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8971818Z (Reading database ... 25%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8972064Z (Reading database ... 30%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8972468Z (Reading database ... 35%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8972714Z (Reading database ... 40%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8972959Z (Reading database ... 45%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.8973204Z (Reading database ... 50%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:28.9004305Z (Reading database ... 55%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.0363014Z (Reading database ... 60%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.2437979Z (Reading database ... 65%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.4332808Z (Reading database ... 70%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.5967949Z (Reading database ... 75%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.7963921Z (Reading database ... 80%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:29.9160639Z (Reading database ... 85%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.0376988Z (Reading database ... 90%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.1940970Z (Reading database ... 95%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.1941511Z (Reading database ... 100%
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.1942172Z (Reading database ... 203191 files and directories currently installed.)
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.1990797Z Preparing to unpack .../0-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.2086630Z Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.4430262Z Selecting previously unselected package fonts-freefont-ttf.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.4565197Z Preparing to unpack .../1-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.4570354Z Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5360866Z Selecting previously unselected package fonts-tlwg-loma-otf.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5494898Z Preparing to unpack .../2-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5501340Z Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5698687Z Selecting previously unselected package fonts-unifont.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5827918Z Preparing to unpack .../3-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.5834178Z Unpacking fonts-unifont (1:15.1.01-1build1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.6905609Z Selecting previously unselected package fonts-wqy-zenhei.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.7040134Z Preparing to unpack .../4-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:30.7141138Z Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.1970499Z Preparing to unpack .../5-libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.1993938Z Unpacking libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) over (2.13.2+dfsg-1ubuntu0.1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2232003Z Selecting previously unselected package xfonts-encodings.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2363830Z Preparing to unpack .../6-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2369316Z Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2647258Z Selecting previously unselected package xfonts-utils.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2776506Z Preparing to unpack .../7-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.2782124Z Unpacking xfonts-utils (1:7.7+6build3) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3095773Z Selecting previously unselected package xfonts-cyrillic.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3223387Z Preparing to unpack .../8-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3229749Z Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3562071Z Selecting previously unselected package xfonts-scalable.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3689775Z Preparing to unpack .../9-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.3696384Z Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4118918Z Setting up fonts-wqy-zenhei (0.9.45-8) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4230133Z Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4244016Z Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4936643Z Setting up libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4950902Z Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.4964306Z Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5032942Z update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5046468Z Setting up fonts-unifont (1:15.1.01-1build1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5059841Z Setting up xfonts-utils (1:7.7+6build3) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5097293Z Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5385622Z Setting up xfonts-scalable (1:1.0.3-1.3) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5668875Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5973707Z Processing triggers for man-db (2.12.0-4build2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.5993624Z Not building database; man-db/auto-update is not 'true'.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:31.6003220Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.2946083Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.2946878Z Running kernel seems to be up-to-date.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.2947244Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.2947425Z Restarting services...
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.3026899Z  systemctl restart php8.3-fpm.service
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4293711Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4295583Z No containers need to be restarted.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4296809Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4297086Z No user sessions are running outdated binaries.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4297451Z 
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:32.4303629Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.3197581Z Downloading Chromium 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-linux.zip
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.5006928Z |                                                                                |   0% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.6309936Z |■■■■■■■■                                                                        |  10% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.7020865Z |■■■■■■■■■■■■■■■■                                                                |  20% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.7897942Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.8603817Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.9313917Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:33.9998857Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:34.0526872Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:34.1154854Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:34.1691708Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:34.2234520Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 173.9 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.4833115Z Chromium 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium-1194
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.4837085Z Downloading FFMPEG playwright build v1011 from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6354797Z |                                                                                |   0% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6481792Z |■■■■■■■■                                                                        |  10% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6566265Z |■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6605906Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6654313Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6700991Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6719476Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6752425Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6781109Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6796690Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.6808563Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.7336315Z FFMPEG playwright build v1011 downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.7339719Z Downloading Chromium Headless Shell 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-headless-shell-linux.zip
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.8774919Z |                                                                                |   0% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:37.9871323Z |■■■■■■■■                                                                        |  10% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.0306345Z |■■■■■■■■■■■■■■■■                                                                |  20% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.0701291Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.1087014Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.1645801Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.2337627Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.2724791Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.3174154Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.3664596Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:38.4264595Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 104.3 MiB
+realqr-lifecycle-diagnostic	Install exact original frontend and Linux Chrome141	2026-10-07T00:13:40.2353829Z Chromium Headless Shell 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1194
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	﻿2026-10-07T00:13:40.7411460Z ##[group]Run bash scripts/ci/wms652-realqr-diagnostic/run.sh
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.7411957Z [36;1mbash scripts/ci/wms652-realqr-diagnostic/run.sh[0m
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.7485042Z shell: /usr/bin/bash -e {0}
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.7485537Z env:
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.7485952Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.7486440Z ##[endgroup]
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.9676358Z From https://github.com/chivkunovd-bitdenis/WMS
+realqr-lifecycle-diagnostic	Frozen selected remount case and separate native transport controls	2026-10-07T00:13:40.9677170Z  * branch                ac845328b27b5be265962695e10766efddef339e -> FETCH_HEAD
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	﻿2026-10-07T00:13:52.8033906Z ##[group]Run actions/upload-artifact@v4
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8034390Z with:
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8034761Z   name: wms652-realqr-lifecycle-37550768806-1
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8035514Z   path: /home/runner/work/_temp/wms652-realqr-lifecycle
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8036047Z   if-no-files-found: error
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8036436Z   compression-level: 6
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8036786Z   overwrite: false
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8037135Z   include-hidden-files: false
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8037519Z env:
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8038068Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.8038757Z ##[endgroup]
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.9856466Z (node:3547) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.9858112Z (Use `node --trace-deprecation ...` to show where the warning was created)
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.9954816Z With the provided path, there will be 19 files uploaded
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.9959254Z Artifact name is valid!
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:52.9960018Z Root directory input is valid!
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.1967762Z Beginning upload of artifact content to blob storage
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.2510945Z (node:3547) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.2752279Z Uploaded bytes 85940
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.2871247Z Finished uploading artifact content to blob storage!
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.2872592Z SHA256 digest of uploaded artifact zip is 96eadc8c3545f4b5a58fc4726e569221d50f3641cfdac1d105493ae3b5be2be4
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.2874070Z Finalizing artifact upload
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.4819099Z Artifact wms652-realqr-lifecycle-37550768806-1.zip successfully finalized. Artifact ID 11452188334
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.4821082Z Artifact wms652-realqr-lifecycle-37550768806-1 has been successfully uploaded! Final size is 85940 bytes. Artifact ID is 11452188334
+realqr-lifecycle-diagnostic	Preserve raw identity and lifecycle observations	2026-10-07T00:13:53.4828870Z Artifact download URL: https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37550768806/artifacts/11452188334
+realqr-lifecycle-diagnostic	Post Run actions/setup-node@v4	﻿2026-10-07T00:13:53.5104749Z Post job cleanup.
+realqr-lifecycle-diagnostic	Post Run actions/setup-node@v4	2026-10-07T00:13:53.6365717Z (node:3559) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+realqr-lifecycle-diagnostic	Post Run actions/setup-node@v4	2026-10-07T00:13:53.6367059Z (Use `node --trace-deprecation ...` to show where the warning was created)
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	﻿2026-10-07T00:13:53.6593231Z Post job cleanup.
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7613658Z [command]/usr/bin/git version
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7662225Z git version 2.55.0
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7703529Z Temporarily overriding HOME='/home/runner/work/_temp/2c10b6c0-1582-4491-a2b0-f005e1ab3f8a' before making global git config changes
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7705186Z Adding repository directory to the temporary git global config as a safe directory
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7713125Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7762013Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.7809895Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.8144778Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.8201250Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.8636619Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+realqr-lifecycle-diagnostic	Post Run actions/checkout@v4	2026-10-07T00:13:53.8661319Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+realqr-lifecycle-diagnostic	Complete job	﻿2026-10-07T00:13:53.9222815Z Cleaning up orphan processes
+realqr-lifecycle-diagnostic	Complete job	2026-10-07T00:13:53.9569052Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

@@ -1,0 +1,16 @@
+{
+  "raw_checkpoint": "796e8be41e3505ca55cf6eedc8914b6a70fd0967",
+  "prefix_checkpoint": "26af10f1f5ffd25de83d058c779f758539f2341c",
+  "files": [
+    {
+      "path": "positive-cohort-chain.json",
+      "bytes": 115715,
+      "sha256": "d3235bad17bab6eca9f441fe0bb37610b4b24cf6837043bcf810dd892468c36e"
+    },
+    {
+      "path": "positive-cohort-chain.md",
+      "bytes": 1900,
+      "sha256": "a8045e4af8f6194b5cd16994254481619aa6f5c2ae8283d0245756274b1482c2"
+    }
+  ]
+}

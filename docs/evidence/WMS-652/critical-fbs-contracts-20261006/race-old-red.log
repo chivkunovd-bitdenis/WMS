@@ -1,0 +1,29 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+________________ test_parallel_from_orders_one_order_one_supply ________________
+tests/test_fbs_supply_from_orders.py:814: in test_parallel_from_orders_one_order_one_supply
+    assert pending.status_code == 409, pending.text  # OLD expectation, RED first.
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   AssertionError: {"detail":{"code":"operation_in_progress","message":"Для этих заказов уже сохранена попытка создания поставки. Дождитесь ответа WB или продолжите проверку этой попытки.","context":{"operation_id":"4e840544-5c8f-4204-8146-6f2064ec4f56","operation_state":"pending_confirmation","supply_id":"f303917e-3380-45c9-860b-0f6a191e69f7","wb_supply_id":"WB-GI-MOCK-1"},"retryable":true}}
+E   assert 503 == 409
+E    +  where 503 = <Response [503 Service Unavailable]>.status_code
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms652-critical-fbs-contracts/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fbs_supply_from_orders.py::test_parallel_from_orders_one_order_one_supply
+1 failed, 6 warnings in 3.09s

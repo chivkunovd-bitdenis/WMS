@@ -1,0 +1,13 @@
+# WMS-517 bounded independent re-review — PASS
+
+This re-review closes only the P1 recorded in `d49f2319330c537ac376a8a9444a06a9bdb779bb`; it does not restart the wider audit. Independent Astra session retained, effort high.
+
+Exact source reviewed: `d6d7bd03497d82608ac15459adaa43c6d47965bf`, obtained by applying frozen test contract `9f0a9e3c854639ccc0853ef43cd260624446073b` and implementation `7a2fa31d83e06b2724edbcca1aaead0914ad5e56` to the review branch. All four helper/launcher/generator/command files and the tests exactly match implementation source `7a2fa31d83e06b2724edbcca1aaead0914ad5e56` (git diff empty).
+
+The correction replaces immediate rejection of the loading-disabled native refresh button with the existing bounded `waitFor` mechanism (80 attempts, 100 ms interval). Each poll checks the current session/location, and the session is checked again immediately before the click. It preserves exact single-button selection, genuine failure timeout, original preparation/rollback and signature boundaries. Only the helper and its regenerated command change product bytes.
+
+The original, unchanged independent reproducer now passes both cases against the actual React/MUI `SellerKizWithdrawalScreen`: zero latency **PASS** and successful registry responses with 700 ms latency **PASS**. Both open exactly one native certificate dialog through the helper with one certificate-list call, six registry GETs, no signature and no submit. See `WMS-517-mac-real-screen-rereview-20261006.txt`. This is the same harness that previously produced 0ms PASS / 700ms FAIL, with no assertion changes.
+
+The revised frozen SC17 suite independently reports **110 PASS, 0 FAIL**; raw TAP is `WMS-517-mac-independent-rereview-20261006.tap`. Test delta preserves the prior 109 assertions, makes unsafe-result scenario titles unique, and adds the latency regression. Its saved pre-code RED is 109 PASS / 1 FAIL for the intended loading-button reason. Helper syntax and command `zsh -n` pass. Regeneration with the checked-in generator reproduces the command exactly (git diff empty).
+
+**Verdict: P1 CLOSED; bounded Mac helper correction PASS on the exact source above.** No further findings in this correction. Review evidence alone is committed by the reviewer; product/test changes are the original commits applied unchanged. No real Mac permission flow, operator certificate/signature, production mutation or deployment was performed. These results establish software preparation correctness within the tested boundary; physical Mac/signature remains separate and is not a prerequisite for releasing this software correction under the latest owner instruction. Optional product-scope work was not rerun.

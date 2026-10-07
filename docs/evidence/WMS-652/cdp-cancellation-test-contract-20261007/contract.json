@@ -1,0 +1,155 @@
+{
+  "task": "WMS-652",
+  "role": "same separate technical testwriter",
+  "base": "3151a29954138f0b92226ae8965a5b186b26b9f3",
+  "rules_origin_etalon": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "case_ids": [
+    "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+    "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+    "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+    "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+    "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+    "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+    "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+  ],
+  "command": "node --test --test-reporter=tap frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+  "format": "node-tap",
+  "planned_report": "print/wms652-cdp-cancellation.tap",
+  "source_closure": [
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+    "frontend/tests-e2e/wms652-critical/browser.mjs",
+    "frontend/package.json",
+    "frontend/package-lock.json"
+  ],
+  "closure_sha256": {
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "2701f510c5879f3154beb3af633f8aaee493cc07311d4d2e3686d24f261199da",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "actual_operation": "AST extraction/evaluation of verbatim CDP class and inert top-level function declarations from browser.mjs.",
+  "controlled_boundary": "WebSocket protocol ingress/replies and manual expiry of the actual command timer; no Chrome/top-level fixture execution.",
+  "observable_disposition": "retired:true on returned result OR rejected typed error; native -32602/Invalid InterceptionId diagnostic remains available. No receipt/accepted/submitted result.",
+  "positive_preconditions": [
+    "Exact observed Fetch.requestPaused requestId with networkId mapping.",
+    "Matching Network.loadingFailed canceled:true and net::ERR_ABORTED.",
+    "No earlier successful response for that token.",
+    "Exact Fetch.fulfillRequest native -32602 Invalid InterceptionId refusal.",
+    "First owned attempt; request lifecycle retirement is consumed once. An already retired token duplicate is a strict failure."
+  ],
+  "negative_matrix": [
+    "never observed FetchID",
+    "missing network mapping",
+    "different network cancellation",
+    "navigation and context clear alone",
+    "canceled false even ERR_ABORTED",
+    "different canceled failure text",
+    "deliberate ConnectionClosed lost acknowledgment",
+    "successful completed token cannot retire a duplicate",
+    "matching abort with other error code",
+    "matching abort with other error message",
+    "matching abort for a different terminal method",
+    "matching abort does not explain timeout"
+  ],
+  "before": {
+    "total": 7,
+    "pass": 5,
+    "fail": 2,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP6",
+      "CDP7"
+    ],
+    "green": [
+      "CDP1",
+      "CDP2",
+      "CDP3",
+      "CDP4",
+      "CDP5"
+    ],
+    "raw": "before-ambiguity-seven.tap"
+  },
+  "green_preservation_proof": {
+    "copy_only": true,
+    "raw": "mutation-preservation.tap",
+    "pass": 0,
+    "fail": 2,
+    "skipped": 0,
+    "red": [
+      "CDP3",
+      "CDP4"
+    ],
+    "mutation_result": "mutation-result.json"
+  },
+  "limits": [
+    "No browser/business43/C5/old7+2+3/scope51/fullCI rerun.",
+    "No business assertions, product, original transport, workflow, policy, requirements or secrets changed.",
+    "No independent review, acceptance, implementation or SOURCE approval; developer must wait for this published frozen contract."
+  ],
+  "provisional_contract_sha": "130130b337958b2a442f2961520b634df77750de",
+  "boundary_review_commit": "5c6fbc5298f1f62575b7b445f602542cf7b74d70",
+  "provisional_before": {
+    "total": 4,
+    "pass": 2,
+    "fail": 2,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP1",
+      "CDP2"
+    ],
+    "green": [
+      "CDP3",
+      "CDP4"
+    ],
+    "raw": "before.tap"
+  },
+  "single_consumption_proof": {
+    "case_id": "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+    "actual_class_raw": "before-five.tap",
+    "mutation_copy_raw": "mutation-duplicate.tap",
+    "mutation_result": "duplicate-proof.json",
+    "first_retirement_prerequisite_passed": true,
+    "duplicate_specific_failure": "strictFailure rejects second resolved retirement",
+    "pass": 0,
+    "fail": 1,
+    "skipped": 0,
+    "copy_only": true
+  },
+  "original_contract_base": "b8bd39d95142875f6db232c3ce4b89192a779210",
+  "five_case_contract_sha": "910217fe9323cfaee211b294b01ec7b77daf49d8",
+  "five_case_closure_sha256": {
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "five_case_before": {
+    "total": 5,
+    "pass": 2,
+    "fail": 3,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP1",
+      "CDP2",
+      "CDP5"
+    ],
+    "green": [
+      "CDP3",
+      "CDP4"
+    ],
+    "raw": "before-five.tap"
+  },
+  "in_flight_ambiguity_boundary": {
+    "case_ids": [
+      "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+      "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+    ],
+    "proof": "ambiguity-proof.json",
+    "intervention": "After the sole native command send, before its native error reply: reuse exact FetchID or observe a second FetchID owning the same NetworkID. Both remain strict refusals with original native diagnostic, no retirement, receipt or retry.",
+    "existing_five_case_prefix_byte_identical": true,
+    "historical_ci_cause": "UNKNOWN; no retrospective inference."
+  }
+}

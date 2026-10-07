@@ -1,0 +1,430 @@
+{
+  "run": 37558149550,
+  "attempt": 1,
+  "selected": "PASS",
+  "original_historical_lock_owner": "UNKNOWN",
+  "coverage": {
+    "exitstatus": 0,
+    "events": 6443,
+    "bytes": 1805572,
+    "dropped": 0,
+    "active_transactions": {}
+  },
+  "kind_counts": {
+    "collector-start": 1,
+    "test-protocol-start": 1,
+    "sqlite-connection-settings": 4,
+    "connection-begin": 183,
+    "sql-start": 2360,
+    "sql-complete": 2360,
+    "connection-commit-start": 141,
+    "pool-checkin": 183,
+    "session-begin": 247,
+    "session-before-flush": 208,
+    "session-transaction-ended": 455,
+    "session-commit-complete": 184,
+    "connection-rollback-start": 42,
+    "service-task-launch": 36,
+    "service-task-settled": 36,
+    "test-protocol-end": 1,
+    "collector-end": 1
+  },
+  "recorded_WMS_engine_connections": [
+    1,
+    4,
+    5,
+    6
+  ],
+  "foreign_session_event_connections_note": "Global Session events include labels2/3 without observed WMS engine SQL/begin/checkin/settings; do not treat these as WMS write owners.",
+  "publisher_update_duration_ms": 82.15621,
+  "publisher_complete_after_outer_checkin_ms": 9.562357,
+  "events": [
+    {
+      "sequence": 5693,
+      "utc_ns": 1791337245180793442,
+      "monotonic_ns": 128080576317,
+      "kind": "connection-begin",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5694,
+      "utc_ns": 1791337245180841031,
+      "monotonic_ns": 128080623766,
+      "kind": "session-begin",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "session": 100,
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5711,
+      "utc_ns": 1791337245189730247,
+      "monotonic_ns": 128089513103,
+      "kind": "sql-start",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "INSERT",
+      "table": "inventory_movements",
+      "transaction": 5693
+    },
+    {
+      "sequence": 5712,
+      "utc_ns": 1791337245190595898,
+      "monotonic_ns": 128090378784,
+      "kind": "sql-complete",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "INSERT",
+      "table": "inventory_movements",
+      "transaction": 5693
+    },
+    {
+      "sequence": 5716,
+      "utc_ns": 1791337245192973110,
+      "monotonic_ns": 128092755976,
+      "kind": "sql-start",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "RELEASE",
+      "table": null,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5717,
+      "utc_ns": 1791337245194761319,
+      "monotonic_ns": 128094544184,
+      "kind": "sql-complete",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "RELEASE",
+      "table": null,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5718,
+      "utc_ns": 1791337245194820319,
+      "monotonic_ns": 128094603095,
+      "kind": "session-commit-complete",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "session": 100
+    },
+    {
+      "sequence": 5719,
+      "utc_ns": 1791337245194881243,
+      "monotonic_ns": 128094663979,
+      "kind": "service-task-launch",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "launched": {
+        "task": 76,
+        "coroutine": "publish_seller_stocks_now",
+        "file": "fbs_stock_publish_service.py"
+      }
+    },
+    {
+      "sequence": 5720,
+      "utc_ns": 1791337245194937098,
+      "monotonic_ns": 128094719823,
+      "kind": "session-transaction-ended",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "session": 100,
+      "nested": true
+    },
+    {
+      "sequence": 5722,
+      "utc_ns": 1791337245195858353,
+      "monotonic_ns": 128095641179,
+      "kind": "sql-start",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "UPDATE",
+      "table": "fbs_shipment_reversal_ledger",
+      "transaction": 5693
+    },
+    {
+      "sequence": 5723,
+      "utc_ns": 1791337245195963750,
+      "monotonic_ns": 128095746516,
+      "kind": "service-task-launch",
+      "task": {
+        "task": 76,
+        "coroutine": "publish_seller_stocks_now",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "launched": {
+        "task": 77,
+        "coroutine": "publish_seller_stocks_now.<locals>.run",
+        "file": "fbs_stock_publish_service.py"
+      }
+    },
+    {
+      "sequence": 5724,
+      "utc_ns": 1791337245197017784,
+      "monotonic_ns": 128096800630,
+      "kind": "connection-begin",
+      "task": {
+        "task": 77,
+        "coroutine": "publish_seller_stocks_now.<locals>.run",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 5,
+      "transaction": 5724
+    },
+    {
+      "sequence": 5742,
+      "utc_ns": 1791337245202861828,
+      "monotonic_ns": 128102644664,
+      "kind": "service-task-launch",
+      "task": {
+        "task": 77,
+        "coroutine": "publish_seller_stocks_now.<locals>.run",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "launched": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      }
+    },
+    {
+      "sequence": 5745,
+      "utc_ns": 1791337245204505687,
+      "monotonic_ns": 128104288542,
+      "kind": "connection-begin",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "sequence": 5746,
+      "utc_ns": 1791337245204581098,
+      "monotonic_ns": 128104363883,
+      "kind": "session-begin",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "session": 106,
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "sequence": 5747,
+      "utc_ns": 1791337245204850342,
+      "monotonic_ns": 128104633137,
+      "kind": "sql-start",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "SELECT",
+      "table": "fbs_warehouse_bindings",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5750,
+      "utc_ns": 1791337245206421965,
+      "monotonic_ns": 128106204851,
+      "kind": "sql-complete",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "SELECT",
+      "table": "fbs_warehouse_bindings",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5751,
+      "utc_ns": 1791337245206955274,
+      "monotonic_ns": 128106738119,
+      "kind": "sql-start",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "SELECT",
+      "table": "sellers",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5756,
+      "utc_ns": 1791337245208885248,
+      "monotonic_ns": 128108668013,
+      "kind": "sql-complete",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "SELECT",
+      "table": "sellers",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5757,
+      "utc_ns": 1791337245209563799,
+      "monotonic_ns": 128109346715,
+      "kind": "sql-start",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "UPDATE",
+      "table": "fbs_warehouse_bindings",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5760,
+      "utc_ns": 1791337245211259003,
+      "monotonic_ns": 128111041959,
+      "kind": "sql-start",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "UPDATE",
+      "table": "fbs_orders",
+      "transaction": 5693
+    },
+    {
+      "sequence": 5761,
+      "utc_ns": 1791337245211704918,
+      "monotonic_ns": 128111487784,
+      "kind": "sql-complete",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "operation": "UPDATE",
+      "table": "fbs_orders",
+      "transaction": 5693
+    },
+    {
+      "sequence": 5868,
+      "utc_ns": 1791337245280452199,
+      "monotonic_ns": 128180235004,
+      "kind": "connection-commit-start",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5870,
+      "utc_ns": 1791337245282157802,
+      "monotonic_ns": 128181940568,
+      "kind": "pool-checkin",
+      "task": {
+        "task": 60,
+        "coroutine": "test_full_flow_warehouse_sc_emulator",
+        "file": "test_fbs_operator_flow_handoff.py"
+      },
+      "connection": 1,
+      "transaction": 5693
+    },
+    {
+      "sequence": 5874,
+      "utc_ns": 1791337245291720120,
+      "monotonic_ns": 128191502925,
+      "kind": "sql-complete",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "operation": "UPDATE",
+      "table": "fbs_warehouse_bindings",
+      "transaction": 5745
+    },
+    {
+      "sequence": 5883,
+      "utc_ns": 1791337245293977387,
+      "monotonic_ns": 128193760112,
+      "kind": "connection-commit-start",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "transaction": 5745
+    },
+    {
+      "sequence": 5885,
+      "utc_ns": 1791337245295043984,
+      "monotonic_ns": 128194826689,
+      "kind": "pool-checkin",
+      "task": {
+        "task": 79,
+        "coroutine": "_publish_seller_stocks_pass.<locals>.publish_target_once",
+        "file": "fbs_stock_publish_service.py"
+      },
+      "connection": 4,
+      "transaction": 5745
+    }
+  ]
+}

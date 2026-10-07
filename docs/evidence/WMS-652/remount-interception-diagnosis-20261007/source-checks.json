@@ -1,0 +1,1121 @@
+{
+  "verdict": "PROTOCOL_LISTENER_FAILURE_CONFIRMED; EXACT_REQUEST_AND_CANCELLATION_CAUSE_UNPROVEN",
+  "immutable_evidence_base": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+  "ci_head": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+  "tested_merge": "ac845328b27b5be265962695e10766efddef339e",
+  "run": 37548248403,
+  "attempt": 1,
+  "job": 112557363776,
+  "artifact": {
+    "artifact_id": 11451563468,
+    "job_id": 112557363776,
+    "run_id": 37548248403,
+    "run_attempt": 1,
+    "tested_sha": "ac845328b27b5be265962695e10766efddef339e",
+    "zip_sha256": "8adb7c4602be0b26acaed849af1b0a1f6d9770656ee7d6e4428fe9b0dec275a8",
+    "selective_raw_only": true
+  },
+  "tested_merge_object_available_locally": false,
+  "source_binding": "Local CI head read directly; saved checkout log identifies merge of head into ancestor etalon. Merge blob not directly available; no fetch performed.",
+  "etalon_is_ancestor_of_ci_head": true,
+  "browser_equal_base_head_accepted9dae": true,
+  "frozen_case_count": 43,
+  "case_ids_sha256": "b19a55fa478eb85727e968895721b25169d09aa2fecea05d260ff62f0ad5527f",
+  "result_counts": {
+    "PASS": 42,
+    "FAIL": 1
+  },
+  "failed_cases": [
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n"
+    }
+  ],
+  "business_assertions_reached_before_line444": "Inferred from sequential source and final 1!==0 with blocked=[]/errors length1; raw business observations agree. Intermediate pre-remount timing/storage values are not separately logged.",
+  "cases": [
+    {
+      "entry": "supply_id-A",
+      "raw_path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_id-A-.json",
+      "request_count": 50,
+      "blocked": [],
+      "errors": [
+        "Error: {\"code\":-32602,\"message\":\"Invalid InterceptionId.\"}"
+      ],
+      "trace": [
+        "product-miss:*DUIkWJJF",
+        "lookup:wb-a-order",
+        "select:wb-a-order",
+        "bind:wb-a-order",
+        "print:scan-wb-a-order",
+        "select:wb-a-order",
+        "print:scan-wb-a-order",
+        "pack:wb-a-order",
+        "product-miss:*DUIkNEXT",
+        "lookup:wb-next-order",
+        "select:wb-next-order",
+        "bind:wb-next-order",
+        "print:scan-wb-next-order",
+        "pack:wb-next-order"
+      ],
+      "selections": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "71f64897-cc0c-423e-9c32-3bd8d465ea69",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "71f64897-cc0c-423e-9c32-3bd8d465ea69",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkNEXT",
+            "idempotency_key": "0b9926a5-8ec2-48ef-8ac0-7efbe0e6bb59",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-next-order"
+          }
+        }
+      ],
+      "commits": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-a-order",
+                "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-a-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-a-order:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+            "scan_no_wb_wait": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-next-order",
+                "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-next-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-next-order:ad54f83481e684002ab81c345de15e2c1d913933368f727f5bcb2d188b521672:bind",
+            "scan_no_wb_wait": true
+          }
+        }
+      ],
+      "packs": [
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-a-order",
+            "idempotency_key": "scan-wb-a-order:packed"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-next-order",
+            "idempotency_key": "scan-wb-next-order:packed"
+          }
+        }
+      ],
+      "print_jobs_without_base64": [
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-next-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "7374dd0de96990a9ec3284f11b235d9967b9c0554ce7e61b92463c075f26b0cb"
+        }
+      ],
+      "accepted_print_keys": [
+        "scan-wb-a-order",
+        "scan-wb-next-order"
+      ],
+      "restored_selection_reuses_nonempty_initial_key": true,
+      "request_counts": [
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-a-order.png",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-next-order.png",
+          "count": 1
+        },
+        {
+          "method": "GET",
+          "path": "/fbs/assembly-time",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-assembly-tasks",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/kiz/lookup",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/worklist",
+          "count": 4
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/wb-a/workspace",
+          "count": 10
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/wb-b/workspace",
+          "count": 1
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/worklist",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/packaging-tasks/task-wb-a",
+          "count": 8
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/validate",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "count": 5
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-claim",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-claim",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "entry": "supply_ids-A",
+      "raw_path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_ids-A-.json",
+      "request_count": 51,
+      "blocked": [],
+      "errors": [],
+      "trace": [
+        "product-miss:*DUIkWJJF",
+        "lookup:wb-a-order",
+        "select:wb-a-order",
+        "bind:wb-a-order",
+        "print:scan-wb-a-order",
+        "select:wb-a-order",
+        "print:scan-wb-a-order",
+        "pack:wb-a-order",
+        "product-miss:*DUIkNEXT",
+        "lookup:wb-next-order",
+        "select:wb-next-order",
+        "bind:wb-next-order",
+        "print:scan-wb-next-order",
+        "pack:wb-next-order"
+      ],
+      "selections": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "f3a0dea1-461f-41ae-80d3-49874c31025d",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "f3a0dea1-461f-41ae-80d3-49874c31025d",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkNEXT",
+            "idempotency_key": "e74a3bf3-51c2-4cb1-8a91-c44ce976a479",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-next-order"
+          }
+        }
+      ],
+      "commits": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-a-order",
+                "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-a-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-a-order:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+            "scan_no_wb_wait": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-next-order",
+                "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-next-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-next-order:ad54f83481e684002ab81c345de15e2c1d913933368f727f5bcb2d188b521672:bind",
+            "scan_no_wb_wait": true
+          }
+        }
+      ],
+      "packs": [
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-a-order",
+            "idempotency_key": "scan-wb-a-order:packed"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-next-order",
+            "idempotency_key": "scan-wb-next-order:packed"
+          }
+        }
+      ],
+      "print_jobs_without_base64": [
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-next-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "7374dd0de96990a9ec3284f11b235d9967b9c0554ce7e61b92463c075f26b0cb"
+        }
+      ],
+      "accepted_print_keys": [
+        "scan-wb-a-order",
+        "scan-wb-next-order"
+      ],
+      "restored_selection_reuses_nonempty_initial_key": true,
+      "request_counts": [
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-a-order.png",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-next-order.png",
+          "count": 1
+        },
+        {
+          "method": "GET",
+          "path": "/fbs/assembly-time",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-assembly-tasks",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/kiz/lookup",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/worklist",
+          "count": 4
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/wb-a/workspace",
+          "count": 12
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/worklist",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/packaging-tasks/task-wb-a",
+          "count": 8
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/validate",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "count": 5
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-claim",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-claim",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-next-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-next-order/pack",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "entry": "supply_ids-A-B",
+      "raw_path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_ids-A-B-.json",
+      "request_count": 57,
+      "blocked": [],
+      "errors": [],
+      "trace": [
+        "product-miss:*DUIkWJJF",
+        "lookup:wb-a-order",
+        "select:wb-a-order",
+        "bind:wb-a-order",
+        "print:scan-wb-a-order",
+        "select:wb-a-order",
+        "print:scan-wb-a-order",
+        "pack:wb-a-order",
+        "product-miss:*DUIkNEXT",
+        "lookup:wb-next-order",
+        "select:wb-next-order",
+        "bind:wb-next-order",
+        "print:scan-wb-next-order",
+        "pack:wb-next-order"
+      ],
+      "selections": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "b9288de0-f674-4024-9d36-6f354534fbd1",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkWJJF",
+            "idempotency_key": "b9288de0-f674-4024-9d36-6f354534fbd1",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-a-order"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-b/scan-auto-print",
+          "body": {
+            "barcode": "*DUIkNEXT",
+            "idempotency_key": "580297bc-0c55-4a8c-b99b-2cd7c6eb6c43",
+            "print_qr": true,
+            "print_chz": false,
+            "reprint_chz": false,
+            "await_honest_sign": true,
+            "order_id": "wb-next-order"
+          }
+        }
+      ],
+      "commits": [
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-a-order",
+                "value": "010460000000000121SERIAL-A\u001d91ABCD\u001d92signed-A",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-a-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-a-order:1fd3340d08b1bc36149c3954b3de2356480a54e0cc2c67a06098e9ec03cfd05f:bind",
+            "scan_no_wb_wait": true
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "body": {
+            "pairs": [
+              {
+                "order_id": "wb-next-order",
+                "value": "010460000000000221SERIAL-B\u001d91EFGH\u001d92signed-B",
+                "confirmed": false,
+                "scan_auto_print_id": "scan-wb-next-order"
+              }
+            ],
+            "idempotency_key": "scan-wb-next-order:ad54f83481e684002ab81c345de15e2c1d913933368f727f5bcb2d188b521672:bind",
+            "scan_no_wb_wait": true
+          }
+        }
+      ],
+      "packs": [
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-a-order",
+            "idempotency_key": "scan-wb-a-order:packed"
+          }
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack",
+          "body": {
+            "quantity": 1,
+            "order_id": "wb-next-order",
+            "idempotency_key": "scan-wb-next-order:packed"
+          }
+        }
+      ],
+      "print_jobs_without_base64": [
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-a-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "ad92392c9c248550300ba5535724dfd35c83e153095c4240b56334542694a483"
+        },
+        {
+          "key": "scan-wb-next-order",
+          "widthMm": 60,
+          "heightMm": 80,
+          "image_data_url_sha256": "7374dd0de96990a9ec3284f11b235d9967b9c0554ce7e61b92463c075f26b0cb"
+        }
+      ],
+      "accepted_print_keys": [
+        "scan-wb-a-order",
+        "scan-wb-next-order"
+      ],
+      "restored_selection_reuses_nonempty_initial_key": true,
+      "request_counts": [
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-a-order.png",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/assets/qr-wb-next-order.png",
+          "count": 1
+        },
+        {
+          "method": "GET",
+          "path": "/fbs/assembly-time",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-assembly-tasks",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/kiz/lookup",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-orders/worklist",
+          "count": 4
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/wb-a/workspace",
+          "count": 8
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/wb-b/workspace",
+          "count": 8
+        },
+        {
+          "method": "GET",
+          "path": "/operations/fbs-supplies/worklist",
+          "count": 2
+        },
+        {
+          "method": "GET",
+          "path": "/operations/packaging-tasks/task-wb-a",
+          "count": 5
+        },
+        {
+          "method": "GET",
+          "path": "/operations/packaging-tasks/task-wb-b",
+          "count": 5
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/commit",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-orders/kiz/validate",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print",
+          "count": 3
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-claim",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-a/scan-auto-print/scan-wb-a-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-b/scan-auto-print",
+          "count": 2
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-b/scan-auto-print/scan-wb-next-order/print-claim",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/fbs-supplies/wb-b/scan-auto-print/scan-wb-next-order/print-started",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack",
+          "count": 1
+        },
+        {
+          "method": "POST",
+          "path": "/operations/packaging-tasks/task-wb-b/lines/line-wb-next-order/pack",
+          "count": 1
+        }
+      ]
+    }
+  ],
+  "product_changes_vs_d618": [
+    "frontend/src/screens/ff/FfInboundRequestView.tsx",
+    "frontend/src/utils/printBarcodeLabel.ts"
+  ],
+  "product_and_critical_fixture_diff_ci_head_to_evidence_base": [],
+  "saved_tap_counts": {
+    "672.tap": {
+      "tests": [
+        11
+      ],
+      "pass": [
+        11
+      ],
+      "fail": [
+        0
+      ],
+      "cancelled": [
+        0
+      ],
+      "skipped": [
+        0
+      ],
+      "todo": [
+        0
+      ],
+      "duration_ms": [
+        328855.176633
+      ]
+    },
+    "672-remaining.tap": {
+      "tests": [
+        6
+      ],
+      "pass": [
+        6
+      ],
+      "fail": [
+        0
+      ],
+      "cancelled": [
+        0
+      ],
+      "skipped": [
+        0
+      ],
+      "todo": [
+        0
+      ],
+      "duration_ms": [
+        22930.446859
+      ]
+    },
+    "672-native-errors.tap": {
+      "tests": [
+        7
+      ],
+      "pass": [
+        7
+      ],
+      "fail": [
+        0
+      ],
+      "cancelled": [
+        0
+      ],
+      "skipped": [
+        0
+      ],
+      "todo": [
+        0
+      ],
+      "duration_ms": [
+        3736.521893
+      ]
+    },
+    "672-peer-drain.tap": {
+      "tests": [
+        2
+      ],
+      "pass": [
+        2
+      ],
+      "fail": [
+        0
+      ],
+      "cancelled": [
+        0
+      ],
+      "skipped": [
+        0
+      ],
+      "todo": [
+        0
+      ],
+      "duration_ms": [
+        1064.169329
+      ]
+    },
+    "672-raster-resource.tap": {
+      "tests": [
+        3
+      ],
+      "pass": [
+        3
+      ],
+      "fail": [
+        0
+      ],
+      "cancelled": [
+        0
+      ],
+      "skipped": [
+        0
+      ],
+      "todo": [
+        0
+      ],
+      "duration_ms": [
+        5928.197748
+      ]
+    }
+  },
+  "source_excerpts": {
+    "33-47": "33: class CDP {\n34:   constructor(url) {\n35:     this.ws = new WebSocket(url); this.next = 0; this.pending = new Map(); this.listeners = new Map();\n36:     this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });\n37:     this.ws.onmessage = event => {\n38:       const msg = JSON.parse(event.data);\n39:       if (msg.id) { const p = this.pending.get(msg.id); this.pending.delete(msg.id); if (p) { clearTimeout(p.timer); msg.error ? p.reject(Error(JSON.stringify(msg.error))) : p.resolve(msg.result); } }\n40:       else for (const f of this.listeners.get(msg.method) ?? []) Promise.resolve(f(msg.params)).catch(e => errors.push(String(e)));\n41:     };\n42:   }\n43:   async send(method, params = {}) {\n44:     await this.ready; const id = ++this.next;\n45:     return new Promise((resolve, reject) => { const timer = setTimeout(() => { this.pending.delete(id); reject(Error(`CDP timeout ${method}`)); }, 12000); this.pending.set(id, { resolve, reject, timer }); this.ws.send(JSON.stringify({ id, method, params })); });\n46:   }\n47:   on(method, callback) { this.listeners.set(method, [...this.listeners.get(method) ?? [], callback]); }",
+    "60-63": "60: async function fulfill(id, body, status = 200, type = 'application/json') {\n61:   const bytes = Buffer.isBuffer(body) ? body : Buffer.from(JSON.stringify(body));\n62:   await cdp.send('Fetch.fulfillRequest', { requestId: id, responseCode: status, responseHeaders: [{ name: 'Content-Type', value: type }, { name: 'Access-Control-Allow-Origin', value: '*' }, { name: 'Access-Control-Allow-Headers', value: '*' }], body: bytes.toString('base64') });\n63: }",
+    "75-91": "75: async function intercept({requestId,request}) {\n76:   const u=new URL(request.url),path=u.pathname.replace(/^\\/api/,'');\n77:   if(u.origin===ORIGIN&&!u.pathname.startsWith('/api/')&&!path.startsWith('/assets/qr-'))return cdp.send('Fetch.continueRequest',{requestId});\n78:   if(u.origin==='http://127.0.0.1:17843'&&path==='/print'){\n79:     if(request.method==='OPTIONS')return fulfill(requestId,{});\n80:     const job=JSON.parse(request.postData);printLog.push(job);trace.push(`print:${job.idempotencyKey}`);\n81:     const key=job.idempotencyKey;\n82:     if(!acceptedPrints.has(key))acceptedPrints.set(key,{job,receipt:`synthetic-${acceptedPrints.size+1}`});\n83:     if(receiptMode==='held'&&printLog.length===1){heldPrint=()=>fulfill(requestId,{receipt:acceptedPrints.get(key).receipt});return;}\n84:     if(receiptMode==='lost'&&!lostAck){lostAck=true;return cdp.send('Fetch.failRequest',{requestId,errorReason:'ConnectionClosed'});}\n85:     return fulfill(requestId,{receipt:acceptedPrints.get(key).receipt});\n86:   }\n87:   if(u.origin!==ORIGIN){blocked.push(request.url);return cdp.send('Fetch.failRequest',{requestId,errorReason:'BlockedByClient'});}\n88:   const body=request.postData?JSON.parse(request.postData):null;\n89:   requestLog.push({method:request.method,path:path+u.search,body});\n90:   const ws=path.match(/^\\/operations\\/fbs-supplies\\/([^/]+)\\/workspace$/);\n91:   if(ws)return fulfill(requestId,state[ws[1]]);",
+    "159-162": "159:   cdp=new CDP(tabs.find(t=>t.type==='page').webSocketDebuggerUrl);cdp.on('Fetch.requestPaused',intercept);\n160:   cdp.on('Runtime.exceptionThrown',e=>errors.push(e.exceptionDetails));\n161:   await cdp.send('Page.enable');await cdp.send('Runtime.enable');\n162:   await cdp.send('Fetch.enable',{patterns:[{urlPattern:'*',requestStage:'Request'}]});",
+    "388-403": "388:       }else if(receiptMode==='lost'){\n389:         for(let i=0;i<70&&!lostAck;i++)await sleep(100);\n390:         assert(lostAck,'fixture must lose native response after accepting job');await sleep(300);\n391:         assert.equal(trace.includes('pack:wb-a-order'),false,'lost accepted response cannot silently pack');\n392:         assert.equal(acceptedPrints.size,1,'one accepted print intent before explicit recovery');\n393:         if(variant==='remount-after-lost-ack'){\n394:           restored=true;\n395:           const saved=await evaluate('JSON.stringify(localStorage)');assert(saved.includes('wb-a-order'),'unfinished order intent must persist before remount');\n396:           await cdp.send('Page.navigate',{url:url+'&preserve=1'});\n397:           await until(`document.querySelector('[data-order-id=\"wb-a-order\"]')&&document.querySelector('[data-testid=\"fbs-unified-scan\"]')`);\n398:         }\n399:         await scan(qrCodes[0]);\n400:         for(let i=0;i<70&&!trace.includes('pack:wb-a-order');i++)await sleep(100);\n401:         assert(trace.includes('pack:wb-a-order'),'same QR must recover original order after uncertain receipt');\n402:         assert.deepEqual(printLog.map(j=>j.idempotencyKey),['scan-wb-a-order','scan-wb-a-order'],'retry must reconcile same accepted print key');\n403:         await scan(qrCodes[1]);await scan(cises[1]);",
+    "437-447": "437:       const packs=requestLog.filter(r=>r.path.endsWith('/pack'));\n438:       assert.deepEqual(packs.map(r=>[r.path,r.body.quantity,r.body.order_id]),[\n439:         ['/operations/packaging-tasks/task-wb-a/lines/line-wb-a-order/pack',1,'wb-a-order'],\n440:         [`/operations/packaging-tasks/task-${many?'wb-b':'wb-a'}/lines/line-wb-next-order/pack`,1,'wb-next-order']]);\n441:       for(const pack of packs)assert(server?pack.body.idempotency_key===`scan-${pack.body.order_id}:packed`:/^local:.+:packed$/.test(pack.body.idempotency_key));\n442:       if(qr)assert(trace.indexOf('print:scan-wb-a-order')<trace.indexOf('pack:wb-a-order'));\n443:       assert(trace.indexOf('pack:wb-a-order')<trace.indexOf('lookup:wb-next-order'),'next correct order after first pack');\n444:       assert.equal(blocked.length,0);assert.equal(errors.length,0);\n445:       report.cases.push({id:report.currentCase,status:'PASS'});console.log(`${report.currentCase}: PASS`);\n446:     }catch(e){report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});console.error(`${report.currentCase}: ${e}`);}\n447:     await writeFile(`${dir}/${report.currentCase.replaceAll(/[^a-zA-Z0-9_-]/g,'-')}.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors,acceptedPrintKeys:[...acceptedPrints.keys()]},null,2));"
+  },
+  "raw_job_excerpts": {
+    "669": "2026-10-06T23:45:13.0638456Z HEAD is now at ac845328b Merge eabfad3656ec7ac923c6014657d4bf8ba5e63400 into 4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "672": "2026-10-06T23:45:13.0803683Z ac845328b27b5be265962695e10766efddef339e",
+    "932": "2026-10-06T23:45:42.7686726Z Downloading Chromium 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-linux.zip",
+    "1235": "2026-10-06T23:53:39.1716850Z WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]: AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:",
+    "1237": "2026-10-06T23:53:39.1721547Z 1 !== 0",
+    "1239": "2026-10-06T23:53:44.1799898Z WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]: PASS",
+    "1240": "2026-10-06T23:53:49.3015240Z WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]: PASS",
+    "1251": "2026-10-06T23:54:26.6238137Z AssertionError [ERR_ASSERTION]: one or more real-screen cases failed",
+    "1252": "2026-10-06T23:54:26.6238945Z     at file:///home/runner/work/WMS/WMS/frontend/tests-e2e/wms652-critical/browser.mjs:231:3 {",
+    "1289": "2026-10-06T23:54:30.4140735Z Artifact release-print-ac845328b27b5be265962695e10766efddef339e-37548248403-1.zip successfully finalized. Artifact ID 11451563468"
+  },
+  "inputs": [
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "bytes": 38300,
+      "blob": "cfc21c4ff43c683a4dbaaadecf184d965e1d809e",
+      "sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "bytes": 38300,
+      "blob": "cfc21c4ff43c683a4dbaaadecf184d965e1d809e",
+      "sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c"
+    },
+    {
+      "sha": "9dae4b19f6d4dca554200e08282579414a110848",
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "bytes": 38300,
+      "blob": "cfc21c4ff43c683a4dbaaadecf184d965e1d809e",
+      "sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "bytes": 2074,
+      "blob": "a24cfbed194d86461dd7a6d39e883ca52d543176",
+      "sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "bytes": 2074,
+      "blob": "a24cfbed194d86461dd7a6d39e883ca52d543176",
+      "sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/result.json",
+      "bytes": 4631,
+      "blob": "2913c1c8cc1b6d3250e1bfc7944d04a8daaffa38",
+      "sha256": "7161213eab91800b74503fe2cf4352e8519412e2952fff7abc013ceb59b13ef7"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/download.json",
+      "bytes": 278,
+      "blob": "96d550598a24af5853d546e8e50a968b3df5550b",
+      "sha256": "62b74bdf21b27ea2044ad1fb83c03311e96ee1612e11c8309b943392d61fb97c"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/job.log",
+      "bytes": 151768,
+      "blob": "50208495694c9a26e5a984339b89f77fd408b7d8",
+      "sha256": "1ea46594102f22d8a55fe99187142bf3b5878a7b72f4bd36e797cd05f2544b2f"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_id-A-.json",
+      "bytes": 13481,
+      "blob": "eba39353eefeb3e55a3c57b4d4c5c8cd5b7f4568",
+      "sha256": "a286eed60adcf56795c25e3132e5bce97bba4ae5a9ffb4afc64c1d67bf47b0f9"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_ids-A-.json",
+      "bytes": 13519,
+      "blob": "0f4943f325a08cbd4522d81e0ae322bcfe2672e9",
+      "sha256": "4f8ef4521c6f037d6c45aaf803d842acf7348df7c5e6a20a00eeb5b109ee5ec7"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/critical-fbs/WMS652-realQrFlags-remount-after-lost-ack-supply_ids-A-B-.json",
+      "bytes": 14187,
+      "blob": "101d51170aff9935bd65862128f4df2230ec6719",
+      "sha256": "8c2af892f30223bb4f8290ca3d4daf7300ad4aafbcfc2d76471611ac8c022220"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/tests-e2e/wms652-critical/main.tsx",
+      "bytes": 851,
+      "blob": "bed0f1f7c1dc0bf5e0a451d3cbb0f73f9b6af6b4",
+      "sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/tests-e2e/wms652-critical/main.tsx",
+      "bytes": 851,
+      "blob": "bed0f1f7c1dc0bf5e0a451d3cbb0f73f9b6af6b4",
+      "sha256": "b2af0e7538b8d678eb91f34622fdf8e9f4806ac94822d02af7e92e5376efb621"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "scripts/ci/run_critical_fbs_browser.sh",
+      "bytes": 775,
+      "blob": "5dfa77f3d855fbdf60d8037b24269166d84142d8",
+      "sha256": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "scripts/ci/run_critical_fbs_browser.sh",
+      "bytes": 775,
+      "blob": "5dfa77f3d855fbdf60d8037b24269166d84142d8",
+      "sha256": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "bytes": 94919,
+      "blob": "27be873d28c0c06cee0d6faa495723970d5159d4",
+      "sha256": "7006d4d3103d177aaa95c9cbd5512bb050677111863a80dae4f921a4e2e7ba8a"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "bytes": 94919,
+      "blob": "27be873d28c0c06cee0d6faa495723970d5159d4",
+      "sha256": "7006d4d3103d177aaa95c9cbd5512bb050677111863a80dae4f921a4e2e7ba8a"
+    },
+    {
+      "sha": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+      "path": "frontend/src/screens/v2/FfFbsOrdersScreen.tsx",
+      "bytes": 94919,
+      "blob": "27be873d28c0c06cee0d6faa495723970d5159d4",
+      "sha256": "7006d4d3103d177aaa95c9cbd5512bb050677111863a80dae4f921a4e2e7ba8a"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/src/screens/v2/fbsSequentialPacking.ts",
+      "bytes": 44981,
+      "blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d",
+      "sha256": "175d7f65562a0b1076195e999ccbb8e6ba7cd1a55edfc3de0299ca11878166fc"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/src/screens/v2/fbsSequentialPacking.ts",
+      "bytes": 44981,
+      "blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d",
+      "sha256": "175d7f65562a0b1076195e999ccbb8e6ba7cd1a55edfc3de0299ca11878166fc"
+    },
+    {
+      "sha": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+      "path": "frontend/src/screens/v2/fbsSequentialPacking.ts",
+      "bytes": 44981,
+      "blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d",
+      "sha256": "175d7f65562a0b1076195e999ccbb8e6ba7cd1a55edfc3de0299ca11878166fc"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "frontend/src/utils/printDirectQr.ts",
+      "bytes": 1250,
+      "blob": "266ff21c954d8f5696ab46bfee29189d4bed4108",
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc"
+    },
+    {
+      "sha": "eabfad3656ec7ac923c6014657d4bf8ba5e63400",
+      "path": "frontend/src/utils/printDirectQr.ts",
+      "bytes": 1250,
+      "blob": "266ff21c954d8f5696ab46bfee29189d4bed4108",
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc"
+    },
+    {
+      "sha": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+      "path": "frontend/src/utils/printDirectQr.ts",
+      "bytes": 1250,
+      "blob": "266ff21c954d8f5696ab46bfee29189d4bed4108",
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/672.tap",
+      "bytes": 3279,
+      "blob": "35b2a5012c72504a5d4a61594ec029f317ea7235",
+      "sha256": "4048fdd6ef13b72d715acb74f66e642f8619d5fd4ccb7a536a3100af05925ba1"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/672-remaining.tap",
+      "bytes": 1586,
+      "blob": "0f40b790d1f0854645b21165857bfec956894b54",
+      "sha256": "03f03af17b0350710363575331b6862999c5902669748c72e2753bf92457b96a"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/672-native-errors.tap",
+      "bytes": 1873,
+      "blob": "873a83a5467e5d9f05b891903694e022a9102f1e",
+      "sha256": "87bad0ecaefa7952c3fba0b6f963978fd747640c195ce1e038b5ef36c09bf001"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/672-peer-drain.tap",
+      "bytes": 1058,
+      "blob": "106d94485e46ace60940247b185547ae6db992f7",
+      "sha256": "46db4172a25fc50f17da7ffdb301ccb0e04f239ae29dfc1ca5c75d7b23801e3d"
+    },
+    {
+      "sha": "55d8d08aa11adbb111ec4a999b59b6e59cdbfb1b",
+      "path": "docs/evidence/WMS-652/common-ci-37548248403/print/672-raster-resource.tap",
+      "bytes": 1404,
+      "blob": "a211911d8caf409b893614bbec44283debfbbe92",
+      "sha256": "ddcece3fe9649639b4ed9684f2bd7f14b647ac18daa3be1bcdaa0f07f464b7de"
+    }
+  ],
+  "new_executions": {
+    "tests": 0,
+    "browser": 0,
+    "build": 0,
+    "dispatch": 0
+  },
+  "source_pin_approved": false,
+  "fixture_fix_approved": false,
+  "release_approved": false
+}

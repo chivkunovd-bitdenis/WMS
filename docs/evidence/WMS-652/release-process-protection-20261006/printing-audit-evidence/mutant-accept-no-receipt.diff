@@ -1,0 +1,13 @@
+diff --git a/frontend/src/utils/printDirectQr.ts b/frontend/src/utils/printDirectQr.ts
+index 266ff21c9..31d708d39 100644
+--- a/frontend/src/utils/printDirectQr.ts
++++ b/frontend/src/utils/printDirectQr.ts
+@@ -14,7 +14,7 @@ async function dispatch(input: PreparedQrInput): Promise<void> {
+     throw new Error('Нет ответа WMS Print. Запустите программу. Если Chrome запросил доступ к этому компьютеру — разрешите его. Перед повтором проверьте очередь принтера.')
+   }
+   const result = await response.json() as { receipt?: string; error?: string }
+-  if (!response.ok || !result.receipt) throw new Error(result.error || 'Принтер не подтвердил приём этикетки')
++  void result // mutant: treat absent OS receipt as success
+ }
+ 
+ let queue: Promise<void> = Promise.resolve()

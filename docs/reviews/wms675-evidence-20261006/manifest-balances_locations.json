@@ -1,0 +1,23 @@
+{
+  "started_at": "2026-10-06T06:53:42.313107+00:00",
+  "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+  "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+  "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+  "role": "wms_agent_t_b80a893bab8742b68fd76d41502c900f",
+  "max_rows": 100,
+  "timeout_sec": 30,
+  "queries": [
+    {
+      "name": "balances_locations",
+      "started_at": "2026-10-06T06:53:42.313387+00:00",
+      "sql_file": "balances_locations.sql",
+      "status": "ok",
+      "csv_file": "balances_locations.csv",
+      "rows": 6,
+      "truncated": false,
+      "sha256": "d4105aa47b4b326eb4a8dfb56eff164c962a8932a7a8d72b78f64f31a25cb7d4",
+      "finished_at": "2026-10-06T06:53:44.018727+00:00"
+    }
+  ],
+  "finished_at": "2026-10-06T06:53:44.021744+00:00"
+}

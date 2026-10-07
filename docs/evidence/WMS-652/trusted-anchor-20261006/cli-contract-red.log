@@ -1,0 +1,14 @@
+..F.
+======================================================================
+FAIL: test_null_merge_still_publishes_failure_on_exact_pr_head (scripts.ci.tests.test_trusted_process_cli.TrustedCliTests.test_null_merge_still_publishes_failure_on_exact_pr_head)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_cli.py", line 67, in test_null_merge_still_publishes_failure_on_exact_pr_head
+    self.assertEqual(len(published), 1)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^
+AssertionError: 0 != 1
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.015s
+
+FAILED (failures=1)

@@ -208,8 +208,8 @@ function parsePdfTextReport(xml: string): PdfTextReport {
 // Coordinates keep every fragment tied to its actual PDF column and row.
 function pdfTable(report: PdfTextReport, geometry: GeometryReport): PdfTable {
   const geometryWidth = geometry.tableBounds.right - geometry.tableBounds.left
-  if (geometryWidth <= 0 || geometry.columnBounds.length !== 10) {
-    throw new Error('Браузер не вернул границы десяти колонок таблицы')
+  if (geometryWidth <= 0 || geometry.columnBounds.length !== 11) {
+    throw new Error('Браузер не вернул границы одиннадцати колонок таблицы')
   }
   const marginPoints = 10 * 72 / 25.4
   return {
@@ -382,12 +382,12 @@ describe('WMS-657 · перенос размера в листе подбора 
     expect(sizeRule).toMatch(/width\s*:\s*78px/)
     expect(`${sizeRule};${sizeCellRule}`).not.toMatch(/white-space\s*:\s*nowrap/)
     expect(`${sizeCellRule};${generalCellRule}`).toMatch(/(?:overflow-wrap\s*:\s*(?:anywhere|break-word)|word-break\s*:\s*(?:break-all|break-word)|white-space\s*:\s*(?:normal|pre-wrap|break-spaces))/)
-    expect(html).toContain('<th class="size">Размер</th><th>Ячейка / тара</th>')
+    expect(html).toContain('<th class="size">Размер</th><th class="color">Цвет</th><th>Ячейка / тара</th>')
   })
 
-  it('C2: десять колонок, контрольные данные и вход не меняются при повторной генерации', () => {
+  it('C2: одиннадцать колонок, контрольные данные и вход не меняются при повторной генерации', () => {
     const control = row({
-      name: 'PRODUCT-CONTROL', size: 'SIZE-CONTROL', imageUrl: 'data:image/png;base64,AA==',
+      name: 'PRODUCT-CONTROL', size: 'SIZE-CONTROL', color: 'COLOR-CONTROL', imageUrl: 'data:image/png;base64,AA==',
       identifiers: ['IDENTIFIER-A', 'IDENTIFIER-B'], locations: ['LOCATION-CONTROL'],
       required: 3, picked: 2, wbOrders: ['ORDER-CONTROL'], stickerCodes: ['S-1'],
       marking: 'MARKING-CONTROL',
@@ -398,9 +398,18 @@ describe('WMS-657 · перенос размера в листе подбора 
     const second = buildFbsPickingListPrintHtml(input)
     expect(second).toBe(first)
     expect(JSON.stringify(input)).toBe(before)
-    expect(first).toContain('<thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th>Ячейка / тара</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>')
+    expect(first).toContain('<thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар и идентификаторы</th><th class="size">Размер</th><th class="color">Цвет</th><th>Ячейка / тара</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>')
     const bodyRow = onlyTableBodyRow(first)
-    expect(tableCells(bodyRow)).toHaveLength(10)
+    expect(tableCells(bodyRow)).toHaveLength(11)
+    expect(tableCells(bodyRow)[4]).toBe('<td class="color">COLOR-CONTROL</td>')
+    for (const [columnIndex, values] of [
+      [0, ['1–3']], [1, ['src="data:image/png;base64,AA=="']],
+      [2, ['PRODUCT-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B']], [3, ['SIZE-CONTROL']],
+      [5, ['LOCATION-CONTROL']], [6, ['ORDER-CONTROL']], [7, ['S-1']],
+      [8, ['3']], [9, ['2 / 3']], [10, ['MARKING-CONTROL']],
+    ] as const) {
+      for (const value of values) expect(tableCells(bodyRow)[columnIndex]).toContain(value)
+    }
     for (const value of ['PRODUCT-CONTROL', 'SIZE-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B', 'LOCATION-CONTROL', '3', '2', 'ORDER-CONTROL', 'S-1', 'MARKING-CONTROL']) {
       expect(bodyRow).toContain(value)
     }
@@ -415,7 +424,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const body = html.match(/<tbody>([\s\S]*?)<\/tbody>/)?.[1] ?? ''
     const rows = [...body.matchAll(/<tr>([\s\S]*?)<\/tr>/g)].map((match) => match[1])
     expect(rows).toHaveLength(2)
-    expect(rows.map((item) => tableCells(item!).length)).toEqual([10, 10])
+    expect(rows.map((item) => tableCells(item!).length)).toEqual([11, 11])
   })
 
   it('C4: Chromium держит длинный размер и соседние данные в границах колонок', () => {
@@ -429,7 +438,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     })])
     const report = renderGeometry(html)
     expect(report.tableWithinPage).toBe(true)
-    expect(report.rowCellCounts).toEqual([10])
+    expect(report.rowCellCounts).toEqual([11])
     expect(report.allCellContentFits).toBe(true)
     expect(report.neighboringCellsDoNotOverlap).toBe(true)
     expect(report.headersAligned).toBe(true)
@@ -466,12 +475,13 @@ describe('WMS-657 · перенос размера в листе подбора 
       { label: 'номер позиции', match: pdfWord(table, 0, '1') },
       { label: 'фото', match: pdfText(table, 1, '—') },
       { label: 'размер', match: size },
-      { label: 'ячейка / тара', match: pdfText(table, 4, 'PDF-LOCATION-LONG-WMS-657') },
-      { label: 'заказ', match: pdfText(table, 5, '№PDF-ORDER-657') },
-      { label: 'стикер', match: pdfText(table, 6, 'S657') },
-      { label: 'взять', match: pdfText(table, 7, '1') },
-      { label: 'подобрано', match: pdfText(table, 8, '0/1') },
-      { label: 'маркировка', match: pdfText(table, 9, 'PDF-MARKING-WMS-657') },
+      { label: 'цвет', match: pdfText(table, 4, '—') },
+      { label: 'ячейка / тара', match: pdfText(table, 5, 'PDF-LOCATION-LONG-WMS-657') },
+      { label: 'заказ', match: pdfText(table, 6, '№PDF-ORDER-657') },
+      { label: 'стикер', match: pdfText(table, 7, 'S657') },
+      { label: 'взять', match: pdfText(table, 8, '1') },
+      { label: 'подобрано', match: pdfText(table, 9, '0/1') },
+      { label: 'маркировка', match: pdfText(table, 10, 'PDF-MARKING-WMS-657') },
     ]
     assertSamePdfRow([name, identifier], cells)
 
@@ -504,7 +514,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     }))
     const html = documentFor(rows)
     const report = renderGeometry(html)
-    expect(report.rowCellCounts).toEqual(Array(34).fill(10))
+    expect(report.rowCellCounts).toEqual(Array(34).fill(11))
     expect(report.tableWithinPage).toBe(true)
     expect(report.allCellContentFits).toBe(true)
     expect(report.rowsDoNotOverlap).toBe(true)
@@ -547,12 +557,13 @@ describe('WMS-657 · перенос размера в листе подбора 
         { label: `номер позиции строки ${rowNumber}`, match: pdfWord(table, 0, String(rowNumber)) },
         { label: `фото строки ${rowNumber}`, match: pdfText(table, 1, '—', index) },
         { label: `размер строки ${rowNumber}`, match: pdfText(table, 3, expectedSize, sizeOccurrence) },
-        { label: `ячейка строки ${rowNumber}`, match: pdfText(table, 4, location) },
-        { label: `заказ строки ${rowNumber}`, match: pdfText(table, 5, `№${657000 + index}`) },
-        { label: `стикер строки ${rowNumber}`, match: pdfText(table, 6, `S${String(index).padStart(3, '0')}`) },
-        { label: `взять строки ${rowNumber}`, match: pdfText(table, 7, '1', index) },
-        { label: `подобрано строки ${rowNumber}`, match: pdfText(table, 8, '0/1', index) },
-        { label: `маркировка строки ${rowNumber}`, match: pdfText(table, 9, `MARK-${String(rowNumber).padStart(3, '0')}`) },
+        { label: `цвет строки ${rowNumber}`, match: pdfText(table, 4, '—', index) },
+        { label: `ячейка строки ${rowNumber}`, match: pdfText(table, 5, location) },
+        { label: `заказ строки ${rowNumber}`, match: pdfText(table, 6, `№${657000 + index}`) },
+        { label: `стикер строки ${rowNumber}`, match: pdfText(table, 7, `S${String(index).padStart(3, '0')}`) },
+        { label: `взять строки ${rowNumber}`, match: pdfText(table, 8, '1', index) },
+        { label: `подобрано строки ${rowNumber}`, match: pdfText(table, 9, '0/1', index) },
+        { label: `маркировка строки ${rowNumber}`, match: pdfText(table, 10, `MARK-${String(rowNumber).padStart(3, '0')}`) },
       ])
     }
   }, 60_000)

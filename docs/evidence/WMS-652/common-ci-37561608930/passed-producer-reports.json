@@ -1,0 +1,93 @@
+{
+  "frontend-fbs": {
+    "report": "frontend-all.json",
+    "sha256": "bc9b1436be605218c386fe9417009b72bd2c8c74113314c93d3c3e726db7a061",
+    "executed": 1566,
+    "required_passed": 204,
+    "exact": false
+  },
+  "print-672": {
+    "report": "print/672.tap",
+    "sha256": "559f7a153d0f6c652ca3ae4e2269f42d82702f56970eeea1b54150f313fa05c0",
+    "executed": 11,
+    "required_passed": 11,
+    "exact": true
+  },
+  "print-672-remaining": {
+    "report": "print/672-remaining.tap",
+    "sha256": "db5d7e878967f6243f614c6bfaa20b02c632d3fae72834b3c0c0d6d164c33332",
+    "executed": 6,
+    "required_passed": 6,
+    "exact": true
+  },
+  "print-673": {
+    "report": "print/673.json",
+    "sha256": "a14347ba07ca65389be34c6ebc51208b1b56d8ebdcc39448e3b538761f9c3e39",
+    "executed": 5,
+    "required_passed": 5,
+    "exact": true
+  },
+  "native-windows": {
+    "report": "native-print-windows.xml",
+    "sha256": "15e6b87ac93c2bba841b320fae3cddf2d04bf084e4bf391465b8d85871ff2b3d",
+    "executed": 29,
+    "required_passed": 29,
+    "exact": true
+  },
+  "real-fbs-browser": {
+    "report": "print/critical-fbs/result.json",
+    "sha256": "0dff2b1b2206d76553d203c3de7073b66135fa641354d935f1c0e3a4cb0d3a38",
+    "executed": 43,
+    "required_passed": 43,
+    "exact": true
+  },
+  "ci-shards": {
+    "report": "ci-shards.xml",
+    "sha256": "c0508bc10d70c78e8b09c44902120ffa066acf159f7ccc4a3edc7f2815cbf551",
+    "executed": 20,
+    "required_passed": 20,
+    "exact": true
+  },
+  "product-scope": {
+    "report": "product-scope.xml",
+    "sha256": "f08317d85bd5a42fb605cbf9ea09b84481c1f8147ad20744c0fba3e8f7c28324",
+    "executed": 51,
+    "required_passed": 51,
+    "exact": true
+  },
+  "mac-517-helper": {
+    "report": "wms517-mac.tap",
+    "sha256": "6f77ff414c34affe30fe58036054859a300d93577811bc4950f97af85fe642e1",
+    "executed": 110,
+    "required_passed": 110,
+    "exact": true
+  },
+  "print-672-native-errors": {
+    "report": "print/672-native-errors.tap",
+    "sha256": "00af68a5c8606912532465e3f9a738a60593166e3f7f50ecf0ffc43436f637a4",
+    "executed": 7,
+    "required_passed": 7,
+    "exact": true
+  },
+  "print-672-peer-drain": {
+    "report": "print/672-peer-drain.tap",
+    "sha256": "1f1af0e05cdf7a8f76de7a4ad9be608a496b11b68883dd3a72fa138e3de72f0d",
+    "executed": 2,
+    "required_passed": 2,
+    "exact": true
+  },
+  "print-672-raster-resource": {
+    "report": "print/672-raster-resource.tap",
+    "sha256": "7e095446f678913d1853c8f9a83d2638be309cb60794b74718b5daac0082a81a",
+    "executed": 3,
+    "required_passed": 3,
+    "exact": true
+  },
+  "fbs-cdp-cancellation": {
+    "report": "print/wms652-cdp-cancellation.tap",
+    "sha256": "3bcbcda8f6ac2c162ac581ac75f579baff86918efb5b1e9fccdd7fa8aa0d6a42",
+    "executed": 7,
+    "required_passed": 7,
+    "exact": true
+  }
+}

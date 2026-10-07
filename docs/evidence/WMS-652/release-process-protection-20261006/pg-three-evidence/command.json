@@ -1,0 +1,25 @@
+{
+  "cwd": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/backend",
+  "argv": [
+    "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python",
+    "/Users/deniscivkunov/Projects/WMS/.worktrees/release-20261006-astra-b/docs/evidence/WMS-652/release-process-protection-20261006/pg-three-evidence/run_network_blocked.py",
+    "-n",
+    "0",
+    "-vv",
+    "--tb=long",
+    "-o",
+    "asyncio_default_fixture_loop_scope=session",
+    "-o",
+    "asyncio_default_test_loop_scope=session",
+    "tests/test_fbs_supply_assembly.py::test_fbs_supply_add_order_concurrent_race",
+    "tests/test_fbs_picking.py::test_fbs_pick_concurrent_same_order_allocation_one_success",
+    "tests/test_fbs_picking.py::test_fbs_pick_sorting_last_unit_is_atomic",
+    "--junitxml=/Users/deniscivkunov/Projects/WMS/.worktrees/release-20261006-astra-b/docs/evidence/WMS-652/release-process-protection-20261006/pg-three-evidence/three.xml"
+  ],
+  "environment": {
+    "WMS_TEST_DATABASE_URL": "postgresql+asyncpg://wms_test@127.0.0.1:55473/wms_test_audit_three",
+    "WMS_TEST_DATA_DIR": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-printing-audit-mutants/.audit-pg-three/app-data",
+    "AUDIT_PG_PORT": "55473",
+    "AUDIT_NETWORK_REPORT": "/Users/deniscivkunov/Projects/WMS/.worktrees/release-20261006-astra-b/docs/evidence/WMS-652/release-process-protection-20261006/pg-three-evidence/network.json"
+  }
+}

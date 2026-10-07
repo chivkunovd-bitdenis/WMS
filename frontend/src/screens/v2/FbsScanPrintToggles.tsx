@@ -37,9 +37,11 @@ function CopiesField({ value, onChange, label, testId }: {
 }
 
 /** The three scan-print checkboxes of WB packing, shared by the supply and the assembly (WMS-631 R1). */
-export function FbsScanPrintToggles({ value, onChange, undo }: {
+export function FbsScanPrintToggles({ value, onChange, undo, qrDisabled = false }: {
   value: FbsScanPrintPreferences
   onChange: (next: FbsScanPrintPreferences) => void
+  /** Ozon has no WB order QR. Keep the shared control visible without overwriting the saved WB preference. */
+  qrDisabled?: boolean
   /** R19: «Назад» right after the checkboxes; absent where scans are not undoable. */
   undo?: { disabled: boolean; onClick: () => void }
 }) {
@@ -50,7 +52,8 @@ export function FbsScanPrintToggles({ value, onChange, undo }: {
       control={
         <Checkbox
           size="small"
-          checked={value.printQr}
+          checked={qrDisabled ? false : value.printQr}
+          disabled={qrDisabled}
           onChange={(event) => onChange({ ...value, printQr: event.target.checked })}
         />
       }

@@ -1,0 +1,162 @@
+.F...............                                                        [100%]
+=================================== FAILURES ===================================
+____ test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart ____
+
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x11159bed0>
+
+    @pytest.mark.asyncio
+    async def test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart(
+        db_session: AsyncSession,
+    ) -> None:
+        """C1/C2/C6/C13: explicit values survive readback; blank is not absent."""
+        order, _, _ = await _seed_order(db_session)
+        transport = _transport()
+        transport.endpoint_response_queues["/v5/fbs/posting/product/exemplar/status"] = [
+            {
+                "posting_number": POSTING_NUMBER,
+                "status": "validation_in_process",
+                "products": [],
+            },
+            {
+                "posting_number": POSTING_NUMBER,
+                "status": "ship_available",
+                "products": [
+                    {
+                        "product_id": SKU_ONE,
+                        "exemplars": [
+                            {
+                                "exemplar_id": 81,
+                                "gtd": "001/ABC-09",
+                                "is_gtd_absent": False,
+                                "rnpt": "",
+                                "is_rnpt_absent": True,
+                                "gtd_check_status": "",
+                                "rnpt_check_status": "",
+                                "gtd_error_codes": [],
+                                "rnpt_error_codes": [],
+                            }
+                        ],
+                    }
+                ],
+            },
+        ]
+        save = _operation("save_exemplar_documents", _SaveDocuments)
+
+        result = await save(
+            db_session,
+            tenant_id=order.tenant_id,
+            order_id=order.id,
+            product_id=SKU_ONE,
+            exemplar_id=81,
+            gtd="001/ABC-09",
+            is_gtd_absent=False,
+            rnpt=None,
+            is_rnpt_absent=True,
+            expected_version=None,
+            provider=OzonMarketplaceProvider(transport=transport),
+            client_id="client",
+            api_key="key",
+        )
+
+        set_payloads = [
+            payload
+            for path, payload in transport.endpoint_calls
+            if path == "/v6/fbs/posting/product/exemplar/set"
+        ]
+        assert len(set_payloads) == 1
+        target = next(
+            exemplar
+            for product in set_payloads[0]["products"]
+            if product["product_id"] == SKU_ONE
+            for exemplar in product["exemplars"]
+            if exemplar["exemplar_id"] == 81
+        )
+        assert target["gtd"] == "001/ABC-09"
+        assert target.get("is_gtd_absent") is not True
+        assert target.get("rnpt") in {None, ""}
+        assert target["is_rnpt_absent"] is True
+        assert _result_value(result, "state") == "checking"
+
+        db_session.expire_all()
+        resume = _operation("resume_exemplar_document_check", _ResumeDocuments)
+        resumed = await resume(
+            db_session,
+>           tenant_id=order.tenant_id,
+                      ^^^^^^^^^^^^^^^
+            order_id=order.id,
+            provider=OzonMarketplaceProvider(transport=transport),
+            client_id="client",
+            api_key="key",
+        )
+
+tests/test_wms663_customs_documents_contract.py:364:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:569: in __get__
+    return self.impl.get(state, dict_)  # type: ignore[no-any-return]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:1096: in get
+    value = self._fire_loader_callables(state, key, passive)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/attributes.py:1126: in _fire_loader_callables
+    return state._load_expired(state, passive)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/state.py:828: in _load_expired
+    self.manager.expired_attribute_loader(self, toload, passive)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:1674: in load_scalar_attributes
+    result = load_on_ident(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:510: in load_on_ident
+    return load_on_pk_identity(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/loading.py:695: in load_on_pk_identity
+    session.execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2373: in execute
+    return self._execute_internal(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/session.py:2271: in _execute_internal
+    result: Result[Any] = compile_state_cls.orm_execute_statement(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/orm/context.py:306: in orm_execute_statement
+    result = conn.execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1421: in execute
+    return meth(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/sql/elements.py:526: in _execute_on_connection
+    return connection._execute_clauseelement(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1643: in _execute_clauseelement
+    ret = self._execute_context(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1848: in _execute_context
+    return self._exec_single_context(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1988: in _exec_single_context
+    self._handle_dbapi_exception(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:2368: in _handle_dbapi_exception
+    raise exc_info[1].with_traceback(exc_info[2])
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/base.py:1969: in _exec_single_context
+    self.dialect.do_execute(
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/postgresql/asyncpg.py:585: in execute
+    self._adapt_connection.await_(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+awaitable = <coroutine object AsyncAdapt_asyncpg_cursor._prepare_and_execute at 0x1113eb1c0>
+
+    def await_only(awaitable: Awaitable[_T]) -> _T:
+        """Awaits an async function in a sync method.
+
+        The sync method must be inside a :func:`greenlet_spawn` context.
+        :func:`await_only` calls cannot be nested.
+
+        :param awaitable: The coroutine to call.
+
+        """
+        # this is called in the context greenlet while running fn
+        current = getcurrent()
+        if not getattr(current, "__sqlalchemy_greenlet_provider__", False):
+            _safe_cancel_awaitable(awaitable)
+
+>           raise exc.MissingGreenlet(
+                "greenlet_spawn has not been called; can't call await_only() "
+                "here. Was IO attempted in an unexpected place?"
+            )
+E           sqlalchemy.exc.MissingGreenlet: greenlet_spawn has not been called; can't call await_only() here. Was IO attempted in an unexpected place? (Background on this error at: https://sqlalche.me/e/20/xd2s)
+
+../../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/util/_concurrency_py3k.py:123: MissingGreenlet
+=========================== short test summary info ============================
+FAILED tests/test_wms663_customs_documents_contract.py::test_wms663_explicit_choice_is_saved_exactly_and_resumes_after_restart
+1 failed, 16 passed, 6 warnings in 7.56s

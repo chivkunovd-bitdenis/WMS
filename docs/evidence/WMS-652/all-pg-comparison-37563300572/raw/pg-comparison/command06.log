@@ -1,0 +1,51 @@
+1d1d7acea7c52e82db68ea0df17df81088b60a4ad6548f80e1993767ec549396
+127.0.0.1:55462 - no response
+127.0.0.1:55462 - accepting connections
+8889797e19f5ed2ac8e5b875064b20b859d65775143550a4d04f6f5bb0311c17
+127.0.0.1:55467 - no response
+127.0.0.1:55467 - accepting connections
+..........                                                               [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+10 passed, 1 warning in 6.16s
+....                                                                     [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+4 passed, 1 warning in 3.98s
+......                                                                   [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+6 passed, 1 warning in 7.21s
+.....                                                                    [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+5 passed, 1 warning in 2.45s
+......                                                                   [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+6 passed, 1 warning in 11.85s
+662.xml: 10 executed, no skipped/failure/error
+662-f6.xml: 4 executed, no skipped/failure/error
+663-669-670-683.xml: 6 executed, no skipped/failure/error
+663-release-retry.xml: 5 executed, no skipped/failure/error
+fbs-concurrency.xml: 6 executed, no skipped/failure/error

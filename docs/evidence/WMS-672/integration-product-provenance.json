@@ -1,0 +1,53 @@
+{
+  "files": {
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": {
+      "reviewed_source": "0e6a7fbc3eb11f951febf972b35c6e117c42678a",
+      "reviewed_blob": "ce099fc1f79901ef7fd66d8e00ffa72b127ca82a",
+      "base_blob": "5a872932f39bd280d838908eea5dd7d383d29f84",
+      "integrated_blob": "dcba63d007d75f5cf14ca1d590877788d24e0de1"
+    },
+    "frontend/src/screens/ff/inboundDraftPersistence.ts": {
+      "reviewed_source": "0e6a7fbc3eb11f951febf972b35c6e117c42678a",
+      "reviewed_blob": "705d57a1c16d6d94647784cd5e7245b1c868ab2d",
+      "base_blob": "8d7271280be68c2475065c387221796f32b75308",
+      "integrated_blob": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45"
+    },
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx": {
+      "reviewed_source": "6b272491dcc7f1a1f3a147e309a61d0500f3a22e",
+      "reviewed_blob": "1bf5f86f33e101595d8b85a2b74d1ce7cb799535",
+      "base_blob": "c2cdf2f92d743470ae1a916b2e9c5abb15ca8bc0",
+      "integrated_blob": "be2cf7377ec6ae7ee81c80cb294efb8537443ee2"
+    },
+    "frontend/src/screens/v2/fbsSupplyAssembly.ts": {
+      "reviewed_source": "6b272491dcc7f1a1f3a147e309a61d0500f3a22e",
+      "reviewed_blob": "cb71ea184d0f220125a8dfb48e7c460047f0f66a",
+      "base_blob": "ca8b892ec5d793b1d8dfd179e8f8e112a2754f81",
+      "integrated_blob": "cb71ea184d0f220125a8dfb48e7c460047f0f66a"
+    },
+    "frontend/src/screens/v2/fbsUx.ts": {
+      "reviewed_source": "6b272491dcc7f1a1f3a147e309a61d0500f3a22e",
+      "reviewed_blob": "85ca6fcde4a6478bca00fb6ed5ee5aa75ccd3e13",
+      "base_blob": "9abb902c80d6815470f9453ed3477e5d0b4cbacd",
+      "integrated_blob": "85ca6fcde4a6478bca00fb6ed5ee5aa75ccd3e13"
+    },
+    "frontend/src/utils/printBarcodeLabel.ts": {
+      "reviewed_source": "0e6a7fbc3eb11f951febf972b35c6e117c42678a",
+      "reviewed_blob": "c168a086fa78fa655781a8eb882e75357fa4e39b",
+      "base_blob": "8059040d6c1611a39db218c1b975efde8448656c",
+      "integrated_blob": "c168a086fa78fa655781a8eb882e75357fa4e39b"
+    }
+  },
+  "semantic_boundaries": [
+    "FfInboundRequestView retains all bulk creation from WMS659; new printing function only. Duplicate randomId import exposed by tsc; new RED published before removal.",
+    "inboundDraftPersistence retains etalon non-JWT read-only fallback; strict write keys unchanged.",
+    "FfFbsSupplyWorkspace preserves WMS681 real WB QR and compensation; only adds marketplace print argument.",
+    "fbsUx retains existing WMS657 size wrapping; only color and reviewed Ozon fallback delta.",
+    "No backend production, stock, printer worker or bulk-create code changed."
+  ],
+  "applied_product_deltas": [
+    "163259d412d2ef5ba2d49b831cd5c7da284245d9",
+    "0e6a7fbc3eb11f951febf972b35c6e117c42678a",
+    "bc2723866b4a0671c510124c39426058f201d2da",
+    "6b272491dcc7f1a1f3a147e309a61d0500f3a22e"
+  ]
+}

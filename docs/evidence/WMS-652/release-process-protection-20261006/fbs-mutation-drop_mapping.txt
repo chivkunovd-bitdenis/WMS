@@ -1,0 +1,32 @@
+WMS_AUDIT_PRODUCT_MUTATION=drop_mapping
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id _______
+tests/test_fbs_orders_intake.py:448: in test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id
+    assert str(order.product_id) == product_b.json()["id"]
+E   AssertionError: assert 'None' == '3fddae9e-045...-d2030f40eba6'
+E
+E     - 3fddae9e-045c-4292-98a0-d2030f40eba6
+E     + None
+------------------------------ Captured log call -------------------------------
+WARNING  app.services.seller_marketplace_requisites_service:seller_marketplace_requisites_service.py:150 wb seller-info: transport error (ConnectError)
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_fbs_orders_intake.py::test_fbs_order_product_mapping_prefers_chrt_id_over_shared_nm_id
+1 failed, 6 warnings in 1.53s

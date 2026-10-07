@@ -1,0 +1,23 @@
+import { createRoot } from 'react-dom/client'
+import { useState } from 'react'
+import { OzonDocumentsAbsence } from './src/screens/v2/OzonDocumentsAbsence'
+const posts: number[] = []
+const data = (state: string, version: number) => ({ state, version, absence_selected: true, requirements_complete: true, errors: state === 'rejected' ? ['Synthetic429'] : [], products: [{ exemplars: [{ gtd_required: true, rnpt_required: false, is_gtd_absent: true }] }] })
+const records: Record<string, ReturnType<typeof data>> = { rejected: data('rejected', 1), accepted: data('accepted', 9), unknown: data('unknown', 7) }
+window.fetch = async (input, init) => {
+  const id = /fbs-orders\/([^/]+)/.exec(String(input))![1]
+  if (init?.method === 'POST') {
+    posts.push(JSON.parse(String(init.body)).expected_version)
+    records[id] = data('accepted', records[id].version + 1)
+  }
+  document.documentElement.dataset.posts = JSON.stringify(posts)
+  return new Response(JSON.stringify(records[id]), { headers: { 'Content-Type': 'application/json' } })
+}
+function Probe() {
+  const [error, setError] = useState<string | null>(null)
+  return <main style={{padding: 24, fontFamily: 'sans-serif'}}>
+    <OzonDocumentsAbsence orderIds={['rejected', 'accepted', 'unknown']} token="synthetic" authHeaders={() => ({})} onError={setError} />
+    <p role="alert">{error}</p>
+  </main>
+}
+createRoot(document.getElementById('root')!).render(<Probe />)

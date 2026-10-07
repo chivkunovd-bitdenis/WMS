@@ -1,0 +1,63 @@
+{
+  "base": "7bbfafc68ef0834746e63f12a49db31a1977f030",
+  "rules_origin_etalon": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "owned_path": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+  "before_sha256": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+  "after_sha256": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c",
+  "exact_only_permitted_four_replacements": true,
+  "case_ids": [
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]"
+  ],
+  "all_five_gate_variants_body_and_decorators_byte_ast_identical": true,
+  "preservation_parameter_and_count_assertions_ast_identical": true,
+  "preservation_assertion_count_before": 3,
+  "preservation_assertion_count_after": 3,
+  "original_backup_source_sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+  "original_23_assertions_unchanged": true,
+  "original_parameters": [
+    "",
+    "dump",
+    "archive",
+    "listing",
+    "empty",
+    "network",
+    "retry"
+  ],
+  "frozen": [
+    {
+      "path": "backend/tests/test_prod_deploy_backup.py",
+      "base_sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+      "byte_identical": true,
+      "local_or_tracked_diff_verified": true
+    },
+    {
+      "path": "scripts/ci/tests/test_ci_release_additions.py",
+      "base_sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+      "byte_identical": true,
+      "local_or_tracked_diff_verified": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+      "base_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "byte_identical": true,
+      "local_or_tracked_diff_verified": true
+    },
+    {
+      "path": "frontend/src/integrations/cryptoProCades.test.ts",
+      "base_sha256": "ad14215c564e233d961a080866d99eefeaa87673a3894acefac2c0b145ece90f",
+      "byte_identical": true,
+      "local_or_tracked_diff_verified": true
+    }
+  ],
+  "diff": "diff --git a/backend/tests/test_prod_deploy_backup_gate_boundary.py b/backend/tests/test_prod_deploy_backup_gate_boundary.py\nindex ff799b6bb..af5383dd6 100644\n--- a/backend/tests/test_prod_deploy_backup_gate_boundary.py\n+++ b/backend/tests/test_prod_deploy_backup_gate_boundary.py\n@@ -5,6 +5,7 @@ from __future__ import annotations\n import ast\n import hashlib\n import importlib.util\n+import inspect\n import json\n import subprocess\n from pathlib import Path\n@@ -23,11 +24,15 @@ def test_all_seven_backup_variants_and_original_assertions_are_preserved() -> No\n     assert ast.literal_eval(parameters.args[1]) == [\n         \"\", \"dump\", \"archive\", \"listing\", \"empty\", \"network\", \"retry\",\n     ]\n-    assertions = [ast.dump(node, include_attributes=False) for node in ast.walk(function)\n+    # Python 3.14 omits empty fields by default; the legacy CI format includes them.\n+    dump_options = (\n+        {\"show_empty\": True} if \"show_empty\" in inspect.signature(ast.dump).parameters else {}\n+    )\n+    assertions = [ast.dump(node, include_attributes=False, **dump_options) for node in ast.walk(function)\n                   if isinstance(node, ast.Assert)]\n     assert len(assertions) == 23\n     assert hashlib.sha256(json.dumps(assertions, ensure_ascii=False).encode()).hexdigest() == (\n-        \"ddbfe3e8447dd54825fadf01f437a1adb6fa18f2ed583f58172cb1ed962fc3da\"\n+        \"0632023b3ebea0de566823f112e6a1eeca5b5222a3cfd538d5624da1d4d81408\"\n     )\n \n \n",
+  "limits": [
+    "No existing Python3.11 binary found on PATH/common install paths;3.11 full serialization is proved by the saved actual Linux failure, not a fresh run.",
+    "Only actual preservation function executed in a stdlib AST-extraction harness; no pytest collection/conftest or other14 cases.",
+    "No product/backup shell/CI/policy/source pin changes or fullCI retry. Independent review and distinct analyst remain separate."
+  ]
+}

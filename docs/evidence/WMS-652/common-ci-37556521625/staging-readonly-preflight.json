@@ -1,0 +1,91 @@
+{
+  "project_id": "c28e681d-4535-4c96-ac97-c7b600a7f8e4",
+  "project_name": "loyal-wonder",
+  "environments": [
+    {
+      "id": "58a08b66-1290-45a2-8737-e3d7408389e5",
+      "name": "production",
+      "services": [
+        {
+          "service": "Redis",
+          "active": [
+            {
+              "id": "2735f90b-1d71-43d6-a787-29d3fbeefd96",
+              "status": "SUCCESS",
+              "commitHash": null,
+              "branch": null
+            }
+          ]
+        },
+        {
+          "service": "WMS",
+          "active": [
+            {
+              "id": "beeff1c5-a84d-4f17-9e5a-8bf906c98c5e",
+              "status": "SUCCESS",
+              "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+              "branch": "staging"
+            }
+          ]
+        },
+        {
+          "service": "web",
+          "active": [
+            {
+              "id": "0a8352dd-f44a-42ec-8624-756a84323535",
+              "status": "SUCCESS",
+              "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+              "branch": "staging"
+            }
+          ]
+        },
+        {
+          "service": "wms-beat",
+          "active": [
+            {
+              "id": "dfde1be2-e17d-4950-aeef-c39b5d6b69bb",
+              "status": "SUCCESS",
+              "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+              "branch": "staging"
+            }
+          ]
+        },
+        {
+          "service": "wms-worker",
+          "active": [
+            {
+              "id": "29de2696-fa74-4ee7-8750-8f381d3d055f",
+              "status": "SUCCESS",
+              "commitHash": "cc8e6a019559343ac404e168a92ad36137255672",
+              "branch": "staging"
+            }
+          ]
+        },
+        {
+          "service": "wb-emulator",
+          "active": [
+            {
+              "id": "bd4e28f4-40cb-4a13-8270-e328c89c8479",
+              "status": "SUCCESS",
+              "commitHash": null,
+              "branch": null
+            }
+          ]
+        },
+        {
+          "service": "Postgres",
+          "active": [
+            {
+              "id": "e13fe976-e04d-4102-bf0d-fe573576a808",
+              "status": "SUCCESS",
+              "commitHash": null,
+              "branch": null
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "recorded_at_utc": "2026-10-07T01:33:05.296098+00:00",
+  "purpose": "read-only preflight; no deployment performed"
+}

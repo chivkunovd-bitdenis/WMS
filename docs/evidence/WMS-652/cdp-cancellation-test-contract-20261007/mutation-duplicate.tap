@@ -1,0 +1,37 @@
+TAP version 13
+# Subtest: CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry
+not ok 1 - CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry
+  ---
+  duration_ms: 4.060417
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:177:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    unproven/other transport failures stay rejected
+    + actual - expected
+    
+    + 'resolved'
+    - 'rejected'
+         ^
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 'rejected'
+  actual: 'resolved'
+  operator: 'strictEqual'
+  stack: |-
+    strictFailure (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:96:10)
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:187:3)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# {"firstRetired":true,"duplicateKind":"resolved","duplicateRetired":true,"nativeDiagnostic":"[object Object]\\n{\\"retired\\":true,\\"nativeError\\":{\\"code\\":-32602,\\"message\\":\\"Invalid InterceptionId.\\"}}","commands":2,"callbackErrors":[]}
+1..1
+# tests 1
+# suites 0
+# pass 0
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 191.141875

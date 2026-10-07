@@ -1,0 +1,16 @@
+{
+  "original_contract": "77dc127344ff164417cc13c8d2b218af3ac09266",
+  "source_transfer_contract": "43f4bdbae7fff1fcbaf7a47d7293a7faaf5428a1",
+  "files": [
+    {
+      "path": "backend/tests/test_wms662_observed_handoff.py",
+      "original_testwriter_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73",
+      "accepted_source_blob": "b44f2ec44c11efcac9e779ef9c427a4cd1a72e73"
+    },
+    {
+      "path": "backend/tests/test_wms662_postgres.py",
+      "original_testwriter_blob": "d99830af1e103017e8bbb235c1c2220971816f83",
+      "accepted_source_blob": "d99830af1e103017e8bbb235c1c2220971816f83"
+    }
+  ]
+}

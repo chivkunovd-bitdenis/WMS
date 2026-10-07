@@ -1,0 +1,45 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-staging-c11-acceptance-20261006/frontend
+
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > rejects migrations, backend entities, stock logic and guard registry changes 1ms
+ × src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > keeps the actual task diff inside the approved packing UI/test/document boundary 1573ms
+   → expected [ Array(3) ] to deeply equal []
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > accepts exact task proofs and rejects adjacent proof and correction namespaces 0ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > reads advancing task history: foreign backend passes, new task backend or guards fail 2699ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > checks task merge resolutions while ignoring an imported foreign backend tree 579ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > rejects a new task workflow edit and pending CI changes independently 1100ms
+fatal: invalid object name '720307d280439e815057ee4fdd78b72134149a39^'.
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > accepts only the exact immutable history checkout delta 39ms
+ ✓ src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > fails an accepted history lookup if its immutable source is missing 191ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/wms666ChangeScope.test.ts > WMS-666 C13: narrow UI-only change boundary > keeps the actual task diff inside the approved packing UI/test/document boundary
+AssertionError: expected [ Array(3) ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   "docs/requirements/WMS-517.md",
++   "docs/reviews/wms663-666-frontend-rollback-scope-20261006.md",
++   "docs/reviews/wms666-earlier-frontend-scope-20261006.md",
++ ]
+
+ ❯ src/screens/v2/wms666ChangeScope.test.ts:118:44
+    116|   it('keeps the actual task diff inside the approved packing UI/test/d…
+    117|     const changed = wms666TaskChangedPaths(new URL('../../../..', impo…
+    118|     expect(wms666ScopeViolations(changed)).toEqual([])
+       |                                            ^
+    119|   })
+    120| 
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 passed (8)
+   Start at  20:01:23
+   Duration  6.54s (transform 38ms, setup 0ms, collect 33ms, tests 6.18s, environment 0ms, prepare 88ms)
+

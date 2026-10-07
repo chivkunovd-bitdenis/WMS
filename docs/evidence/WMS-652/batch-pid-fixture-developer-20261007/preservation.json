@@ -1,0 +1,28 @@
+{
+  "base": "4c6ce786e9aec3a06fe4faeb11a283c4df923460",
+  "contract_sha": "8d16fca4c7d16cc97ae9fe15608708563bb5d243",
+  "frozen_new_test_sha256": "35f8833b765a8ec645e42b1f7d46f56bf4fa0021a5a1db2fe257cc30f3f2d407",
+  "outside_BatchSchedule_byte_identical": true,
+  "business_case_AST_identical": true,
+  "business_assertions": 21,
+  "distinct_writer_assertion_unchanged": true,
+  "delays_timeouts_unchanged": true,
+  "precode": {
+    "fail": 1,
+    "pass": 1,
+    "skip": 0,
+    "error": 0
+  },
+  "after": {
+    "pass": 2,
+    "fail": 0,
+    "skip": 0,
+    "error": 0
+  },
+  "native_PG_or_CI_or_browser_run": false,
+  "product_edited": false,
+  "implementation_sha": "308dde98518a6c14de421caadef1a9528e0e0bd4",
+  "full_ruff_exit": 0,
+  "full_mypy_exit": 0,
+  "mypy_source_files": 563
+}

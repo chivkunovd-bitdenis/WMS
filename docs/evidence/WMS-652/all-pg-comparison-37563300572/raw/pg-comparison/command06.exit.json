@@ -1,0 +1,13 @@
+{
+  "id": "command06",
+  "name": "Required PostgreSQL handoff cancellation documents and catalog contracts",
+  "command": "bash ../scripts/ci/run_release_postgres.sh",
+  "working_directory": "backend",
+  "command_sha256": "5557f2d1db24332b362841d735de7c7c16dda5ca30dd10183eb441be8f774c64",
+  "exit_code": 0,
+  "started_epoch": 1791341128.6037872,
+  "completed_epoch": 1791341191.319762,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

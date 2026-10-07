@@ -1,0 +1,670 @@
+TAP version 13
+# Subtest: SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog
+ok 1 - SC17 default DOM adapter clears old filters, selects every page and opens only the native certificate dialog
+  ---
+  duration_ms: 92.101708
+  type: 'test'
+  ...
+# Subtest: SC17 default DOM adapter waits for successful 700ms filter refresh before selecting and opening certificate dialog
+ok 2 - SC17 default DOM adapter waits for successful 700ms filter refresh before selecting and opening certificate dialog
+  ---
+  duration_ms: 4284.745583
+  type: 'test'
+  ...
+# Subtest: launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success
+ok 3 - launches the helper once in execute mode and returns only unsigned unsent dynamic-dialog success
+  ---
+  duration_ms: 2.964542
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+ok 4 - accepts the correct production registry URL variant (exact) and ignores unrelated tabs
+  ---
+  duration_ms: 1.334583
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant / and ignores unrelated tabs
+ok 5 - accepts the correct production registry URL variant / and ignores unrelated tabs
+  ---
+  duration_ms: 1.804583
+  type: 'test'
+  ...
+# Subtest: allows query and hash on the exact registry URL and ignores unrelated tabs
+ok 6 - allows query and hash on the exact registry URL and ignores unrelated tabs
+  ---
+  duration_ms: 1.064709
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+ok 7 - accepts the correct production registry URL variant \#registry and ignores unrelated tabs
+  ---
+  duration_ms: 0.775458
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+ok 8 - accepts the correct production registry URL variant /?date_from=2026-09-18 and ignores unrelated tabs
+  ---
+  duration_ms: 1.000458
+  type: 'test'
+  ...
+# Subtest: accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+ok 9 - accepts the correct production registry URL variant /\#registry and ignores unrelated tabs
+  ---
+  duration_ms: 0.771834
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 10 - rejects non-target tab https://sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.706583
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 11 - rejects non-target tab http://wms.sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.5165
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+ok 12 - rejects non-target tab https://wms.sellerfocus.pro.evil.test/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.580541
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+ok 13 - rejects non-target tab https://evil.test/sellerfocus.pro/seller/honest-sign/withdrawals before injection
+  ---
+  duration_ms: 0.910084
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+ok 14 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals/operations before injection
+  ---
+  duration_ms: 0.741834
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+ok 15 - rejects non-target tab https://wms.sellerfocus.pro/seller/honest-sign/withdrawals-other before injection
+  ---
+  duration_ms: 0.419542
+  type: 'test'
+  ...
+# Subtest: rejects non-target tab not a URL before injection
+ok 16 - rejects non-target tab not a URL before injection
+  ---
+  duration_ms: 0.367667
+  type: 'test'
+  ...
+# Subtest: rejects 0 matching tabs before injection
+ok 17 - rejects 0 matching tabs before injection
+  ---
+  duration_ms: 0.356292
+  type: 'test'
+  ...
+# Subtest: rejects 2 matching tabs before injection
+ok 18 - rejects 2 matching tabs before injection
+  ---
+  duration_ms: 0.348375
+  type: 'test'
+  ...
+# Subtest: does not launch Chrome if it is not already running
+ok 19 - does not launch Chrome if it is not already running
+  ---
+  duration_ms: 0.768333
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failRunning
+ok 20 - fails fast and redacts Apple Events or Automation error at failRunning
+  ---
+  duration_ms: 0.420416
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failTabs
+ok 21 - fails fast and redacts Apple Events or Automation error at failTabs
+  ---
+  duration_ms: 0.445458
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failEvaluate
+ok 22 - fails fast and redacts Apple Events or Automation error at failEvaluate
+  ---
+  duration_ms: 0.368125
+  type: 'test'
+  ...
+# Subtest: fails fast and redacts Apple Events or Automation error at failProbe
+ok 23 - fails fast and redacts Apple Events or Automation error at failProbe
+  ---
+  duration_ms: 0.34725
+  type: 'test'
+  ...
+# Subtest: repeated launch after successful preparation does not inject or execute twice
+ok 24 - repeated launch after successful preparation does not inject or execute twice
+  ---
+  duration_ms: 1.078417
+  type: 'test'
+  ...
+# Subtest: an already running launch is never injected again and polling is bounded
+ok 25 - an already running launch is never injected again and polling is bounded
+  ---
+  duration_ms: 1.575541
+  type: 'test'
+  ...
+# Subtest: helper rejection is redacted, never retried and never reported as success
+ok 26 - helper rejection is redacted, never retried and never reported as success
+  ---
+  duration_ms: 1.122125
+  type: 'test'
+  ...
+# Subtest: a hung helper times out with bounded polling and no automatic retry
+ok 27 - a hung helper times out with bounded polling and no automatic retry
+  ---
+  duration_ms: 1.875708
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 0: {"status":"ready"}
+ok 28 - does not accept unsafe or incomplete helper result scenario 0: {"status":"ready"}
+  ---
+  duration_ms: 1.20875
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 1: {"targetCount":0}
+ok 29 - does not accept unsafe or incomplete helper result scenario 1: {"targetCount":0}
+  ---
+  duration_ms: 0.8745
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 2: {"targetCount":-1}
+ok 30 - does not accept unsafe or incomplete helper result scenario 2: {"targetCount":-1}
+  ---
+  duration_ms: 0.603416
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 3: {"targetCount":1.5}
+ok 31 - does not accept unsafe or incomplete helper result scenario 3: {"targetCount":1.5}
+  ---
+  duration_ms: 1.063375
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 4: {"targetCount":"84"}
+ok 32 - does not accept unsafe or incomplete helper result scenario 4: {"targetCount":"84"}
+  ---
+  duration_ms: 1.179333
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 5: {"targetCount":null}
+ok 33 - does not accept unsafe or incomplete helper result scenario 5: {"targetCount":null}
+  ---
+  duration_ms: 2.066875
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 6: {}
+ok 34 - does not accept unsafe or incomplete helper result scenario 6: {}
+  ---
+  duration_ms: 1.22925
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 7: {"targetCount":null}
+ok 35 - does not accept unsafe or incomplete helper result scenario 7: {"targetCount":null}
+  ---
+  duration_ms: 1.036667
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 8: {"noSend":false}
+ok 36 - does not accept unsafe or incomplete helper result scenario 8: {"noSend":false}
+  ---
+  duration_ms: 1.809291
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 9: {}
+ok 37 - does not accept unsafe or incomplete helper result scenario 9: {}
+  ---
+  duration_ms: 1.681541
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 10: {"signed":true}
+ok 38 - does not accept unsafe or incomplete helper result scenario 10: {"signed":true}
+  ---
+  duration_ms: 4.181875
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 11: {"sent":true}
+ok 39 - does not accept unsafe or incomplete helper result scenario 11: {"sent":true}
+  ---
+  duration_ms: 1.504542
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 12: {}
+ok 40 - does not accept unsafe or incomplete helper result scenario 12: {}
+  ---
+  duration_ms: 0.962417
+  type: 'test'
+  ...
+# Subtest: does not accept unsafe or incomplete helper result scenario 13: {}
+ok 41 - does not accept unsafe or incomplete helper result scenario 13: {}
+  ---
+  duration_ms: 0.900417
+  type: 'test'
+  ...
+# Subtest: does not accept malformed browser status as readiness
+ok 42 - does not accept malformed browser status as readiness
+  ---
+  duration_ms: 1.072666
+  type: 'test'
+  ...
+# Subtest: one executable macOS command embeds exact reviewed sources and needs only system JXA
+ok 43 - one executable macOS command embeds exact reviewed sources and needs only system JXA
+  ---
+  duration_ms: 1.964416
+  type: 'test'
+  ...
+# Subtest: all launch artifacts and the runbook use the correct production URL without the old working link
+ok 44 - all launch artifacts and the runbook use the correct production URL without the old working link
+  ---
+  duration_ms: 0.589625
+  type: 'test'
+  ...
+# Subtest: the command generator reproduces the saved executable exactly without writing any real file
+ok 45 - the command generator reproduces the saved executable exactly without writing any real file
+  ---
+  duration_ms: 1.343875
+  type: 'test'
+  ...
+# Subtest: redirect after permission probe blocks browser helper loading before any target data is exposed
+ok 46 - redirect after permission probe blocks browser helper loading before any target data is exposed
+  ---
+  duration_ms: 0.848208
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 1
+ok 47 - JXA rechecks current tab URL before execution number 1
+  ---
+  duration_ms: 2.183625
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 2
+ok 48 - JXA rechecks current tab URL before execution number 2
+  ---
+  duration_ms: 2.756792
+  type: 'test'
+  ...
+# Subtest: JXA rechecks current tab URL before execution number 3
+ok 49 - JXA rechecks current tab URL before execution number 3
+  ---
+  duration_ms: 1.28575
+  type: 'test'
+  ...
+# Subtest: successful JXA preparation brings the exact target tab and its background window to the front
+ok 50 - successful JXA preparation brings the exact target tab and its background window to the front
+  ---
+  duration_ms: 1.679459
+  type: 'test'
+  ...
+# Subtest: JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+ok 51 - JXA refuses a replacement matching tab after readiness instead of focusing a different identity
+  ---
+  duration_ms: 1.756959
+  type: 'test'
+  ...
+# Subtest: JXA redacts focus setters activation and repeated tab lookup failures without another execute
+ok 52 - JXA redacts focus setters activation and repeated tab lookup failures without another execute
+  ---
+  duration_ms: 8.223917
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 1
+ok 53 - SC17 launcher accepts fresh positive integer dialog count 1
+  ---
+  duration_ms: 2.323
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 80
+ok 54 - SC17 launcher accepts fresh positive integer dialog count 80
+  ---
+  duration_ms: 2.448791
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 81
+ok 55 - SC17 launcher accepts fresh positive integer dialog count 81
+  ---
+  duration_ms: 2.117375
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 84
+ok 56 - SC17 launcher accepts fresh positive integer dialog count 84
+  ---
+  duration_ms: 1.733375
+  type: 'test'
+  ...
+# Subtest: SC17 launcher accepts fresh positive integer dialog count 305
+ok 57 - SC17 launcher accepts fresh positive integer dialog count 305
+  ---
+  duration_ms: 6.8995
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80
+ok 58 - SC17 dry-run uses all 1 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 21.958375
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80
+ok 59 - SC17 execute uses all 1 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 2.027917
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 80 fresh eligible sales-backed rows without fixed80
+ok 60 - SC17 dry-run uses all 80 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.438458
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80
+ok 61 - SC17 execute uses all 80 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.165458
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80
+ok 62 - SC17 dry-run uses all 81 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.523
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80
+ok 63 - SC17 execute uses all 81 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.589125
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80
+ok 64 - SC17 dry-run uses all 84 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.870375
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80
+ok 65 - SC17 execute uses all 84 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 1.052041
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80
+ok 66 - SC17 dry-run uses all 305 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 0.969541
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80
+ok 67 - SC17 execute uses all 305 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 5.777541
+  type: 'test'
+  ...
+# Subtest: SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80
+ok 68 - SC17 dry-run uses all 501 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 2.291958
+  type: 'test'
+  ...
+# Subtest: SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80
+ok 69 - SC17 execute uses all 501 fresh eligible sales-backed rows without fixed80
+  ---
+  duration_ms: 6.065167
+  type: 'test'
+  ...
+# Subtest: SC17 zero rows never claims readiness or opens certificate dialog (dry-run)
+ok 70 - SC17 zero rows never claims readiness or opens certificate dialog (dry-run)
+  ---
+  duration_ms: 0.596541
+  type: 'test'
+  ...
+# Subtest: SC17 zero rows never claims readiness or opens certificate dialog (execute)
+ok 71 - SC17 zero rows never claims readiness or opens certificate dialog (execute)
+  ---
+  duration_ms: 0.178542
+  type: 'test'
+  ...
+# Subtest: SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs
+ok 72 - SC17 former ID disappeared from sales-backed registry: selects only current eligible IDs
+  ---
+  duration_ms: 0.880333
+  type: 'test'
+  ...
+# Subtest: SC17 return removes former ID and adds a new sold row: selects only current eligible IDs
+ok 73 - SC17 return removes former ID and adds a new sold row: selects only current eligible IDs
+  ---
+  duration_ms: 0.895625
+  type: 'test'
+  ...
+# Subtest: SC17 active claim on former ID is excluded: selects only current eligible IDs
+ok 74 - SC17 active claim on former ID is excluded: selects only current eligible IDs
+  ---
+  duration_ms: 0.8205
+  type: 'test'
+  ...
+# Subtest: SC17 already withdrawn former ID is excluded: selects only current eligible IDs
+ok 75 - SC17 already withdrawn former ID is excluded: selects only current eligible IDs
+  ---
+  duration_ms: 1.037625
+  type: 'test'
+  ...
+# Subtest: SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs
+ok 76 - SC17 invalid sale price stays visible but is not selected: selects only current eligible IDs
+  ---
+  duration_ms: 1.757875
+  type: 'test'
+  ...
+# Subtest: SC17 newly returned/claimed ID between read and selection cannot survive as stale snapshot
+ok 77 - SC17 newly returned/claimed ID between read and selection cannot survive as stale snapshot
+  ---
+  duration_ms: 1.368
+  type: 'test'
+  ...
+# Subtest: SC17 same count but replacement ID between read and selection cannot be stale success
+ok 78 - SC17 same count but replacement ID between read and selection cannot be stale success
+  ---
+  duration_ms: 0.591958
+  type: 'test'
+  ...
+# Subtest: SC17 duplicate across pages refuses partial or ambiguous preparation before dialog
+ok 79 - SC17 duplicate across pages refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.926166
+  type: 'test'
+  ...
+# Subtest: SC17 empty nonterminal page refuses partial or ambiguous preparation before dialog
+ok 80 - SC17 empty nonterminal page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.74825
+  type: 'test'
+  ...
+# Subtest: SC17 short nonterminal first page refuses partial or ambiguous preparation before dialog
+ok 81 - SC17 short nonterminal first page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.296125
+  type: 'test'
+  ...
+# Subtest: SC17 short terminal page refuses partial or ambiguous preparation before dialog
+ok 82 - SC17 short terminal page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 1.258583
+  type: 'test'
+  ...
+# Subtest: SC17 changed total on second page refuses partial or ambiguous preparation before dialog
+ok 83 - SC17 changed total on second page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.822916
+  type: 'test'
+  ...
+# Subtest: SC17 invalid total refuses partial or ambiguous preparation before dialog
+ok 84 - SC17 invalid total refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.477166
+  type: 'test'
+  ...
+# Subtest: SC17 oversized page refuses partial or ambiguous preparation before dialog
+ok 85 - SC17 oversized page refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.821667
+  type: 'test'
+  ...
+# Subtest: SC17 second-page invalid JSON refuses partial or ambiguous preparation before dialog
+ok 86 - SC17 second-page invalid JSON refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 1.683583
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 401 refuses partial or ambiguous preparation before dialog
+ok 87 - SC17 second-page HTTP 401 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 1.461875
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 403 refuses partial or ambiguous preparation before dialog
+ok 88 - SC17 second-page HTTP 403 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.754292
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 429 refuses partial or ambiguous preparation before dialog
+ok 89 - SC17 second-page HTTP 429 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.688125
+  type: 'test'
+  ...
+# Subtest: SC17 second-page HTTP 503 refuses partial or ambiguous preparation before dialog
+ok 90 - SC17 second-page HTTP 503 refuses partial or ambiguous preparation before dialog
+  ---
+  duration_ms: 0.5985
+  type: 'test'
+  ...
+# Subtest: SC17 wrong tenant_id rejects before registry or UI
+ok 91 - SC17 wrong tenant_id rejects before registry or UI
+  ---
+  duration_ms: 0.203333
+  type: 'test'
+  ...
+# Subtest: SC17 wrong seller_id rejects before registry or UI
+ok 92 - SC17 wrong seller_id rejects before registry or UI
+  ---
+  duration_ms: 0.300167
+  type: 'test'
+  ...
+# Subtest: SC17 wrong active_seller_id rejects before registry or UI
+ok 93 - SC17 wrong active_seller_id rejects before registry or UI
+  ---
+  duration_ms: 0.170792
+  type: 'test'
+  ...
+# Subtest: SC17 wrong role rejects before registry or UI
+ok 94 - SC17 wrong role rejects before registry or UI
+  ---
+  duration_ms: 0.204625
+  type: 'test'
+  ...
+# Subtest: SC17 wrong withdrawal_enabled rejects before registry or UI
+ok 95 - SC17 wrong withdrawal_enabled rejects before registry or UI
+  ---
+  duration_ms: 0.175625
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://sellerfocus.pro"}
+ok 96 - SC17 exact production origin and route required {"origin":"https://sellerfocus.pro"}
+  ---
+  duration_ms: 0.195041
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://foreign.example"}
+ok 97 - SC17 exact production origin and route required {"origin":"https://foreign.example"}
+  ---
+  duration_ms: 0.073916
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"https://wms.sellerfocus.pro.evil.test"}
+ok 98 - SC17 exact production origin and route required {"origin":"https://wms.sellerfocus.pro.evil.test"}
+  ---
+  duration_ms: 0.061958
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"origin":"http://wms.sellerfocus.pro"}
+ok 99 - SC17 exact production origin and route required {"origin":"http://wms.sellerfocus.pro"}
+  ---
+  duration_ms: 0.0685
+  type: 'test'
+  ...
+# Subtest: SC17 exact production origin and route required {"pathname":"/seller/orders"}
+ok 100 - SC17 exact production origin and route required {"pathname":"/seller/orders"}
+  ---
+  duration_ms: 0.063958
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"switchTokenAtOffset":250}
+ok 101 - SC17 seller session switch refuses preparation {"switchTokenAtOffset":250}
+  ---
+  duration_ms: 2.4875
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"changeTokenInUi":true}
+ok 102 - SC17 seller session switch refuses preparation {"changeTokenInUi":true}
+  ---
+  duration_ms: 0.762125
+  type: 'test'
+  ...
+# Subtest: SC17 seller session switch refuses preparation {"switchIdentity":true}
+ok 103 - SC17 seller session switch refuses preparation {"switchIdentity":true}
+  ---
+  duration_ms: 0.859125
+  type: 'test'
+  ...
+# Subtest: SC17 preexisting selection is not silently extended
+ok 104 - SC17 preexisting selection is not silently extended
+  ---
+  duration_ms: 0.400666
+  type: 'test'
+  ...
+# Subtest: SC17 incomplete DOM confirmation is never success {"openedCount":83}
+ok 105 - SC17 incomplete DOM confirmation is never success {"openedCount":83}
+  ---
+  duration_ms: 1.517542
+  type: 'test'
+  ...
+# Subtest: SC17 incomplete DOM confirmation is never success {"dialogOpen":false}
+ok 106 - SC17 incomplete DOM confirmation is never success {"dialogOpen":false}
+  ---
+  duration_ms: 1.80125
+  type: 'test'
+  ...
+# Subtest: SC17 missing seller token null rejects before any GET or UI
+ok 107 - SC17 missing seller token null rejects before any GET or UI
+  ---
+  duration_ms: 0.337541
+  type: 'test'
+  ...
+# Subtest: SC17 missing seller token "" rejects before any GET or UI
+ok 108 - SC17 missing seller token "" rejects before any GET or UI
+  ---
+  duration_ms: 0.299417
+  type: 'test'
+  ...
+# Subtest: SC17 identity GET HTTP 401 refuses preparation
+ok 109 - SC17 identity GET HTTP 401 refuses preparation
+  ---
+  duration_ms: 0.269959
+  type: 'test'
+  ...
+# Subtest: SC17 identity GET HTTP 403 refuses preparation
+ok 110 - SC17 identity GET HTTP 403 refuses preparation
+  ---
+  duration_ms: 0.118416
+  type: 'test'
+  ...
+1..110
+# tests 110
+# suites 0
+# pass 110
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4893.913125

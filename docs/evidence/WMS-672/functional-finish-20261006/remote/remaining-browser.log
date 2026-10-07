@@ -1,0 +1,14 @@
+✔ C7 remaining inbound: unknown reload, operator clarification then distinct explicit reprint (4452.785469ms)
+✔ C11 inbound: actual placement dialog long names preview error and neighbors (4183.645996ms)
+✔ C7 remaining return: unknown reload, operator clarification then distinct explicit reprint (3439.58985ms)
+✔ C11 return: actual placement dialog long names preview error and neighbors (4073.594815ms)
+✔ C10 remaining inbound: existing WMS659 bulk creation opens quantity dialog without printing (1545.871981ms)
+✔ C10 remaining return: existing WMS659 bulk creation opens quantity dialog without printing (1549.719032ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 19587.269844

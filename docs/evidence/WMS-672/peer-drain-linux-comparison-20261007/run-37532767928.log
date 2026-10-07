@@ -1,0 +1,1135 @@
+c5-peer-drain-comparison	Set up job	﻿2026-10-06T21:17:07.6192203Z Current runner version: '2.337.0'
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6215876Z ##[group]Runner Image Provisioner
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6216584Z Hosted Compute Agent
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6217132Z Version: 20261002.596
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6217651Z Commit: c3d12f3313a95f25162a1503be624f3b0617f8c0
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6218229Z Build Date: 2026-10-02T22:28:27Z
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6218879Z Worker ID: {e19ade18-8f86-4ef7-8e4b-5bea142f9a57}
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6219463Z Region: westus3
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6219988Z Cloud: Azure
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6220429Z ##[endgroup]
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6221552Z ##[group]Operating System
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6222158Z Ubuntu
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6222604Z 24.04.5
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6223332Z LTS
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6223776Z ##[endgroup]
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6224240Z ##[group]Runner Image
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6224806Z Image: ubuntu-24.04
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6225272Z Version: 20261004.327.1
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6226209Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20261004.327/images/ubuntu/Ubuntu2404-Readme.md
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6227671Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20261004.327
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6228528Z ##[endgroup]
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6229450Z ##[group]GITHUB_TOKEN Permissions
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6231215Z Contents: read
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6232023Z Metadata: read
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6232519Z ##[endgroup]
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6234294Z Secret source: Actions
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6235168Z Cache mode: write
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6235750Z Prepare workflow directory
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6609358Z Prepare all required actions
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.6648984Z Getting action download info
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:07.9816142Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:08.2141575Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:08.8362366Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+c5-peer-drain-comparison	Set up job	2026-10-06T21:17:09.8342824Z Complete job name: c5-peer-drain-comparison
+c5-peer-drain-comparison	Run actions/checkout@v4	﻿2026-10-06T21:17:09.9034497Z ##[group]Run actions/checkout@v4
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9035529Z with:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9036166Z   persist-credentials: false
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9036921Z   fetch-depth: 0
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9037616Z   repository: chivkunovd-bitdenis/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9045020Z   token: ***
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9045658Z   ssh-strict: true
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9046353Z   ssh-user: git
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9046969Z   clean: true
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9047621Z   sparse-checkout-cone-mode: true
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9048394Z   fetch-tags: false
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9049053Z   show-progress: true
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9049726Z   lfs: false
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9050337Z   submodules: false
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9050998Z   set-safe-directory: true
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9051783Z   allow-unsafe-pr-checkout: false
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9052882Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9879071Z Syncing repository: chivkunovd-bitdenis/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9881534Z ##[group]Getting Git version info
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9882485Z Working directory is '/home/runner/work/WMS/WMS'
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9884405Z [command]/usr/bin/git version
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9930011Z git version 2.55.0
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9949172Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9962077Z Temporarily overriding HOME='/home/runner/work/_temp/333dc126-339c-41d7-be6d-ad2176bbf8de' before making global git config changes
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9964378Z Adding repository directory to the temporary git global config as a safe directory
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:09.9967944Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0014138Z Deleting the contents of '/home/runner/work/WMS/WMS'
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0017820Z ##[group]Initializing the repository
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0020762Z [command]/usr/bin/git init /home/runner/work/WMS/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0214563Z hint: Using 'master' as the name for the initial branch. This default branch name
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0217399Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0219673Z hint: to use in all of your new repositories, which will suppress this warning,
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0221382Z hint: call:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0222357Z hint:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0223722Z hint: 	git config --global init.defaultBranch <name>
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0224996Z hint:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0226190Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0227610Z hint: 'development'. The just-created branch can be renamed via this command:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0228728Z hint:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0229346Z hint: 	git branch -m <name>
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0230222Z hint:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0231193Z hint: Disable this message with "git config set advice.defaultBranchName false"
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0233565Z Initialized empty Git repository in /home/runner/work/WMS/WMS/.git/
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0236999Z [command]/usr/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0272395Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0273851Z ##[group]Disabling automatic garbage collection
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0275302Z [command]/usr/bin/git config --local gc.auto 0
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0302400Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0303685Z ##[group]Setting up auth
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0309975Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0338363Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0652985Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0683091Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0869284Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.0898176Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.1088525Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.1201912Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.1203654Z ##[group]Fetching the repository
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:10.1210366Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4047622Z From https://github.com/chivkunovd-bitdenis/WMS
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4049077Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4050495Z  * [new branch]          archive/staging-20260924-93f511ab -> origin/archive/staging-20260924-93f511ab
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4051388Z  * [new branch]          archive/staging-before-wms521-20260924 -> origin/archive/staging-before-wms521-20260924
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4052363Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4053419Z  * [new branch]          backlog/fbs-followups-20260812 -> origin/backlog/fbs-followups-20260812
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4054166Z  * [new branch]          brand/portal-logos-20260811 -> origin/brand/portal-logos-20260811
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4054998Z  * [new branch]          brand/portal-logos-live-20260811 -> origin/brand/portal-logos-live-20260811
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4055835Z  * [new branch]          brand/portal-logos-prod-20260811 -> origin/brand/portal-logos-prod-20260811
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4056664Z  * [new branch]          chore/deploy-smoke-retry-on-main -> origin/chore/deploy-smoke-retry-on-main
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4057762Z  * [new branch]          chore/operator-change-contract-20260901 -> origin/chore/operator-change-contract-20260901
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4058527Z  * [new branch]          chore/railway-toml-fix  -> origin/chore/railway-toml-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4059214Z  * [new branch]          chore/release-via-pr-only-rules -> origin/chore/release-via-pr-only-rules
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4059939Z  * [new branch]          chore/staging-sync-20261003 -> origin/chore/staging-sync-20261003
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4060779Z  * [new branch]          chore/wb-emulator-railway-dockerfile -> origin/chore/wb-emulator-railway-dockerfile
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4061822Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4062604Z  * [new branch]          chore/wms574-stand      -> origin/chore/wms574-stand
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4063368Z  * [new branch]          codex/agent-job-1710a7649a6964db -> origin/codex/agent-job-1710a7649a6964db
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4063925Z  * [new branch]          codex/agent-job-21079e59afb9acdb -> origin/codex/agent-job-21079e59afb9acdb
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4064440Z  * [new branch]          codex/agent-job-6f3e370ab6217c51 -> origin/codex/agent-job-6f3e370ab6217c51
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4064953Z  * [new branch]          codex/agent-job-8c954436cd418999 -> origin/codex/agent-job-8c954436cd418999
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4065463Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac -> origin/codex/agent-job-97af6faf8d8c22ac
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4065969Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5 -> origin/codex/agent-job-bb021d7e007fb8a5
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4066491Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150 -> origin/codex/agent-job-ef71dbb00ee2b150
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4066990Z  * [new branch]          codex/agent-job-fc68bb2705b6850f -> origin/codex/agent-job-fc68bb2705b6850f
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4067470Z  * [new branch]          codex/artmaks-fbo-mockup -> origin/codex/artmaks-fbo-mockup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4067926Z  * [new branch]          codex/backlog40-ci-contracts -> origin/codex/backlog40-ci-contracts
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4068553Z  * [new branch]          codex/backlog40-ci-pdf  -> origin/codex/backlog40-ci-pdf
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4069022Z  * [new branch]          codex/billing-journal-20260825 -> origin/codex/billing-journal-20260825
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4069626Z  * [new branch]          codex/billing-module-20260826 -> origin/codex/billing-module-20260826
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4070466Z  * [new branch]          codex/billing-stage-finish-20260823 -> origin/codex/billing-stage-finish-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4071070Z  * [new branch]          codex/billing-storage-bounds-20260823 -> origin/codex/billing-storage-bounds-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4071679Z  * [new branch]          codex/box-label-bulk-print-20260824 -> origin/codex/box-label-bulk-print-20260824
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4072255Z  * [new branch]          codex/catalog-box-filters-20260824 -> origin/codex/catalog-box-filters-20260824
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4073263Z  * [new branch]          codex/catalog-box-tabs-source-20260823 -> origin/codex/catalog-box-tabs-source-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4074264Z  * [new branch]          codex/cell-contents-scanner-20260824 -> origin/codex/cell-contents-scanner-20260824
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4074883Z  * [new branch]          codex/fbs-qr-only-print-20260823 -> origin/codex/fbs-qr-only-print-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4075545Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4076203Z  * [new branch]          codex/fix-seller-inbound-empty-picker -> origin/codex/fix-seller-inbound-empty-picker
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4076778Z  * [new branch]          codex/fix-wb-done-supply-status-prod -> origin/codex/fix-wb-done-supply-status-prod
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4077358Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820 -> origin/codex/hotfix-fbs-100-orders-20260820
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4077927Z  * [new branch]          codex/hotfix-fbs-packaging-flag -> origin/codex/hotfix-fbs-packaging-flag
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4078583Z  * [new branch]          codex/hotfix-ozon-kiz   -> origin/codex/hotfix-ozon-kiz
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4079034Z  * [new branch]          codex/invoice-row-location -> origin/codex/invoice-row-location
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4079584Z  * [new branch]          codex/knowledge-inbound-guide-20260824 -> origin/codex/knowledge-inbound-guide-20260824
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4080146Z  * [new branch]          codex/mp-dashboard-e2e-20260815 -> origin/codex/mp-dashboard-e2e-20260815
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4080690Z  * [new branch]          codex/night-ready-acceptance-1006 -> origin/codex/night-ready-acceptance-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4081435Z  * [new branch]          codex/night-ready-candidate-1006-inrepo -> origin/codex/night-ready-candidate-1006-inrepo
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4082173Z  * [new branch]          codex/night-ready-exact-staging-1006 -> origin/codex/night-ready-exact-staging-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4083245Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4083892Z  * [new branch]          codex/night-ready-migration-compat-1006 -> origin/codex/night-ready-migration-compat-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4084463Z  * [new branch]          codex/night-ready-staging-1006 -> origin/codex/night-ready-staging-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4085084Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4085804Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4086465Z  * [new branch]          codex/night-ready-staging-rollback-1006 -> origin/codex/night-ready-staging-rollback-1006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4087023Z  * [new branch]          codex/night-release-5beb52da-1 -> origin/codex/night-release-5beb52da-1
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4087549Z  * [new branch]          codex/night-requirements-20261006 -> origin/codex/night-requirements-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4088165Z  * [new branch]          codex/night1007-658     -> origin/codex/night1007-658
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4088595Z  * [new branch]          codex/night1007-671-687 -> origin/codex/night1007-671-687
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4089036Z  * [new branch]          codex/night1007-675-release -> origin/codex/night1007-675-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4089473Z  * [new branch]          codex/night1007-679-680 -> origin/codex/night1007-679-680
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4089881Z  * [new branch]          codex/night1007-681     -> origin/codex/night1007-681
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4090300Z  * [new branch]          codex/night1007-684-586 -> origin/codex/night1007-684-586
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4090736Z  * [new branch]          codex/night1007-integration -> origin/codex/night1007-integration
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4091309Z  * [new branch]          codex/night1007-print-regressions-646cb4 -> origin/codex/night1007-print-regressions-646cb4
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4091897Z  * [new branch]          codex/night1007-wms652-ci-fix -> origin/codex/night1007-wms652-ci-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4092557Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4093340Z  * [new branch]          codex/ozon-catalog-20260825 -> origin/codex/ozon-catalog-20260825
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4093802Z  * [new branch]          codex/ozon-fbs-20260825 -> origin/codex/ozon-fbs-20260825
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4094233Z  * [new branch]          codex/ozon-stock-20260825 -> origin/codex/ozon-stock-20260825
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4094751Z  * [new branch]          codex/ozon-test-key-marker-20260824 -> origin/codex/ozon-test-key-marker-20260824
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4095334Z  * [new branch]          codex/priority-five-release-20261006 -> origin/codex/priority-five-release-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4095906Z  * [new branch]          codex/priority-five-review-20261006 -> origin/codex/priority-five-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4096645Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4097252Z  * [new branch]          codex/regress-live-cases-20260825 -> origin/codex/regress-live-cases-20260825
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4097777Z  * [new branch]          codex/release-20261006-astra-a -> origin/codex/release-20261006-astra-a
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4098276Z  * [new branch]          codex/release-20261006-astra-b -> origin/codex/release-20261006-astra-b
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4098785Z  * [new branch]          codex/release-ci-final-20261006 -> origin/codex/release-ci-final-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4099279Z  * [new branch]          codex/release-log-2026-09-27 -> origin/codex/release-log-2026-09-27
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4099822Z  * [new branch]          codex/reporting-backend-core-20260823 -> origin/codex/reporting-backend-core-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4100428Z  * [new branch]          codex/reporting-stage-finish-20260823 -> origin/codex/reporting-stage-finish-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4100994Z  * [new branch]          codex/staging-sync-login-20260914 -> origin/codex/staging-sync-login-20260914
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4101503Z  * [new branch]          codex/storage-stage-20260823 -> origin/codex/storage-stage-20260823
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4101957Z  * [new branch]          codex/trello-wms-20261005 -> origin/codex/trello-wms-20261005
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4102392Z  * [new branch]          codex/trello-wms-20261006 -> origin/codex/trello-wms-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4102978Z  * [new branch]          codex/trello-wms-20261006-1200 -> origin/codex/trello-wms-20261006-1200
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4103455Z  * [new branch]          codex/tsd-package-20260913 -> origin/codex/tsd-package-20260913
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4103943Z  * [new branch]          codex/tsd-package-stage-release -> origin/codex/tsd-package-stage-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4104462Z  * [new branch]          codex/tsd-staging-merge-20260913 -> origin/codex/tsd-staging-merge-20260913
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4104961Z  * [new branch]          codex/volna9-01-backend-only -> origin/codex/volna9-01-backend-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4105547Z  * [new branch]          codex/volna9-02-status-only -> origin/codex/volna9-02-status-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4106013Z  * [new branch]          codex/volna9-03-backend-only -> origin/codex/volna9-03-backend-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4106470Z  * [new branch]          codex/volna9-04-backend-only -> origin/codex/volna9-04-backend-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4106929Z  * [new branch]          codex/volna9-05-backend-only -> origin/codex/volna9-05-backend-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4107418Z  * [new branch]          codex/volna9-06-print-order-only -> origin/codex/volna9-06-print-order-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4107921Z  * [new branch]          codex/weekly-release-20260909 -> origin/codex/weekly-release-20260909
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4108362Z  * [new branch]          codex/wms-chat-20260911 -> origin/codex/wms-chat-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4108833Z  * [new branch]          codex/wms-chat-evening-20260910 -> origin/codex/wms-chat-evening-20260910
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4109345Z  * [new branch]          codex/wms-integrations-20260911 -> origin/codex/wms-integrations-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4109794Z  * [new branch]          codex/wms-ozon-20260911 -> origin/codex/wms-ozon-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4110268Z  * [new branch]          codex/wms-ozon-generator-20260911 -> origin/codex/wms-ozon-generator-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4110772Z  * [new branch]          codex/wms-pick-container-scan -> origin/codex/wms-pick-container-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4111314Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820 -> origin/codex/wms-pipeline-unified-v2-20260820
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4111816Z  * [new branch]          codex/wms-print-20260911 -> origin/codex/wms-print-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4112393Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4113253Z  * [new branch]          codex/wms-psp-backlog-20260921 -> origin/codex/wms-psp-backlog-20260921
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4113806Z  * [new branch]          codex/wms-qr-review-evidence-20261006 -> origin/codex/wms-qr-review-evidence-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4114319Z  * [new branch]          codex/wms-release-20260911 -> origin/codex/wms-release-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4114794Z  * [new branch]          codex/wms-release-ozon-terminal -> origin/codex/wms-release-ozon-terminal
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4115268Z  * [new branch]          codex/wms-storage-20260911 -> origin/codex/wms-storage-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4115744Z  * [new branch]          codex/wms-storage-final-20260911 -> origin/codex/wms-storage-final-20260911
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4116220Z  * [new branch]          codex/wms-transfer-urgent -> origin/codex/wms-transfer-urgent
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4116861Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4117585Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4118113Z  * [new branch]          codex/wms010-backlog40  -> origin/codex/wms010-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4118516Z  * [new branch]          codex/wms011-backlog40  -> origin/codex/wms011-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4118914Z  * [new branch]          codex/wms013-backlog40  -> origin/codex/wms013-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4119301Z  * [new branch]          codex/wms040-backlog40  -> origin/codex/wms040-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4119688Z  * [new branch]          codex/wms045-backlog40  -> origin/codex/wms045-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4120176Z  * [new branch]          codex/wms058-availability-followup -> origin/codex/wms058-availability-followup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4120647Z  * [new branch]          codex/wms058-backlog40  -> origin/codex/wms058-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4121047Z  * [new branch]          codex/wms058-browser-qa -> origin/codex/wms058-browser-qa
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4121488Z  * [new branch]          codex/wms058-mp-box-source -> origin/codex/wms058-mp-box-source
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4122077Z  * [new branch]          codex/wms058-overplan-source -> origin/codex/wms058-overplan-source
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4122532Z  * [new branch]          codex/wms058-review-fix -> origin/codex/wms058-review-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4123138Z  * [new branch]          codex/wms080-392-review-fix -> origin/codex/wms080-392-review-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4123598Z  * [new branch]          codex/wms080-backlog40  -> origin/codex/wms080-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4124015Z  * [new branch]          codex/wms081-backlog40  -> origin/codex/wms081-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4124453Z  * [new branch]          codex/wms081-defect-compat -> origin/codex/wms081-defect-compat
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4124934Z  * [new branch]          codex/wms082-085-emulator-meta -> origin/codex/wms082-085-emulator-meta
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4125392Z  * [new branch]          codex/wms082-backlog40  -> origin/codex/wms082-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4125815Z  * [new branch]          codex/wms083-backlog40  -> origin/codex/wms083-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4126239Z  * [new branch]          codex/wms084-backlog40  -> origin/codex/wms084-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4126677Z  * [new branch]          codex/wms084-emulator-delete -> origin/codex/wms084-emulator-delete
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4127202Z  * [new branch]          codex/wms084-packing-test-contract -> origin/codex/wms084-packing-test-contract
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4127669Z  * [new branch]          codex/wms084-rebind     -> origin/codex/wms084-rebind
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4128069Z  * [new branch]          codex/wms085-backlog40  -> origin/codex/wms085-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4128464Z  * [new branch]          codex/wms086-backlog40  -> origin/codex/wms086-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4128855Z  * [new branch]          codex/wms087-backlog40  -> origin/codex/wms087-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4189119Z  * [new branch]          codex/wms091-backlog40  -> origin/codex/wms091-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4189945Z  * [new branch]          codex/wms092-backlog40  -> origin/codex/wms092-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4190703Z  * [new branch]          codex/wms095-backlog40  -> origin/codex/wms095-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4191398Z  * [new branch]          codex/wms095-import-error-backlog40 -> origin/codex/wms095-import-error-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4192082Z  * [new branch]          codex/wms096-backlog40  -> origin/codex/wms096-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4192625Z  * [new branch]          codex/wms110-backlog40  -> origin/codex/wms110-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4193321Z  * [new branch]          codex/wms115-backlog40  -> origin/codex/wms115-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4193937Z  * [new branch]          codex/wms123-backlog40  -> origin/codex/wms123-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4194512Z  * [new branch]          codex/wms272-backlog40  -> origin/codex/wms272-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4195174Z  * [new branch]          codex/wms272-resume-backlog40 -> origin/codex/wms272-resume-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4196035Z  * [new branch]          codex/wms273-backlog40  -> origin/codex/wms273-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4196722Z  * [new branch]          codex/wms276-backlog40  -> origin/codex/wms276-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4197361Z  * [new branch]          codex/wms277-backlog40  -> origin/codex/wms277-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4198004Z  * [new branch]          codex/wms277-catalog    -> origin/codex/wms277-catalog
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4198754Z  * [new branch]          codex/wms277-import-sku-collision -> origin/codex/wms277-import-sku-collision
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4199523Z  * [new branch]          codex/wms278-backlog40  -> origin/codex/wms278-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4200158Z  * [new branch]          codex/wms387-training   -> origin/codex/wms387-training
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4200797Z  * [new branch]          codex/wms389-backlog40  -> origin/codex/wms389-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4201449Z  * [new branch]          codex/wms390-backlog40  -> origin/codex/wms390-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4202262Z  * [new branch]          codex/wms391-backlog40  -> origin/codex/wms391-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4203149Z  * [new branch]          codex/wms392-backlog40  -> origin/codex/wms392-backlog40
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4203802Z  * [new branch]          codex/wms392-review-tests -> origin/codex/wms392-review-tests
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4204468Z  * [new branch]          codex/wms394-kiz-ui     -> origin/codex/wms394-kiz-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4205016Z  * [new branch]          codex/wms395-pool-inline -> origin/codex/wms395-pool-inline
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4205444Z  * [new branch]          codex/wms396-stage      -> origin/codex/wms396-stage
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4205899Z  * [new branch]          codex/wms396-staging-release -> origin/codex/wms396-staging-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4206350Z  * [new branch]          codex/wms396-true-api   -> origin/codex/wms396-true-api
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4206752Z  * [new branch]          codex/wms397-api        -> origin/codex/wms397-api
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4207179Z  * [new branch]          codex/wms399-chat-design -> origin/codex/wms399-chat-design
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4207718Z  * [new branch]          codex/wms401-android-build-proof -> origin/codex/wms401-android-build-proof
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4208281Z  * [new branch]          codex/wms406-backfill-final-plan -> origin/codex/wms406-backfill-final-plan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4208760Z  * [new branch]          codex/wms406-invoice    -> origin/codex/wms406-invoice
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4209175Z  * [new branch]          codex/wms406-report     -> origin/codex/wms406-report
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4209646Z  * [new branch]          codex/wms408-billing-unification -> origin/codex/wms408-billing-unification
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4210140Z  * [new branch]          codex/wms415-coord-20260910 -> origin/codex/wms415-coord-20260910
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4210691Z  * [new branch]          codex/wms418-catalog-publication-filter -> origin/codex/wms418-catalog-publication-filter
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4211408Z  * [new branch]          codex/wms418-loviana-off -> origin/codex/wms418-loviana-off
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4211889Z  * [new branch]          codex/wms425-marketplace-hotfix -> origin/codex/wms425-marketplace-hotfix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4212379Z  * [new branch]          codex/wms433-stage-user-only -> origin/codex/wms433-stage-user-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4213106Z  * [new branch]          codex/wms433-support-bot-concept -> origin/codex/wms433-support-bot-concept
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4213618Z  * [new branch]          codex/wms437-analyst-cases -> origin/codex/wms437-analyst-cases
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4214109Z  * [new branch]          codex/wms437-small-task-process -> origin/codex/wms437-small-task-process
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4214561Z  * [new branch]          codex/wms440-tsd        -> origin/codex/wms440-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4214956Z  * [new branch]          codex/wms440-tsd-ui     -> origin/codex/wms440-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4215376Z  * [new branch]          codex/wms441-c10-evidence -> origin/codex/wms441-c10-evidence
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4215795Z  * [new branch]          codex/wms441-tsd        -> origin/codex/wms441-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4216184Z  * [new branch]          codex/wms441-tsd-ui     -> origin/codex/wms441-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4216570Z  * [new branch]          codex/wms442-tsd        -> origin/codex/wms442-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4216956Z  * [new branch]          codex/wms442-tsd-ui     -> origin/codex/wms442-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4217337Z  * [new branch]          codex/wms443-tsd        -> origin/codex/wms443-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4217704Z  * [new branch]          codex/wms443-tsd-ui     -> origin/codex/wms443-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4218075Z  * [new branch]          codex/wms444-tsd        -> origin/codex/wms444-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4218455Z  * [new branch]          codex/wms444-tsd-ui     -> origin/codex/wms444-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4218850Z  * [new branch]          codex/wms445-tsd        -> origin/codex/wms445-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4219316Z  * [new branch]          codex/wms445-tsd-server-truth -> origin/codex/wms445-tsd-server-truth
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4219863Z  * [new branch]          codex/wms445-tsd-ui     -> origin/codex/wms445-tsd-ui
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4220459Z  * [new branch]          codex/wms447-full-marketplace-labels -> origin/codex/wms447-full-marketplace-labels
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4220973Z  * [new branch]          codex/wms460-fbs-qr-scan -> origin/codex/wms460-fbs-qr-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4221526Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4222094Z  * [new branch]          codex/wms476-auto-legacy-guard -> origin/codex/wms476-auto-legacy-guard
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4222629Z  * [new branch]          codex/wms476-implementation-sol-high -> origin/codex/wms476-implementation-sol-high
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4223356Z  * [new branch]          codex/wms476-staging-release-20260923 -> origin/codex/wms476-staging-release-20260923
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4223916Z  * [new branch]          codex/wms477-backend-review-fix -> origin/codex/wms477-backend-review-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4224396Z  * [new branch]          codex/wms477-p3-notice  -> origin/codex/wms477-p3-notice
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4224960Z  * [new branch]          codex/wms483-prod-release-20260920 -> origin/codex/wms483-prod-release-20260920
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4225476Z  * [new branch]          codex/wms483-wb-zero-refresh -> origin/codex/wms483-wb-zero-refresh
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4225964Z  * [new branch]          codex/wms489-staging-release -> origin/codex/wms489-staging-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4226524Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4227230Z  * [new branch]          codex/wms502-stock-sorting-incident -> origin/codex/wms502-stock-sorting-incident
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4227776Z  * [new branch]          codex/wms506-silent-kiz-print -> origin/codex/wms506-silent-kiz-print
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4228430Z  * [new branch]          codex/wms508-persistent-form-cards -> origin/codex/wms508-persistent-form-cards
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4228954Z  * [new branch]          codex/wms514-clickable-mockup -> origin/codex/wms514-clickable-mockup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4229493Z  * [new branch]          codex/wms514-staging-release-20260924 -> origin/codex/wms514-staging-release-20260924
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4230030Z  * [new branch]          codex/wms515-client-registry -> origin/codex/wms515-client-registry
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4230653Z  * [new branch]          codex/wms517-current-release-analysis -> origin/codex/wms517-current-release-analysis
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4231607Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4232210Z  * [new branch]          codex/wms517-mac-dynamic-eligible -> origin/codex/wms517-mac-dynamic-eligible
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4232869Z  * [new branch]          codex/wms517-mac-test-contract -> origin/codex/wms517-mac-test-contract
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4233428Z  * [new branch]          codex/wms517-price-by-product-group -> origin/codex/wms517-price-by-product-group
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4233986Z  * [new branch]          codex/wms517-sales-report-contract -> origin/codex/wms517-sales-report-contract
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4234867Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4235521Z  * [new branch]          codex/wms517-staging-20261001 -> origin/codex/wms517-staging-20261001
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4236035Z  * [new branch]          codex/wms519-artifact-pdf-hotfix -> origin/codex/wms519-artifact-pdf-hotfix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4236581Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio -> origin/codex/wms519-kiz-label-aspect-ratio
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4237093Z  * [new branch]          codex/wms519-post-deploy-docs -> origin/codex/wms519-post-deploy-docs
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4237564Z  * [new branch]          codex/wms520-requirements -> origin/codex/wms520-requirements
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4238123Z  * [new branch]          codex/wms521-kiz-release -> origin/codex/wms521-kiz-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4238588Z  * [new branch]          codex/wms523-auto-import-pools -> origin/codex/wms523-auto-import-pools
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4239047Z  * [new branch]          codex/wms524-confirm-order -> origin/codex/wms524-confirm-order
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4239491Z  * [new branch]          codex/wms524-print-blank -> origin/codex/wms524-print-blank
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4240031Z  * [new branch]          codex/wms533-client-hardening -> origin/codex/wms533-client-hardening
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4240503Z  * [new branch]          codex/wms533-five-events -> origin/codex/wms533-five-events
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4240944Z  * [new branch]          codex/wms533-prod-five-events -> origin/codex/wms533-prod-five-events
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4241447Z  * [new branch]          codex/wms533-seller-stock-events -> origin/codex/wms533-seller-stock-events
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4242022Z  * [new branch]          codex/wms537-pg-fixture-review-20261006 -> origin/codex/wms537-pg-fixture-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4242537Z  * [new branch]          codex/wms550-sorting-scan -> origin/codex/wms550-sorting-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4243194Z  * [new branch]          codex/wms582-yandex-market-api -> origin/codex/wms582-yandex-market-api
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4243774Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4244294Z  * [new branch]          codex/wms591-avpack-6300 -> origin/codex/wms591-avpack-6300
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4244714Z  * [new branch]          codex/wms593-597-urgent -> origin/codex/wms593-597-urgent
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4245140Z  * [new branch]          codex/wms602-fbs-cell-scan -> origin/codex/wms602-fbs-cell-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4245562Z  * [new branch]          codex/wms603-box-scan   -> origin/codex/wms603-box-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4246145Z  * [new branch]          codex/wms604-staging-integration -> origin/codex/wms604-staging-integration
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4246649Z  * [new branch]          codex/wms604-unified-packing -> origin/codex/wms604-unified-packing
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4247190Z  * [new branch]          codex/wms607-artmaks-installer-findings -> origin/codex/wms607-artmaks-installer-findings
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4247718Z  * [new branch]          codex/wms607-instant-print -> origin/codex/wms607-instant-print
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4248191Z  * [new branch]          codex/wms607-mac-single-binary -> origin/codex/wms607-mac-single-binary
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4248732Z  * [new branch]          codex/wms607-printer-failure-analysis -> origin/codex/wms607-printer-failure-analysis
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4249238Z  * [new branch]          codex/wms607-staging-print -> origin/codex/wms607-staging-print
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4249667Z  * [new branch]          codex/wms607-windows-x64 -> origin/codex/wms607-windows-x64
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4250122Z  * [new branch]          codex/wms608-scanned-row-first -> origin/codex/wms608-scanned-row-first
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4250687Z  * [new branch]          codex/wms610-fbs-picking-columns -> origin/codex/wms610-fbs-picking-columns
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4251290Z  * [new branch]          codex/wms611-fbs-print-disabled -> origin/codex/wms611-fbs-print-disabled
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4251781Z  * [new branch]          codex/wms612-delivery-checks -> origin/codex/wms612-delivery-checks
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4252225Z  * [new branch]          codex/wms612-staging-all -> origin/codex/wms612-staging-all
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4252822Z  * [new branch]          codex/wms614-616-prod-release -> origin/codex/wms614-616-prod-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4253283Z  * [new branch]          codex/wms617-video-demo -> origin/codex/wms617-video-demo
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4253697Z  * [new branch]          codex/wms618-staging    -> origin/codex/wms618-staging
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4254135Z  * [new branch]          codex/wms622-fbo-kiz-recovery -> origin/codex/wms622-fbo-kiz-recovery
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4254645Z  * [new branch]          codex/wms623-artmaks-unused-pdfs -> origin/codex/wms623-artmaks-unused-pdfs
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4255358Z  * [new branch]          codex/wms624-developer-requests-current -> origin/codex/wms624-developer-requests-current
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4255873Z  * [new branch]          codex/wms624-sync-cadence -> origin/codex/wms624-sync-cadence
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4256346Z  * [new branch]          codex/wms625-print-reliability -> origin/codex/wms625-print-reliability
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4256884Z  * [new branch]          codex/wms626-astra-effort-limit -> origin/codex/wms626-astra-effort-limit
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4257535Z  * [new branch]          codex/wms627-artmaks-stock-reconcile -> origin/codex/wms627-artmaks-stock-reconcile
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4258085Z  * [new branch]          codex/wms628-artmaks-wrong-scan -> origin/codex/wms628-artmaks-wrong-scan
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4258556Z  * [new branch]          codex/wms628-production -> origin/codex/wms628-production
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4259014Z  * [new branch]          codex/wms629-packing-scroll -> origin/codex/wms629-packing-scroll
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4259602Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4260153Z  * [new branch]          codex/wms651-counter-copy -> origin/codex/wms651-counter-copy
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4260825Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4261762Z  * [new branch]          codex/wms652-acceptance-evidence -> origin/codex/wms652-acceptance-evidence
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4262369Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4263066Z  * [new branch]          codex/wms652-backup-fixture-review -> origin/codex/wms652-backup-fixture-review
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4263676Z  * [new branch]          codex/wms652-bot-night  -> origin/codex/wms652-bot-night
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4264249Z  * [new branch]          codex/wms652-checkpoint-requirements -> origin/codex/wms652-checkpoint-requirements
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4265060Z  * [new branch]          codex/wms652-ci-delta-review -> origin/codex/wms652-ci-delta-review
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4265761Z  * [new branch]          codex/wms652-ci-two-shards -> origin/codex/wms652-ci-two-shards
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4266536Z  * [new branch]          codex/wms652-critical-fbs-contracts -> origin/codex/wms652-critical-fbs-contracts
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4267487Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4268104Z  * [new branch]          codex/wms652-independent-main-check -> origin/codex/wms652-independent-main-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4268601Z  * [new branch]          codex/wms652-night-reader -> origin/codex/wms652-night-reader
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4269055Z  * [new branch]          codex/wms652-night-repair -> origin/codex/wms652-night-repair
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4269536Z  * [new branch]          codex/wms652-pdf-probe  -> origin/codex/wms652-pdf-probe
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4270063Z  * [new branch]          codex/wms652-process-gates -> origin/codex/wms652-process-gates
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4270623Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4271301Z  * [new branch]          codex/wms652-prod-env-negative-canary-20261007 -> origin/codex/wms652-prod-env-negative-canary-20261007
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4271881Z  * [new branch]          codex/wms652-regression-guard -> origin/codex/wms652-regression-guard
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4272369Z  * [new branch]          codex/wms652-release-ci-20261006 -> origin/codex/wms652-release-ci-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4273154Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4273804Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4274510Z  * [new branch]          codex/wms652-server-deploy-gate -> origin/codex/wms652-server-deploy-gate
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4274999Z  * [new branch]          codex/wms652-sonnet-frontend -> origin/codex/wms652-sonnet-frontend
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4275463Z  * [new branch]          codex/wms652-trusted-anchor -> origin/codex/wms652-trusted-anchor
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4275892Z  * [new branch]          codex/wms652-ui-gate    -> origin/codex/wms652-ui-gate
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4276398Z  * [new branch]          codex/wms653-scope-attribution-20261006 -> origin/codex/wms653-scope-attribution-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4277046Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4277776Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4278404Z  * [new branch]          codex/wms659-imperia-boxes -> origin/codex/wms659-imperia-boxes
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4278830Z  * [new branch]          codex/wms660-barcodes   -> origin/codex/wms660-barcodes
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4279272Z  * [new branch]          codex/wms661-analyst-20261006 -> origin/codex/wms661-analyst-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4279801Z  * [new branch]          codex/wms661-installed-baseline-tests -> origin/codex/wms661-installed-baseline-tests
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4280412Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4281035Z  * [new branch]          codex/wms661-runtime-preflight-20261006 -> origin/codex/wms661-runtime-preflight-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4281638Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4282421Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4283084Z  * [new branch]          codex/wms662-663-priority -> origin/codex/wms662-663-priority
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4283520Z  * [new branch]          codex/wms662-f6-testwriter -> origin/codex/wms662-f6-testwriter
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4284073Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4284728Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4285259Z  * [new branch]          codex/wms662-prod-handoff -> origin/codex/wms662-prod-handoff
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4285916Z  * [new branch]          codex/wms662-review-c36b8ab -> origin/codex/wms662-review-c36b8ab
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4286765Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4287407Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4288101Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4288808Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4289471Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4290070Z  * [new branch]          codex/wms663-release-retry-acceptance -> origin/codex/wms663-release-retry-acceptance
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4290608Z  * [new branch]          codex/wms663-release-retry-fix -> origin/codex/wms663-release-retry-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4291246Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4292172Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4293048Z  * [new branch]          codex/wms663-retry-contract-20261006 -> origin/codex/wms663-retry-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4293631Z  * [new branch]          codex/wms663-scoped-priority-20261006 -> origin/codex/wms663-scoped-priority-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4294170Z  * [new branch]          codex/wms664-dispatcher-stall -> origin/codex/wms664-dispatcher-stall
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4294699Z  * [new branch]          codex/wms665-avpack-withdrawal-helper -> origin/codex/wms665-avpack-withdrawal-helper
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4295347Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4296034Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4296738Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4297406Z  * [new branch]          codex/wms666-ci-history-scope-20261006 -> origin/codex/wms666-ci-history-scope-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4297956Z  * [new branch]          codex/wms666-ci-qr-finish-20261006 -> origin/codex/wms666-ci-qr-finish-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4298533Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4299162Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4299751Z  * [new branch]          codex/wms666-priority-etalon-20261006 -> origin/codex/wms666-priority-etalon-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4300452Z  * [new branch]          codex/wms666-release-c11-acceptance -> origin/codex/wms666-release-c11-acceptance
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4301055Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4301690Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4302327Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4302989Z  * [new branch]          codex/wms666-unified-fbs-packing -> origin/codex/wms666-unified-fbs-packing
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4303473Z  * [new branch]          codex/wms667-stock-filter -> origin/codex/wms667-stock-filter
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4303924Z  * [new branch]          codex/wms667-visual-runner -> origin/codex/wms667-visual-runner
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4304431Z  * [new branch]          codex/wms668-dispatcher-batch-final -> origin/codex/wms668-dispatcher-batch-final
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4305080Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4305686Z  * [new branch]          codex/wms672-673-analyst-20261006 -> origin/codex/wms672-673-analyst-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4306257Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4306819Z  * [new branch]          codex/wms672-c5-linux-diagnostic -> origin/codex/wms672-c5-linux-diagnostic
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4307320Z  * [new branch]          codex/wms672-c5-linux-fix-check -> origin/codex/wms672-c5-linux-fix-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4307811Z  * [new branch]          codex/wms672-c5-peer-drain-check -> origin/codex/wms672-c5-peer-drain-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4308369Z  * [new branch]          codex/wms672-functional-finish-20261006 -> origin/codex/wms672-functional-finish-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4308921Z  * [new branch]          codex/wms672-native-decode-fix -> origin/codex/wms672-native-decode-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4309618Z  * [new branch]          codex/wms672-native-error-contract-20261007 -> origin/codex/wms672-native-error-contract-20261007
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4310169Z  * [new branch]          codex/wms672-native-fix-review -> origin/codex/wms672-native-fix-review
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4310720Z  * [new branch]          codex/wms672-peer-drain-contract-20261007 -> origin/codex/wms672-peer-drain-contract-20261007
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4311313Z  * [new branch]          codex/wms675-ci-topology-proof-20261006 -> origin/codex/wms675-ci-topology-proof-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4311912Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4312528Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4313296Z  * [new branch]          codex/wms676-crosscheck-astra -> origin/codex/wms676-crosscheck-astra
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4313830Z  * [new branch]          codex/wms676-night-review-fallback -> origin/codex/wms676-night-review-fallback
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4314324Z  * [new branch]          codex/wms676-sol61-pipeline -> origin/codex/wms676-sol61-pipeline
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4314827Z  * [new branch]          codex/wms679-fbw-analysis-source349 -> origin/codex/wms679-fbw-analysis-source349
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4315400Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4315904Z  * [new branch]          codex/wms681-qr-recovery -> origin/codex/wms681-qr-recovery
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4316364Z  * [new branch]          codex/wms681-real-wb-qr-hotfix -> origin/codex/wms681-real-wb-qr-hotfix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4316866Z  * [new branch]          deploy/wb-emulator-real-order-qr -> origin/deploy/wb-emulator-real-order-qr
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4317498Z  * [new branch]          docs/owner-requirements-20260831 -> origin/docs/owner-requirements-20260831
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4318067Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4318576Z  * [new branch]          docs/wms469-470-backlog -> origin/docs/wms469-470-backlog
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4319014Z  * [new branch]          docs/wms561-ship-by-in-supply -> origin/docs/wms561-ship-by-in-supply
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4319501Z  * [new branch]          docs/wms584-585-tsd-walkthrough -> origin/docs/wms584-585-tsd-walkthrough
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4319998Z  * [new branch]          docs/wms648-ozon-catalog-backlog -> origin/docs/wms648-ozon-catalog-backlog
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4320497Z  * [new branch]          docs/wms649-shk-po-ploshchadke -> origin/docs/wms649-shk-po-ploshchadke
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4320908Z  * [new branch]          etalon                  -> origin/etalon
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4321310Z  * [new branch]          feat/cz-print-split-artifact -> origin/feat/cz-print-split-artifact
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4321825Z  * [new branch]          feat/fbs-warehouse-filter-20260812 -> origin/feat/fbs-warehouse-filter-20260812
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4322344Z  * [new branch]          feat/ff-inbound-create-20260812 -> origin/feat/ff-inbound-create-20260812
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4322966Z  * [new branch]          feat/marking-import-s3-storage -> origin/feat/marking-import-s3-storage
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4323427Z  * [new branch]          feat/mobile-fbs-demo-seed -> origin/feat/mobile-fbs-demo-seed
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4323882Z  * [new branch]          feat/product-barcode-print -> origin/feat/product-barcode-print
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4324317Z  * [new branch]          feat/wms056-audit-trail -> origin/feat/wms056-audit-trail
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4324736Z  * [new branch]          feat/wms062-warehouse-docs -> origin/feat/wms062-warehouse-docs
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4325184Z  * [new branch]          feat/wms111-wb-cancel-return -> origin/feat/wms111-wb-cancel-return
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4325650Z  * [new branch]          feat/wms121-supply-identity -> origin/feat/wms121-supply-identity
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4326207Z  * [new branch]          feat/wms270-login-and-ports -> origin/feat/wms270-login-and-ports
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4326718Z  * [new branch]          feat/wms338-stock-min-formula -> origin/feat/wms338-stock-min-formula
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4327173Z  * [new branch]          feat/wms349-merge-service -> origin/feat/wms349-merge-service
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4327579Z  * [new branch]          feat/wms363-ozon-tsd    -> origin/feat/wms363-ozon-tsd
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4327982Z  * [new branch]          feat/wms397-chat-mvp    -> origin/feat/wms397-chat-mvp
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4328420Z  * [new branch]          feat/wms401-mobile-followup -> origin/feat/wms401-mobile-followup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4328889Z  * [new branch]          feat/wms433-assistant-release -> origin/feat/wms433-assistant-release
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4329345Z  * [new branch]          feat/wms433-tenant-rollout -> origin/feat/wms433-tenant-rollout
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4329794Z  * [new branch]          feat/wms447-fbs-box-count -> origin/feat/wms447-fbs-box-count
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4330282Z  * [new branch]          feat/wms453-455-boxes-shared-pool -> origin/feat/wms453-455-boxes-shared-pool
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4330751Z  * [new branch]          feat/wms469-stock-dialog -> origin/feat/wms469-stock-dialog
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4331196Z  * [new branch]          feat/wms529-stock-vs-location -> origin/feat/wms529-stock-vs-location
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4331630Z  * [new branch]          feat/wms534-intake-box  -> origin/feat/wms534-intake-box
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4332025Z  * [new branch]          feat/wms536-scan-layer  -> origin/feat/wms536-scan-layer
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4332483Z  * [new branch]          feat/wms539-artmaks-cells-import -> origin/feat/wms539-artmaks-cells-import
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4333134Z  * [new branch]          feat/wms631-print-agent -> origin/feat/wms631-print-agent
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4333662Z  * [new branch]          feat/wms633-chz-copies  -> origin/feat/wms633-chz-copies
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4334114Z  * [new branch]          feat/wms636-wb-rejected-filter -> origin/feat/wms636-wb-rejected-filter
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4334600Z  * [new branch]          feat/wms641-support-agent -> origin/feat/wms641-support-agent
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4335025Z  * [new branch]          feat/wms650-sorting-impl -> origin/feat/wms650-sorting-impl
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4335460Z  * [new branch]          feat/wms650-sorting-mockup -> origin/feat/wms650-sorting-mockup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4335903Z  * [new branch]          fix/auth-staff-e2e-20260815 -> origin/fix/auth-staff-e2e-20260815
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4336350Z  * [new branch]          fix/cis-pool-full-20260821 -> origin/fix/cis-pool-full-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4336793Z  * [new branch]          fix/cz-artifact-print-scale -> origin/fix/cz-artifact-print-scale
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4337219Z  * [new branch]          fix/deploy-hard-reset   -> origin/fix/deploy-hard-reset
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4337670Z  * [new branch]          fix/fbs-box-controls-20260901 -> origin/fix/fbs-box-controls-20260901
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4338146Z  * [new branch]          fix/fbs-supplier-status-sync -> origin/fix/fbs-supplier-status-sync
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4338651Z  * [new branch]          fix/inventory-owner-block-20260902 -> origin/fix/inventory-owner-block-20260902
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4339280Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4339853Z  * [new branch]          fix/kiz-gs-restore-20260821 -> origin/fix/kiz-gs-restore-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4340301Z  * [new branch]          fix/no-distribution-20260821 -> origin/fix/no-distribution-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4340853Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4341544Z  * [new branch]          fix/packing-optional-20260819 -> origin/fix/packing-optional-20260819
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4342319Z  * [new branch]          fix/packing-optional-to-prod -> origin/fix/packing-optional-to-prod
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4343090Z  * [new branch]          fix/picklist-size-20260819 -> origin/fix/picklist-size-20260819
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4343529Z  * [new branch]          fix/print-pdf-dialog    -> origin/fix/print-pdf-dialog
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4343951Z  * [new branch]          fix/print-restore-proven -> origin/fix/print-restore-proven
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4344396Z  * [new branch]          fix/review-findings-20260902 -> origin/fix/review-findings-20260902
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4344912Z  * [new branch]          fix/seller-honest-sign-sync-20260819 -> origin/fix/seller-honest-sign-sync-20260819
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4345430Z  * [new branch]          fix/warehouse-single-20260821 -> origin/fix/warehouse-single-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4345920Z  * [new branch]          fix/wb-label-seller-line-height -> origin/fix/wb-label-seller-line-height
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4346418Z  * [new branch]          fix/wb-label-seller-line-trim -> origin/fix/wb-label-seller-line-trim
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4346881Z  * [new branch]          fix/wb-meta-method-20260821 -> origin/fix/wb-meta-method-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4347309Z  * [new branch]          fix/wb-token-save-500   -> origin/fix/wb-token-save-500
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4347759Z  * [new branch]          fix/wms-fbs-single-pick-by-cell -> origin/fix/wms-fbs-single-pick-by-cell
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4348230Z  * [new branch]          fix/wms-session-regression -> origin/fix/wms-session-regression
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4348736Z  * [new branch]          fix/wms487-tape-print-missing-codes -> origin/fix/wms487-tape-print-missing-codes
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4349225Z  * [new branch]          fix/wms517-price-snapshot -> origin/fix/wms517-price-snapshot
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4349635Z  * [new branch]          fix/wms517-sold-only    -> origin/fix/wms517-sold-only
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4350067Z  * [new branch]          fix/wms625-on-etalon-20261003 -> origin/fix/wms625-on-etalon-20261003
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4350659Z  * [new branch]          fix/wms634-fbo-date-delegated -> origin/fix/wms634-fbo-date-delegated
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4351113Z  * [new branch]          fix/wms635-kiz-no-wb-wait -> origin/fix/wms635-kiz-no-wb-wait
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4351574Z  * [new branch]          fix/wms639-scan-no-wb-readback -> origin/fix/wms639-scan-no-wb-readback
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4352049Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait -> origin/fix/wms640-scan-kiz-no-wb-wait
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4352543Z  * [new branch]          fix/wms641-kiz-delete-background -> origin/fix/wms641-kiz-delete-background
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4353275Z  * [new branch]          fix/wms642-kiz-no-locks-handover -> origin/fix/wms642-kiz-no-locks-handover
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4353810Z  * [new branch]          fix/wms643-no-print-when-unchecked -> origin/fix/wms643-no-print-when-unchecked
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4354337Z  * [new branch]          fix/wms652-contract-check-merge -> origin/fix/wms652-contract-check-merge
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4354804Z  * [new branch]          fix/wms656-full-kiz-label -> origin/fix/wms656-full-kiz-label
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4355272Z  * [new branch]          fix/wms666-product-stock-scope -> origin/fix/wms666-product-stock-scope
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4355833Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4356366Z  * [new branch]          hotfix/boxes-print-all-qr -> origin/hotfix/boxes-print-all-qr
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4356883Z  * [new branch]          hotfix/cz-print-regression-2026-07-07 -> origin/hotfix/cz-print-regression-2026-07-07
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4357408Z  * [new branch]          hotfix/inbound-qty-blur-v2 -> origin/hotfix/inbound-qty-blur-v2
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4357928Z  * [new branch]          hotfix/inbound-table-header-alignment -> origin/hotfix/inbound-table-header-alignment
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4358473Z  * [new branch]          hotfix/ozon-requirements-int-sku -> origin/hotfix/ozon-requirements-int-sku
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4358999Z  * [new branch]          hotfix/tz-print-landscape-revert -> origin/hotfix/tz-print-landscape-revert
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4359650Z  * [new branch]          hotfix/wb-unified-token-fbs-intake -> origin/hotfix/wb-unified-token-fbs-intake
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4360140Z  * [new branch]          hotfix/wms622-628-restore -> origin/hotfix/wms622-628-restore
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4360601Z  * [new branch]          integration/fbs-fixes-20260821 -> origin/integration/fbs-fixes-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4361007Z  * [new branch]          main                    -> origin/main
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4361446Z  * [new branch]          mobile/android7-v014-recovery -> origin/mobile/android7-v014-recovery
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4361875Z  * [new branch]          mobile/feat-fbs         -> origin/mobile/feat-fbs
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4362273Z  * [new branch]          mockup/psp2-clickable   -> origin/mockup/psp2-clickable
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4363001Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4363849Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4364508Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4365153Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4365796Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4366423Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4367014Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4367788Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4368507Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4369140Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4369690Z  * [new branch]          night/volna-9/lane-1/01-wb-marking -> origin/night/volna-9/lane-1/01-wb-marking
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4370196Z  * [new branch]          night/volna-9/lane-1/07-reporting -> origin/night/volna-9/lane-1/07-reporting
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4370684Z  * [new branch]          night/volna-9/lane-1/defect-01 -> origin/night/volna-9/lane-1/defect-01
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4371162Z  * [new branch]          night/volna-9/lane-1/feature-07 -> origin/night/volna-9/lane-1/feature-07
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4371693Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen -> origin/night/volna-9/lane-2/02-verdikt-screen
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4372215Z  * [new branch]          night/volna-9/lane-2/08-storage -> origin/night/volna-9/lane-2/08-storage
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4372857Z  * [new branch]          night/volna-9/lane-2/defect-02 -> origin/night/volna-9/lane-2/defect-02
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4373435Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4373979Z  * [new branch]          night/volna-9/lane-3/09-billing -> origin/night/volna-9/lane-3/09-billing
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4374441Z  * [new branch]          night/volna-9/lane-3/defect-03 -> origin/night/volna-9/lane-3/defect-03
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4374959Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4375470Z  * [new branch]          night/volna-9/lane-4/defect-04 -> origin/night/volna-9/lane-4/defect-04
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4376079Z  * [new branch]          night/volna-9/lane-5/05-prod-slow -> origin/night/volna-9/lane-5/05-prod-slow
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4376572Z  * [new branch]          night/volna-9/lane-5/defect-05 -> origin/night/volna-9/lane-5/defect-05
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4377111Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4377634Z  * [new branch]          night/volna-9/lane-6/defect-06 -> origin/night/volna-9/lane-6/defect-06
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4378062Z  * [new branch]          night/wms-653-5beb52da  -> origin/night/wms-653-5beb52da
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4378457Z  * [new branch]          night/wms-654-5beb52da  -> origin/night/wms-654-5beb52da
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4378848Z  * [new branch]          night/wms-657-5beb52da  -> origin/night/wms-657-5beb52da
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4379228Z  * [new branch]          night/wms-658-5beb52da  -> origin/night/wms-658-5beb52da
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4379611Z  * [new branch]          night/wms-659-5beb52da  -> origin/night/wms-659-5beb52da
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4380136Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4380758Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4381378Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4381985Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4382593Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4383340Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4384091Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4384717Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4385329Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4385918Z  * [new branch]          process/pipeline-on-etalon-20260821 -> origin/process/pipeline-on-etalon-20260821
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4386445Z  * [new branch]          release/2026-10-02-packing-stock -> origin/release/2026-10-02-packing-stock
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4386905Z  * [new branch]          release/2026-10-03-ready -> origin/release/2026-10-03-ready
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4387348Z  * [new branch]          release/barcode-tall-label -> origin/release/barcode-tall-label
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4387799Z  * [new branch]          release/inbound-print-fix -> origin/release/inbound-print-fix
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4388230Z  * [new branch]          release/wms641-agent-v1 -> origin/release/wms641-agent-v1
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4388636Z  * [new branch]          release/wms641-agent-v2 -> origin/release/wms641-agent-v2
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4389029Z  * [new branch]          release/wms641-agent-v3 -> origin/release/wms641-agent-v3
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4389528Z  * [new branch]          review/pick-and-binding-fixes-20260816 -> origin/review/pick-and-binding-fixes-20260816
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4390132Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4390652Z  * [new branch]          speed/test-infra-20260830 -> origin/speed/test-infra-20260830
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4391035Z  * [new branch]          staging                 -> origin/staging
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4391422Z  * [new branch]          support-task/WMS-651-4  -> origin/support-task/WMS-651-4
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4391927Z  * [new branch]          support-task/WMS-653-6  -> origin/support-task/WMS-653-6
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4392327Z  * [new branch]          support-task/WMS-654-7  -> origin/support-task/WMS-654-7
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4392900Z  * [new branch]          support-task/WMS-657-8  -> origin/support-task/WMS-657-8
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4393325Z  * [new branch]          support-task/WMS-658-9  -> origin/support-task/WMS-658-9
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4393731Z  * [new branch]          support-task/WMS-661-14 -> origin/support-task/WMS-661-14
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4394141Z  * [new branch]          support-task/WMS-667-18 -> origin/support-task/WMS-667-18
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4394538Z  * [new branch]          support-task/WMS-677-22 -> origin/support-task/WMS-677-22
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4394939Z  * [new branch]          support-task/WMS-679-26 -> origin/support-task/WMS-679-26
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4395327Z  * [new branch]          support-task/WMS-680-27 -> origin/support-task/WMS-680-27
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4395728Z  * [new branch]          support-task/WMS-683-29 -> origin/support-task/WMS-683-29
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4396172Z  * [new branch]          test/wms672-c7-c10-c11-20261006 -> origin/test/wms672-c7-c10-c11-20261006
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4396570Z  * [new tag]             tsd-preview             -> tsd-preview
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4396963Z  * [new tag]             wms-print-direct-v2026.09.30.1 -> wms-print-direct-v2026.09.30.1
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4397396Z  * [new tag]             wms-print-direct-v2026.09.30.2 -> wms-print-direct-v2026.09.30.2
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4397826Z  * [new tag]             wms-print-direct-v2026.09.30.3 -> wms-print-direct-v2026.09.30.3
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4398249Z  * [new tag]             wms-print-direct-v2026.09.30.4 -> wms-print-direct-v2026.09.30.4
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4398673Z  * [new tag]             wms-print-direct-v2026.09.30.5 -> wms-print-direct-v2026.09.30.5
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4399246Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1 -> wms-print-direct-v2026.10.01.1-rc1
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4399680Z  * [new tag]             wms-print-v2026.09.13.1 -> wms-print-v2026.09.13.1
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4400083Z  * [new tag]             wms-print-v2026.09.13.2 -> wms-print-v2026.09.13.2
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4400427Z  * [new tag]             wms-print-v2026.09.13.3 -> wms-print-v2026.09.13.3
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4401504Z [command]/usr/bin/git branch --list --remote origin/codex/wms672-c5-peer-drain-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4401887Z   origin/codex/wms672-c5-peer-drain-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4402520Z [command]/usr/bin/git rev-parse refs/remotes/origin/codex/wms672-c5-peer-drain-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4402993Z cef4cffd5d6bd1b76e691c596b87c9ad719e7d4f
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4403648Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4403999Z ##[group]Determining the checkout info
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4404356Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4404582Z [command]/usr/bin/git sparse-checkout disable
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4405232Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4405955Z ##[group]Checking out the ref
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:19.4406480Z [command]/usr/bin/git checkout --progress --force -B codex/wms672-c5-peer-drain-check refs/remotes/origin/codex/wms672-c5-peer-drain-check
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1316155Z Switched to a new branch 'codex/wms672-c5-peer-drain-check'
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1318886Z branch 'codex/wms672-c5-peer-drain-check' set up to track 'origin/codex/wms672-c5-peer-drain-check'.
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1374798Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1427071Z [command]/usr/bin/git log -1 --format=%H
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1451695Z cef4cffd5d6bd1b76e691c596b87c9ad719e7d4f
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1460036Z ##[group]Removing auth
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1464222Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1492531Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1690465Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1717142Z http.https://github.com/.extraheader
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1723663Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1779474Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.1973892Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.2000561Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-peer-drain-comparison	Run actions/checkout@v4	2026-10-06T21:17:20.2192484Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/setup-node@v4	﻿2026-10-06T21:17:20.2630157Z ##[group]Run actions/setup-node@v4
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2630397Z with:
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2630567Z   node-version: 24.21.0
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2630752Z   always-auth: false
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2630933Z   check-latest: false
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2633112Z   token: ***
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.2633283Z ##[endgroup]
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.3907309Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.3911549Z (node:2172) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.3912255Z (Use `node --trace-deprecation ...` to show where the warning was created)
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.3913671Z ##[group]Environment details
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.8624629Z node: v24.21.0
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.8624982Z npm: 11.19.0
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.8625250Z yarn: 1.22.22
+c5-peer-drain-comparison	Run actions/setup-node@v4	2026-10-06T21:17:20.8625980Z ##[endgroup]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	﻿2026-10-06T21:17:20.8741479Z ##[group]Run npm ci --prefix frontend
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8741792Z [36;1mnpm ci --prefix frontend[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8742225Z [36;1mnpm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8743304Z [36;1mnode "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8743719Z [36;1msudo apt-get update[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8743944Z [36;1msudo apt-get install -y poppler-utils[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8744444Z [36;1mecho "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8760766Z [36;1mnode --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"[0m
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8984161Z shell: /usr/bin/bash -e {0}
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:20.8984403Z ##[endgroup]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:22.2471293Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1626250Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1627257Z added 329 packages, and audited 330 packages in 10s
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1627630Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1627844Z 85 packages are looking for funding
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1628263Z   run `npm fund` for details
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1910165Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1911900Z 15 vulnerabilities (1 low, 3 moderate, 9 high, 2 critical)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1912244Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1912772Z To address issues that do not require attention, run:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1913192Z   npm audit fix
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1913343Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1913619Z To address all issues (including breaking changes), run:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1914028Z   npm audit fix --force
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1914205Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1914351Z Run `npm audit` for details.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1919538Z npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1920516Z npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1921147Z npm warn install-scripts
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:31.1922018Z npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:32.8912920Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:32.8913692Z added 2 packages in 2s
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.3166935Z Installing dependencies...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.3213198Z Switching to root user to install dependencies...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.3872119Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.4212419Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.4213809Z Get:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.4226076Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.4283568Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.4291778Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5196287Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [519 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5384247Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [463 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5550557Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1373 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5607601Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [306 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5648135Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1700 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5701633Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [341 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5719081Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1730 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5796792Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [396 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.5818392Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [13.3 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.6411986Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1073 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.6459328Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [222 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.6472971Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1218 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.6964533Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [245 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:33.6976798Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [11.6 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:40.0111404Z Fetched 9993 kB in 1s (11.9 MB/s)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:40.7310102Z Reading package lists...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:40.7594106Z Reading package lists...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:40.9600951Z Building dependency tree...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:40.9607625Z Reading state information...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1130607Z libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1131254Z libasound2t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1131766Z libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1132279Z libatk-bridge2.0-0t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1133000Z libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1133441Z libatk1.0-0t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1133930Z libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1134415Z libatspi2.0-0t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1134897Z libcairo2 is already the newest version (1.18.0-3build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1135386Z libcairo2 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1135896Z libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1136391Z libcups2t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1136805Z libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1137115Z libdbus-1-3 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1137676Z libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1138168Z libdrm2 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1138661Z libgbm1 is already the newest version (25.2.8-0ubuntu0.24.04.4).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1139139Z libgbm1 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1139711Z libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.9).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1140224Z libglib2.0-0t64 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1140741Z libnspr4 is already the newest version (2:4.35-1.1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1141220Z libnspr4 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1141692Z libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1142136Z libnss3 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1142627Z libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1143349Z libpango-1.0-0 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1143846Z libx11-6 is already the newest version (2:1.8.7-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1144320Z libx11-6 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1144785Z libxcb1 is already the newest version (1.15-1ubuntu2).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1145245Z libxcb1 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1145779Z libxcomposite1 is already the newest version (1:0.4.5-1build3).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1146302Z libxcomposite1 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1146840Z libxdamage1 is already the newest version (1:1.1.6-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1147339Z libxdamage1 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1147824Z libxext6 is already the newest version (2:1.3.4-1build2).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1148295Z libxext6 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1148790Z libxfixes3 is already the newest version (1:6.0.0-2build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1149293Z libxfixes3 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1150160Z libxkbcommon0 is already the newest version (1.6.0-1build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1150629Z libxkbcommon0 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1151300Z libxrandr2 is already the newest version (2:1.5.2-2build1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1151753Z libxrandr2 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1152253Z xvfb is already the newest version (2:21.1.12-1ubuntu1.8).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1153116Z fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1153830Z libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1154364Z libfontconfig1 set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1154910Z fonts-liberation is already the newest version (1:2.1.5-3).
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1155409Z fonts-liberation set to manually installed.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1155929Z The following additional packages will be installed:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1156389Z   xfonts-encodings xfonts-utils
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1156764Z Recommended packages:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1157127Z   fonts-ipafont-mincho fonts-tlwg-loma
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1325850Z The following NEW packages will be installed:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1326642Z   fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1332195Z   fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1332866Z   xfonts-utils
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1336134Z The following packages will be upgraded:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1339771Z   libfreetype6
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1488799Z 1 upgraded, 9 newly installed, 0 to remove and 9 not upgraded.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1489200Z Need to get 21.5 MB of archives.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1489565Z After this operation, 79.5 MB of additional disk space will be used.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.1489960Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.3584493Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.4970298Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.6432835Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.7071875Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.7914106Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:41.9936125Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype6 amd64 2.13.2+dfsg-1ubuntu0.2 [403 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.0641997Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.1327372Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.1978814Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.2635461Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.4726777Z Fetched 21.5 MB in 1s (19.1 MB/s)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6192873Z Selecting previously unselected package fonts-ipafont-gothic.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6413824Z (Reading database ... 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6414239Z (Reading database ... 5%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6414509Z (Reading database ... 10%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6414748Z (Reading database ... 15%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6414985Z (Reading database ... 20%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6415700Z (Reading database ... 25%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6416018Z (Reading database ... 30%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6416335Z (Reading database ... 35%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6416660Z (Reading database ... 40%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6416995Z (Reading database ... 45%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6417226Z (Reading database ... 50%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.6448755Z (Reading database ... 55%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.7475598Z (Reading database ... 60%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:42.9550153Z (Reading database ... 65%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.1456709Z (Reading database ... 70%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.3465290Z (Reading database ... 75%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.5064574Z (Reading database ... 80%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.6489154Z (Reading database ... 85%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.7581433Z (Reading database ... 90%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.9136906Z (Reading database ... 95%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.9137328Z (Reading database ... 100%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.9137719Z (Reading database ... 203191 files and directories currently installed.)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.9176346Z Preparing to unpack .../0-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:43.9248433Z Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.1636927Z Selecting previously unselected package fonts-freefont-ttf.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.1746273Z Preparing to unpack .../1-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.1751707Z Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.2838452Z Selecting previously unselected package fonts-tlwg-loma-otf.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.2947636Z Preparing to unpack .../2-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.2953161Z Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.3116181Z Selecting previously unselected package fonts-unifont.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.3222516Z Preparing to unpack .../3-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.3227503Z Unpacking fonts-unifont (1:15.1.01-1build1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.5929832Z Selecting previously unselected package fonts-wqy-zenhei.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.6039661Z Preparing to unpack .../4-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:44.6120284Z Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.0902219Z Preparing to unpack .../5-libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.0925459Z Unpacking libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) over (2.13.2+dfsg-1ubuntu0.1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1135076Z Selecting previously unselected package xfonts-encodings.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1245578Z Preparing to unpack .../6-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1251129Z Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1618383Z Selecting previously unselected package xfonts-utils.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1729759Z Preparing to unpack .../7-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.1735160Z Unpacking xfonts-utils (1:7.7+6build3) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2032156Z Selecting previously unselected package xfonts-cyrillic.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2142805Z Preparing to unpack .../8-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2147472Z Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2412964Z Selecting previously unselected package xfonts-scalable.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2520330Z Preparing to unpack .../9-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2614819Z Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.2980347Z Setting up fonts-wqy-zenhei (0.9.45-8) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3072141Z Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3085610Z Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3098455Z Setting up libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3111500Z Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3124197Z Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3177174Z update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3189634Z Setting up fonts-unifont (1:15.1.01-1build1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3202767Z Setting up xfonts-utils (1:7.7+6build3) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3233401Z Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3523532Z Setting up xfonts-scalable (1:1.0.3-1.3) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.3746706Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.5714713Z Processing triggers for man-db (2.12.0-4build2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.5733610Z Not building database; man-db/auto-update is not 'true'.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:45.5768028Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.1537821Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.1538343Z Running kernel seems to be up-to-date.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.1538554Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.1538658Z Restarting services...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.1614790Z  systemctl restart php8.3-fpm.service
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2553393Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2554069Z No containers need to be restarted.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2554534Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2554997Z No user sessions are running outdated binaries.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2555456Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:46.2555997Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.0568131Z Downloading Chromium 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-linux.zip
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.1673081Z |                                                                                |   0% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.2479750Z |■■■■■■■■                                                                        |  10% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.5527779Z |■■■■■■■■■■■■■■■■                                                                |  20% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.6606823Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.7441155Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.8086095Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.9032450Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:47.9749505Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:48.0348387Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:48.3444164Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:48.5026047Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 173.9 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.0696544Z Chromium 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium-1194
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.0699612Z Downloading FFMPEG playwright build v1011 from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1697659Z |                                                                                |   0% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1736539Z |■■■■■■■■                                                                        |  10% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1765233Z |■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1787979Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1803311Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1814675Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1828216Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1851344Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1860916Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1868068Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.1879005Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.2298637Z FFMPEG playwright build v1011 downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.2301155Z Downloading Chromium Headless Shell 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-headless-shell-linux.zip
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.3343270Z |                                                                                |   0% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.3875025Z |■■■■■■■■                                                                        |  10% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.4424495Z |■■■■■■■■■■■■■■■■                                                                |  20% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.4841827Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.5258150Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.5828014Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.6243035Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.6639689Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.7039213Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.7427780Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:51.7803377Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 104.3 MiB
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.1159492Z Chromium Headless Shell 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1194
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2245630Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2577656Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2578576Z Hit:6 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2585657Z Hit:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2591926Z Hit:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:53.2597659Z Hit:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.2169579Z Reading package lists...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.2418662Z Reading package lists...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.4100418Z Building dependency tree...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.4106543Z Reading state information...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5448303Z The following additional packages will be installed:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5451083Z   libpoppler134 poppler-data
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5455455Z Suggested packages:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5455965Z   ghostscript fonts-japanese-mincho | fonts-ipafont-mincho fonts-arphic-ukai
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5456472Z   fonts-arphic-uming fonts-nanum
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5593644Z The following NEW packages will be installed:
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5596651Z   libpoppler134 poppler-data poppler-utils
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5741355Z 0 upgraded, 3 newly installed, 0 to remove and 9 not upgraded.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5741926Z Need to get 3389 kB of archives.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5742474Z After this operation, 17.8 MB of additional disk space will be used.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.5743248Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.6563849Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 poppler-data all 0.4.12-1 [2060 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.7360843Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libpoppler134 amd64 24.02.0-1ubuntu9.9 [1118 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:54.8091746Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 poppler-utils amd64 24.02.0-1ubuntu9.9 [212 kB]
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0215382Z Fetched 3389 kB in 0s (13.8 MB/s)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0365576Z Selecting previously unselected package poppler-data.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0418786Z (Reading database ... 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0419167Z (Reading database ... 5%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0419486Z (Reading database ... 10%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0419817Z (Reading database ... 15%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0420143Z (Reading database ... 20%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0420465Z (Reading database ... 25%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0420768Z (Reading database ... 30%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0421079Z (Reading database ... 35%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0421755Z (Reading database ... 40%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0422060Z (Reading database ... 45%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0422360Z (Reading database ... 50%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0431042Z (Reading database ... 55%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0529179Z (Reading database ... 60%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0553951Z (Reading database ... 65%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0572233Z (Reading database ... 70%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0604609Z (Reading database ... 75%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0628917Z (Reading database ... 80%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0750690Z (Reading database ... 85%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.0823430Z (Reading database ... 90%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.1032569Z (Reading database ... 95%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.1033156Z (Reading database ... 100%
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.1033649Z (Reading database ... 203458 files and directories currently installed.)
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.1073477Z Preparing to unpack .../poppler-data_0.4.12-1_all.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.1079736Z Unpacking poppler-data (0.4.12-1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.2635423Z Selecting previously unselected package libpoppler134:amd64.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.2747240Z Preparing to unpack .../libpoppler134_24.02.0-1ubuntu9.9_amd64.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.2756864Z Unpacking libpoppler134:amd64 (24.02.0-1ubuntu9.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.3735276Z Selecting previously unselected package poppler-utils.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.3846787Z Preparing to unpack .../poppler-utils_24.02.0-1ubuntu9.9_amd64.deb ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.3853241Z Unpacking poppler-utils (24.02.0-1ubuntu9.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.4820302Z Setting up libpoppler134:amd64 (24.02.0-1ubuntu9.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.4912897Z Setting up poppler-data (0.4.12-1) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.4963074Z Setting up poppler-utils (24.02.0-1ubuntu9.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.4979112Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.5097546Z Processing triggers for man-db (2.12.0-4build2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.5110171Z Not building database; man-db/auto-update is not 'true'.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:55.5118403Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0027490Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0028121Z Running kernel seems to be up-to-date.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0028430Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0028621Z No services need to be restarted.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0028829Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0029009Z No containers need to be restarted.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0029224Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0029477Z No user sessions are running outdated binaries.
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0029734Z 
+c5-peer-drain-comparison	Install original frontend and Chrome141 harness dependencies	2026-10-06T21:17:56.0030065Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+c5-peer-drain-comparison	Unchanged C5 only with error observations	﻿2026-10-06T21:17:57.0818593Z ##[group]Run bash scripts/ci/wms672-c5-diagnostic/run.sh
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0818945Z [36;1mbash scripts/ci/wms672-c5-diagnostic/run.sh[0m
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0875253Z shell: /usr/bin/bash -e {0}
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0875464Z env:
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0875795Z   PLAYWRIGHT_MODULE: /home/runner/work/_temp/print-contract-tools/node_modules/playwright/index.mjs
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0876277Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.0876604Z ##[endgroup]
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.1568475Z TAP version 13
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9107683Z # Subtest: C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9119884Z ok 1 - C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9120589Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9120865Z   duration_ms: 215.078012
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9121188Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9121494Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9122540Z # {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":14,"cleanup":[{"pending":0,"ready":14}],"finished":true}}
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9198329Z # Subtest: C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9199668Z ok 2 - C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9200391Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9200666Z   duration_ms: 92.761672
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9201051Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9201697Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9203025Z # {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":15,"cleanup":[{"pending":0,"ready":15}],"finished":true}}
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9442197Z 1..2
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9442781Z # tests 2
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9443315Z # suites 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9443790Z # pass 2
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9444353Z # fail 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9444648Z # cancelled 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9444921Z # skipped 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9445162Z # todo 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9445450Z # duration_ms 796.664035
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:57.9836356Z TAP version 13
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0041267Z # Subtest: C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0041986Z ok 1 - C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0042352Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0042528Z   duration_ms: 498.677897
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0042864Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.0043034Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6750755Z # Subtest: C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6773891Z ok 2 - C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6775158Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6775754Z   duration_ms: 672.277548
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6776226Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:17:59.6776627Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2587320Z # Subtest: C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2588802Z ok 3 - C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2589575Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2589983Z   duration_ms: 377.245305
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2590447Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2590843Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2591887Z # Subtest: C5 blank message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2599997Z ok 4 - C5 blank message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2653286Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2653831Z   duration_ms: 73.480525
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2683097Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2713046Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2743379Z # Subtest: C5 nonstring message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2745069Z ok 5 - C5 nonstring message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2773035Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2803044Z   duration_ms: 85.658645
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2803501Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2833026Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2863513Z # Subtest: C5 no message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2893329Z ok 6 - C5 no message retains existing generic preparation error and zero external actions
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2894005Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2923067Z   duration_ms: 72.975332
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2953076Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.2953457Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9946162Z # Subtest: C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9948135Z ok 7 - C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9949015Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9949550Z   duration_ms: 786.988629
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9950100Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:00.9950400Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0298797Z 1..7
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0299150Z # tests 7
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0303332Z # suites 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0303624Z # pass 7
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0303812Z # fail 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0304005Z # cancelled 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0304218Z # skipped 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0304412Z # todo 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:01.0304623Z # duration_ms 3055.509204
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:02.4263370Z TAP version 13
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:18:03.2635804Z # C5 environment {"node":"v24.21.0","platform":"linux","arch":"x64","browser":"141.0.7390.37"}
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4567927Z # Subtest: C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4586584Z not ok 1 - C5 decode failure at label 150: no transfer/early marks, visible error, explicit corrected retry
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4587269Z   ---
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4598246Z   duration_ms: 69585.044101
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4598779Z   type: 'test'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4599520Z   location: '/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:303:1'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4600226Z   failureType: 'testCodeFailure'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4603155Z   error: |-
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4603714Z     locator.waitFor: Timeout 30000ms exceeded.
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4604230Z     Call log:
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4604926Z       - waiting for getByRole('alert').filter({ hasText: 'WMS672 decode failed at 299' }) to be visible
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4605579Z     
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4605945Z   code: 'ERR_TEST_FAILURE'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4606352Z   name: 'TimeoutError'
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4606734Z   stack: |-
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4607450Z     TestContext.<anonymous> (/home/runner/work/WMS/WMS/frontend/tests-e2e/wms672-box-labels.test.mjs:308:101)
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.4608237Z   ...
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5674881Z 1..1
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5675665Z # tests 1
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5675927Z # suites 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5676203Z # pass 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5676435Z # fail 1
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5676679Z # cancelled 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5676953Z # skipped 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5677195Z # todo 0
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.5677479Z # duration_ms 70152.348093
+c5-peer-drain-comparison	Unchanged C5 only with error observations	2026-10-06T21:19:12.7807961Z ##[error]Process completed with exit code 1.
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	﻿2026-10-06T21:19:12.7968567Z ##[group]Run actions/upload-artifact@v4
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7968939Z with:
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7969256Z   name: wms672-c5-peer-drain-comparison-37532767928-1
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7969726Z   path: /home/runner/work/_temp/c5-peer-drain-comparison
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7970133Z   if-no-files-found: error
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7970417Z   compression-level: 6
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7970668Z   overwrite: false
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7970935Z   include-hidden-files: false
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7971213Z env:
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7971658Z   PLAYWRIGHT_MODULE: /home/runner/work/_temp/print-contract-tools/node_modules/playwright/index.mjs
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7972372Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.7972959Z ##[endgroup]
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.9358935Z (node:3726) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.9359641Z (Use `node --trace-deprecation ...` to show where the warning was created)
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.9466950Z With the provided path, there will be 31 files uploaded
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.9471965Z Artifact name is valid!
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:12.9472342Z Root directory input is valid!
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:13.2930792Z Beginning upload of artifact content to blob storage
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:13.6701292Z (node:3726) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.3773649Z Uploaded bytes 5044848
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.4394050Z Finished uploading artifact content to blob storage!
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.4395188Z SHA256 digest of uploaded artifact zip is 268455c403fcce028a79ea329d6bfdd64185e0701570f4671cceb562240f46d4
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.4395975Z Finalizing artifact upload
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.7169122Z Artifact wms672-c5-peer-drain-comparison-37532767928-1.zip successfully finalized. Artifact ID 11445167634
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.7170518Z Artifact wms672-c5-peer-drain-comparison-37532767928-1 has been successfully uploaded! Final size is 5044848 bytes. Artifact ID is 11445167634
+c5-peer-drain-comparison	Save raw diagnostic evidence even on failure	2026-10-06T21:19:14.7176211Z Artifact download URL: https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37532767928/artifacts/11445167634
+c5-peer-drain-comparison	Post Run actions/checkout@v4	﻿2026-10-06T21:19:14.7364470Z Post job cleanup.
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8071910Z [command]/usr/bin/git version
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8109048Z git version 2.55.0
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8138975Z Temporarily overriding HOME='/home/runner/work/_temp/7601068a-53af-487b-9bbb-52b115b8b81b' before making global git config changes
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8140331Z Adding repository directory to the temporary git global config as a safe directory
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8144313Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8179126Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8208805Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8435770Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8466267Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8689864Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+c5-peer-drain-comparison	Post Run actions/checkout@v4	2026-10-06T21:19:14.8724164Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+c5-peer-drain-comparison	Complete job	﻿2026-10-06T21:19:14.9068704Z Cleaning up orphan processes
+c5-peer-drain-comparison	Complete job	2026-10-06T21:19:14.9344049Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

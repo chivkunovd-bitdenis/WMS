@@ -1,0 +1,59 @@
+{
+  "source": "47817f76589701ea36ba1f8b30fca84b6a136208",
+  "frozen_contract": "a0e4409300d4897234c501474de2bfe45478e488",
+  "local_receipt_commit": "69065b3db93b1036c6c399c1bebe8fe71527e68b",
+  "product_delta": "one utility, 10 insertions/1 deletion; no other changed paths in implementation commit",
+  "frozen_hashes_checked": [
+    {
+      "path": "frontend/tests-e2e/wms672-box-labels.test.mjs",
+      "sha256": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-dom.config.ts",
+      "sha256": "dd41131adc4f3dedcd82bf466b52a157fcd320131a4651656415bfa47ad7f0a4",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-dom.test.tsx",
+      "sha256": "1def65fbab1fc7a03501b92b215cf843966d8fa781728627437e015c580fe37c",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-harness.html",
+      "sha256": "a3364cddee28c438d9b3da7d179e4039700f499f06f90a291abe992e6ec671e3",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-harness.tsx",
+      "sha256": "909d405c00427f98e5a8b71ce66e14f712d08cb39ee0c83a9a98bb5f77c0a2d0",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-remaining.test.mjs",
+      "sha256": "36a67b5888e1d1b0bdec56a0a70cb52086a0830fd384e1c652f0cc176d68b1dd",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-vite.config.ts",
+      "sha256": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
+      "same_parent": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "same_parent": true
+    }
+  ],
+  "peer_contract_byte_equal": true,
+  "screen_byte_equal_parent": true,
+  "reviewer_test_runs": 0,
+  "reviewer_dispatches": 0,
+  "verdict": "PASS bounded source-only; no effectiveness/reference approval",
+  "linux37539919041": "coordinator reports C5 failure; raw checkpoint not yet independently assessed"
+}

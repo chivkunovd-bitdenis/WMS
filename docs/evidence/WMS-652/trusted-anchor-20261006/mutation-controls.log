@@ -1,0 +1,189 @@
+tree-blob-guard-removed: expected failing control, exit=1
+F..............F./Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'execution.json'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+.....
+======================================================================
+FAIL: test_changed_blob_with_unchanged_policy_hash_rejected (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_changed_blob_with_unchanged_policy_hash_rejected)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 91, in test_changed_blob_with_unchanged_policy_hash_rejected
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_tree_missing_changed_mode_symlink_or_duplicates_refuse (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_tree_missing_changed_mode_symlink_or_duplicates_refuse) (mutation='mode')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 122, in test_tree_missing_changed_mode_symlink_or_duplicates_refuse
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.030s
+
+FAILED (failures=2)
+
+artifact-metadata-guard-removed: expected failing control, exit=1
+................FFFFFF/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'execution.json'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+.....
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='sha')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='head_sha')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='base_sha')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='run_id')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='run_attempt')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_wrong_tested_merge_head_base_attempt_run_policy_refuses (scripts.ci.tests.test_trusted_process_artifact.TrustedArtifactTests.test_wrong_tested_merge_head_base_attempt_run_policy_refuses) (key='policy_sha256')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 76, in test_wrong_tested_merge_head_base_attempt_run_policy_refuses
+    self.reject()
+    ~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_artifact.py", line 57, in reject
+    with self.assertRaises(ValueError):
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.032s
+
+FAILED (failures=6)
+
+required-job-guard-removed: expected failing control, exit=1
+.....FFFFF.........../Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'execution.json'
+  return self._open_to_write(zinfo, force_zip64=force_zip64)
+.....
+======================================================================
+FAIL: test_missing_skipped_or_neutral_required_job_refuses (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_missing_skipped_or_neutral_required_job_refuses) (state='missing')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 103, in test_missing_skipped_or_neutral_required_job_refuses
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_skipped_or_neutral_required_job_refuses (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_missing_skipped_or_neutral_required_job_refuses) (state='skipped')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 103, in test_missing_skipped_or_neutral_required_job_refuses
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_skipped_or_neutral_required_job_refuses (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_missing_skipped_or_neutral_required_job_refuses) (state='neutral')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 103, in test_missing_skipped_or_neutral_required_job_refuses
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_skipped_or_neutral_required_job_refuses (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_missing_skipped_or_neutral_required_job_refuses) (state='failure')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 103, in test_missing_skipped_or_neutral_required_job_refuses
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_missing_skipped_or_neutral_required_job_refuses (scripts.ci.tests.test_trusted_process_check.TrustedProcessCheckTests.test_missing_skipped_or_neutral_required_job_refuses) (state='cancelled')
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_check.py", line 103, in test_missing_skipped_or_neutral_required_job_refuses
+    with self.assertRaises(ValueError): self.verify()
+         ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 22 tests in 0.032s
+
+FAILED (failures=5)
+
+CLI-strict-artifact-bypass: expected failing control, exit=1
+.F.F
+======================================================================
+FAIL: test_missing_proof_publishes_failure_only_on_exact_pr_head (scripts.ci.tests.test_trusted_process_cli.TrustedCliTests.test_missing_proof_publishes_failure_only_on_exact_pr_head)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_cli.py", line 56, in test_missing_proof_publishes_failure_only_on_exact_pr_head
+    self.assertEqual(code, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^
+AssertionError: 0 != 2
+
+======================================================================
+FAIL: test_read_only_cli_always_requires_artifact_and_never_publishes (scripts.ci.tests.test_trusted_process_cli.TrustedCliTests.test_read_only_cli_always_requires_artifact_and_never_publishes)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-trusted-anchor/scripts/ci/tests/test_trusted_process_cli.py", line 39, in test_read_only_cli_always_requires_artifact_and_never_publishes
+    self.assertEqual(code, 2)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^
+AssertionError: 0 != 2
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.013s
+
+FAILED (failures=2)

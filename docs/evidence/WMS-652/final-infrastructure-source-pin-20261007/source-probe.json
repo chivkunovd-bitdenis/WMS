@@ -1,0 +1,158 @@
+{
+  "verdict": "APPROVED exact bootstrap BASE/SOURCE pair; prepared candidate only",
+  "BASE": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "SOURCE": "321f69385a8783bbf0c2fa65e80829e4c9c32373",
+  "policy_sha256": "1dced9197f99a8922ca6d10795fab51a02c48ebd821e90fc686ac56860caa2eb",
+  "regular_files": 230,
+  "modes": {
+    "100644": 223,
+    "100755": 7
+  },
+  "suites": 22,
+  "case_ids": 1180,
+  "actual_git_rows_sha256": "f30efb696a5156a433a3eced4bceec2608dd31f4247af4a8f65dafdb675e18ac",
+  "all_actual_git_blob_hashes_match_policy": true,
+  "protected_blobs_modes_policy_and_suites_identical_to_reviewed_SOURCE": "972da18be97cab8c41b14b0aa00a3d30773e4492",
+  "retention": {
+    "93b0757103fbd29fb00d4f198f6baab8def85172": {
+      "previous_files": 210,
+      "previous_suites": 15,
+      "previous_case_ids": 955,
+      "all_paths_modes_ids_order_and_suite_metadata_retained": true,
+      "changed_existing_hashes": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "before": "ff93f57e9760718e42f97394bf34a74ca556ef201e2705267a7696dd3d385a15",
+          "after": "c21e5fa87d961ffea9e502fd74310386e63b52da15ebce5376dd04bfced7737a"
+        },
+        {
+          "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+          "before": "c34723ca88f5af1864912de5db2f6366d06ab81bfc487366272bab6fb039d436",
+          "after": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6"
+        },
+        {
+          "path": "frontend/tests-e2e/wms652-critical/cases.json",
+          "before": "1ef736d9c61eddae8d0c70302d930a7cf610e8f3605c3cedd6646855d23fe2e2",
+          "after": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9"
+        },
+        {
+          "path": "scripts/ops/tests/wms517-mac-dom.test.cjs",
+          "before": "9d96c45a340931278119005ae91efa22c0d22c88c09a348e58c93fb5eb77e0d6",
+          "after": "bda5ad08b093cc0075553ec0540f3449a8c6c908bbf5f3ffc5f74edc7604026e"
+        },
+        {
+          "path": "scripts/ops/tests/wms517-mac-launcher.test.cjs",
+          "before": "b2e24955a34e2efa9369630ed5b2984aacb70f8ee07720187f5d9360a0cbc954",
+          "after": "766f4959600a053c6db879dc657b9e2f51fd152d9a58f3d5a465bd5d3dbe4ac8"
+        }
+      ],
+      "new_paths": [
+        "backend/tests/test_prod_deploy_backup.py",
+        "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+        "docs/evidence/WMS-652/ci-two-shards-20261006/backend-collection.json",
+        "frontend/src/screens/ff/FfInboundRequestView.tsx",
+        "frontend/src/utils/printBarcodeLabel.ts",
+        "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+        "frontend/tests-e2e/wms652-critical/geometry-mutations.py",
+        "frontend/tests-e2e/wms652-critical/geometry.mjs",
+        "frontend/tests-e2e/wms672-native-errors.test.mjs",
+        "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+        "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+        "scripts/ci/backend_shards.py",
+        "scripts/ci/tests/test_backend_shard_failclosed.py",
+        "scripts/ci/tests/test_backend_shard_redis_setup.py",
+        "scripts/ci/tests/test_backend_shards.py",
+        "scripts/ci/tests/test_ci_release_additions.py",
+        "scripts/ops/avpack-macos-launcher.js",
+        "scripts/ops/avpack-sold-kiz-filter.js",
+        "scripts/ops/avpack-sold-kiz.command",
+        "scripts/ops/build-avpack-macos-command.cjs"
+      ],
+      "existing_suite_definitions_byte_semantic_equal": false
+    },
+    "9dae4b19f6d4dca554200e08282579414a110848": {
+      "previous_files": 229,
+      "previous_suites": 21,
+      "previous_case_ids": 1173,
+      "all_paths_modes_ids_order_and_suite_metadata_retained": true,
+      "changed_existing_hashes": [
+        {
+          "path": ".github/workflows/ci.yml",
+          "before": "2fdb71d1ae54a6ceb5200d7a360967ba659144c94c14c24fe9d295190082902b",
+          "after": "c21e5fa87d961ffea9e502fd74310386e63b52da15ebce5376dd04bfced7737a"
+        },
+        {
+          "path": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+          "before": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+          "after": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c"
+        },
+        {
+          "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+          "before": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+          "after": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6"
+        },
+        {
+          "path": "scripts/ci/tests/test_ci_release_additions.py",
+          "before": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+          "after": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a"
+        }
+      ],
+      "new_paths": [
+        "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs"
+      ],
+      "existing_suite_definitions_byte_semantic_equal": true
+    },
+    "972da18be97cab8c41b14b0aa00a3d30773e4492": {
+      "previous_files": 230,
+      "previous_suites": 22,
+      "previous_case_ids": 1180,
+      "all_paths_modes_ids_order_and_suite_metadata_retained": true,
+      "changed_existing_hashes": [],
+      "new_paths": [],
+      "existing_suite_definitions_byte_semantic_equal": true
+    }
+  },
+  "docs_only_delta_since_reviewed_SOURCE": [
+    "docs/KANONICHESKIY_BACKLOG.md",
+    "docs/evidence/WMS-652/cdp-cancellation-source-review-20261007/r1-rereview.md",
+    "docs/evidence/WMS-652/infrastructure-delta-acceptance-20261007/README.md",
+    "docs/evidence/WMS-652/infrastructure-delta-acceptance-20261007/acceptance.json",
+    "docs/evidence/WMS-652/infrastructure-delta-acceptance-20261007/source-probe.json",
+    "docs/evidence/WMS-652/infrastructure-delta-acceptance-20261007/source-probe.py",
+    "docs/evidence/WMS-652/process-gates-20261006/README.md",
+    "docs/evidence/WMS-652/process-gates-20261006/production-preflight-20261007.json",
+    "docs/requirements/WMS-652.md",
+    "docs/reviews/release-20261006/coordinator.md"
+  ],
+  "closure_hashes": {
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+    "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+    "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
+  },
+  "new_suite": {
+    "report": "print/wms652-cdp-cancellation.tap",
+    "format": "node-tap",
+    "exact": true,
+    "cases": [
+      "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
+      "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
+      "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
+      "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+      "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+      "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+      "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
+    ]
+  },
+  "static_accepted_product_reference": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "app_comparison_only_prior_reviewed_infrastructure_title": [
+    "frontend/src/integrations/cryptoProCades.test.ts"
+  ],
+  "analyst_commit": "ff6110eebc0ca1d39c1f2308e1141420e5853d79",
+  "acceptance_sha256": "4fa190faf67ce3caa86a0a8a81430c792d74e7e85487e3795eee9c7a73ec36c9",
+  "independent_R1_closed_review": "7c4670975d7e70cbbfe28fb0cd4ee66f39018007",
+  "new_test_build_browser_CI_or_network_runs": [],
+  "original_historical_CI_cause": "UNKNOWN",
+  "full_CI_and_post_patch_actual_43_case_effectiveness": "REQUIRED NEXT; NOT APPROVED AS PASS",
+  "main_pin_activation_release_deploy_physical_proof": "NOT PERFORMED OR CLAIMED"
+}

@@ -1,0 +1,6 @@
+{
+  "frontend/tests-e2e/wms672-box-labels.test.mjs": "69ff351f0a370e1d3187aa7f3bd5a325fb426332cf57aec1c7904f97e9c5a70d",
+  "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+  "frontend/src/utils/printBarcodeLabel.ts": "269694705aabed0a7c44d9cb9ce68fcebe8d01de1b6769b36f5bab99032264be",
+  "frontend/src/screens/ff/FfInboundRequestView.tsx": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11"
+}

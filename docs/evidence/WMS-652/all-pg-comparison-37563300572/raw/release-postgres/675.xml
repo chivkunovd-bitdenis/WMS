@@ -1,0 +1,1 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="0" skipped="0" tests="1" time="5.024" timestamp="2026-10-07T02:46:35.544277+00:00" hostname="runnervm8df0l"><testcase classname="tests.test_wms675_recovery_scenario" name="test_bambook_exact_31_recovers_26_once" time="4.922" /></testsuite></testsuites>

@@ -1,0 +1,143 @@
+{
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "accepted_source": "dd5cb7a629bbadcbb3fcd76be64110d86ab44bc6",
+  "product_sha": "3a65b1c61803f4a88e9c84680854a386fcec2945",
+  "integration_test_commit": "28671d78ce431a6fc32c357a6eee34f769ce6192",
+  "integration_product_commit": "e93f9efba99032028444d7149268f1860dddd379",
+  "files": [
+    {
+      "path": "backend/app/api/marking_withdrawals.py",
+      "source_blob": "9d952622a8236b999c8670ce02ffdc368626d6c6",
+      "sha256": "c211215bb9784700e1a454b9e9882f87363e9d32a1d0cf619245ad02dc2b8533",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/app/db/withdrawal_repository.py",
+      "source_blob": "30c57d8f1dd4aa74b456cc4a7e4a06c17050acdc",
+      "sha256": "42a8b2830584e81e38bda9e95aca15cc296458703e47bdd4452702139a307994",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/app/services/wb_sales_report.py",
+      "source_blob": "035d20ebff8ae338eaea122119a1f03b79391b83",
+      "sha256": "247825c8f13fac3ef05e9bc4ccafd37cc6924bd8d0163080737c4614d3f3817a",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/app/services/withdrawal_orchestration.py",
+      "source_blob": "e389f75b46d4858b0f4bcf6d3560b0c637277b72",
+      "sha256": "9c35a49d1baeb86e3ad2d6df89dee177014332683cf91f074db8205087579f1a",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/app/services/withdrawal_service.py",
+      "source_blob": "a58dd1e104fcfef2aa7a4e8dcf275c76ee97dcdb",
+      "sha256": "3817f608ebd063e3d5fe44050426370effac90f0b71084980235c8d236b1c832",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_access.py",
+      "source_blob": "0db11f98b9d483ff0a053b3249d32a464b14b9f2",
+      "sha256": "093035bc9b2593a1329b21bca1e5e89d60782d1738bf8e4f8334da3140262caa",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_ledger.py",
+      "source_blob": "90fd7726dd7e6542963379b674be9ac33479cd49",
+      "sha256": "b1f1d1298f9c4f422f856c5d7bc830ed58f0664c6bc6cade6c835ec82b104386",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_orchestration.py",
+      "source_blob": "1a562e65e17abbd4fe2aed37856c710d4b4d7de0",
+      "sha256": "c75ce479d73e3b4977e025f09cda1700494e66047a0127410592ec8a3e53d57e",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_readiness.py",
+      "source_blob": "985a800a81324b4e2a256d21322e710fdaf54a5b",
+      "sha256": "6c345cfcea0c704cc8f561e563d363bc94ecdf60414c5ca1b57aaac21f01ae79",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_review_fixes.py",
+      "source_blob": "b613e794d6d553233db25b113d4ed99733e27148",
+      "sha256": "333314f771f15bde99d9ce190df1f00a4d7b4c5ab9f7aac98e26efc34200a24b",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_row_status.py",
+      "source_blob": "f254e9020f02838ad2d11622b8e5a1ad4e4a0736",
+      "sha256": "eb28f06a773548a00b479576170c0075a29732ddaa6fcbd1854836c9ac58d903",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_withdrawal_wms563.py",
+      "source_blob": "ed0409b8f3324b51d50fb939820138db12673719",
+      "sha256": "82287554e0a0c908219a96d33c53dae6ad0cad34f6d57e033def34f0ce63b426",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_legacy_price_source_contract.py",
+      "source_blob": "40cea1d6ab71da8421bc39ef575567cd981c510b",
+      "sha256": "ed857f72fd309a2b31736c9e52aa994a879e51ce9af52248c1eedb1f6a6b93f4",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_raw_integer_price.py",
+      "source_blob": "87b0d1f17ec79daa48b234479bdbce76dd06aedb",
+      "sha256": "61dd64d6b90fa9a0d8eb22d08729a57dfbad824235f91b5b2557b18fb64e0311",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_raw_numeric_price.py",
+      "source_blob": "39f10b4df7ee3ce6e0937892cacbb43d7c458625",
+      "sha256": "3f614f32a1da3fe45b7ba2d8fc4b67f6e2e99c227486f47e1b514ba8a583374f",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_sales_contract.py",
+      "source_blob": "b5ddcb3b42810902b05da09726222b7e500684cf",
+      "sha256": "ac47a369c4023ae249ba5b0a6f0fb1fa7ba62adad2d4f96646add68d49c691dc",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_sales_partial_decimal_regressions.py",
+      "source_blob": "95eddd563a75cc415437f5068688f7d163e0ef70",
+      "sha256": "514a510e51659627f873a61108f9607aba7ba830a90c6a582343050ddf19ee51",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_sales_regressions.py",
+      "source_blob": "2270c89e0e38c7db7cfac73db1cd5087af5b7b38",
+      "sha256": "4955c12fe9cb8079425dfdf39718bdfb138223e73c68a28b77c75dd3372e5700",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/test_wms517_sales_waiting_rate.py",
+      "source_blob": "462f6ee2be39a0e5cb4e36ded05bfe7743ece72a",
+      "sha256": "5f3140d0856ea748745f36dfc0588aa33ae2c1a99849e0cff2b032181d6d7c52",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "backend/tests/wms517_price_source_negative_control.py",
+      "source_blob": "7eaac134c7083ec7af8ae4b2280cc56bc553b65b",
+      "sha256": "337be0bd8253e2e0af7793d96bbc095d47fabc7035c59039f227e56678ef04ac",
+      "identical_to_accepted": true
+    },
+    {
+      "path": "frontend/src/screens/v2/SellerKizWithdrawalScreen.tsx",
+      "source_blob": "3c30395bdfac439bf6561761fa76c361db1a9aa7",
+      "sha256": "8325c924d78ea171aa869421f2ceece53a4248e20ffb54064ca60b2ed88c9bea",
+      "identical_to_accepted": true
+    }
+  ],
+  "untouched_etalon_files": [
+    "AGENTS.md",
+    "CLAUDE.md",
+    "scripts/ci/check_task_documents.py",
+    "backend/app/services/fbs_packing_box_service.py",
+    "backend/app/services/fbs_shipment_service.py",
+    "backend/tests/conftest.py"
+  ]
+}

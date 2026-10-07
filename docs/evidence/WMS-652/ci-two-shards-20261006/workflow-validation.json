@@ -1,0 +1,18 @@
+{
+  "collection_base": "1cf3b6c11",
+  "collected": 4625,
+  "shards": [
+    2313,
+    2312
+  ],
+  "exact_union": true,
+  "overlap": 0,
+  "pg_migration_lint_print_steps_preserved": true,
+  "only_pg_command_change": "append517JUnitoutput",
+  "backend_services_unchanged": true,
+  "frontend_print_parallel": true,
+  "process_proof_original_needs_unchanged": true,
+  "full_ci_executed": false,
+  "new_shard_unit_cases": 20,
+  "actual_product_scope_cases": 51
+}

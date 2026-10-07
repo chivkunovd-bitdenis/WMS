@@ -1,0 +1,31 @@
+{
+  "sourceSha": "1c045a4f2d6c1bb34eeed2f5e79f6e53be2a8a9d",
+  "caseCount": 43,
+  "allCasesPass": true,
+  "old33IdsPreserved": true,
+  "newGeometryCases": 10,
+  "validPackingEntries": 7,
+  "mutantSourceSha": "695a429cd08b4a0b3675cb2d4af0d3f33eeaf9f5",
+  "mutants": [
+    {
+      "mutation": "hide-packing-print-action",
+      "otherCasesPass": 36,
+      "productBytesRestoredInFinally": true,
+      "targetFailures": 7
+    },
+    {
+      "mutation": "overlap-order-seller-header",
+      "otherCasesPass": 41,
+      "productBytesRestoredInFinally": true,
+      "targetFailures": 2
+    },
+    {
+      "mutation": "hide-selected-action-only-for-long-data",
+      "otherCasesPass": 42,
+      "productBytesRestoredInFinally": true,
+      "targetFailures": 1
+    }
+  ],
+  "geometrySourceIdenticalAcrossFinalReadonlyFixtureDelta": true,
+  "productDiffEmpty": true
+}

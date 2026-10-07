@@ -1,0 +1,91 @@
+{
+  "base": "b8bd39d95142875f6db232c3ce4b89192a779210",
+  "frozen": [
+    {
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "base_sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "base_sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/fixtures.mjs",
+      "base_sha256": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/geometry.mjs",
+      "base_sha256": "eeb4a65d08be78e91726b79e60e5ca5bcc57e6ad4c51e31c073a4188626d87c6",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/vite.config.ts",
+      "base_sha256": "41acc123c05fbeef9f6f02a6889879b58c00c1e6399fe80b01350185deb54bf4",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "base_sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "base_sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+      "base_sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/tests/test_product_scope.py",
+      "base_sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+      "byte_identical": true
+    },
+    {
+      "path": "scripts/ci/product_scope.py",
+      "base_sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package.json",
+      "base_sha256": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
+      "byte_identical": true
+    },
+    {
+      "path": "frontend/package-lock.json",
+      "base_sha256": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c",
+      "byte_identical": true
+    }
+  ],
+  "original43_count": 43,
+  "original43_ids_sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+  "whole_browser_file_unchanged": true,
+  "all_tracked_diff_before_add": [],
+  "cause_input_hashes": {
+    "docs/evidence/WMS-652/explicit-abort-linux-20261007/result.md": "243d2d0370ef0eaadce2c196a383e80c935458de71aae29c17ea16adb1bc75a5",
+    "docs/evidence/WMS-652/explicit-abort-linux-20261007/boundary-ledger.json": "44b31c3f4067c70ecdbda5cc88a2d71ba1bf36a7c8f0386d8fd010a3a1faa3cd"
+  },
+  "measured_control": {
+    "run": 37552021494,
+    "attempt": 1,
+    "head": "e54a8d17fee84b4fab7f07dcb8f4d10ad61b8e9e",
+    "records": 44,
+    "dropped": 0
+  },
+  "original_ci_cause": "UNKNOWN; no retrospective classification of the unlogged common-CI command.",
+  "additive_cdp5": {
+    "provisional_commit": "130130b337958b2a442f2961520b634df77750de",
+    "old_full_test_sha256": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "preserved_prefix_bytes": 10592,
+    "preserved_prefix_sha256": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "old_helpers_and_cases_1_to_4_byte_identical": true,
+    "negative12_expectations_unchanged": true,
+    "only_one_new_test_appended": true,
+    "new_case_id": "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry"
+  }
+}

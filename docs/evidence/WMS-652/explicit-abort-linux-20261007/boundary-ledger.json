@@ -1,0 +1,212 @@
+{
+  "run_id": 37552021494,
+  "attempt": 1,
+  "head_sha": "e54a8d17fee84b4fab7f07dcb8f4d10ad61b8e9e",
+  "actual_job_conclusion": "success",
+  "source_unchanged_before_after": true,
+  "event_count": 44,
+  "dropped": 0,
+  "environment": {
+    "node": "v24.21.0",
+    "platform": "linux",
+    "arch": "x64",
+    "protocolVersion": "1.3",
+    "product": "Chrome/141.0.7390.37",
+    "revision": "@9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+    "userAgent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36",
+    "jsVersion": "14.1.146.11"
+  },
+  "fetch_network_frame": {
+    "requestId": "interception-job-3.0",
+    "networkId": "3156.3",
+    "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+    "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+    "method": "GET"
+  },
+  "client_outcome": {
+    "name": "AbortError",
+    "message": "signal is aborted without reason",
+    "signalAborted": true
+  },
+  "matching_failure": {
+    "requestId": "3156.3",
+    "timestamp": 135.460313,
+    "type": "Fetch",
+    "errorText": "net::ERR_ABORTED",
+    "canceled": true
+  },
+  "known_id_command": 14,
+  "unknown_id_command": 15,
+  "known_native_error": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "unknown_native_error": {
+    "code": -32602,
+    "message": "Invalid InterceptionId."
+  },
+  "original_ci_cause": "UNKNOWN; original command/id were not logged",
+  "lifecycle": [
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862664,
+      "nodeUtc": "2026-10-07T00:27:42.664Z",
+      "nodeMonoMs": 491.753607,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.requestWillBeSent",
+      "requestId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "loaderId": "8BCEEDF14ABB71343B046BE67AAF7646",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "requestMethod": "GET",
+      "browserTimestamp": 135.457861,
+      "browserWallTime": 1791332862.663931,
+      "type": "Fetch"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.745126,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Fetch.requestPaused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "requestMethod": "GET"
+    },
+    {
+      "kind": "control-stage",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.878694,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "stage": "explicit-client-abort-with-observed-request-paused",
+      "requestId": "interception-job-3.0",
+      "networkId": "3156.3",
+      "frameId": "1DD331B6465D837EFCBD082834C9E57E",
+      "url": "http://127.0.0.1:16686/__wms652_paused_abort__",
+      "method": "GET"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862665,
+      "nodeUtc": "2026-10-07T00:27:42.665Z",
+      "nodeMonoMs": 492.907127,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 11,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.102012,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 11,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.165496,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 12,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "protocol-event",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.366975,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "method": "Network.loadingFailed",
+      "requestId": "3156.3",
+      "browserTimestamp": 135.460313,
+      "canceled": true,
+      "errorText": "net::ERR_ABORTED",
+      "type": "Fetch"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.636053,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 12,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862667,
+      "nodeUtc": "2026-10-07T00:27:42.667Z",
+      "nodeMonoMs": 494.666839,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 13,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862673,
+      "nodeUtc": "2026-10-07T00:27:42.673Z",
+      "nodeMonoMs": 500.095044,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 13,
+      "method": "Runtime.evaluate"
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862673,
+      "nodeUtc": "2026-10-07T00:27:42.673Z",
+      "nodeMonoMs": 500.221151,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 14,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.308822,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 14,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "interception-job-3.0",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    },
+    {
+      "kind": "command-send",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.458124,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 15,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200
+    },
+    {
+      "kind": "command-result",
+      "nodeUtcMs": 1791332862674,
+      "nodeUtc": "2026-10-07T00:27:42.674Z",
+      "nodeMonoMs": 501.773241,
+      "nodeTimeOriginMs": 1791332862172.933,
+      "commandId": 15,
+      "method": "Fetch.fulfillRequest",
+      "requestId": "__WMS652_never_observed_interception__",
+      "responseCode": 200,
+      "error": {
+        "code": -32602,
+        "message": "Invalid InterceptionId."
+      }
+    }
+  ]
+}

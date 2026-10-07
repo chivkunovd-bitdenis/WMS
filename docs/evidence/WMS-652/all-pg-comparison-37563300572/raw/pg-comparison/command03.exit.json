@@ -1,0 +1,13 @@
+{
+  "id": "command03",
+  "name": "PostgreSQL locks and immutable migration guards",
+  "command": "pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py --junitxml=\"$RUNNER_TEMP/release-postgres/517-withdrawal.xml\"",
+  "working_directory": "backend",
+  "command_sha256": "84fc8dde562c28e060ff9c3b3f05e21981adf73d74d8bafb125c29244229ba3f",
+  "exit_code": 0,
+  "started_epoch": 1791341099.5922334,
+  "completed_epoch": 1791341108.8729982,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

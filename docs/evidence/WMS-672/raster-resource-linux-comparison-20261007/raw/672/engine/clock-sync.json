@@ -1,0 +1,17 @@
+[
+  {
+    "syncId": "C5-clock-fixture-2-trace-start-0",
+    "epochBeforeMs": 1791328508748,
+    "epochAfterMs": 1791328508749
+  },
+  {
+    "syncId": "C5-clock-fixture-2-opened-1",
+    "epochBeforeMs": 1791328508776,
+    "epochAfterMs": 1791328508776
+  },
+  {
+    "syncId": "C5-clock-fixture-2-trace-end-2",
+    "epochBeforeMs": 1791328543167,
+    "epochAfterMs": 1791328543167
+  }
+]

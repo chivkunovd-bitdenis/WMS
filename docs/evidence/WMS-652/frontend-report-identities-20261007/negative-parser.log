@@ -1,0 +1,2 @@
+Actual unchanged process_contracts.vitest_results(untracked duplicate report COPY)
+ValueError: Duplicate executed case: src/integrations/cryptoProCades.test.ts::CryptoPro CAdES readiness rejects a CryptoPro runtime below the tested baseline

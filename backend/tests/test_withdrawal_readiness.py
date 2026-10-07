@@ -15,6 +15,7 @@ from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 from test_true_api_withdrawal import FIXTURES, INN, SIGNATURE, client
+from test_withdrawal_ledger import legacy_sales_http  # noqa: F401 -- same synthetic I/O fixture
 
 from app.models import Base
 from app.models.marking_withdrawal import WithdrawalObservation

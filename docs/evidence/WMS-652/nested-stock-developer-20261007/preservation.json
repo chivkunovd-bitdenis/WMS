@@ -1,0 +1,34 @@
+{
+  "base": "fc729dd84a2c45de0b3c56381b41e475cb131673",
+  "frozen_test_commit": "f1e355525edbf41177d379c70cc5ee721986c967",
+  "preserved_hashes": {
+    "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+    "backend/tests/test_fbs_stock_publish_on_movement.py": "5fac1e064ceec17a6266fabe7a2fc7f1994a904e6cf2c78ed92add928784d86e",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "product_delta_exact_two_line_guard": true,
+  "rollback_handler_unchanged": true,
+  "precode": {
+    "pass": 1,
+    "fail": 3,
+    "skip": 0,
+    "error": 0
+  },
+  "targeted": {
+    "new4_pass": 4,
+    "existing_pass": 6,
+    "existing_skip": 1,
+    "skip_reason": "Real PostgreSQL advisory locks required",
+    "failure": 0,
+    "error": 0
+  },
+  "full_ruff_exit": 0,
+  "full_mypy_exit": 0,
+  "mypy_source_files": 563,
+  "historical_sqlite_lock_owner": "UNKNOWN",
+  "full_CI_or_browser_run": false,
+  "implementation_sha": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "implementation_module_sha256": "2e2956f8e062b1b3a13fc726529ce2d41bddde2d11a6e5ff26fef3e1f4e81c30"
+}

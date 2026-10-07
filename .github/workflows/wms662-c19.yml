@@ -1,0 +1,69 @@
+name: WMS662 isolated C19 browser proof
+on:
+  push:
+    branches: [codex/wms662-prod-handoff]
+    paths: ['scripts/wms662-c19/**', '.github/workflows/wms662-c19.yml']
+permissions:
+  contents: read
+jobs:
+  c19:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: wms_test_662_c19
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only
+        ports: ['5432:5432']
+        options: --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 3s --health-retries 20
+    env:
+      DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_662_c19
+      JWT_SECRET_KEY: fixture-only-c19-not-a-real-secret-at-least-32-characters
+      C19_OUTPUT: ${{ github.workspace }}/evidence
+      WMS_DATA_DIR: ${{ github.workspace }}/fixture-data
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: proof
+      - uses: actions/checkout@v4
+        with:
+          ref: 7fb13f788a2d98efaa575493856b5b504363f3af
+          path: product
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install remote dependencies
+        run: |
+          pip install -e './product/backend[dev]'
+          npm ci --prefix product/frontend
+          npm install --prefix proof/scripts/wms662-c19 playwright@1.51.1
+          cd proof/scripts/wms662-c19
+          npx playwright install --with-deps chromium
+      - name: Manifest and isolated stand
+        run: |
+          mkdir -p evidence
+          git -C product rev-parse HEAD > evidence/product-sha.txt
+          git -C proof rev-parse HEAD > evidence/proof-sha.txt
+          git -C product ls-tree -r HEAD > evidence/product-manifest.txt
+          pip freeze > evidence/python-dependencies.txt
+          cp product/frontend/package-lock.json evidence/frontend-package-lock.json
+          cp proof/scripts/wms662-c19/entry.tsx product/frontend/c19-entry.tsx
+          echo '<html lang="ru"><head><meta charset="UTF-8"></head><body><div id="root"></div><script type="module" src="/c19-entry.tsx"></script></body></html>' > product/frontend/c19.html
+          cd product
+          PYTHONPATH="$PWD/backend:$PWD/backend/tests" uvicorn --app-dir ../proof/scripts/wms662-c19 server:app --host 127.0.0.1 --port 8000 > ../evidence/api.log 2>&1 &
+          cd frontend
+          VITE_API_PROXY=http://127.0.0.1:8000 npm run dev -- --host 127.0.0.1 > ../../evidence/frontend.log 2>&1 &
+      - name: Chromium partial then full refresh and reopen
+        run: |
+          for i in $(seq 1 45); do curl --fail --silent http://127.0.0.1:8000/fixture > evidence/fixture.json && break; sleep 2; done
+          node proof/scripts/wms662-c19/browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms662-c19-evidence
+          path: evidence

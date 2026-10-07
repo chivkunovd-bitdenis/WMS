@@ -1,0 +1,15 @@
+{
+  "mutation": "leak image-rendering:auto on first original image after DOM snapshot",
+  "target": "frontend/src/utils/printBarcodeLabel.ts",
+  "copy_only": true,
+  "copy_automatically_removed": true,
+  "original_sha256": "c4b1d5f835ada6073c1b471553fed8b98f6196692e002f5eca6c073271b0f9f5",
+  "mutated_copy_sha256": "1125690eeca877a986bdf0d3a0fdf8c49f1ec06a01f42cbbaf9e53cf74809cc5",
+  "reproduce": "python3 docs/evidence/WMS-672/raster-resource-test-contract-20261007/mutation-proof.py",
+  "node_command": "node --require <untracked-copy-reader.cjs> --test --test-reporter=tap --test-name-pattern=RR[23] frontend/tests-e2e/wms672-raster-resource.test.mjs",
+  "exit_code": 1,
+  "pass": 0,
+  "fail": 2,
+  "failure_reason": "restore every original inline style exactly",
+  "tracked_utility_unchanged": true
+}

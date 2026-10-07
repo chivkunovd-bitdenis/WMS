@@ -1,0 +1,74 @@
+{
+  "verdict": "PASS bounded literal contract and digest migration only",
+  "source_sha": "ce212ec254a87a4f5570b549d6aa721db971b5ef",
+  "contract_commit": "88343975e13f8819d6b81cd03cddbba1d67db078",
+  "previous_reviewed_source": "9dae4b19f6d4dca554200e08282579414a110848",
+  "previous_SOURCE_approval_historical_only": "f4d095aa4280c89075bfafcef2883f88e17c25d4",
+  "approved_product_reference_retained": "25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "policy_sha256": "8a3e69096cf9823309d1060269071c5b391256780142d0f930907d41c4933abd",
+  "changed_test": {
+    "path": "scripts/ci/tests/test_ci_release_additions.py",
+    "before_sha256": "8be9ed2993398491e3499218245bc1772a10a8118190ded24686a700d8ff3bc9",
+    "after_sha256": "9fe9ca325e8fa264e609449ab70cd3742fd5d54af501ea54bfe3c69a8742af4a",
+    "exact_one_literal_byte_change": true,
+    "normalized_AST_identical": true,
+    "old_literal": "python scripts/ci/product_scope.py --root . --trusted-ref d61805978b3e7878d1056c99b4e6e0823edf49a5",
+    "new_literal": "python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+    "case_ids": [
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_existing_517_pg_run_produces_report_without_duplicate_run",
+      "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts.test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact"
+    ],
+    "all_other_assertions_and_bytes_preserved": true
+  },
+  "protected_files_verified": 229,
+  "regular_modes": {
+    "100644": 222,
+    "100755": 7
+  },
+  "verified_sorted_path_mode_blob_digest_rows_sha256": "446bda94f8ae8fb93d39d89a98dcbaab176efd014e42459453989a8c920c4eeb",
+  "suites": 21,
+  "case_ids": 1173,
+  "all_21_suite_definitions_identical_to_9dae": true,
+  "other228_protected_blobs_identical_to_9dae": true,
+  "scope51_and_CLI_unchanged": true,
+  "C5_bytes_unchanged": true,
+  "app_diff_vs_25eb": [],
+  "saved_actual_CI": {
+    "run": 37548248403,
+    "tested_merge": "ac845328b27b5be265962695e10766efddef339e",
+    "guards_raw_sha256": "fa3166238817d2cfce5951af9cba00229452cf20f3a118de380cb24022536c2d",
+    "infrastructure_tests": 131,
+    "pass": 130,
+    "fail": 1
+  },
+  "saved_testwriter_before_after": {
+    "before": "2PASS/1 targeted assertion FAIL",
+    "after": "3PASS/0skip"
+  },
+  "negative_control": {
+    "same_actual_test_old_reference": "1 assertion FAIL/0errors/0skip",
+    "copied_workflow_sha256": "92644b0d610d22ee1728d312bb1a20b8c8c7a630ced4fd1b301cd161dbf45742",
+    "replayed_by_this_reviewer": false
+  },
+  "independent_three_test_run": {
+    "source_sha": "ce212ec254a87a4f5570b549d6aa721db971b5ef",
+    "command": [
+      "python3",
+      "-B",
+      "-m",
+      "unittest",
+      "scripts.ci.tests.test_ci_release_additions",
+      "-v"
+    ],
+    "exit_code": 0,
+    "raw_sha256": "bd3a336276f30a8e0666ff743f2a7d69ffbadbecbbadaa2cd2a6ccd7ab233011",
+    "executions_by_this_reviewer": 1
+  },
+  "review_gap_acknowledged": "Earlier workflow/ref/pin review missed this protected test constant still requiring d618.",
+  "distinct_analyst_migration_acceptance": "pending next stage",
+  "final_SOURCE_pin_approval": false,
+  "main_or_pin_changed": false,
+  "fullCI_build_browser_C5_other_cases_repeated": false,
+  "bounds": "Existing software/reference approval retained; new pin requires analyst then tiny exact-SHA review. No fullCI/release/deploy/paper claim."
+}

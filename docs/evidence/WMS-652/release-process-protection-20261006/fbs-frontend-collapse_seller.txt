@@ -1,0 +1,78 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/release-ci-final-20261006/frontend
+
+WMS_AUDIT_PRODUCT_MUTATION=collapse_seller APPLIED
+ ❯ src/screens/v2/fbsSupplyAssembly.test.ts (23 tests | 2 failed) 25ms
+   × WMS-574 Д1: деление выбора на поставки > делит 10 заказов 2 селлеров и 2 складов WB, у одного склада два грузовых типа 17ms
+     → expected [ { …(5) }, { …(5) }, { …(5) } ] to have a length of 5 but got 3
+   ✓ WMS-574 Д1: деление выбора на поставки > разделяет по складу WMS и типу покупателя — тем же признакам, по которым отказывает сервер 1ms
+   × WMS-574 Д1: деление выбора на поставки > Д2: новое окно только для WB, который делится на 2+ поставки 1ms
+     → expected false to be true // Object.is equality
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > скан уходит первой поставке, которой товар ещё нужен 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > если товар не нужен никому — первая поставка с ним, чтобы сервер ответил прежним отказом 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > C8: число 3 раздаётся по порядку, уменьшение до 1 снимает сначала со второй поставки 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > отмена последнего снятия возвращает штуку той поставке, которой она досталась 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > без истории уменьшение идёт с поставок в обратном порядке 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > больше, чем ждут заказы группы, — остаток уходит последней поставке, сервер ответит прежним отказом 0ms
+   ✓ WMS-574 Д5: раздача общего подбора по поставкам > то же число — запросов нет 0ms
+   ✓ WMS-574 R3/R4: создание поставок групп без дубля > WMS-588: после частичного успеха создаёт задание только из созданных в этой попытке поставок 0ms
+   ✓ WMS-574 R3/R4: создание поставок групп без дубля > после сбоя повтор отправляет только несозданные группы с прежними ключами 0ms
+   ✓ WMS-574 R3/R4: создание поставок групп без дубля > окончательный отказ сервера меняет ключ группы, как в окне одной поставки 0ms
+   ✓ WMS-574 окно сборки > R5: шапка — сумма тех же чисел, что шапка карточки каждой поставки 0ms
+   ✓ WMS-574 окно сборки > R7: подзаголовок поставки 0ms
+   ✓ WMS-574 окно сборки > Д4: supply_ids из адреса и вкладка по группе 0ms
+   ✓ WMS-574 окно сборки > Д14: строки листа подбора суммируют план товара по всем поставкам группы 0ms
+   ✓ WMS-574 окно сборки > WMS-588: чистая группа Ozon берёт позиции и их план/частичный подбор, а не товар заказа по одной штуке 0ms
+   ✓ WMS-574 окно сборки > WMS-588: подпись рамки Ozon не называет поставку и склад WB 0ms
+   ✓ WMS-574 окно сборки > WMS-580 R5/R6: порядок строк листа группы для одной поставки совпадает с её собственной лентой/листом 0ms
+   ✓ WMS-574 итоговое ревью > Д5 при одном ШК у товаров разных селлеров: первая поставка, которой нужен именно её товар 0ms
+   ✓ WMS-574 итоговое ревью > Д19: ШК товара заказа, ШК привязки и ЧЗ с тем же GTIN относятся к поставке, чужой код — нет 0ms
+   ✓ WMS-604 independent seller creation > starts different sellers together, keeps one seller sequential and preserves group order 0ms
+WMS_AUDIT_PRODUCT_MUTATION=collapse_seller APPLIED
+ ✓ src/screens/v2/FfFbsOrdersScreen.wms588.dom.test.tsx (2 tests) 110ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/v2/fbsSupplyAssembly.test.ts > WMS-574 Д1: деление выбора на поставки > делит 10 заказов 2 селлеров и 2 складов WB, у одного склада два грузовых типа
+AssertionError: expected [ { …(5) }, { …(5) }, { …(5) } ] to have a length of 5 but got 3
+
+- Expected
++ Received
+
+- 5
++ 3
+
+ ❯ src/screens/v2/fbsSupplyAssembly.test.ts:69:20
+     67|     ]
+     68|     const groups = groupFbsOrdersForSupplies(orders)
+     69|     expect(groups).toHaveLength(5)
+       |                    ^
+     70|     expect(groups.reduce((sum, group) => sum + group.orderIds.length, …
+     71|     expect(groups.map((group) => [group.sellerName, group.wbWarehouseN…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  src/screens/v2/fbsSupplyAssembly.test.ts > WMS-574 Д1: деление выбора на поставки > Д2: новое окно только для WB, который делится на 2+ поставки
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/screens/v2/fbsSupplyAssembly.test.ts:94:103
+     92|     expect(fbsSelectionNeedsGroupCreate([order({ id: '1' }), order({ i…
+     93|     expect(fbsSelectionNeedsGroupCreate([order({ id: '1' })])).toBe(fa…
+     94|     expect(fbsSelectionNeedsGroupCreate([order({ id: '1' }), order({ i…
+       |                                                                                                       ^
+     95|     expect(fbsSelectionNeedsGroupCreate([
+     96|       order({ id: '1', marketplace: 'ozon' }),
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 23 passed (25)
+   Start at  22:03:55
+   Duration  1.32s (transform 130ms, setup 0ms, collect 794ms, tests 135ms, environment 225ms, prepare 100ms)

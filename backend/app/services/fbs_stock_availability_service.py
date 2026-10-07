@@ -7,6 +7,7 @@ from dataclasses import dataclass
 
 from sqlalchemy import case, func, select, union_all
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.sql import Select
 
 from app.models.fbs_order import FbsOrderProductReservation, FbsOrderReservation
 from app.models.inventory_balance import InventoryBalance
@@ -329,6 +330,20 @@ class OrganizationStockTotals:
         return max(0, self.available)
 
 
+def organization_on_hand_totals_statement(
+    tenant_id: uuid.UUID,
+) -> Select[tuple[uuid.UUID, int]]:
+    """R1: shared SQL sum for organization stock, without location restrictions."""
+    return (
+        select(
+            InventoryBalance.product_id.label("product_id"),
+            func.coalesce(func.sum(InventoryBalance.quantity), 0).label("on_hand"),
+        )
+        .where(InventoryBalance.tenant_id == tenant_id)
+        .group_by(InventoryBalance.product_id)
+    )
+
+
 async def _organization_on_hand_by_product(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -337,16 +352,8 @@ async def _organization_on_hand_by_product(
     """R1: сумма всех строк остатка товара, без единого фильтра по месту."""
     if not product_ids:
         return {}
-    stmt = (
-        select(
-            InventoryBalance.product_id,
-            func.coalesce(func.sum(InventoryBalance.quantity), 0),
-        )
-        .where(
-            InventoryBalance.tenant_id == tenant_id,
-            InventoryBalance.product_id.in_(product_ids),
-        )
-        .group_by(InventoryBalance.product_id)
+    stmt = organization_on_hand_totals_statement(tenant_id).where(
+        InventoryBalance.product_id.in_(product_ids)
     )
     res = await session.execute(stmt)
     return {pid: int(qty or 0) for pid, qty in res.all()}

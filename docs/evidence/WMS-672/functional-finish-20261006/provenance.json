@@ -1,0 +1,78 @@
+{
+  "candidate": "5ddd09aac4df17e7ecdefaf1625462c05f8039ce",
+  "runner": "efc7c4fb8ddbcbcf60d457fc0a9105922919e937",
+  "rows": [
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.tsx",
+      "blobs": {
+        "f25e5a602": "dcc92a7a151d6bf5c208650fda9a633dab7829d1",
+        "5ddd09aac": "dcc92a7a151d6bf5c208650fda9a633dab7829d1",
+        "HEAD": "dcc92a7a151d6bf5c208650fda9a633dab7829d1"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/screens/ff/inboundDraftPersistence.ts",
+      "blobs": {
+        "f25e5a602": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45",
+        "5ddd09aac": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45",
+        "HEAD": "2760d2e2d50ded4aeb0f5d4f78bde67b9fac7d45"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/utils/printBarcodeLabel.ts",
+      "blobs": {
+        "f25e5a602": "c168a086fa78fa655781a8eb882e75357fa4e39b",
+        "5ddd09aac": "c168a086fa78fa655781a8eb882e75357fa4e39b",
+        "HEAD": "c168a086fa78fa655781a8eb882e75357fa4e39b"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/components/BoxLabelPrintDialog.tsx",
+      "blobs": {
+        "f25e5a602": "ab80c8708fca14a5de094ff988f3d2f8eadbee31",
+        "5ddd09aac": "ab80c8708fca14a5de094ff988f3d2f8eadbee31",
+        "HEAD": "ab80c8708fca14a5de094ff988f3d2f8eadbee31"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-remaining.test.mjs",
+      "blobs": {
+        "f25e5a602": "707e60e1dc731ccf7a25308f60a583b576b0608c",
+        "5ddd09aac": "707e60e1dc731ccf7a25308f60a583b576b0608c",
+        "HEAD": "707e60e1dc731ccf7a25308f60a583b576b0608c"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "frontend/src/screens/ff/FfInboundRequestView.wms659.dom.test.tsx",
+      "blobs": {
+        "f25e5a602": "d2bc6674306dbb05f4d1ec9047f07b3a4258e14f",
+        "5ddd09aac": "d2bc6674306dbb05f4d1ec9047f07b3a4258e14f",
+        "HEAD": "d2bc6674306dbb05f4d1ec9047f07b3a4258e14f"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "backend/tests/test_wms659_bulk_inbound_boxes.py",
+      "blobs": {
+        "f25e5a602": "887dfa37e4d621ccce943d43985aa93f810dfc4d",
+        "5ddd09aac": "887dfa37e4d621ccce943d43985aa93f810dfc4d",
+        "HEAD": "887dfa37e4d621ccce943d43985aa93f810dfc4d"
+      },
+      "unchanged": true
+    },
+    {
+      "path": "backend/app/services/inbound_intake_service.py",
+      "blobs": {
+        "f25e5a602": "d86ab62d2c943e07c3ca0963fa83ecd27022b05f",
+        "5ddd09aac": "d86ab62d2c943e07c3ca0963fa83ecd27022b05f",
+        "HEAD": "d86ab62d2c943e07c3ca0963fa83ecd27022b05f"
+      },
+      "unchanged": true
+    }
+  ]
+}

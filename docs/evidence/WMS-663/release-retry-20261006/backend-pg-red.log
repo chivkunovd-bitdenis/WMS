@@ -1,0 +1,53 @@
+F...F                                                                    [100%]
+=================================== FAILURES ===================================
+_ test_definite_429_then_explicit_retry_sends_one_new_set_and_persists_acceptance _
+tests/test_wms663_release_retry_contract.py:62: in test_definite_429_then_explicit_retry_sends_one_new_set_and_persists_acceptance
+    assert writes(transport) == [expected_payload(), expected_payload()], (
+E   AssertionError: A definite 429 must permit exactly one NEW SET for the next explicit retry
+E   assert [{'multi_box_...d': 663002}]}] == [{'posting_nu... '', ...}]}]}]
+E     
+E     Right contains one more item: {'posting_number': '019663-0001-1', 'multi_box_qty': 3, 'products': [{'product_id': 663001, 'exemplars': [{'exemplar_i......}]}, {'product_id': 663002, 'exemplars': [{'exemplar_id': 91, 'gtd': '', 'is_gtd_absent': True, 'rnpt': '', ...}]}]}
+E     Use -v to get more diff
+_ test_two_sessions_same_version_batch_allow_only_one_set[rejected-batch-retry] _
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/tasks.py:488: in wait_for
+    return await fut
+           ^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/locks.py:213: in wait
+    await fut
+E   asyncio.exceptions.CancelledError
+
+The above exception was the direct cause of the following exception:
+tests/test_wms663_release_retry_contract.py:165: in test_two_sessions_same_version_batch_allow_only_one_set
+    await asyncio.wait_for(entered.wait(), timeout=3)
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/tasks.py:487: in wait_for
+    async with timeouts.timeout(timeout):
+               ^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/timeouts.py:114: in __aexit__
+    raise TimeoutError from exc_val
+E   TimeoutError
+
+During handling of the above exception, another exception occurred:
+tests/test_wms663_release_retry_contract.py:167: in test_two_sessions_same_version_batch_allow_only_one_set
+    pytest.fail("Explicit rejected-batch retry never claimed a fresh write/snapshot")
+E   Failed: Explicit rejected-batch retry never claimed a fresh write/snapshot
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/wms663-retry-contract-20261006/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_wms663_release_retry_contract.py::test_definite_429_then_explicit_retry_sends_one_new_set_and_persists_acceptance
+FAILED tests/test_wms663_release_retry_contract.py::test_two_sessions_same_version_batch_allow_only_one_set[rejected-batch-retry]
+2 failed, 3 passed, 6 warnings in 4.50s
