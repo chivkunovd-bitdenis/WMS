@@ -1,0 +1,180 @@
+{
+  "analyst_session": "01a11390-1014-76a0-9302-fbe0fd46ed1f",
+  "replacement_original_unavailable": true,
+  "acceptance_source": "17f44649b05e6b9f5b3bc7af6657aa6418569ac4",
+  "independent_review_commit": "4e4819af8f5cd4fa6685c7cf76a0f16085e15f84",
+  "reviewed_source": "dce1b012e0929e227b182863bb14a378d04d3412",
+  "approved_PRODUCT_reference": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "requirements_commit": "476d206dc791799f88714012093c1ec315885fba",
+  "frozen_contract_commit": "f1e355525edbf41177d379c70cc5ee721986c967",
+  "current_protected_tree_identical_to_reviewed": true,
+  "counts_from_independent_proof": {
+    "protected_regular_files": 233,
+    "suites": 22,
+    "required_case_ids": 1184,
+    "old230_files_1180_IDs_retained": true,
+    "backend_required_cases": 619,
+    "actual_git_rows_sha256": "e3d2d9061317d1b6a05d9b0482f62f97bae0fb0244045cdab08805c7c50cbb4d"
+  },
+  "check_mapping": {
+    "C66": [
+      "test_c66_native_savepoint_commit_keeps_intent_without_dispatch"
+    ],
+    "C67": [
+      "test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+      "test_c67_ordinary_native_outer_commit_coalesces_duplicates_once"
+    ],
+    "C68": [
+      "test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+    ]
+  },
+  "xml_ids": [
+    "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+    "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+  ],
+  "saved_receipt_cases": {
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/before.xml": [
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+        "status": "failure"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+        "status": "failure"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+        "status": "failure"
+      }
+    ],
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/ordinary-mutation.xml": [
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "status": "failure"
+      }
+    ],
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/precode-red.xml": [
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+        "status": "failure"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+        "status": "failure"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+        "status": "failure"
+      }
+    ],
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/targeted-green.xml": [
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_read_only_wb_token_is_reported_distinctly",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_schedule_collapses_duplicates_and_skips_rollback",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_publish_lock_survives_business_commits_and_does_not_block_delivery",
+        "status": "skipped"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_drain_removes_finished_task_even_when_its_done_callback_has_not_run",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_picking_service_allows_sorting_zone",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_outbound_reservation_publishes_stock",
+        "status": "pass"
+      },
+      {
+        "id": "tests.test_fbs_stock_publish_on_movement::test_movement_publishes_stock_once_per_seller",
+        "status": "pass"
+      }
+    ],
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-before.xml": [
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+        "status": "failure"
+      },
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
+        "status": "pass"
+      },
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
+        "status": "pass"
+      }
+    ],
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-after.xml": [
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference",
+        "status": "pass"
+      },
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_all_three_mac_test_files_run_after_npm_ci_and_tap_is_in_frontend_artifact",
+        "status": "pass"
+      },
+      {
+        "id": "scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts::test_existing_517_pg_run_produces_report_without_duplicate_run",
+        "status": "pass"
+      }
+    ]
+  },
+  "input_sha256": {
+    "docs/evidence/WMS-652/nested-stock-source-review-20261007/proof.json": "a414ee1580cd536d3558c7c96849a92ca7d74b544872313ba21a3bc786c2ee5a",
+    "docs/evidence/WMS-652/nested-stock-source-review-20261007/review.md": "e9d0b601c11108b13d94fd1bb835bdd224c02de38d630c0963b49619655fae8a",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/contract.json": "3e5a61608523ebc00b57372b003bc60fadad03e2e6ebd0b2d9793b8a7486cb30",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/before.xml": "038f6083280215611c32b2dd65150a4afe493f40058b9b5882c974cb6b0ed93d",
+    "docs/evidence/WMS-652/nested-stock-test-contract-20261007/ordinary-mutation.xml": "9c4e89400e05740acabe4b6ba9a77586dc49706279d4bf5e9fc83101a6a852c3",
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/precode-red.xml": "bf4cb62821304194871e7a2049801d731c5d34ba1f75d69538ebe212f16d94d9",
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/targeted-green.xml": "ed94e84dbfe4dc3dabbd533a824c74d8460f8c1a52c7019059db6bfa384a5e01",
+    "docs/evidence/WMS-652/nested-stock-developer-20261007/preservation.json": "5725f0789693d399c501e73727d2c94af2b2cf79173f009642d4d846574c2603",
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-before.xml": "89f052552cc7d925d908a25b1b2e21c40fb55fd0e82b5bf1953bd2e379245dad",
+    "docs/evidence/WMS-652/nested-stock-reference-migration-20261007/literal-after.xml": "9ff4cebe1ee6b715d71948291dda5eb217203fb16098c34fb1bd0383eeea7ab1",
+    "docs/evidence/WMS-652/common-ci-37556521625/summary.json": "645adf6a8bd27ca32c8574cf1ef96d7a2ad1148c23ea91ffca514fbdff1295f4"
+  },
+  "format_ledger_review_commit": "6475d8f96d47ae33a01699c6f3843092a3d2c7f7",
+  "software_acceptance": "PASS R52/C66-C68 and bounded formatting/ledger/reference migration",
+  "historical_SQLite_lock_owner": "UNKNOWN",
+  "new_runtime_runs": [],
+  "final_SOURCE_pin_approval": false,
+  "release_accepted": false,
+  "backlog_preservation": {
+    "before_sha256": "f24d3e869488e28dbed7c646ce32962766b205fc758c7118b2067b5c9f5806b6",
+    "after_sha256": "6ec7523d8b1c66bfc4168db76d6c1c9ea0236d62831d63fa0cf54c727aee2f6c",
+    "only_insertion_in_WMS_652_section": true,
+    "remove_exact_addition_restores_original_bytes": true
+  }
+}
