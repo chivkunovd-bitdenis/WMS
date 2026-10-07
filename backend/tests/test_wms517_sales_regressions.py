@@ -18,6 +18,9 @@ from test_wms517_sales_contract import (
     sale,
     sales_http,  # noqa: F401 -- public HTTP boundary fixture
 )
+from test_wms517_sales_report_singleflight_contract import (
+    redis_ownership_io,  # noqa: F401 -- actual Redis ownership Lua fixture
+)
 
 from app.api.marking_withdrawals import withdrawal_products
 from app.core.settings import settings
@@ -30,7 +33,7 @@ from app.services.withdrawal_service import create_operation, retry_operation
 
 
 @pytest.fixture
-def redis_boundary(monkeypatch, sales_http):
+def redis_boundary(monkeypatch, sales_http, redis_ownership_io):
     """Two Redis clients share a deterministic server clock/store at the I/O edge."""
     server = SimpleNamespace(now=0, slots={}, cache={}, writes=[], clients=[], http_times=[])
 
@@ -39,22 +42,46 @@ def redis_boundary(monkeypatch, sales_http):
             self.closed = False
             server.clients.append(self)
 
-        async def eval(self, script, numkeys, key, *args):
-            assert numkeys == 1 and "TIME" in script
-            if args:
+        async def eval(self, script, numkeys, *keys_and_args):
+            key = keys_and_args[0]
+            args = keys_and_args[numkeys:]
+            if script == wb_sales_report._DEFER:
                 server.slots[key] = max(server.slots.get(key, 0), server.now + int(args[0]))
+                if len(args) > 1:
+                    await redis_ownership_io.client.set(key + ":defer", args[1])
                 return 1
-            slot = max(server.now, server.slots.get(key, 0))
-            server.slots[key] = slot + 61000
-            return slot - server.now
+            if script == wb_sales_report._RESERVE:
+                slot = max(server.now, server.slots.get(key, 0))
+                server.slots[key] = slot + 61000
+                return slot - server.now
+            # Native Redis executes atomic ownership Lua without emulating its result.
+            result = await redis_ownership_io.client.eval(script, numkeys, *keys_and_args)
+            for completed_key in await redis_ownership_io.client.keys("wb:sales:complete:*"):
+                payload = await redis_ownership_io.client.get(completed_key)
+                if payload and (
+                    completed_key not in server.cache or server.cache[completed_key][0] != payload
+                ):
+                    ttl = await redis_ownership_io.client.ttl(completed_key)
+                    server.writes.append((completed_key, payload, ttl))
+                    server.cache[completed_key] = (payload, server.now + ttl * 1000)
+            return result
 
         async def get(self, key):
-            value, until = server.cache.get(key, (None, 0))
-            return value if until > server.now else None
+            if key in server.cache:
+                value, until = server.cache[key]
+                if until > server.now:
+                    return value
+                await redis_ownership_io.client.delete(key)
+                return None
+            return await redis_ownership_io.client.get(key)
 
-        async def set(self, key, value, *, ex):
-            server.writes.append((key, value, ex))
-            server.cache[key] = (value, server.now + ex * 1000)
+        async def set(self, key, value, *, ex=None, **kwargs):
+            if ":complete:" in key and not kwargs:
+                server.writes.append((key, value, ex))
+                server.cache[key] = (value, server.now + ex * 1000)
+                await redis_ownership_io.client.set(key, value, ex=ex)
+                return True
+            return await redis_ownership_io.client.set(key, value, ex=ex, **kwargs)
 
         async def aclose(self):
             self.closed = True
