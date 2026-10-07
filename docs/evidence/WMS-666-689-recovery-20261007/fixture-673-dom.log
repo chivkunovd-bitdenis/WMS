@@ -1,0 +1,20 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/frontend
+
+stderr | src/screens/v2/fbsPickingColor.wms673.dom.test.tsx > WMS-673 business RED contract through real buttons and API fixtures > C1 WB single: separate adjacent column carries both exact product colors
+React does not recognize the `fullWidth` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `fullwidth` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+Received `false` for a non-boolean attribute `indicator`.
+
+If you want to write it to the DOM, pass a string instead: indicator="false" or indicator={value.toString()}.
+
+If you used to conditionally omit it with indicator={condition && value}, pass indicator={condition ? value : undefined} instead.
+React does not recognize the `selectionFollowsFocus` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `selectionfollowsfocus` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+React does not recognize the `textColor` prop on a DOM element. If you intentionally want it to appear in the DOM as a custom attribute, spell it as lowercase `textcolor` instead. If you accidentally passed it from a parent component, remove it from the DOM element.
+
+ ✓ src/screens/v2/fbsPickingColor.wms673.dom.test.tsx (21 tests) 1820ms
+
+ Test Files  1 passed (1)
+      Tests  21 passed (21)
+   Start at  23:51:32
+   Duration  98.46s (transform 638ms, setup 0ms, collect 95.93s, tests 1.82s, environment 445ms, prepare 77ms)
+
