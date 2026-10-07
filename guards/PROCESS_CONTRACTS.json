@@ -162,7 +162,7 @@
     "frontend/src/utils/printBarcodeLabel.ts": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
     "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
-    "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "2701f510c5879f3154beb3af633f8aaee493cc07311d4d2e3686d24f261199da",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
     "frontend/tests-e2e/wms652-critical/fixtures.mjs": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
