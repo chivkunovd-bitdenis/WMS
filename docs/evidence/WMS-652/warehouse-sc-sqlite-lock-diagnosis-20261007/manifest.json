@@ -4,19 +4,9 @@
   "attempt": 1,
   "members": [
     {
-      "path": "README.md",
-      "bytes": 3192,
-      "sha256": "fba521a5488f3e799edc72b671af6478629ac65dd43f7e26d2fc68a5b980f69a"
-    },
-    {
       "path": "actual-ledger.json",
       "bytes": 11872,
       "sha256": "4d5756edc70a728aa00f855f2e0b07e847cb3e1d2faba2b3aa9725513cd91cd8"
-    },
-    {
-      "path": "preparation.json",
-      "bytes": 1670,
-      "sha256": "78221f4ae222a0e34a25cfc6c324470e417d62bd20a13cb1e46834196eb78603"
     },
     {
       "path": "raw/artifacts.json",
@@ -57,6 +47,11 @@
       "path": "raw/jobs.json",
       "bytes": 3190,
       "sha256": "7dfe9609561c4426460f82aeebcfe5542715e8fceaedeeb2430a3035e909f1de"
+    },
+    {
+      "path": "raw/preparation.json",
+      "bytes": 1670,
+      "sha256": "78221f4ae222a0e34a25cfc6c324470e417d62bd20a13cb1e46834196eb78603"
     },
     {
       "path": "raw/protected-after.sha256",
