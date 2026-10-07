@@ -161,7 +161,7 @@
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
     "frontend/src/utils/printBarcodeLabel.ts": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
-    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
     "frontend/tests-e2e/wms652-critical/browser.mjs": "2701f510c5879f3154beb3af633f8aaee493cc07311d4d2e3686d24f261199da",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
@@ -1562,7 +1562,9 @@
         "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
         "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
         "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
-        "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry"
+        "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+        "CDP6 reused observed FetchID after native send and before error reply remains a strict failure",
+        "CDP7 second observed FetchID owning the same NetworkID after native send and before error reply remains a strict failure"
       ]
     }
   }
