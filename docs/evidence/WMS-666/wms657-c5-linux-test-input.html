@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Лист подбора — FBS WMS-657</title>
+    <style>
+      @page { size: A4 landscape; margin: 10mm; }
+      * { box-sizing: border-box; }
+      body { margin: 0; color: #172033; font: 12px/1.35 Arial, sans-serif; }
+      @media screen { body { max-width: 277mm; margin: 12px auto; } }
+      h1 { margin: 0 0 4px; font-size: 22px; }
+      .subtitle { margin-bottom: 14px; color: #5c6475; }
+      .meta { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin-bottom: 14px; }
+      .meta div { border: 1px solid #d9dce5; border-radius: 6px; padding: 7px 9px; }
+      .meta span { display: block; color: #687083; font-size: 10px; }
+      .meta strong { display: block; margin-top: 2px; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      th, td { border: 1px solid #cfd3df; padding: 6px; text-align: left; vertical-align: middle; overflow-wrap: anywhere; }
+      th { background: #f1eefb; font-size: 10px; text-transform: uppercase; }
+      tr { break-inside: avoid; }
+      .number { width: 28px; text-align: center; }
+      .image { width: 54px; text-align: center; }
+      .image img { display: block; width: 42px; height: 42px; margin: auto; object-fit: contain; }
+      .size { text-align: center; }
+      td.size { font-size: 20px; font-weight: 700; }
+      .quantity { text-align: center; font-weight: 700; }
+      .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+      .muted { margin-top: 3px; color: #687083; font-size: 10px; }
+      .orders { font-size: 10px; white-space: nowrap; }
+      th.quantity { font-size: 9px; white-space: nowrap; }
+      .sources { font-size: 10px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
+      .source-group + .source-group { margin-top: 1.4em; }
+      .source-group > strong { display: block; }
+      .footer { margin-top: 8px; color: #687083; font-size: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1>Лист подбора FBS</h1>
+    <div class="subtitle">FBS WMS-657 · № WB WB-WMS-657</div>
+    <div class="meta">
+      <div><span>Селлер</span><strong>Контрольный селлер</strong></div>
+      <div><span>Склад WMS</span><strong>Основной склад</strong></div>
+      <div><span>Маршрут</span><strong>Склад / СЦ</strong></div>
+      <div><span>Сдать до</span><strong>05.10.2026, 18:00</strong></div>
+    </div>
+    <table>
+      <colgroup><col style="width:2.6745%" /><col style="width:5.1579%" /><col style="width:12.1021%" /><col style="width:9.0253%" /><col style="width:7.9422%" /><col style="width:7.2202%" /><col style="width:16.8916%" /><col style="width:8.6643%" /><col style="width:11.0800%" /><col style="width:4.0794%" /><col style="width:6.4982%" /><col style="width:8.6643%" /></colgroup>
+      <thead><tr><th class="number">№</th><th class="image">Фото</th><th>Товар</th><th>Артикул</th><th>Цвет</th><th class="size">Размер</th><th>Поставка / ячейка / короб</th><th>Заказы WB</th><th class="sticker">Стикер</th><th class="quantity">Взять</th><th class="quantity">Подобрано</th><th>Маркировка</th></tr></thead>
+      <tbody>
+      <tr>
+        <td class="number">1</td>
+        <td class="image"><span>—</span></td>
+        <td>
+          <strong>PDF-PRODUCT-LONG-WMS-657</strong>
+          <div class="muted">PDF-IDENTIFIER-WMS-657</div>
+        </td>
+        <td>PDF-ARTICLE-WMS-657</td>
+        <td>PDF-COLOR-WMS-657</td>
+        <td class="size">Универсальный</td>
+        <td class="sources">PDF-LOCATION-LONG-WMS-657</td>
+        <td class="orders">№PDF-ORDER-657</td>
+        <td class="sticker"><strong>S657</strong></td>
+        <td class="quantity">1</td>
+        <td class="quantity">0 / 1</td>
+        <td>PDF-MARKING-WMS-657</td>
+      </tr></tbody>
+    </table>
+    <div class="footer">Сформировано WMS: 05.10.2026, 12:00 · Актуальное серверное состояние на момент печати.</div><script>
+  (() => {
+    const rect = (element) => element.getBoundingClientRect();
+    const within = (inner, outer) => inner.left >= outer.left - 1 && inner.right <= outer.right + 1 && inner.top >= outer.top - 1 && inner.bottom <= outer.bottom + 1;
+    const rows = Array.from(document.querySelectorAll('tbody tr'));
+    const headers = Array.from(document.querySelectorAll('thead th'));
+    const firstCells = rows[0] ? Array.from(rows[0].children) : [];
+    const tableRect = rect(document.querySelector('table'));
+    const bodyRect = rect(document.body);
+    const sizeCells = Array.from(document.querySelectorAll('td.size')).map((cell) => {
+      const range = document.createRange();
+      range.selectNodeContents(cell);
+      const lineRects = Array.from(range.getClientRects()).filter((item) => item.width > 0 && item.height > 0);
+      const tops = [];
+      for (const item of lineRects) if (!tops.some((top) => Math.abs(top - item.top) < 1)) tops.push(item.top);
+      return {
+        text: cell.textContent,
+        lineCount: tops.length,
+        linesWithinCell: lineRects.every((item) => within(item, rect(cell))),
+      };
+    });
+    const report = {
+      tableWithinPage: tableRect.left >= bodyRect.left - 1 && tableRect.right <= bodyRect.right + 1 && document.body.scrollWidth <= document.body.clientWidth + 1,
+      tableBounds: { left: tableRect.left, right: tableRect.right },
+      columnBounds: headers.map((header) => ({ left: rect(header).left, right: rect(header).right })),
+      rowCellCounts: rows.map((item) => item.children.length),
+      allCellContentFits: rows.every((item) => Array.from(item.children).every((cell) => cell.scrollWidth <= cell.clientWidth + 1)),
+      neighboringCellsDoNotOverlap: rows.every((item) => Array.from(item.children).every((cell, index, cells) => !cells[index + 1] || rect(cell).right <= rect(cells[index + 1]).left + 1)),
+      headersAligned: headers.length === firstCells.length && headers.every((header, index) => Math.abs(rect(header).left - rect(firstCells[index]).left) <= 1 && Math.abs(rect(header).right - rect(firstCells[index]).right) <= 1),
+      rowsDoNotOverlap: rows.every((item, index) => !rows[index + 1] || rect(item).bottom <= rect(rows[index + 1]).top + 1),
+      sizeCells,
+    };
+    document.documentElement.setAttribute('data-wms657-geometry', btoa(unescape(encodeURIComponent(JSON.stringify(report)))));
+  })();
+</script></body>
+</html>

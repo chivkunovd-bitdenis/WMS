@@ -1,0 +1,753 @@
+{
+  "candidate_sha_under_test": "5cf6b1a00af251b54c6b653a5e3b0095ccd59df9",
+  "status": "provisional/non-acceptance; candidate SHA is a test-only wrapper and not the final product freeze",
+  "linux_workflow_run": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37703550425",
+  "workflow_sha": "f327a3cfee670897e0553e56ebfc793d3140b68d",
+  "linux_artifact_id": 11518099875,
+  "linux_artifact_member_input": "657-rendered/chromium-input-3.html",
+  "linux_artifact_member_geometry": "657-rendered/chromium-dump-3.geometry.json",
+  "linux_geometry": {
+    "tableWithinPage": true,
+    "allCellContentFits": false,
+    "neighboringCellsDoNotOverlap": true,
+    "headersAligned": true,
+    "rowsDoNotOverlap": true,
+    "columnBounds_order": {
+      "left": 638.671875,
+      "right": 729.28125
+    },
+    "source": "657-rendered/chromium-dump-3.geometry.json in artifact 11518099875"
+  },
+  "diagnostic_browser": "Chrome macOS 154.0.8037.98, isolated headless profile; diagnostic only, not acceptance",
+  "diagnostic_dump": "wms657-c5-diagnostic-dump.html",
+  "cells": [
+    {
+      "index": 0,
+      "text": "1",
+      "clientWidth": 27,
+      "scrollWidth": 27,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 0.53125,
+        "y": 167.25,
+        "width": 27.96875,
+        "height": 94,
+        "left": 0.53125,
+        "right": 28.5,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "1",
+          "rects": [
+            {
+              "x": 11.171875,
+              "y": 207.15625,
+              "width": 6.6875,
+              "height": 14,
+              "left": 11.171875,
+              "right": 17.859375,
+              "top": 207.15625,
+              "bottom": 221.15625
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "text": "—",
+      "clientWidth": 53,
+      "scrollWidth": 53,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 28.5,
+        "y": 167.25,
+        "width": 53.9375,
+        "height": 94,
+        "left": 28.5,
+        "right": 82.4375,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "—",
+          "rects": [
+            {
+              "x": 49.46875,
+              "y": 207.15625,
+              "width": 12,
+              "height": 14,
+              "left": 49.46875,
+              "right": 61.46875,
+              "top": 207.15625,
+              "bottom": 221.15625
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 2,
+      "text": "PDF-PRODUCT-LONG-WMS-657\nPDF-IDENTIFIER-WMS-657",
+      "clientWidth": 126,
+      "scrollWidth": 126,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 82.4375,
+        "y": 167.25,
+        "width": 126.578125,
+        "height": 94,
+        "left": 82.4375,
+        "right": 209.015625,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "PDF-PRODUCT-LONG-WMS-657",
+          "rects": [
+            {
+              "x": 88.9375,
+              "y": 184.0625,
+              "width": 90.671875,
+              "height": 14,
+              "left": 88.9375,
+              "right": 179.609375,
+              "top": 184.0625,
+              "bottom": 198.0625
+            },
+            {
+              "x": 88.9375,
+              "y": 200.25,
+              "width": 92.015625,
+              "height": 14,
+              "left": 88.9375,
+              "right": 180.953125,
+              "top": 200.25,
+              "bottom": 214.25
+            }
+          ]
+        },
+        {
+          "text": "PDF-IDENTIFIER-WMS-657",
+          "rects": [
+            {
+              "x": 88.9375,
+              "y": 219.4375,
+              "width": 110,
+              "height": 11,
+              "left": 88.9375,
+              "right": 198.9375,
+              "top": 219.4375,
+              "bottom": 230.4375
+            },
+            {
+              "x": 88.9375,
+              "y": 232.9375,
+              "width": 16.6875,
+              "height": 11,
+              "left": 88.9375,
+              "right": 105.625,
+              "top": 232.9375,
+              "bottom": 243.9375
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 3,
+      "text": "PDF-ARTICLE-WMS-657",
+      "clientWidth": 93,
+      "scrollWidth": 93,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 209.015625,
+        "y": 167.25,
+        "width": 94.390625,
+        "height": 94,
+        "left": 209.015625,
+        "right": 303.40625,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "PDF-ARTICLE-WMS-657",
+          "rects": [
+            {
+              "x": 215.515625,
+              "y": 190.96875,
+              "width": 28,
+              "height": 14,
+              "left": 215.515625,
+              "right": 243.515625,
+              "top": 190.96875,
+              "bottom": 204.96875
+            },
+            {
+              "x": 215.515625,
+              "y": 207.15625,
+              "width": 54.46875,
+              "height": 14,
+              "left": 215.515625,
+              "right": 269.984375,
+              "top": 207.15625,
+              "bottom": 221.15625
+            },
+            {
+              "x": 215.515625,
+              "y": 223.34375,
+              "width": 53.34375,
+              "height": 14,
+              "left": 215.515625,
+              "right": 268.859375,
+              "top": 223.34375,
+              "bottom": 237.34375
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 4,
+      "text": "PDF-COLOR-WMS-657",
+      "clientWidth": 82,
+      "scrollWidth": 82,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 303.40625,
+        "y": 167.25,
+        "width": 83.0625,
+        "height": 94,
+        "left": 303.40625,
+        "right": 386.46875,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "PDF-COLOR-WMS-657",
+          "rects": [
+            {
+              "x": 309.90625,
+              "y": 190.96875,
+              "width": 28,
+              "height": 14,
+              "left": 309.90625,
+              "right": 337.90625,
+              "top": 190.96875,
+              "bottom": 204.96875
+            },
+            {
+              "x": 309.90625,
+              "y": 207.15625,
+              "width": 46.671875,
+              "height": 14,
+              "left": 309.90625,
+              "right": 356.578125,
+              "top": 207.15625,
+              "bottom": 221.15625
+            },
+            {
+              "x": 309.90625,
+              "y": 223.34375,
+              "width": 53.34375,
+              "height": 14,
+              "left": 309.90625,
+              "right": 363.25,
+              "top": 223.34375,
+              "bottom": 237.34375
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 5,
+      "text": "Универсальный",
+      "clientWidth": 75,
+      "scrollWidth": 75,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 386.46875,
+        "y": 167.25,
+        "width": 75.515625,
+        "height": 94,
+        "left": 386.46875,
+        "right": 461.984375,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "700 20px / 27px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "Универсальный",
+          "rects": [
+            {
+              "x": 394.609375,
+              "y": 175.75,
+              "width": 59.21875,
+              "height": 22,
+              "left": 394.609375,
+              "right": 453.828125,
+              "top": 175.75,
+              "bottom": 197.75
+            },
+            {
+              "x": 394.359375,
+              "y": 202.75,
+              "width": 59.71875,
+              "height": 22,
+              "left": 394.359375,
+              "right": 454.078125,
+              "top": 202.75,
+              "bottom": 224.75
+            },
+            {
+              "x": 403.484375,
+              "y": 229.75,
+              "width": 41.46875,
+              "height": 22,
+              "left": 403.484375,
+              "right": 444.953125,
+              "top": 229.75,
+              "bottom": 251.75
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 6,
+      "text": "PDF-LOCATION-LONG-WMS-657",
+      "clientWidth": 176,
+      "scrollWidth": 176,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 461.984375,
+        "y": 167.25,
+        "width": 176.6875,
+        "height": 94,
+        "left": 461.984375,
+        "right": 638.671875,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "10px / 14px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "PDF-LOCATION-LONG-WMS-657",
+          "rects": [
+            {
+              "x": 468.484375,
+              "y": 208.25,
+              "width": 153.171875,
+              "height": 11,
+              "left": 468.484375,
+              "right": 621.65625,
+              "top": 208.25,
+              "bottom": 219.25
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 7,
+      "text": "№PDF-ORDER-657",
+      "clientWidth": 90,
+      "scrollWidth": 96,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 638.671875,
+        "y": 167.25,
+        "width": 90.609375,
+        "height": 94,
+        "left": 638.671875,
+        "right": 729.28125,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "10px / 13.5px Arial, sans-serif",
+      "whiteSpace": "nowrap",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "№PDF-ORDER-657",
+          "rects": [
+            {
+              "x": 645.171875,
+              "y": 208.5,
+              "width": 90.1875,
+              "height": 11,
+              "left": 645.171875,
+              "right": 735.359375,
+              "top": 208.5,
+              "bottom": 219.5
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 8,
+      "text": "S657",
+      "clientWidth": 115,
+      "scrollWidth": 115,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 729.28125,
+        "y": 167.25,
+        "width": 115.875,
+        "height": 94,
+        "left": 729.28125,
+        "right": 845.15625,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "",
+      "whiteSpace": "nowrap",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "S657",
+          "rects": [
+            {
+              "x": 735.78125,
+              "y": 207.15625,
+              "width": 28.03125,
+              "height": 14,
+              "left": 735.78125,
+              "right": 763.8125,
+              "top": 207.15625,
+              "bottom": 221.15625
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 9,
+      "text": "1",
+      "clientWidth": 42,
+      "scrollWidth": 42,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 845.15625,
+        "y": 167.25,
+        "width": 42.65625,
+        "height": 94,
+        "left": 845.15625,
+        "right": 887.8125,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "700 12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "1",
+          "rects": [
+            {
+              "x": 863.140625,
+              "y": 207.15625,
+              "width": 6.6875,
+              "height": 14,
+              "left": 863.140625,
+              "right": 869.828125,
+              "top": 207.15625,
+              "bottom": 221.15625
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 10,
+      "text": "0 / 1",
+      "clientWidth": 67,
+      "scrollWidth": 67,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 887.8125,
+        "y": 167.25,
+        "width": 67.953125,
+        "height": 94,
+        "left": 887.8125,
+        "right": 955.765625,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "700 12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "0 / 1",
+          "rects": [
+            {
+              "x": 910.109375,
+              "y": 207.15625,
+              "width": 23.359375,
+              "height": 14,
+              "left": 910.109375,
+              "right": 933.46875,
+              "top": 207.15625,
+              "bottom": 221.15625
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "index": 11,
+      "text": "PDF-MARKING-WMS-657",
+      "clientWidth": 90,
+      "scrollWidth": 90,
+      "clientHeight": 93,
+      "scrollHeight": 93,
+      "rect": {
+        "x": 955.765625,
+        "y": 167.25,
+        "width": 90.6875,
+        "height": 94,
+        "left": 955.765625,
+        "right": 1046.453125,
+        "top": 167.25,
+        "bottom": 261.25
+      },
+      "font": "12px / 16.2px Arial, sans-serif",
+      "whiteSpace": "normal",
+      "overflow": "visible",
+      "overflowX": "visible",
+      "overflowY": "visible",
+      "overflowWrap": "anywhere",
+      "wordBreak": "normal",
+      "textOverflow": "clip",
+      "texts": [
+        {
+          "text": "PDF-MARKING-WMS-657",
+          "rects": [
+            {
+              "x": 962.265625,
+              "y": 190.96875,
+              "width": 28,
+              "height": 14,
+              "left": 962.265625,
+              "right": 990.265625,
+              "top": 190.96875,
+              "bottom": 204.96875
+            },
+            {
+              "x": 962.265625,
+              "y": 207.15625,
+              "width": 60,
+              "height": 14,
+              "left": 962.265625,
+              "right": 1022.265625,
+              "top": 207.15625,
+              "bottom": 221.15625
+            },
+            {
+              "x": 962.265625,
+              "y": 223.34375,
+              "width": 53.34375,
+              "height": 14,
+              "left": 962.265625,
+              "right": 1015.609375,
+              "top": 223.34375,
+              "bottom": 237.34375
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "c5_offender": {
+    "row_cell_index": 7,
+    "column": "Заказы WB",
+    "text": "№PDF-ORDER-657",
+    "rect": {
+      "x": 638.671875,
+      "y": 167.25,
+      "width": 90.609375,
+      "height": 94,
+      "left": 638.671875,
+      "right": 729.28125,
+      "top": 167.25,
+      "bottom": 261.25
+    },
+    "clientWidth": 90,
+    "scrollWidth": 96,
+    "overflow_px": 6,
+    "text_rect": {
+      "x": 645.171875,
+      "y": 208.5,
+      "width": 90.1875,
+      "height": 11,
+      "left": 645.171875,
+      "right": 735.359375,
+      "top": 208.5,
+      "bottom": 219.5
+    },
+    "font": "10px / 13.5px Arial, sans-serif",
+    "whiteSpace": "nowrap",
+    "overflow": "visible",
+    "overflowX": "visible",
+    "overflowY": "visible",
+    "overflowWrap": "anywhere",
+    "wordBreak": "normal",
+    "textOverflow": "clip"
+  },
+  "c4_comparison": {
+    "result": "pass",
+    "allCellContentFits": true,
+    "same_order_column_bounds_px": {
+      "left": 638.671875,
+      "right": 729.28125,
+      "width": 90.609375
+    },
+    "wb_order_numbers": [
+      5524537174,
+      5524537175,
+      5524537176
+    ],
+    "digits_per_order": 10,
+    "source": "C4 input in frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts at candidate source"
+  },
+  "source_sha256": {
+    "fbsUx.ts": "259775e8eaf16f7145c5f408ed140bd6514e0bb98e005e4b61fd0336ef33c401",
+    "baseline_212_fbsUx.ts": "259775e8eaf16f7145c5f408ed140bd6514e0bb98e005e4b61fd0336ef33c401"
+  },
+  "c673_reference": {
+    "candidate_sha_under_test": "0c44ed45bf6b687899750ada2af2ac81d1e6b03e",
+    "workflow_sha": "d6805af82bbb10eb85f1b6cf9a43aef49b64acd8",
+    "run": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37702281527",
+    "artifact_id": 11518617127,
+    "artifact_member": "673-dom/single.html",
+    "full_source_sha256_test": "8d32d1bc3fb31ff89874f2d0780c1d6987a47f29e6cbee30d4de34a221c892f2",
+    "expected_without_color": [
+      [
+        "1",
+        "—",
+        "Товар red WB 1673 · WB-CODE-red",
+        "ART-red",
+        "46",
+        "Нет свободного остатка",
+        "№673000",
+        "S673 0000",
+        "1",
+        "1 / 1",
+        "sgtin"
+      ],
+      [
+        "2",
+        "—",
+        "Товар blue WB 1673 · WB-CODE-blue",
+        "ART-blue",
+        "46",
+        "A-02 · Короб B-02: 7",
+        "№673001",
+        "S673 0001",
+        "1",
+        "0 / 1",
+        "sgtin"
+      ]
+    ],
+    "header": "Approved header appears in C1 HTML only; not evidence about failed C6/C10 rows",
+    "test_result": "17/19; failure summaries name C6/C10 single/group at frozen line 218; actual rows are not captured in this artifact",
+    "note": "old exact production tree; not final candidate acceptance; release worker is capturing the failing C6/C10 actuals separately",
+    "artifact_member_role": "C1 screen evidence only; not a C6/C10 failed-test actual",
+    "c6_c10_actual_rows": "not present in the saved C1 HTML or the JSON reporter failure summary; do not infer from C1"
+  }
+}
