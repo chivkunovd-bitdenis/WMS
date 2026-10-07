@@ -1,0 +1,147 @@
+{
+  "reviewed_sha": "cafaaefae22b529207ddf5bdd0aacbb1194f735b",
+  "frozen_test_commit": "90cf5e8f49e5eee1070c914b19ed87de4fa49353",
+  "frozen_test_bytes_unchanged": true,
+  "red_green": {
+    "red": {
+      "tests": 5,
+      "failures": 2,
+      "errors": 0,
+      "failed_ids": [
+        "review_frozen_tests.PromoteGuardsTests.test_parses_every_br_and_semicolon_separated_permanent_reference",
+        "review_frozen_tests.PromoteGuardsTests.test_protected_original_stays_registered_and_second_promotion_is_idempotent"
+      ]
+    },
+    "green": {
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "failed_ids": []
+    }
+  },
+  "probes": [
+    {
+      "scenario": "changed-bytes",
+      "refused": true,
+      "reason": "Изменён защищённый original тест: backend/tests/test_immutable_contract.py",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": "M backend/tests/test_immutable_contract.py"
+    },
+    {
+      "scenario": "head-bytes-mismatch-with-matching-policy-hash",
+      "refused": true,
+      "reason": "Изменён защищённый original тест: backend/tests/test_immutable_contract.py",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": "M backend/tests/test_immutable_contract.py"
+    },
+    {
+      "scenario": "wrong-saved-hash",
+      "refused": true,
+      "reason": "Изменён защищённый original тест: backend/tests/test_immutable_contract.py",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": ""
+    },
+    {
+      "scenario": "missing-case",
+      "refused": true,
+      "reason": "Защищённый original не имеет обязательного case/report: backend/tests/test_immutable_contract.py::test_frozen_case_id",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": ""
+    },
+    {
+      "scenario": "wrong-format-report-binding",
+      "refused": true,
+      "reason": "Защищённый original не имеет обязательного case/report: backend/tests/test_immutable_contract.py::test_frozen_case_id",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": ""
+    },
+    {
+      "scenario": "invalid-empty-report",
+      "refused": true,
+      "reason": "Empty or invalid relative path",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": ""
+    },
+    {
+      "scenario": "uncommitted-policy",
+      "refused": true,
+      "reason": "Process protection должна быть сохранена в Git до promotion",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": "M guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "self-rehash-uncommitted",
+      "refused": true,
+      "reason": "Process protection должна быть сохранена в Git до promotion",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": "M backend/tests/test_immutable_contract.py\n M guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "source-symlink",
+      "refused": true,
+      "reason": "Symlink is not execution evidence: backend/tests/test_immutable_contract.py",
+      "no_mutation": true,
+      "protected_original_exists": true,
+      "moved_target_exists": false,
+      "status_after": "T backend/tests/test_immutable_contract.py\n?? outside.py"
+    },
+    {
+      "scenario": "deleted-policy",
+      "refused": false,
+      "reason": "returned: ['backend/tests/guards/test_immutable_contract.py']",
+      "no_mutation": false,
+      "protected_original_exists": false,
+      "moved_target_exists": true,
+      "status_after": "R  backend/tests/test_immutable_contract.py -> backend/tests/guards/test_immutable_contract.py\n M docs/requirements/WMS-902.md\n M guards/MANIFEST.json\n D guards/PROCESS_CONTRACTS.json"
+    },
+    {
+      "scenario": "dangling-policy-symlink",
+      "refused": false,
+      "reason": "returned: ['backend/tests/guards/test_immutable_contract.py']",
+      "no_mutation": false,
+      "protected_original_exists": false,
+      "moved_target_exists": true,
+      "status_after": "R  backend/tests/test_immutable_contract.py -> backend/tests/guards/test_immutable_contract.py\n M docs/requirements/WMS-902.md\n M guards/MANIFEST.json\n T guards/PROCESS_CONTRACTS.json"
+    }
+  ],
+  "old_1146_ids_and_suite_bindings_preserved": true,
+  "previous_1161_ids_and_suite_bindings_preserved": true,
+  "current": {
+    "files": 226,
+    "suites": 19,
+    "cases": 1164
+  },
+  "changed_existing_hashes_since_14c": [
+    "scripts/ci/tests/test_promote_guards.py"
+  ],
+  "new_protected_files": [
+    "scripts/ci/promote_guards.py"
+  ],
+  "new_ci_shards_cases": [
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent",
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference",
+    "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion"
+  ],
+  "actual_ci_shards_producer_command": "python -m pytest -q scripts/ci/tests/test_backend_shards.py scripts/ci/tests/test_backend_shard_failclosed.py scripts/ci/tests/test_ci_release_additions.py scripts/ci/tests/test_backend_shard_redis_setup.py --junitxml=\"$RUNNER_TEMP/ci-shards.xml\"",
+  "actual_ci_shards_receipt_rejected_by_target_policy": "ci-shards: missing required cases: ['scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_empty_active_permanent_reference_still_refuses_promotion', 'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_parses_every_br_and_semicolon_separated_permanent_reference', 'scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_original_stays_registered_and_second_promotion_is_idempotent']",
+  "promotion_readme_claimed_files": 225,
+  "verdict": "FAIL",
+  "final_P_S": "pending",
+  "full_release_approval": false
+}

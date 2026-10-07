@@ -1,0 +1,38 @@
+{
+  "checked_at_utc": "2026-10-06T20:44:36.619850+00:00",
+  "scope": "read-only SSH; exact candidate Python source executed in memory only; no files written on server",
+  "server": "194.87.96.144",
+  "repo": "/opt/wms",
+  "python": "3.10.12",
+  "installed_checkout_sha": "8f11d912351e8de7633b4abcf74d195badaeb254",
+  "candidate_source_sha": "f6066d68bd198794602a6e8916612d0d3b32460f",
+  "source_sha256": {
+    "scripts/ci/verify_ci.py": "bba4de74814427d50c24a0117477f829ae9532c9d31669579c7a32d26372fedb",
+    "scripts/ci/verify_server_process_ci.py": "f0f2481151e75dea0a5dc314fba30acca8760452229cade9f9d6927321288ab6"
+  },
+  "public_api_read": [
+    {
+      "endpoint": "actions/workflows/ci.yml",
+      "http": 200,
+      "state": "active",
+      "rate_remaining": 59
+    },
+    {
+      "endpoint": "actions/runs/37523087363",
+      "http": 200,
+      "rate_remaining": 58
+    },
+    {
+      "endpoint": "actions/runs/37523087363/artifacts",
+      "http": 200,
+      "count": 7,
+      "rate_remaining": 57
+    }
+  ],
+  "runtime_imports": "PASS",
+  "exact_gate_execution": {
+    "refusal": "Нет push-CI etalon для указанного SHA; выкладка ожидает CI",
+    "exit_code": 4
+  },
+  "boundary": "Old deployedSHA lacks matching etalon pushCI. This confirms gate execution/refusal, not green futurecandidate or deploy. No secret/credential/cookie reads, no Docker/DB/build/migrations/deploy."
+}

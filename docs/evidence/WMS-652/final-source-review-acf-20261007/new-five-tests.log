@@ -1,0 +1,10 @@
+test_corrupt_base_or_source_bytes_never_fall_back_to_candidate_hashes (scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests.test_corrupt_base_or_source_bytes_never_fall_back_to_candidate_hashes) ... ok
+test_exact_trusted_pin_upgrades_existing_base_and_checks_source_candidate_and_proof (scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests.test_exact_trusted_pin_upgrades_existing_base_and_checks_source_candidate_and_proof) ... ok
+test_git_integrity_exact_approved_upgrade_accepts_reviewed_digest_and_additions (scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests.test_git_integrity_exact_approved_upgrade_accepts_reviewed_digest_and_additions) ... ok
+test_reviewed_source_must_keep_every_base_path_case_and_suite_semantics (scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests.test_reviewed_source_must_keep_every_base_path_case_and_suite_semantics) ... ok
+test_unapproved_base_source_or_candidate_config_cannot_authorize_upgrade (scripts.ci.tests.test_reviewed_process_upgrade.ReviewedProcessUpgradeTests.test_unapproved_base_source_or_candidate_config_cannot_authorize_upgrade) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 8.578s
+
+OK

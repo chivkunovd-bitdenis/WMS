@@ -1,0 +1,32 @@
+[
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol20/menu/v0.0.1/config.json",
+    "status": "200",
+    "bytes": 498849,
+    "sha256": "203e52677956474a8df79effd413979c490da69f8ea13fdfc4be97153942eed1",
+    "supplies_module_evidence": [
+      "nuItem\":true}},{\"name\":\"menu.section.shipments-and-orders\",\"permission\":\"menuRootDeliveriesOrders\",\"nextLevelItems\":[{\"name\":\"menu.promo.supply-management-front\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"permission\":\"menuSectionSupplyManagementCommon\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/supplierAssigns';window.MONOPALETTE_INFO_ENDPOINT='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/monopalletInfo';window.ENDPOINT_GEO_CODE_YANDEX='https://geocode-maps.yandex.ru/v1';window.ENDPOINT_DELIVERY_PENALTIES='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/warnings/deliveryPenalties';window.ENDPO",
+      "anager/api/v1/plan/validatePackage\",\"VALIDATE_SPOT_GOODS\":\"https://seller-supply.wildberries.ru/ns/sm/supply-manager/api/v1/spot/validateGoods\"},\"loadRef\":{\"APP_STATIC_NAMESPACE\":\"supplies-managment-front\",\"JS\":\"umd/index.637577e813740fb02261.js\",\"JS_CDN\":\"https://static-basket-02.wbbasket.ru/vol20/supplies-managment-front/v2.7.64/index.9e9d55f08272d3fa3232.js\"},\"routeName\":\"supplies-management\",\"routePath\":\"/supplies-management\",\"version\":\"v2.7.64\"},\"nextLevelItems\":[{\"name\":\"menu.supply-management-front-fbw\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"extendedRouteName\":\"supplies-management.all-supplies\",\"permission\":\"menuSectionSupplyManagementNew\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm"
+    ]
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol25/dynamic-menu-config/v0.0.1/config-seller.wildberries.ru.json",
+    "status": "200",
+    "bytes": 498584,
+    "sha256": "e66b970d11b3b823db8d0be44929bf80948657a20dc0e217ec9ee76b3a15b863",
+    "supplies_module_evidence": [
+      "nuItem\":true}},{\"name\":\"menu.section.shipments-and-orders\",\"permission\":\"menuRootDeliveriesOrders\",\"nextLevelItems\":[{\"name\":\"menu.promo.supply-management-front\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"permission\":\"menuSectionSupplyManagementCommon\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/supplierAssigns';window.MONOPALETTE_INFO_ENDPOINT='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/monopalletInfo';window.ENDPOINT_GEO_CODE_YANDEX='https://geocode-maps.yandex.ru/v1';window.ENDPOINT_DELIVERY_PENALTIES='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/warnings/deliveryPenalties';window.ENDPO",
+      "anager/api/v1/plan/validatePackage\",\"VALIDATE_SPOT_GOODS\":\"https://seller-supply.wildberries.ru/ns/sm/supply-manager/api/v1/spot/validateGoods\"},\"loadRef\":{\"APP_STATIC_NAMESPACE\":\"supplies-managment-front\",\"JS\":\"umd/index.637577e813740fb02261.js\",\"JS_CDN\":\"https://static-basket-02.wbbasket.ru/vol20/supplies-managment-front/v2.7.64/index.9e9d55f08272d3fa3232.js\"},\"routeName\":\"supplies-management\",\"routePath\":\"/supplies-management\",\"version\":\"v2.7.64\"},\"nextLevelItems\":[{\"name\":\"menu.supply-management-front-fbw\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"extendedRouteName\":\"supplies-management.all-supplies\",\"permission\":\"menuSectionSupplyManagementNew\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm"
+    ]
+  },
+  {
+    "url": "https://static-basket-02.wbbasket.ru/vol25/dynamic-menu-config/v0.0.1/new-config-seller.wildberries.ru.json",
+    "status": "200",
+    "bytes": 498584,
+    "sha256": "e66b970d11b3b823db8d0be44929bf80948657a20dc0e217ec9ee76b3a15b863",
+    "supplies_module_evidence": [
+      "nuItem\":true}},{\"name\":\"menu.section.shipments-and-orders\",\"permission\":\"menuRootDeliveriesOrders\",\"nextLevelItems\":[{\"name\":\"menu.promo.supply-management-front\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"permission\":\"menuSectionSupplyManagementCommon\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/supplierAssigns';window.MONOPALETTE_INFO_ENDPOINT='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/monopalletInfo';window.ENDPOINT_GEO_CODE_YANDEX='https://geocode-maps.yandex.ru/v1';window.ENDPOINT_DELIVERY_PENALTIES='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/warnings/deliveryPenalties';window.ENDPO",
+      "anager/api/v1/plan/validatePackage\",\"VALIDATE_SPOT_GOODS\":\"https://seller-supply.wildberries.ru/ns/sm/supply-manager/api/v1/spot/validateGoods\"},\"loadRef\":{\"APP_STATIC_NAMESPACE\":\"supplies-managment-front\",\"JS\":\"umd/index.637577e813740fb02261.js\",\"JS_CDN\":\"https://static-basket-02.wbbasket.ru/vol20/supplies-managment-front/v2.7.64/index.9e9d55f08272d3fa3232.js\"},\"routeName\":\"supplies-management\",\"routePath\":\"/supplies-management\",\"version\":\"v2.7.64\"},\"nextLevelItems\":[{\"name\":\"menu.supply-management-front-fbw\",\"staticURL\":\"/nsf/supplies-managment-front/frontend-services\",\"extendedRouteName\":\"supplies-management.all-supplies\",\"permission\":\"menuSectionSupplyManagementNew\",\"config\":{\"envs\":\"window.ENDPOINT_GTD_FROM_XLS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/gtdFromXLS';window.ENDPOINT_SUPPLIER_ASSIGNS='https://seller-supply.wildberries.ru/ns/sm"
+    ]
+  }
+]

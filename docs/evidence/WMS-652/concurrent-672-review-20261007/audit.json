@@ -1,0 +1,77 @@
+{
+  "candidate": "10c018092ab6f76928a54115eb824a64adc637be",
+  "parent": "d88c0773419f984ab12ba8f78f88ac88eee02e83",
+  "foreign_source": "9dae4b19f6d4dca554200e08282579414a110848",
+  "policy_counts": [
+    269,
+    27,
+    1675
+  ],
+  "preserved": [
+    {
+      "source": "parent",
+      "count": [
+        262,
+        24,
+        1648
+      ]
+    },
+    {
+      "source": "SOURCE0151",
+      "count": [
+        222,
+        18,
+        1146
+      ]
+    }
+  ],
+  "all_foreign_case_report_format_exact_bindings_retained": true,
+  "additions": [
+    "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks",
+    "C5 blank message retains existing generic preparation error and zero external actions",
+    "C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness",
+    "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
+    "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
+    "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
+    "C5 no message retains existing generic preparation error and zero external actions",
+    "C5 nonstring message retains existing generic preparation error and zero external actions",
+    "C5 synchronous decode throw drains held active peers before cleanup and retry readiness",
+    "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
+    "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
+    "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[archive]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[dump]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[empty]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[listing]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[network]",
+    "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[retry]",
+    "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[False]",
+    "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[True]",
+    "tests.test_prod_deploy_backup_gate_boundary::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+    "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+    "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+    "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]",
+    "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+    "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]"
+  ],
+  "exact_native_files": [
+    "frontend/tests-e2e/wms672-native-errors.test.mjs",
+    "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs"
+  ],
+  "portable_backup_AST_identical_to": "4ce7ac351cf85072fa9cfa62a7917e93f3e2a94f",
+  "decoder": {
+    "decoder_foreign_ast_equal": true,
+    "all_outside_decoder_parent_bytes_equal": true
+  },
+  "whole_inbound_unchanged": true,
+  "product_changes": [
+    "frontend/src/utils/printBarcodeLabel.ts"
+  ],
+  "known_preexisting_pending_F6_hash": [
+    "backend/tests/test_wms662_cancellation_lock_order.py"
+  ],
+  "all_other_protected_hashes_match": true,
+  "runtime": "Accepted twelve cases/tsc/Ruff records reused, not rerun; next combined CI pending"
+}

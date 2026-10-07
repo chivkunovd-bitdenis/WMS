@@ -1,0 +1,16 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-dom-ci/frontend
+
+ ✓ src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx (11 tests) 5772ms
+   ✓ WMS-684 acceptance box labels > single label preserves own box and metadata numbered=true generated=true  478ms
+   ✓ WMS-684 acceptance box labels > bulk is one job with three pages in original order and no trailing break  387ms
+   ✓ WMS-684 acceptance box labels > refresh and navigation preserve identities without stale seller/date/box data  1091ms
+   ✓ WMS-684 acceptance box labels > uses the Moscow document date and handles missing or invalid metadata without refusing print  1468ms
+   ✓ WMS-684 acceptance box labels > escapes complete long seller text in single and bulk HTML  608ms
+   ✓ WMS-684 acceptance box labels > mark http failure reports error, releases busy and never reprints automatically  434ms
+   ✓ WMS-684 acceptance box labels > mark lost failure reports error, releases busy and never reprints automatically  491ms
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  09:52:59
+   Duration  8.13s (transform 593ms, setup 0ms, collect 1.82s, tests 5.77s, environment 370ms, prepare 48ms)

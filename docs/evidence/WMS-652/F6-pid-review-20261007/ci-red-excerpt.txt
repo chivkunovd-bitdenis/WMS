@@ -1,0 +1,32 @@
+2026-10-07T00:10:30.6491320Z ..F.                                                                     [100%]
+2026-10-07T00:10:30.6492215Z =================================== FAILURES ===================================
+2026-10-07T00:10:30.6493382Z _ test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_duplicate[observed_status-normal] _
+2026-10-07T00:10:30.6494119Z
+2026-10-07T00:10:30.6494732Z db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x7fc5df731b50>
+2026-10-07T00:10:30.6495623Z handoff_entry = 'normal', cancel_entry = 'observed_status'
+2026-10-07T00:10:30.6544252Z         )
+2026-10-07T00:10:30.6544682Z         assert not schedule.barrier_errors, f"HARNESS swallowed barrier timeout: {diagnostics}"
+2026-10-07T00:10:30.6545423Z         assert schedule.contended, (
+2026-10-07T00:10:30.6545948Z             f"HARNESS: PostgreSQL never confirmed handoff blocked by cancellation; {diagnostics}"
+2026-10-07T00:10:30.6546422Z         )
+2026-10-07T00:10:30.6546715Z         assert set(schedule.pids) == {"handoff", "cancel"}
+2026-10-07T00:10:30.6547329Z >       assert len(set(schedule.pids.values())) == 2, "must use independent PostgreSQL backends"
+2026-10-07T00:10:30.6548156Z E       AssertionError: must use independent PostgreSQL backends
+2026-10-07T00:10:30.6548531Z E       assert 1 == 2
+2026-10-07T00:10:30.6548806Z E        +  where 1 = len({90})
+2026-10-07T00:10:30.6549150Z E        +    where {90} = set(dict_values([90, 90]))
+2026-10-07T00:10:30.6549744Z E        +      where dict_values([90, 90]) = <built-in method values of dict object at 0x7fc5df65ec40>()
+2026-10-07T00:10:30.6550563Z E        +        where <built-in method values of dict object at 0x7fc5df65ec40> = {'cancel': 90, 'handoff': 90}.values
+2026-10-07T00:10:30.6551510Z E        +          where {'cancel': 90, 'handoff': 90} = <test_wms662_cancellation_lock_order.LockSchedule object at 0x7fc5df7eab90>.pids
+2026-10-07T00:10:30.6551985Z
+2026-10-07T00:10:30.6552250Z tests/test_wms662_cancellation_lock_order.py:393: AssertionError
+2026-10-07T00:10:30.6556327Z =========================== short test summary info ============================
+2026-10-07T00:10:30.6557725Z FAILED tests/test_wms662_cancellation_lock_order.py::test_f6_cancel_and_distinct_order_handoff_commit_without_loss_or_duplicate[observed_status-normal] - AssertionError: must use independent PostgreSQL backends
+2026-10-07T00:10:30.6558611Z assert 1 == 2
+2026-10-07T00:10:30.6558834Z  +  where 1 = len({90})
+2026-10-07T00:10:30.6559126Z  +    where {90} = set(dict_values([90, 90]))
+2026-10-07T00:10:30.6559637Z  +      where dict_values([90, 90]) = <built-in method values of dict object at 0x7fc5df65ec40>()
+2026-10-07T00:10:30.6560366Z  +        where <built-in method values of dict object at 0x7fc5df65ec40> = {'cancel': 90, 'handoff': 90}.values
+2026-10-07T00:10:30.6561187Z  +          where {'cancel': 90, 'handoff': 90} = <test_wms662_cancellation_lock_order.LockSchedule object at 0x7fc5df7eab90>.pids
+2026-10-07T00:10:30.6561802Z 1 failed, 3 passed, 1 warning in 4.06s
+2026-10-07T00:10:31.7489029Z ##[error]Process completed with exit code 1.

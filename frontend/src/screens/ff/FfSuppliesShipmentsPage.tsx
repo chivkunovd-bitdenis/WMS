@@ -359,8 +359,12 @@ export function FfSuppliesShipmentsPage({
   const [boxAddDialogBoxId, setBoxAddDialogBoxId] = useState<string | null>(null)
   const [boxAddSuccessMsg, setBoxAddSuccessMsg] = useState<string | null>(null)
   const [boxImportOpen, setBoxImportOpen] = useState(false)
+  const [wbFbwExportBusy, setWbFbwExportBusy] = useState(false)
+  const [wbFbwExportError, setWbFbwExportError] = useState<string | null>(null)
+  const [wbFbwExportWarning, setWbFbwExportWarning] = useState<string | null>(null)
   const mpTabInitForRef = useRef<string | null>(null)
   const docDetailRequests = useRef(createLatestRequestSequence())
+  const wbFbwExportRequests = useRef(createLatestRequestSequence())
   // Пункт 2 итерации 2026-08-14: статус документа не должен меняться молча
   // (например «Утверждено» → «На сборке» как побочный эффект скана/создания короба).
   const prevMpStatusRef = useRef<{ id: string; status: string } | null>(null)
@@ -370,6 +374,13 @@ export function FfSuppliesShipmentsPage({
     () => (token ? { Authorization: `Bearer ${token}` } : null),
     [token],
   )
+
+  useEffect(() => {
+    wbFbwExportRequests.current.next()
+    setWbFbwExportBusy(false)
+    setWbFbwExportError(null)
+    setWbFbwExportWarning(null)
+  }, [docModal, docModalId])
 
   useEffect(() => {
     if (sellers.length === 0) {
@@ -1064,12 +1075,62 @@ export function FfSuppliesShipmentsPage({
       return
     }
     printBarcodeLabel({
-      title: 'Короб отгрузки',
+      title: 'Внутренний ШК WMS',
       barcode,
       barcodeDataUrl: renderBarcodeDataUrl(barcode, { variant: 'internalBox' }),
       labelSize: size,
       layout: 'internalBox',
     })
+  }
+
+  const downloadWbFbwPackaging = async () => {
+    if (!token || !authHeaders || docModal !== 'marketplace_unload' || !docModalId) {
+      return
+    }
+    const exportRequestId = wbFbwExportRequests.current.next()
+    setWbFbwExportBusy(true)
+    setWbFbwExportError(null)
+    setWbFbwExportWarning(null)
+    try {
+      const response = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${docModalId}/wb-fbw-packaging.xlsx`),
+        { headers: authHeaders },
+      )
+      if (!wbFbwExportRequests.current.isLatest(exportRequestId)) {
+        return
+      }
+      if (!response.ok) {
+        const message = await readApiErrorMessage(response)
+        if (wbFbwExportRequests.current.isLatest(exportRequestId)) {
+          setWbFbwExportError(message)
+        }
+        return
+      }
+      const requiresShelfLifeDate = response.headers.get('x-wms-warning-code') === 'wb-shelf-life-date-required'
+      const blob = await response.blob()
+      if (!wbFbwExportRequests.current.isLatest(exportRequestId)) {
+        return
+      }
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = 'wb-fbw-packaging.xlsx'
+      link.click()
+      URL.revokeObjectURL(url)
+      if (requiresShelfLifeDate) {
+        setWbFbwExportWarning(
+          'Перед загрузкой в WB укажите фактическую дату партии для товаров со сроком годности: WMS не хранит дату окончания партии.',
+        )
+      }
+    } catch (e) {
+      if (wbFbwExportRequests.current.isLatest(exportRequestId)) {
+        setWbFbwExportError(e instanceof Error ? e.message : 'Не удалось скачать XLSX для WB.')
+      }
+    } finally {
+      if (wbFbwExportRequests.current.isLatest(exportRequestId)) {
+        setWbFbwExportBusy(false)
+      }
+    }
   }
 
   const copyBox = async (boxId: string) => {
@@ -2880,6 +2941,29 @@ export function FfSuppliesShipmentsPage({
                     </AccordionSummary>
                     <AccordionDetails>
                       <Stack spacing={1.25} data-testid="ff-mp-boxes">
+                        {unloadDetail.marketplace === 'wb' ? (
+                          <Stack spacing={1} sx={{ alignItems: 'flex-start' }}>
+                            <Button
+                              variant="outlined"
+                              size="small"
+                              onClick={() => void downloadWbFbwPackaging()}
+                              disabled={wbFbwExportBusy}
+                              data-testid="ff-mp-wb-fbw-export"
+                            >
+                              Скачать XLSX для WB
+                            </Button>
+                            {wbFbwExportError ? (
+                              <Alert severity="error" data-testid="ff-mp-wb-fbw-export-error">
+                                {wbFbwExportError}
+                              </Alert>
+                            ) : null}
+                            {wbFbwExportWarning ? (
+                              <Alert severity="warning" data-testid="ff-mp-wb-fbw-export-warning">
+                                {wbFbwExportWarning}
+                              </Alert>
+                            ) : null}
+                          </Stack>
+                        ) : null}
                         {canUseMpBoxOperationalControls ? (
                           <Box
                             sx={{

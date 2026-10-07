@@ -48,6 +48,36 @@
         "evidence_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
         "evidence_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e"
       }
+    },
+    {
+      "contract_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "correction_commit": "e2495dfa50767f156e6f54d91889c6067d6d5625",
+      "files": [
+        {
+          "transform": "wms662-confirmed-wait-pid-pair",
+          "path": "backend/tests/test_wms662_cancellation_lock_order.py",
+          "before_blob": "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+          "after_blob": "bf7c850d9c7948ffd3b7cef5cbea9b3c1404923e"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "docs/evidence/wms652/wms662-f6-pid-fixture-correction.md",
+          "before_blob": null,
+          "after_blob": "fcfd9a45460e04ee41a1490148dd01a5bfa9316d"
+        }
+      ],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+        "correction_commit": "e2495dfa50767f156e6f54d91889c6067d6d5625",
+        "evidence": "docs/reviews/WMS-652-F6-pid-observation-review-20261007.md",
+        "evidence_commit": "e8ce046001dbf7c1f335b1a7e497e8532e9b698a",
+        "evidence_blob": "141821083fb2134e9c92f3941c2d6ecdcaec7e36"
+      }
     }
   ],
   "owner_supersessions": [

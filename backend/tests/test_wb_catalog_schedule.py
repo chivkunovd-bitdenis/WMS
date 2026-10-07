@@ -88,17 +88,27 @@ async def test_connected_sellers_isolated_and_http_has_no_open_read_session(
             finally:
                 opened -= 1
 
-    calls = []
+    calls: list[httpx.Request] = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
         assert opened == 0  # All enumeration/token sessions ended before HTTP.
-        calls.append(request.headers["Authorization"])
-        if calls[-1] == "bad":
-            return httpx.Response(401, json={"error": "synthetic"})
-        return httpx.Response(200, json={"cards": [{
-            "nmID": 277, "vendorCode": "SAME-SKU", "title": "Synthetic",
-            "sizes": [{"chrtID": 277, "techSize": "0", "skus": ["SAME-BAR"]}],
-        }]})
+        calls.append(request)
+        token = request.headers["Authorization"]
+        if request.url.path == "/content/v2/get/cards/list":
+            if token == "bad":
+                return httpx.Response(401, json={"error": "synthetic"})
+            return httpx.Response(200, json={"cards": [{
+                "nmID": 277, "vendorCode": "SAME-SKU", "title": "Synthetic",
+                "sizes": [{"chrtID": 277, "techSize": "0", "skus": ["SAME-BAR"]}],
+            }]})
+        if request.url.path == "/content/v2/object/parent/all":
+            assert token in {"first", "second"}
+            return httpx.Response(200, json={"data": []})
+        if request.url.path == "/content/v2/object/all":
+            assert token in {"first", "second"}
+            assert request.url.params == {"limit": "1000", "offset": "0"}
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB request: {request.method} {request.url}")
 
     monkeypatch.setattr(sync, "SessionLocal", tracked_session)
     monkeypatch.setattr(sync.httpx, "AsyncClient", partial(
@@ -107,7 +117,27 @@ async def test_connected_sellers_isolated_and_http_has_no_open_read_session(
     summary = await sync.run_wb_products_sync_all_sellers()
     assert summary["sellers_total"] == 3
     assert summary["sellers_ok"] == 2 and summary["sellers_failed"] == 1
-    assert sorted(calls) == ["bad", "first", "second"]
+    card_calls = [
+        request for request in calls if request.url.path == "/content/v2/get/cards/list"
+    ]
+    parent_calls = [
+        request for request in calls if request.url.path == "/content/v2/object/parent/all"
+    ]
+    subject_calls = [
+        request for request in calls if request.url.path == "/content/v2/object/all"
+    ]
+    # Each connected seller gets exactly one card-list request under its own
+    # token. Category reads are additional WMS-658 evidence requests, never a
+    # replacement for card selection and never authorized as the failed seller.
+    assert sorted(request.headers["Authorization"] for request in card_calls) == [
+        "bad", "first", "second"
+    ]
+    assert sorted(request.headers["Authorization"] for request in parent_calls) == [
+        "first", "second"
+    ]
+    assert sorted(request.headers["Authorization"] for request in subject_calls) == [
+        "first", "second"
+    ]
     products = list((await db_session.scalars(select(Product))).all())
     assert {(p.tenant_id, p.seller_id) for p in products} == {
         (first.tenant_id, first.id), (second.tenant_id, second.id),
@@ -146,11 +176,18 @@ async def test_active_manual_job_skipped_then_terminal_job_allows_import(
         job.status = jobs.JOB_STATUS_RUNNING
         job.started_at = datetime.now(UTC)
         await db_session.commit()
-    calls = []
+    calls: list[httpx.Request] = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
         calls.append(request)
-        return httpx.Response(200, json={"cards": []})
+        if request.url.path == "/content/v2/get/cards/list":
+            return httpx.Response(200, json={"cards": []})
+        if request.url.path in {
+            "/content/v2/object/parent/all",
+            "/content/v2/object/all",
+        }:
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB request: {request.method} {request.url}")
 
     monkeypatch.setattr(sync.httpx, "AsyncClient", partial(
         httpx.AsyncClient, transport=httpx.MockTransport(upstream),
@@ -163,7 +200,13 @@ async def test_active_manual_job_skipped_then_terminal_job_allows_import(
     job.status = "failed"
     await db_session.commit()
     summary = await sync.run_wb_products_sync_all_sellers()
-    assert summary["sellers_ok"] == 1 and len(calls) == 1
+    assert summary["sellers_ok"] == 1
+    assert [request.url.path for request in calls] == [
+        "/content/v2/get/cards/list",
+        "/content/v2/object/parent/all",
+        "/content/v2/object/all",
+    ]
+    assert all(request.headers["Authorization"] == "synthetic" for request in calls)
 
 
 @pytest.mark.asyncio

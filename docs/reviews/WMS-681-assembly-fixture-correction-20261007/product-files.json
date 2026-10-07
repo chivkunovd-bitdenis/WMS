@@ -1,0 +1,40 @@
+{
+  "product_sha": "95b4728eb58793e3a58cb89b057e53ba8b9228a5",
+  "all_archived_files_match": true,
+  "test_file_is_only_override": "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+  "archived_files_verified_count": 689,
+  "relevant_source_blobs": [
+    {
+      "path": "frontend/package-lock.json",
+      "blob": "d1a759767447ad4eb6b73f9fcece047ca602e444"
+    },
+    {
+      "path": "frontend/package.json",
+      "blob": "b47e0efa49a5d6dbd2d675b3d50db06fc134d068"
+    },
+    {
+      "path": "frontend/src/screens/v2/FbsPackingScanBar.tsx",
+      "blob": "aefb7bc9c071192c3723fac08cbd0331a22a8efd"
+    },
+    {
+      "path": "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+      "blob": "d347fcce8832cfc70928126cb65283e35dd1e275"
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsApi.ts",
+      "blob": "32599c067a8e805066c5b0ce94871111f27bcd2b"
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsSequentialPacking.ts",
+      "blob": "9d97ad3d0252c513e6789ee1abb595dc2f070c0d"
+    },
+    {
+      "path": "frontend/src/screens/v2/fbsSupplyAssembly.ts",
+      "blob": "b10773229add54c8c5a293b0fa2d5394d94ac783"
+    },
+    {
+      "path": "frontend/vitest.config.ts",
+      "blob": "a98465e2fb090848261b4489dea030f9f18be8da"
+    }
+  ]
+}

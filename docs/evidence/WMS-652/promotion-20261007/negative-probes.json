@@ -1,0 +1,26 @@
+[
+  {
+    "scenario": "changed-bytes",
+    "refused": true,
+    "reason": "Изменён защищённый original тест: backend/tests/test_immutable_contract.py",
+    "no_mutation": true
+  },
+  {
+    "scenario": "missing-case",
+    "refused": true,
+    "reason": "Защищённый original не имеет обязательного case/report: backend/tests/test_immutable_contract.py::test_frozen_case_id",
+    "no_mutation": true
+  },
+  {
+    "scenario": "uncommitted-policy",
+    "refused": true,
+    "reason": "Process protection должна быть сохранена в Git до promotion",
+    "no_mutation": true
+  },
+  {
+    "scenario": "symlink",
+    "refused": true,
+    "reason": "Symlink is not execution evidence: backend/tests/test_immutable_contract.py",
+    "no_mutation": true
+  }
+]

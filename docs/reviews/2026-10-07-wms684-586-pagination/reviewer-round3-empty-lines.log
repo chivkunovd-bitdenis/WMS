@@ -1,0 +1,12 @@
+/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-586/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+  from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____________ test_empty_line_fragments_do_not_emit_blank_pdf_pages _____________
+../docs/reviews/2026-10-07-wms684-586-pagination/pagination_api_probe.py:154: in test_empty_line_fragments_do_not_emit_blank_pdf_pages
+    assert not empties, f"permitted 255-character name generated blank PDF pages: {empties}"
+E   AssertionError: permitted 255-character name generated blank PDF pages: [3, 4, 5]
+E   assert not [3, 4, 5]
+=========================== short test summary info ============================
+FAILED ::test_empty_line_fragments_do_not_emit_blank_pdf_pages - AssertionErr...
+1 failed, 1 deselected in 1.71s

@@ -1,0 +1,26 @@
+{
+  "purpose": "Two Test cells C680-09/C680-10 refer to the same genuine three-space parameter case; legacy whitespace normalization cannot represent it. Both checks still require this exact mandatory CI case.",
+  "bindings": [
+    {
+      "check": "C680-09",
+      "case_id": "src/utils/wms680PrintContract.test.ts::WMS-680 · контракт печатных накладных до реализации C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('   ', 'Blue')",
+      "suite": "frontend-fbs",
+      "format": "vitest",
+      "report": "frontend-all.json",
+      "protected_source": "frontend/src/utils/wms680PrintContract.test.ts",
+      "protected_sha256": "1246504f6f28a8c86b34f6b5b4e14d18b68898b2faf6be56b40c4764d3304525"
+    },
+    {
+      "check": "C680-10",
+      "case_id": "src/utils/wms680PrintContract.test.ts::WMS-680 · контракт печатных накладных до реализации C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('   ', 'Blue')",
+      "suite": "frontend-fbs",
+      "format": "vitest",
+      "report": "frontend-all.json",
+      "protected_source": "frontend/src/utils/wms680PrintContract.test.ts",
+      "protected_sha256": "1246504f6f28a8c86b34f6b5b4e14d18b68898b2faf6be56b40c4764d3304525"
+    }
+  ],
+  "test_source_changed": false,
+  "policy_changed": false,
+  "case_removed_or_skipped": false
+}

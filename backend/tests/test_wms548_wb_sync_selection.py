@@ -293,23 +293,48 @@ async def test_hourly_sync_selection_is_isolated_per_seller_and_tenant(
     }])
     await db_session.commit()
 
-    calls: list[str] = []
+    calls: list[httpx.Request] = []
 
     def upstream(request: httpx.Request) -> httpx.Response:
-        token = request.headers["Authorization"]
-        calls.append(token)
-        return httpx.Response(200, json={"cards": [{
-            "nmID": 900, "vendorCode": "WMS548-900",
-            "title": "Совпадающий артикул (обновлён)",
-            "sizes": [{"chrtID": 90, "techSize": "0", "skus": ["9000000000001"]}],
-        }]})
+        calls.append(request)
+        if request.url.path == "/content/v2/get/cards/list":
+            return httpx.Response(200, json={"cards": [{
+                "nmID": 900, "vendorCode": "WMS548-900",
+                "title": "Совпадающий артикул (обновлён)",
+                "sizes": [{"chrtID": 90, "techSize": "0", "skus": ["9000000000001"]}],
+            }]})
+        if request.url.path == "/content/v2/object/parent/all":
+            return httpx.Response(200, json={"data": []})
+        if request.url.path == "/content/v2/object/all":
+            assert request.url.params == {"limit": "1000", "offset": "0"}
+            return httpx.Response(200, json={"data": []})
+        raise AssertionError(f"unexpected WB request: {request.method} {request.url}")
 
     monkeypatch.setattr(sync_module.httpx, "AsyncClient", partial(
         httpx.AsyncClient, transport=httpx.MockTransport(upstream),
     ))
     summary = await sync_module.run_wb_products_sync_all_sellers()
     assert summary["sellers_ok"] == 3
-    assert sorted(calls) == ["tokA", "tokB", "tokC"]
+    card_calls = [
+        request for request in calls if request.url.path == "/content/v2/get/cards/list"
+    ]
+    parent_calls = [
+        request for request in calls if request.url.path == "/content/v2/object/parent/all"
+    ]
+    subject_calls = [
+        request for request in calls if request.url.path == "/content/v2/object/all"
+    ]
+    # Category requests use the same seller credentials as their card list;
+    # no tenant may borrow another seller's WB token to classify its cards.
+    assert sorted(request.headers["Authorization"] for request in card_calls) == [
+        "tokA", "tokB", "tokC"
+    ]
+    assert sorted(request.headers["Authorization"] for request in parent_calls) == [
+        "tokA", "tokB", "tokC"
+    ]
+    assert sorted(request.headers["Authorization"] for request in subject_calls) == [
+        "tokA", "tokB", "tokC"
+    ]
 
     assert await _product_count(db_session, tenant1.id, seller_a.id) == 1
     assert await _product_count(db_session, tenant1.id, seller_b.id) == 0

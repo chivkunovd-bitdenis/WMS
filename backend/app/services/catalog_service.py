@@ -216,8 +216,14 @@ def _normalize_rack_name(name: str) -> str:
     return name.strip().upper()
 
 
-def _format_location_code(rack_name: str, side: int, position: int) -> str:
-    return f"{rack_name} {side}.{position}"
+def _format_location_code(
+    rack_name: str,
+    side: int | None,
+    tier: int | None,
+    position: int,
+) -> str:
+    parts = [str(value) for value in (side, tier, position) if value is not None]
+    return f"{rack_name} {'.'.join(parts)}"
 
 
 async def list_racks(
@@ -289,10 +295,13 @@ async def suggest_next_location_for_rack(
     warehouse_id: uuid.UUID,
     *,
     rack_name: str,
-    side: int,
+    side: int | None,
+    tier: int | None = None,
 ) -> tuple[int, str]:
-    if side not in (1, 2):
+    if side is not None and side not in (1, 2):
         raise CatalogError("invalid_side")
+    if tier is not None and tier <= 0:
+        raise CatalogError("invalid_tier")
     name = _normalize_rack_name(rack_name)
     max_pos = 0
     rack = await _get_rack_by_name(session, tenant_id, warehouse_id, rack_name=rack_name)
@@ -302,12 +311,28 @@ async def suggest_next_location_for_rack(
             StorageLocation.warehouse_id == warehouse_id,
             StorageLocation.rack_id == rack.id,
             StorageLocation.side == side,
+            StorageLocation.tier == tier,
             StorageLocation.position.is_not(None),
         )
         res = await session.execute(stmt)
         max_pos = int(res.scalar_one() or 0)
     next_pos = max_pos + 1
-    return next_pos, _format_location_code(name, side, next_pos)
+    # Coordinates describe scope for the next position, but the persisted code
+    # remains globally unique within a warehouse.  A legacy/manual code can
+    # therefore occupy a rendering of a new coordinate combination.
+    while True:
+        code = _format_location_code(name, side, tier, next_pos)
+        occupied = await session.scalar(
+            select(StorageLocation.id).where(
+                StorageLocation.tenant_id == tenant_id,
+                StorageLocation.warehouse_id == warehouse_id,
+                StorageLocation.deleted_at.is_(None),
+                StorageLocation.code == code,
+            ).limit(1)
+        )
+        if occupied is None:
+            return next_pos, code
+        next_pos += 1
 
 
 async def create_location_from_rack(
@@ -316,14 +341,17 @@ async def create_location_from_rack(
     warehouse_id: uuid.UUID,
     *,
     rack_name: str,
-    side: int,
+    side: int | None,
+    tier: int | None = None,
     position: int | None = None,
 ) -> StorageLocation:
     wh = await get_warehouse(session, tenant_id, warehouse_id)
     if wh is None:
         raise CatalogError("warehouse_not_found")
-    if side not in (1, 2):
+    if side is not None and side not in (1, 2):
         raise CatalogError("invalid_side")
+    if tier is not None and tier <= 0:
+        raise CatalogError("invalid_tier")
     if position is not None and position <= 0:
         raise CatalogError("invalid_position")
 
@@ -331,10 +359,10 @@ async def create_location_from_rack(
 
     if position is None:
         position, code = await suggest_next_location_for_rack(
-            session, tenant_id, warehouse_id, rack_name=rack.name, side=side
+            session, tenant_id, warehouse_id, rack_name=rack.name, side=side, tier=tier
         )
     else:
-        code = _format_location_code(rack.name, side, position)
+        code = _format_location_code(rack.name, side, tier, position)
 
     # CODE128 supports alphanumeric; keep it short and unique.
     # Persisted in DB and used for printing the barcode label.
@@ -345,6 +373,7 @@ async def create_location_from_rack(
             code=code,
             rack_id=rack.id,
             side=side,
+            tier=tier,
             position=position,
             barcode=f"LOC-{uuid.uuid4().hex[:12].upper()}",
         )
@@ -354,7 +383,15 @@ async def create_location_from_rack(
         except IntegrityError as exc:
             await session.rollback()
             msg = str(exc.orig).lower() if exc.orig is not None else str(exc).lower()
-            if "uq_storage_locations_wh_code" in msg or "storage_locations_wh_code" in msg:
+            if (
+                "uq_storage_locations_wh_code" in msg
+                or "storage_locations_wh_code" in msg
+                or (
+                    "unique constraint failed: storage_locations.warehouse_id, "
+                    "storage_locations.code"
+                )
+                in msg
+            ):
                 raise CatalogError("location_code_taken") from exc
             if "uq_storage_locations_tenant_barcode" in msg or "tenant_barcode" in msg:
                 # Retry barcode collision (extremely unlikely).

@@ -15,6 +15,11 @@ CONTRACT_CORRECTIONS_DIR = "docs/reviews/contract-corrections"
 # decorators, imports and control flow. Changing even one other byte is denied.
 # New pairs require a process change with RED regressions and independent review.
 FIXTURE_BLOB_PAIRS = {
+    "wms662-confirmed-wait-pid-pair": (
+        "WMS-662", "backend/tests/test_wms662_cancellation_lock_order.py",
+        "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+        "bf7c850d9c7948ffd3b7cef5cbea9b3c1404923e",
+    ),
     "wms517-uuid-before-rollback": (
         "WMS-517", "backend/tests/test_wms517_sales_contract.py",
         "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",
@@ -61,6 +66,63 @@ FIXTURE_BLOB_PAIRS = {
         "03d744d54222dc6ee13014d1f378bf07e6eb4e8a",
     ),
 }
+
+# Published Sol high exact chains: fixed whole-file blobs, no generic exemption.
+NIGHT_REVIEWED_FIXTURE_PAIRS = {'wms-658-reviewed-1-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               '9661a123265f1ea75d084fbf1b6da13d34481856',
+                                                               '0a267634279a868660cbc014c6312bbf4cfc7798'),
+ 'wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_wb_honest_sign_contract.py',
+                                                               '9bf03cba6847065ee8b59030aece6f1695b4d22d',
+                                                               '946ec81ef52d7fb888379b327dcd74be8ce52a99'),
+ 'wms-658-reviewed-2-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               '0a267634279a868660cbc014c6312bbf4cfc7798',
+                                                               'ff481b1e693884c103e46624a05807f3120bc040'),
+ 'wms-658-reviewed-3-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               'ff481b1e693884c103e46624a05807f3120bc040',
+                                                               'cee12538b9d752f040edcc2c7a892726d307d68d'),
+ 'wms-658-reviewed-4-test_wms658_marking_import_contract.py': ('WMS-658',
+                                                               'backend/tests/test_wms658_marking_import_contract.py',
+                                                               'cee12538b9d752f040edcc2c7a892726d307d68d',
+                                                               '6e76bf1d4bcf38ff59341e6d3459346313421e6c'),
+ 'wms-681-reviewed-1-test_fbs_packing_box.py': ('WMS-681',
+                                                'backend/tests/test_fbs_packing_box.py',
+                                                '7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3',
+                                                'bf92738de529c1ca4882240a0b617df5db82dedd'),
+ 'wms-681-reviewed-1-FfFbsSupplyWorkspace.assembly.dom.test.tsx': ('WMS-681',
+                                                                   'frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx',
+                                                                   'c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4',
+                                                                   'c809482c9eb151425e9031e33b06246cb1e6039a'),
+ 'wms-681-reviewed-2-test_fbs_packing_box.py': ('WMS-681',
+                                                'backend/tests/test_fbs_packing_box.py',
+                                                'bf92738de529c1ca4882240a0b617df5db82dedd',
+                                                '1cca9c86a4e50842919d0ca4aec4c57607c0fe7a'),
+ 'wms-681-reviewed-2-FfFbsSupplyWorkspace.assembly.dom.test.tsx': ('WMS-681',
+                                                                   'frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx',
+                                                                   'c809482c9eb151425e9031e33b06246cb1e6039a',
+                                                                   '58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3')}
+NIGHT_REVIEWED_COMPANIONS = {'wms-658-reviewed-1-test_wms658_marking_import_contract.py': [{'path': 'docs/requirements/WMS-658.md',
+                                                                'before_blob': '88a79ede1de989790d4cf814d208f3615420740f',
+                                                                'after_blob': 'a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58'}],
+ 'wms-658-reviewed-1-test_wms658_wb_honest_sign_contract.py': [{'path': 'docs/requirements/WMS-658.md',
+                                                                'before_blob': '88a79ede1de989790d4cf814d208f3615420740f',
+                                                                'after_blob': 'a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58'}]}
+NIGHT_REVIEWED_FIXTURE_PAIRS["wms681-integration-assembly-qr-recovery"] = (
+    "WMS-681", "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+    "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
+    "12358c8953c842819db9a1b277ce51cbd83b9915",
+)
+NIGHT_REVIEWED_FIXTURE_PAIRS["wms662-confirmed-wait-pid-pair"] = FIXTURE_BLOB_PAIRS["wms662-confirmed-wait-pid-pair"]
+NIGHT_REVIEWED_COMPANIONS["wms662-confirmed-wait-pid-pair"] = [{
+    "path": "docs/evidence/wms652/wms662-f6-pid-fixture-correction.md",
+    "before_blob": None,
+    "after_blob": "fcfd9a45460e04ee41a1490148dd01a5bfa9316d",
+}]
+FIXTURE_BLOB_PAIRS.update(NIGHT_REVIEWED_FIXTURE_PAIRS)
+
 POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"
 POSITIVE_STATUS_HANDOFF = (
     "docs/reviews/wms663-healthy-positive-fixture-correction-handoff.md",
@@ -101,6 +163,120 @@ OWNER_UI_REQUEST = {
     "blob": "664aa8ea5e279c04f9b6219a8440142fd7bc142a",
 }
 
+
+# One reviewed owner-supersession chain, immutable published Git objects.
+WMS680_CLOSED_CHAIN = {'reviewed_source_commit': '535e8a970928e8834147553ad4c0139fcc5f10da',
+ 'original_contract': '24009478c3a58b558ad8a661d83dc5920108cb00',
+ 'final_correction_commit': '535e8a970928e8834147553ad4c0139fcc5f10da',
+ 'report': {'path': 'docs/reviews/WMS-652-final-night-release-review-20261007.md',
+            'commit': 'da5b0db7ad48bc6a3f7b7d51371185b133554ce6',
+            'blob': '7f24a11ee73ea224ee37e9f86161212fe786b8a6'},
+ 'owner': {'source': '7015448e255f606ef74b69e04e81f53777a099d5',
+           'correction': '3be84bb091712caa2e32226f989e3008e47618a5',
+           'artifacts': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': [None,
+                                                                                            '2d399ace6c00df72c28843d7e0802687a089e632'],
+                         'docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html': [None,
+                                                                                                         'b507fdd97763f9227137321f32c0b4d5696e984b'],
+                         'docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html': [None,
+                                                                                                         'c9a1711a963b8ec88b38ea26fad7f337705888a9'],
+                         'docs/requirements/WMS-680.md': ['aad7a41a3ea194fdcf2eb596643a30a0096ac488',
+                                                          'b765c124dc7641ea83a6347fe4b1cc50e648ec4d']}},
+ 'contracts': {'24009478c3a58b558ad8a661d83dc5920108cb00': {'backend/tests/test_wms680_print_payload_contract.py': ['f7510d80221621aa192dacfe0fd0f7837a18385e',
+                                                                                                                    'f7510d80221621aa192dacfe0fd0f7837a18385e'],
+                                                            'frontend/src/utils/wms680PrintContract.test.ts': ['c8847911821967052947bd9f90691892188193e1',
+                                                                                                               '799f895bb38acca23867042e7b31c6cba96e7884']},
+               '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                                                           '299ff644942016a7cee5ee665cbc321ebddbddbc'],
+                                                            'frontend/src/utils/printInboundReceivingSheet.test.ts': ['c4cc01c1726331f4ee5f912606017638ba6aea76',
+                                                                                                                      'c4cc01c1726331f4ee5f912606017638ba6aea76'],
+                                                            'frontend/src/utils/printShipmentPackagingSheet.test.ts': ['f59bd4972d9c4a716263b24ab417c74c80377888',
+                                                                                                                       'f59bd4972d9c4a716263b24ab417c74c80377888'],
+                                                            'frontend/src/utils/wms680PrintContract.test.ts': ['f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                                                               '799f895bb38acca23867042e7b31c6cba96e7884'],
+                                                            'frontend/src/utils/wms680PrintGeometry.test.ts': ['11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                                                               '81a83b3794340eadd60abba94594d6ff09d533ae']},
+               '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                                                               '81a83b3794340eadd60abba94594d6ff09d533ae']}},
+ 'steps': [{'kind': 'owner_ui_supersession',
+            'source': '8baaa27bf91851327ba30d6e93b29fbfb5c423fd',
+            'correction': '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e',
+            'files': {'frontend/src/utils/wms680PrintContract.test.ts': ['c8847911821967052947bd9f90691892188193e1',
+                                                                         'f3b12dd1617453a445a5624e19c19692c70a4693'],
+                      'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['f01723a9ccee9cc4466797875c9d16a79f50a608',
+                                                                                     'ab978dfabfb1f41076e0a16666e94fa081f3ec21'],
+                      'frontend/src/utils/wms680PrintGeometry.test.ts': [None,
+                                                                         '11ec2e43dcf3b696288bcaa55d6cd83a454858d8']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-size-zero-exact-cells',
+            'source': '1d335e8aead87fc27895a9577253cb8abdf9ca5a',
+            'correction': '7ad0aa781d175ef7f4e1d16074a12b47eed655f2',
+            'files': {'frontend/src/utils/wms680PrintContract.test.ts': ['f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                         '799f895bb38acca23867042e7b31c6cba96e7884']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-product-anchor',
+            'source': 'e8638be207559fee31a069734026cda1d4fcccb4',
+            'correction': '11806bd237c48a030a4e0ff49bb12dd90dfe6778',
+            'files': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ['ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                     '299ff644942016a7cee5ee665cbc321ebddbddbc']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-safe-filenames',
+            'source': '363e3b58110c61283f44cbb0cfdba5ee227de9aa',
+            'correction': '739bcadf1be4fe92e24af3d30b42f892f858e598',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                         '34f4ef6ca82d72cf65583d6ba6bdcefb689128a6']}},
+           {'kind': 'additive_bug_coverage',
+            'transform': 'wms680-numeric-subtable',
+            'source': '739bcadf1be4fe92e24af3d30b42f892f858e598',
+            'parent': 'd300851544c9587d6563462c23a60c3b67d1af12',
+            'correction': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
+            'model': 'gpt-6.1-sol',
+            'effort': 'high',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                         '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-linux-wrapped-text-and-browser-exit',
+            'source': '0df92673934df8768efabe470baeca6f2f4568af',
+            'correction': '4ed0c391135c95b67879c954195034b9c43d4980',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['0c7cc8f9f06fad5df0f7f3bd924dde607179a068',
+                                                                         '00162dc5c08858803c5a988c75328dab0f00cfdc']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-real-pdf-cell-isolation',
+            'source': '58fb2f240e83f997ee79e87ba1e0dd6cb76ef982',
+            'correction': '535e8a970928e8834147553ad4c0139fcc5f10da',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['00162dc5c08858803c5a988c75328dab0f00cfdc',
+                                                                         '81a83b3794340eadd60abba94594d6ff09d533ae']}}]}
+WMS680_CLOSED_SCOPES = {'3be84bb091712caa2e32226f989e3008e47618a5': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': (None,
+                                                                                                                 '2d399ace6c00df72c28843d7e0802687a089e632'),
+                                              'docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html': (None,
+                                                                                                                              'b507fdd97763f9227137321f32c0b4d5696e984b'),
+                                              'docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html': (None,
+                                                                                                                              'c9a1711a963b8ec88b38ea26fad7f337705888a9'),
+                                              'docs/requirements/WMS-680.md': ('aad7a41a3ea194fdcf2eb596643a30a0096ac488',
+                                                                               'b765c124dc7641ea83a6347fe4b1cc50e648ec4d')},
+ '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e': {'docs/requirements/WMS-680.md': ('b765c124dc7641ea83a6347fe4b1cc50e648ec4d',
+                                                                               '20fcef00da292c0a1a0cec6a100bfb8a0e4e464e'),
+                                              'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ('f01723a9ccee9cc4466797875c9d16a79f50a608',
+                                                                                                             'ab978dfabfb1f41076e0a16666e94fa081f3ec21'),
+                                              'frontend/src/utils/printInboundReceivingSheet.test.ts': ('e71e18dddc41804c8cbf370362e58bd11154ea04',
+                                                                                                        'c4cc01c1726331f4ee5f912606017638ba6aea76'),
+                                              'frontend/src/utils/printShipmentPackagingSheet.test.ts': ('9a11e5b4b88fe257622865dd0e0fb15c9083cf2e',
+                                                                                                         'f59bd4972d9c4a716263b24ab417c74c80377888'),
+                                              'frontend/src/utils/wms680PrintContract.test.ts': ('c8847911821967052947bd9f90691892188193e1',
+                                                                                                 'f3b12dd1617453a445a5624e19c19692c70a4693'),
+                                              'frontend/src/utils/wms680PrintGeometry.test.ts': (None,
+                                                                                                 '11ec2e43dcf3b696288bcaa55d6cd83a454858d8')},
+ '7ad0aa781d175ef7f4e1d16074a12b47eed655f2': {'frontend/src/utils/wms680PrintContract.test.ts': ('f3b12dd1617453a445a5624e19c19692c70a4693',
+                                                                                                 '799f895bb38acca23867042e7b31c6cba96e7884')},
+ '11806bd237c48a030a4e0ff49bb12dd90dfe6778': {'frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts': ('ab978dfabfb1f41076e0a16666e94fa081f3ec21',
+                                                                                                             '299ff644942016a7cee5ee665cbc321ebddbddbc')},
+ '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
+                                                                                                 '34f4ef6ca82d72cf65583d6ba6bdcefb689128a6')},
+ 'f2de20008df3b21c1decead0e1051dbda4a4a08a': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
+                                                                                                 '0c7cc8f9f06fad5df0f7f3bd924dde607179a068')},
+ '4ed0c391135c95b67879c954195034b9c43d4980': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['0c7cc8f9f06fad5df0f7f3bd924dde607179a068',
+                                                                                                 '00162dc5c08858803c5a988c75328dab0f00cfdc']},
+ '535e8a970928e8834147553ad4c0139fcc5f10da': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['00162dc5c08858803c5a988c75328dab0f00cfdc',
+                                                                                                 '81a83b3794340eadd60abba94594d6ff09d533ae']}}
 
 def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
@@ -179,6 +355,22 @@ def test_reference_errors(root: Path, reference: str) -> list[str]:
         content = path.read_text(encoding="utf-8")
     except UnicodeDecodeError:
         return [f"Файл теста {path_text} не является текстовым."]
+    # Exact saved original/hash/case/report proof also covers it.each expansion.
+    # Unprotected legacy references still use the literal source contract.
+    import sys
+    project_root = str(Path(__file__).resolve().parents[2])
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+    from scripts.ci.promote_guards import saved_process_policy, verify_registered_case
+    try:
+        policy = (saved_process_policy(root)
+                  if (root / "guards/PROCESS_CONTRACTS.json").exists()
+                  or (root / "guards/PROCESS_CONTRACTS.json").is_symlink() else None)
+        if policy is not None and path_text in policy["files"]:
+            if verify_registered_case(root, policy, pure, test_name):
+                return []
+    except (ValueError, OSError, subprocess.CalledProcessError) as exc:
+        return [f"Не подтверждена постоянная охрана {path_text}::{test_name}: {exc}"]
     if test_name not in content:
         return [f"В {path_text} не найдено имя теста {test_name}."]
     return []
@@ -377,7 +569,7 @@ def exact_fixture_corrections(
             # Only this reviewed fifth pair has a later product source. Reject
             # even a reverted intervening mutation, not merely differing bytes.
             source_matches = source == prior_sha
-            if transform == POSITIVE_STATUS_TRANSFORM and not source_matches:
+            if (transform == POSITIVE_STATUS_TRANSFORM or transform in NIGHT_REVIEWED_FIXTURE_PAIRS) and not source_matches:
                 source_matches = ancestor(root, prior_sha, source) and not git(
                     root, "log", "--full-history", "--format=%H", f"{prior_sha}..{source}",
                     "--", path,
@@ -390,6 +582,12 @@ def exact_fixture_corrections(
             state[path] = (correction, after)
         required_companions = ([LEGACY_SALES_COMPANION]
                                if "wms517-explicit-sales-fixture" in transforms else [])
+        if transforms & NIGHT_REVIEWED_FIXTURE_PAIRS.keys():
+            required_companions = []
+            for transform in sorted(transforms):
+                for companion in NIGHT_REVIEWED_COMPANIONS.get(transform, []):
+                    if companion not in required_companions:
+                        required_companions.append(companion)
         if companions != required_companions:
             return fail("неподдерживаемые дополнительные файлы")
         for companion in required_companions:
@@ -529,6 +727,196 @@ def owner_ui_supersessions(root: Path, task_id: str, ledger: dict):
     return {original: (current, {path})}, {(original, path): entry["before_blob"]}, []
 
 
+def requirement_test_links_only(root: Path, before: str, after: str, path: str) -> bool:
+    """A reviewed companion may update links, never requirement semantics."""
+    def masked(text: str) -> str:
+        lines = text.splitlines()
+        for index, line in enumerate(lines[:-1]):
+            headers = [plain(value).casefold() for value in cells(line)]
+            if "тест" not in headers:
+                continue
+            separator = cells(lines[index + 1])
+            if len(separator) != len(headers) or not all(re.fullmatch(r":?-{3,}:?", v) for v in separator):
+                continue
+            test_col = headers.index("тест")
+            for row in range(index + 2, len(lines)):
+                if "|" not in lines[row] or not lines[row].strip():
+                    break
+                values = cells(lines[row])
+                if len(values) != len(headers):
+                    break
+                values[test_col] = "<test-links>"
+                lines[row] = "|".join(values)
+        return "\n".join(lines)
+    if git_blob(root, before, path) is None or git_blob(root, after, path) is None:
+        return False
+    return masked(git(root, "show", f"{before}:{path}")) == masked(git(root, "show", f"{after}:{path}"))
+
+
+def correction_companions(root: Path, task_id: str, correction: str, frozen: set[str],
+                          expected: set[str], entry: dict) -> bool:
+    parents = git(root, "rev-list", "--parents", "-n", "1", correction).split()
+    if len(parents) != 2 or any(git_blob(root, correction, path) is None for path in expected):
+        return False
+    companions = commit_changed_paths(root, correction) - expected
+    # This is compatibility for the independently reviewed WMS-687 additive
+    # correction, not a new general correction/migration permission.
+    if companions and (
+        task_id != "WMS-687"
+        or expected != {"frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"}
+        or not companions.issubset({
+            "docs/requirements/WMS-687.md",
+            "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts",
+            "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx",
+        })
+    ):
+        return False
+    declared = entry.get("ancillary_files")
+    if declared is not None and (
+        not isinstance(declared, list) or any(not isinstance(p, str) for p in declared)
+        or len(declared) != len(set(declared)) or set(declared) != companions
+    ):
+        return False
+    for path in companions:
+        if path in frozen:
+            return False
+        if path == f"docs/requirements/{task_id}.md":
+            if not requirement_test_links_only(root, parents[1], correction, path):
+                return False
+            continue
+        # Only newly added tests of this exact task can accompany a correction.
+        # Existing/frozen files, product code and another task are never allowed.
+        own_test = (
+            (path.startswith("frontend/src/") and re.search(
+                rf"\.wms{task_id[4:]}(?:\.|_)\S*\.test\.(?:ts|tsx)$", path, re.I))
+            or (path.startswith("backend/tests/") and re.search(
+                rf"/test_wms{task_id[4:]}(?:_|\.)[^/]*\.py$", path, re.I))
+        )
+        if (not own_test or git_blob(root, parents[1], path) is not None
+                or git_blob(root, correction, path) is None):
+            return False
+    review = entry["review"]
+    if companions and ("report" in review or "report_commit" in review):
+        report, ref = review.get("report"), review.get("report_commit")
+        if (not isinstance(report, str) or not report.startswith("docs/reviews/")
+                or not isinstance(ref, str) or not re.fullmatch(r"[0-9a-f]{40}", ref)
+                or not ancestor(root, correction, ref) or not ancestor(root, ref, "HEAD")
+                or git_blob(root, ref, report) is None
+                or git_blob(root, ref, report) != git_blob(root, "HEAD", report)):
+            return False
+    return True
+
+
+def wms680_closed_correction(root: Path, ledger: dict, contract_commit: str):
+    """Validate only the published owner request and closed reviewed 680 graph."""
+    def fail(reason):
+        return {}, [f"WMS-680: reviewed-closed-chain: {reason}"]
+    blob_cache = {}
+    def blob(sha, file):
+        key = (sha, file)
+        if key not in blob_cache:
+            blob_cache[key] = git_blob(root, sha, file)
+        return blob_cache[key]
+    record = WMS680_CLOSED_CHAIN
+    semantic, report = record["steps"][0], record["report"]
+    source = semantic["source"]
+    path = "frontend/src/utils/wms680PrintContract.test.ts"
+    before, after = semantic["files"][path]
+    def review(source, correction):
+        return {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": correction,
+                "evidence": report["path"], "evidence_commit": report["commit"],
+                "evidence_blob": report["blob"]}
+    owner_path = "docs/evidence/WMS-680/acceptance-20261007/baseline-source.json"
+    owner = {"contract_commit": record["original_contract"],
+             "prior_commit": record["original_contract"], "source_commit": source,
+             "path": path, "before_blob": before,
+             "changes": [[semantic["correction"], after]],
+             "companion_files": [{"path": name, "before_blob": pair[0], "after_blob": pair[1]}
+                                 for name, pair in semantic["files"].items() if name != path],
+             "owner_request": {"commit": record["owner"]["correction"], "path": owner_path,
+                               "blob": record["owner"]["artifacts"][owner_path][1]},
+             "review": review(source, semantic["correction"])}
+    entries = []
+    for step in record["steps"][1:]:
+        originals = [semantic["correction"]]
+        if step["correction"] == record["final_correction_commit"]:
+            originals.append(step["source"])
+        for original in originals:
+            entries.append({"contract_commit": original, "source_commit": step["source"],
+                            "correction_commit": step["correction"],
+                            "files": [{"transform": step["transform"], "path": name,
+                                       "before_blob": pair[0], "after_blob": pair[1]}
+                                      for name, pair in step["files"].items()],
+                            "companion_files": [],
+                            "review": review(step["source"], step["correction"])})
+    expected = {"task": "WMS-680", "owner_supersessions": [owner], "fixture_corrections": entries}
+    contracts = dict(record["contracts"])
+    # Several fixed corrections are also saved test contracts. Their exact
+    # newly frozen files need the same final protection, including f2de.
+    final_versions = {file: pair[1] for paths in contracts.values() for file, pair in paths.items()}
+    for step in record["steps"]:
+        correction = step["correction"]
+        if correction not in contracts and is_task_contract_commit(root, correction, "WMS-680"):
+            contracts[correction] = {
+                file: [pair[1], final_versions[file]]
+                for file, pair in WMS680_CLOSED_SCOPES[correction].items()
+                if not file.startswith("docs/requirements/")
+            }
+    if ledger != expected or contract_commit not in contracts:
+        return fail("не совпадает точная запись source/owner/scope/review/blob/цепочки")
+    head = git(root, "rev-parse", "HEAD")
+    if (not ancestor(root, report["commit"], head)
+            or blob(report["commit"], report["path"]) != report["blob"]
+            or blob(head, report["path"]) != report["blob"]):
+        return fail("подменён независимый review artifact")
+    report_text = git(root, "show", f"{report['commit']}:{report['path']}")
+    if record["final_correction_commit"] not in report_text or "PASS" not in report_text:
+        return fail("review не подтверждает точный final SHA")
+    for artifact, pair in record["owner"]["artifacts"].items():
+        if (blob(record["owner"]["source"], artifact) != pair[0]
+                or blob(record["owner"]["correction"], artifact) != pair[1]):
+            return fail("подменён historical owner-request blob")
+        if artifact.startswith("docs/evidence/") and blob(head, artifact) != pair[1]:
+            return fail("подменён сохранённый owner-request artifact")
+    for step in [record["owner"], *record["steps"]]:
+        correction, source = step["correction"], step.get("parent", step["source"])
+        parents = git(root, "rev-list", "--parents", "-n", "1", correction).split()
+        expected_paths = WMS680_CLOSED_SCOPES[correction]
+        if (parents != [correction, source] or not ancestor(root, correction, report["commit"])
+                or commit_changed_paths(root, correction) != set(expected_paths)):
+            return fail("не совпадает exact commit scope/родитель")
+        for file, pair in expected_paths.items():
+            if blob(source, file) != pair[0] or blob(correction, file) != pair[1]:
+                return fail("не совпадает exact whole-file blob")
+    baselines = {}
+    for original, paths in contracts.items():
+        if not is_task_contract_commit(root, original, "WMS-680"):
+            return fail("нет сохранённого исходного контракта")
+        for file, pair in paths.items():
+            if blob(original, file) != pair[0] or blob(head, file) != pair[1]:
+                return fail(f"последующая мутация frozen HEAD: {file}")
+            allowed = {pair[0], pair[1]}
+            for step in record["steps"]:
+                if file in step["files"]:
+                    allowed.update(step["files"][file])
+            for row in git(root, "rev-list", "--parents", "--ancestry-path", f"{original}..{head}").splitlines():
+                sha, *parents = row.split()
+                current = blob(sha, file)
+                if current not in allowed:
+                    return fail(f"непроверенная промежуточная мутация: {file}")
+                if sha not in WMS680_CLOSED_SCOPES and current not in {
+                        blob(parent, file) for parent in parents}:
+                    return fail(f"непроверенная дельта frozen файла: {file}")
+            if original == contract_commit and pair[0] != pair[1]:
+                final = next(step["correction"] for step in reversed(record["steps"])
+                             if step["files"].get(file, [None, None])[1] == pair[1])
+                baselines.setdefault(final, set()).add(file)
+    if git(root, "rev-parse", "HEAD") != head:
+        return fail("HEAD изменился во время проверки")
+    return baselines, []
+
+
 def reviewed_contract_correction(
     root: Path,
     task_id: str,
@@ -560,6 +948,8 @@ def reviewed_contract_correction(
         return {}, [
             f"{task_id}: реестр коррекции контракта должен быть JSON-объектом"
         ]
+    if task_id == "WMS-680":
+        return wms680_closed_correction(root, ledger, contract_commit)
     owner_baselines, owner_frontier, owner_errors = owner_ui_supersessions(root, task_id, ledger)
     if owner_errors:
         return {}, owner_errors
@@ -637,7 +1027,7 @@ def reviewed_contract_correction(
             expected == frozen and (array_format or len(frozen) > 1)
         ):
             return {}, [f"{task_id}: коррекция должна менять только часть исходного контракта"]
-        if commit_changed_paths(root, correction) != expected:
+        if not correction_companions(root, task_id, correction, frozen, expected, entry):
             return {}, [f"{task_id}: коммит коррекции должен менять ровно перечисленные файлы"]
         already_corrected = corrected_by_contract.setdefault(original, set())
         if already_corrected & expected:

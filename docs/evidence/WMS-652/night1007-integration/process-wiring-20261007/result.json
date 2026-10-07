@@ -1,0 +1,43 @@
+{
+  "at": "2026-10-06T21:23:18.419430+00:00",
+  "role": "separate process developer after tester5ca749e; independent review pending",
+  "original_test_commits": [
+    "1ab749c2bb9eb68272eaaff8eb5840f3d79e1a7a",
+    "5ca749eaa048465fbc9d717c4b3a52e34b524b35"
+  ],
+  "imported_test_commits": [
+    "72e4fde5c75dde123c536571bc6ea422060597ed",
+    "977aa7f6bb9da2ccb2850c091f765759fa161cfd"
+  ],
+  "red": "7cases6PASS1FAIL; actual existing686job missing trueTAP report",
+  "green": [
+    "source transition/receipt7unitPASS",
+    "ci-shards24PASS54subtests",
+    "frozenNode24model11PASS trueTAP",
+    "unchanged process-parser10PASS",
+    "actual2raw reports verified against exact policy suiteIDs",
+    "bootstrap integrity225files PASS"
+  ],
+  "preserved_old_files": 222,
+  "existing_protected_hash_delta": [
+    ".github/workflows/ci.yml",
+    "scripts/ci/tests/test_ci_release_additions.py"
+  ],
+  "new_protected_files": [
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json",
+    "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json",
+    "docs/mockups/WMS-686/model.test.ts"
+  ],
+  "old_suites": 18,
+  "old_case_ids": 1146,
+  "new_suites": 19,
+  "new_case_ids": 1161,
+  "old_report_format_exact_retained": true,
+  "product_reference_P": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "final_product_P": "not frozen; fixture remains pending",
+  "protection_source_S": "not independently reviewed/frozen",
+  "main_pin_changed": false,
+  "etalon_changed": false,
+  "deploy": false,
+  "full_ci": "not run/claimed; partial local rawreports not total process-proof"
+}

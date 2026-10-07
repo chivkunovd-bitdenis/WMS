@@ -1,0 +1,15 @@
+{
+  "accepted_P": "10c018092ab6f76928a54115eb824a64adc637be",
+  "status": "PUBLISHED_RECOVERABLE_CHECKPOINT_ONLY",
+  "main": "8df23716626451e026d74137494e835e3cb081b7",
+  "current_main_SOURCE": "9dae4b19f6d4dca554200e08282579414a110848",
+  "new_main_pin_applied": false,
+  "etalon_and_production_changed": false,
+  "permanent_guards": "270paths/27suites/1676cases;original1146/18 plus allnightcases and incoming27 preserved",
+  "genuine_review_chain": [
+    "27a33df9abe2e2dd22c67631609a02b98c69664f",
+    "cbca45cfa6cd2e8854e5b8c651a3302d51e215f9",
+    "b733c5a345cf36f9b55212299e73496182941dea"
+  ],
+  "budget_stop": "Userfloor10000; no new paid roles authorised belowfloor; pending work kept explicit"
+}

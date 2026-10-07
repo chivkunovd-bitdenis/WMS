@@ -1,0 +1,37 @@
+tests/test_wms654_cells.py::test_c1_four_address_combinations_survive_reload[False-False-\u0410 4]
+tests/test_wms654_cells.py::test_c1_four_address_combinations_survive_reload[True-False-\u0410 2.4]
+tests/test_wms654_cells.py::test_c1_four_address_combinations_survive_reload[False-True-\u0410 3.4]
+tests/test_wms654_cells.py::test_c1_four_address_combinations_survive_reload[True-True-\u0410 2.3.4]
+tests/test_wms654_cells.py::test_c2_suggestions_use_coordinate_context_and_skip_code_collisions
+tests/test_wms654_cells.py::test_c3_legacy_api_and_existing_rows_are_unchanged
+tests/test_wms654_cells.py::test_c4_repeat_conflict_does_not_duplicate_new_address
+tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner[False]
+tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner[True]
+tests/test_wms654_cells.py::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[False]
+tests/test_wms654_cells.py::test_c5_tenant_warehouse_and_staff_permissions_are_preserved[True]
+tests/test_wms654_cells.py::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad0]
+tests/test_wms654_cells.py::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad1]
+tests/test_wms654_cells.py::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad2]
+tests/test_wms654_cells.py::test_c7_invalid_coordinates_can_be_corrected_without_changing_neighbors[bad3]
+tests/test_wms654_cells.py::test_c10_creation_keeps_existing_stock_placement_and_barcodes[False]
+tests/test_wms654_cells.py::test_c10_creation_keeps_existing_stock_placement_and_barcodes[True]
+tests/test_wms654_cells.py::test_c3_new_creation_preserves_legacy_coordinates_and_barcode
+
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+18 tests collected in 0.12s

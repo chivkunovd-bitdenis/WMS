@@ -1,0 +1,24 @@
+{
+  "etalon": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "AGENTS_sha256": "829e975ebcdfd2574c5e215985f9cf3a5c621b3f35b6686351daae01c1f82ee1",
+  "libraries": "unchanged; retained full reading",
+  "CI_run": 37553998053,
+  "original_logs": [
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/backend-shard-0-ca6-final.log",
+      "sha256": "de6f50d7359e224fb810cd60625b06bade8629a18a0cfc75e371dc9f5a65cc9f",
+      "excerpt_line_offsets": [
+        6498,
+        6524
+      ]
+    },
+    {
+      "path": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/frontend-build-ca6-final.log",
+      "sha256": "4b3a281578a52503f6df382bf9ad241ac92aafa2be8e8f5d0f378185ca775430",
+      "excerpt_line_offsets": [
+        2530,
+        2558
+      ]
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "status": "reviewable-final-candidate",
+  "candidate_sha": "acf62b24a39565957f779c63b46cf573f8208d63",
+  "proposed_product_P": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+  "base_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "counts": [
+    279,
+    29,
+    1701
+  ],
+  "product_scope_difference": [],
+  "targeted_tests": "42 passed /84 subtests passed /9.59s",
+  "metadata_activation_template": {
+    "product_reference": "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
+    "independent_record": "ACTUAL completed PASS report published unchanged as descendant; no invented record",
+    "allowed_paths": [
+      ".github/workflows/ci.yml",
+      "scripts/ci/tests/fixtures/wms652_source_binding_transition.json",
+      "guards/PROCESS_CONTRACTS.json"
+    ],
+    "only_changes": "workflow exact --trusted-ref P; existing source-binding fixture exact final/current P and genuine review record/accepted list; corresponding workflow/fixture digests, counts/cases unchanged"
+  },
+  "main_delta": [
+    "scripts/ci/trusted_process_check.py copied exact reviewed H blob",
+    "scripts/ci/process_bootstrap.json fixed base4c/sourceS after genuine activation"
+  ],
+  "remaining": [
+    "independent exact merged-product/process review +data template",
+    "docgate on H",
+    "metadata activation after PASS",
+    "publishSOURCE without PR pushtrigger; normal main anchor/pin PR",
+    "thenPR393 HEAD refresh /fullCI /etalonCI /deploy /fresh675 repair"
+  ],
+  "source_ref_push_trigger": "ci.yml only pull_request and push etalon, ordinary named ref without PR does not start fullCI",
+  "planned_source_publication": "refs/heads/codex/night1007-reviewed-source-20261007 (no PR; only etalon push triggers CI)",
+  "old_corrected_sources": {
+    "F6": "e249/cbca-e8ce/02545",
+    "native_formatter": "e2b988/1373-552428",
+    "final_CI_fixtures": "a026+bdfea8/bf31-b2a"
+  },
+  "docgate": {
+    "exit": 0,
+    "log": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/docgate-final-upgrade-H.log"
+  }
+}

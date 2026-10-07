@@ -90,6 +90,7 @@ import { printInboundReceivingSheet } from '../../utils/printInboundReceivingShe
 import { readApiErrorMessage } from '../../utils/readApiErrorMessage'
 import { inboundOperationTypeReceptionLabel } from '../../utils/inboundOperationType'
 import { FfInboundBoxAddDialog } from './FfInboundBoxAddDialog'
+import { FbsStockDialogContainer } from './products-fbs/FbsStockDialogContainer'
 import { FfSortingObjectsPage } from './sorting-objects/FfSortingObjectsPage'
 import { buildInboundScanProductMap, findInboundScanProductId } from './inboundScanLookup'
 import { BoxImportDialog } from '../../components/BoxImportDialog'
@@ -117,7 +118,7 @@ import { useOzonReturnWorkflow } from './useOzonReturnWorkflow'
 import { applyScannedInboundLine, createDebouncedInboundReconciler, createSerialScanQueue, isLatestScannedInboundLine, shouldDispatchInboundScan } from './inboundReceivingRuntime'
 
 type LocationRow = { id: string; code: string; warehouse_id: string; barcode: string }
-type WarehouseRow = { id: string; name: string; code: string }
+type WarehouseRow = { id: string; name: string; code: string; is_operational?: boolean }
 type SellerRow = { id: string; name: string }
 
 type InboundBoxLine = {
@@ -168,6 +169,8 @@ type InboundLine = {
   product_id: string
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   wb_barcode: string | null
   requires_honest_sign: boolean
   length_mm: number | null
@@ -440,6 +443,18 @@ function inboundStatusChipColor(
 const GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9ABCDEFGHJKMNPQRSTVWXYZ]{14}$/
 const LEGACY_GENERATED_INBOUND_BOX_BARCODE_RE = /^INB-[0-9A-F]{12}$/
 
+function inboundReceiptDate(value: string | null | undefined): string {
+  if (!value) return '—'
+  const normalized = /(?:Z|[+-]\d{2}:\d{2})$/i.test(value) ? value : `${value}Z`
+  const date = new Date(normalized)
+  if (Number.isNaN(date.getTime())) return '—'
+  const pieces = new Intl.DateTimeFormat('ru-RU', {
+    timeZone: 'Europe/Moscow', day: '2-digit', month: '2-digit', year: 'numeric',
+  }).formatToParts(date)
+  const part = (type: Intl.DateTimeFormatPartTypes) => pieces.find((item) => item.type === type)?.value ?? '—'
+  return `${part('day')}.${part('month')}.${part('year')}`
+}
+
 function isGeneratedInboundBoxBarcode(barcode: string): boolean {
   return (
     GENERATED_INBOUND_BOX_BARCODE_RE.test(barcode) ||
@@ -457,6 +472,10 @@ type Props = {
   token: string
   requestId: string
   isFulfillmentAdmin: boolean
+  /** Право на обычную работу с документом приёмки. */
+  canReceptionOps?: boolean
+  /** Право на настройку каталога FBS; не совпадает с правом работы в приёмке. */
+  canManageCatalog?: boolean
   workspace?: InboundRequestWorkspace
   sellers?: SellerRow[]
   onClose: () => void
@@ -468,22 +487,25 @@ type Props = {
 export function FfInboundRequestView({
   token,
   requestId,
-  isFulfillmentAdmin,
+  isFulfillmentAdmin: legacyFulfillmentAdmin,
+  canReceptionOps,
+  canManageCatalog = legacyFulfillmentAdmin,
   workspace = 'full',
   onClose,
   onDirtyChange,
   addressStorageEnabled = true,
   numberedInboundBoxLabels = false,
 }: Props) {
+  const canOperateReception = canReceptionOps ?? legacyFulfillmentAdmin
   const authHeaders = useMemo(() => ({ Authorization: `Bearer ${token}` }), [token])
   const [acceptanceActLoading, setAcceptanceActLoading] = useState(false)
-  // WMS-586: «Акт приёмки» — Excel завершённой приёмки (план, факт, расхождение).
+  // WMS-586: «Акт приёмки» завершённой приёмки (план, факт, расхождение).
   // Имя файла приходит от сервера в Content-Disposition.
-  const downloadAcceptanceAct = async () => {
+  const downloadAcceptanceAct = async (format: 'xlsx' | 'pdf') => {
     if (acceptanceActLoading) return
     setAcceptanceActLoading(true)
     try {
-      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/acceptance-act.xlsx`), {
+      const response = await fetch(apiUrl(`/operations/inbound-intake-requests/${requestId}/acceptance-act.${format}`), {
         headers: authHeaders,
       })
       if (!response.ok) {
@@ -493,7 +515,7 @@ export function FfInboundRequestView({
       const blob = await response.blob()
       const header = response.headers.get('content-disposition') ?? ''
       const encoded = header.match(/filename\*=UTF-8''([^;]+)/i)?.[1]
-      let filename = 'acceptance-act.xlsx'
+      let filename = `acceptance-act.${format}`
       try { if (encoded) filename = decodeURIComponent(encoded) } catch { /* keep fallback name */ }
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -565,11 +587,16 @@ export function FfInboundRequestView({
   const [saveSuccessMsg, setSaveSuccessMsg] = useState<string | null>(null)
   const [newLocationCode, setNewLocationCode] = useState('')
   const [requestWarehouse, setRequestWarehouse] = useState<WarehouseRow | null>(null)
+  const [warehouses, setWarehouses] = useState<WarehouseRow[]>([])
+  const [selectedFbsStockProductIds, setSelectedFbsStockProductIds] = useState<Set<string>>(
+    () => new Set(),
+  )
+  const [fbsStockDialogOpen, setFbsStockDialogOpen] = useState(false)
   const loadDetailSeq = useRef(0)
   const receivingScanQueue = useRef(createSerialScanQueue()).current
   const lastProductScan = useRef<string | null>(null)
   const scanDocument = useRef(requestId)
-  const marking = useInboundMarkingCodes(requestId, token, isFulfillmentAdmin && workspace !== 'sorting', detail?.status)
+  const marking = useInboundMarkingCodes(requestId, token, canOperateReception && workspace !== 'sorting', detail?.status)
   useEffect(() => {
     scanDocument.current = requestId
     lastProductScan.current = null
@@ -603,10 +630,10 @@ export function FfInboundRequestView({
   // заказчиком 17.08.2026). На обычной приёмке таблица остаётся видна всегда.
   const showInboundLinesTable = !sortingView
 
-  // Глобальный скан: панель приёмки видна и диалог короба не открыт
+  // Глобальный скан: панель приёмки видна и ни один модальный путь документа не открыт.
   useBarcodeScanner({
     enabled:
-      isFulfillmentAdmin &&
+      canOperateReception &&
       !sortingView &&
       receivingActive &&
       !busy &&
@@ -618,16 +645,17 @@ export function FfInboundRequestView({
       !boxDialogOpen &&
       clearBoxTarget == null &&
       !distOpen &&
-      !kizReprintOpen,
+      !kizReprintOpen &&
+      !fbsStockDialogOpen,
     onScan: (code) => {
-      if (!shouldDispatchInboundScan(kizReprintOpen)) return
+      if (fbsStockDialogOpen || !shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => scanToReceiving(code))
     },
   })
 
   useBarcodeScanner({
     enabled:
-      isFulfillmentAdmin &&
+      canOperateReception &&
       !sortingView &&
       detail?.status === 'draft' &&
       boxAddDialogBoxId == null &&
@@ -636,9 +664,10 @@ export function FfInboundRequestView({
       dimensionsLine == null &&
       !boxDialogOpen &&
       clearBoxTarget == null &&
-      !kizReprintOpen,
+      !kizReprintOpen &&
+      !fbsStockDialogOpen,
     onScan: (code) => {
-      if (!shouldDispatchInboundScan(kizReprintOpen)) return
+      if (fbsStockDialogOpen || !shouldDispatchInboundScan(kizReprintOpen)) return
       void receivingScanQueue(() => addLineByBarcode(code))
     },
   })
@@ -905,6 +934,7 @@ export function FfInboundRequestView({
     if (!warehouseId) {
       setLocations([])
       setRequestWarehouse(null)
+      setWarehouses([])
       return
     }
     void loadLocations(warehouseId)
@@ -912,9 +942,11 @@ export function FfInboundRequestView({
       const res = await fetch(apiUrl('/warehouses'), { headers: authHeaders })
       if (!res.ok) {
         setRequestWarehouse(null)
+        setWarehouses([])
         return
       }
       const rows = (await res.json()) as WarehouseRow[]
+      setWarehouses(rows)
       setRequestWarehouse(rows.find((w) => w.id === warehouseId) ?? null)
     })()
   }, [authHeaders, detail?.warehouse_id, loadLocations])
@@ -925,7 +957,7 @@ export function FfInboundRequestView({
       setDistLines([])
       return
     }
-    if (!isFulfillmentAdmin) {
+    if (!canOperateReception) {
       setDistOpen(false)
       setDistLines([])
       return
@@ -945,7 +977,7 @@ export function FfInboundRequestView({
       return
     }
     void loadDistribution()
-  }, [detail, isFulfillmentAdmin, loadDistribution, workspace])
+  }, [detail, canOperateReception, loadDistribution, workspace])
 
   useEffect(() => {
     if (!distOpen || !isSortingStatus(detail?.status ?? '')) return
@@ -1000,6 +1032,21 @@ export function FfInboundRequestView({
     () => new Set(detail?.lines.map((l) => l.product_id) ?? []),
     [detail],
   )
+
+  const selectedFbsStockRows = useMemo(() => {
+    if (!detail) return []
+    const seen = new Set<string>()
+    return detail.lines.flatMap((line) => {
+      if (!selectedFbsStockProductIds.has(line.product_id) || seen.has(line.product_id)) return []
+      seen.add(line.product_id)
+      return [{ id: line.product_id, name: line.product_name, sku_code: line.sku_code }]
+    })
+  }, [detail, selectedFbsStockProductIds])
+
+  useEffect(() => {
+    setSelectedFbsStockProductIds(new Set())
+    setFbsStockDialogOpen(false)
+  }, [requestId])
 
   const pickerDisabledProductIds = useMemo(() => {
     if (detail?.status !== 'draft' || ffDraft) {
@@ -1078,7 +1125,7 @@ export function FfInboundRequestView({
   const hasNoCellPending = noCellRemainingLines.length > 0
 
   const distributionCompleted = Boolean(detail?.distribution_completed_at)
-  const distributionEditable = isFulfillmentAdmin && !distributionCompleted
+  const distributionEditable = canOperateReception && !distributionCompleted
   const canReopenDistribution =
     Boolean(detail) &&
     distributionCompleted &&
@@ -1659,6 +1706,11 @@ export function FfInboundRequestView({
             : `Грузоместо № ${target.number}`,
           barcode: target.barcode,
           barcodeDataUrl: renderBarcodeDataUrl(target.barcode, { variant: 'internalBox' }),
+          metadata: target.kind === 'box' ? [
+            `Короб № ${target.number}`,
+            detail?.seller_name?.trim() || '—',
+            `Приёмка ${formatHumanDocumentNumber(detail) ?? '—'} от ${inboundReceiptDate(detail?.created_at)}`,
+          ] : undefined,
           labelSize,
           layout: 'internalBox' as const,
         })), { beforeTransfer: (html) => {
@@ -1681,9 +1733,10 @@ export function FfInboundRequestView({
       await loadDetail()
       saveInboundLabelAttempt(token, requestId, { ...attempt, state: 'complete' })
     } catch (e) {
-      const message = typeof e === 'object' && e !== null && 'message' in e && typeof e.message === 'string'
-        ? e.message
-        : ''
+      // Native decode errors belong to the print iframe's realm and need not
+      // be instances of this window's Error constructor.
+      const message = typeof e === 'object' && e !== null && 'message' in e
+        && typeof e.message === 'string' ? e.message : ''
       setError(message.trim() ? message : 'Не удалось напечатать этикетки.')
     } finally {
       inboundLabelPrinting.current = false
@@ -2279,9 +2332,9 @@ export function FfInboundRequestView({
     [boxAddDialogBoxId, boxes],
   )
 
-  const actualEditable = isFulfillmentAdmin && (receivingActive || ffDraft)
+  const actualEditable = canOperateReception && (receivingActive || ffDraft)
   const boxCreationEditable =
-    isFulfillmentAdmin &&
+    canOperateReception &&
     (receivingActive || ffDraft || (detail?.status === 'draft' && isReturnOperation))
 
   const hasPostedPartial = useMemo(
@@ -2290,7 +2343,7 @@ export function FfInboundRequestView({
   )
 
   const canReopenReceiving =
-    isFulfillmentAdmin &&
+    canOperateReception &&
     !sortingView &&
     detail != null &&
     isSortingStatus(detail.status) &&
@@ -2467,7 +2520,7 @@ export function FfInboundRequestView({
                   sx={{ display: 'flex', alignItems: 'center' }}
                 />
               ) : null}
-              {isFulfillmentAdmin &&
+              {canOperateReception &&
               workspace !== 'sorting' &&
               receivingActive ? (
                 <>
@@ -2495,7 +2548,7 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
-              {isFulfillmentAdmin && workspace !== 'sorting' && isReturnOperation ? (
+              {canOperateReception && workspace !== 'sorting' && isReturnOperation ? (
                 <Button
                   variant="outlined"
                   disabled={!detail.seller_id}
@@ -2506,7 +2559,7 @@ export function FfInboundRequestView({
                 </Button>
               ) : null}
 
-              {isFulfillmentAdmin &&
+              {canOperateReception &&
               workspace !== 'sorting' &&
               receivingActive ? (
                 <Button
@@ -2520,7 +2573,7 @@ export function FfInboundRequestView({
               ) : null}
 
               {documentDistributionEnabled &&
-              isFulfillmentAdmin &&
+              canOperateReception &&
               addressStorageEnabled &&
               isSortingStatus(detail.status) &&
               workspace === 'full' ? (
@@ -2544,19 +2597,19 @@ export function FfInboundRequestView({
                   >
                     Добавить товар
                   </Button>
-                  {isFulfillmentAdmin && sellerCreatedDraft ? null : (
+                  {canOperateReception && sellerCreatedDraft ? null : (
                     <Button
                       variant="contained"
                       color="secondary"
                       disabled={busy || detail.lines.length === 0}
                       onClick={() =>
-                        isFulfillmentAdmin
+                        canOperateReception
                           ? ffDraft ? void completeReceiving() : void beginReceiving()
                           : void submitToWarehouse()
                       }
                       data-testid="ff-inbound-submit-warehouse"
                     >
-                      {isFulfillmentAdmin
+                      {canOperateReception
                         ? ffDraft ? 'Завершить приёмку' : usesReturnShortcut
                           ? 'Завершить подбор возврата'
                           : 'Начать приёмку'
@@ -2566,9 +2619,9 @@ export function FfInboundRequestView({
                 </>
               ) : null}
 
-              {isFulfillmentAdmin && isOzonReturn ? <OzonReturnActions busy={busy} showPickerAction={detail.status === 'draft'} workflow={ozonReturn} /> : null}
+              {canOperateReception && isOzonReturn ? <OzonReturnActions busy={busy} showPickerAction={detail.status === 'draft'} workflow={ozonReturn} /> : null}
 
-              {isFulfillmentAdmin && workspace !== 'sorting' && waitingForFfStart ? (
+              {canOperateReception && workspace !== 'sorting' && waitingForFfStart ? (
                 <Button
                   variant="contained"
                   color="secondary"
@@ -2615,6 +2668,8 @@ export function FfInboundRequestView({
                           wb_nm_id: meta.wb_nm_id,
                           photo_url: meta.wb_primary_image_url,
                           expected_qty: ln.expected_qty,
+                          size: ln.size,
+                          color: ln.color,
                         }
                       }),
                     })
@@ -2625,14 +2680,37 @@ export function FfInboundRequestView({
               ) : null}
 
               {receptionClosed && detail.lines.length > 0 ? (
+                <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadOutlined />}
+                    disabled={busy || acceptanceActLoading}
+                    data-testid="ff-inbound-acceptance-act"
+                    onClick={() => void downloadAcceptanceAct('xlsx')}
+                  >
+                    Акт приёмки · Excel
+                  </Button>
+                  <Button
+                    variant="outlined"
+                    startIcon={<DownloadOutlined />}
+                    disabled={busy || acceptanceActLoading}
+                    onClick={() => void downloadAcceptanceAct('pdf')}
+                  >
+                    PDF
+                  </Button>
+                </Stack>
+              ) : null}
+
+              {canManageCatalog &&
+              detail.seller_id &&
+              selectedFbsStockRows.length > 0 ? (
                 <Button
                   variant="outlined"
-                  startIcon={<DownloadOutlined />}
-                  disabled={busy || acceptanceActLoading}
-                  data-testid="ff-inbound-acceptance-act"
-                  onClick={() => void downloadAcceptanceAct()}
+                  disabled={busy}
+                  onClick={() => setFbsStockDialogOpen(true)}
+                  data-testid="ff-inbound-set-fbs-stock"
                 >
-                  Акт приёмки
+                  Задать остаток
                 </Button>
               ) : null}
 
@@ -2678,7 +2756,7 @@ export function FfInboundRequestView({
             </>
           ) : null}
 
-          {showInboundLinesTable && isFulfillmentAdmin ? (
+          {showInboundLinesTable && canOperateReception ? (
             <Stack direction="row" spacing={1} sx={{ alignItems: 'center', mb: 1 }}>
               {marking.items.some(inboundMarkingNeedsAttention) ? (
                 <Button size="small" variant="outlined" onClick={() => void marking.download()} data-testid="ff-inbound-kiz-export">Проблемные коды ЧЗ в Excel</Button>
@@ -2720,7 +2798,25 @@ export function FfInboundRequestView({
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ minWidth: 0, overflow: 'hidden' }}>
-                      Товар
+                      <Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
+                        {canManageCatalog ? (
+                          <CheckboxInput
+                            label="Выбрать все товары"
+                            hideLabel
+                            checked={
+                              detail.lines.length > 0 &&
+                              detail.lines.every((line) => selectedFbsStockProductIds.has(line.product_id))
+                            }
+                            onChange={(checked) => {
+                              setSelectedFbsStockProductIds(
+                                checked ? new Set(detail.lines.map((line) => line.product_id)) : new Set(),
+                              )
+                            }}
+                            testId="ff-inbound-stock-select-all"
+                          />
+                        ) : null}
+                        <Typography component="span" variant="inherit">Товар</Typography>
+                      </Stack>
                     </TableCell>
                     <TableCell sx={{ width: 188 }}>
                       Габариты
@@ -2792,15 +2888,35 @@ export function FfInboundRequestView({
                         meta={displayMeta}
                         productId={ln.product_id}
                         printTestId={`ff-inbound-line-print-${ln.id}`}
-                        markingControl={lineCodes.length > 0 ? (
+                        markingControl={canManageCatalog || lineCodes.length > 0 ? (
                           <Stack direction="row" sx={{ alignItems: 'center' }}>
-                            <IconButton size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} aria-expanded={Boolean(marking.expanded[ln.id])}
-                              onClick={() => marking.setExpanded((current) => ({ ...current, [ln.id]: !current[ln.id] }))} data-testid="ff-inbound-kiz-expand">
-                              <ExpandMoreOutlined fontSize="small" sx={{ transform: marking.expanded[ln.id] ? 'rotate(180deg)' : undefined }} />
-                            </IconButton>
-                            {badCodes.length > 0 ? <Tooltip title={Array.from(new Set(badCodes.map((code) => code.cz_reason))).join(' ')}>
-                              <ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label="Проблема с кодами ЧЗ" data-testid="ff-inbound-kiz-warning" />
-                            </Tooltip> : null}
+                            {canManageCatalog ? (
+                              <CheckboxInput
+                                label={`Выбрать ${ln.product_name}`}
+                                hideLabel
+                                checked={selectedFbsStockProductIds.has(ln.product_id)}
+                                onChange={(checked) => {
+                                  setSelectedFbsStockProductIds((current) => {
+                                    const next = new Set(current)
+                                    if (checked) next.add(ln.product_id)
+                                    else next.delete(ln.product_id)
+                                    return next
+                                  })
+                                }}
+                                testId={`ff-inbound-stock-select-line-${ln.id}`}
+                              />
+                            ) : null}
+                            {lineCodes.length > 0 ? (
+                              <>
+                                <IconButton size="small" aria-label={`Коды ЧЗ: ${ln.sku_code}`} aria-expanded={Boolean(marking.expanded[ln.id])}
+                                  onClick={() => marking.setExpanded((current) => ({ ...current, [ln.id]: !current[ln.id] }))} data-testid="ff-inbound-kiz-expand">
+                                  <ExpandMoreOutlined fontSize="small" sx={{ transform: marking.expanded[ln.id] ? 'rotate(180deg)' : undefined }} />
+                                </IconButton>
+                                {badCodes.length > 0 ? <Tooltip title={Array.from(new Set(badCodes.map((code) => code.cz_reason))).join(' ')}>
+                                  <ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label="Проблема с кодами ЧЗ" data-testid="ff-inbound-kiz-warning" />
+                                </Tooltip> : null}
+                              </>
+                            ) : null}
                           </Stack>
                         ) : undefined}
                       />
@@ -2820,7 +2936,7 @@ export function FfInboundRequestView({
                           >
                             {formatLineDimensions(ln)}
                           </Typography>
-                          {isFulfillmentAdmin ? (
+                          {canOperateReception ? (
                             <Tooltip title="Габариты">
                               <Box component="span" sx={{ flex: '0 0 40px', display: 'inline-flex' }}>
                                 <IconButton
@@ -2993,7 +3109,7 @@ export function FfInboundRequestView({
                                   <TableCell><Stack direction="row" spacing={0.5} sx={{ alignItems: 'center' }}>
                                     <Tooltip title={code.cz_reason}><Typography variant="body2" tabIndex={0}>{inboundMarkingStatusLabel(code.cz_status)}</Typography></Tooltip>
                                     {inboundMarkingNeedsAttention(code) ? <Tooltip title={code.cz_reason}><ErrorOutline tabIndex={0} fontSize="small" color="error" aria-label={code.cz_reason} /></Tooltip> : null}
-                                    {receivingActive && isFulfillmentAdmin ? (
+                                    {receivingActive && canOperateReception ? (
                                       <Tooltip title="Убрать ошибочно отсканированный код">
                                         <span><IconButton size="small" aria-label="Убрать код из приёмки" disabled={busy || marking.removingCodeId !== null}
                                           onClick={() => { void receivingScanQueue(() => marking.remove(code.id)) }}>
@@ -3027,13 +3143,26 @@ export function FfInboundRequestView({
           </TableContainer>
           ) : null}
 
+          {fbsStockDialogOpen && detail.seller_id && selectedFbsStockRows.length > 0 ? (
+            <FbsStockDialogContainer
+              token={token}
+              sellerId={detail.seller_id}
+              sellerName={detail.seller_name ?? '—'}
+              chosen={selectedFbsStockRows}
+              warehouses={warehouses}
+              canEditBindings={canManageCatalog}
+              onClose={() => setFbsStockDialogOpen(false)}
+              onLoadError={setError}
+            />
+          ) : null}
+
           {sortingView && !receptionClosed ? (
             <Alert severity="info" sx={{ mt: 2 }} data-testid="ff-inbound-sorting-wait-reception">
               Сначала завершите приёмку в разделе <strong>Приёмка</strong>.
             </Alert>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView ? (
+          {canOperateReception && !sortingView ? (
             <Accordion
               expanded={packagesExpanded}
               onChange={(_, expanded) => setPackagesExpanded(expanded)}
@@ -3332,7 +3461,7 @@ export function FfInboundRequestView({
             </Accordion>
           ) : null}
 
-          {isFulfillmentAdmin && !sortingView ? (
+          {canOperateReception && !sortingView ? (
             <Box sx={{ mt: 2 }}>
               {workspace === 'reception' && isSortingStatus(detail.status) ? (
                 <Alert severity="success" sx={{ mt: 2 }} data-testid="ff-inbound-moved-to-sorting">

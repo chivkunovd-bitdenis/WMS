@@ -1,0 +1,14 @@
+Command (from frontend/):
+npm run test:unit -- src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx --maxWorkers=1
+
+Baseline under test: a469cebec (product baseline 9ecf0a916; analyst clarification only).
+
+Result: exit 1; 2 tests, 2 failed.
+
+C2 uses the server suggestion scoped to active side/tier instead of ambiguous map code text
+AssertionError: The real page must request the authoritative suggestion: expected undefined to be defined
+
+C7 ignores a late previous-rack response and keeps the manual position in the current row
+AssertionError: expected [] to have a length of 2 but got +0
+
+The map fixture loaded and the actual FfWarehouseMapPage dialog opened. Both failures are the intended RED: the page has no HTTP request to /api/warehouses/wh-current/locations/suggest, so it cannot use the coordinate-scoped authoritative response or reject an old response after a context change. This is not an import, fixture, or module-loading failure.

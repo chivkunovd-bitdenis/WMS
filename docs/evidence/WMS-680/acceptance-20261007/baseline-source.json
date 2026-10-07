@@ -1,0 +1,14 @@
+{
+  "at": "2026-10-06T21:09:20.454348+00:00",
+  "candidate_observed": "851b32498dd2b8eb6a227a422422c33bd8ac5cd4",
+  "review": "7015448e255f606ef74b69e04e81f53777a099d5",
+  "replacement_analyst": "/root/artmaks_fbo_mockup; original ephemeral analyst unavailable per moderator",
+  "owner_screenshot_sha256": "9e80f0b60004b85ff7c7dfea359fc1f2b2ab8737d3288b3856fcc178ca9e4099",
+  "browser_tab": "663124232",
+  "harness": "actual FfPackagingTaskPanel; GET-only mockdata; unavailable catalog500; exact print capture sandbox only, no nativeprint",
+  "observed": "real PrintWaybill button;4normalvariants; ChromeSavePDFpreview1page; long28lines captured by realbutton",
+  "accepted": false,
+  "reason": "owner requested separate columns after viewing baseline; new contract R8–R10 C15–19 before fix",
+  "physical_print": false,
+  "pdf_file_saved": false
+}

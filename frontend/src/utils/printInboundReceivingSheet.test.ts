@@ -37,9 +37,9 @@ describe('buildInboundReceivingSheetHtml', () => {
     expect(html).toContain('2026-08-19')
   })
 
-  it('renders columns in order: Фото, Товар, ШК, Заявлено, Факт', () => {
+  it('renders R8 columns in order: Фото, Товар, Артикул, Цвет, Размер, ШК, Заявлено, Факт', () => {
     const html = buildInboundReceivingSheetHtml(base)
-    const headOrder = ['<th>Фото</th>', '<th>Товар</th>', '<th>ШК</th>', '<th>Заявлено</th>', '<th>Факт</th>']
+    const headOrder = ['<th>Фото</th>', '<th>Товар</th>', '<th>Артикул</th>', '<th>Цвет</th>', '<th>Размер</th>', '<th>ШК</th>', '<th>Заявлено</th>', '<th>Факт</th>']
     let lastIndex = -1
     for (const marker of headOrder) {
       const idx = html.indexOf(marker)

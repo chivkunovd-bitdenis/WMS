@@ -1,0 +1,94 @@
+{
+  "status": "BLOCKED_PENDING_ACCEPTED_CONCURRENT_SOURCE_RECONCILIATION",
+  "main": "8df23716626451e026d74137494e835e3cb081b7",
+  "incoming_trusted_source": "9dae4b19f6d4dca554200e08282579414a110848",
+  "our_reviewed_candidate": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "new_paths": {
+    "backend/tests/test_prod_deploy_backup.py": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+    "frontend/src/screens/ff/FfInboundRequestView.tsx": "cfe2a5b8198d5045719549a58b53224a7e13debb43273347c907ed5f7ae1cf11",
+    "frontend/src/utils/printBarcodeLabel.ts": "47cef393e22751f6e637adda175714b4da5698df55fae0a5382200fc19f12c8e",
+    "frontend/tests-e2e/wms672-native-errors.test.mjs": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+    "frontend/tests-e2e/wms672-peer-drain.test.mjs": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+    "frontend/tests-e2e/wms672-raster-resource.test.mjs": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79"
+  },
+  "new_mandatory_cases": {
+    "backend-fbs": {
+      "report": "backend-all.xml",
+      "format": "junit",
+      "exact": false,
+      "cases": [
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[archive]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[dump]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[empty]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[listing]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[network]",
+        "tests.test_prod_deploy_backup::test_deploy_requires_verified_backup_before_migration[retry]",
+        "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[False]",
+        "tests.test_prod_deploy_backup::test_workflow_bootstrap_checks_git_and_separates_stdin[True]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[accepted]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[failed]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[missing]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[unavailable]",
+        "tests.test_prod_deploy_backup_gate_boundary::test_backup_fixture_server_ci_boundary_precedes_every_docker_action[wrong-sha]"
+      ]
+    },
+    "print-672-native-errors": {
+      "report": "print/672-native-errors.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks",
+        "C5 blank message retains existing generic preparation error and zero external actions",
+        "C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape",
+        "C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape",
+        "C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape",
+        "C5 no message retains existing generic preparation error and zero external actions",
+        "C5 nonstring message retains existing generic preparation error and zero external actions"
+      ]
+    },
+    "print-672-peer-drain": {
+      "report": "print/672-peer-drain.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness",
+        "C5 synchronous decode throw drains held active peers before cleanup and retry readiness"
+      ]
+    },
+    "print-672-raster-resource": {
+      "report": "print/672-raster-resource.tap",
+      "format": "node-tap",
+      "exact": true,
+      "cases": [
+        "RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer",
+        "RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff",
+        "RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff"
+      ]
+    }
+  },
+  "new_count": 27,
+  "shared_source_hash_conflicts": [
+    ".github/workflows/ci.yml",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx",
+    "frontend/src/screens/v2/fbsPickingColor.wms673.pdf.test.ts",
+    "frontend/tests-e2e/wms672-dom.test.tsx",
+    "scripts/ci/tests/test_ci_release_additions.py",
+    "scripts/ci/tests/test_promote_guards.py"
+  ],
+  "real_product_delta": "Incoming672 printBarcodeLabel decodeImages adds16-image raster cohorts, held peer draining via allSettled, originalstyle restoration beforehandoff. It is not equivalent to ours8-image yielding. Wholefilecopy would remove684receipt metadata and wholeInboundcopy would remove687stockdialog/680printfields, so forbidden.",
+  "minimal_next_steps": [
+    "Wait for concurrentcoordinator actualacceptedstableSOURCE and its bounded CDP InterceptionId correction;9dae currentlyinterim",
+    "Import exactaccepted five newlyprotectedtestfiles preserving assertions + 15backup/12nativecaseIDs. Add three NodeTAPproducers native-errors/peer-drain/raster-resource to existingprintjob with rawexactattempt artifacts. Keep allour1648 cases/allold1146/18semantics.",
+    "Narrow merge accepted672 decode/raster/drain function into ourprinterutility, retainall684metadata/layout; keepourInboundfeatures with incomingcrossrealmerror semantics. Separateindependentreview/targetmandatorytests before newP. Never wholeforeignbranchcopy/revert.",
+    "Reconcile six shared protectedsource diffs explicitly:our CI/progression/transforms and 681/673 fixtures have genuine acceptedcorrectionrecords;preserveincomingassertions/scope withbounded reviewedmerge.",
+    "Only then freezecombinedP and post-product policySOURCE, mainpin throughnormalPR; existing27aPASS covers ourb6/activationonly, notunknownforeignmerge."
+  ],
+  "current_other_failures": {
+    "419_backend": "existing F6 observed_status-normal scheduler timeout; readonly packageanalyst diagnosing",
+    "419_print": "critical-fbs actual errors=[Invalid InterceptionId -32602], blocked=[]; concurrentcoordinator alreadyownsCDPfix. No43-caseblindrerun/ignoreerrors."
+  },
+  "no_mutations": true
+}

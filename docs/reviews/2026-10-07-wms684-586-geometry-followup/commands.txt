@@ -1,0 +1,16 @@
+Existing Python: /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python
+Every invocation uses PYTHONDONTWRITEBYTECODE=1; sequential, no installs/builds/subagents.
+
+From backend:
+python -m pytest -n0 -p no:cacheprovider tests/test_wms586_review_regression_contract.py -k 'does_not_overlap or does_not_add_blank' -q --tb=short
+python -m pytest -n0 -p no:cacheprovider -p tests.conftest -c pyproject.toml ../docs/reviews/2026-10-07-wms684-586-geometry-followup/pagination_api_probe.py -q --tb=short
+
+From checkout root:
+python docs/reviews/2026-10-07-wms684-586-geometry-followup/boundary_probe.py
+python docs/reviews/2026-10-07-wms684-586-geometry-followup/receipts_probe.py
+
+API and boundary probes are byte-identical copies of the ed482516 evidence programs;
+their relative output directory is now this report. SQLite is isolated by tests.conftest,
+HTTP uses real ASGI app in memory, product PDF renderer is not mocked.
+Receipts read retained PDF bytes only and strengthen both boundaries, separator clearance,
+visible-character bounds, and empty-line numeric uniqueness.

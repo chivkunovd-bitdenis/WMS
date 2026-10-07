@@ -1,0 +1,31 @@
+test_missing_saved_protected_policy_refuses_legacy_move (review_promote_tests.PromoteGuardsTests.test_missing_saved_protected_policy_refuses_legacy_move) ... FAIL
+test_dangling_saved_protected_policy_refuses_legacy_move (review_promote_tests.PromoteGuardsTests.test_dangling_saved_protected_policy_refuses_legacy_move) ... FAIL
+test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report (review_promote_tests.PromoteGuardsTests.test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report) ... ERROR
+
+======================================================================
+ERROR: test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report (review_promote_tests.PromoteGuardsTests.test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "65049df62d2bac87932fc5349f6326caec43dea5:scripts/ci/tests/test_promote_guards.py", line 284, in test_protected_wms654_templates_bind_every_real_case_in_fixed_vitest_report
+  File "aadd1716abc34f316648639e3baa10c1ac8c5e54^:scripts/ci/promote_guards.py", line 207, in promote
+  File "aadd1716abc34f316648639e3baa10c1ac8c5e54^:scripts/ci/promote_guards.py", line 173, in verify_registered_case
+ValueError: Защищённый original не имеет обязательного case/report: frontend/src/sections/CatalogSection.wms654.test.tsx::C6 independent coordinates sides=%s tiers=%s
+
+======================================================================
+FAIL: test_missing_saved_protected_policy_refuses_legacy_move (review_promote_tests.PromoteGuardsTests.test_missing_saved_protected_policy_refuses_legacy_move)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "65049df62d2bac87932fc5349f6326caec43dea5:scripts/ci/tests/test_promote_guards.py", line 355, in test_missing_saved_protected_policy_refuses_legacy_move
+AssertionError: ValueError not raised
+
+======================================================================
+FAIL: test_dangling_saved_protected_policy_refuses_legacy_move (review_promote_tests.PromoteGuardsTests.test_dangling_saved_protected_policy_refuses_legacy_move)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "65049df62d2bac87932fc5349f6326caec43dea5:scripts/ci/tests/test_promote_guards.py", line 369, in test_dangling_saved_protected_policy_refuses_legacy_move
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.495s
+
+FAILED (failures=2, errors=1)

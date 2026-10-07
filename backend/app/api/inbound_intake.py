@@ -62,12 +62,15 @@ from app.services import tenant_settings_service as tenant_settings_svc
 from app.services.catalog_service import volume_liters_from_mm
 from app.services.inbound_acceptance_act_service import (
     acceptance_act_filename,
+    acceptance_act_filename_for_format,
+    build_acceptance_act_pdf,
     build_acceptance_act_workbook,
 )
 from app.services.inbound_intake_box_service import InboundIntakeBoxError
 from app.services.inbound_intake_service import InboundIntakeError
 from app.services.marketplace_provider import OzonMarketplaceProvider
 from app.services.ozon_provider_factory import build_ozon_provider
+from app.services.print_product_metadata_service import populate_print_variant_attributes
 
 logger = logging.getLogger(__name__)
 
@@ -311,6 +314,8 @@ class InboundIntakeLineOut(BaseModel):
     product_id: str
     sku_code: str
     product_name: str
+    size: str | None = None
+    color: str | None = None
     wb_barcode: str | None = None
     requires_honest_sign: bool = False
     length_mm: int | None = None
@@ -565,7 +570,8 @@ def _map_inbound_svc_err(exc: InboundIntakeError) -> HTTPException:
     )
 
 
-def _request_out(
+async def _request_out(
+    session: AsyncSession,
     r: InboundIntakeRequest,
     lines: list[InboundIntakeLineOut] | None = None,
     boxes: list[InboundIntakeBoxOut] | None = None,
@@ -574,6 +580,9 @@ def _request_out(
     lines_out = lines
     if lines_out is None:
         lines_out = [_line_out_from_orm(ln, ln.product) for ln in r.lines]
+    await populate_print_variant_attributes(
+        session, [ln.product for ln in r.lines], lines_out
+    )
     boxes_out = boxes
     if boxes_out is None:
         if "boxes" in sa_inspect(r).unloaded:
@@ -626,7 +635,7 @@ async def _request_out_after_completion(
     request: InboundIntakeRequest,
 ) -> InboundIntakeRequestOut:
     refreshed, warning = await _refresh_completed_ozon_return(session, request)
-    return _request_out(refreshed, marketplace_warning=warning)
+    return await _request_out(session, refreshed, marketplace_warning=warning)
 
 
 def _line_out_from_orm(
@@ -673,13 +682,15 @@ async def _line_out_for_request(
     request_status: str,
     line: InboundIntakeLine,
     product: Product,
+    *,
+    enrich_variant: bool = True,
 ) -> InboundIntakeLineOut:
     effective: int | None = None
     if request_status in (svc.STATUS_DRAFT, svc.STATUS_SUBMITTED, svc.STATUS_RECEIVING):
         effective = await svc.effective_actual_qty(
             session, request_id, line, request_status=request_status
         )
-    return _line_out_from_orm(
+    result = _line_out_from_orm(
         line,
         product,
         effective_actual_qty=effective,
@@ -687,6 +698,9 @@ async def _line_out_for_request(
             session, tenant_id
         ),
     )
+    if enrich_variant:
+        await populate_print_variant_attributes(session, [product], [result])
+    return result
 
 
 def _movement_out(
@@ -867,7 +881,7 @@ async def create_inbound_request(
                 detail="invalid_operation_type",
             ) from None
         raise
-    return _request_out(r)
+    return await _request_out(session, r)
 
 
 @router.post(
@@ -894,7 +908,7 @@ async def begin_inbound_receiving(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return await _request_out(session, r2)
 
 
 @router.get("/{request_id}", response_model=InboundIntakeRequestOut)
@@ -920,14 +934,20 @@ async def get_inbound_request(
         p = ln.product
         lines_out.append(
             await _line_out_for_request(
-                session, user.tenant_id, request_id, r.status, ln, p
+                session,
+                user.tenant_id,
+                request_id,
+                r.status,
+                ln,
+                p,
+                enrich_variant=False,
             )
         )
     boxes = await inbound_box_svc.list_boxes_with_lines(
         session, user.tenant_id, request_id
     )
     boxes_out = [_box_out(b) for b in boxes]
-    return _request_out(r, lines=lines_out, boxes=boxes_out)
+    return await _request_out(session, r, lines=lines_out, boxes=boxes_out)
 
 
 @router.get("/{request_id}/acceptance-act.xlsx")
@@ -959,6 +979,41 @@ async def download_inbound_acceptance_act(
         headers={
             "Content-Disposition": (
                 'attachment; filename="acceptance-act.xlsx"; '
+                f"filename*=UTF-8''{urllib.parse.quote(filename)}"
+            )
+        },
+    )
+
+
+@router.get("/{request_id}/acceptance-act.pdf")
+async def download_inbound_acceptance_act_pdf(
+    request_id: uuid.UUID,
+    user: Annotated[User, Depends(get_current_user)],
+    session: Annotated[AsyncSession, Depends(get_db)],
+    seller_scope: Annotated[uuid.UUID | None, Depends(seller_line_product_scope)],
+) -> Response:
+    """WMS-586: PDF той же завершённой приёмки, что и Excel-акт."""
+    try:
+        req, content = await build_acceptance_act_pdf(
+            session, user.tenant_id, request_id, seller_product_owner_id=seller_scope
+        )
+    except InboundIntakeError as exc:
+        if exc.code == "request_not_found":
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail="request_not_found"
+            ) from None
+        if exc.code == "reception_not_closed":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail="reception_not_closed"
+            ) from None
+        raise
+    filename = acceptance_act_filename_for_format(req, "pdf")
+    return Response(
+        content=content,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": (
+                'attachment; filename="acceptance-act.pdf"; '
                 f"filename*=UTF-8''{urllib.parse.quote(filename)}"
             )
         },
@@ -1055,7 +1110,7 @@ async def patch_inbound_request_planned(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return await _request_out(session, r2)
 
 
 @router.post(
@@ -1365,7 +1420,7 @@ async def complete_inbound_receiving(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return await _request_out(session, r2)
 
 
 @router.post(
@@ -1407,7 +1462,7 @@ async def reopen_inbound_receiving(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return await _request_out(session, r2)
 
 
 @router.post(
@@ -1759,7 +1814,7 @@ async def resync_inbound_sorting_stock(
                 detail=exc.code,
             ) from None
         raise
-    return _request_out(r)
+    return await _request_out(session, r)
 
 
 @router.patch(
@@ -2313,7 +2368,7 @@ async def submit_inbound_request(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="request_missing",
         )
-    return _request_out(r2)
+    return await _request_out(session, r2)
 
 
 @router.post("/{request_id}/post", response_model=InboundIntakeRequestOut)
@@ -2635,4 +2690,4 @@ async def reopen_distribution_route(
     for ln in r.lines:
         p = ln.product
         lines_out.append(_line_out_from_orm(ln, p))
-    return _request_out(r, lines=lines_out)
+    return await _request_out(session, r, lines=lines_out)

@@ -124,7 +124,8 @@ jobs:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55466/wms_test_662_batch
         run: |
           pip install asyncpg==0.31.0
-          pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py
+          mkdir -p "$RUNNER_TEMP/release-postgres"
+          pytest -n 0 -q -s tests/test_wms662_batch_handoff_lock_order.py --junitxml="$RUNNER_TEMP/release-postgres/662-batch.xml"
       - name: WMS-662 isolated steady-state lock order on real PostgreSQL
         env:
           WMS_TEST_DATABASE_URL: postgresql+asyncpg://wms_test:fixture-only@127.0.0.1:55468/wms_test_662_steady
@@ -136,6 +137,24 @@ jobs:
           pytest -n 0 -m postgresql_concurrency tests/test_withdrawal_ledger.py tests/test_wb_order_price_snapshot.py tests/test_withdrawal_readiness.py --junitxml="$RUNNER_TEMP/release-postgres/517-withdrawal.xml"
           pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe
           pytest -n 0 tests/test_wms537_draft_supply_stickers.py::test_concurrent_add_of_the_same_order_to_a_draft_supply
+      - name: WMS-654 migration and both concurrent modes on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_654_combined
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_654_combined'); c.close()"
+          pytest -n 0 -q tests/test_wms654_migration.py::test_c8_migration_preserves_legacy_rows_and_new_list_coordinates tests/test_wms654_cells.py::test_c4_postgresql_concurrent_requests_have_one_winner --junitxml="$RUNNER_TEMP/release-postgres/654.xml"
+      - name: WMS-658 nine identity worker races on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_658_identity
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_658_identity'); c.close()"
+          pytest -n 0 -q tests/test_wms658_normalized_identity_regression.py::test_postgresql_workers_share_one_code_pool_and_link_for_identity_variants --junitxml="$RUNNER_TEMP/release-postgres/658.xml"
+      - name: WMS-681 two-worker QR checkpoint recovery on isolated PostgreSQL
+        env:
+          WMS_TEST_DATABASE_URL: postgresql+psycopg_async://postgres:fixture-only@127.0.0.1:5432/wms_test_681_recovery
+        run: |
+          python -c "import psycopg; c = psycopg.connect('postgresql://postgres:fixture-only@127.0.0.1:5432/postgres', autocommit=True); c.execute('CREATE DATABASE wms_test_681_recovery'); c.close()"
+          pytest -n 0 -q tests/test_wms681_postgres_recovery.py::test_wms681_postgres_two_workers_recover_one_group_across_qr_checkpoint --junitxml="$RUNNER_TEMP/release-postgres/681.xml"
       - name: Required PostgreSQL handoff cancellation documents and catalog contracts
         run: bash ../scripts/ci/run_release_postgres.sh
       - name: WMS-675 real incident recovery on isolated PostgreSQL
@@ -290,7 +309,7 @@ jobs:
           sudo apt-get install -y poppler-utils
           echo "PLAYWRIGHT_MODULE=$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs" >> "$GITHUB_ENV"
           node --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"
-      - name: Native iframe failure reasons and complete tape readiness
+      - name: Required accepted native print error peer drain and raster contracts
         run: |
           mkdir -p "$RUNNER_TEMP/release-print"
           node --test --test-reporter=tap frontend/tests-e2e/wms672-native-errors.test.mjs > "$RUNNER_TEMP/release-print/672-native-errors.tap"
@@ -359,6 +378,8 @@ jobs:
           test -x "$WMS_PRINT_CHROMIUM"
           command -v pdfimages
           npx vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
+      - name: WMS-672 frozen cross-realm C5a decode contract
+        run: npx vitest run --config tests-e2e/wms672-dom.config.ts -t 'C5a 33 labels' --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/wms672-c5a.json"
       - name: Build
         run: npm run build
       - uses: actions/upload-artifact@v4
@@ -367,7 +388,36 @@ jobs:
           name: frontend-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/frontend-all.json
+            ${{ runner.temp }}/wms672-c5a.json
             ${{ runner.temp }}/wms517-mac.tap
+          retention-days: 14
+
+  wms686-mockup:
+    timeout-minutes: 15
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install existing frontend dependencies
+        run: |
+          npm ci --prefix frontend
+          ln -s frontend/node_modules node_modules
+      - name: WMS-686 frozen model and isolation contract
+        run: node --test --test-reporter=tap docs/mockups/WMS-686/model.test.ts > "$RUNNER_TEMP/wms686-model.tap"
+      - name: WMS-686 demo typecheck and build
+        run: |
+          frontend/node_modules/.bin/tsc --noEmit -p docs/mockups/WMS-686/tsconfig.json
+          frontend/node_modules/.bin/vite build --config docs/mockups/WMS-686/vite.config.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/wms686-model.tap
+          if-no-files-found: error
           retention-days: 14
 
   guards:
@@ -385,7 +435,7 @@ jobs:
       - name: Install infrastructure test dependencies
         run: python -m pip install pytest pytest-xdist
       - name: Verify whole candidate against the accepted product reference
-        run: python scripts/ci/product_scope.py --root . --trusted-ref 1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333
+        run: python scripts/ci/product_scope.py --root . --trusted-ref b2a03ec118f9b4a184edfc4c2973ff92e044fd6c
       - name: Infrastructure tests (not business guards)
         run: |
           python -m unittest discover -s scripts/ci/tests -p 'test_*.py' -v
@@ -400,7 +450,14 @@ jobs:
           scripts/ci/tests/test_backend_shard_failclosed.py
           scripts/ci/tests/test_ci_release_additions.py
           scripts/ci/tests/test_backend_shard_redis_setup.py
+          scripts/ci/tests/test_promote_guards.py
+          scripts/ci/tests/test_process_contracts.py
+          scripts/ci/tests/test_reviewed_process_upgrade.py
+          scripts/ci/tests/test_process_deploy_gate.py
+          scripts/ci/tests/test_server_process_gate.py
           --junitxml="$RUNNER_TEMP/ci-shards.xml"
+      - name: WMS-687 strict reviewed correction compatibility
+        run: python -m pytest -q scripts/ci/test_check_task_documents.py --junitxml="$RUNNER_TEMP/docgate-687.xml"
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -409,6 +466,7 @@ jobs:
             ${{ runner.temp }}/product-scope.xml
             ${{ runner.temp }}/product-scope-receipt.json
             ${{ runner.temp }}/ci-shards.xml
+            ${{ runner.temp }}/docgate-687.xml
           if-no-files-found: error
           retention-days: 14
       - name: Verify against the checker and manifest from trusted BASE
@@ -429,13 +487,23 @@ jobs:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
         run: |
           set -euo pipefail
-          if git cat-file -e "$BASE_SHA:guards/PROCESS_CONTRACTS.json" 2>/dev/null; then
-            git show "$BASE_SHA:scripts/ci/process_contracts.py" > "$RUNNER_TEMP/process_contracts.py"
-            python "$RUNNER_TEMP/process_contracts.py" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA"
-          else
-            echo 'BOOTSTRAP: process protection is being introduced; independent acceptance is still required.'
-            python scripts/ci/process_contracts.py --base "$BASE_SHA" --bootstrap
-          fi
+          TRUSTED="$RUNNER_TEMP/trusted-process/scripts/ci"
+          mkdir -p "$TRUSTED"
+          git show origin/main:scripts/ci/trusted_process_check.py > "$TRUSTED/trusted_process_check.py"
+          git show origin/main:scripts/ci/process_bootstrap.json > "$TRUSTED/process_bootstrap.json"
+          PROTECTED_REF=$(python - "$TRUSTED/trusted_process_check.py" "$BASE_SHA" <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('trusted_anchor', sys.argv[1])
+          anchor = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(anchor)
+          pin = anchor.load_approved_bootstrap()
+          print(pin['source_sha'] if pin and pin['base_sha'] == sys.argv[2] else sys.argv[2])
+          PY
+          )
+          git show "$PROTECTED_REF:scripts/ci/process_contracts.py" > "$TRUSTED/process_contracts.py"
+          UPGRADE_ARGS=()
+          if [ "$PROTECTED_REF" != "$BASE_SHA" ]; then UPGRADE_ARGS=(--reviewed-upgrade); fi
+          python "$TRUSTED/process_contracts.py" --root "$GITHUB_WORKSPACE" --base "$BASE_SHA" "${UPGRADE_ARGS[@]}"
       - name: Install backend guard dependencies
         if: steps.integrity.outputs.backend_tests != '0'
         run: pip install -e './backend[dev]'
@@ -479,7 +547,7 @@ jobs:
   process-proof:
     # Required by the deployment verifier. Branch enforcement needs a separately
     # installed trusted anchor; this candidate workflow cannot protect itself.
-    needs: [baseline, backend, frontend-build, guards, print-regressions, printer-windows]
+    needs: [baseline, backend, frontend-build, guards, print-regressions, printer-windows, wms686-mockup]
     timeout-minutes: 5
     runs-on: ubuntu-latest
     steps:
@@ -510,11 +578,34 @@ jobs:
         with:
           name: guard-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/process-proof
+      - uses: actions/download-artifact@v4
+        with:
+          name: wms686-executed-contracts-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/process-proof
       - name: Verify every required named case and bind evidence to this attempt
         env:
           BASE_SHA: ${{ needs.baseline.outputs.base_sha }}
           CANDIDATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-        run: python scripts/ci/build_process_proof.py --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA"
+        run: |
+          set -euo pipefail
+          TRUSTED="$RUNNER_TEMP/trusted-process/scripts/ci"
+          mkdir -p "$TRUSTED"
+          git show origin/main:scripts/ci/trusted_process_check.py > "$TRUSTED/trusted_process_check.py"
+          git show origin/main:scripts/ci/process_bootstrap.json > "$TRUSTED/process_bootstrap.json"
+          PROTECTED_REF=$(python - "$TRUSTED/trusted_process_check.py" "$BASE_SHA" <<'PY'
+          import importlib.util, sys
+          spec = importlib.util.spec_from_file_location('trusted_anchor', sys.argv[1])
+          anchor = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(anchor)
+          pin = anchor.load_approved_bootstrap()
+          print(pin['source_sha'] if pin and pin['base_sha'] == sys.argv[2] else sys.argv[2])
+          PY
+          )
+          git show "$PROTECTED_REF:scripts/ci/process_contracts.py" > "$TRUSTED/process_contracts.py"
+          UPGRADE_ARGS=()
+          if [ "$PROTECTED_REF" != "$BASE_SHA" ]; then UPGRADE_ARGS=(--reviewed-upgrade); fi
+          git show "$PROTECTED_REF:scripts/ci/build_process_proof.py" > "$TRUSTED/build_process_proof.py"
+          python "$TRUSTED/build_process_proof.py" --root "$GITHUB_WORKSPACE" --reports "$RUNNER_TEMP/process-proof" --base "$BASE_SHA" "${UPGRADE_ARGS[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: process-proof-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}

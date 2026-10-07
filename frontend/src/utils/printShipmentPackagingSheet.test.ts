@@ -70,9 +70,18 @@ describe('buildShipmentPackagingSheetHtml', () => {
     expect(html).not.toContain('ШК: 2000000000015')
   })
 
-  it('renders only name, articles and barcode — no size/composition/description', () => {
-    const html = buildShipmentPackagingSheetHtml(base)
-    expect(html).not.toContain('Размер:')
+  it('renders required article, color and size in separate R8 columns, but no composition/description', () => {
+    const html = buildShipmentPackagingSheetHtml({
+      ...base,
+      items: [makeItem({ size: '42', color: 'Графит' })],
+    })
+    // R8 WMS-680 supersedes only the old inline placement, not these values.
+    expect(html).toContain('<th>Артикул</th>')
+    expect(html).toContain('<th>Цвет</th>')
+    expect(html).toContain('<th>Размер</th>')
+    expect(html).toContain('>ART-1</td>')
+    expect(html).toContain('>Графит</td>')
+    expect(html).toContain('>42</td>')
     expect(html).not.toContain('Состав:')
   })
 

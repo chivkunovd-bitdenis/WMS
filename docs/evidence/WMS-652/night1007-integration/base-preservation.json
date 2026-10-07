@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-06T20:55:37.298086+00:00",
+  "source": "f6066d68bd198794602a6e8916612d0d3b32460f",
+  "accepted_product": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "accepted_policy": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "protected_files": 222,
+  "suites": 18,
+  "case_ids": 1146,
+  "policy_equality": true,
+  "protected_hashes_blobs_modes_equal": true,
+  "product_scope_equal_d618": true,
+  "source_delta": "only own integration requirements/evidence",
+  "new_lanes_imported": false,
+  "local_checks": [
+    "check_task_documents origin/etalon PASS",
+    "diff --check f6066d68 own requirements/evidence PASS"
+  ],
+  "historical_raw_evidence_whitespace": "Existing imported logs have trailing whitespace; preserved byte-for-byte, not rewritten",
+  "full_ci": "pending prior7 fixture failures/C5 fixes; no release readiness claim"
+}

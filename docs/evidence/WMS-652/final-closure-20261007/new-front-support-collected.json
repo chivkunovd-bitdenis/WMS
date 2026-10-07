@@ -1,0 +1,118 @@
+[
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C1: R8 добавляет отдельные Артикул/Цвет, а размер остаётся в своей компактной ячейке с переносом",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C2: двенадцать колонок, контрольные данные и вход не меняются при повторной генерации",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C3: короткий размер остаётся одной строкой, отсутствие размера — прочерком",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C4: Chromium держит длинный размер и соседние данные в границах колонок",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C5: PDF A4 landscape сохраняет таблицу и полный текст всех колонок",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "WMS-657 · перенос размера в листе подбора FBS > C6: многострочный HTML/PDF не смешивает строки и варианты размера",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders A4 sheet with document header (номер, селлер, склад, дата)",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders R8 columns in order: Фото, Товар, Артикул, Цвет, Размер, ШК, Заявлено, Факт",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders a photo thumbnail with the passed photo url",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders barcode and product meta (article, SKU, WB article)",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > shows the expected (заявлено) quantity from seller",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders an always-empty Факт cell — no digits, no placeholder",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > does not fill Факт even when expected_qty looks like it could be echoed",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > does not break layout for an item without a photo — renders fallback block",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > falls back to SKU when vendor code is empty",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > renders empty-state message when there are no items",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > keeps a row from splitting across pages",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildInboundReceivingSheetHtml > escapes HTML in product name",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printInboundReceivingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders A4 sheet (orientation chosen in print dialog, not forced in CSS)",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders shipment line quantity in a dedicated column",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders one row per item with photo, article, barcode and instructions",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders barcode on a separate bold line in the product header",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders required article, color and size in separate R8 columns, but no composition/description",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders a compact table with an empty Fact column",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > keeps a row from splitting across pages",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > shows placeholders when ТЗ or photo missing",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > falls back to SKU when vendor code empty",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > renders empty-state message when no items",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  },
+  {
+    "name": "buildShipmentPackagingSheetHtml > escapes HTML in ТЗ text",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/printShipmentPackagingSheet.test.ts"
+  }
+]

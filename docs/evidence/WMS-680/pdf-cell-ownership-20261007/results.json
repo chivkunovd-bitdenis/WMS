@@ -1,0 +1,156 @@
+{
+  "sources": [
+    {
+      "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+      "blob": "00162dc5c08858803c5a988c75328dab0f00cfdc",
+      "sha256": "797428aefa56438ab4534a58675bd87118054420db92d62615978fc6b6312ff3"
+    },
+    {
+      "source": "535e8a970928e8834147553ad4c0139fcc5f10da",
+      "blob": "81a83b3794340eadd60abba94594d6ff09d533ae",
+      "sha256": "9718bf384afb546ffa42ca5acbfc49fa1cfcc05f19ce09cf01349059b6c8ad89"
+    }
+  ],
+  "chrome": "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+  "results": [
+    {
+      "name": "cross-row",
+      "expected": "PACKAGING-LONG-NAME-01-680",
+      "mustAccept": false,
+      "html_sha256": "3764b6e769d6df6195c8fd76e0188f461c8cb847a460c35965711a64d14a70ad",
+      "pdf_sha256": "208520fae69d85c2ae8982426b056016d16b596c9b968aa1caa6085a304e39e2",
+      "xml_sha256": "d070b6091e5dbed760d8d32c96d33894450fbb429dfac23396903838499af7a0",
+      "checks": [
+        {
+          "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "accepted": true,
+          "rejection": null,
+          "fragments": [
+            {
+              "left": 37.499998,
+              "top": 55.744627,
+              "right": 135.901606,
+              "bottom": 67.475095,
+              "text": "PACKAGING-LONG-"
+            },
+            {
+              "left": 37.499998,
+              "top": 189.244621,
+              "right": 104.027339,
+              "bottom": 200.975089,
+              "text": "NAME-01-680"
+            }
+          ]
+        },
+        {
+          "source": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "accepted": false,
+          "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+          "fragments": null
+        }
+      ]
+    },
+    {
+      "name": "cross-column",
+      "expected": "PACKAGING-LONG-NAME-01-680",
+      "mustAccept": false,
+      "html_sha256": "aa9faa3f82f86aac26a43d583234d59d1b9c59c7f6e3684b5df89ebf534d0ae1",
+      "pdf_sha256": "23e8b2c03d98703896a0adc8b9df455b50842e4fcf29b61d4ec7db261ebd2318",
+      "xml_sha256": "ef1a67c39a0dabb260498ecefcf984f3b681295c340822bf16b2d9ece16ad424",
+      "checks": [
+        {
+          "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "accepted": false,
+          "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+          "fragments": null
+        },
+        {
+          "source": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "accepted": false,
+          "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+          "fragments": null
+        }
+      ]
+    },
+    {
+      "name": "wrapped-cell",
+      "expected": "PACKAGING-LONG-NAME-01-680",
+      "mustAccept": true,
+      "html_sha256": "36549443d0c8eb690d9931c67944b2846901a3c0abb09207b68cfc879449128e",
+      "pdf_sha256": "7dab3339f513f3d7b4fdce594e213c79291e407772be8fcade9cc8c0943f2c06",
+      "xml_sha256": "cba21370840759e47aefe0970b83c1c9822945751ad25ddfaa29695bcd159d64",
+      "checks": [
+        {
+          "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "accepted": true,
+          "rejection": null,
+          "fragments": [
+            {
+              "left": 37.499998,
+              "top": 55.744627,
+              "right": 135.901606,
+              "bottom": 67.475095,
+              "text": "PACKAGING-LONG-"
+            },
+            {
+              "left": 37.499998,
+              "top": 67.744626,
+              "right": 104.027339,
+              "bottom": 79.475094,
+              "text": "NAME-01-680"
+            }
+          ]
+        },
+        {
+          "source": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "accepted": true,
+          "rejection": null,
+          "fragments": [
+            {
+              "left": 37.499998,
+              "top": 55.744627,
+              "right": 135.901606,
+              "bottom": 67.475095,
+              "text": "PACKAGING-LONG-",
+              "page": 0,
+              "block": 1,
+              "line": 0
+            },
+            {
+              "left": 37.499998,
+              "top": 67.744626,
+              "right": 104.027339,
+              "bottom": 79.475094,
+              "text": "NAME-01-680",
+              "page": 0,
+              "block": 1,
+              "line": 1
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "truncated-cell",
+      "expected": "PACKAGING-LONG-NAME-01-680",
+      "mustAccept": false,
+      "html_sha256": "fc937c42602201d0bd12dda84dc524628a8a60e9151255f22b3a751de143e0d0",
+      "pdf_sha256": "32559b1ed3365ce6b6b1f987bee7bc6230b4e0e1b009d5bce05a2e291e126e95",
+      "xml_sha256": "25557ad2e4e042c370dfdd5553071dd97c467b931add2fd4eade3a9c76a918d5",
+      "checks": [
+        {
+          "source": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "accepted": false,
+          "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+          "fragments": null
+        },
+        {
+          "source": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "accepted": false,
+          "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+          "fragments": null
+        }
+      ]
+    }
+  ]
+}

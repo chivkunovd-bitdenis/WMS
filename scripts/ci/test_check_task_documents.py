@@ -1,8 +1,10 @@
 import importlib.util
+import hashlib
 import json
 import subprocess
 import tempfile
 import unittest
+from contextlib import contextmanager
 from pathlib import Path
 
 SPEC = importlib.util.spec_from_file_location(
@@ -10,6 +12,11 @@ SPEC = importlib.util.spec_from_file_location(
 )
 checker = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(checker)
+
+EXACT_REVIEWED_CHAINS = json.loads(
+    (Path(__file__).with_name("tests") / "fixtures" /
+     "wms652_exact_reviewed_correction_chains.json").read_text(encoding="utf-8")
+)["tasks"]
 
 DOCUMENT = """# Задача
 
@@ -155,6 +162,450 @@ class GitTests(unittest.TestCase):
         self.write(checker.SCRIPT_PATH, "# rollout marker\n")
         self.write("docs/requirements/WMS-437.md", DOCUMENT)
         return self.commit("WMS-437 introduce document check")
+
+    @staticmethod
+    def current_integration_checker():
+        integration = Path(__file__).resolve().parents[2].parent / "night1007-integration"
+        path = integration / "scripts/ci/check_task_documents.py"
+        # During this test-writer stage exercise the live integration candidate;
+        # after the contract is merged, run the same tests against their local
+        # checked-in checker rather than a worktree-specific absolute path.
+        if not path.is_file():
+            path = Path(__file__).with_name("check_task_documents.py")
+        spec = importlib.util.spec_from_file_location(
+            "current_integration_check_task_documents",
+            path,
+        )
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        return module
+
+    def protected_wms687_document_gate_fixture(self):
+        source = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        inbound = "inbound selects only document products and opens the catalog FbsStockDialogContainer"
+        returned = "return selects only document products and opens the catalog FbsStockDialogContainer"
+        full_prefix = "WMS-687 shared FBS stock dialog from an inbound document"
+        # These are actual test.each values, not literal source names.  A broad
+        # describe/prefix match would incorrectly approve unrelated cases.
+        self.write(source, """import { describe, it } from 'vitest'\n\ndescribe('WMS-687 shared FBS stock dialog from an inbound document', () => {\n  it.each(['inbound', 'return'])('%s selects only document products and opens the catalog FbsStockDialogContainer', () => {})\n})\n""")
+        report = "frontend-all.json"
+        cases = [f"src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx::{full_prefix} {name}"
+                 for name in (inbound, returned)]
+        self.write(report, json.dumps({
+            "success": True,
+            "testResults": [{
+                "name": f"/workspace/frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx",
+                "status": "passed",
+                "assertionResults": [{"fullName": f"{full_prefix} {name}", "status": "passed"}
+                                     for name in (inbound, returned)],
+            }],
+        }) + "\n")
+        digest = hashlib.sha256((self.root / source).read_bytes()).hexdigest()
+        policy = {
+            "version": 1,
+            "files": {source: digest},
+            "suites": {"frontend-fbs": {
+                "report": report, "format": "vitest", "exact": False, "cases": cases,
+            }},
+        }
+        self.write("guards/PROCESS_CONTRACTS.json", json.dumps(policy) + "\n")
+        self.commit("WMS-687: save protected expanded DOM contract")
+        def document(name):
+            return f"""# WMS-687\n\n| Проверка | Класс | Тест | Вердикт |\n| --- | --- | --- | --- |\n| C1 | навсегда | {source}::{name} | Подтверждено |\n\n## Заключение\nПринято.\n"""
+        return source, inbound, returned, report, policy, document
+
+    def immutable_blob(self, commit: str, path: str) -> str:
+        """Read a published object, never the moving checkout version of a test."""
+        project = Path(__file__).resolve().parents[2]
+        return subprocess.check_output(
+            ["git", "show", f"{commit}:{path}"], cwd=project, text=True,
+        )
+
+    def wms680_published_ledger(self):
+        """Use existing ledger fields with actual published SHA/blob/report facts."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        original = record["original_contract"]
+        semantic = record["steps"][0]
+        report = record["report"]
+        path = "frontend/src/utils/wms680PrintContract.test.ts"
+        before, after = semantic["files"][path]
+        evidence_path = "docs/evidence/WMS-680/acceptance-20261007/baseline-source.json"
+
+        def review(source, correction):
+            return {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                    "source_commit": source, "correction_commit": correction,
+                    "evidence": report["path"], "evidence_commit": report["commit"],
+                    "evidence_blob": report["blob"]}
+
+        owner = {
+            "contract_commit": original, "prior_commit": original,
+            "source_commit": semantic["source"], "path": path, "before_blob": before,
+            "changes": [[semantic["correction"], after]],
+            "companion_files": [
+                {"path": name, "before_blob": pair[0], "after_blob": pair[1]}
+                for name, pair in semantic["files"].items() if name != path
+            ],
+            "owner_request": {"commit": record["owner"]["correction"],
+                              "path": evidence_path,
+                              "blob": record["owner"]["artifacts"][evidence_path][1]},
+            "review": review(semantic["source"], semantic["correction"]),
+        }
+        fixtures = []
+        for step in record["steps"][1:]:
+            # 5739 froze all five frontend test files. 739 froze Geometry again;
+            # its subsequent f2de append must be approved for BOTH originals.
+            originals = [semantic["correction"]]
+            if step["correction"] == record["final_correction_commit"]:
+                originals.append(step["source"])
+            for contract in originals:
+                fixtures.append({
+                    "contract_commit": contract, "source_commit": step["source"],
+                    "correction_commit": step["correction"],
+                    "files": [{"transform": step["transform"], "path": name,
+                               "before_blob": pair[0], "after_blob": pair[1]}
+                              for name, pair in step["files"].items()],
+                    "companion_files": [], "review": review(step["source"], step["correction"]),
+                })
+        return {"task": "WMS-680", "owner_supersessions": [owner],
+                "fixture_corrections": fixtures}
+
+    def wms681_integration_fixture_ledger(self, correction=None, publication=None):
+        """Bind the ordinary 681 chain plus its one later reviewed DOM delta.
+
+        The new source is deliberately its real parent, not the reviewer branch
+        commit.  The independently authored report is retained as provenance,
+        while ``publication_commit`` is the only immutable publication that is
+        actually descended from the correction.
+        """
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        integration = record["integration_fixture"]
+        report = record["report"]
+
+        def review(source, fixed, *, evidence, evidence_commit, evidence_blob):
+            return {
+                "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": fixed,
+                "evidence": evidence, "evidence_commit": evidence_commit,
+                "evidence_blob": evidence_blob,
+            }
+
+        entries = []
+        for number, step in enumerate(record["steps"], 1):
+            entries.append({
+                "contract_commit": record["original_contract"],
+                "source_commit": step["source"], "correction_commit": step["correction"],
+                "files": [
+                    {"transform": self.exact_transform("WMS-681", number, path),
+                     "path": path, "before_blob": pair[0], "after_blob": pair[1]}
+                    for path, pair in step["files"].items()
+                ],
+                "companion_files": [],
+                "review": review(step["source"], step["correction"],
+                                 evidence=report["path"], evidence_commit=report["commit"],
+                                 evidence_blob=report["blob"]),
+            })
+        fixed = correction or integration["correction_commit"]
+        published = publication or integration["publication_commit"]
+        entries.append({
+            "contract_commit": record["original_contract"],
+            "source_commit": integration["source_commit"], "correction_commit": fixed,
+            "files": [{
+                "transform": integration["transform"], "path": integration["path"],
+                "before_blob": integration["before_blob"], "after_blob": integration["after_blob"],
+            }],
+            "companion_files": [],
+            "review": review(integration["source_commit"], fixed,
+                             evidence=integration["report_path"], evidence_commit=published,
+                             evidence_blob=integration["report_blob"]),
+        })
+        return {"task": "WMS-681", "fixture_corrections": entries}
+
+    @contextmanager
+    def wms681_integration_real_git_graph(self, tamper=None):
+        """Run the actual contract gate over immutable 681 objects only.
+
+        The temporary repository borrows object storage through ``alternates``;
+        no refs, worktree files, or candidate code in the integration checkout
+        can be changed by this test.
+        """
+        project = Path(__file__).resolve().parents[2]
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        integration = record["integration_fixture"]
+        run_dir = project / ".agent-runs"
+        run_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="wms681-integration-gate-", dir=run_dir) as directory:
+            root = Path(directory)
+
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+
+            def save(path, text):
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+                git("add", "--", path)
+
+            def commit(message):
+                git("commit", "-q", "-m", message)
+                return git("rev-parse", "HEAD")
+
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            objects = checker.git(project, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+            (root / ".git/objects/info/alternates").write_text(objects + "\n", encoding="utf-8")
+            git("update-ref", "HEAD", integration["publication_commit"])
+            git("read-tree", integration["publication_commit"])
+            ledger = self.wms681_integration_fixture_ledger()
+            entry = ledger["fixture_corrections"][-1]
+
+            if tamper == "wrong-before":
+                entry["files"][0]["before_blob"] = "0" * 40
+            elif tamper == "wrong-after":
+                entry["files"][0]["after_blob"] = "0" * 40
+            elif tamper == "wrong-report":
+                entry["review"]["evidence_blob"] = "0" * 40
+            elif tamper == "wrong-publication":
+                # Same bytes, but this genuine independent review is not a
+                # descendant of 879 and therefore cannot be substituted.
+                entry["review"]["evidence_commit"] = integration["original_independent_review_commit"]
+            elif tamper == "wrong-source-parent":
+                entry["source_commit"] = entry["correction_commit"]
+                entry["review"]["source_commit"] = entry["source_commit"]
+            elif tamper == "extra-scope":
+                # Construct a private canary with the approved test bytes plus
+                # one product path. Exact pair registration must not bless it.
+                git("update-ref", "HEAD", integration["source_commit"])
+                git("read-tree", integration["source_commit"])
+                save(integration["path"], self.immutable_blob(
+                    integration["correction_commit"], integration["path"]))
+                save("backend/app/wms681_unreviewed.py", "unreviewed = True\n")
+                canary = commit("WMS-681: canary changes fixture and product")
+                save(integration["report_path"], self.immutable_blob(
+                    integration["publication_commit"], integration["report_path"]))
+                published = commit("WMS-681: canary publishes copied report")
+                ledger = self.wms681_integration_fixture_ledger(canary, published)
+                entry = ledger["fixture_corrections"][-1]
+            elif tamper not in (None, "unreviewed-mutation"):
+                raise AssertionError(f"Unknown canary: {tamper}")
+
+            save("docs/reviews/contract-corrections/WMS-681.json", json.dumps(ledger) + "\n")
+            commit("WMS-681: store exact integration fixture correction")
+            if tamper == "unreviewed-mutation":
+                save(integration["path"], checker.git(
+                    root, "show", f"HEAD:{integration['path']}") + "\n// unreviewed mutation\n")
+                commit("WMS-681: unreviewed post-ledger mutation")
+
+            self.assertTrue(checker.ancestor(root, entry["correction_commit"], "HEAD"))
+            yield root
+
+    @contextmanager
+    def wms680_real_git_graph(self, tamper=None):
+        """Preserve published trees, commits and parents; never rewrite history.
+
+        Borrow only immutable Git objects. A private HEAD/index starts at the
+        real review SHA, and only a ledger/canary is committed after that SHA.
+        No checkout of product files and no changes to another agent's Git refs.
+        """
+        project = Path(__file__).resolve().parents[2]
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        run_dir = project / ".agent-runs"
+        run_dir.mkdir(exist_ok=True)
+        with tempfile.TemporaryDirectory(prefix="wms680-gate-", dir=run_dir) as directory:
+            root = Path(directory)
+            def git(*args):
+                return subprocess.check_output(["git", *args], cwd=root, text=True).strip()
+            def save(path, text):
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+                git("add", "--", path)
+            def commit():
+                git("commit", "-q", "-m", "WMS-652: isolated gate fixture")
+                return git("rev-parse", "HEAD")
+
+            git("init", "-q")
+            git("config", "user.name", "Fixture")
+            git("config", "user.email", "fixture@example.invalid")
+            objects = checker.git(project, "rev-parse", "--path-format=absolute", "--git-path", "objects")
+            (root / ".git/objects/info/alternates").write_text(objects + "\n")
+            git("update-ref", "HEAD", record["report"]["commit"])
+            git("read-tree", record["report"]["commit"])
+            ledger = self.wms680_published_ledger()
+            owner = ledger["owner_supersessions"][0]
+            if tamper == "wrong-owner":
+                owner["owner_request"]["blob"] = "0" * 40
+            elif tamper == "missing-report":
+                for entry in [owner, *ledger["fixture_corrections"]]:
+                    entry["review"].pop("evidence_commit")
+            elif tamper == "wrong-report":
+                owner["review"]["evidence_blob"] = "0" * 40
+            elif tamper == "report-artifact-mutation":
+                path = record["report"]["path"]
+                save(path, checker.git(root, "show", f"HEAD:{path}") + "\nUnreviewed append\n")
+                commit()
+            elif tamper == "declared-wrong-blob":
+                ledger["fixture_corrections"][0]["files"][0]["after_blob"] = "0" * 40
+            elif tamper == "wrong-transform":
+                ledger["fixture_corrections"][0]["files"][0]["transform"] = "unreviewed-transform"
+            elif tamper == "wrong-model":
+                owner["review"]["model"] = "unreviewed-model"
+            elif tamper == "wrong-source":
+                owner["source_commit"] = record["report"]["commit"]
+            elif tamper == "missing-transform":
+                ledger["fixture_corrections"] = [
+                    item for item in ledger["fixture_corrections"]
+                    if item["correction_commit"] != "739bcadf1be4fe92e24af3d30b42f892f858e598"
+                ]
+            elif tamper == "extra-scope":
+                save("backend/app/wms680_unreviewed.py", "unreviewed = True\n")
+                unreviewed = commit()
+                owner["changes"][0][0] = unreviewed
+                owner["review"]["correction_commit"] = unreviewed
+            elif tamper in ("assertion-mutation", "later-geometry-mutation", "owner-artifact-mutation"):
+                path = {"assertion-mutation": "frontend/src/utils/wms680PrintContract.test.ts",
+                        "later-geometry-mutation": "frontend/src/utils/wms680PrintGeometry.test.ts",
+                        "owner-artifact-mutation": owner["owner_request"]["path"]}[tamper]
+                raw = checker.git(root, "show", f"HEAD:{path}")
+                if tamper == "owner-artifact-mutation":
+                    raw = "{}"
+                else:
+                    self.assertIn("expect(", raw)
+                    raw = raw.replace("expect(", "unreviewedExpect(", 1)
+                save(path, raw + "\n")
+                commit()
+            elif tamper is not None:
+                raise AssertionError(f"Unknown canary: {tamper}")
+            save("docs/reviews/contract-corrections/WMS-680.json", json.dumps(ledger) + "\n")
+            commit()
+            self.assertTrue(checker.ancestor(root, record["report"]["commit"], "HEAD"))
+            for sha in (record["original_contract"], *record["contracts"],
+                        *[step["correction"] for step in record["steps"]]):
+                self.assertTrue(checker.ancestor(root, sha, "HEAD"), sha)
+            yield root
+
+    @staticmethod
+    def exact_transform(task_id: str, step: int, path: str) -> str:
+        return f"{task_id.lower()}-reviewed-{step}-{path.rsplit('/', 1)[-1]}"
+
+    def reviewed_exact_chain(self, task_id: str, *, tamper: str | None = None):
+        """Build a small Git graph from immutable published blobs and metadata.
+
+        Commit ids are deliberately synthetic; every source/correction content
+        hash, exact path, report binding and graph edge comes from the published
+        independent-review mapping.  That makes this a stable checker fixture,
+        rather than a dependency on whatever HEAD happens to contain.
+        """
+        record = EXACT_REVIEWED_CHAINS[task_id]
+        rollout = self.rollout()
+        for path in record["frozen_files"]:
+            self.write(path, self.immutable_blob(record["original_contract"], path))
+        requirement = f"docs/requirements/{task_id}.md"
+        first = record["steps"][0]
+        if requirement in first.get("ancillary", {}):
+            self.write(requirement, self.immutable_blob(first["source"], requirement))
+        else:
+            self.write(requirement, DOCUMENT)
+        contract = self.commit(f"{task_id}: контракт тестов")
+
+        entries = []
+        source = contract
+        for number, step in enumerate(record["steps"], 1):
+            for path in step["files"]:
+                self.write(path, self.immutable_blob(step["correction"], path))
+            for path in step.get("ancillary", {}):
+                self.write(path, self.immutable_blob(step["correction"], path))
+            if tamper == "other-file" and number == 1:
+                self.write("backend/app/unrelated.py", "must never enter a fixture correction\n")
+            correction = self.commit(f"{task_id}: independently reviewed fixture correction {number}")
+            evidence = f"docs/reviews/{task_id}-fixture-review-{number}.md"
+            self.write(evidence, f"independent high PASS for {correction}\n")
+            evidence_commit = self.commit(f"{task_id}: publish fixture review {number}")
+            items = []
+            for path, (before, after) in step["files"].items():
+                items.append({
+                    "transform": self.exact_transform(task_id, number, path),
+                    "path": path, "before_blob": before, "after_blob": after,
+                })
+            review = {
+                "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+                "source_commit": source, "correction_commit": correction,
+                "evidence": evidence, "evidence_commit": evidence_commit,
+                "evidence_blob": checker.git_blob(self.root, evidence_commit, evidence),
+            }
+            entries.append({
+                "contract_commit": contract, "source_commit": source,
+                "correction_commit": correction, "files": items,
+                "companion_files": [
+                    {"path": path, "before_blob": before, "after_blob": after}
+                    for path, (before, after) in step.get("ancillary", {}).items()
+                ],
+                "review": review,
+            })
+            # The next independently reviewed source is a real descendant which
+            # did not alter the frozen bytes; rejecting it would erase the audit.
+            source = evidence_commit
+        ledger = {"task": task_id, "fixture_corrections": entries}
+        if tamper == "wrong-source":
+            ledger["fixture_corrections"][1]["source_commit"] = "f" * 40
+        elif tamper == "wrong-blob":
+            ledger["fixture_corrections"][0]["files"][0]["after_blob"] = "0" * 40
+        elif tamper == "missing-review":
+            ledger["fixture_corrections"][0]["review"].pop("model")
+        elif tamper == "wrong-report":
+            report = ledger["fixture_corrections"][0]["review"]["evidence"]
+            self.write(report, "rewritten report\n")
+            self.commit(f"{task_id}: mutate published review artifact")
+        self.write(
+            f"docs/reviews/contract-corrections/{task_id}.json",
+            json.dumps(ledger, ensure_ascii=False) + "\n",
+        )
+        self.commit(f"{task_id}: store exact independently reviewed chain")
+        return rollout
+
+    def wms687_document(self, test_links: str) -> str:
+        return f"""# WMS-687
+
+| Проверка | Требование | Класс | Тест | Ожидаемый результат | Вердикт |
+| --- | --- | --- | --- | --- | --- |
+| C1 | R1 | навсегда | {test_links} | Общий диалог сохраняет только выбранные строки документа. | принято |
+
+## Заключение
+Принято.
+"""
+
+    def wms687_contract(self, *, second_frozen: bool = False):
+        rollout = self.rollout()
+        frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        frozen_paths = [frozen]
+        if second_frozen:
+            second = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+            self.write(second, "export const frozenPermission = 'original'\n")
+            frozen_paths.append(second)
+        document = "docs/requirements/WMS-687.md"
+        self.write(document, self.wms687_document(f"{frozen}::WMS-687 old DOM contract"))
+        contract = self.commit("WMS-687: контракт тестов")
+        return rollout, contract, frozen_paths, document
+
+    def wms687_ledger(self, contract: str, correction: str, files: list[str]) -> None:
+        self.write(
+            "docs/reviews/contract-corrections/WMS-687.json",
+            json.dumps(
+                {
+                    "task": "WMS-687",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": files,
+                    "review": {
+                        "model": "gpt-6.1-sol",
+                        "effort": "high",
+                        "verdict": "PASS",
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-687 correction ledger")
 
     def test_pre_rollout_history_ignored_but_introduction_checked(self):
         self.commit("WMS-002 legacy without contract")
@@ -738,6 +1189,479 @@ class GitTests(unittest.TestCase):
         self.commit("WMS-702 rename contract")
         errors = checker.contract_change_errors(self.root, rollout)
         self.assertTrue(any("WMS-702" in error for error in errors))
+
+    def test_protected_wms687_expanded_inbound_reference_uses_exact_receipt_case(self):
+        _, inbound, _, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(inbound), self.root)
+        self.assertEqual(errors, [])
+
+    def test_protected_wms687_expanded_return_reference_uses_exact_receipt_case(self):
+        _, _, returned, _, _, document = self.protected_wms687_document_gate_fixture()
+        errors = self.current_integration_checker().document_errors(document(returned), self.root)
+        self.assertEqual(errors, [])
+
+    def test_protected_wms687_expanded_reference_rejects_unbound_or_changed_proof(self):
+        for tamper in ("changed-head", "dirty", "missing-case", "wrong-report", "unregistered"):
+            with self.subTest(tamper=tamper):
+                with tempfile.TemporaryDirectory() as directory:
+                    isolated = self.__class__()
+                    isolated.temp = tempfile.TemporaryDirectory(dir=directory)
+                    isolated.root = Path(isolated.temp.name)
+                    isolated.git("init", "-q")
+                    isolated.git("config", "user.name", "Fixture")
+                    isolated.git("config", "user.email", "fixture@example.invalid")
+                    isolated.write("AGENTS.md", "Rules\n")
+                    isolated.write("CLAUDE.md", "Rules\n")
+                    isolated.base = isolated.commit("WMS-001 legacy base")
+                    try:
+                        source, _, returned, _, policy, document = isolated.protected_wms687_document_gate_fixture()
+                        if tamper == "changed-head":
+                            isolated.write(source, "it('changed protected original', () => {})\n")
+                            isolated.commit("WMS-687: changed protected original")
+                        elif tamper == "dirty":
+                            isolated.write(source, (isolated.root / source).read_text() + "// dirty\n")
+                        else:
+                            if tamper == "missing-case":
+                                policy["suites"]["frontend-fbs"]["cases"] = [
+                                    policy["suites"]["frontend-fbs"]["cases"][0]
+                                ]
+                            elif tamper == "wrong-report":
+                                policy["suites"]["frontend-fbs"]["report"] = "other-frontend.json"
+                                isolated.write("other-frontend.json", "{}\n")
+                            elif tamper == "unregistered":
+                                policy["files"] = {}
+                            isolated.write("guards/PROCESS_CONTRACTS.json", json.dumps(policy) + "\n")
+                            isolated.commit(f"WMS-687: {tamper} protected proof")
+                        errors = isolated.current_integration_checker().document_errors(document(returned), isolated.root)
+                        self.assertTrue(errors, errors)
+                    finally:
+                        isolated.temp.cleanup()
+
+    def test_unprotected_legacy_test_reference_stays_literal(self):
+        source = "frontend/src/screens/ff/Legacy.test.tsx"
+        self.write(source, "it('legacy literal case', () => {})\n")
+        document = f"""# Legacy
+
+| Проверка | Класс | Тест | Вердикт |
+| --- | --- | --- | --- |
+| C1 | навсегда | {source}::legacy literal case | Подтверждено |
+
+## Заключение
+Принято.
+"""
+        self.assertEqual(self.current_integration_checker().document_errors(document, self.root), [])
+
+    def test_wms687_reviewed_correction_allows_only_new_task_tests_and_own_test_links(self):
+        rollout, contract, [frozen], document = self.wms687_contract()
+        regression = "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+        permission = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        self.write(regression, "export const regression = 'WMS-687'\n")
+        self.write(permission, "export const permission = 'WMS-687'\n")
+        self.write(
+            document,
+            self.wms687_document(
+                f"{frozen}::WMS-687 old DOM contract<br>"
+                f"{regression}::WMS-687 shared dialog regression<br>"
+                f"{permission}::WMS-687 catalog permission wiring"
+            ),
+        )
+        correction = self.commit("WMS-687: correction after independent review")
+        self.wms687_ledger(contract, correction, [frozen])
+
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms687_correction_rejects_product_or_other_task_test_companion(self):
+        for path in (
+            "frontend/src/screens/ff/FfInboundRequestView.tsx",
+            "frontend/src/screens/ff/FfInboundRequestView.wms688.regression.dom.test.tsx",
+        ):
+            with self.subTest(path=path):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    (root / "AGENTS.md").write_text("Rules\n")
+                    (root / "CLAUDE.md").write_text("Rules\n")
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+                    contract = commit("WMS-687: контракт тестов")
+                    write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                    write(path, "export const unrelated = true\n")
+                    correction = commit("WMS-687 correction with forbidden companion")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms687_correction_rejects_foreign_or_semantic_requirement_change(self):
+        for changed_document, before, replacement in (
+            ("docs/requirements/WMS-688.md", "", "foreign requirement\n"),
+            ("docs/requirements/WMS-687.md", "R1", "R99"),
+            ("docs/requirements/WMS-687.md", "Общий диалог сохраняет только выбранные строки документа.",
+             "Общий диалог меняет бизнес-результат."),
+        ):
+            with self.subTest(document=changed_document):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write("AGENTS.md", "Rules\n")
+                    write("CLAUDE.md", "Rules\n")
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    original_doc = self.wms687_document(f"{frozen}::old")
+                    write("docs/requirements/WMS-687.md", original_doc)
+                    write("docs/requirements/WMS-688.md", "# WMS-688\n")
+                    contract = commit("WMS-687: контракт тестов")
+                    write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                    if changed_document.endswith("WMS-687.md"):
+                        write(changed_document, original_doc.replace(before, replacement))
+                    else:
+                        write(changed_document, replacement)
+                    correction = commit("WMS-687 correction with forbidden requirement edit")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms687_correction_rejects_undeclared_or_deleted_frozen_test(self):
+        for mode in ("undeclared", "deleted"):
+            with self.subTest(mode=mode):
+                with tempfile.TemporaryDirectory() as directory:
+                    root = Path(directory)
+                    subprocess.check_call(["git", "init", "-q"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.name", "Fixture"], cwd=root)
+                    subprocess.check_call(["git", "config", "user.email", "fixture@example.invalid"], cwd=root)
+                    def write(name, text):
+                        target = root / name
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_text(text)
+                    def commit(message):
+                        subprocess.check_call(["git", "add", "."], cwd=root)
+                        subprocess.check_call(["git", "commit", "-q", "--allow-empty", "-m", message], cwd=root)
+                        return subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+                    write("AGENTS.md", "Rules\n")
+                    write("CLAUDE.md", "Rules\n")
+                    write(checker.SCRIPT_PATH, "# rollout marker\n")
+                    rollout = commit("WMS-437 introduce document check")
+                    frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+                    second = "frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+                    write(frozen, "export const frozenContract = 'original'\n")
+                    write(second, "export const frozenPermission = 'original'\n")
+                    write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+                    contract = commit("WMS-687: контракт тестов")
+                    if mode == "deleted":
+                        subprocess.check_call(["git", "rm", "-q", frozen], cwd=root)
+                    else:
+                        write(frozen, "export const frozenContract = 'reviewed correction'\n")
+                        write(second, "export const frozenPermission = 'changed outside ledger'\n")
+                    correction = commit("WMS-687 correction with invalid frozen scope")
+                    write(
+                        "docs/reviews/contract-corrections/WMS-687.json",
+                        json.dumps({
+                            "task": "WMS-687", "contract_commit": contract,
+                            "correction_commit": correction, "files": [frozen],
+                            "review": {"model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS"},
+                        }) + "\n",
+                    )
+                    commit("WMS-687 correction ledger")
+                    self.assertTrue(checker.contract_change_errors(root, rollout))
+
+    def test_wms658_published_exact_chain_with_own_test_links_is_accepted(self):
+        """658 has one reviewed requirements-Test-links companion, no broad companion rule."""
+        rollout = self.reviewed_exact_chain("WMS-658")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms681_published_two_by_two_exact_chain_is_accepted(self):
+        """Both frozen 681 files change in each of its two approved corrections."""
+        rollout = self.reviewed_exact_chain("WMS-681")
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_reviewed_658_and_681_exact_chain_rejects_every_binding_canary(self):
+        # These are not a generic migration escape hatch: each kind of binding
+        # failure must stay fatal after the two positive chains are implemented.
+        for task_id, tamper in (
+            ("WMS-658", "wrong-source"),
+            ("WMS-658", "wrong-blob"),
+            ("WMS-658", "other-file"),
+            ("WMS-681", "missing-review"),
+            ("WMS-681", "wrong-report"),
+        ):
+            with self.subTest(task_id=task_id, tamper=tamper):
+                with tempfile.TemporaryDirectory() as directory:
+                    isolated = self.__class__()
+                    # Reuse the normal fixture setup on an independent Git repo;
+                    # no case shares chain state or a mutable evidence artifact.
+                    isolated.temp = tempfile.TemporaryDirectory(dir=directory)
+                    isolated.root = Path(isolated.temp.name)
+                    isolated.git("init", "-q")
+                    isolated.git("config", "user.name", "Fixture")
+                    isolated.git("config", "user.email", "fixture@example.invalid")
+                    isolated.write("AGENTS.md", "Rules\n")
+                    isolated.write("CLAUDE.md", "Rules\n")
+                    isolated.base = isolated.commit("WMS-001 legacy base")
+                    try:
+                        rollout = isolated.reviewed_exact_chain(task_id, tamper=tamper)
+                        self.assertTrue(checker.contract_change_errors(isolated.root, rollout))
+                    finally:
+                        isolated.temp.cleanup()
+
+    def test_exact_chain_records_pin_the_two_published_review_artifacts(self):
+        # The fixture is an immutable source of real source/final/report/blob
+        # values for the two ordinary fixture-only chains.
+        for task_id, report_commit, report_blob in (
+            ("WMS-658", "0d9d7cc735bf7506de0067991ff1b92e6b468a52",
+             "0a48a0167af6e83b156ff003b66a842df09c42c6"),
+            ("WMS-681", "4c3c53bb1a4057da7e003e024680c842c05abdc1",
+             "fc539ecf01b0d652920d4f9a26b913e519eacaf9"),
+        ):
+            with self.subTest(task_id=task_id):
+                report = EXACT_REVIEWED_CHAINS[task_id]["report"]
+                self.assertEqual(report["commit"], report_commit)
+                self.assertEqual(report["blob"], report_blob)
+                self.assertEqual(len(EXACT_REVIEWED_CHAINS[task_id]["steps"]), 4 if task_id == "WMS-658" else 2)
+
+    def test_exact_chain_records_match_published_parent_blobs_and_report(self):
+        # This verifies the actual immutable objects separately from the small
+        # synthetic graphs above.  It is intentionally independent of HEAD.
+        project = Path(__file__).resolve().parents[2]
+        for task_id in ("WMS-658", "WMS-681"):
+            record = EXACT_REVIEWED_CHAINS[task_id]
+            with self.subTest(task_id=task_id):
+                self.assertTrue(checker.ancestor(project, record["original_contract"], record["final_correction_commit"]))
+                report = record["report"]
+                self.assertEqual(checker.git_blob(project, report["commit"], report["path"]), report["blob"])
+                for step in record["steps"]:
+                    parent = checker.git(project, "rev-list", "--parents", "-n", "1", step["correction"]).split()[1]
+                    self.assertEqual(parent, step["source"])
+                    for path, (before, after) in step["files"].items():
+                        self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                        self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+                    for path, (before, after) in step.get("ancillary", {}).items():
+                        self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                        self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+
+    def test_wms681_integration_fixture_keeps_review_identity_but_uses_descendant_publication(self):
+        """The review bytes alone are not a substitute for proof ancestry."""
+        project = Path(__file__).resolve().parents[2]
+        integration = EXACT_REVIEWED_CHAINS["WMS-681"]["integration_fixture"]
+        parent = checker.git(
+            project, "rev-list", "--parents", "-n", "1", integration["correction_commit"],
+        ).split()[1]
+        self.assertEqual(parent, integration["source_commit"])
+        self.assertEqual(
+            checker.git_blob(project, integration["source_commit"], integration["path"]),
+            integration["before_blob"],
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["correction_commit"], integration["path"]),
+            integration["after_blob"],
+        )
+        self.assertEqual(
+            checker.commit_changed_paths(project, integration["correction_commit"]),
+            {integration["path"]},
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["original_independent_review_commit"],
+                             integration["report_path"]),
+            integration["report_blob"],
+        )
+        self.assertEqual(
+            checker.git_blob(project, integration["publication_commit"], integration["report_path"]),
+            integration["report_blob"],
+        )
+        self.assertTrue(checker.ancestor(
+            project, integration["correction_commit"], integration["publication_commit"],
+        ))
+        self.assertFalse(checker.ancestor(
+            project, integration["original_independent_review_commit"], integration["publication_commit"],
+        ))
+
+    def test_wms681_integration_fixture_exact_pair_is_accepted_after_registration(self):
+        """Real published 681 graph: old pair is preserved and 879 is additive."""
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        with self.wms681_integration_real_git_graph() as root:
+            errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+            self.assertEqual([error for error in errors if "WMS-681" in error], [])
+
+    def test_wms681_integration_fixture_rejects_every_exact_binding_canary(self):
+        record = EXACT_REVIEWED_CHAINS["WMS-681"]
+        for tamper in ("wrong-before", "wrong-after", "wrong-report",
+                       "wrong-publication", "wrong-source-parent", "extra-scope",
+                       "unreviewed-mutation"):
+            with self.subTest(tamper=tamper):
+                with self.wms681_integration_real_git_graph(tamper) as root:
+                    # Exercise the gate's real ledger validator directly: the
+                    # positive above already scans the full published history.
+                    _, errors = checker.reviewed_contract_correction(
+                        root, "WMS-681", record["original_contract"],
+                    )
+                    self.assertTrue([error for error in errors if "WMS-681" in error], errors)
+
+    def test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly(self):
+        """Run the real gate over every published 680 contract, including f2de."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        with self.wms680_real_git_graph() as root:
+            errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+            self.assertEqual([error for error in errors if "WMS-680" in error], [])
+
+    def test_wms680_real_gate_accepts_later_5739_and_739_frozen_bases(self):
+        # Starting CI after the initial contract must still validate corrections
+        # to the earlier contract and protect the newly frozen Geometry file.
+        with self.wms680_real_git_graph() as root:
+            for base in ("5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e^",
+                         "739bcadf1be4fe92e24af3d30b42f892f858e598^"):
+                with self.subTest(base=base):
+                    errors = checker.contract_change_errors(root, base)
+                    self.assertEqual([error for error in errors if "WMS-680" in error], [])
+
+    def test_wms680_manifest_matches_owner_evidence_all_frontiers_and_report(self):
+        """Every allowed 680 edge is proved against immutable published Git data."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        project = Path(__file__).resolve().parents[2]
+        owner = record["owner"]
+        self.assertEqual(
+            checker.git(project, "rev-list", "--parents", "-n", "1", owner["correction"]).split()[1],
+            owner["source"],
+        )
+        for path, (before, after) in owner["artifacts"].items():
+            self.assertEqual(checker.git_blob(project, owner["source"], path), before)
+            self.assertEqual(checker.git_blob(project, owner["correction"], path), after)
+        report = record["report"]
+        self.assertEqual(checker.git_blob(project, report["commit"], report["path"]), report["blob"])
+        self.assertTrue(checker.ancestor(project, owner["correction"], report["commit"]))
+        for contract, paths in record["contracts"].items():
+            self.assertEqual(checker.git(project, "show", "-s", "--format=%s", contract), "WMS-680: контракт тестов")
+            self.assertTrue(checker.ancestor(project, contract, report["commit"]))
+            for path, (before, after) in paths.items():
+                self.assertEqual(checker.git_blob(project, contract, path), before)
+                self.assertEqual(checker.git_blob(project, record["final_correction_commit"], path), after)
+        for step in record["steps"]:
+            parent = checker.git(project, "rev-list", "--parents", "-n", "1", step["correction"]).split()[1]
+            self.assertEqual(parent, step.get("parent", step["source"]))
+            for path, (before, after) in step["files"].items():
+                self.assertEqual(checker.git_blob(project, step["source"], path), before)
+                self.assertEqual(checker.git_blob(project, step["correction"], path), after)
+
+    def test_wms680_closed_matrix_rejects_owner_report_assertion_and_scope_canaries(self):
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        for tamper in ("wrong-owner", "owner-artifact-mutation", "missing-report",
+                       "wrong-report", "report-artifact-mutation", "wrong-model",
+                       "wrong-source", "extra-scope", "declared-wrong-blob", "wrong-transform",
+                       "assertion-mutation", "later-geometry-mutation", "missing-transform"):
+            with self.subTest(tamper=tamper):
+                with self.wms680_real_git_graph(tamper) as root:
+                    errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+                    self.assertTrue([error for error in errors if "WMS-680" in error], errors)
+
+    def test_legacy_wms654_exact_files_ledger_keeps_accepted_report_without_report_commit(self):
+        rollout = self.rollout()
+        report = "docs/reviews/WMS-654-correction-review.md"
+        frozen = "frontend/src/sections/CatalogSection.wms654.test.tsx"
+        self.write(report, "# Legacy WMS-654 independent PASS report\n")
+        self.commit("WMS-654 independent review report")
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        contract = self.commit("WMS-654: контракт тестов")
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        correction = self.commit("WMS-654 exact reviewed correction")
+        self.write(
+            "docs/reviews/contract-corrections/WMS-654.json",
+            json.dumps(
+                {
+                    "task": "WMS-654",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": [frozen],
+                    "review": {
+                        "model": "gpt-6-astra",
+                        "effort": "high",
+                        "verdict": "PASS",
+                        "report": report,
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-654 correction ledger")
+
+        self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+
+    def test_wms687_ancillary_correction_with_report_still_requires_report_commit(self):
+        rollout = self.rollout()
+        report = "docs/reviews/WMS-687-correction-review.md"
+        frozen = "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+        regression = "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+        self.write(report, "# WMS-687 independent PASS report\n")
+        self.commit("WMS-687 independent review report")
+        self.write(frozen, "export const frozenContract = 'original'\n")
+        self.write("docs/requirements/WMS-687.md", self.wms687_document(f"{frozen}::old"))
+        contract = self.commit("WMS-687: контракт тестов")
+        self.write(frozen, "export const frozenContract = 'reviewed correction'\n")
+        self.write(regression, "export const regression = 'WMS-687'\n")
+        self.write(
+            "docs/requirements/WMS-687.md",
+            self.wms687_document(f"{frozen}::old<br>{regression}::WMS-687 regression"),
+        )
+        correction = self.commit("WMS-687 reviewed correction with ancillary test")
+        self.write(
+            "docs/reviews/contract-corrections/WMS-687.json",
+            json.dumps(
+                {
+                    "task": "WMS-687",
+                    "contract_commit": contract,
+                    "correction_commit": correction,
+                    "files": [frozen],
+                    "ancillary_files": [
+                        "docs/requirements/WMS-687.md",
+                        regression,
+                    ],
+                    "review": {
+                        "model": "gpt-6.1-sol",
+                        "effort": "high",
+                        "verdict": "PASS",
+                        "report": report,
+                    },
+                }
+            ) + "\n",
+        )
+        self.commit("WMS-687 correction ledger")
+
+        self.assertTrue(checker.contract_change_errors(self.root, rollout))
 
 
 if __name__ == "__main__":

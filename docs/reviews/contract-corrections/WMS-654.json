@@ -1,0 +1,19 @@
+{
+  "task": "WMS-654",
+  "contract_commit": "d841e1445cf5867002e9341b35741ecaf90ca3a2",
+  "correction_commit": "01d1cc5c2fd6690e6e68c604c8fcd5dff99a0180",
+  "files": [
+    "backend/tests/test_wms654_migration.py"
+  ],
+  "review": {
+    "model": "gpt-6-astra",
+    "effort": "high",
+    "verdict": "PASS",
+    "report": "docs/reviews/WMS-654-c8-correction-review.md",
+    "evidence": [
+      "docs/reviews/WMS-654-migration-contract-proof.md",
+      "docs/reviews/WMS-654-pg-receipts.xml"
+    ],
+    "summary": "Exact correction changes only the migration selector; all 12 frozen assertions and the missing-tier failure are preserved. Existing PostgreSQL receipts: C8 and C4 False/True, 3 PASS, 0 SKIP on branch models. Combined models and full Alembic path remain integration/CI obligations."
+  }
+}

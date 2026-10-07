@@ -557,10 +557,30 @@ async def test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch(
         upsert_products_from_wb_cards as original_upsert,
     )
 
-    async def flaky_upsert(session: Any, tenant_id_arg: Any, seller_id_arg: Any, cards: Any) -> Any:
+    forwarded_marking_context: list[tuple[Any, Any]] = []
+
+    async def flaky_upsert(
+        session: Any,
+        tenant_id_arg: Any,
+        seller_id_arg: Any,
+        cards: Any,
+        *,
+        before_commit: Any = None,
+        marking_catalog: Any = None,
+        marking_catalog_error: Any = None,
+    ) -> Any:
         if cards[0].get("nmID") == 8_700_001:
             raise RuntimeError("WMS-548 F3 simulated failure")
-        return await original_upsert(session, tenant_id_arg, seller_id_arg, cards)
+        forwarded_marking_context.append((marking_catalog, marking_catalog_error))
+        return await original_upsert(
+            session,
+            tenant_id_arg,
+            seller_id_arg,
+            cards,
+            before_commit=before_commit,
+            marking_catalog=marking_catalog,
+            marking_catalog_error=marking_catalog_error,
+        )
 
     monkeypatch.setattr(catalog_svc, "upsert_products_from_wb_cards", flaky_upsert)
 
@@ -574,3 +594,4 @@ async def test_f3_one_failing_wb_card_does_not_crash_the_rest_of_the_batch(
     assert {s["id"]: s["reason"] for s in body["skipped"]} == {"8700001": "internal_error"}
     assert {a["id"] for a in body["added"]} == {"8700002"}
     assert await _product_count(tenant_id, seller_id, 8_700_002) == 1
+    assert forwarded_marking_context == [(None, "wb_category_catalog_unavailable")]

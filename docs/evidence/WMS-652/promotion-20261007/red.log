@@ -1,0 +1,56 @@
+test_empty_active_permanent_reference_still_refuses_promotion (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_empty_active_permanent_reference_still_refuses_promotion) ... ok
+test_parses_every_br_and_semicolon_separated_permanent_reference (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_parses_every_br_and_semicolon_separated_permanent_reference) ... FAIL
+test_promotes_only_permanent_tests_and_updates_references (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_promotes_only_permanent_tests_and_updates_references) ... ok
+test_protected_original_stays_registered_and_second_promotion_is_idempotent (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_original_stays_registered_and_second_promotion_is_idempotent) ... FAIL
+test_rejects_test_outside_supported_trees (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_rejects_test_outside_supported_trees) ... ok
+
+======================================================================
+FAIL: test_parses_every_br_and_semicolon_separated_permanent_reference (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_parses_every_br_and_semicolon_separated_permanent_reference)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_promote_guards.py", line 189, in test_parses_every_br_and_semicolon_separated_permanent_reference
+    self.assertEqual(
+    ~~~~~~~~~~~~~~~~^
+        [(str(path), name) for _, _, path, name in references],
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<4 lines>...
+        ],
+        ^^
+    )
+    ^
+AssertionError: Lists differ: [('ba[53 chars]alpha<br>backend/tests/test_multiple_immutable[78 chars]ma')] != [('ba[53 chars]alpha'), ('backend/tests/test_multiple_immutab[88 chars]ma')]
+
+First differing element 0:
+('bac[52 chars]alpha<br>backend/tests/test_multiple_immutable[77 chars]mma')
+('bac[52 chars]alpha')
+
+Second list contains 2 additional elements.
+First extra element 1:
+('backend/tests/test_multiple_immutable_cases.py', 'test_beta')
+
+- [('backend/tests/test_multiple_immutable_cases.py',
++ [('backend/tests/test_multiple_immutable_cases.py', 'test_alpha'),
+?                                                    +++++++++++++++
+
+-   'test_alpha<br>backend/tests/test_multiple_immutable_cases.py::test_beta; '
+-   'backend/tests/test_multiple_immutable_cases.py::test_gamma')]
+?  ^                                               ^^     ^^^^   ^
+
++  ('backend/tests/test_multiple_immutable_cases.py', 'test_beta'),
+?  ^                                               ^^^^     ^^^   ^
+
++  ('backend/tests/test_multiple_immutable_cases.py', 'test_gamma')]
+
+======================================================================
+FAIL: test_protected_original_stays_registered_and_second_promotion_is_idempotent (scripts.ci.tests.test_promote_guards.PromoteGuardsTests.test_protected_original_stays_registered_and_second_promotion_is_idempotent)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/scripts/ci/tests/test_promote_guards.py", line 160, in test_protected_original_stays_registered_and_second_promotion_is_idempotent
+    self.assertTrue((self.root / source).is_file())
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.576s
+
+FAILED (failures=2)

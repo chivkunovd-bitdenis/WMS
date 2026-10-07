@@ -1,0 +1,20 @@
+{
+  "url": "https://static-basket-02.wbbasket.ru/vol20/supplies-managment-front/v2.7.64/index.9e9d55f08272d3fa3232.js",
+  "status": "200",
+  "bytes": 33436,
+  "sha256": "58b3135c629fd11e06ac6432c2870e9f99f3c05bb1b4bdcb72ce38b9a86a6fbe",
+  "matches": {
+    ".xlsx": [],
+    "Баркод товара": [],
+    "Кол-во товаров": [],
+    "ШК короба": [],
+    "sheetNames": [],
+    "SheetNames": [],
+    "boxBarcode": [],
+    "downloadTemplate": [],
+    "barcodeTemplate": [],
+    "expiration": [],
+    "6,30": [],
+    "WB_": []
+  }
+}

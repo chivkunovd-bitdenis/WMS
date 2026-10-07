@@ -1,0 +1,14 @@
+{
+  "file": "frontend/src/test-contracts/inbound684586Harness.tsx",
+  "before": "4190460c97db0db439712b17a083c5b474ee3d74",
+  "after": "98978e667bbc305cc08a9b541016fef06686388e",
+  "typescript": "6.0.2",
+  "compilerOptions": {
+    "target": 7,
+    "module": 99,
+    "jsx": 4
+  },
+  "runtime_javascript_identical": true,
+  "compiled_sha256": "b42a7c9d52d6c4a732fa7668f7380ece7c195f42133ec13f94f35696eb4ba1b0",
+  "tsc_and_single_file_eslint": "Original tester actual both PASS; commands recorded in typefix handoff"
+}

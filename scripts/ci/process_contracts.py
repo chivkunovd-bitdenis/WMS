@@ -72,8 +72,42 @@ def git(root: Path, *args: str) -> bytes:
     return subprocess.check_output(['git', '-C', str(root), *args], stderr=subprocess.PIPE)
 
 
-def verify_integrity(root: Path, base: str, *, bootstrap: bool = False) -> dict:
-    """Candidate hashes cannot approve changes to a previously accepted contract."""
+def approved_upgrade_pin(value: dict) -> dict:
+    if (not isinstance(value, dict) or set(value) != {'base_sha', 'source_sha'}
+            or any(not isinstance(value[key], str) or not re.fullmatch('[0-9a-f]{40}', value[key])
+                   for key in ('base_sha', 'source_sha'))
+            or value['base_sha'] == value['source_sha']):
+        raise ValueError('Reviewed upgrade requires exact separate trusted base/source SHAs')
+    return value
+
+
+def retained_contracts(trusted: dict, current: dict, *, same_digests: bool) -> None:
+    for name, digest in trusted['files'].items():
+        if name not in current['files'] or (same_digests and current['files'][name] != digest):
+            raise ValueError(f'Changed protected contract hash: {name}')
+    for name, suite in trusted['suites'].items():
+        target = current['suites'].get(name)
+        if target is None or any(target[key] != suite[key] for key in ('report', 'format', 'exact')):
+            raise ValueError(f'Changed protected execution suite: {name}')
+        if not set(suite['cases']).issubset(target['cases']):
+            raise ValueError(f'Removed protected case from {name}')
+
+
+def git_policy(root: Path, ref: str) -> dict:
+    data = json.loads(git(root, 'show', f'{ref}:{POLICY_PATH}'))
+    validate_policy(data)
+    for name, digest in data['files'].items():
+        row = git(root, 'ls-tree', '-z', ref, '--', name).decode().split('\t', 1)
+        if len(row) != 2 or row[0].split()[:2] not in (['100644', 'blob'], ['100755', 'blob']):
+            raise ValueError(f'Trusted protected file missing or non-regular: {name}')
+        if hashlib.sha256(git(root, 'show', f'{ref}:{name}')).hexdigest() != digest:
+            raise ValueError(f'Trusted protected hash mismatch: {name}')
+    return data
+
+
+def verify_integrity(root: Path, base: str, *, bootstrap: bool = False,
+                     approved_upgrade: dict | None = None) -> dict:
+    """Only an exact trusted-main pin may approve a reviewed contract upgrade."""
     candidate = json.loads(local_file(root, POLICY_PATH).read_bytes())
     validate_policy(candidate)
     git(root, 'cat-file', '-e', f'{base}^{{commit}}')
@@ -82,19 +116,14 @@ def verify_integrity(root: Path, base: str, *, bootstrap: bool = False) -> dict:
         if not bootstrap:
             raise ValueError('Trusted BASE has no process policy; bootstrap acceptance required')
     else:
-        trusted = json.loads(git(root, 'show', f'{base}:{POLICY_PATH}'))
-        validate_policy(trusted)
-        for name, digest in trusted['files'].items():
-            if hashlib.sha256(git(root, 'show', f'{base}:{name}')).hexdigest() != digest:
-                raise ValueError(f'Trusted protected hash mismatch: {name}')
-            if candidate['files'].get(name) != digest:
-                raise ValueError(f'Changed protected contract hash: {name}')
-        for name, suite in trusted['suites'].items():
-            current = candidate['suites'].get(name)
-            if current is None or any(current[key] != suite[key] for key in ('report', 'format', 'exact')):
-                raise ValueError(f'Changed protected execution suite: {name}')
-            if not set(suite['cases']).issubset(current['cases']):
-                raise ValueError(f'Removed protected case from {name}')
+        trusted = git_policy(root, base)
+        if approved_upgrade is not None:
+            pin = approved_upgrade_pin(approved_upgrade)
+            if pin['base_sha'] == base:
+                source = git_policy(root, pin['source_sha'])
+                retained_contracts(trusted, source, same_digests=False)
+                trusted = source
+        retained_contracts(trusted, candidate, same_digests=True)
     for name, digest in candidate['files'].items():
         if hashlib.sha256(local_file(root, name).read_bytes()).hexdigest() != digest:
             raise ValueError(f'Changed protected bytes: {name}')
@@ -201,14 +230,31 @@ def verify_reports(policy: dict, root: Path, *, sha: str | None = None) -> dict[
     return verified
 
 
+def load_approved_upgrade() -> dict | None:
+    # Executed from the immutable SOURCE selected by trusted-main. Its sibling
+    # config is copied from trusted-main, never from the candidate or environment.
+    config = Path(__file__).resolve().with_name('process_bootstrap.json')
+    if config.is_symlink():
+        raise ValueError('Trusted upgrade config must not be a symlink')
+    if not config.exists():
+        return None
+    raw = config.read_bytes()
+    if len(raw) > 65536:
+        raise ValueError('Trusted upgrade config too large')
+    return approved_upgrade_pin(json.loads(raw))
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--root', type=Path, default=Path.cwd())
     parser.add_argument('--base', required=True)
     parser.add_argument('--bootstrap', action='store_true')
+    parser.add_argument('--reviewed-upgrade', action='store_true')
     parser.add_argument('--reports', type=Path)
     args = parser.parse_args()
-    policy = verify_integrity(args.root, args.base, bootstrap=args.bootstrap)
+    approved = load_approved_upgrade() if args.reviewed_upgrade else None
+    policy = verify_integrity(args.root, args.base, bootstrap=args.bootstrap,
+                              approved_upgrade=approved)
     if args.reports:
         sha = git(args.root, 'rev-parse', 'HEAD').decode().strip()
         print(json.dumps(verify_reports(policy, args.reports, sha=sha), ensure_ascii=False))

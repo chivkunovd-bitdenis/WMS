@@ -1,0 +1,44 @@
+{
+  "source": "https://static-basket-02.wbbasket.ru/vol20/menu/v0.0.1/config.json",
+  "module": {
+    "name": "menu.supply-detail-packaging-nano",
+    "staticURL": "/nsf/supply-detail-packaging-nano/frontend-services",
+    "config": {
+      "envs": "window.ENDPOINT_SHK_BOXES='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/createBoxBarcodes';window.ENDPOINT_SHK_DELETE='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/deleteBoxBarcodes';window.ENDPOINT_REMOVE_BOXES='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeBoxes';window.ENDPOINT_SHK_BOXES_V2='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/boxv2/createBoxBarcodes';window.ENDPOINT_ABAC_FEATURES='https://seller-supply.wildberries.ru/ns/abac/supply-manager/';window.ENDPOINT_BIND_BARCODES='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/bindBarcodes';window.GET_CARGO='https://seller-supply.wildberries.ru/ns/cross-dock/supply-manager/api/v1/wBDrive/getCargo';window.SUPPLY_DETAILS_ENDPOINT='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/supplyDetails';window.ENDPOINT_LIST_BARCODE_BOXES='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box';window.ENDPOINT_SHK_DOWNLOAD_EXCEL='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/getTemplateXLS';window.ENDPOINT_PAGE_DOWNLOAD_EXCEL='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/goodsToXLS';window.ENDPOINT_SUPPLY_COST='https:///seller-supply.wildberries.ru/ns/seller-api/suppliers-portal-goods/api/v1/supply/cost';window.ENDPOINT_BOUND_SHK_DELETE='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeBox';window.ENDPOINT_ADD_ALL_PRODUCTS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/addAllProducts';window.ENDPOINT_PAID_PACKAGING_UPDATE='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/update';window.ENDPOINT_SHK_DELETE_V2='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/boxv2/deleteBoxBarcodes';window.ENDPOINT_ALL_PASSES_LIST='https://seller-supply.wildberries.ru/ns/sm/supply-manager/api/v1/barcode';window.ENDPOINT_PAID_PACKAGING_PLAN='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/plan';window.ENDPOINT_BARCODES_AND_NAMES='https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply';window.ENDPOINT_PAID_PACKAGING_DETAILS='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/details';window.ENDPOINT_SHK_UPLOAD_EXCEL='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/boxesFromXLS';window.ENDPOINT_DELETE_ALL_BOXES='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeAllBoxes';window.ENDPOINT_PICKING_LIST_DOWNLOAD_EXCEL='https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/packingListXlsx';",
+      "envsObject": {
+        "ENDPOINT_ABAC_FEATURES": "https://seller-supply.wildberries.ru/ns/abac/supply-manager/",
+        "ENDPOINT_ADD_ALL_PRODUCTS": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/addAllProducts",
+        "ENDPOINT_ALL_PASSES_LIST": "https://seller-supply.wildberries.ru/ns/sm/supply-manager/api/v1/barcode",
+        "ENDPOINT_BARCODES_AND_NAMES": "https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply",
+        "ENDPOINT_BIND_BARCODES": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/bindBarcodes",
+        "ENDPOINT_BOUND_SHK_DELETE": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeBox",
+        "ENDPOINT_DELETE_ALL_BOXES": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeAllBoxes",
+        "ENDPOINT_LIST_BARCODE_BOXES": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box",
+        "ENDPOINT_PAGE_DOWNLOAD_EXCEL": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/goodsToXLS",
+        "ENDPOINT_PAID_PACKAGING_DETAILS": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/details",
+        "ENDPOINT_PAID_PACKAGING_PLAN": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/plan",
+        "ENDPOINT_PAID_PACKAGING_UPDATE": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/paidPackaging/update",
+        "ENDPOINT_PICKING_LIST_DOWNLOAD_EXCEL": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/packingListXlsx",
+        "ENDPOINT_REMOVE_BOXES": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/removeBoxes",
+        "ENDPOINT_SHK_BOXES": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/createBoxBarcodes",
+        "ENDPOINT_SHK_BOXES_V2": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/boxv2/createBoxBarcodes",
+        "ENDPOINT_SHK_DELETE": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/deleteBoxBarcodes",
+        "ENDPOINT_SHK_DELETE_V2": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/boxv2/deleteBoxBarcodes",
+        "ENDPOINT_SHK_DOWNLOAD_EXCEL": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/getTemplateXLS",
+        "ENDPOINT_SHK_UPLOAD_EXCEL": "https://seller-supply.wildberries.ru/ns/sm-box/supply-manager/api/v1/box/boxesFromXLS",
+        "ENDPOINT_SUPPLY_COST": "https:///seller-supply.wildberries.ru/ns/seller-api/suppliers-portal-goods/api/v1/supply/cost",
+        "GET_CARGO": "https://seller-supply.wildberries.ru/ns/cross-dock/supply-manager/api/v1/wBDrive/getCargo",
+        "SUPPLY_DETAILS_ENDPOINT": "https://seller-supply.wildberries.ru/ns/sm-supply/supply-manager/api/v1/supply/supplyDetails"
+      },
+      "loadRef": {
+        "APP_STATIC_NAMESPACE": "supply-detail-packaging-nano",
+        "JS": "umd/index.cc84c4aac59eec5ffd45.js",
+        "JS_CDN": "https://static-basket-02.wbbasket.ru/vol20/supply-detail-packaging-nano/v1.0.66/index.d49d205f8cf1ad14db29.js"
+      },
+      "routeName": "supplies-management",
+      "routePath": "/supplies-management",
+      "version": "v1.0.66"
+    },
+    "hidden": true
+  }
+}

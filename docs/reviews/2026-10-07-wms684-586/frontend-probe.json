@@ -1,0 +1,49 @@
+{
+  "dates": [
+    {
+      "timezone": "UTC",
+      "zoned": "29.09.2026",
+      "naive": "29.09.2026"
+    },
+    {
+      "timezone": "Europe/Moscow",
+      "zoned": "29.09.2026",
+      "naive": "28.09.2026"
+    },
+    {
+      "timezone": "Asia/Tbilisi",
+      "zoned": "29.09.2026",
+      "naive": "28.09.2026"
+    }
+  ],
+  "numbers": [
+    {
+      "detail": {
+        "display_number": null,
+        "document_number": "INB-000684"
+      },
+      "canonical": "№000684",
+      "sticker": "INB-000684"
+    },
+    {
+      "detail": {
+        "display_number": " ",
+        "document_number": "INB-000684"
+      },
+      "canonical": "№000684",
+      "sticker": "—"
+    },
+    {
+      "detail": {
+        "display_number": null,
+        "document_number": "broken"
+      },
+      "canonical": null,
+      "sticker": "broken"
+    }
+  ],
+  "directNumber": "${(detail?.display_number || detail?.document_number || '—').trim() || '—'}",
+  "cargoHtmlEqual": false,
+  "cargoCssBefore": ".wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto 1fr auto; gap: 1mm; justify-items: stretch; align-items: center; }",
+  "cargoCssAfter": ".wrap { width: 100%; height: 100%; box-sizing: border-box; padding: 1.5mm; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; gap: 1mm; justify-items: stretch; align-items: center; }"
+}

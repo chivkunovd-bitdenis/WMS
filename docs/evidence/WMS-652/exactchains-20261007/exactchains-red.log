@@ -1,0 +1,44 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+__ GitTests.test_wms658_published_exact_chain_with_own_test_links_is_accepted __
+
+self = <test_check_task_documents.GitTests testMethod=test_wms658_published_exact_chain_with_own_test_links_is_accepted>
+
+    def test_wms658_published_exact_chain_with_own_test_links_is_accepted(self):
+        """658 has one reviewed requirements-Test-links companion, no broad companion rule."""
+        rollout = self.reviewed_exact_chain("WMS-658")
+>       self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+E       AssertionError: Lists differ: ['WMS-658: fixture-only: неподдерживаемое [44 chars]ons'] != []
+E       
+E       First list contains 1 additional elements.
+E       First extra element 0:
+E       'WMS-658: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E       
+E       + []
+E       - ['WMS-658: fixture-only: неподдерживаемое преобразование или изменены frozen '
+E       -  'expectations']
+
+scripts/ci/test_check_task_documents.py:1032: AssertionError
+______ GitTests.test_wms681_published_two_by_two_exact_chain_is_accepted _______
+
+self = <test_check_task_documents.GitTests testMethod=test_wms681_published_two_by_two_exact_chain_is_accepted>
+
+    def test_wms681_published_two_by_two_exact_chain_is_accepted(self):
+        """Both frozen 681 files change in each of its two approved corrections."""
+        rollout = self.reviewed_exact_chain("WMS-681")
+>       self.assertEqual(checker.contract_change_errors(self.root, rollout), [])
+E       AssertionError: Lists differ: ['WMS-681: fixture-only: неподдерживаемое [44 chars]ons'] != []
+E       
+E       First list contains 1 additional elements.
+E       First extra element 0:
+E       'WMS-681: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E       
+E       + []
+E       - ['WMS-681: fixture-only: неподдерживаемое преобразование или изменены frozen '
+E       -  'expectations']
+
+scripts/ci/test_check_task_documents.py:1037: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_wms658_published_exact_chain_with_own_test_links_is_accepted
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_wms681_published_two_by_two_exact_chain_is_accepted
+2 failed, 70 deselected in 2.63s

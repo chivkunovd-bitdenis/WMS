@@ -62,6 +62,7 @@ export function WarehouseMapScene() {
   return (
     <SceneShell route="/app/ff/warehouse-map">
       <FfWarehouseMapScreen
+        legacyCreateCell
         data={data}
         loading={false}
         error={null}

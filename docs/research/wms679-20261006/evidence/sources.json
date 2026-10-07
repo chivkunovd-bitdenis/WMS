@@ -1,0 +1,51 @@
+{
+  "checked_at_utc": "2026-10-06T08:01:31.876527+00:00",
+  "article_updated": "2026-10-05",
+  "seller_html_uncompressed_sha256": "066f7917157f18eb6df169f7c833686a651ea9b1164949697823e93b9267c70b",
+  "sources": [
+    {
+      "path": "seller-package-filling.html.gz",
+      "url": "https://seller.wildberries.ru/instructions/ru/ru/material/step-two-fbw-package-filling",
+      "http_status": 200,
+      "sha256_file": "df0806f75eb17afb272cd6cefa31a15baf6b6a9e2220d4f2ca6d5e4a3999fc3c",
+      "bytes": 115708
+    },
+    {
+      "path": "template-columns.webp",
+      "url": "https://static-basket-02.wbbasket.ru/vol20/article-static/fec63206-0b9e-4617-bf07-279e932bb7c7.png.webp",
+      "http_status": 200,
+      "sha256_file": "fa3a03f51103935e247df1222477a2acddb006e10b433ded083eebb1fa228e72",
+      "bytes": 12330
+    },
+    {
+      "path": "template-download.webp",
+      "url": "https://static-basket-02.wbbasket.ru/vol20/article-static/05475afa-4085-449b-a5b0-a91487619a8f.png.webp",
+      "http_status": 200,
+      "sha256_file": "bf975d683b4283688c02a5d00210021c8b58333f6e5d64ac582258d2e12d1e94",
+      "bytes": 27912
+    },
+    {
+      "url": "https://dev.wildberries.ru/openapi/orders-fbw",
+      "http_status": "498",
+      "error": null
+    },
+    {
+      "url": "https://dev.wildberries.ru/swagger/orders-fbw.yaml",
+      "http_status": "498",
+      "error": null
+    },
+    {
+      "url": "https://dev.wildberries.ru/swagger/orders-fbw.json",
+      "http_status": "498",
+      "error": null
+    },
+    {
+      "url": "https://dev.wildberries.ru/en/openapi/orders-fbw",
+      "http_status": "498",
+      "error": null
+    }
+  ],
+  "xlsx_file_obtained": false,
+  "xlsx_limitation": "Публичная статья содержит инструкцию и изображение шаблона; бинарный XLSX доступен кнопкой в поставке кабинета и не скачан.",
+  "wb_mutations": false
+}

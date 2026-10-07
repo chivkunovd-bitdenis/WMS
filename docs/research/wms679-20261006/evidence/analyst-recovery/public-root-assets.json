@@ -1,0 +1,11 @@
+{
+  "url": "https://static-basket-02.wbbasket.ru/vol20/root-monorepo/latest/main.d8a58571ff5c866f.js",
+  "bytes": 60475,
+  "sha256": "cd3f2daf011b5179f83382d01fea4664a2d59735e9678a99394473dc7fdd99ae",
+  "matches": {
+    "supplies-management": [],
+    "supplies": [],
+    "remoteEntry": [],
+    "xlsx": []
+  }
+}

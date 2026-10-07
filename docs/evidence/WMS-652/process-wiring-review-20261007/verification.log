@@ -1,0 +1,166 @@
+{
+  "reviewed_sha": "14c340a76db5f77c248794183b44d8b13880ef81",
+  "old_source": "0151a555ac429957d0eee591317cc4326e909dfd",
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "old": {
+    "files": 222,
+    "suites": 18,
+    "cases": 1146
+  },
+  "current": {
+    "files": 225,
+    "suites": 19,
+    "cases": 1161
+  },
+  "all_old_ids_in_order_preserved": true,
+  "old_suite_semantics_preserved": true,
+  "existing_protected_hash_delta": [
+    ".github/workflows/ci.yml",
+    "scripts/ci/tests/test_ci_release_additions.py"
+  ],
+  "new_protected_files": [
+    "docs/mockups/WMS-686/model.test.ts",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json",
+    "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json"
+  ],
+  "old_protected_modes_preserved": true,
+  "220_other_old_protected_blobs_unchanged": true,
+  "tester_commits_byte_equivalent_and_unchanged_by_developer": true,
+  "frozen_model_equals_original_test_commit": true,
+  "old_workflow_jobs_and_producers_preserved": true,
+  "required_producers": [
+    "baseline",
+    "backend",
+    "frontend-build",
+    "guards",
+    "print-regressions",
+    "printer-windows",
+    "wms686-mockup"
+  ],
+  "partial_actual_raw_reports_verified": {
+    "ci-shards": 24,
+    "wms686-model": 11
+  },
+  "real_TAP_read_through_artifact_verifier_with_synthetic_API_identity": true,
+  "runtime": {
+    "node": "v24.13.1",
+    "python": "3.14.3"
+  },
+  "negative_receipts": [
+    {
+      "probe": "old SOURCE rejects updated protected hashes",
+      "rejected": true,
+      "reason": "Changed protected contract hash: .github/workflows/ci.yml"
+    },
+    {
+      "probe": "missing actual TAP receipt",
+      "rejected": true,
+      "reason": "Missing required file: wms686-model.tap"
+    },
+    {
+      "probe": "empty",
+      "rejected": true,
+      "reason": "Incomplete TAP execution"
+    },
+    {
+      "probe": "malformed",
+      "rejected": true,
+      "reason": "Incomplete TAP execution"
+    },
+    {
+      "probe": "same-count-wrong-case",
+      "rejected": true,
+      "reason": "wms686-model: missing required cases: ['C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав']"
+    },
+    {
+      "probe": "failed-case-even-with-zero-summary",
+      "rejected": true,
+      "reason": "wms686-model: required cases did not pass: {'C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав': 'failed'}"
+    },
+    {
+      "probe": "skipped-case",
+      "rejected": true,
+      "reason": "Unexecuted TAP case: C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав # SKIP"
+    },
+    {
+      "probe": "todo-case",
+      "rejected": true,
+      "reason": "Unexecuted TAP case: C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав # TODO"
+    },
+    {
+      "probe": "missing-plan",
+      "rejected": true,
+      "reason": "Missing or inconsistent TAP plan"
+    },
+    {
+      "probe": "incorrect-plan",
+      "rejected": true,
+      "reason": "Missing or inconsistent TAP plan"
+    },
+    {
+      "probe": "missing-summary",
+      "rejected": true,
+      "reason": "TAP cancelled is nonzero or missing"
+    },
+    {
+      "probe": "nonzero-summary",
+      "rejected": true,
+      "reason": "TAP fail is nonzero or missing"
+    },
+    {
+      "probe": "duplicate-case",
+      "rejected": true,
+      "reason": "Duplicate TAP case: C2: весь смешанный короб сохраняет собственный код, товары и КИЗ, повтор не удваивает состав"
+    },
+    {
+      "probe": "extra-case-valid-plan",
+      "rejected": true,
+      "reason": "wms686-model: unexpected cases: ['unrelated']"
+    },
+    {
+      "probe": "symlink receipt",
+      "rejected": true,
+      "reason": "Symlink is not execution evidence: wms686-model.tap"
+    },
+    {
+      "probe": "artifact reader: missing real TAP member",
+      "rejected": true,
+      "reason": "В архиве отсутствует обязательный отчёт сценария"
+    },
+    {
+      "probe": "artifact reader: wrong sha",
+      "rejected": true,
+      "reason": "Отчёт относится к другой версии, попытке или набору обязательных сценариев"
+    },
+    {
+      "probe": "artifact reader: wrong head_sha",
+      "rejected": true,
+      "reason": "Отчёт относится к другой версии, попытке или набору обязательных сценариев"
+    },
+    {
+      "probe": "artifact reader: wrong run_id",
+      "rejected": true,
+      "reason": "Отчёт относится к другой версии, попытке или набору обязательных сценариев"
+    },
+    {
+      "probe": "artifact reader: wrong run_attempt",
+      "rejected": true,
+      "reason": "Отчёт относится к другой версии, попытке или набору обязательных сценариев"
+    },
+    {
+      "probe": "artifact reader: wrong policy_sha256",
+      "rejected": true,
+      "reason": "Отчёт относится к другой версии, попытке или набору обязательных сценариев"
+    },
+    {
+      "probe": "artifact reader: other attempt artifact",
+      "rejected": true,
+      "reason": "Отчёт исполнения отсутствует или неоднозначен"
+    }
+  ],
+  "product_reference_P": "d61805978b3e7878d1056c99b4e6e0823edf49a5",
+  "final_P": "pending",
+  "final_S": "pending",
+  "synthetic_negatives_are_not_release_receipts": true,
+  "full_CI_or_final_release_approval": false
+}

@@ -1,0 +1,22 @@
+{
+  "cases": {
+    "pg-654": 3,
+    "print-672-c5a": 1,
+    "ci-shards": 29
+  },
+  "policy_files": 231,
+  "policy_suites": 21,
+  "policy_case_ids": 1206,
+  "old1146_preserved": true,
+  "full_ci": "NOT_RUN",
+  "P": "PENDING",
+  "S": "PENDING",
+  "candidate_receipt_wiring": "fedfa7ef18c81fbff5a1d535d6cb3fa4600e1a6f",
+  "docgate": "PASS against4b298",
+  "mockup686_after_actual654_frontend_merge": {
+    "tsc": "PASS",
+    "vite": "PASS",
+    "seconds": 1.28
+  },
+  "independent_promotion_review": "FAIL c737647b; receipt P1 already closed; disappeared HEAD policy P1 requires developer correction"
+}

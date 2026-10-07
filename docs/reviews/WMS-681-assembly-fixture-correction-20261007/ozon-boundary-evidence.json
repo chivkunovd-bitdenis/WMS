@@ -1,0 +1,23 @@
+{
+  "inspected_commit": "c7f755ce3a6c0ebce9a37567ae423aaa54565f51",
+  "source_blobs": {
+    "frontend/src/screens/v2/OzonDocumentsAbsence.tsx": "5e3fc8e01607d06bbb11dbd8f6cfcd938baa99d9",
+    "backend/app/api/fbs_orders.py": "59db53e2be65aec3b16bfb6c87b4c25af0ef4ff7",
+    "backend/app/services/ozon_exemplar_documents_service.py": "d6ee8c94169edf9d741c9042c37ef5685f9490a1"
+  },
+  "component_initial_state": "useState<Record<string, Documents>>({})",
+  "component_get_path": "/operations/fbs-orders/{id}/ozon-exemplar-documents",
+  "prior_fixture_unmatched_response": "HTTP 200 JSON null",
+  "backend_success_shape_fields": [
+    "posting_number",
+    "version",
+    "state",
+    "status",
+    "absence_selected",
+    "requirements_complete",
+    "editable",
+    "products",
+    "errors"
+  ],
+  "conclusion": "Fixture injected null; component initial state and backend documented success response are not null. Minimal valid GET response supplied; real component remains mounted."
+}

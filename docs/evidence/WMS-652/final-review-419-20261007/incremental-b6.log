@@ -1,0 +1,26 @@
+{
+  "target": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "proposed_P": "98978e667bbc305cc08a9b541016fef06686388e",
+  "typescript": "6.0.2",
+  "compilerOptions": {
+    "target": 7,
+    "module": 99,
+    "jsx": 4
+  },
+  "compiled_js_identical": true,
+  "compiled_js_sha256": "b42a7c9d52d6c4a732fa7668f7380ece7c195f42133ec13f94f35696eb4ba1b0",
+  "exact_annotation_only": true,
+  "policy_only_harness_hash_updated": true,
+  "policy_counts": [
+    262,
+    24,
+    1648
+  ],
+  "product_delta_from_P": [],
+  "unchanged_680_template": true,
+  "approved_template_sha256": {
+    "docs/evidence/WMS-652/final-closure-20261007/wms680-reviewed-activation-template.json": "82d8b5c846a2e32f5d3cce20b035b4719d12d7478b940780730c57297d80cd2d",
+    "docs/evidence/WMS-652/final-closure-20261007/proposed-final-P-S.json": "6524258e000099079e039bd6495b225ff99c7b2b3e53e59cc19922a79c06373d"
+  },
+  "full_tsc_eslint": "Tester publication claim inspected; not independently rerun in this incremental review"
+}

@@ -1012,6 +1012,11 @@ def _raise_from_pvz_service(exc: pvz_svc.FbsShipmentPvzError) -> None:
 def _raise_from_packing_box_service(exc: packing_box_svc.FbsPackingBoxError) -> None:
     if exc.code in {"supply_not_found", "packing_box_not_found", "box_assignment_not_found"}:
         raise_fbs_http(status.HTTP_404_NOT_FOUND, exc.code)
+    if exc.code == "wb_pending_confirmation":
+        # For an existing physical box an ambiguous WB read is a conflict in
+        # its recovery state, not a gateway timeout: no new external create
+        # has been attempted and the operator can retry only after WB changes.
+        raise_fbs_http(status.HTTP_409_CONFLICT, exc.code, retryable=True)
     if exc.code in {
         "idempotency_key_reused",
         "box_not_empty",
@@ -2197,7 +2202,12 @@ async def retry_fbs_packing_box_qr(
                     )
             else:
                 await packing_box_svc.retry_box_qr(
-                    session, tenant_id, supply_id, box_id, http_client
+                    session,
+                    tenant_id,
+                    supply_id,
+                    box_id,
+                    http_client,
+                    actor_user_id=user.id,
                 )
         except packing_box_svc.FbsPackingBoxError as exc:
             _raise_from_packing_box_service(exc)

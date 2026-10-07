@@ -1,6 +1,10 @@
+import { compactPrintWidth, printColgroup } from './printTableColumns'
+
 export type WaybillLine = {
   sku_code: string
   product_name: string
+  size?: string | null
+  color?: string | null
   quantity: number
   shipped_qty?: number
   received_qty?: number | null
@@ -90,46 +94,33 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
   const isOperational = data.docKind === 'operational_outbound'
   const isInbound = data.docKind === 'inbound_intake'
 
-  const lineRows = data.lines
-    .map((ln, i) => {
-      if (isInbound) {
-        const factQty = ln.received_qty ?? 0
-        return `<tr>
-          <td><strong>${escapeHtml(ln.sku_code)}</strong><br><span>${escapeHtml(ln.product_name)}</span></td>
-          <td align="right">${ln.quantity}</td>
-          <td align="right">${factQty}</td>
-          <td>${escapeHtml(discrepancyText(ln.quantity, factQty))}</td>
-        </tr>`
-      }
-      const shipped =
-        isOperational && ln.shipped_qty != null
-          ? `<td align="right">${ln.shipped_qty}</td>`
-          : ''
-      const received =
-        isInbound
-          ? `<td align="right">${ln.received_qty != null ? ln.received_qty : '—'}</td>`
-          : ''
-      const cell =
-        isOperational
-          ? `<td>${escapeHtml(ln.storage_location_code ?? '—')}</td>`
-          : ''
-      const qtyLabel = isInbound ? ln.quantity : ln.quantity
-      return `<tr>
-          <td>${i + 1}</td>
-          <td>${escapeHtml(ln.sku_code)}</td>
-          <td>${escapeHtml(ln.product_name)}</td>
-          ${cell}
-          <td align="right">${qtyLabel}</td>
-          ${received}
-          ${shipped}
-        </tr>`
-    })
-    .join('')
-
-  const headShipped = isOperational ? '<th align="right">Отгружено</th>' : ''
-  const headReceived = ''
-  const headCell = isOperational ? '<th>Ячейка</th>' : ''
-  const headQty = 'Кол-во'
+  const columns = printColgroup(186, [
+    ...(!isInbound ? [{ width: 7 }] : []),
+    { width: compactPrintWidth('SKU', data.lines.map((line) => line.sku_code), 16, 12, 4.5, 12) },
+    { grow: 1 },
+    { width: compactPrintWidth('Артикул', data.lines.map((line) => line.sku_code), 20, 12, 4.5, 12) },
+    { width: compactPrintWidth('Цвет', data.lines.map((line) => line.color), 17, 12, 4.5, 12) },
+    { width: compactPrintWidth('Размер', data.lines.map((line) => line.size), 18, 12, 4.5, 12) },
+    ...(isOperational ? [{ width: compactPrintWidth('Ячейка', data.lines.map((line) => line.storage_location_code), 16, 12, 4.5, 12) }] : []),
+    { width: compactPrintWidth(isInbound ? 'Заявлено' : 'Кол-во', data.lines.map((line) => line.quantity), 18, 12, 4.5, 12) },
+    ...(isOperational ? [{ width: compactPrintWidth('Отгружено', data.lines.map((line) => line.shipped_qty), 20, 12, 4.5, 12) }] : []),
+    ...(isInbound ? [
+      { width: compactPrintWidth('Факт', data.lines.map((line) => line.received_qty ?? 0), 15, 12, 4.5, 12) },
+      { width: compactPrintWidth('Расхождение', data.lines.map((line) => discrepancyText(line.quantity, line.received_qty ?? 0)), 28, 12, 4.5, 12) },
+    ] : []),
+  ])
+  const lineRows = data.lines.map((line, index) => `<tr>
+    ${!isInbound ? `<td>${index + 1}</td>` : ''}
+    <td>${escapeHtml(line.sku_code)}</td>
+    <td class="product">${escapeHtml(line.product_name)}</td>
+    <td>${escapeHtml(line.sku_code.trim() || '—')}</td>
+    <td>${escapeHtml(line.color?.trim() || '—')}</td>
+    <td>${escapeHtml(line.size?.trim() || '—')}</td>
+    ${isOperational ? `<td>${escapeHtml(line.storage_location_code ?? '—')}</td>` : ''}
+    <td align="right">${line.quantity}</td>
+    ${isOperational ? `<td align="right">${line.shipped_qty ?? '—'}</td>` : ''}
+    ${isInbound ? `<td align="right">${line.received_qty ?? 0}</td><td>${escapeHtml(discrepancyText(line.quantity, line.received_qty ?? 0))}</td>` : ''}
+  </tr>`).join('')
 
   const boxMeta =
     isInbound && (data.plannedBoxCount != null || data.actualBoxCount != null)
@@ -140,6 +131,11 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     data.pickAllocations && data.pickAllocations.length > 0
       ? `<h2>Подбор по ячейкам</h2>
         <table>
+          ${printColgroup(186, [
+            { grow: 1 },
+            { grow: 1 },
+            { width: compactPrintWidth('Кол-во', data.pickAllocations.map((p) => p.quantity), 18, 12, 4.5, 12) },
+          ])}
           <thead><tr><th>Ячейка</th><th>SKU</th><th align="right">Кол-во</th></tr></thead>
           <tbody>
             ${data.pickAllocations
@@ -157,7 +153,7 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       ? `<dt>Склад МП (WB)</dt><dd>${escapeHtml(data.wbWarehouseLabel ?? '—')}</dd>`
       : ''
 
-  const colSpan = isInbound ? 4 : 4 + (isOperational ? 2 : 0)
+  const colSpan = isInbound ? 8 : 7 + (isOperational ? 2 : 0)
   const inboundTypeLabel = data.documentTypeLabel?.trim() || 'Поставка'
   const inboundTitle = `${inboundTypeLabel} ${inboundDocumentNumber(data)}`
   const printTitle = isInbound ? inboundTitle : `Накладная ${data.documentId.slice(0, 8)}`
@@ -182,9 +178,8 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       <dt>Плановая дата</dt><dd>${escapeHtml(data.plannedDate ?? '—')}</dd>
       <dt>Создано</dt><dd>${escapeHtml(data.createdAt ?? '—')}</dd>`
     : ''
-  const tableHead = isInbound
-    ? '<tr><th>SKU/товар</th><th align="right">Заявлено</th><th align="right">Факт</th><th>Расхождение</th></tr>'
-    : `<tr><th>#</th><th>SKU</th><th>Наименование</th>${headCell}<th align="right">${headQty}</th>${headReceived}${headShipped}</tr>`
+  const tableHead = `<tr>${!isInbound ? '<th>#</th>' : ''}<th>SKU</th><th>${isInbound ? 'Товар' : 'Наименование'}</th><th>Артикул</th><th>Цвет</th><th>Размер</th>${isOperational ? '<th>Ячейка</th>' : ''}<th align="right">${isInbound ? 'Заявлено' : 'Кол-во'}</th>${isOperational ? '<th align="right">Отгружено</th>' : ''}${isInbound ? '<th align="right">Факт</th><th>Расхождение</th>' : ''}</tr>`
+
   const foot = footerText(data.docKind)
 
   const html = `<!doctype html>
@@ -200,9 +195,11 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
       .meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 24px; margin-bottom: 16px; }
       .meta dt { font-weight: 600; margin: 0; }
       .meta dd { margin: 0 0 6px; }
-      table { width: 100%; border-collapse: collapse; }
-      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; }
+      table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+      * { box-sizing: border-box; }
+      th, td { border: 1px solid #ccc; padding: 6px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
       th { background: #f5f5f5; }
+      tr { break-inside: avoid; }
       .foot { margin-top: 24px; font-size: 11px; color: #555; }
     </style>
   </head>
@@ -213,6 +210,7 @@ export function printShipmentWaybill(data: ShipmentWaybillData): void {
     </dl>
     <h2>Состав</h2>
     <table>
+      ${columns}
       <thead>
         ${tableHead}
       </thead>

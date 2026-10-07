@@ -1,0 +1,30 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_ GitTests.test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly _
+
+self = <test_check_task_documents.GitTests testMethod=test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly>
+
+    def test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly(self):
+        """Run the real gate over every published 680 contract, including f2de."""
+        record = EXACT_REVIEWED_CHAINS["WMS-680"]
+        with self.wms680_real_git_graph() as root:
+            errors = checker.contract_change_errors(root, record["original_contract"] + "^")
+>           self.assertEqual([error for error in errors if "WMS-680" in error], [])
+E           AssertionError: Lists differ: ['WMS-680: owner-supersession: нужна одна [361 chars]ись'] != []
+E           
+E           First list contains 6 additional elements.
+E           First extra element 0:
+E           'WMS-680: owner-supersession: нужна одна точно разрешённая запись'
+E           
+E           + []
+E           - ['WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+E           -  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+E           -  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+E           -  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+E           -  'WMS-680: owner-supersession: нужна одна точно разрешённая запись',
+E           -  'WMS-680: owner-supersession: нужна одна точно разрешённая запись']
+
+scripts/ci/test_check_task_documents.py:1355: AssertionError
+=========================== short test summary info ============================
+FAILED scripts/ci/test_check_task_documents.py::GitTests::test_wms680_owner_semantic_and_fixture_matrix_is_registered_exactly
+1 failed, 79 deselected in 1.58s

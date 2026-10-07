@@ -1,0 +1,108 @@
+{
+  "checked_at_utc": "2026-10-06T19:46:17.755402+00:00",
+  "requests": [
+    {
+      "url": "https://dev.wildberries.ru/yaml/ru/07-orders-fbw.yaml",
+      "status": "498",
+      "bytes": 1134,
+      "sha256": "30e214876a7db002e19789cd3a6184b92f87d3ceac733cdb24ab2c5a4611ab87",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "/__wbaas/challenges/antibot/__static/v2/index-yz9dDw8g.js",
+        "/__wbaas/challenges/antibot/__static/v2/browser-check.js"
+      ]
+    },
+    {
+      "url": "https://dev.wildberries.ru/yaml/en/07-orders-fbw.yaml",
+      "status": "498",
+      "bytes": 1134,
+      "sha256": "d2a34e282df3b664617f7b19d591e8fbe6367b0457edd6d4ad24e91f589be51f",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "/__wbaas/challenges/antibot/__static/v2/index-yz9dDw8g.js",
+        "/__wbaas/challenges/antibot/__static/v2/browser-check.js"
+      ]
+    },
+    {
+      "url": "https://dev.wildberries.ru/swagger/07-orders-fbw.yaml",
+      "status": "498",
+      "bytes": 1134,
+      "sha256": "fb7c14f9741a772232451e0918cf917bfe04654c2b0bc56261ed57d8ceff0f9f",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "/__wbaas/challenges/antibot/__static/v2/index-yz9dDw8g.js",
+        "/__wbaas/challenges/antibot/__static/v2/browser-check.js"
+      ]
+    },
+    {
+      "url": "https://dev.wildberries.ru/openapi/orders-fbw",
+      "status": "498",
+      "bytes": 1134,
+      "sha256": "2db3c17d58df7cb30cfa203521918e66a845ec3c20b8c0930707e9458186b251",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "/__wbaas/challenges/antibot/__static/v2/index-yz9dDw8g.js",
+        "/__wbaas/challenges/antibot/__static/v2/browser-check.js"
+      ]
+    },
+    {
+      "url": "https://seller.wildberries.ru/instructions/ru/ru/material/step-two-fbw-package-filling",
+      "status": "200",
+      "bytes": 779450,
+      "sha256": "32b00229ccf6b965d02fe0a9ce0741e66cf97fb02553667381cfeb422d261526",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/fd9d1056-9782a19f8d873fc7.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/2117-4822d531763913b7.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/main-app-fb757dbf2494d41f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/717-8b0ae815d82e2b1c.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/layout-8a56937bd27b5aae.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/7901-87a1ff72ab0e6599.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/global-error-5c5b6a21dec5e88c.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/5905-990a96b66f62690f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/%5Blocale%5D/%5Bcountry%5D/(commonPages)/layout-03c506e318933b3f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/c16f53c3-28717ee73c154df1.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/6960-ae718f0b20cc67af.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/9528-926f8f9365074efa.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/6306-270056fb0895604b.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/6408-749dddf06d172715.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/4463-8efd135a3fe366ea.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3309-22a2f9339897e79b.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/%5Blocale%5D/%5Bcountry%5D/(commonPages)/(material)/material/%5BmaterialId%5D/layout-efa2884a0267109f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/400d98f3-0d04634523a520bf.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3610-b882396c50c70719.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/9258-ab74960d9880dff9.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3861-6e53606224e8a28f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3628-ba37a71e45c74dba.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/4416-97966d80a7c9dfec.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/4284-0a0f75a6a7c0da93.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/%5Blocale%5D/%5Bcountry%5D/(commonPages)/(material)/material/%5BmaterialId%5D/page-53fe57c272744127.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/9339-b9866dfb71336b2f.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3922-f9d82902f78846db.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/%5Blocale%5D/%5Bcountry%5D/layout-07904f3ec4c6a07d.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/3704-7fd5459e82fe2fc3.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/app/%5Blocale%5D/%5Bcountry%5D/error-52ff9150325f7104.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/polyfills-42372ed130431b0a.js",
+        "https://static-basket-02.wbbasket.ru/vol20/help-front/latest/_next/static/chunks/webpack-ca752034fd2d32f3.js"
+      ]
+    },
+    {
+      "url": "https://seller.wildberries.ru/supplies-management",
+      "status": "200",
+      "bytes": 16432,
+      "sha256": "b74630f6f632ee336cf4821bf88593c75ce0087cf3df8fbbc391171d209dc7c1",
+      "curl_exit": 0,
+      "xlsx_urls": [],
+      "scripts": [
+        "https://static-basket-02.wbbasket.ru/vol20/root-monorepo/latest/runtime.d123a0b7c76fed0c.js",
+        "https://static-basket-02.wbbasket.ru/vol20/root-monorepo/latest/vendor.37a0376ca2944941.js",
+        "https://static-basket-02.wbbasket.ru/vol20/root-monorepo/latest/main.d8a58571ff5c866f.js"
+      ]
+    }
+  ]
+}

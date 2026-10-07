@@ -1,0 +1,88 @@
+305-
+306-    order = await _order(db_session)
+307-    assert order.warehouse_id == ctx.warehouse.id
+308-    assert order.reserve_status != RESERVE_STATUS_WAREHOUSE_UNMAPPED
+309-
+310-
+311:async def test_posting_barcode_price_and_creation_date_come_from_the_real_fields(
+312-    db_session: AsyncSession,
+313-) -> None:
+314-    ctx = await _seed(db_session)
+315-    await _sync(db_session, ctx, [posting_row()])
+316-
+317-    order = await _order(db_session)
+318:    await db_session.refresh(order)
+319-    # Штрихкоды лежат в объекте `barcodes`; на верхнем уровне поля `barcode` нет.
+320-    assert order.wb_barcode == "%303%3435"
+321-    # Цены на верхнем уровне у отправления нет: считаем по позициям, в копейках.
+322-    assert order.price == 250000
+323-    # Даты создания у отправления нет — есть `in_process_at`. Раньше сюда молча
+324-    # подставлялось «сейчас».
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_posting_barcode_price_and_creation_date_come_from_the_real_fields ____
+
+db_session = <sqlalchemy.ext.asyncio.session.AsyncSession object at 0x10dce5160>
+
+    async def test_posting_barcode_price_and_creation_date_come_from_the_real_fields(
+        db_session: AsyncSession,
+    ) -> None:
+        ctx = await _seed(db_session)
+        await _sync(db_session, ctx, [posting_row()])
+    
+        order = await _order(db_session)
+        await db_session.refresh(order)
+        # Штрихкоды лежат в объекте `barcodes`; на верхнем уровне поля `barcode` нет.
+        assert order.wb_barcode == "%303%3435"
+        # Цены на верхнем уровне у отправления нет: считаем по позициям, в копейках.
+        assert order.price == 250000
+        # Даты создания у отправления нет — есть `in_process_at`. Раньше сюда молча
+        # подставлялось «сейчас».
+>       assert order.created_at_wb == datetime(2026, 9, 1, 10, 30, tzinfo=UTC)
+E       assert datetime.datetime(2026, 9, 1, 10, 30) == datetime.datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc)
+E        +  where datetime.datetime(2026, 9, 1, 10, 30) = <app.models.fbs_order.FbsOrder object at 0x10dce7b60>.created_at_wb
+E        +  and   datetime.datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc) = datetime(2026, 9, 1, 10, 30, tzinfo=datetime.timezone.utc)
+
+tests/test_ozon_posting_contract.py:325: AssertionError
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-ozon-date-ci/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_ozon_posting_contract.py::test_posting_barcode_price_and_creation_date_come_from_the_real_fields
+1 failed, 6 warnings in 0.70s
+
+PYTEST_EXIT=1
+
+............................................                             [100%]
+=============================== warnings summary ===============================
+app/main.py:19
+  /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-ozon-date-ci/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+44 passed, 6 warnings in 3.50s

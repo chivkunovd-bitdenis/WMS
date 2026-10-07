@@ -1,0 +1,48 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd"><html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<title>truncated-cell.html</title>
+<meta name="Creator" content="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/154.0.0.0 Safari/537.36"/>
+<meta name="Producer" content="Skia/PDF m154"/>
+<meta name="CreationDate" content="2026-10-07T00:05:33Z"/>
+<meta name="ModDate" content="2026-10-07T00:05:33Z"/>
+</head>
+<body>
+<doc>
+  <page width="841.919980" height="594.959960">
+    <flow>
+      <block xMin="37.499998" yMin="37.744627" xMax="68.236081" yMax="49.475096">
+        <line xMin="37.499998" yMin="37.744627" xMax="68.236081" yMax="49.475096">
+          <word xMin="37.499998" yMin="37.744627" xMax="68.236081" yMax="49.475096">Товар</word>
+        </line>
+      </block>
+      <block xMin="37.499998" yMin="55.744627" xMax="135.901606" yMax="67.475095">
+        <line xMin="37.499998" yMin="55.744627" xMax="135.901606" yMax="67.475095">
+          <word xMin="37.499998" yMin="55.744627" xMax="135.901606" yMax="67.475095">PACKAGING-LONG-</word>
+        </line>
+      </block>
+    </flow>
+    <flow>
+      <block xMin="352.792958" yMin="37.744627" xMax="401.370837" yMax="49.475096">
+        <line xMin="352.792958" yMin="37.744627" xMax="401.370837" yMax="49.475096">
+          <word xMin="352.792958" yMin="37.744627" xMax="401.370837" yMax="49.475096">АРТИКУЛ</word>
+        </line>
+      </block>
+    </flow>
+    <flow>
+      <block xMin="505.441389" yMin="37.744627" xMax="534.111310" yMax="49.475096">
+        <line xMin="505.441389" yMin="37.744627" xMax="534.111310" yMax="49.475096">
+          <word xMin="505.441389" yMin="37.744627" xMax="534.111310" yMax="49.475096">ЦВЕТ</word>
+        </line>
+      </block>
+    </flow>
+    <flow>
+      <block xMin="658.089820" yMin="37.744627" xMax="701.084447" yMax="49.475096">
+        <line xMin="658.089820" yMin="37.744627" xMax="701.084447" yMax="49.475096">
+          <word xMin="658.089820" yMin="37.744627" xMax="701.084447" yMax="49.475096">РАЗМЕР</word>
+        </line>
+      </block>
+    </flow>
+  </page>
+</doc>
+</body>
+</html>

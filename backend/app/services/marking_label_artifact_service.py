@@ -190,6 +190,12 @@ def _square_datamatrix_pdf(cis_code: str) -> tuple[bytes, float]:
         svg_doc.close()
 
 
+def build_datamatrix_label_pdf(cis_code: str) -> bytes:
+    """Generate a printable vector label from the complete saved CIS payload."""
+    pdf_bytes, _quiet_zone_ratio = _square_datamatrix_pdf(cis_code)
+    return pdf_bytes
+
+
 def _repair_distorted_datamatrix_pdf(pdf_bytes: bytes, cis_code: str) -> bytes:
     """Replace only an anisotropically scaled Data Matrix inside a stored label PDF."""
     import fitz  # pymupdf

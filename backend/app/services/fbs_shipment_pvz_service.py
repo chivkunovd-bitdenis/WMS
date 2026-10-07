@@ -384,13 +384,16 @@ async def preflight_cargo_places(
     tenant_id: uuid.UUID,
     supply_id: uuid.UUID,
     boxes: list[CargoPlaceDraft],
+    *,
+    enforce_count_limit: bool = True,
 ) -> dict[str, Any]:
     supply = await _get_supply(session, tenant_id, supply_id, with_orders=True)
     if supply is None:
         raise FbsShipmentPvzError("supply_not_found")
 
     count = len(boxes)
-    _validate_count_limit(count, len(supply.orders))
+    if enforce_count_limit:
+        _validate_count_limit(count, len(supply.orders))
 
     issues = _preflight_issues_for_boxes(boxes)
     total_volume: int | None = None
@@ -427,6 +430,16 @@ async def _reconcile_trbxes_from_wb(
     for idx, wb_trbx_id in enumerate(wb_trbx_ids):
         trbx = by_wb_id.get(wb_trbx_id)
         draft = boxes[idx] if idx < len(boxes) else None
+        if (
+            trbx is not None
+            and draft is not None
+            and trbx.packaging_box_id is not None
+            and trbx.packaging_box_id != draft.packaging_box_id
+        ):
+            # A WB ID already bound to another physical box is evidence that
+            # this pending delta is not attributable to the retrying group.
+            # Never reassign it merely because the number of remote IDs fits.
+            raise FbsShipmentPvzError("wb_pending_confirmation")
         if trbx is None:
             trbx = FbsTrbx(
                 supply_id=supply.id,
@@ -492,16 +505,22 @@ async def _ensure_cargo_qrs(
     *,
     trbxes: list[FbsTrbx] | None = None,
 ) -> None:
-    try:
-        await ensure_cargo_place_qr_assets(
-            session,
-            tenant_id,
-            supply,
-            http_client,
-            trbxes=trbxes,
-        )
-    except FbsPrintAssetError as exc:
-        raise _wrap_print_asset_error(exc) from exc
+    targets = trbxes if trbxes is not None else list(supply.trbxes)
+    for trbx in targets:
+        try:
+            await ensure_cargo_place_qr_assets(
+                session,
+                tenant_id,
+                supply,
+                http_client,
+                trbxes=[trbx],
+            )
+            # QR files are an independently recoverable projection.  Once WB
+            # returned a real label, retain it even when a later cargo-place
+            # request fails, so bulk print can use the ready part.
+            await session.commit()
+        except FbsPrintAssetError as exc:
+            raise _wrap_print_asset_error(exc) from exc
 
 
 async def list_cargo_places(
@@ -543,6 +562,8 @@ async def create_cargo_places(
     *,
     actor_user_id: uuid.UUID | None,
     confirmation_source: str = MEASUREMENTS_CONFIRMATION_SOURCE_OPERATOR,
+    allow_existing_physical_box_group: bool = False,
+    expected_wb_trbx_ids_before: list[str] | None = None,
 ) -> list[dict[str, Any]]:
     if not idempotency_key.strip():
         raise FbsShipmentPvzError("missing_idempotency_key")
@@ -561,12 +582,14 @@ async def create_cargo_places(
     if len(effective_boxes) != count:
         raise FbsShipmentPvzError("invalid_trbx_count")
 
-    _validate_count_limit(count, len(supply.orders))
+    if not allow_existing_physical_box_group:
+        _validate_count_limit(count, len(supply.orders))
     preflight = await preflight_cargo_places(
         session,
         tenant_id,
         supply_id,
         effective_boxes,
+        enforce_count_limit=not allow_existing_physical_box_group,
     )
     if not preflight["compatible"]:
         raise FbsShipmentPvzError("cargo_places_preflight_failed")
@@ -635,6 +658,15 @@ async def create_cargo_places(
             )
         except WildberriesClientError as exc:
             raise FbsShipmentPvzError(_wb_error_code(exc)) from exc
+        if (
+            expected_wb_trbx_ids_before is not None
+            and set(wb_trbx_ids_before) != set(expected_wb_trbx_ids_before)
+        ):
+            # A historical physical group has no safe way to attribute new
+            # WB cargo places that appeared after its original failed POST.
+            # Stop before a second create rather than attaching or duplicating
+            # somebody else's places.
+            raise FbsShipmentPvzError("wb_pending_confirmation")
         request_summary: dict[str, Any] = {
             "supply_id": str(supply.id),
             "count": count,

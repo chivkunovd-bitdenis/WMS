@@ -21,6 +21,7 @@ from app.models.user import User
 from app.services import marking_code_service as mc_svc
 from app.services import packaging_task_service as pkg_svc
 from app.services import tenant_settings_service as tenant_settings_svc
+from app.services.print_product_metadata_service import populate_print_variant_attributes
 
 router = APIRouter(
     prefix="/operations/packaging-tasks",
@@ -91,6 +92,8 @@ class PackagingTaskLineOut(BaseModel):
     seller_name: str | None = None
     sku_code: str
     product_name: str
+    size: str | None = None
+    color: str | None = None
     storage_location_id: str | None
     storage_location_code: str | None
     packaging_instructions: str | None
@@ -270,6 +273,9 @@ async def _task_out(
                 reveal_storage=reveal_storage,
             )
         )
+    await populate_print_variant_attributes(
+        session, [ln.product for ln in task.lines], line_outs
+    )
     sellers: set[tuple[uuid.UUID | None, str | None]] = set()
     for ln in task.lines:
         line_seller_id = ln.product.seller_id

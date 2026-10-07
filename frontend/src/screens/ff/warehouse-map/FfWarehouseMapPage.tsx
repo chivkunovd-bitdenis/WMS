@@ -7,6 +7,11 @@ import { WarehousePrinterDialog } from './WarehousePrinterDialog'
 import { InventoryCountDialog } from '../inventory/InventoryCountDialog'
 import type { MapRow } from './WarehouseMapRows'
 import type { WarehouseMapData } from './WarehouseMapTypes'
+import type {
+  CreateCellBody,
+  CreateCellSuggestion,
+  CreateCellSuggestionRequest,
+} from './WarehouseMapToolbar'
 import {
   mapErrorMessage,
   humanError,
@@ -131,25 +136,51 @@ export function FfWarehouseMapPage({ token, warehouses, isAdmin }: Props) {
     onError: setOperationError,
   })
 
-  async function createCell(code: string) {
+  async function createCell(body: CreateCellBody): Promise<boolean> {
     const requestWarehouseId = selectedWarehouseRef.current
     if (!requestWarehouseId) {
       setOperationError('Сначала выберите склад: ячейка создаётся внутри склада.')
-      return
+      return false
     }
     setOperationError(null)
     try {
       const res = await fetch(apiUrl(`/warehouses/${requestWarehouseId}/locations`), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', ...headers(token) },
-        body: JSON.stringify({ code }),
+        body: JSON.stringify(body),
       })
       if (!res.ok) throw new Error(await mapErrorMessage(res))
       await load({ preserveOperationError: true })
+      return true
     } catch (err) {
       setOperationError(humanError(err, 'Не удалось создать ячейку'))
+      return false
     }
   }
+
+  const suggestCell = useCallback(async (
+    request: CreateCellSuggestionRequest,
+  ): Promise<CreateCellSuggestion | null> => {
+    const requestWarehouseId = selectedWarehouseRef.current
+    if (!requestWarehouseId) return null
+    const params = new URLSearchParams({
+      rack_name: request.rack_name,
+      use_sides: String(request.use_sides),
+      use_tiers: String(request.use_tiers),
+    })
+    if (request.side !== null) params.set('side', String(request.side))
+    if (request.tier !== null) params.set('tier', String(request.tier))
+    try {
+      const res = await fetch(
+        apiUrl(`/warehouses/${requestWarehouseId}/locations/suggest?${params}`),
+        { headers: headers(token) },
+      )
+      if (!res.ok || requestWarehouseId !== selectedWarehouseRef.current) return null
+      return (await res.json()) as CreateCellSuggestion
+    } catch {
+      return null
+    }
+  }, [token])
 
   async function createWarehouse(name: string, code: string) {
     setOperationError(null)
@@ -181,7 +212,8 @@ export function FfWarehouseMapPage({ token, warehouses, isAdmin }: Props) {
         warehouseId={warehouseId}
         onWarehouseChange={selectWarehouse}
         onMove={actions.move}
-        onCreateCell={(code: string) => void createCell(code)}
+        onCreateCell={createCell}
+        onSuggestCell={suggestCell}
         onCreateWarehouse={(name: string, code: string) => void createWarehouse(name, code)}
         onPrinter={() => setPrinterOpen(true)}
         onPrintCell={actions.printCell}

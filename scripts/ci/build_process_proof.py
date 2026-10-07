@@ -13,15 +13,17 @@ import sys
 if __package__ in (None, ''):
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from scripts.ci.process_contracts import POLICY_PATH, verify_integrity, verify_reports
+from scripts.ci.process_contracts import POLICY_PATH, load_approved_upgrade, verify_integrity, verify_reports
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--reports', type=Path, required=True)
     parser.add_argument('--base', required=True)
+    parser.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument('--reviewed-upgrade', action='store_true')
     args = parser.parse_args()
-    root = Path(__file__).resolve().parents[2]
+    root = args.root.resolve()
     sha = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     head = os.environ['CANDIDATE_HEAD_SHA']
     if any(not re.fullmatch('[0-9a-f]{40}', value) for value in [sha, head, args.base]):
@@ -31,7 +33,9 @@ def main():
     baseline_has_policy = subprocess.run(
         ['git', 'cat-file', '-e', f'{args.base}:{POLICY_PATH}'], cwd=root,
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-    policy = verify_integrity(root, args.base, bootstrap=not baseline_has_policy)
+    approved = load_approved_upgrade() if args.reviewed_upgrade else None
+    policy = verify_integrity(root, args.base, bootstrap=not baseline_has_policy,
+                              approved_upgrade=approved)
     results = verify_reports(policy, args.reports, sha=sha)
     output = args.reports.parent / 'process-proof-final'
     if output.exists():

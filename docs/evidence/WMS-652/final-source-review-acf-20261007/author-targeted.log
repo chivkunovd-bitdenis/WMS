@@ -1,0 +1,8 @@
+..........................................                   [100%]
+=============================== warnings summary ===============================
+scripts/ci/tests/test_trusted_process_artifact.py::TrustedArtifactTests::test_zip_duplicate_traversal_symlink_missing_or_malformed_metadata_refuses
+  /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'execution.json'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+42 passed, 1 warning, 84 subtests passed in 9.59s

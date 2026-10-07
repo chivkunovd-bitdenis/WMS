@@ -1,0 +1,159 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Лист отгрузки — №000680</title>
+    <style>
+      /* Ориентацию выбирает оператор в диалоге печати — не форсируем landscape в @page
+         (иначе при Portrait в диалоге карточки уезжают за область печати). */
+      @page { size: A4; margin: 7mm 8mm 8mm; }
+      * { box-sizing: border-box; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+        font-size: 10.5px;
+        color: #111;
+        margin: 0;
+        width: 100%;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      h1 { font-size: 15px; margin: 0 0 5px; }
+      .pk-head {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 3px 12px;
+        margin: 0 0 8px;
+        padding: 6px 8px;
+        border: 1px solid #cfcfcf;
+        background: #f6f6f6;
+      }
+      .pk-head dt { margin: 0; color: #555; font-size: 9px; text-transform: uppercase; }
+      .pk-head dd { margin: 0; font-weight: 700; word-break: break-word; }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        table-layout: fixed;
+      }
+      th,
+      td {
+        border: 1px solid #cfcfcf;
+        padding: 4px 5px;
+        vertical-align: top;
+      }
+      th {
+        background: #ececec;
+        font-size: 9px;
+        text-align: left;
+        text-transform: uppercase;
+        color: #444;
+      }
+      tr {
+        page-break-inside: avoid;
+        break-inside: avoid-page;
+      }
+      .pk-photo-cell { width: 24mm; }
+      .pk-product-cell { width: 35%; }
+      .pk-barcode-cell { width: 24mm; word-break: break-word; font-weight: 700; }
+      .pk-qty-cell { width: 14mm; text-align: right; font-weight: 700; font-size: 13px; }
+      .pk-instructions-cell { width: auto; }
+      .pk-fact-cell { width: 18mm; min-height: 24mm; }
+      .pk-photo {
+        width: 21mm;
+        height: 21mm;
+        object-fit: contain;
+        border: 1px solid #eee;
+        display: block;
+        margin: 0;
+      }
+      .pk-photo-empty {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #999;
+        font-size: 11px;
+        background: #f5f5f5;
+      }
+      .pk-name { font-weight: 700; margin: 0 0 2px; word-break: break-word; }
+      .pk-meta { margin: 0; color: #555; word-break: break-word; }
+      .pk-instructions-text {
+        white-space: pre-wrap;
+        word-break: break-word;
+        line-height: 1.35;
+      }
+      .pk-empty-text { color: #999; font-style: italic; }
+      .pk-empty { color: #555; }
+    </style>
+  </head>
+  <body>
+    <h1>Лист отгрузки</h1>
+    <dl class="pk-head">
+      <div><dt>Селлер</dt><dd>Селлер680</dd></div>
+      <div><dt>Дата</dt><dd>07.10.2026, 04:00:00</dd></div>
+      <div><dt>Тип</dt><dd>Отгрузка на маркетплейс</dd></div>
+      <div><dt>Номер</dt><dd>№000680</dd></div>
+      <div><dt>Склад ФФ</dt><dd>Склад680</dd></div>
+      <div><dt>Склад МП</dt><dd>—</dd></div>
+    </dl>
+    <table data-testid="shipment-sheet-table">
+      <thead>
+        <tr>
+          <th>Фото</th>
+          <th>Товар</th>
+          <th>ШК</th>
+          <th>Кол-во</th>
+          <th>Инструкции</th>
+          <th>Факт</th>
+        </tr>
+      </thead>
+      <tbody><tr data-testid="tz-sheet-card" data-row-index="0">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 0</p>
+    <p class="pk-meta"><span>Арт.: SKU-0</span> · <span>SKU: SKU-0</span></p>
+    <p class="pk-meta">Размер: S</p>
+    <p class="pk-meta">Цвет: Красный</p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">—</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">1</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="1">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 1</p>
+    <p class="pk-meta"><span>Арт.: SKU-1</span> · <span>SKU: SKU-1</span></p>
+    <p class="pk-meta">Размер: M</p>
+    <p class="pk-meta">Цвет: Синий</p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">—</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">2</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="2">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 2</p>
+    <p class="pk-meta"><span>Арт.: SKU-2</span> · <span>SKU: SKU-2</span></p>
+    <p class="pk-meta">Размер: 0</p>
+    <p class="pk-meta">Цвет: —</p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">—</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">3</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr><tr data-testid="tz-sheet-card" data-row-index="3">
+  <td class="pk-photo-cell"><div class="pk-photo pk-photo-empty">фото</div></td>
+  <td class="pk-product-cell">
+    <p class="pk-name">Товар одного артикула · вариант 3</p>
+    <p class="pk-meta"><span>Арт.: SKU-3</span> · <span>SKU: SKU-3</span></p>
+    <p class="pk-meta">Размер: —</p>
+    <p class="pk-meta">Цвет: Зелёный</p>
+  </td>
+  <td class="pk-barcode-cell" data-testid="shipment-sheet-barcode">—</td>
+  <td class="pk-qty-cell" data-testid="tz-sheet-qty">4</td>
+  <td class="pk-instructions-cell" data-testid="shipment-sheet-instructions"><div class="pk-instructions-text">Пакет прозрачный; не закрывать штрихкод.</div></td>
+  <td class="pk-fact-cell" data-testid="shipment-sheet-fact"></td>
+</tr></tbody>
+    </table>
+  </body>
+</html>

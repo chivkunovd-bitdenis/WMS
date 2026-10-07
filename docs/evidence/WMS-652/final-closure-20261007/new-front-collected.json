@@ -1,0 +1,270 @@
+[
+  {
+    "name": "K6 Chromium PDF pages match every selected stock and decode original barcodes in both paths",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx"
+  },
+  {
+    "name": "K6 preserved browser PDF keeps dimensions and original code128 on every stock",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > single label preserves own box and metadata numbered=true generated=true",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > single label preserves own box and metadata numbered=true generated=false",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > single label preserves own box and metadata numbered=false generated=true",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > single label preserves own box and metadata numbered=false generated=false",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > bulk is one job with three pages in original order and no trailing break",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > refresh and navigation preserve identities without stale seller/date/box data",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > uses the Moscow document date and handles missing or invalid metadata without refusing print",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > escapes complete long seller text in single and bulk HTML",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > mark http failure reports error, releases busy and never reprints automatically",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > mark lost failure reports error, releases busy and never reprints automatically",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-684 acceptance box labels > keeps cargo, default and storageCell printing free of receipt metadata",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > downloads xlsx for current document with server MIME and UTF8 name without printing",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > xlsx recovers from 404, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > xlsx recovers from 409, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > xlsx recovers from 500, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > xlsx recovers from network, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > xlsx recovers from blob, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > downloads pdf for current document with server MIME and UTF8 name without printing",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > pdf recovers from 404, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > pdf recovers from 409, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > pdf recovers from 500, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > pdf recovers from network, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > pdf recovers from blob, never downloads an error and can navigate to B",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-586 act file actions > retains status and nonempty-line visibility without discrepancy-act requests",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 real shared stock dialog > inbound blocks receiving scans while the shared dialog loads or is open, then restores the ordinary scan after close",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 real shared stock dialog > return blocks receiving scans while the shared dialog loads or is open, then restores the ordinary scan after close",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 real shared stock dialog > inbound sends all selected document products to the real container and renders its saved conditions",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 real shared stock dialog > return sends all selected document products to the real container and renders its saved conditions",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 shared FBS stock dialog from an inbound document > inbound selects only document products and opens the catalog FbsStockDialogContainer",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 shared FBS stock dialog from an inbound document > return selects only document products and opens the catalog FbsStockDialogContainer",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 shared FBS stock dialog from an inbound document > does not expose the stock entry to a reception operator without the existing catalog-settings right",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > приёмка/возврат: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > FBO WB/Ozon/самостоятельная упаковка: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > общая marketplace_unload: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > общая operational_outbound: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > общая inbound_intake: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > FBS одиночный/групповой: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > C680-18: marketplace_unload сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > C680-18: operational_outbound сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · C680-18 реальная PDF-геометрия > C680-18: inbound_intake сохраняет компактное Кол-во в реальной DOM/PDF-таблице подбора",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintGeometry.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-01: лист приёмки и возврат печатают варианты своих Product без смешения строк",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-02: реальная FBO-форма WB и Ozon сохраняет варианты каждой строки",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-03: самостоятельная упаковка использует ту же форму и не теряет два поля",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-04: операционная отгрузка сохраняет ячейки, подбор и варианты строк",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-05: WB, многопозиционный Ozon и групповая сборка сохраняют size/color позиции",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-06: общая форма marketplace_unload показывает оба подписанных поля без потери реквизитов",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-06: общая форма operational_outbound показывает оба подписанных поля без потери реквизитов",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-06: общая форма inbound_intake показывает оба подписанных поля без потери реквизитов",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-08: известные поля строки доходят до печати без каталожной подстановки или блокировки",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными (undefined, 'Blue')",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными (null, 'Blue')",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('', 'Blue')",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('   ', 'Blue')",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('0', null)",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-09/C680-10: пустые поля независимы, 0 и HTML остаются корректными ('S', 'Red & <Blue>')",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-11: генерация дважды не меняет документ и не переносит вариант в другой документ",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-12: инвентаризированные печатные входы остаются отдельными от акта, стикеров и WMS-679",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-15: все реальные шаблоны печатают четыре варианта в отдельных столбцах Артикул, Цвет и Размер",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-16: известные, fallback, whitespace и строковый 0 остаются в собственных колонках без каталога",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-680 · контракт печатных накладных до реализации > C680-17: реальные caller-map сохраняют варианты, реквизиты и границы прежних форм",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/utils/wms680PrintContract.test.ts"
+  },
+  {
+    "name": "WMS-679 · MP-отгрузка WB: контракт документа до реализации > C13: выгрузка находится у коробов WB, не подменяет импорт и не закрывает документ",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfSuppliesShipmentsPage.wms679.dom.test.tsx"
+  },
+  {
+    "name": "WMS-679 · MP-отгрузка WB: контракт документа до реализации > C9: ошибка и устаревший ответ экспорта остаются в контексте открытого документа",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfSuppliesShipmentsPage.wms679.dom.test.tsx"
+  },
+  {
+    "name": "WMS-679 · MP-отгрузка WB: контракт документа до реализации > C10: печать legacy INB не называется этикеткой приёмки WB",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfSuppliesShipmentsPage.wms679.dom.test.tsx"
+  },
+  {
+    "name": "WMS-687 catalog permission wiring > passes the existing catalog-settings permission, not reception permission, to the inbound stock entry",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/ff/FfInboundRequestView.wms687.permission.test.ts"
+  },
+  {
+    "name": "WMS-680 · одиночная печать FBS Ozon > C680-05: передаёт marketplace Ozon реальному вызову листа подбора",
+    "file": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-integration/frontend/src/screens/v2/FfFbsSupplyWorkspace.wms680.test.ts"
+  }
+]

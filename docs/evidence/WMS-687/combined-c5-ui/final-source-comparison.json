@@ -1,0 +1,40 @@
+{
+  "baseline_cua_source_sha": "05da854733eb35584c096b9995b52ae8aafe6877",
+  "baseline_evidence_commit": "9f39e1fa6fba13190be3e2d1da876a25167b9cdf",
+  "checked_integration_sha": "230cad6f370825480a86cbdbd8e16287977b8560",
+  "pdf_product_sha": "b6e14f56692cf0561955e48af0a30e1415ccea36",
+  "independent_pdf_pass_sha": "1fbbcf5e750de1bc7ffec13973a4eccb590881c8",
+  "FfInboundRequestView_whole_file_equal": false,
+  "sections": {
+    "downloadAcceptanceAct": {
+      "equal": true,
+      "sha256": "2d85d37b90fe1be4d7c75f834551a14bab8c10b13d1d5058ebc73b48d9884978"
+    },
+    "stickerMetadataAndRecovery": {
+      "equal": true,
+      "sha256": "3ee7d68ceb8b1f4aaa57896b9447599bdb778b27fd194b04f21d99941b9d840b"
+    },
+    "pdfExcelStockControls": {
+      "equal": true,
+      "sha256": "6872bba95e290b89af1c0d232fe43f23df0d9feb07027855bb8188f783b4437e"
+    }
+  },
+  "unchanged_files": {
+    "frontend/src/screens/ff/products-fbs/FbsStockDialogContainer.tsx": {
+      "equal": true,
+      "sha256": "dcfe3d5d183329d0c596150257ddbad27b8776c69974b1f1964b261738d7b5b1"
+    },
+    "frontend/src/screens/ff/products-fbs/FbsStockDialog.tsx": {
+      "equal": true,
+      "sha256": "c9bfa8a5b7f55eac9bf1feb2bea0ad8fab001d9c8173927c53d3099c1fe1c3a9"
+    },
+    "frontend/src/utils/printBarcodeLabel.ts": {
+      "equal": true,
+      "sha256": "8540268b169552a261ac4be14bbcea816f513d2fcbd8e830a50801e14a87a9e2"
+    },
+    "frontend/src/screens/ff/inboundDraftPersistence.ts": {
+      "equal": true,
+      "sha256": "8bc4b3458bea69a0489b281aea4dc811744b2e92fbeeec2f6236458382e732d9"
+    }
+  }
+}
