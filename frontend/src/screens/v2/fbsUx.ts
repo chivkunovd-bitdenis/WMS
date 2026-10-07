@@ -581,7 +581,7 @@ export function buildFbsPickingListPrintHtml(input: FbsPickingListPrintInput) {
       .quantity { text-align: center; font-weight: 700; }
       .sticker { width: 116px; font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
       .muted { margin-top: 3px; color: #687083; font-size: 10px; }
-      .orders { font-size: 10px; white-space: nowrap; }
+      .orders { font-size: 10px; white-space: normal; }
       th.quantity { font-size: 9px; white-space: nowrap; }
       .sources { font-size: 10px; line-height: 1.4; white-space: normal; overflow-wrap: anywhere; }
       .source-group + .source-group { margin-top: 1.4em; }
