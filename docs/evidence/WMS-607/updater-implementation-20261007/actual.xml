@@ -1,0 +1,52 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.directMacUpdater" tests="10" failures="7" errors="0" skipped="0"><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_direct_build_metadata" time="0.9216795000029379" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_public_and_current_journal_replay" time="0.14654149999842048" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported" time="3.255861666999408"><failure>test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported (test_macos_direct_updater_contract.UpdaterContract.test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported) (machine='arm64', translated=0): Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 313, in test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported
+    r=self.run_update();self.assertEqual(r.returncode,0,r.stderr);self.assert_target()
+                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : WMS Print update: Port 17843 belongs to a different executable; nothing was stopped
+
+
+test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported (test_macos_direct_updater_contract.UpdaterContract.test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported) (machine='x86_64', translated=1): Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 313, in test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported
+    r=self.run_update();self.assertEqual(r.returncode,0,r.stderr);self.assert_target()
+                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : WMS Print update: Port 17843 belongs to a different executable; nothing was stopped
+
+
+test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported (test_macos_direct_updater_contract.UpdaterContract.test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported) (machine='x86_64', translated=0): Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 313, in test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported
+    r=self.run_update();self.assertEqual(r.returncode,0,r.stderr);self.assert_target()
+                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : WMS Print update: Port 17843 belongs to a different executable; nothing was stopped
+
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed" time="7.235284083006263"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 346, in test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed
+    self.assertEqual(self.run_update().returncode,0);self.assert_target()
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc3_lossless_backup_and_archive_or_space_failure" time="2.5630343750017346"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 353, in test_uc3_lossless_backup_and_archive_or_space_failure
+    self.write_system();self.assertEqual(self.run_update().returncode,0);self.assert_archived();self.assert_target()
+                        ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc4_foreign_port_owner_and_health200_wrong_process" time="2.3134023749953485" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc5_replace_and_start_rollback_preserve_current_journal" time="2.41297179099638"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 369, in test_uc5_replace_and_start_rollback_preserve_current_journal
+    self.assertTrue((self.state/'late-unknown.json').exists(),'Current unknown/receipt must survive rollback')
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : Current unknown/receipt must survive rollback
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc6_repeat_concurrent_and_interrupted_update_recover" time="2.4511693750027916"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 377, in test_uc6_repeat_concurrent_and_interrupted_update_recover
+    self.assertTrue(any(r.returncode==0 for r in results));self.assert_target();self.assert_archived()
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc7_actual_journal_replay_after_update_and_failed_restart" time="1.8253043750009965"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 384, in test_uc7_actual_journal_replay_after_update_and_failed_restart
+    self.assertEqual(self.run_update().returncode,0);self.assert_target();self.assert_archived()
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0
+</failure></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc8_no_security_printer_or_dependencies_change_permission_recovery" time="1.988999540997611"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_contract.py", line 405, in test_uc8_no_security_printer_or_dependencies_change_permission_recovery
+    self.assertRegex((r.stdout+r.stderr).lower(),r'permission|privacy|security|разреш|конфиденц')
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Regex didn't match: 'permission|privacy|security|разреш|конфиденц' not found in 'wms print update: port 17843 belongs to a different executable; nothing was stopped\n'
+</failure></testcase></testsuite>

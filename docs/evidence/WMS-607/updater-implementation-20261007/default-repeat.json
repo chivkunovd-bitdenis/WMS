@@ -1,0 +1,169 @@
+{
+  "pass": true,
+  "entry_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+  "first": {
+    "exit": 0,
+    "stdout": "Verified native Direct target dc652472d75812dbebc68ef4353a718b0f629cbe (arm64). Previous application/state archive: $CASE/backups/previous.Ij2XnybQ. Physical printing has not been tested.\n",
+    "stderr": ""
+  },
+  "repeat": {
+    "exit": 0,
+    "stdout": "Verified target already running; previous archives and print history retained.\n",
+    "stderr": ""
+  },
+  "defaults_checked": [
+    "app-dir",
+    "manifest"
+  ],
+  "state_and_backup": "explicit temporary boundaries; HOME unchanged",
+  "archives_unchanged": true,
+  "stop_or_print_on_repeat": false,
+  "process_alias": "/var and /private/var resolve to same selected executable",
+  "commands": [
+    [
+      "uname",
+      "-s"
+    ],
+    [
+      "uname",
+      "-m"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "hw.optional.arm64"
+    ],
+    [
+      "sysctl",
+      "-n",
+      "sysctl.proc_translated"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/backups"
+    ],
+    [
+      "mkdir",
+      "-p",
+      "$CASE/.app.direct-update"
+    ],
+    [
+      "mkdir",
+      "$CASE/.app.direct-update/lock"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--location",
+      "--proto",
+      "=https",
+      "--proto-redir",
+      "=https",
+      "--max-time",
+      "120",
+      "https://fixture.invalid/releases/immutable/arm64.zip",
+      "-o",
+      "$CASE/.wms-print-stage.jvk73UYW/package.zip"
+    ],
+    [
+      "ditto",
+      "-xk",
+      "$CASE/.wms-print-stage.jvk73UYW/package.zip",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked/wms-print/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked/wms-print/wms-print"
+    ],
+    [
+      "codesign",
+      "--verify",
+      "--strict",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked/wms-print/wms-print"
+    ],
+    [
+      "binary",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked/wms-print/wms-print",
+      "--self-test"
+    ],
+    [
+      "cp",
+      "-p",
+      "$CASE/app/updater-manifest.json",
+      "$CASE/.wms-print-stage.jvk73UYW/unpacked/wms-print/updater-manifest.json"
+    ],
+    [
+      "lipo",
+      "-archs",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "file",
+      "$CASE/app/wms-print"
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "lsof",
+      "-nP",
+      "-iTCP:17843",
+      "-sTCP:LISTEN",
+      "-t"
+    ],
+    [
+      "curl",
+      "--fail",
+      "--silent",
+      "--show-error",
+      "--max-time",
+      "2",
+      "http://127.0.0.1:17843/health"
+    ],
+    [
+      "ps",
+      "-p",
+      "42424242",
+      "-o",
+      "comm="
+    ],
+    [
+      "binary",
+      "$CASE/app/wms-print",
+      "--readiness"
+    ]
+  ]
+}

@@ -1,0 +1,41 @@
+{
+  "kind": "local actual native ARM64 build; not a distribution release",
+  "source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "metadata": {
+    "source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+    "platform": "darwin",
+    "architecture": "arm64",
+    "runtime": "direct",
+    "console": true,
+    "physical_print_verified": false
+  },
+  "artifact_path": "tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+  "artifact_bytes": 182031,
+  "archive_sha256": "409f1afd0ab3743729dad0f1f3105f86822d89d99e509dad02ccf94dd7a09cf3",
+  "executable_sha256": "6e114c15815ebc02e25dd91478f66c7ca6a5030b6d1e7c8fa8480a4bbfb0d007",
+  "updater_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+  "archive_entries": [
+    "wms-print/",
+    "wms-print/wms-print",
+    "__MACOSX/",
+    "__MACOSX/wms-print/",
+    "__MACOSX/wms-print/._wms-print",
+    "wms-print/history.html",
+    "__MACOSX/wms-print/._history.html",
+    "wms-print/README.txt",
+    "__MACOSX/wms-print/._README.txt",
+    "wms-print/build.json",
+    "__MACOSX/wms-print/._build.json",
+    "wms-print/update_macos_direct.sh",
+    "__MACOSX/wms-print/._update_macos_direct.sh"
+  ],
+  "architecture_verified": "arm64",
+  "archive_readback_matches": true,
+  "codesign_verify_and_unpacked_selftest": "builder exit 0; local-arm64-build.log",
+  "public_url": null,
+  "review": false,
+  "analytical_acceptance": false,
+  "Intel_build": false,
+  "client_install": false,
+  "physical_print_verified": false
+}

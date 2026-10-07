@@ -1,0 +1,56 @@
+{
+  "pass": true,
+  "provenance": {
+    "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "transformed_source_sha256": "02419b74b9475333312347ac2a35fa16cdfd94ae2a7886a5aecdbbde51587de7",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "startup_submissions": 0,
+  "readiness_submissions": 0,
+  "explicit_new_scan_submissions": 1,
+  "saved_job_after_scan": "saved",
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-2a5c6bcd2d899312dc8d31250868e2710d3ef5e0cf016f02c73f56a478cb7d3a",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms607-start-proof-_slitdkl/direct/jobs-v2/96a1ee9dcb7241caf6ec354c02223bf339d84191c899a119f9afa879038e2698.png"
+    ]
+  ],
+  "readiness": "WMS Print Direct: default queue available; no label submitted",
+  "physical_print": false
+}

@@ -1,0 +1,114 @@
+{
+  "base": "a40bf5b9a2f833a16cb9ff8c941c46c02a0b9d72",
+  "product_source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "unchanged": [
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+      "bytes": 30177,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+      "sha256": "518c52e6f00ffe53371a6d030c0a906dcc09a03f2bf77e5b79fde7c201901fc3",
+      "bytes": 2704,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/contract.json",
+      "sha256": "18550049b6892de66e25bb3e8b86e3ed5e5ae48d5ab89fd191a1cbd923470750",
+      "bytes": 12852,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+      "bytes": 8619,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+      "bytes": 5141,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "bytes": 10276,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+      "bytes": 11965,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/wms_cups_observe.c",
+      "sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "bytes": 3894,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "tools/print-agent/history.html",
+      "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "bytes": 5643,
+      "byte_unchanged_from_base": true
+    },
+    {
+      "path": "docs/requirements/WMS-607.md",
+      "sha256": "706159108016721c5e39e2d2c3e6726c5ee67b65f142ac37ae8d969d2f60eb31",
+      "bytes": 76387,
+      "byte_unchanged_from_base": true
+    }
+  ],
+  "products": [
+    {
+      "path": "tools/print-agent/update_macos_direct.sh",
+      "sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+      "bytes": 17413
+    },
+    {
+      "path": "tools/print-agent/build_console.py",
+      "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e",
+      "bytes": 4606
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+      "bytes": 68232
+    }
+  ],
+  "native_core_preserved_except_explicit_resumeSaved_option": true,
+  "HTTP_and_native_selftest_bytes_unchanged": true,
+  "native_source_before_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+  "native_source_after_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+  "reports": {
+    "precode": {
+      "name": "WMS607.directMacUpdater",
+      "tests": "10",
+      "failures": "8",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "final": {
+      "name": "WMS607.directMacUpdater",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "existing": {
+      "name": "WMS607.existingMacContracts",
+      "tests": "19",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  },
+  "exact_final_XML_ids_and_all_10_raw_source_hashes": true,
+  "separate_native_start_and_default_repeat": true,
+  "independent_review": false,
+  "analytical_acceptance": false
+}

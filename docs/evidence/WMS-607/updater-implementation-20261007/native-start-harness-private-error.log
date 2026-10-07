@@ -1,0 +1,8 @@
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/docs/evidence/WMS-607/updater-implementation-20261007/check-native-start.py", line 37, in <module>
+    assert compiled.returncode == 0, compiled.stderr
+           ^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: /var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/wms607-start-proof-a4ooo___/seed.swift:475:5: error: constant must be declared private or fileprivate because its type 'Printer' uses a private type
+let seed=try Printer(directory:directory,autoWork:false,submit:{_,_ in fatalError("seed must not submit")},queue:{"Label_Printer"})
+    ^
+

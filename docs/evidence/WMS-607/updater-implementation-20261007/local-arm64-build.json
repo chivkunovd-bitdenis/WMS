@@ -1,0 +1,8 @@
+{
+  "source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "platform": "darwin",
+  "architecture": "arm64",
+  "runtime": "direct",
+  "console": true,
+  "physical_print_verified": false
+}
