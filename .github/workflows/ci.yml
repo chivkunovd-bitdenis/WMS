@@ -31,6 +31,7 @@ jobs:
           test "$DISPATCH_REF" = refs/heads/codex/wms607-direct-updater-mac-package-20261007
           test "$DISPATCH_ATTEMPT" = 1
           [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          test "$REQUESTED_SOURCE" = a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
