@@ -144,12 +144,12 @@ OWNER_UI_REQUEST = {
 
 
 # One reviewed owner-supersession chain, immutable published Git objects.
-WMS680_CLOSED_CHAIN = {'reviewed_source_commit': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
+WMS680_CLOSED_CHAIN = {'reviewed_source_commit': '535e8a970928e8834147553ad4c0139fcc5f10da',
  'original_contract': '24009478c3a58b558ad8a661d83dc5920108cb00',
- 'final_correction_commit': 'f2de20008df3b21c1decead0e1051dbda4a4a08a',
- 'report': {'path': 'docs/reviews/WMS-680-frozen-corrections-review-20261007.md',
-            'commit': 'd0de155adcc31a7d33dca43d857a22e49897b981',
-            'blob': 'e4d18d7879c31d31b4841167173a48f8dc50c9eb'},
+ 'final_correction_commit': '535e8a970928e8834147553ad4c0139fcc5f10da',
+ 'report': {'path': 'docs/reviews/WMS-652-final-night-release-review-20261007.md',
+            'commit': 'da5b0db7ad48bc6a3f7b7d51371185b133554ce6',
+            'blob': '7f24a11ee73ea224ee37e9f86161212fe786b8a6'},
  'owner': {'source': '7015448e255f606ef74b69e04e81f53777a099d5',
            'correction': '3be84bb091712caa2e32226f989e3008e47618a5',
            'artifacts': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': [None,
@@ -173,9 +173,9 @@ WMS680_CLOSED_CHAIN = {'reviewed_source_commit': 'f2de20008df3b21c1decead0e1051d
                                                             'frontend/src/utils/wms680PrintContract.test.ts': ['f3b12dd1617453a445a5624e19c19692c70a4693',
                                                                                                                '799f895bb38acca23867042e7b31c6cba96e7884'],
                                                             'frontend/src/utils/wms680PrintGeometry.test.ts': ['11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
-                                                                                                               '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']},
+                                                                                                               '81a83b3794340eadd60abba94594d6ff09d533ae']},
                '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
-                                                                                                               '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}},
+                                                                                                               '81a83b3794340eadd60abba94594d6ff09d533ae']}},
  'steps': [{'kind': 'owner_ui_supersession',
             'source': '8baaa27bf91851327ba30d6e93b29fbfb5c423fd',
             'correction': '5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e',
@@ -211,7 +211,19 @@ WMS680_CLOSED_CHAIN = {'reviewed_source_commit': 'f2de20008df3b21c1decead0e1051d
             'model': 'gpt-6.1-sol',
             'effort': 'high',
             'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
-                                                                         '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}}]}
+                                                                         '0c7cc8f9f06fad5df0f7f3bd924dde607179a068']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-linux-wrapped-text-and-browser-exit',
+            'source': '0df92673934df8768efabe470baeca6f2f4568af',
+            'correction': '4ed0c391135c95b67879c954195034b9c43d4980',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['0c7cc8f9f06fad5df0f7f3bd924dde607179a068',
+                                                                         '00162dc5c08858803c5a988c75328dab0f00cfdc']}},
+           {'kind': 'exact_fixture_correction',
+            'transform': 'wms680-real-pdf-cell-isolation',
+            'source': '58fb2f240e83f997ee79e87ba1e0dd6cb76ef982',
+            'correction': '535e8a970928e8834147553ad4c0139fcc5f10da',
+            'files': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['00162dc5c08858803c5a988c75328dab0f00cfdc',
+                                                                         '81a83b3794340eadd60abba94594d6ff09d533ae']}}]}
 WMS680_CLOSED_SCOPES = {'3be84bb091712caa2e32226f989e3008e47618a5': {'docs/evidence/WMS-680/acceptance-20261007/baseline-source.json': (None,
                                                                                                                  '2d399ace6c00df72c28843d7e0802687a089e632'),
                                               'docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html': (None,
@@ -239,7 +251,11 @@ WMS680_CLOSED_SCOPES = {'3be84bb091712caa2e32226f989e3008e47618a5': {'docs/evide
  '739bcadf1be4fe92e24af3d30b42f892f858e598': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('11ec2e43dcf3b696288bcaa55d6cd83a454858d8',
                                                                                                  '34f4ef6ca82d72cf65583d6ba6bdcefb689128a6')},
  'f2de20008df3b21c1decead0e1051dbda4a4a08a': {'frontend/src/utils/wms680PrintGeometry.test.ts': ('34f4ef6ca82d72cf65583d6ba6bdcefb689128a6',
-                                                                                                 '0c7cc8f9f06fad5df0f7f3bd924dde607179a068')}}
+                                                                                                 '0c7cc8f9f06fad5df0f7f3bd924dde607179a068')},
+ '4ed0c391135c95b67879c954195034b9c43d4980': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['0c7cc8f9f06fad5df0f7f3bd924dde607179a068',
+                                                                                                 '00162dc5c08858803c5a988c75328dab0f00cfdc']},
+ '535e8a970928e8834147553ad4c0139fcc5f10da': {'frontend/src/utils/wms680PrintGeometry.test.ts': ['00162dc5c08858803c5a988c75328dab0f00cfdc',
+                                                                                                 '81a83b3794340eadd60abba94594d6ff09d533ae']}}
 
 def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", *args], cwd=root, text=True).strip()

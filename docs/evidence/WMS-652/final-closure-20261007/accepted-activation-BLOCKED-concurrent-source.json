@@ -1,0 +1,16 @@
+{
+  "status": "REVIEWED_ACTIVATION_CHECKPOINT_RELEASE_BLOCKED",
+  "reviewed_candidate": "b6c2140d85e7ca5f8b7ede1cb26d30b1744c55a6",
+  "accepted_P": "98978e667bbc305cc08a9b541016fef06686388e",
+  "original_independent_review": "27a33df9abe2e2dd22c67631609a02b98c69664f",
+  "unchanged_review_publication": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+  "review_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6",
+  "activation": "Only exact approved P/R/data fields and resulting protectedhashes; no product/checker logic change",
+  "release_blockers": [
+    "Concurrentmain bootstrap SOURCE9dae/new7paths/27cases mustbe preserved and narrowly integrated thenindependentlyaccepted; no cutoverfromold0151",
+    "Actual419F6 observedPIDfixture defect originaltesterownsfix",
+    "Actual419CDP InvalidInterceptionId concurrentcoordinatorownsfix"
+  ],
+  "final_SOURCE_S": null,
+  "main_etalon_production_mutations": false
+}

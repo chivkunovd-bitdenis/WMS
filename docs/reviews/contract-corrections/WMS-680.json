@@ -36,9 +36,9 @@
         "verdict": "PASS",
         "source_commit": "8baaa27bf91851327ba30d6e93b29fbfb5c423fd",
         "correction_commit": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     }
   ],
@@ -62,9 +62,9 @@
         "verdict": "PASS",
         "source_commit": "1d335e8aead87fc27895a9577253cb8abdf9ca5a",
         "correction_commit": "7ad0aa781d175ef7f4e1d16074a12b47eed655f2",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     },
     {
@@ -86,9 +86,9 @@
         "verdict": "PASS",
         "source_commit": "e8638be207559fee31a069734026cda1d4fcccb4",
         "correction_commit": "11806bd237c48a030a4e0ff49bb12dd90dfe6778",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     },
     {
@@ -110,9 +110,9 @@
         "verdict": "PASS",
         "source_commit": "363e3b58110c61283f44cbb0cfdba5ee227de9aa",
         "correction_commit": "739bcadf1be4fe92e24af3d30b42f892f858e598",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     },
     {
@@ -134,21 +134,21 @@
         "verdict": "PASS",
         "source_commit": "739bcadf1be4fe92e24af3d30b42f892f858e598",
         "correction_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     },
     {
-      "contract_commit": "739bcadf1be4fe92e24af3d30b42f892f858e598",
-      "source_commit": "739bcadf1be4fe92e24af3d30b42f892f858e598",
-      "correction_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
+      "contract_commit": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e",
+      "source_commit": "0df92673934df8768efabe470baeca6f2f4568af",
+      "correction_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
       "files": [
         {
-          "transform": "wms680-numeric-subtable",
+          "transform": "wms680-linux-wrapped-text-and-browser-exit",
           "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
-          "before_blob": "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6",
-          "after_blob": "0c7cc8f9f06fad5df0f7f3bd924dde607179a068"
+          "before_blob": "0c7cc8f9f06fad5df0f7f3bd924dde607179a068",
+          "after_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc"
         }
       ],
       "companion_files": [],
@@ -156,11 +156,59 @@
         "model": "gpt-6.1-sol",
         "effort": "high",
         "verdict": "PASS",
-        "source_commit": "739bcadf1be4fe92e24af3d30b42f892f858e598",
-        "correction_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
-        "evidence": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md",
-        "evidence_commit": "d0de155adcc31a7d33dca43d857a22e49897b981",
-        "evidence_blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"
+        "source_commit": "0df92673934df8768efabe470baeca6f2f4568af",
+        "correction_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
+      }
+    },
+    {
+      "contract_commit": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e",
+      "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+      "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+      "files": [
+        {
+          "transform": "wms680-real-pdf-cell-isolation",
+          "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
+          "before_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc",
+          "after_blob": "81a83b3794340eadd60abba94594d6ff09d533ae"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
+      }
+    },
+    {
+      "contract_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+      "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+      "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+      "files": [
+        {
+          "transform": "wms680-real-pdf-cell-isolation",
+          "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
+          "before_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc",
+          "after_blob": "81a83b3794340eadd60abba94594d6ff09d533ae"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+        "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "evidence_commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "evidence_blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
       }
     }
   ]

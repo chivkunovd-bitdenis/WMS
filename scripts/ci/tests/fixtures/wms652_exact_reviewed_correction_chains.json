@@ -18,10 +18,60 @@
         "frontend/src/screens/shared/MarkingImportDialog.wms658.test.ts"
       ],
       "steps": [
-        {"transform": "wms658-source-label-raster-and-nmid", "source": "6e0926102c6d7e71aee001b1ccda7bc8fc9bdf1b", "correction": "4769712e70ca825dbc8d1f98ea632343e5b25b57", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["9661a123265f1ea75d084fbf1b6da13d34481856", "0a267634279a868660cbc014c6312bbf4cfc7798"], "backend/tests/test_wms658_wb_honest_sign_contract.py": ["9bf03cba6847065ee8b59030aece6f1695b4d22d", "946ec81ef52d7fb888379b327dcd74be8ce52a99"]}, "ancillary": {"docs/requirements/WMS-658.md": ["88a79ede1de989790d4cf814d208f3615420740f", "a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58"]}},
-        {"transform": "wms658-supplier-page-crop", "source": "24fcbdabc5560012e5ac849c8ae229e4ba740d28", "correction": "16a58ac82df16fada0571d249b0827e8900527ad", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["0a267634279a868660cbc014c6312bbf4cfc7798", "ff481b1e693884c103e46624a05807f3120bc040"]}},
-        {"transform": "wms658-actual-220-crop", "source": "f6f382e684fab4d9da291d439a61b452a01666b2", "correction": "ff86e9126c0ac87b02cd0588c17a5884e964a246", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["ff481b1e693884c103e46624a05807f3120bc040", "cee12538b9d752f040edcc2c7a892726d307d68d"]}},
-        {"transform": "wms658-same-cis-layout", "source": "3df33bab79ab27d5612271e351f06f2a5edf17e6", "correction": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd", "files": {"backend/tests/test_wms658_marking_import_contract.py": ["cee12538b9d752f040edcc2c7a892726d307d68d", "6e76bf1d4bcf38ff59341e6d3459346313421e6c"]}}
+        {
+          "transform": "wms658-source-label-raster-and-nmid",
+          "source": "6e0926102c6d7e71aee001b1ccda7bc8fc9bdf1b",
+          "correction": "4769712e70ca825dbc8d1f98ea632343e5b25b57",
+          "files": {
+            "backend/tests/test_wms658_marking_import_contract.py": [
+              "9661a123265f1ea75d084fbf1b6da13d34481856",
+              "0a267634279a868660cbc014c6312bbf4cfc7798"
+            ],
+            "backend/tests/test_wms658_wb_honest_sign_contract.py": [
+              "9bf03cba6847065ee8b59030aece6f1695b4d22d",
+              "946ec81ef52d7fb888379b327dcd74be8ce52a99"
+            ]
+          },
+          "ancillary": {
+            "docs/requirements/WMS-658.md": [
+              "88a79ede1de989790d4cf814d208f3615420740f",
+              "a1625ab8ba3c943cb7d8b7ed89c1db67f777eb58"
+            ]
+          }
+        },
+        {
+          "transform": "wms658-supplier-page-crop",
+          "source": "24fcbdabc5560012e5ac849c8ae229e4ba740d28",
+          "correction": "16a58ac82df16fada0571d249b0827e8900527ad",
+          "files": {
+            "backend/tests/test_wms658_marking_import_contract.py": [
+              "0a267634279a868660cbc014c6312bbf4cfc7798",
+              "ff481b1e693884c103e46624a05807f3120bc040"
+            ]
+          }
+        },
+        {
+          "transform": "wms658-actual-220-crop",
+          "source": "f6f382e684fab4d9da291d439a61b452a01666b2",
+          "correction": "ff86e9126c0ac87b02cd0588c17a5884e964a246",
+          "files": {
+            "backend/tests/test_wms658_marking_import_contract.py": [
+              "ff481b1e693884c103e46624a05807f3120bc040",
+              "cee12538b9d752f040edcc2c7a892726d307d68d"
+            ]
+          }
+        },
+        {
+          "transform": "wms658-same-cis-layout",
+          "source": "3df33bab79ab27d5612271e351f06f2a5edf17e6",
+          "correction": "a9443e3f3ceee39f3dae04d72bc3cf61fc75a1dd",
+          "files": {
+            "backend/tests/test_wms658_marking_import_contract.py": [
+              "cee12538b9d752f040edcc2c7a892726d307d68d",
+              "6e76bf1d4bcf38ff59341e6d3459346313421e6c"
+            ]
+          }
+        }
       ]
     },
     "WMS-681": {
@@ -38,8 +88,36 @@
         "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx"
       ],
       "steps": [
-        {"transform": "wms681-independent-assignments", "source": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d", "correction": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385", "files": {"backend/tests/test_fbs_packing_box.py": ["7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3", "bf92738de529c1ca4882240a0b617df5db82dedd"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4", "c809482c9eb151425e9031e33b06246cb1e6039a"]}},
-        {"transform": "wms681-partial-qr-readback", "source": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4", "correction": "0e39bf4ed8f444f5b00e1287aa27f1161596a101", "files": {"backend/tests/test_fbs_packing_box.py": ["bf92738de529c1ca4882240a0b617df5db82dedd", "1cca9c86a4e50842919d0ca4aec4c57607c0fe7a"], "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": ["c809482c9eb151425e9031e33b06246cb1e6039a", "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3"]}}
+        {
+          "transform": "wms681-independent-assignments",
+          "source": "d3fad344bd35c4ca4b96fbe64ea2c36429fdd41d",
+          "correction": "a4a54b9cc72e7c1cdd242c2b0726e9761cf1f385",
+          "files": {
+            "backend/tests/test_fbs_packing_box.py": [
+              "7f3d8754f68c2da1fd96ecdfb21f92ce1a6297c3",
+              "bf92738de529c1ca4882240a0b617df5db82dedd"
+            ],
+            "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": [
+              "c6647a611da4d6f92d9afe0c3cd8990a0c7b9fc4",
+              "c809482c9eb151425e9031e33b06246cb1e6039a"
+            ]
+          }
+        },
+        {
+          "transform": "wms681-partial-qr-readback",
+          "source": "ba59fedd6f6b0c9557bf7dc46bce32c2625e81a4",
+          "correction": "0e39bf4ed8f444f5b00e1287aa27f1161596a101",
+          "files": {
+            "backend/tests/test_fbs_packing_box.py": [
+              "bf92738de529c1ca4882240a0b617df5db82dedd",
+              "1cca9c86a4e50842919d0ca4aec4c57607c0fe7a"
+            ],
+            "frontend/src/screens/v2/FfFbsSupplyWorkspace.assembly.dom.test.tsx": [
+              "c809482c9eb151425e9031e33b06246cb1e6039a",
+              "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3"
+            ]
+          }
+        }
       ],
       "integration_fixture": {
         "transform": "wms681-integration-assembly-qr-recovery",
@@ -55,22 +133,171 @@
       }
     },
     "WMS-680": {
-      "reviewed_source_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
+      "reviewed_source_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
       "original_contract": "24009478c3a58b558ad8a661d83dc5920108cb00",
-      "final_correction_commit": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
-      "report": {"path": "docs/reviews/WMS-680-frozen-corrections-review-20261007.md", "commit": "d0de155adcc31a7d33dca43d857a22e49897b981", "blob": "e4d18d7879c31d31b4841167173a48f8dc50c9eb"},
-      "owner": {"source": "7015448e255f606ef74b69e04e81f53777a099d5", "correction": "3be84bb091712caa2e32226f989e3008e47618a5", "artifacts": {"docs/evidence/WMS-680/acceptance-20261007/baseline-source.json": [null, "2d399ace6c00df72c28843d7e0802687a089e632"], "docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html": [null, "b507fdd97763f9227137321f32c0b4d5696e984b"], "docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html": [null, "c9a1711a963b8ec88b38ea26fad7f337705888a9"], "docs/requirements/WMS-680.md": ["aad7a41a3ea194fdcf2eb596643a30a0096ac488", "b765c124dc7641ea83a6347fe4b1cc50e648ec4d"]}},
+      "final_correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+      "report": {
+        "path": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+        "commit": "da5b0db7ad48bc6a3f7b7d51371185b133554ce6",
+        "blob": "7f24a11ee73ea224ee37e9f86161212fe786b8a6"
+      },
+      "owner": {
+        "source": "7015448e255f606ef74b69e04e81f53777a099d5",
+        "correction": "3be84bb091712caa2e32226f989e3008e47618a5",
+        "artifacts": {
+          "docs/evidence/WMS-680/acceptance-20261007/baseline-source.json": [
+            null,
+            "2d399ace6c00df72c28843d7e0802687a089e632"
+          ],
+          "docs/evidence/WMS-680/acceptance-20261007/fbo-ozon-long-before-columns.html": [
+            null,
+            "b507fdd97763f9227137321f32c0b4d5696e984b"
+          ],
+          "docs/evidence/WMS-680/acceptance-20261007/fbo-wb-normal-before-columns.html": [
+            null,
+            "c9a1711a963b8ec88b38ea26fad7f337705888a9"
+          ],
+          "docs/requirements/WMS-680.md": [
+            "aad7a41a3ea194fdcf2eb596643a30a0096ac488",
+            "b765c124dc7641ea83a6347fe4b1cc50e648ec4d"
+          ]
+        }
+      },
       "contracts": {
-        "24009478c3a58b558ad8a661d83dc5920108cb00": {"backend/tests/test_wms680_print_payload_contract.py": ["f7510d80221621aa192dacfe0fd0f7837a18385e", "f7510d80221621aa192dacfe0fd0f7837a18385e"], "frontend/src/utils/wms680PrintContract.test.ts": ["c8847911821967052947bd9f90691892188193e1", "799f895bb38acca23867042e7b31c6cba96e7884"]},
-        "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e": {"frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": ["ab978dfabfb1f41076e0a16666e94fa081f3ec21", "299ff644942016a7cee5ee665cbc321ebddbddbc"], "frontend/src/utils/printInboundReceivingSheet.test.ts": ["c4cc01c1726331f4ee5f912606017638ba6aea76", "c4cc01c1726331f4ee5f912606017638ba6aea76"], "frontend/src/utils/printShipmentPackagingSheet.test.ts": ["f59bd4972d9c4a716263b24ab417c74c80377888", "f59bd4972d9c4a716263b24ab417c74c80377888"], "frontend/src/utils/wms680PrintContract.test.ts": ["f3b12dd1617453a445a5624e19c19692c70a4693", "799f895bb38acca23867042e7b31c6cba96e7884"], "frontend/src/utils/wms680PrintGeometry.test.ts": ["11ec2e43dcf3b696288bcaa55d6cd83a454858d8", "0c7cc8f9f06fad5df0f7f3bd924dde607179a068"]},
-        "739bcadf1be4fe92e24af3d30b42f892f858e598": {"frontend/src/utils/wms680PrintGeometry.test.ts": ["34f4ef6ca82d72cf65583d6ba6bdcefb689128a6", "0c7cc8f9f06fad5df0f7f3bd924dde607179a068"]}
+        "24009478c3a58b558ad8a661d83dc5920108cb00": {
+          "backend/tests/test_wms680_print_payload_contract.py": [
+            "f7510d80221621aa192dacfe0fd0f7837a18385e",
+            "f7510d80221621aa192dacfe0fd0f7837a18385e"
+          ],
+          "frontend/src/utils/wms680PrintContract.test.ts": [
+            "c8847911821967052947bd9f90691892188193e1",
+            "799f895bb38acca23867042e7b31c6cba96e7884"
+          ]
+        },
+        "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e": {
+          "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": [
+            "ab978dfabfb1f41076e0a16666e94fa081f3ec21",
+            "299ff644942016a7cee5ee665cbc321ebddbddbc"
+          ],
+          "frontend/src/utils/printInboundReceivingSheet.test.ts": [
+            "c4cc01c1726331f4ee5f912606017638ba6aea76",
+            "c4cc01c1726331f4ee5f912606017638ba6aea76"
+          ],
+          "frontend/src/utils/printShipmentPackagingSheet.test.ts": [
+            "f59bd4972d9c4a716263b24ab417c74c80377888",
+            "f59bd4972d9c4a716263b24ab417c74c80377888"
+          ],
+          "frontend/src/utils/wms680PrintContract.test.ts": [
+            "f3b12dd1617453a445a5624e19c19692c70a4693",
+            "799f895bb38acca23867042e7b31c6cba96e7884"
+          ],
+          "frontend/src/utils/wms680PrintGeometry.test.ts": [
+            "11ec2e43dcf3b696288bcaa55d6cd83a454858d8",
+            "81a83b3794340eadd60abba94594d6ff09d533ae"
+          ]
+        },
+        "739bcadf1be4fe92e24af3d30b42f892f858e598": {
+          "frontend/src/utils/wms680PrintGeometry.test.ts": [
+            "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6",
+            "81a83b3794340eadd60abba94594d6ff09d533ae"
+          ]
+        }
       },
       "steps": [
-        {"kind": "owner_ui_supersession", "source": "8baaa27bf91851327ba30d6e93b29fbfb5c423fd", "correction": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e", "files": {"frontend/src/utils/wms680PrintContract.test.ts": ["c8847911821967052947bd9f90691892188193e1", "f3b12dd1617453a445a5624e19c19692c70a4693"], "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": ["f01723a9ccee9cc4466797875c9d16a79f50a608", "ab978dfabfb1f41076e0a16666e94fa081f3ec21"], "frontend/src/utils/wms680PrintGeometry.test.ts": [null, "11ec2e43dcf3b696288bcaa55d6cd83a454858d8"]}},
-        {"kind": "exact_fixture_correction", "transform": "wms680-size-zero-exact-cells", "source": "1d335e8aead87fc27895a9577253cb8abdf9ca5a", "correction": "7ad0aa781d175ef7f4e1d16074a12b47eed655f2", "files": {"frontend/src/utils/wms680PrintContract.test.ts": ["f3b12dd1617453a445a5624e19c19692c70a4693", "799f895bb38acca23867042e7b31c6cba96e7884"]}},
-        {"kind": "exact_fixture_correction", "transform": "wms680-product-anchor", "source": "e8638be207559fee31a069734026cda1d4fcccb4", "correction": "11806bd237c48a030a4e0ff49bb12dd90dfe6778", "files": {"frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": ["ab978dfabfb1f41076e0a16666e94fa081f3ec21", "299ff644942016a7cee5ee665cbc321ebddbddbc"]}},
-        {"kind": "exact_fixture_correction", "transform": "wms680-safe-filenames", "source": "363e3b58110c61283f44cbb0cfdba5ee227de9aa", "correction": "739bcadf1be4fe92e24af3d30b42f892f858e598", "files": {"frontend/src/utils/wms680PrintGeometry.test.ts": ["11ec2e43dcf3b696288bcaa55d6cd83a454858d8", "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6"]}},
-        {"kind": "additive_bug_coverage", "transform": "wms680-numeric-subtable", "source": "739bcadf1be4fe92e24af3d30b42f892f858e598", "parent": "d300851544c9587d6563462c23a60c3b67d1af12", "correction": "f2de20008df3b21c1decead0e1051dbda4a4a08a", "model": "gpt-6.1-sol", "effort": "high", "files": {"frontend/src/utils/wms680PrintGeometry.test.ts": ["34f4ef6ca82d72cf65583d6ba6bdcefb689128a6", "0c7cc8f9f06fad5df0f7f3bd924dde607179a068"]}}
+        {
+          "kind": "owner_ui_supersession",
+          "source": "8baaa27bf91851327ba30d6e93b29fbfb5c423fd",
+          "correction": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e",
+          "files": {
+            "frontend/src/utils/wms680PrintContract.test.ts": [
+              "c8847911821967052947bd9f90691892188193e1",
+              "f3b12dd1617453a445a5624e19c19692c70a4693"
+            ],
+            "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": [
+              "f01723a9ccee9cc4466797875c9d16a79f50a608",
+              "ab978dfabfb1f41076e0a16666e94fa081f3ec21"
+            ],
+            "frontend/src/utils/wms680PrintGeometry.test.ts": [
+              null,
+              "11ec2e43dcf3b696288bcaa55d6cd83a454858d8"
+            ]
+          }
+        },
+        {
+          "kind": "exact_fixture_correction",
+          "transform": "wms680-size-zero-exact-cells",
+          "source": "1d335e8aead87fc27895a9577253cb8abdf9ca5a",
+          "correction": "7ad0aa781d175ef7f4e1d16074a12b47eed655f2",
+          "files": {
+            "frontend/src/utils/wms680PrintContract.test.ts": [
+              "f3b12dd1617453a445a5624e19c19692c70a4693",
+              "799f895bb38acca23867042e7b31c6cba96e7884"
+            ]
+          }
+        },
+        {
+          "kind": "exact_fixture_correction",
+          "transform": "wms680-product-anchor",
+          "source": "e8638be207559fee31a069734026cda1d4fcccb4",
+          "correction": "11806bd237c48a030a4e0ff49bb12dd90dfe6778",
+          "files": {
+            "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": [
+              "ab978dfabfb1f41076e0a16666e94fa081f3ec21",
+              "299ff644942016a7cee5ee665cbc321ebddbddbc"
+            ]
+          }
+        },
+        {
+          "kind": "exact_fixture_correction",
+          "transform": "wms680-safe-filenames",
+          "source": "363e3b58110c61283f44cbb0cfdba5ee227de9aa",
+          "correction": "739bcadf1be4fe92e24af3d30b42f892f858e598",
+          "files": {
+            "frontend/src/utils/wms680PrintGeometry.test.ts": [
+              "11ec2e43dcf3b696288bcaa55d6cd83a454858d8",
+              "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6"
+            ]
+          }
+        },
+        {
+          "kind": "additive_bug_coverage",
+          "transform": "wms680-numeric-subtable",
+          "source": "739bcadf1be4fe92e24af3d30b42f892f858e598",
+          "parent": "d300851544c9587d6563462c23a60c3b67d1af12",
+          "correction": "f2de20008df3b21c1decead0e1051dbda4a4a08a",
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "files": {
+            "frontend/src/utils/wms680PrintGeometry.test.ts": [
+              "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6",
+              "0c7cc8f9f06fad5df0f7f3bd924dde607179a068"
+            ]
+          }
+        },
+        {
+          "kind": "exact_fixture_correction",
+          "transform": "wms680-linux-wrapped-text-and-browser-exit",
+          "source": "0df92673934df8768efabe470baeca6f2f4568af",
+          "correction": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "files": {
+            "frontend/src/utils/wms680PrintGeometry.test.ts": [
+              "0c7cc8f9f06fad5df0f7f3bd924dde607179a068",
+              "00162dc5c08858803c5a988c75328dab0f00cfdc"
+            ]
+          }
+        },
+        {
+          "kind": "exact_fixture_correction",
+          "transform": "wms680-real-pdf-cell-isolation",
+          "source": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+          "correction": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "files": {
+            "frontend/src/utils/wms680PrintGeometry.test.ts": [
+              "00162dc5c08858803c5a988c75328dab0f00cfdc",
+              "81a83b3794340eadd60abba94594d6ff09d533ae"
+            ]
+          }
+        }
       ]
     }
   }
