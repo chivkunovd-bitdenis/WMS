@@ -48,6 +48,20 @@ describe('WMS-693/697 manual save lifecycle', () => {
     expect(save).toHaveBeenCalledOnce()
   })
 
+  it('cancels a pending manual target when Undo happens before debounce and close', async () => {
+    const save = vi.fn()
+    const f = await fixture(save)
+    await edit(f.input(), '12')
+    const undo = document.querySelector<HTMLButtonElement>('button[data-testid="pick-undo-p-cell:c"]')!
+    expect(undo).toBeTruthy()
+    await act(async () => undo.click())
+    expect(f.input().value).toBe('0')
+    await f.close()
+    await new Promise((resolve) => setTimeout(resolve, 450))
+    expect(save).toHaveBeenCalledOnce()
+    expect(save.mock.calls[0][0]).toMatchObject({ productId: 'p', quantity: 0 })
+  })
+
   it('applies a server refresh received while a conflicting save is still pending', async () => {
     let finish!: () => void
     const save = vi.fn(() => new Promise<void>((resolve) => { finish = resolve }))

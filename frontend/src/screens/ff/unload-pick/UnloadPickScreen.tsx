@@ -370,6 +370,12 @@ export function UnloadPickScreen({
     const key = pickKey(operation.productId, operation.placeKey)
     const place = row.places.find((one) => one.key === operation.placeKey)
     if (!place) return
+    // Undo replaces this source's pending manual target; it must never flush
+    // after the immediate reversal (including when the screen closes).
+    const timer = pendingSetPicked.current.get(key)
+    if (timer) clearTimeout(timer)
+    pendingSetPicked.current.delete(key)
+    pendingManualEdits.current.delete(key)
     const nextQuantity = Math.max(0, place.picked - operation.qty)
     setPicked((current) => ({ ...current, [key]: nextQuantity }))
     savePicked(row.product.id, place, nextQuantity)
