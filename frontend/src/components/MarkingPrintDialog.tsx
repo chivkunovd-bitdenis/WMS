@@ -128,7 +128,21 @@ type FbsTapeContext = {
   markingShortage?: number
   includeOrderQr: boolean
   print: (args: { layout: PrintLayout; allowPartial: boolean; reprint: boolean }) => Promise<FbsTapePrintResult>
-  confirmQrApplied: (asset: FbsTapeAsset) => Promise<void>
+  confirmQrApplied: (asset: FbsTapeAsset, idempotencyKey: string) => Promise<void>
+}
+
+type PendingFbsQrAcknowledgement = {
+  asset: FbsTapeAsset
+  idempotencyKey: string
+}
+
+type PendingFbsQrAcknowledgements = {
+  context: FbsTapeContext
+  remaining: PendingFbsQrAcknowledgement[]
+}
+
+function createFbsQrAcknowledgementKey(): string {
+  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
 }
 
 export function withSelectedFbsTapeBarcode(
@@ -447,6 +461,8 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     total: number
   } | null>(null)
   const fbsTapeBuildAbortRef = useRef<AbortController | null>(null)
+  const pendingFbsQrAcknowledgementsRef = useRef<PendingFbsQrAcknowledgements | null>(null)
+  const [pendingFbsQrAcknowledgementCount, setPendingFbsQrAcknowledgementCount] = useState(0)
 
   const requiresHonestSign = ctx?.requiresHonestSign ?? true
   const fbsTapeMode = Boolean(ctx?.fbsTape)
@@ -536,6 +552,13 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     fbsTapeBuildAbortRef.current = null
     setFbsTapeBuildProgress(null)
   }, [open])
+
+  useEffect(() => {
+    // Closing or opening a new dialog context starts a new explicit action.
+    // Retries within the same context retain the original asset bindings.
+    pendingFbsQrAcknowledgementsRef.current = null
+    setPendingFbsQrAcknowledgementCount(0)
+  }, [open, ctx?.fbsTape])
 
   useEffect(() => {
     if (!open || !ctx?.token || !requiresHonestSign || effectiveReprint || fbsTapeMode) {
@@ -943,6 +966,42 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
     return true
   }
 
+  const confirmPendingFbsQrAcknowledgements = async (pending: PendingFbsQrAcknowledgements) => {
+    while (pending.remaining.length > 0) {
+      if (pendingFbsQrAcknowledgementsRef.current !== pending) {
+        throw new Error('Контекст ручной печати изменился. Откройте печать заново.')
+      }
+      const acknowledgement = pending.remaining[0]
+      if (!acknowledgement) return
+      // Remove an asset only after the server confirms it. If the response is
+      // lost, retrying this same idempotent asset acknowledgement is safe.
+      await pending.context.confirmQrApplied(acknowledgement.asset, acknowledgement.idempotencyKey)
+      pending.remaining = pending.remaining.slice(1)
+      setPendingFbsQrAcknowledgementCount(pending.remaining.length)
+    }
+    if (pendingFbsQrAcknowledgementsRef.current === pending) {
+      pendingFbsQrAcknowledgementsRef.current = null
+    }
+    setPendingFbsQrAcknowledgementCount(0)
+  }
+
+  const retryPendingFbsQrAcknowledgements = async () => {
+    const pending = pendingFbsQrAcknowledgementsRef.current
+    if (!pending || pending.context !== ctx?.fbsTape || !ctx) return
+    onBusyChange(true)
+    setError(null)
+    try {
+      await confirmPendingFbsQrAcknowledgements(pending)
+      ctx.onPrinted()
+      pending.context.onCompleted?.()
+      onClose()
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Не удалось подтвердить QR заказа.')
+    } finally {
+      onBusyChange(false)
+    }
+  }
+
   const printFbsTape = async ({
     layout: printLayout,
     size,
@@ -1099,10 +1158,18 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         setFbsTapeBuildProgress(null)
       }
       await printTapeSections(sections, size)
-      for (const asset of builtOrders.flatMap((order) =>
-        order.qrAssetToConfirm ? [order.qrAssetToConfirm] : [],
-      )) {
-        await ctx.fbsTape.confirmQrApplied(asset)
+      const pending = {
+        context: ctx.fbsTape,
+        remaining: builtOrders.flatMap((order) =>
+          order.qrAssetToConfirm
+            ? [{ asset: order.qrAssetToConfirm, idempotencyKey: createFbsQrAcknowledgementKey() }]
+            : [],
+        ),
+      }
+      if (pending.remaining.length > 0) {
+        pendingFbsQrAcknowledgementsRef.current = pending
+        setPendingFbsQrAcknowledgementCount(pending.remaining.length)
+        await confirmPendingFbsQrAcknowledgements(pending)
       }
       ctx.onPrinted()
 
@@ -2124,14 +2191,25 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
               >
                 {fbsTapeBuildProgress ? 'Отменить сборку' : 'Отмена'}
               </Button>
-              <Button
-                variant="contained"
-                disabled={printDisabled}
-                onClick={() => void handlePrint({ forceReprint: forceReprintOnConfirm })}
-                data-testid="marking-print-confirm"
-              >
-                {effectiveReprint ? 'Перепечатать' : 'Печать'}
-              </Button>
+              {pendingFbsQrAcknowledgementCount > 0 ? (
+                <Button
+                  variant="contained"
+                  disabled={busy}
+                  onClick={() => void retryPendingFbsQrAcknowledgements()}
+                  data-testid="marking-print-retry-qr-ack"
+                >
+                  Повторить подтверждение QR
+                </Button>
+              ) : (
+                <Button
+                  variant="contained"
+                  disabled={printDisabled}
+                  onClick={() => void handlePrint({ forceReprint: forceReprintOnConfirm })}
+                  data-testid="marking-print-confirm"
+                >
+                  {effectiveReprint ? 'Перепечатать' : 'Печать'}
+                </Button>
+              )}
             </>
           )}
         </DialogActions>
