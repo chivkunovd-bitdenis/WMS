@@ -134,27 +134,63 @@ def load_approved_bootstrap():
     return bootstrap_pin(json_object(raw))
 
 
+def verified_policy_snapshot(get, root, ref, rows, cache):
+    data, _ = policy(get, root, ref)
+    for name, digest in data['files'].items():
+        row = rows.get(name)
+        if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
+            raise ValueError('Protected source file missing, non-blob or symlink')
+        oid = sha(row['sha'])
+        if oid not in cache:
+            result = get(f'{root}/git/blobs/{oid}')
+            if result.get('encoding') != 'base64':
+                raise ValueError('Protected Git blob unavailable')
+            raw = base64.b64decode(''.join(result['content'].split()), validate=True)
+            if hashlib.sha1(f'blob {len(raw)}\0'.encode() + raw).hexdigest() != oid:
+                raise ValueError('Protected Git blob identity mismatch')
+            cache[oid] = hashlib.sha256(raw).hexdigest()
+        if cache[oid] != digest:
+            raise ValueError('Trusted protected digest does not match source bytes')
+    return data
+
+
 def baseline_policy(get, root, base, approved_bootstrap):
     if approved_bootstrap is None:
-        # Preserve the default refusal if baseline contents are unavailable.
         data, _ = policy(get, root, base)
         return data, tree(get, root, base), None
     baseline_tree = tree(get, root, base)
-    ref, source = base, None
-    if POLICY_PATH not in baseline_tree:
-        pin = bootstrap_pin(approved_bootstrap)
-        if pin['base_sha'] != base:
-            raise ValueError('Bootstrap is not approved for this exact PR base')
-        ref = source = pin['source_sha']
-        baseline_tree = tree(get, root, ref)
-    row = baseline_tree.get(POLICY_PATH)
+    pin = bootstrap_pin(approved_bootstrap)
+    has_policy = POLICY_PATH in baseline_tree
+    if has_policy and pin['base_sha'] != base:
+        data, _ = policy(get, root, base)
+        return data, baseline_tree, None
+    if pin['base_sha'] != base:
+        raise ValueError('Bootstrap is not approved for this exact PR base')
+    cache = {}
+    previous = None
+    if has_policy:
+        row = baseline_tree.get(POLICY_PATH)
+        if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
+            raise ValueError('Baseline policy must exist as a regular Git blob')
+        previous = verified_policy_snapshot(get, root, base, baseline_tree, cache)
+    source = pin['source_sha']
+    source_tree = tree(get, root, source)
+    row = source_tree.get(POLICY_PATH)
     if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
         raise ValueError('Baseline policy must exist as a regular Git blob')
     sha(row['sha'])
-    # Existing BASE policy always wins. Its corruption/API error never selects
-    # the seed: fallback requires prior absence in the full BASE tree above.
-    data, _ = policy(get, root, ref)
-    return data, baseline_tree, source
+    if not has_policy:
+        data, _ = policy(get, root, source)
+        return data, source_tree, source
+    data = verified_policy_snapshot(get, root, source, source_tree, cache)
+    if not set(previous['files']).issubset(data['files']):
+        raise ValueError('Reviewed source removed a protected baseline path')
+    for name, suite in previous['suites'].items():
+        current = data['suites'].get(name)
+        if (current is None or any(current[key] != suite[key] for key in ('report', 'format', 'exact'))
+                or not set(suite['cases']).issubset(current['cases'])):
+            raise ValueError('Reviewed source changed a protected execution contract')
+    return data, source_tree, source
 
 
 def pages(get, path, key, query=None):
