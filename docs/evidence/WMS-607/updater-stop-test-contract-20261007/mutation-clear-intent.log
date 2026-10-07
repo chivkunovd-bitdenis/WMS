@@ -1,0 +1,15 @@
+test_successful_owned_stop_restores_previous_and_preserves_journal (__main__.RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal) ... FAIL
+
+======================================================================
+FAIL: test_successful_owned_stop_restores_previous_and_preserves_journal (__main__.RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 160, in test_successful_owned_stop_restores_previous_and_preserves_journal
+    self.assertEqual(actual['transaction'], 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0
+
+----------------------------------------------------------------------
+Ran 1 test in 0.125s
+
+FAILED (failures=1)

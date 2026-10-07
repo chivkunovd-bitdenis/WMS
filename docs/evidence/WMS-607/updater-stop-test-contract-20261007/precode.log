@@ -1,0 +1,33 @@
+test_foreign_owner_not_signaled_existing_application_recovery_preserved (__main__.RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved) ... ok
+test_owned_TERM_error_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_error_retains_target_and_recovery) ... FAIL
+test_owned_TERM_success_survivor_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_success_survivor_retains_target_and_recovery) ... FAIL
+test_successful_owned_stop_restores_previous_and_preserves_journal (__main__.RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal) ... ok
+
+======================================================================
+FAIL: test_owned_TERM_error_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_error_retains_target_and_recovery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 149, in test_owned_TERM_error_retains_target_and_recovery
+    self.assert_owned_stop_failure('term_error')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 143, in assert_owned_stop_failure
+    self.assertTrue(all(checks.values()), json.dumps(checks, sort_keys=True))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : {"app_unchanged": false, "backup_unchanged": true, "intent_unchanged": false, "no_target_rename": true, "not_misreported_foreign": false, "state_unchanged": true, "transaction_retained": false, "truthful_owned_stop_failure": false, "work/previous_unchanged": false}
+
+======================================================================
+FAIL: test_owned_TERM_success_survivor_retains_target_and_recovery (__main__.RollbackStopContract.test_owned_TERM_success_survivor_retains_target_and_recovery)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 146, in test_owned_TERM_success_survivor_retains_target_and_recovery
+    self.assert_owned_stop_failure('survives')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 143, in assert_owned_stop_failure
+    self.assertTrue(all(checks.values()), json.dumps(checks, sort_keys=True))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : {"app_unchanged": false, "backup_unchanged": true, "intent_unchanged": false, "no_target_rename": true, "not_misreported_foreign": false, "state_unchanged": true, "transaction_retained": false, "truthful_owned_stop_failure": true, "work/previous_unchanged": false}
+
+----------------------------------------------------------------------
+Ran 4 tests in 0.616s
+
+FAILED (failures=2)

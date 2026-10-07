@@ -1,0 +1,136 @@
+{
+  "base": "6232cf29765f1b25466e96919ee7840bf5874c62",
+  "old_frozen_contract": "a40bf5b9a2f833a16cb9ff8c941c46c02a0b9d72",
+  "updater": {
+    "path": "tools/print-agent/update_macos_direct.sh",
+    "git_blob": "c40888ff857f46dd1b611d9b096d4f3c3a9346b9",
+    "mode": "100755",
+    "sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a"
+  },
+  "test": {
+    "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+    "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+  },
+  "xml_ids": [
+    "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+    "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+    "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+    "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+  ],
+  "precode": {
+    "total": 4,
+    "PASS": 2,
+    "target_behavior_FAIL": 2,
+    "ERROR": 0,
+    "SKIP": 0,
+    "native_runner_exit": 1,
+    "cases": [
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "assertion": "PASS",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "assertion": "FAIL",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "assertion": "FAIL",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal",
+        "assertion": "PASS",
+        "native_rollback_exit": 0,
+        "process_alive": false,
+        "transaction": 0,
+        "intent_unchanged": false
+      }
+    ]
+  },
+  "frozen_28_paths_unchanged": [
+    "docs/evidence/WMS-607/updater-test-contract-20261007/README.md",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/contract.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/harness-development-error.log",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/manifest.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutant-journal/test_preservation_actual_public_and_current_journal_replay.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutant-metadata/test_preservation_actual_direct_build_metadata.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-control.py",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-journal.log",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-journal.xml",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-metadata.log",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-metadata.xml",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-result.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode.log",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode.xml",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_preservation_actual_direct_build_metadata.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_preservation_actual_public_and_current_journal_replay.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/source-checks.json",
+    "docs/evidence/WMS-607/updater-test-contract-20261007/source-probe.py",
+    "tools/print-agent/test_macos_direct_updater_contract.py"
+  ],
+  "requirements_unchanged": true,
+  "copy_controls": {
+    "tracked_source_unchanged": true,
+    "temporary_copies_removed": true,
+    "controls": [
+      {
+        "name": "clear-intent",
+        "case": "RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal",
+        "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+        "copy_sha256": "c4a6f64b60d23a8bcd568c776476f3f11e558193880012ddfd6a6656700876c8",
+        "edits": [
+          [
+            "    clear_transaction\n",
+            "    : # COPY: omit successful recovery finalization\n"
+          ]
+        ],
+        "native_exit": 1,
+        "assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      },
+      {
+        "name": "foreign-ownership",
+        "case": "RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+        "copy_sha256": "2a063d39c8582d374448a6d62a1990a2300173aa00bd4eb290339c7d43e8aa95",
+        "edits": [
+          [
+            "    process_matches \"$pid\" || return 2\n",
+            "    : # COPY: ignore owner identity\n"
+          ],
+          [
+            "    # Recheck immediately before TERM. No blanket process-name kill or forced kill.\n    process_matches \"$pid\" || return 1\n",
+            "    : # COPY: ignore pre-TERM ownership recheck\n"
+          ]
+        ],
+        "native_exit": 1,
+        "assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      }
+    ]
+  },
+  "product_source_unchanged": true
+}
