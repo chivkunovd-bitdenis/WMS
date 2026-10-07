@@ -100,9 +100,9 @@ class LlmCfg:
                 "mockup": "sonnet",
                 "frontend": "sonnet",
             },
-            # WMS-676: все новые этапы выполняет Sol 6.1, включая отдельное ревью.
+            # WMS-676: рабочие этапы Sol 6.1; независимое ревью строго Astra high.
             "codex": {
-                role: "gpt-6.1-sol"
+                role: "gpt-6-astra" if role == "review" else "gpt-6.1-sol"
                 for role in ("filter", "routine", "analyst", "frontend", "mockup", "review")
             },
         }
@@ -118,7 +118,12 @@ class AgentCfg:
     enabled: bool = False
     owner_model: str = "gpt-6.1-sol"
     owner_provider: str = "codex"
-    context_limit_tokens: int = 120_000
+    context_limit_tokens: int = 250_000
+    visible_moderator: bool = False
+    moderator_thread_id: str = ""
+    history_dir: str = ""
+    intake_only: bool = False
+    client_replies_enabled: bool = False
     hourly_interval_sec: int = 3600
     timezone: str = "Asia/Tbilisi"
 

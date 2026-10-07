@@ -93,6 +93,9 @@ class Agent:
 
     # ---- запуск ----------------------------------------------------------------------
     def startup(self) -> None:
+        if self.cfg.agent.intake_only:
+            self.store.kv_set("heartbeat", self.clock())
+            return
         recover_after_restart(self.store, self.cfg)
         if self.pipe.agent is not None:
             self.pipe.agent.recover_after_restart()
@@ -178,6 +181,9 @@ class Agent:
             except TelegramError as exc:
                 log.warning("telegram poll failed: %s", exc.code)
                 time.sleep(min(5, tg_timeout))
+        if self.cfg.agent.intake_only:
+            self.store.kv_set("heartbeat", self.clock())
+            return
         if now - self.last_form_poll >= self.cfg.wms.poll_interval_sec:
             self.last_form_poll = now
             before = self.store.row("SELECT COUNT(*) AS n FROM tickets WHERE kind='form'")
