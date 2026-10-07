@@ -1,0 +1,26 @@
+{
+  "commit": "c343156e9216fcb46f60717b76b69bbf2995b214",
+  "chat_id": -1004441620578,
+  "mention": "@AVitaliy95",
+  "documents": [
+    {
+      "filename": "WMS Вывод КИЗ из оборота.docx",
+      "sha256": "27c2c3dd4279387ec835c3dd0b057df89847d713f314aa587b5cf5017e4f28d1",
+      "outbox_key": "WMS517-universal-guides-0-27c2c3dd4279387e",
+      "status": "sent",
+      "message_id": "907",
+      "attempts": 1,
+      "sent_at": "2026-10-07T11:38:29.312130+00:00"
+    },
+    {
+      "filename": "WMS Запуск помощника на Mac.docx",
+      "sha256": "500022a65a493a9a3965eb2d0adf8e387ded8d769f75dae6408d9b45ae70b499",
+      "outbox_key": "WMS517-universal-guides-1-500022a65a493a9a",
+      "status": "sent",
+      "message_id": "908",
+      "attempts": 1,
+      "sent_at": "2026-10-07T11:38:29.843865+00:00"
+    }
+  ],
+  "chat_title": "ВМС- Короб💵"
+}
