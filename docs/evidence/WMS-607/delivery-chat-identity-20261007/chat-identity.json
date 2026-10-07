@@ -1,0 +1,20 @@
+{
+  "checked_at": "2026-10-07T06:35:42.557432+00:00",
+  "owner_binding_message": {
+    "source": "telegram",
+    "chat_id": -5414355172,
+    "msg_id": "161",
+    "role": "bind",
+    "author_id": "689889703",
+    "author_name": "владелец",
+    "ts": 1791296355.0,
+    "text": "@wms_korob_support_bot \nЭто ФФ АртМакс"
+  },
+  "getChat": {
+    "id": -5414355172,
+    "type": "group",
+    "title": "Короб ВМС - ArtMaks",
+    "username": null
+  },
+  "messages_sent": 0
+}
