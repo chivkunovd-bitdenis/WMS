@@ -1,0 +1,107 @@
+{
+  "source": "90744e4b8dde3cc69a951269c00f6f1daa0a4d00",
+  "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "product_reference": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "commands": [
+    {
+      "name": "ruff",
+      "cwd": "backend",
+      "argv": [
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/ruff",
+        "check",
+        "."
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.152,
+      "report": "ruff.log"
+    },
+    {
+      "name": "mypy",
+      "cwd": "backend",
+      "argv": [
+        "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/mypy",
+        "."
+      ],
+      "exit": 0,
+      "elapsed_seconds": 1.256,
+      "report": "mypy.log"
+    },
+    {
+      "name": "backlog",
+      "cwd": ".",
+      "argv": [
+        "./scripts/ci/check-backlog-ref.sh",
+        "4b298efc95be7b4b6b7fe5665be9f3671f1fe747"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.437,
+      "report": "backlog.log"
+    },
+    {
+      "name": "documents",
+      "cwd": ".",
+      "argv": [
+        "python3",
+        "scripts/ci/check_task_documents.py",
+        "4b298efc95be7b4b6b7fe5665be9f3671f1fe747"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 86.512,
+      "report": "documents.log"
+    },
+    {
+      "name": "scope",
+      "cwd": ".",
+      "argv": [
+        "python3",
+        "scripts/ci/product_scope.py",
+        "--root",
+        ".",
+        "--trusted-ref",
+        "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.395,
+      "report": "scope.log"
+    },
+    {
+      "name": "integrity",
+      "cwd": ".",
+      "argv": [
+        "python3",
+        "scripts/ci/process_contracts.py",
+        "--base",
+        "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+        "--bootstrap"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.263,
+      "report": "integrity.log"
+    },
+    {
+      "name": "legacy-guards",
+      "cwd": ".",
+      "argv": [
+        "python3",
+        "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-process-gates/docs/evidence/WMS-652/final-batch-preflight-20261007/trusted-base-guard-checker.py",
+        "--root",
+        ".",
+        "--base",
+        "4b298efc95be7b4b6b7fe5665be9f3671f1fe747"
+      ],
+      "exit": 0,
+      "elapsed_seconds": 0.587,
+      "report": "legacy-guards.log"
+    }
+  ],
+  "sha256": {
+    "documents.log": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+    "integrity.log": "4fc4dda439964d6bd5d3d85c7a2bd605b93f535166f8d80ed1fcb45bd66ef7ad",
+    "trusted-base-guard-checker.py": "587e87b4a289b9ea808bdb14de475bc009490e4da6c69da69ecff7558d3f2b6f",
+    "legacy-guards.log": "bf8de230c21afaad0f343678014fe3088d850fc41db32f3561f09cb83236cbe3",
+    "scope.log": "eab1e9260172818aa5910e02abda069cdfbcb41f55f4a399151144cfcc352b5e",
+    "mypy.log": "7b88c3bba484f804c624ac1951bcec1a174f82253ddf5a2dc46be7faebe231cc",
+    "ruff.log": "82b3e6a6c090a57601d22943bd23fca9218d1031dbe5a7b754092f9a156b4f18",
+    "backlog.log": "3e69867617fbaa6a4575c73685cfa17765141f4d1e2a3ece3a10ea983c27929d"
+  }
+}
