@@ -770,6 +770,7 @@ class FbsSupplyDeliverBody(BaseModel):
 class FbsWorkspaceProductOut(FbsWorklistProductOut):
     packaging_instructions: str | None
     has_packaging_instructions: bool
+    requires_honest_sign: bool
 
 
 class FbsWorkspaceOrderOut(FbsWorklistOrderOut):

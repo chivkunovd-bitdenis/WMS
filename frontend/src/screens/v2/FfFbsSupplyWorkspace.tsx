@@ -1194,7 +1194,7 @@ export function FfFbsSupplyWorkspace({
     if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
     // Manual printing needs the task formerly created by the removed Start button.
-    const prepare = !assemblyFrame && !workspace.supply.packaging_task_id
+    const prepare = !workspace.supply.packaging_task_id
       && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
       && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
     if (!missing.length && !prepare) return
@@ -1210,7 +1210,32 @@ export function FfFbsSupplyWorkspace({
       else void load(true)
       if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
     }).catch((cause: unknown) => {
-      if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      if (!write.isCurrent()) return
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+      // The failed background request is deliberately not retried automatically.
+      // Keep it attached to this supply and retry the same finite prepare sequence
+      // only after the operator presses the existing Alert action.
+      const operation = async () => {
+        const retryBatch = missing.length
+          ? await fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+            kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
+          })
+          : null
+        const refreshed = await fetchFbsWorkspace(token, authHeaders, workspace.supply.id)
+        const next = prepare && !refreshed.supply.packaging_task_id
+          ? await startFbsSupplyWork(token, authHeaders, workspace.supply.id)
+          : refreshed
+        if (retryBatch?.order_errors.length) {
+          setError(retryBatch.order_errors.map((item) => item.message).join(' '))
+        }
+        return next
+      }
+      const success = ''
+      const onError = undefined
+      const onSuccess = undefined
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(operation, success, onError, onSuccess)
+      })
     })
   }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
 
@@ -2801,7 +2826,11 @@ export function FfFbsSupplyWorkspace({
       return order.metadata.states.some((state) => state.kind === 'sgtin' && Boolean(state.value_tail))
     }
     const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
-    return Boolean(line?.requires_honest_sign || order.metadata.required.includes('sgtin'))
+    return Boolean(
+      order.product.requires_honest_sign
+      || line?.requires_honest_sign
+      || order.metadata.required.includes('sgtin'),
+    )
   }
 
   const markingAvailableForOrders = (orders: Array<FbsWorkspace['orders'][number]>) => {
