@@ -1,0 +1,242 @@
+{
+  "acceptance_source": "d5a3d5391c6a030a4d075bf18cea00c09c2ec178",
+  "analyst_session": "01a11390-1014-76a0-9302-fbe0fd46ed1f",
+  "original_WMS652_analyst_unavailable_replacement": true,
+  "independent_review_commit": "e70b2f89b00d4f656a0c61029d1fe1f4eb95c0ee",
+  "review_import_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
+  "review_artifact_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e",
+  "reviewed_source": "3867d9e74cce3807b5e719c3f2c912fc0cfbd8d6",
+  "protected_tree_identical_to_reviewed": true,
+  "accepted_PRODUCT_reference_unchanged": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "APP_equal_PRODUCT": true,
+  "registry": {
+    "files": 238,
+    "suites": 22,
+    "IDs": 1192,
+    "backend_fbs": 627,
+    "modes_from_independent_proof": {
+      "100644": 230,
+      "100755": 8
+    },
+    "policy_sha256": "58a95dc526e15dff10999925d33f8ed935c2100b6231f0bfb70ab2b7985ed6e8",
+    "old233_files_1184_IDs_retained": true,
+    "review_old235_1186_retained": true
+  },
+  "C69_frozen_contract": "8d16fca4c7d16cc97ae9fe15608708563bb5d243",
+  "C70_frozen_contract": "937babc754f1e719ef7d69c48316a50960c02dce",
+  "C69_test_refs": [
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+    "backend/tests/test_wms662_batch_pid_snapshot_contract.py::test_live_cycle_observation_after_pid_change_uses_current_writer_connections"
+  ],
+  "C70_test_refs": [
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+    "backend/tests/test_wms662_exact_fixture_pairs_contract.py::test_missing_changed_review_or_rebound_source_remains_rejected"
+  ],
+  "C70_exact_six_XML_IDs": [
+    "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+    "tests.test_wms662_exact_fixture_pairs_contract::test_missing_changed_review_or_rebound_source_remains_rejected"
+  ],
+  "saved_GREEN_XML": {
+    "docs/evidence/WMS-652/batch-pid-fixture-developer-20261007/targeted-green.xml": {
+      "sha256": "ed99fd1354051673430a5f481c60c6062647575325bf321e7d626cc9d37159b2",
+      "cases": [
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_first_proven_wait_writer_snapshot_survives_later_pooled_pid_reuse",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_batch_pid_snapshot_contract::test_live_cycle_observation_after_pid_change_uses_current_writer_connections",
+          "status": "pass"
+        }
+      ]
+    },
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/targeted-green.xml": {
+      "sha256": "2fdf7e735ef61bb902fa817f3d7feca975e11c83873fffd833eabf536f9ca8c1",
+      "cases": [
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[legacy-format]",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_exact_historical_fixture_pair_is_accepted[batch-pid]",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_wrong_task_path_transform_and_blob_pairs_remain_rejected",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob",
+          "status": "pass"
+        },
+        {
+          "id": "tests.test_wms662_exact_fixture_pairs_contract::test_missing_changed_review_or_rebound_source_remains_rejected",
+          "status": "pass"
+        }
+      ]
+    }
+  },
+  "ledger_commit": "353b711dd10297ae86f9cd8184de52d99c33df5a",
+  "actual_ledger_matches_independently_approved_template_with_real_import_binding": true,
+  "owner_supersessions_retained": true,
+  "both_exact_fixture_corrections": [
+    {
+      "contract_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "source_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+      "correction_commit": "5feca959614667eb95e56a85e7b94efa497feeff",
+      "files": [
+        {
+          "transform": "wms662-live-delivery-test-format",
+          "path": "backend/tests/test_wms662_live_delivery_substatuses.py",
+          "before_blob": "a6fc67e70364b0c84e9d2d41d734cd5af1cd61b4",
+          "after_blob": "cefb7d8ac635c3da443a6f623c2fef4a1ff75850"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "c466c65b850dd87481be5da88b99bcfaa4087414",
+        "correction_commit": "5feca959614667eb95e56a85e7b94efa497feeff",
+        "evidence": "docs/reviews/wms652-batch-exact-fixture-review-20261007.md",
+        "evidence_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
+        "evidence_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e"
+      }
+    },
+    {
+      "contract_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+      "correction_commit": "466178698fc47d4eadecc611eeb6039c475da58a",
+      "files": [
+        {
+          "transform": "wms662-batch-first-wait-pid-snapshot",
+          "path": "backend/tests/test_wms662_batch_handoff_lock_order.py",
+          "before_blob": "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+          "after_blob": "03d744d54222dc6ee13014d1f378bf07e6eb4e8a"
+        }
+      ],
+      "companion_files": [],
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "2006171f0feae5513f887b471125ecae1a96c2ae",
+        "correction_commit": "466178698fc47d4eadecc611eeb6039c475da58a",
+        "evidence": "docs/reviews/wms652-batch-exact-fixture-review-20261007.md",
+        "evidence_commit": "07b49705462eeb2f4da934b1a946afe751a82b43",
+        "evidence_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e"
+      }
+    }
+  ],
+  "integrator_document_gate_on_353_BASE4b": "PASS per explicit handoff; not rerun by analyst",
+  "native_PG": {
+    "run": 37563300572,
+    "attempt": 1,
+    "source": "b568bfdddd8b106799428ce81451b406ffe9860b",
+    "native_command_outcomes": 16,
+    "all_exit0": true,
+    "required_PG_PASS": 37,
+    "native_Linux_PASS": 30,
+    "new_SOURCE_fullCI": false,
+    "batch_writers": [
+      219,
+      209
+    ],
+    "steady_writers": [
+      225,
+      224
+    ]
+  },
+  "latest_full_CI": {
+    "run": 37561608930,
+    "attempt": 1,
+    "head": "a09e34fc7ec3dcfbdceeaf4916a8535fcbffc8ed",
+    "tested_merge": "4a118aea00ec3995d98f70d337245260b291ca7f",
+    "base": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "tree": "fc3e2a129659480df4c653873da4495199e0abba",
+    "conclusion": "failure",
+    "elapsed_seconds": 779.0,
+    "collection_count": 4635,
+    "collection_disjoint_union": true,
+    "xml_case_disjoint_union": true,
+    "xml_statuses": {
+      "passed": 4437,
+      "skipped": 198
+    },
+    "required_fbs": {
+      "passed": 619,
+      "skipped": 0,
+      "failed": 0
+    },
+    "historical_sqlite_case": "passed",
+    "new_stock_native_four": {
+      "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once": "passed",
+      "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches": "passed",
+      "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch": "passed",
+      "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit": "passed"
+    },
+    "shards": {
+      "1": {
+        "counts": {
+          "passed": 2218,
+          "skipped": 99
+        },
+        "selected": 2317,
+        "junit_sha256": "b1d0183dbdc80c61dfcb22c6d16fff1f238a9c3165883f38d59839860723dfac",
+        "receipt_sha256": "39bdb0c0a31518ace49c4b96c93620018ae189e65729ec2b0743ab85a1ff21ed"
+      },
+      "0": {
+        "counts": {
+          "passed": 2219,
+          "skipped": 99
+        },
+        "selected": 2318,
+        "junit_sha256": "92b54b54bd6cd14fa091f3cbd0bd38818c5e0ffe1c4892b1737ab778843347e8",
+        "receipt_sha256": "2e6b8c8b465afa0ab5ff9c9ea7af29d7f5a1791cc8f6fdcd66b4532bb6573ad3"
+      }
+    },
+    "mandatory_pg": "batch harness FAIL; remaining steps NOT_EXECUTED",
+    "process_proof": "SKIPPED",
+    "latest_process_integrity": "FAILURE 02:35:04UTC",
+    "limitations": [
+      "198 ordinary XML skips are not mandatory PG passes",
+      "12m59 failed run does not achieve successful timing acceptance",
+      "Historical SQLite owner remains UNKNOWN despite current full test PASS"
+    ]
+  },
+  "input_sha256": {
+    "docs/reviews/wms652-batch-exact-fixture-review-20261007.md": "66d48340b6cc95f91d06e603eaee2835b9c93047443789698690e910583102d7",
+    "docs/evidence/WMS-652/batch-exact-pair-review-20261007/proof.json": "c69506f95ff29f3474c7fcf18095e304ef176d935c985a377e6778cdd9333043",
+    "docs/reviews/contract-corrections/WMS-662.json": "9d6696d879469cf1ba7adb440df859ecddb8c3314bddbf5b0ea17e9d63b7d039",
+    "docs/evidence/WMS-652/all-pg-comparison-37563300572/actual-command-outcomes.json": "e5dff7be1c174defa9435ed4071ae40b46cb0684c7476ceca2c5b2d14dd8015b",
+    "docs/evidence/WMS-652/all-pg-comparison-37563300572/verified-raw-reports.json": "eb69b3812d8cbad75d182a77e759d48876d615818d930c3694615308009ac4d6",
+    "docs/evidence/WMS-652/common-ci-37561608930/backend-outcomes.json": "6116d117a85862d07f9049d1ce4e76b9da77ab7b75918943a89a124c23c2f2a7",
+    "docs/evidence/WMS-652/batch-pid-test-contract-20261007/contract.json": "e24438f087698ac1ab6b5d42f9dc1fec3ec70e6f780e30208fe5ddb607dc9166",
+    "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/contract.json": "94bf4c17813b432c2e78d17009478d117068f4e5a69bf3daf9136b4467482985"
+  },
+  "software_acceptance": "PASS bounded PID fixture/exact pairs/ledger and saved native PG effectiveness",
+  "final_SOURCE_pin_approval": false,
+  "successful_R51_C65_timing_goal_proven": false,
+  "release_accepted": false,
+  "historical_SQLite_lock_owner": "UNKNOWN",
+  "new_test_build_browser_CI_runs": [],
+  "document_scope_preservation": {
+    "backlog_before_sha256": "6ec7523d8b1c66bfc4168db76d6c1c9ea0236d62831d63fa0cf54c727aee2f6c",
+    "backlog_after_sha256": "a7df5d1b30abe0425011ce4d881cf50c903fd5ef4b44ebc58f9279a36330d496",
+    "remove_only652_and662_insertions_restores_original_bytes": true,
+    "WMS662_append_only_original_bytes_retained": true
+  }
+}
