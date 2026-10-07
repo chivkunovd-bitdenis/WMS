@@ -1,0 +1,166 @@
+{
+  "task": "WMS-702",
+  "stage": "Independent bounded S702 protected SOURCE and exact main pin review",
+  "status": "PASS",
+  "releaseReady": false,
+  "reviewer": "Independent replacement /root/wms702_composition_acceptance, gpt-6.1-sol/high",
+  "sourceSha": "d9db3001602db14a7f7afeecd8bae5a410308cba",
+  "mainPinSha": "51f1fbec0d12a47dde99f570aaaaabf03ef98316",
+  "productSha": "86f450ad54745a5a2f2d77b3facdac8b778ac442",
+  "productAcceptanceSha": "94024ce47589d5bbed5556344b75aab9e16551c2",
+  "acceptedSourceBase": "39d1afdc8f37cdfda3c7768804ccccc3c9ad4e6e",
+  "productionAncestor": "212f19d548496fef7baf75c83204b771e304281b",
+  "generatorBlob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+  "testContract": {
+    "originalPublishedSha": "5a777d8c463e0605d9381e6552368bd8aaebf854",
+    "transferredSha": "7fb2f866b162fda9f11c60361f24b27c1d80a4c8",
+    "path": "scripts/ci/tests/test_wms702_source_transition.py",
+    "exactBytesPreserved": true,
+    "transferAncestorOfImplementation": true,
+    "implementationSha": "d9db3001602db14a7f7afeecd8bae5a410308cba"
+  },
+  "sourceChecks": {
+    "exactRemotePublication": true,
+    "cleanTrackedWorktree": true,
+    "acceptedSourceProductProductionAndAcceptanceAncestors": true,
+    "productRuntimeDelta": [],
+    "all285ProtectedCommittedFileDigestsVerified": true,
+    "allPrevious282ProtectedPathsRetained": true,
+    "changedOldDerivativeHashes": [
+      ".github/workflows/ci.yml",
+      "scripts/ci/tests/fixtures/wms652_source_binding_transition.json",
+      "scripts/ci/run_release_print.sh"
+    ],
+    "newProtectedFiles": [
+      "frontend/src/utils/printProductThermalLabel.test.ts",
+      "frontend/src/utils/wms702ProductLabelGeometry.test.ts",
+      "scripts/ci/tests/test_wms702_source_transition.py"
+    ],
+    "old29SuitesExactIncludingOrderReportsFormatAndExactFlag": true,
+    "old1715CasesExact": true,
+    "newSuites": 30,
+    "newCases": 1716,
+    "fullPrevious39dBindingDictionaryRetained": true,
+    "allPreviousAcceptedSourceAndHistoricalFailureRecordsRetained": true,
+    "literalReviewedProductReference": "86f450ad54745a5a2f2d77b3facdac8b778ac442",
+    "literalRealIndependentProductAcceptance": "94024ce47589d5bbed5556344b75aab9e16551c2",
+    "A702RawReportIdenticalToOwnedIndependentReport": true,
+    "A702RawReportIdenticalInS702": true,
+    "runReleasePrintHookByteIdenticalToReviewedP702": true,
+    "businessGuardTreesAndManifestUnchanged": true,
+    "workflowOnlyProductReferenceLiteralChanged": true,
+    "noCandidateEnvironmentHeadSelfApproval": true,
+    "authorityExplanation": "Fixture PASS/status names independently accepted product P702 and realA702, explicitly excludes source-transition approval. Workflow uses only literalP702. Actual source authority still requires exact trusted-main base/sourcepin; unchanged trusted consumers reject candidate/env config and arbitrary BASE/SOURCE.",
+    "required702Receipt": {
+      "suite": "print-702",
+      "report": "print/702.json",
+      "format": "vitest",
+      "exact": true,
+      "cases": 1,
+      "result": "Added required full702geometry receipt; existing suites retained. Missing/skipped/failed/wrong-case/wrong-file receipts rejected by real unchangedconsumer in independent tests.",
+      "completeExecution": "Protected producer unchanged fromP702 invokes geometry test. Protected geometry assertion forbids evidence-only mode when GITHUB_ACTIONS=true; all4sizes×6samples×2documents remain guarded. No full48 rerun in this source review."
+    },
+    "gitDiffCheck": "PASS39d..S702",
+    "taskDocuments": "PASS39d..S702; AGENTS=CLAUDE",
+    "productScope": "PASS unapproved_product_paths=[] against literalP702"
+  },
+  "independentExecution": {
+    "combinedContracts": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m pytest -q -p no:cacheprovider scripts/ci/tests/test_product_scope.py scripts/ci/tests/test_reviewed_process_upgrade.py scripts/ci/tests/test_process_contracts.py scripts/ci/tests/test_wms702_source_transition.py",
+      "testsPassed": 72,
+      "subtestsPassed": 30,
+      "durationSeconds": 34.59,
+      "exitCode": 0
+    },
+    "bindingCommands": {
+      "command": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest scripts.ci.tests.test_ci_release_additions.ReleaseCommandContracts -v",
+      "testsPassed": 7,
+      "exitCode": 0
+    },
+    "committedSnapshotIntegrity": "process_contracts.git_policy exactS702 executed independently; all285 protected regularGit files matched their SHA256",
+    "localCompleteIntegritySimulation": {
+      "result": "not completed: sparse checkout lacks historical tracked evidence",
+      "error": "Missing required file: docs/evidence/WMS-652/ci-two-shards-20261006/backend-collection.json",
+      "interpretation": "Snapshot hash verification proves committed historical file exists and matches. Missing materialization in sparseworktree prevented local wholefile simulation, not a missing committed file or source defect. No fullcheckout/install/cleanup attempted; no localfullintegrityPASS claim."
+    },
+    "productAndFullGeometryRerun": false,
+    "reason": "P702 independently accepted earlier; product/runtime/producer/sourcebytes remain unchanged"
+  },
+  "mainPinReview": {
+    "status": "PASS for exact bounded diff; owner merge authorization pending",
+    "sha": "51f1fbec0d12a47dde99f570aaaaabf03ef98316",
+    "publishedBranch": "codex/wms702-main-source-pin",
+    "remoteReadbackVerified": true,
+    "pullRequest": {
+      "number": 409,
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/pull/409",
+      "creationAndDraftState": "Parent reported draft; this review independently verified published exact head rather than PRstate"
+    },
+    "baseMain": "ac6c92bb5c8bd346a748690d868185c3eab397ed",
+    "baseMainAncestor": true,
+    "unchangedRemoteMainObserved": "ac6c92bb5c8bd346a748690d868185c3eab397ed",
+    "changedPaths": [
+      "scripts/ci/process_bootstrap.json",
+      "docs/requirements/WMS-702.md"
+    ],
+    "pin": {
+      "base_sha": "a5df04f1560de0eaaf855199065936cb22a222b1",
+      "source_sha": "d9db3001602db14a7f7afeecd8bae5a410308cba"
+    },
+    "explanation": "Same exactetalonBASEa5 retained; replaces39d SOURCE with this independently reviewed exactS702. Self-contained taskdocument references accepted P/A, preserved protections and pendingCI/deploy/paper; no code or shared policy mutations in mainbranch. Pin is a proposed authority change, not already approved authority.",
+    "cleanTrackedWorktree": true,
+    "gitDiffCheck": "PASS",
+    "documentChecker": {
+      "exitCode": 1,
+      "error": "AGENTS.md и CLAUDE.md должны существовать и содержать одинаковые правила.",
+      "scope": "Executed S702 checker in exactmainpin cwd. BothAGENTS/CLAUDE byte-identical to origin/mainac6, so mismatch is a pre-existing baselinefailure untouched by twofilediff. Canonical702registration already exists in productbranch; no unrelatedbacklog invented for historicalmain.",
+      "baselineDigests": {
+        "AGENTS": "e38827ab37d7dc4f12104c00ba1232a51e768be6abfe0bed0668314331a76c29",
+        "CLAUDE": "a540d0020f41cfe697da854d2531863dd55d715a4e063b73b8dc9923d315ae07"
+      }
+    },
+    "fullCIClaim": false,
+    "mainMergeAuthorized": false
+  },
+  "findings": [],
+  "conclusion": "PASS for independently reviewed exactS702 d9db3001602db14a7f7afeecd8bae5a410308cba and published mainpin51f1fbec0d12a47dde99f570aaaaabf03ef98316 within boundedSOURCE/pin scope. Only three reviewed derivativehashes changed, three testfile guards and one exact required702receipt added; all prior282paths/29suites/1715cases and complete39d bindinghistory retained. ExactP86f and realindependentA94024 are referenced, unchanged runtime/hook/rawA bytes verified, and independent72+30 plus7 contractsPASS. No material changed-scope defect found. PASS is independent source review, not owner permission, fullCI or deployment.",
+  "remaining": [
+    "Explicit owner authorization to merge exact mainpinPR409 at reviewed51f1f head; no merge performed.",
+    "Legacy mainAGENTS/CLAUDE documentcheck failure is separately disclosed; preparedPR is not claimed fullygreen.",
+    "Full exact final candidateCI, successful etalonpush CI and sameattempt trustedprocessproof required by existing releasegates.",
+    "Productionmust be reread before deployment; this boundedreview uses preserved212ancestry and parentreportedliveversion, no live operationalclaim.",
+    "Verify deployedservedSHA/operatorresult and physicalpaper separately."
+  ],
+  "readSources": [
+    "Current origin/etalon:AGENTS.md and fullowner/failurecase libraries already read in thissame review session; reused without irrelevant rereads",
+    "Existing P702 raw independentreport and realA702 Git snapshot",
+    "S702 preparation report",
+    "ExactS702 workflow/policy/fullbinding/newtestcontract/printproducer/unchangedreportconsumer",
+    "Exactpublishedmainpin diff/requirements",
+    "Existing reviewedprocessupgrade rejection contracts"
+  ],
+  "acceptanceCommit": null,
+  "acceptanceCommitNote": "Raw independent report only; parent may preserve it in Git separately. No manufactured acceptanceSHA.",
+  "boundaries": {
+    "sourceEdits": false,
+    "testEdits": false,
+    "policyEdits": false,
+    "commits": false,
+    "pushes": false,
+    "mainMerge": false,
+    "etalonMerge": false,
+    "CIDispatched": false,
+    "deploy": false,
+    "full48Rerun": false,
+    "physicalPrint": false,
+    "clientRepliesEnabled": false,
+    "clientMessagesSent": false,
+    "outboxTouched": false,
+    "otherProjectsAccessed": false,
+    "secretsModified": false,
+    "dependenciesInstalled": false,
+    "fullCheckout": false,
+    "cleanup": false
+  },
+  "writtenAt": "2026-10-07T22:11:30.885Z"
+}
