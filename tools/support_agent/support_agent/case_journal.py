@@ -102,12 +102,25 @@ class CaseJournal:
         for row in self.store.rows('SELECT * FROM messages WHERE chat_id=? ORDER BY id', (chat_id,)):
             self.record(chat_id, 'inbound', row['text'], f"in:{row['id']}:{row['revision']}",
                         data=dict(row))
+            # Transcription is asynchronous and does not create a Telegram edit.
+            # Preserve it separately even when the empty original is already archived.
+            if row['kind'] == 'voice' and row['text']:
+                self.record(chat_id, 'transcript', row['text'],
+                            f"transcript:{row['id']}:{row['revision']}", data=dict(row))
+            media = self.store.kv_get(f"media:{row['id']}:{row['revision']}", {})
+            if media.get('status') == 'ready':
+                self.record(chat_id, 'attachment', row['caption'],
+                            f"attachment:{row['id']}:{row['revision']}:{media['sha256']}", data=media)
         for row in self.store.rows(
             'SELECT r.* FROM message_revisions r JOIN messages m ON m.id=r.message_id '
             'WHERE m.chat_id=? ORDER BY r.id', (chat_id,)
         ):
             self.record(chat_id, 'edited_version', row['text'],
                         f"revision:{row['message_id']}:{row['revision']}", data=dict(row))
+            media = self.store.kv_get(f"media:{row['message_id']}:{row['revision']}", {})
+            if media.get('status') == 'ready':
+                self.record(chat_id, 'attachment', row['caption'],
+                            f"attachment:{row['message_id']}:{row['revision']}:{media['sha256']}", data=media)
         for row in self.store.rows('SELECT * FROM outbox WHERE chat_id=? ORDER BY id', (chat_id,)):
             self.record(chat_id, 'outbound', row['text'], f"out:{row['id']}:{row['status']}", data=dict(row))
         with self._locked():
@@ -119,16 +132,19 @@ class CaseJournal:
 
     @staticmethod
     def render(card: dict[str, Any]) -> str:
-        header = f"Обращение №{card['number']} · {str(card.get('chat_title') or card['chat_id'])[:180]}\n"
-        header += str(card.get('title') or 'Разбор обращения')[:220] + '\n'
+        def shorten(value: Any, units: int) -> str:
+            return str(value).encode('utf-16-le')[:units * 2].decode('utf-16-le', errors='ignore')
+
+        header = f"Обращение №{card['number']} · {shorten(card.get('chat_title') or card['chat_id'], 180)}\n"
+        header += shorten(card.get('title') or 'Разбор обращения', 220) + '\n'
         if card.get('summary'):
-            header += '\n' + str(card['summary'])[:900] + '\n'
+            header += '\n' + shorten(card['summary'], 900) + '\n'
         for field, label in _LABELS.items():
             value = card.get('statuses', {}).get(field)
             header += f"{'🟢' if value is True else '🟡' if value else '⚪'} {label}\n"
         if card.get('task_url'):
-            header += str(card['task_url'])[:300] + '\n'
-        entries = [f"{datetime.fromtimestamp(e['ts']).strftime('%d.%m %H:%M')} — {e['text'][:1400]}"
+            header += shorten(card['task_url'], 300) + '\n'
+        entries = [f"{datetime.fromtimestamp(e['ts']).strftime('%d.%m %H:%M')} — {shorten(e['text'], 1400)}"
                    for e in card.get('events', [])]
         # Telegram counts UTF-16 units, not Python Unicode code points.
         def fits(text: str) -> bool:
@@ -175,6 +191,12 @@ class CaseJournal:
             if task_url:
                 card['task_url'] = task_url
             card['statuses'].update({k: v for k, v in (statuses or {}).items() if k in _LABELS})
+            snapshot = {k: card[k] for k in ('number', 'topic_id', 'chat_id', 'title', 'summary',
+                                              'chat_title', 'statuses', 'task_url') if k in card}
+            snapshot_key = hashlib.sha256(json.dumps(snapshot, ensure_ascii=False,
+                                                       sort_keys=True).encode()).hexdigest()
+            self.record(chat_id, 'case_snapshot', str(card.get('summary') or card.get('title') or ''),
+                        f'case-snapshot:{topic_id}:{snapshot_key}', topic_id, snapshot)
             if event:
                 event_key = event_key or hashlib.sha256(event.encode()).hexdigest()
                 if not any(e['key'] == event_key for e in card['events']):

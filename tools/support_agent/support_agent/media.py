@@ -85,5 +85,12 @@ def message_image_paths(pipe: Any, message: Any) -> list[str]:
 
 
 def archive_pending(pipe: Any) -> None:
-    for row in pipe.store.rows("SELECT * FROM messages WHERE file_id IS NOT NULL ORDER BY id DESC LIMIT 200"):
+    # Ready files are a cheap local lookup; a recent window would permanently
+    # starve older attachments, including versions superseded by Telegram edits.
+    for row in pipe.store.rows("SELECT * FROM messages WHERE file_id IS NOT NULL ORDER BY id DESC"):
+        archive_message(pipe, row)
+    for row in pipe.store.rows(
+        "SELECT m.id,m.chat_id,m.role,r.revision,r.kind,r.file_id FROM message_revisions r "
+        "JOIN messages m ON m.id=r.message_id WHERE r.file_id IS NOT NULL ORDER BY r.id DESC"
+    ):
         archive_message(pipe, row)

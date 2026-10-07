@@ -6,6 +6,7 @@ The native chat reads the materials and decides what to do itself.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 import time
@@ -26,6 +27,9 @@ class NativeBridge:
 
     def status(self) -> dict[str, Any]:
         return {"paused": bool(self.store.kv_get("native_paused", True)),
+                "ready": bool(self.store.kv_get("native_ready", False)),
+                "moderator_thread_id": self.cfg.agent.moderator_thread_id,
+                "client_replies_enabled": self.cfg.agent.client_replies_enabled,
                 "history_root": str(self.journal.root),
                 "latest_message_id": self.store.row("SELECT coalesce(max(id),0) n FROM messages")["n"],
                 "latest_edit_id": self.store.row("SELECT coalesce(max(id),0) n FROM message_revisions")["n"],
@@ -34,8 +38,9 @@ class NativeBridge:
                           for row in self.store.rows("SELECT value FROM kv WHERE key LIKE 'case_card:%'")]}
 
     def _messages(self, rows: list[Any]) -> list[dict[str, Any]]:
-        return [{**dict(row), "media": self.store.kv_get(f"media:{row['id']}:{row['revision']}", {})}
-                for row in rows]
+        return [{**dict(row), "media": self.store.kv_get(f"media:{row['id']}:{row['revision']}", {}),
+                 "case_topic_id": self.journal.find_topic(row["reply_to"])
+                 if row["role"] == "owner" else None} for row in rows]
 
     def history(self, chat_id: int, limit: int = 100, before_id: int = 2**63 - 1) -> dict[str, Any]:
         rows = self.store.rows("SELECT * FROM messages WHERE chat_id=? AND id<? ORDER BY id DESC LIMIT ?",
@@ -48,20 +53,42 @@ class NativeBridge:
                 "outgoing": [dict(row) for row in reversed(outgoing)],
                 "full_history": str(self.journal.root / f"chat-{chat_id}" / "history.jsonl")}
 
-    def inbox(self, after_id: int = 0, after_edit_id: int = 0, limit: int = 100) -> dict[str, Any]:
+    def inbox(self, after_id: int = 0, after_edit_id: int = 0, limit: int = 100,
+              known_materials: dict[str, str] | None = None) -> dict[str, Any]:
         rows = self.store.rows("SELECT * FROM messages WHERE id>? ORDER BY id LIMIT ?",
                                (after_id, max(1, min(limit, 500))))
         edits = self.store.rows("SELECT * FROM message_revisions WHERE id>? ORDER BY id LIMIT ?",
                                 (after_edit_id, max(1, min(limit, 500))))
-        return {"messages": self._messages(rows), "edits": [dict(row) for row in edits],
+        revised = []
+        for row in edits:
+            current = self.store.row("SELECT * FROM messages WHERE id=?", (row["message_id"],))
+            revised.append({**dict(row), "current": self._messages([current])[0]})
+        # Attachments and transcripts arrive after the Telegram message itself. A
+        # reader can retain these fingerprints to observe their completion without
+        # rewinding its message cursor or having this transport acknowledge work.
+        ids = set(known_materials or {}) | {str(row["id"]) for row in rows if row["file_id"]}
+        versions, materials = {}, []
+        for message_id in sorted(ids):
+            row = self.store.row("SELECT * FROM messages WHERE id=?", (int(message_id),))
+            if row is None:
+                continue
+            message = self._messages([row])[0]
+            state = [message["revision"], message["text"], message["status"], message["media"]]
+            digest = hashlib.sha256(json.dumps(state, sort_keys=True).encode()).hexdigest()
+            versions[message_id] = digest
+            if message_id in (known_materials or {}) and known_materials[message_id] != digest:
+                materials.append(message)
+        return {"messages": self._messages(rows), "edits": revised,
+                "materials": materials, "material_versions": versions,
                 "next_message_id": max([after_id, *[int(row["id"]) for row in rows]]),
                 "next_edit_id": max([after_edit_id, *[int(row["id"]) for row in edits]])}
 
-    def watch(self, after_id: int, after_edit_id: int = 0, seconds: int = 45) -> dict[str, Any]:
+    def watch(self, after_id: int, after_edit_id: int = 0, seconds: int = 45,
+              known_materials: dict[str, str] | None = None) -> dict[str, Any]:
         until = time.monotonic() + min(45, max(0, seconds))
         while True:
-            data = self.inbox(after_id, after_edit_id)
-            if data["messages"] or data["edits"] or time.monotonic() >= until:
+            data = self.inbox(after_id, after_edit_id, known_materials=known_materials)
+            if data["messages"] or data["edits"] or data["materials"] or time.monotonic() >= until:
                 return data
             time.sleep(1)
 

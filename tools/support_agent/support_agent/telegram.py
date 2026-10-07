@@ -77,7 +77,7 @@ class TelegramClient:
         return result
 
     def send_message(self, chat_id: int, text: str, reply_to: str | None = None) -> str:
-        if len(text) > MAX_TEXT:  # молча не обрезаем: клиент и владелец должны видеть одно и то же
+        if len(text.encode("utf-16-le")) // 2 > MAX_TEXT:
             raise TelegramError("rejected", "too_long")
         payload: dict[str, Any] = {"chat_id": chat_id, "text": text}
         if reply_to:
@@ -101,7 +101,7 @@ class TelegramClient:
     ) -> str:
         payload: dict[str, Any] = {"chat_id": str(chat_id)}
         if caption:
-            payload["caption"] = caption[:1000]
+            payload["caption"] = caption.encode("utf-16-le")[:2000].decode("utf-16-le", errors="ignore")
         if reply_to:
             payload["reply_to_message_id"] = reply_to
             payload["allow_sending_without_reply"] = "true"
@@ -324,7 +324,7 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
                 message_id = tg.send_document(
                     item["chat_id"], item["file_path"], item["text"], item["reply_to"]
                 )
-            elif len(item["text"]) > MAX_TEXT:
+            elif len(item["text"].encode("utf-16-le")) // 2 > MAX_TEXT:
                 # Длинное служебное сообщение уходит целиком файлом, а не обрезанным текстом.
                 folder = cfg.state_path / "outbox-long"
                 folder.mkdir(parents=True, exist_ok=True)
