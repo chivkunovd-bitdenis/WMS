@@ -1,0 +1,1061 @@
+etalon-identity-browser43-diagnostic	Set up job	﻿2026-10-07T04:00:06.9325241Z Current runner version: '2.337.0'
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9355055Z ##[group]Runner Image Provisioner
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9356005Z Hosted Compute Agent
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9357011Z Version: 20260901.588
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9357799Z Commit: f88ec8081b781fac6c440065ac7ff9e710ce3d0b
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9358842Z Build Date: 2026-09-01T19:56:44Z
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9359694Z Worker ID: {7d4860f5-9de6-4621-a094-88bc64df11ad}
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9360577Z Azure Region: northcentralus
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9361467Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9363061Z ##[group]Operating System
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9363851Z Ubuntu
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9364560Z 24.04.5
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9365157Z LTS
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9365889Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9366546Z ##[group]Runner Image
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9367491Z Image: ubuntu-24.04
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9368310Z Version: 20260927.320.1
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9369653Z Included Software: https://github.com/actions/runner-images/blob/ubuntu24/20260927.320/images/ubuntu/Ubuntu2404-Readme.md
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9371924Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu24%2F20260927.320
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9373205Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9374589Z ##[group]GITHUB_TOKEN Permissions
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9377015Z Contents: read
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9377811Z Metadata: read
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9378523Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9382047Z Secret source: Actions
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9383663Z Cache mode: write
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9384975Z Prepare workflow directory
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9668689Z Prepare all required actions
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:06.9723312Z Getting action download info
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:07.1966065Z Download action repository 'actions/checkout@v4' (SHA:11d5960a326750d5838078e36cf38b85af677262)
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:07.3370763Z Download action repository 'actions/setup-node@v4' (SHA:49933ea5288caeca8642d1e84afbd3f7d6820020)
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:07.5817299Z Download action repository 'actions/upload-artifact@v4' (SHA:ea165f8d65b6e75b540449e92b4886f43607fa02)
+etalon-identity-browser43-diagnostic	Set up job	2026-10-07T04:00:08.1691850Z Complete job name: etalon-identity-browser43-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	﻿2026-10-07T04:00:08.2424606Z ##[group]Run actions/checkout@v4
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2425734Z with:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2426444Z   fetch-depth: 0
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2427328Z   persist-credentials: false
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2428209Z   repository: chivkunovd-bitdenis/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2435368Z   token: ***
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2436116Z   ssh-strict: true
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2436910Z   ssh-user: git
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2437601Z   clean: true
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2438328Z   sparse-checkout-cone-mode: true
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2439187Z   fetch-tags: false
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2439923Z   show-progress: true
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2440655Z   lfs: false
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2441331Z   submodules: false
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2442096Z   set-safe-directory: true
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2442917Z   allow-unsafe-pr-checkout: false
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.2443944Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3278578Z Syncing repository: chivkunovd-bitdenis/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3280938Z ##[group]Getting Git version info
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3282003Z Working directory is '/home/runner/work/WMS/WMS'
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3283600Z [command]/usr/bin/git version
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3695925Z git version 2.55.0
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3715280Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3730735Z Temporarily overriding HOME='/home/runner/work/_temp/adac29c5-4e59-451f-852a-57d9f7e2725b' before making global git config changes
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3733128Z Adding repository directory to the temporary git global config as a safe directory
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3735261Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3783478Z Deleting the contents of '/home/runner/work/WMS/WMS'
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3788103Z ##[group]Initializing the repository
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3791904Z [command]/usr/bin/git init /home/runner/work/WMS/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3873930Z hint: Using 'master' as the name for the initial branch. This default branch name
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3877015Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3879367Z hint: to use in all of your new repositories, which will suppress this warning,
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3881534Z hint: call:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3882482Z hint:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3883675Z hint: 	git config --global init.defaultBranch <name>
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3885126Z hint:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3886498Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3888902Z hint: 'development'. The just-created branch can be renamed via this command:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3890713Z hint:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3891668Z hint: 	git branch -m <name>
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3892793Z hint:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3894284Z hint: Disable this message with "git config set advice.defaultBranchName false"
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3896553Z Initialized empty Git repository in /home/runner/work/WMS/WMS/.git/
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3901212Z [command]/usr/bin/git remote add origin https://github.com/chivkunovd-bitdenis/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3947031Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3948978Z ##[group]Disabling automatic garbage collection
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3950625Z [command]/usr/bin/git config --local gc.auto 0
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3983803Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3985026Z ##[group]Setting up auth
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.3988979Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4020130Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4304347Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4339511Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4528265Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4559096Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4751899Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4788832Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4790225Z ##[group]Fetching the repository
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:08.4797113Z [command]/usr/bin/git -c protocol.version=2 fetch --prune --no-recurse-submodules origin +refs/heads/*:refs/remotes/origin/* +refs/tags/*:refs/tags/*
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6580524Z From https://github.com/chivkunovd-bitdenis/WMS
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6582020Z  * [new branch]          archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823 -> origin/archive/night/volna-9-recovery/lane-3/06-picking-list-order-pre-owner-scope-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6583324Z  * [new branch]          archive/staging-20260924-93f511ab -> origin/archive/staging-20260924-93f511ab
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6584244Z  * [new branch]          archive/staging-before-wms521-20260924 -> origin/archive/staging-before-wms521-20260924
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6585214Z  * [new branch]          archive/wms415-disputed-candidate-20260910 -> origin/archive/wms415-disputed-candidate-20260910
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6586060Z  * [new branch]          backlog/fbs-followups-20260812 -> origin/backlog/fbs-followups-20260812
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6586984Z  * [new branch]          brand/portal-logos-20260811 -> origin/brand/portal-logos-20260811
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6587742Z  * [new branch]          brand/portal-logos-live-20260811 -> origin/brand/portal-logos-live-20260811
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6588506Z  * [new branch]          brand/portal-logos-prod-20260811 -> origin/brand/portal-logos-prod-20260811
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6589368Z  * [new branch]          chore/deploy-smoke-retry-on-main -> origin/chore/deploy-smoke-retry-on-main
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6590633Z  * [new branch]          chore/operator-change-contract-20260901 -> origin/chore/operator-change-contract-20260901
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6591531Z  * [new branch]          chore/railway-toml-fix  -> origin/chore/railway-toml-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6592302Z  * [new branch]          chore/release-via-pr-only-rules -> origin/chore/release-via-pr-only-rules
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6593073Z  * [new branch]          chore/staging-sync-20261003 -> origin/chore/staging-sync-20261003
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6593903Z  * [new branch]          chore/wb-emulator-railway-dockerfile -> origin/chore/wb-emulator-railway-dockerfile
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6594905Z  * [new branch]          chore/wms375-production-evidence-20260906 -> origin/chore/wms375-production-evidence-20260906
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6595705Z  * [new branch]          chore/wms574-stand      -> origin/chore/wms574-stand
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6596451Z  * [new branch]          codex/agent-job-1710a7649a6964db -> origin/codex/agent-job-1710a7649a6964db
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6597450Z  * [new branch]          codex/agent-job-21079e59afb9acdb -> origin/codex/agent-job-21079e59afb9acdb
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6598332Z  * [new branch]          codex/agent-job-6f3e370ab6217c51 -> origin/codex/agent-job-6f3e370ab6217c51
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6599158Z  * [new branch]          codex/agent-job-8c954436cd418999 -> origin/codex/agent-job-8c954436cd418999
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6599979Z  * [new branch]          codex/agent-job-97af6faf8d8c22ac -> origin/codex/agent-job-97af6faf8d8c22ac
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6600851Z  * [new branch]          codex/agent-job-bb021d7e007fb8a5 -> origin/codex/agent-job-bb021d7e007fb8a5
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6601675Z  * [new branch]          codex/agent-job-ef71dbb00ee2b150 -> origin/codex/agent-job-ef71dbb00ee2b150
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6602521Z  * [new branch]          codex/agent-job-fc68bb2705b6850f -> origin/codex/agent-job-fc68bb2705b6850f
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6603290Z  * [new branch]          codex/artmaks-fbo-mockup -> origin/codex/artmaks-fbo-mockup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6604025Z  * [new branch]          codex/backlog40-ci-contracts -> origin/codex/backlog40-ci-contracts
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6605014Z  * [new branch]          codex/backlog40-ci-pdf  -> origin/codex/backlog40-ci-pdf
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6605775Z  * [new branch]          codex/billing-journal-20260825 -> origin/codex/billing-journal-20260825
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6606657Z  * [new branch]          codex/billing-module-20260826 -> origin/codex/billing-module-20260826
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6608605Z  * [new branch]          codex/billing-stage-finish-20260823 -> origin/codex/billing-stage-finish-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6609584Z  * [new branch]          codex/billing-storage-bounds-20260823 -> origin/codex/billing-storage-bounds-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6610608Z  * [new branch]          codex/box-label-bulk-print-20260824 -> origin/codex/box-label-bulk-print-20260824
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6619155Z  * [new branch]          codex/catalog-box-filters-20260824 -> origin/codex/catalog-box-filters-20260824
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6627395Z  * [new branch]          codex/catalog-box-tabs-source-20260823 -> origin/codex/catalog-box-tabs-source-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6628604Z  * [new branch]          codex/cell-contents-scanner-20260824 -> origin/codex/cell-contents-scanner-20260824
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6629537Z  * [new branch]          codex/fbs-qr-only-print-20260823 -> origin/codex/fbs-qr-only-print-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6630510Z  * [new branch]          codex/fix-fbs-stock-publication-20260831 -> origin/codex/fix-fbs-stock-publication-20260831
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6631550Z  * [new branch]          codex/fix-seller-inbound-empty-picker -> origin/codex/fix-seller-inbound-empty-picker
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6632536Z  * [new branch]          codex/fix-wb-done-supply-status-prod -> origin/codex/fix-wb-done-supply-status-prod
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6633504Z  * [new branch]          codex/hotfix-fbs-100-orders-20260820 -> origin/codex/hotfix-fbs-100-orders-20260820
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6634434Z  * [new branch]          codex/hotfix-fbs-packaging-flag -> origin/codex/hotfix-fbs-packaging-flag
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6635480Z  * [new branch]          codex/hotfix-ozon-kiz   -> origin/codex/hotfix-ozon-kiz
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6636221Z  * [new branch]          codex/invoice-row-location -> origin/codex/invoice-row-location
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6637318Z  * [new branch]          codex/knowledge-inbound-guide-20260824 -> origin/codex/knowledge-inbound-guide-20260824
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6638278Z  * [new branch]          codex/mp-dashboard-e2e-20260815 -> origin/codex/mp-dashboard-e2e-20260815
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6639194Z  * [new branch]          codex/night-ready-acceptance-1006 -> origin/codex/night-ready-acceptance-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6640210Z  * [new branch]          codex/night-ready-candidate-1006-inrepo -> origin/codex/night-ready-candidate-1006-inrepo
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6641231Z  * [new branch]          codex/night-ready-exact-staging-1006 -> origin/codex/night-ready-exact-staging-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6642308Z  * [new branch]          codex/night-ready-exact-staging-redis-1006 -> origin/codex/night-ready-exact-staging-redis-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6643403Z  * [new branch]          codex/night-ready-migration-compat-1006 -> origin/codex/night-ready-migration-compat-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6644364Z  * [new branch]          codex/night-ready-staging-1006 -> origin/codex/night-ready-staging-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6645412Z  * [new branch]          codex/night-ready-staging-db-head-rollback-1006 -> origin/codex/night-ready-staging-db-head-rollback-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6646646Z  * [new branch]          codex/night-ready-staging-migration-deploy-1006 -> origin/codex/night-ready-staging-migration-deploy-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6647934Z  * [new branch]          codex/night-ready-staging-rollback-1006 -> origin/codex/night-ready-staging-rollback-1006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6648898Z  * [new branch]          codex/night-release-5beb52da-1 -> origin/codex/night-release-5beb52da-1
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6649790Z  * [new branch]          codex/night-requirements-20261006 -> origin/codex/night-requirements-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6650875Z  * [new branch]          codex/night1007-658     -> origin/codex/night1007-658
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6651557Z  * [new branch]          codex/night1007-671-687 -> origin/codex/night1007-671-687
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6652277Z  * [new branch]          codex/night1007-675-release -> origin/codex/night1007-675-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6653011Z  * [new branch]          codex/night1007-679-680 -> origin/codex/night1007-679-680
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6653668Z  * [new branch]          codex/night1007-681     -> origin/codex/night1007-681
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6654354Z  * [new branch]          codex/night1007-684-586 -> origin/codex/night1007-684-586
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6655096Z  * [new branch]          codex/night1007-integration -> origin/codex/night1007-integration
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6656039Z  * [new branch]          codex/night1007-print-regressions-646cb4 -> origin/codex/night1007-print-regressions-646cb4
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6657170Z  * [new branch]          codex/night1007-wms652-ci-fix -> origin/codex/night1007-wms652-ci-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6658240Z  * [new branch]          codex/owner-frontend-correction-proof-20261006 -> origin/codex/owner-frontend-correction-proof-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6659273Z  * [new branch]          codex/ozon-catalog-20260825 -> origin/codex/ozon-catalog-20260825
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6660005Z  * [new branch]          codex/ozon-fbs-20260825 -> origin/codex/ozon-fbs-20260825
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6660714Z  * [new branch]          codex/ozon-stock-20260825 -> origin/codex/ozon-stock-20260825
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6661564Z  * [new branch]          codex/ozon-test-key-marker-20260824 -> origin/codex/ozon-test-key-marker-20260824
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6662525Z  * [new branch]          codex/priority-five-release-20261006 -> origin/codex/priority-five-release-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6663503Z  * [new branch]          codex/priority-five-review-20261006 -> origin/codex/priority-five-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6664757Z  * [new branch]          codex/priority-five-staging-proof-20261006 -> origin/codex/priority-five-staging-proof-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6665779Z  * [new branch]          codex/regress-live-cases-20260825 -> origin/codex/regress-live-cases-20260825
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6666633Z  * [new branch]          codex/release-20261006-astra-a -> origin/codex/release-20261006-astra-a
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6667626Z  * [new branch]          codex/release-20261006-astra-b -> origin/codex/release-20261006-astra-b
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6668471Z  * [new branch]          codex/release-ci-final-20261006 -> origin/codex/release-ci-final-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6669263Z  * [new branch]          codex/release-log-2026-09-27 -> origin/codex/release-log-2026-09-27
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6670156Z  * [new branch]          codex/reporting-backend-core-20260823 -> origin/codex/reporting-backend-core-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6671169Z  * [new branch]          codex/reporting-stage-finish-20260823 -> origin/codex/reporting-stage-finish-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6672153Z  * [new branch]          codex/staging-sync-login-20260914 -> origin/codex/staging-sync-login-20260914
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6672982Z  * [new branch]          codex/storage-stage-20260823 -> origin/codex/storage-stage-20260823
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6673701Z  * [new branch]          codex/trello-wms-20261005 -> origin/codex/trello-wms-20261005
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6674376Z  * [new branch]          codex/trello-wms-20261006 -> origin/codex/trello-wms-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6675111Z  * [new branch]          codex/trello-wms-20261006-1200 -> origin/codex/trello-wms-20261006-1200
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6675857Z  * [new branch]          codex/tsd-package-20260913 -> origin/codex/tsd-package-20260913
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6676653Z  * [new branch]          codex/tsd-package-stage-release -> origin/codex/tsd-package-stage-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6677693Z  * [new branch]          codex/tsd-staging-merge-20260913 -> origin/codex/tsd-staging-merge-20260913
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6678527Z  * [new branch]          codex/volna9-01-backend-only -> origin/codex/volna9-01-backend-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6679459Z  * [new branch]          codex/volna9-02-status-only -> origin/codex/volna9-02-status-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6680211Z  * [new branch]          codex/volna9-03-backend-only -> origin/codex/volna9-03-backend-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6681015Z  * [new branch]          codex/volna9-04-backend-only -> origin/codex/volna9-04-backend-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6681780Z  * [new branch]          codex/volna9-05-backend-only -> origin/codex/volna9-05-backend-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6682613Z  * [new branch]          codex/volna9-06-print-order-only -> origin/codex/volna9-06-print-order-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6683448Z  * [new branch]          codex/weekly-release-20260909 -> origin/codex/weekly-release-20260909
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6684192Z  * [new branch]          codex/wms-chat-20260911 -> origin/codex/wms-chat-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6684961Z  * [new branch]          codex/wms-chat-evening-20260910 -> origin/codex/wms-chat-evening-20260910
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6685842Z  * [new branch]          codex/wms-integrations-20260911 -> origin/codex/wms-integrations-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6686612Z  * [new branch]          codex/wms-ozon-20260911 -> origin/codex/wms-ozon-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6687581Z  * [new branch]          codex/wms-ozon-generator-20260911 -> origin/codex/wms-ozon-generator-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6688451Z  * [new branch]          codex/wms-pick-container-scan -> origin/codex/wms-pick-container-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6689391Z  * [new branch]          codex/wms-pipeline-unified-v2-20260820 -> origin/codex/wms-pipeline-unified-v2-20260820
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6690254Z  * [new branch]          codex/wms-print-20260911 -> origin/codex/wms-print-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6691236Z  * [new branch]          codex/wms-priority-legacy-test-harness-20261006 -> origin/codex/wms-priority-legacy-test-harness-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6692492Z  * [new branch]          codex/wms-psp-backlog-20260921 -> origin/codex/wms-psp-backlog-20260921
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6693437Z  * [new branch]          codex/wms-qr-review-evidence-20261006 -> origin/codex/wms-qr-review-evidence-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6694315Z  * [new branch]          codex/wms-release-20260911 -> origin/codex/wms-release-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6695128Z  * [new branch]          codex/wms-release-ozon-terminal -> origin/codex/wms-release-ozon-terminal
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6695936Z  * [new branch]          codex/wms-storage-20260911 -> origin/codex/wms-storage-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6696920Z  * [new branch]          codex/wms-storage-final-20260911 -> origin/codex/wms-storage-final-20260911
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6697737Z  * [new branch]          codex/wms-transfer-urgent -> origin/codex/wms-transfer-urgent
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6698816Z  * [new branch]          codex/wms-wave-storage-category-inbound-split-20260828 -> origin/codex/wms-wave-storage-category-inbound-split-20260828
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6700077Z  * [new branch]          codex/wms000-night-backlog-normalization -> origin/codex/wms000-night-backlog-normalization
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6700966Z  * [new branch]          codex/wms010-backlog40  -> origin/codex/wms010-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6701647Z  * [new branch]          codex/wms011-backlog40  -> origin/codex/wms011-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6702313Z  * [new branch]          codex/wms013-backlog40  -> origin/codex/wms013-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6702996Z  * [new branch]          codex/wms040-backlog40  -> origin/codex/wms040-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6703626Z  * [new branch]          codex/wms045-backlog40  -> origin/codex/wms045-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6704406Z  * [new branch]          codex/wms058-availability-followup -> origin/codex/wms058-availability-followup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6705152Z  * [new branch]          codex/wms058-backlog40  -> origin/codex/wms058-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6705776Z  * [new branch]          codex/wms058-browser-qa -> origin/codex/wms058-browser-qa
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6706509Z  * [new branch]          codex/wms058-mp-box-source -> origin/codex/wms058-mp-box-source
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6707577Z  * [new branch]          codex/wms058-overplan-source -> origin/codex/wms058-overplan-source
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6708185Z  * [new branch]          codex/wms058-review-fix -> origin/codex/wms058-review-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6708838Z  * [new branch]          codex/wms080-392-review-fix -> origin/codex/wms080-392-review-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6709536Z  * [new branch]          codex/wms080-backlog40  -> origin/codex/wms080-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6710240Z  * [new branch]          codex/wms081-backlog40  -> origin/codex/wms081-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6710958Z  * [new branch]          codex/wms081-defect-compat -> origin/codex/wms081-defect-compat
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6711780Z  * [new branch]          codex/wms082-085-emulator-meta -> origin/codex/wms082-085-emulator-meta
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6712553Z  * [new branch]          codex/wms082-backlog40  -> origin/codex/wms082-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6713209Z  * [new branch]          codex/wms083-backlog40  -> origin/codex/wms083-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6713847Z  * [new branch]          codex/wms084-backlog40  -> origin/codex/wms084-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6714533Z  * [new branch]          codex/wms084-emulator-delete -> origin/codex/wms084-emulator-delete
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6783516Z  * [new branch]          codex/wms084-packing-test-contract -> origin/codex/wms084-packing-test-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6784302Z  * [new branch]          codex/wms084-rebind     -> origin/codex/wms084-rebind
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6784892Z  * [new branch]          codex/wms085-backlog40  -> origin/codex/wms085-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6785473Z  * [new branch]          codex/wms086-backlog40  -> origin/codex/wms086-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6786043Z  * [new branch]          codex/wms087-backlog40  -> origin/codex/wms087-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6786614Z  * [new branch]          codex/wms091-backlog40  -> origin/codex/wms091-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6797956Z  * [new branch]          codex/wms092-backlog40  -> origin/codex/wms092-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6798629Z  * [new branch]          codex/wms095-backlog40  -> origin/codex/wms095-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6799424Z  * [new branch]          codex/wms095-import-error-backlog40 -> origin/codex/wms095-import-error-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6800140Z  * [new branch]          codex/wms096-backlog40  -> origin/codex/wms096-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6800567Z  * [new branch]          codex/wms110-backlog40  -> origin/codex/wms110-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6800961Z  * [new branch]          codex/wms115-backlog40  -> origin/codex/wms115-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6801397Z  * [new branch]          codex/wms123-backlog40  -> origin/codex/wms123-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6801984Z  * [new branch]          codex/wms272-backlog40  -> origin/codex/wms272-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6802574Z  * [new branch]          codex/wms272-resume-backlog40 -> origin/codex/wms272-resume-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6803007Z  * [new branch]          codex/wms273-backlog40  -> origin/codex/wms273-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6803374Z  * [new branch]          codex/wms276-backlog40  -> origin/codex/wms276-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6803730Z  * [new branch]          codex/wms277-backlog40  -> origin/codex/wms277-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6804101Z  * [new branch]          codex/wms277-catalog    -> origin/codex/wms277-catalog
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6804546Z  * [new branch]          codex/wms277-import-sku-collision -> origin/codex/wms277-import-sku-collision
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6804997Z  * [new branch]          codex/wms278-backlog40  -> origin/codex/wms278-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6805371Z  * [new branch]          codex/wms387-training   -> origin/codex/wms387-training
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6805886Z  * [new branch]          codex/wms389-backlog40  -> origin/codex/wms389-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6806462Z  * [new branch]          codex/wms390-backlog40  -> origin/codex/wms390-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6807601Z  * [new branch]          codex/wms391-backlog40  -> origin/codex/wms391-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6807988Z  * [new branch]          codex/wms392-backlog40  -> origin/codex/wms392-backlog40
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6808393Z  * [new branch]          codex/wms392-review-tests -> origin/codex/wms392-review-tests
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6808789Z  * [new branch]          codex/wms394-kiz-ui     -> origin/codex/wms394-kiz-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6809181Z  * [new branch]          codex/wms395-pool-inline -> origin/codex/wms395-pool-inline
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6809564Z  * [new branch]          codex/wms396-stage      -> origin/codex/wms396-stage
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6809977Z  * [new branch]          codex/wms396-staging-release -> origin/codex/wms396-staging-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6810391Z  * [new branch]          codex/wms396-true-api   -> origin/codex/wms396-true-api
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6810756Z  * [new branch]          codex/wms397-api        -> origin/codex/wms397-api
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6811142Z  * [new branch]          codex/wms399-chat-design -> origin/codex/wms399-chat-design
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6811629Z  * [new branch]          codex/wms401-android-build-proof -> origin/codex/wms401-android-build-proof
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6812264Z  * [new branch]          codex/wms406-backfill-final-plan -> origin/codex/wms406-backfill-final-plan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6812697Z  * [new branch]          codex/wms406-invoice    -> origin/codex/wms406-invoice
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6813061Z  * [new branch]          codex/wms406-report     -> origin/codex/wms406-report
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6813490Z  * [new branch]          codex/wms408-billing-unification -> origin/codex/wms408-billing-unification
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6813969Z  * [new branch]          codex/wms415-coord-20260910 -> origin/codex/wms415-coord-20260910
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6814494Z  * [new branch]          codex/wms418-catalog-publication-filter -> origin/codex/wms418-catalog-publication-filter
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6815138Z  * [new branch]          codex/wms418-loviana-off -> origin/codex/wms418-loviana-off
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6815589Z  * [new branch]          codex/wms425-marketplace-hotfix -> origin/codex/wms425-marketplace-hotfix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6816054Z  * [new branch]          codex/wms433-stage-user-only -> origin/codex/wms433-stage-user-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6816522Z  * [new branch]          codex/wms433-support-bot-concept -> origin/codex/wms433-support-bot-concept
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6817136Z  * [new branch]          codex/wms437-analyst-cases -> origin/codex/wms437-analyst-cases
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6817590Z  * [new branch]          codex/wms437-small-task-process -> origin/codex/wms437-small-task-process
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6818005Z  * [new branch]          codex/wms440-tsd        -> origin/codex/wms440-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6818359Z  * [new branch]          codex/wms440-tsd-ui     -> origin/codex/wms440-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6818738Z  * [new branch]          codex/wms441-c10-evidence -> origin/codex/wms441-c10-evidence
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6819111Z  * [new branch]          codex/wms441-tsd        -> origin/codex/wms441-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6819453Z  * [new branch]          codex/wms441-tsd-ui     -> origin/codex/wms441-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6819792Z  * [new branch]          codex/wms442-tsd        -> origin/codex/wms442-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6820127Z  * [new branch]          codex/wms442-tsd-ui     -> origin/codex/wms442-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6820459Z  * [new branch]          codex/wms443-tsd        -> origin/codex/wms443-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6820818Z  * [new branch]          codex/wms443-tsd-ui     -> origin/codex/wms443-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6821230Z  * [new branch]          codex/wms444-tsd        -> origin/codex/wms444-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6821750Z  * [new branch]          codex/wms444-tsd-ui     -> origin/codex/wms444-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6822263Z  * [new branch]          codex/wms445-tsd        -> origin/codex/wms445-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6822874Z  * [new branch]          codex/wms445-tsd-server-truth -> origin/codex/wms445-tsd-server-truth
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6823633Z  * [new branch]          codex/wms445-tsd-ui     -> origin/codex/wms445-tsd-ui
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6824296Z  * [new branch]          codex/wms447-full-marketplace-labels -> origin/codex/wms447-full-marketplace-labels
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6824790Z  * [new branch]          codex/wms460-fbs-qr-scan -> origin/codex/wms460-fbs-qr-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6825323Z  * [new branch]          codex/wms475-537-prefetch-ci-repair-20261006 -> origin/codex/wms475-537-prefetch-ci-repair-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6825861Z  * [new branch]          codex/wms476-auto-legacy-guard -> origin/codex/wms476-auto-legacy-guard
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6826367Z  * [new branch]          codex/wms476-implementation-sol-high -> origin/codex/wms476-implementation-sol-high
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6827102Z  * [new branch]          codex/wms476-staging-release-20260923 -> origin/codex/wms476-staging-release-20260923
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6827622Z  * [new branch]          codex/wms477-backend-review-fix -> origin/codex/wms477-backend-review-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6828074Z  * [new branch]          codex/wms477-p3-notice  -> origin/codex/wms477-p3-notice
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6828538Z  * [new branch]          codex/wms483-prod-release-20260920 -> origin/codex/wms483-prod-release-20260920
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6829007Z  * [new branch]          codex/wms483-wb-zero-refresh -> origin/codex/wms483-wb-zero-refresh
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6829434Z  * [new branch]          codex/wms489-staging-release -> origin/codex/wms489-staging-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6829948Z  * [new branch]          codex/wms501-performance-isolation-audit -> origin/codex/wms501-performance-isolation-audit
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6830502Z  * [new branch]          codex/wms502-stock-sorting-incident -> origin/codex/wms502-stock-sorting-incident
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6830981Z  * [new branch]          codex/wms506-silent-kiz-print -> origin/codex/wms506-silent-kiz-print
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6831607Z  * [new branch]          codex/wms508-persistent-form-cards -> origin/codex/wms508-persistent-form-cards
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6832096Z  * [new branch]          codex/wms514-clickable-mockup -> origin/codex/wms514-clickable-mockup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6832585Z  * [new branch]          codex/wms514-staging-release-20260924 -> origin/codex/wms514-staging-release-20260924
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6833060Z  * [new branch]          codex/wms515-client-registry -> origin/codex/wms515-client-registry
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6833537Z  * [new branch]          codex/wms517-current-release-analysis -> origin/codex/wms517-current-release-analysis
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6834107Z  * [new branch]          codex/wms517-dynamicmac-independent-review -> origin/codex/wms517-dynamicmac-independent-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6834655Z  * [new branch]          codex/wms517-mac-dynamic-eligible -> origin/codex/wms517-mac-dynamic-eligible
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6835370Z  * [new branch]          codex/wms517-mac-test-contract -> origin/codex/wms517-mac-test-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6836087Z  * [new branch]          codex/wms517-price-by-product-group -> origin/codex/wms517-price-by-product-group
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6836616Z  * [new branch]          codex/wms517-sales-report-contract -> origin/codex/wms517-sales-report-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6837312Z  * [new branch]          codex/wms517-scoped-integration-20261006 -> origin/codex/wms517-scoped-integration-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6837822Z  * [new branch]          codex/wms517-staging-20261001 -> origin/codex/wms517-staging-20261001
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6838292Z  * [new branch]          codex/wms519-artifact-pdf-hotfix -> origin/codex/wms519-artifact-pdf-hotfix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6838787Z  * [new branch]          codex/wms519-kiz-label-aspect-ratio -> origin/codex/wms519-kiz-label-aspect-ratio
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6839591Z  * [new branch]          codex/wms519-post-deploy-docs -> origin/codex/wms519-post-deploy-docs
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6840124Z  * [new branch]          codex/wms520-requirements -> origin/codex/wms520-requirements
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6840662Z  * [new branch]          codex/wms521-kiz-release -> origin/codex/wms521-kiz-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6841087Z  * [new branch]          codex/wms523-auto-import-pools -> origin/codex/wms523-auto-import-pools
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6841537Z  * [new branch]          codex/wms524-confirm-order -> origin/codex/wms524-confirm-order
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6841938Z  * [new branch]          codex/wms524-print-blank -> origin/codex/wms524-print-blank
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6842358Z  * [new branch]          codex/wms533-client-hardening -> origin/codex/wms533-client-hardening
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6842772Z  * [new branch]          codex/wms533-five-events -> origin/codex/wms533-five-events
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6843190Z  * [new branch]          codex/wms533-prod-five-events -> origin/codex/wms533-prod-five-events
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6843647Z  * [new branch]          codex/wms533-seller-stock-events -> origin/codex/wms533-seller-stock-events
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6844181Z  * [new branch]          codex/wms537-pg-fixture-review-20261006 -> origin/codex/wms537-pg-fixture-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6844662Z  * [new branch]          codex/wms550-sorting-scan -> origin/codex/wms550-sorting-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6845102Z  * [new branch]          codex/wms582-yandex-market-api -> origin/codex/wms582-yandex-market-api
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6845628Z  * [new branch]          codex/wms584-589-release-evidence-20260930 -> origin/codex/wms584-589-release-evidence-20260930
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6846112Z  * [new branch]          codex/wms591-avpack-6300 -> origin/codex/wms591-avpack-6300
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6846500Z  * [new branch]          codex/wms593-597-urgent -> origin/codex/wms593-597-urgent
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6847067Z  * [new branch]          codex/wms602-fbs-cell-scan -> origin/codex/wms602-fbs-cell-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6847477Z  * [new branch]          codex/wms603-box-scan   -> origin/codex/wms603-box-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6848052Z  * [new branch]          codex/wms604-staging-integration -> origin/codex/wms604-staging-integration
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6848528Z  * [new branch]          codex/wms604-unified-packing -> origin/codex/wms604-unified-packing
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6849101Z  * [new branch]          codex/wms607-artmaks-acceptance-updater-contract -> origin/codex/wms607-artmaks-acceptance-updater-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6849700Z  * [new branch]          codex/wms607-artmaks-direct-repair -> origin/codex/wms607-artmaks-direct-repair
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6850210Z  * [new branch]          codex/wms607-artmaks-http-recovery -> origin/codex/wms607-artmaks-http-recovery
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6850854Z  * [new branch]          codex/wms607-artmaks-http-recovery-contract -> origin/codex/wms607-artmaks-http-recovery-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6851573Z  * [new branch]          codex/wms607-artmaks-http-recovery-review-20261007 -> origin/codex/wms607-artmaks-http-recovery-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6852203Z  * [new branch]          codex/wms607-artmaks-installer-findings -> origin/codex/wms607-artmaks-installer-findings
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6852745Z  * [new branch]          codex/wms607-artmaks-repair-review -> origin/codex/wms607-artmaks-repair-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6853230Z  * [new branch]          codex/wms607-artmaks-test-contract -> origin/codex/wms607-artmaks-test-contract
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6853686Z  * [new branch]          codex/wms607-instant-print -> origin/codex/wms607-instant-print
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6854117Z  * [new branch]          codex/wms607-mac-single-binary -> origin/codex/wms607-mac-single-binary
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6854619Z  * [new branch]          codex/wms607-printer-failure-analysis -> origin/codex/wms607-printer-failure-analysis
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6855093Z  * [new branch]          codex/wms607-staging-print -> origin/codex/wms607-staging-print
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6855487Z  * [new branch]          codex/wms607-windows-x64 -> origin/codex/wms607-windows-x64
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6855902Z  * [new branch]          codex/wms608-scanned-row-first -> origin/codex/wms608-scanned-row-first
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6856489Z  * [new branch]          codex/wms610-fbs-picking-columns -> origin/codex/wms610-fbs-picking-columns
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6857155Z  * [new branch]          codex/wms611-fbs-print-disabled -> origin/codex/wms611-fbs-print-disabled
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6857610Z  * [new branch]          codex/wms612-delivery-checks -> origin/codex/wms612-delivery-checks
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6858025Z  * [new branch]          codex/wms612-staging-all -> origin/codex/wms612-staging-all
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6858441Z  * [new branch]          codex/wms614-616-prod-release -> origin/codex/wms614-616-prod-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6858844Z  * [new branch]          codex/wms617-video-demo -> origin/codex/wms617-video-demo
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6859251Z  * [new branch]          codex/wms618-staging    -> origin/codex/wms618-staging
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6859654Z  * [new branch]          codex/wms622-fbo-kiz-recovery -> origin/codex/wms622-fbo-kiz-recovery
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6860128Z  * [new branch]          codex/wms623-artmaks-unused-pdfs -> origin/codex/wms623-artmaks-unused-pdfs
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6860659Z  * [new branch]          codex/wms624-developer-requests-current -> origin/codex/wms624-developer-requests-current
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6861145Z  * [new branch]          codex/wms624-sync-cadence -> origin/codex/wms624-sync-cadence
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6861575Z  * [new branch]          codex/wms625-print-reliability -> origin/codex/wms625-print-reliability
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6862052Z  * [new branch]          codex/wms626-astra-effort-limit -> origin/codex/wms626-astra-effort-limit
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6862552Z  * [new branch]          codex/wms627-artmaks-stock-reconcile -> origin/codex/wms627-artmaks-stock-reconcile
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6863041Z  * [new branch]          codex/wms628-artmaks-wrong-scan -> origin/codex/wms628-artmaks-wrong-scan
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6863454Z  * [new branch]          codex/wms628-production -> origin/codex/wms628-production
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6863994Z  * [new branch]          codex/wms629-packing-scroll -> origin/codex/wms629-packing-scroll
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6864533Z  * [new branch]          codex/wms636-typecheck-validation-20261006 -> origin/codex/wms636-typecheck-validation-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6865035Z  * [new branch]          codex/wms651-counter-copy -> origin/codex/wms651-counter-copy
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6865550Z  * [new branch]          codex/wms652-517-release-acceptance-20261006 -> origin/codex/wms652-517-release-acceptance-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6866157Z  * [new branch]          codex/wms652-abort-boundary-review-20261007 -> origin/codex/wms652-abort-boundary-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6866849Z  * [new branch]          codex/wms652-acceptance-evidence -> origin/codex/wms652-acceptance-evidence
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6867469Z  * [new branch]          codex/wms652-accepted-reference-contract-20261007 -> origin/codex/wms652-accepted-reference-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6868241Z  * [new branch]          codex/wms652-all-pg-fixture-comparison -> origin/codex/wms652-all-pg-fixture-comparison
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6869740Z  * [new branch]          codex/wms652-backup-boundary-format -> origin/codex/wms652-backup-boundary-format
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6870348Z  * [new branch]          codex/wms652-backup-fixture-boundary-20261007 -> origin/codex/wms652-backup-fixture-boundary-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6870930Z  * [new branch]          codex/wms652-backup-fixture-review -> origin/codex/wms652-backup-fixture-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6871538Z  * [new branch]          codex/wms652-backup-format-ledger-review-20261007 -> origin/codex/wms652-backup-format-ledger-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6872214Z  * [new branch]          codex/wms652-batch-exact-ledger-contract-20261007 -> origin/codex/wms652-batch-exact-ledger-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6872808Z  * [new branch]          codex/wms652-batch-exact-pair-pins -> origin/codex/wms652-batch-exact-pair-pins
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6873401Z  * [new branch]          codex/wms652-batch-exact-pair-review-20261007 -> origin/codex/wms652-batch-exact-pair-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6874166Z  * [new branch]          codex/wms652-batch-pid-contract-20261007 -> origin/codex/wms652-batch-pid-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6874708Z  * [new branch]          codex/wms652-batch-pid-fixture-fix -> origin/codex/wms652-batch-pid-fixture-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6875284Z  * [new branch]          codex/wms652-batch-pid-fixture-review-20261007 -> origin/codex/wms652-batch-pid-fixture-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6875922Z  * [new branch]          codex/wms652-batch-release-acceptance-20261007 -> origin/codex/wms652-batch-release-acceptance-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6876427Z  * [new branch]          codex/wms652-bot-night  -> origin/codex/wms652-bot-night
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6877022Z  * [new branch]          codex/wms652-cdp-ambiguity-contract-20261007 -> origin/codex/wms652-cdp-ambiguity-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6877633Z  * [new branch]          codex/wms652-cdp-cancel-contract-20261007 -> origin/codex/wms652-cdp-cancel-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6878220Z  * [new branch]          codex/wms652-cdp-contract-review-20261007 -> origin/codex/wms652-cdp-contract-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6878804Z  * [new branch]          codex/wms652-cdp-explicit-abort-diagnostic -> origin/codex/wms652-cdp-explicit-abort-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6879434Z  * [new branch]          codex/wms652-cdp-fixture-source-review-20261007 -> origin/codex/wms652-cdp-fixture-source-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6880030Z  * [new branch]          codex/wms652-cdp-known-cancel-fixture -> origin/codex/wms652-cdp-known-cancel-fixture
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6880564Z  * [new branch]          codex/wms652-cdp-r1-rereview-20261007 -> origin/codex/wms652-cdp-r1-rereview-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6881117Z  * [new branch]          codex/wms652-checkpoint-requirements -> origin/codex/wms652-checkpoint-requirements
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6881811Z  * [new branch]          codex/wms652-ci-delta-review -> origin/codex/wms652-ci-delta-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6882241Z  * [new branch]          codex/wms652-ci-two-shards -> origin/codex/wms652-ci-two-shards
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6882714Z  * [new branch]          codex/wms652-critical-fbs-contracts -> origin/codex/wms652-critical-fbs-contracts
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6883281Z  * [new branch]          codex/wms652-disjoint-contract-corrections -> origin/codex/wms652-disjoint-contract-corrections
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6883943Z  * [new branch]          codex/wms652-etalon-invalid-id-identity-diagnostic -> origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6884614Z  * [new branch]          codex/wms652-etalon-invalid-id-review-20261007 -> origin/codex/wms652-etalon-invalid-id-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6885250Z  * [new branch]          codex/wms652-final-batch-source-pin-20261007 -> origin/codex/wms652-final-batch-source-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6885859Z  * [new branch]          codex/wms652-final-bootstrap-pin-20261007 -> origin/codex/wms652-final-bootstrap-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6886538Z  * [new branch]          codex/wms652-final-infrastructure-pin-review-20261007 -> origin/codex/wms652-final-infrastructure-pin-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6887456Z  * [new branch]          codex/wms652-final-source-pin-review-20261007 -> origin/codex/wms652-final-source-pin-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6888077Z  * [new branch]          codex/wms652-final-stock-source-pin-20261007 -> origin/codex/wms652-final-stock-source-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6888724Z  * [new branch]          codex/wms652-frontend-report-identities-20261007 -> origin/codex/wms652-frontend-report-identities-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6889339Z  * [new branch]          codex/wms652-independent-main-check -> origin/codex/wms652-independent-main-check
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6889967Z  * [new branch]          codex/wms652-infrastructure-acceptance-20261007 -> origin/codex/wms652-infrastructure-acceptance-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6890719Z  * [new branch]          codex/wms652-infrastructure-corrections-review-20261007 -> origin/codex/wms652-infrastructure-corrections-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6891537Z  * [new branch]          codex/wms652-nested-stock-acceptance-20261007 -> origin/codex/wms652-nested-stock-acceptance-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6892198Z  * [new branch]          codex/wms652-nested-stock-causal-review-20261007 -> origin/codex/wms652-nested-stock-causal-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6892839Z  * [new branch]          codex/wms652-nested-stock-fix-review-20261007 -> origin/codex/wms652-nested-stock-fix-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6893537Z  * [new branch]          codex/wms652-nested-stock-publish-requirements-20261007 -> origin/codex/wms652-nested-stock-publish-requirements-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6894246Z  * [new branch]          codex/wms652-nested-stock-test-contract-20261007 -> origin/codex/wms652-nested-stock-test-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6894779Z  * [new branch]          codex/wms652-night-reader -> origin/codex/wms652-night-reader
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6895181Z  * [new branch]          codex/wms652-night-repair -> origin/codex/wms652-night-repair
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6895568Z  * [new branch]          codex/wms652-pdf-probe  -> origin/codex/wms652-pdf-probe
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6896031Z  * [new branch]          codex/wms652-pg-collector-peer-review -> origin/codex/wms652-pg-collector-peer-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6896614Z  * [new branch]          codex/wms652-portable-backup-proof-20261007 -> origin/codex/wms652-portable-backup-proof-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6897340Z  * [new branch]          codex/wms652-process-fixes-review-20261007 -> origin/codex/wms652-process-fixes-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6897846Z  * [new branch]          codex/wms652-process-gates -> origin/codex/wms652-process-gates
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6898374Z  * [new branch]          codex/wms652-process-protection-requirements -> origin/codex/wms652-process-protection-requirements
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6899144Z  * [new branch]          codex/wms652-prod-env-negative-canary-20261007 -> origin/codex/wms652-prod-env-negative-canary-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6899779Z  * [new branch]          codex/wms652-realqr-cdp-lifecycle-diagnostic -> origin/codex/wms652-realqr-cdp-lifecycle-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6900423Z  * [new branch]          codex/wms652-reference-migration-review-20261007 -> origin/codex/wms652-reference-migration-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6900992Z  * [new branch]          codex/wms652-regression-guard -> origin/codex/wms652-regression-guard
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6901453Z  * [new branch]          codex/wms652-release-ci-20261006 -> origin/codex/wms652-release-ci-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6902019Z  * [new branch]          codex/wms652-release-execution-evidence-20261007 -> origin/codex/wms652-release-execution-evidence-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6902719Z  * [new branch]          codex/wms652-remount-interception-diagnosis-20261007 -> origin/codex/wms652-remount-interception-diagnosis-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6903394Z  * [new branch]          codex/wms652-required-check-canary-20261006 -> origin/codex/wms652-required-check-canary-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6904030Z  * [new branch]          codex/wms652-reviewed-batch-source-pin-20261007 -> origin/codex/wms652-reviewed-batch-source-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6904658Z  * [new branch]          codex/wms652-reviewed-contract-corrections -> origin/codex/wms652-reviewed-contract-corrections
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6905307Z  * [new branch]          codex/wms652-reviewed-infrastructure-pin-20261007 -> origin/codex/wms652-reviewed-infrastructure-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6905965Z  * [new branch]          codex/wms652-reviewed-stock-source-pin-20261007 -> origin/codex/wms652-reviewed-stock-source-pin-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6906523Z  * [new branch]          codex/wms652-server-deploy-gate -> origin/codex/wms652-server-deploy-gate
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6907052Z  * [new branch]          codex/wms652-sonnet-frontend -> origin/codex/wms652-sonnet-frontend
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6907660Z  * [new branch]          codex/wms652-stock-outer-commit-guard -> origin/codex/wms652-stock-outer-commit-guard
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6908147Z  * [new branch]          codex/wms652-trusted-anchor -> origin/codex/wms652-trusted-anchor
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6908553Z  * [new branch]          codex/wms652-ui-gate    -> origin/codex/wms652-ui-gate
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6909041Z  * [new branch]          codex/wms652-warehouse-sc-sqlite-diagnostic -> origin/codex/wms652-warehouse-sc-sqlite-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6909629Z  * [new branch]          codex/wms653-scope-attribution-20261006 -> origin/codex/wms653-scope-attribution-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6910231Z  * [new branch]          codex/wms653-scope-independent-review-20261006 -> origin/codex/wms653-scope-independent-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6910925Z  * [new branch]          codex/wms653-shared-proof-independent-review-20261006 -> origin/codex/wms653-shared-proof-independent-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6911526Z  * [new branch]          codex/wms654-product-20261006 -> origin/codex/wms654-product-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6912208Z  * [new branch]          codex/wms659-imperia-boxes -> origin/codex/wms659-imperia-boxes
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6912606Z  * [new branch]          codex/wms660-barcodes   -> origin/codex/wms660-barcodes
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6913007Z  * [new branch]          codex/wms661-analyst-20261006 -> origin/codex/wms661-analyst-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6913503Z  * [new branch]          codex/wms661-installed-baseline-tests -> origin/codex/wms661-installed-baseline-tests
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6914078Z  * [new branch]          codex/wms661-reviewed-ordered-integration -> origin/codex/wms661-reviewed-ordered-integration
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6914653Z  * [new branch]          codex/wms661-runtime-preflight-20261006 -> origin/codex/wms661-runtime-preflight-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6915225Z  * [new branch]          codex/wms661-testwriter-baseline-20261006 -> origin/codex/wms661-testwriter-baseline-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6915974Z  * [new branch]          codex/wms662-663-owner-supersession-gate-20261006 -> origin/codex/wms662-663-owner-supersession-gate-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6916509Z  * [new branch]          codex/wms662-663-priority -> origin/codex/wms662-663-priority
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6916992Z  * [new branch]          codex/wms662-f6-testwriter -> origin/codex/wms662-f6-testwriter
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6917507Z  * [new branch]          codex/wms662-format-only-correction-20261006 -> origin/codex/wms662-format-only-correction-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6918112Z  * [new branch]          codex/wms662-live-delivery-contract-20261006 -> origin/codex/wms662-live-delivery-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6918605Z  * [new branch]          codex/wms662-prod-handoff -> origin/codex/wms662-prod-handoff
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6919016Z  * [new branch]          codex/wms662-review-c36b8ab -> origin/codex/wms662-review-c36b8ab
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6919520Z  * [new branch]          codex/wms662-scoped-integration-20261006 -> origin/codex/wms662-scoped-integration-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6920106Z  * [new branch]          codex/wms663-boxes-single-checkbox-20261006 -> origin/codex/wms663-boxes-single-checkbox-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6920747Z  * [new branch]          codex/wms663-owner-checkbox-test-contract-20261006 -> origin/codex/wms663-owner-checkbox-test-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6921415Z  * [new branch]          codex/wms663-pre-set-recovery-contract-20261006 -> origin/codex/wms663-pre-set-recovery-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6922029Z  * [new branch]          codex/wms663-readonly-ozon-status-20261006 -> origin/codex/wms663-readonly-ozon-status-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6922604Z  * [new branch]          codex/wms663-release-retry-acceptance -> origin/codex/wms663-release-retry-acceptance
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6923106Z  * [new branch]          codex/wms663-release-retry-fix -> origin/codex/wms663-release-retry-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6923723Z  * [new branch]          codex/wms663-required-order-checkbox-contract-20261006 -> origin/codex/wms663-required-order-checkbox-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6924607Z  * [new branch]          codex/wms663-requirements-completeness-contract-20261006 -> origin/codex/wms663-requirements-completeness-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6925259Z  * [new branch]          codex/wms663-retry-contract-20261006 -> origin/codex/wms663-retry-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6925794Z  * [new branch]          codex/wms663-scoped-priority-20261006 -> origin/codex/wms663-scoped-priority-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6926289Z  * [new branch]          codex/wms664-dispatcher-stall -> origin/codex/wms664-dispatcher-stall
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6926996Z  * [new branch]          codex/wms665-avpack-withdrawal-helper -> origin/codex/wms665-avpack-withdrawal-helper
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6927625Z  * [new branch]          codex/wms665-full-sold-operational-check-20261006 -> origin/codex/wms665-full-sold-operational-check-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6928286Z  * [new branch]          codex/wms665-production-url-hotfix-20261006 -> origin/codex/wms665-production-url-hotfix-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6928950Z  * [new branch]          codex/wms666-ci-history-independent-review-20261006 -> origin/codex/wms666-ci-history-independent-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6929575Z  * [new branch]          codex/wms666-ci-history-scope-20261006 -> origin/codex/wms666-ci-history-scope-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6930091Z  * [new branch]          codex/wms666-ci-qr-finish-20261006 -> origin/codex/wms666-ci-qr-finish-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6930636Z  * [new branch]          codex/wms666-doc-history-scope-fix-20261006 -> origin/codex/wms666-doc-history-scope-fix-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6931224Z  * [new branch]          codex/wms666-legacy-harness-review-20261006 -> origin/codex/wms666-legacy-harness-review-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6931783Z  * [new branch]          codex/wms666-priority-etalon-20261006 -> origin/codex/wms666-priority-etalon-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6932429Z  * [new branch]          codex/wms666-release-c11-acceptance -> origin/codex/wms666-release-c11-acceptance
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6932986Z  * [new branch]          codex/wms666-remote-browser-proof-20261006 -> origin/codex/wms666-remote-browser-proof-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6933587Z  * [new branch]          codex/wms666-staging-c11-acceptance-20261006 -> origin/codex/wms666-staging-c11-acceptance-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6934195Z  * [new branch]          codex/wms666-task-scope-correction-20261006 -> origin/codex/wms666-task-scope-correction-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6934736Z  * [new branch]          codex/wms666-unified-fbs-packing -> origin/codex/wms666-unified-fbs-packing
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6935179Z  * [new branch]          codex/wms667-stock-filter -> origin/codex/wms667-stock-filter
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6935589Z  * [new branch]          codex/wms667-visual-runner -> origin/codex/wms667-visual-runner
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6936051Z  * [new branch]          codex/wms668-dispatcher-batch-final -> origin/codex/wms668-dispatcher-batch-final
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6936641Z  * [new branch]          codex/wms669-urgent-confirmed-contract-20261006 -> origin/codex/wms669-urgent-confirmed-contract-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6937303Z  * [new branch]          codex/wms672-673-analyst-20261006 -> origin/codex/wms672-673-analyst-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6937848Z  * [new branch]          codex/wms672-673-prerequisite-integration -> origin/codex/wms672-673-prerequisite-integration
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6938381Z  * [new branch]          codex/wms672-c5-cache-clock-trace -> origin/codex/wms672-c5-cache-clock-trace
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6938860Z  * [new branch]          codex/wms672-c5-cache-debug-trace -> origin/codex/wms672-c5-cache-debug-trace
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6939301Z  * [new branch]          codex/wms672-c5-cache-trace -> origin/codex/wms672-c5-cache-trace
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6939749Z  * [new branch]          codex/wms672-c5-linux-diagnostic -> origin/codex/wms672-c5-linux-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6940218Z  * [new branch]          codex/wms672-c5-linux-fix-check -> origin/codex/wms672-c5-linux-fix-check
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6940797Z  * [new branch]          codex/wms672-c5-peer-drain-check -> origin/codex/wms672-c5-peer-drain-check
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6941342Z  * [new branch]          codex/wms672-c5-raster-resource-comparison -> origin/codex/wms672-c5-raster-resource-comparison
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6941892Z  * [new branch]          codex/wms672-c5-target-cache-trace -> origin/codex/wms672-c5-target-cache-trace
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6942417Z  * [new branch]          codex/wms672-functional-finish-20261006 -> origin/codex/wms672-functional-finish-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6942917Z  * [new branch]          codex/wms672-native-decode-fix -> origin/codex/wms672-native-decode-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6943445Z  * [new branch]          codex/wms672-native-error-contract-20261007 -> origin/codex/wms672-native-error-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6943965Z  * [new branch]          codex/wms672-native-fix-review -> origin/codex/wms672-native-fix-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6944489Z  * [new branch]          codex/wms672-peer-drain-contract-20261007 -> origin/codex/wms672-peer-drain-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6945052Z  * [new branch]          codex/wms672-peer-drain-source-review -> origin/codex/wms672-peer-drain-source-review
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6945647Z  * [new branch]          codex/wms672-raster-analyst-acceptance-20261007 -> origin/codex/wms672-raster-analyst-acceptance-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6946299Z  * [new branch]          codex/wms672-raster-resource-contract-20261007 -> origin/codex/wms672-raster-resource-contract-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6947021Z  * [new branch]          codex/wms672-raster-resource-fix -> origin/codex/wms672-raster-resource-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6947579Z  * [new branch]          codex/wms672-raster-resource-review-20261007 -> origin/codex/wms672-raster-resource-review-20261007
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6948297Z  * [new branch]          codex/wms675-ci-topology-proof-20261006 -> origin/codex/wms675-ci-topology-proof-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6948876Z  * [new branch]          codex/wms675-incident-regression-20261006 -> origin/codex/wms675-incident-regression-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6949454Z  * [new branch]          codex/wms675-live-reconciliation-20261006 -> origin/codex/wms675-live-reconciliation-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6949963Z  * [new branch]          codex/wms676-crosscheck-astra -> origin/codex/wms676-crosscheck-astra
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6950437Z  * [new branch]          codex/wms676-night-review-fallback -> origin/codex/wms676-night-review-fallback
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6950895Z  * [new branch]          codex/wms676-sol61-pipeline -> origin/codex/wms676-sol61-pipeline
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6951370Z  * [new branch]          codex/wms679-fbw-analysis-source349 -> origin/codex/wms679-fbw-analysis-source349
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6951914Z  * [new branch]          codex/wms681-682-morning-intake-20261006 -> origin/codex/wms681-682-morning-intake-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6952386Z  * [new branch]          codex/wms681-qr-recovery -> origin/codex/wms681-qr-recovery
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6952805Z  * [new branch]          codex/wms681-real-wb-qr-hotfix -> origin/codex/wms681-real-wb-qr-hotfix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6953275Z  * [new branch]          deploy/wb-emulator-real-order-qr -> origin/deploy/wb-emulator-real-order-qr
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6953754Z  * [new branch]          docs/owner-requirements-20260831 -> origin/docs/owner-requirements-20260831
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6954280Z  * [new branch]          docs/wms-system-review-protocol-20260812 -> origin/docs/wms-system-review-protocol-20260812
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6954755Z  * [new branch]          docs/wms469-470-backlog -> origin/docs/wms469-470-backlog
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6955167Z  * [new branch]          docs/wms561-ship-by-in-supply -> origin/docs/wms561-ship-by-in-supply
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6955619Z  * [new branch]          docs/wms584-585-tsd-walkthrough -> origin/docs/wms584-585-tsd-walkthrough
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6956084Z  * [new branch]          docs/wms648-ozon-catalog-backlog -> origin/docs/wms648-ozon-catalog-backlog
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6956653Z  * [new branch]          docs/wms649-shk-po-ploshchadke -> origin/docs/wms649-shk-po-ploshchadke
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6957138Z  * [new branch]          etalon                  -> origin/etalon
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6957525Z  * [new branch]          feat/cz-print-split-artifact -> origin/feat/cz-print-split-artifact
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6958005Z  * [new branch]          feat/fbs-warehouse-filter-20260812 -> origin/feat/fbs-warehouse-filter-20260812
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6958496Z  * [new branch]          feat/ff-inbound-create-20260812 -> origin/feat/ff-inbound-create-20260812
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6958954Z  * [new branch]          feat/marking-import-s3-storage -> origin/feat/marking-import-s3-storage
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6959385Z  * [new branch]          feat/mobile-fbs-demo-seed -> origin/feat/mobile-fbs-demo-seed
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6959811Z  * [new branch]          feat/product-barcode-print -> origin/feat/product-barcode-print
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6960216Z  * [new branch]          feat/wms056-audit-trail -> origin/feat/wms056-audit-trail
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6960608Z  * [new branch]          feat/wms062-warehouse-docs -> origin/feat/wms062-warehouse-docs
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6961030Z  * [new branch]          feat/wms111-wb-cancel-return -> origin/feat/wms111-wb-cancel-return
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6961464Z  * [new branch]          feat/wms121-supply-identity -> origin/feat/wms121-supply-identity
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6961877Z  * [new branch]          feat/wms270-login-and-ports -> origin/feat/wms270-login-and-ports
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6962303Z  * [new branch]          feat/wms338-stock-min-formula -> origin/feat/wms338-stock-min-formula
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6962715Z  * [new branch]          feat/wms349-merge-service -> origin/feat/wms349-merge-service
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6963090Z  * [new branch]          feat/wms363-ozon-tsd    -> origin/feat/wms363-ozon-tsd
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6963567Z  * [new branch]          feat/wms397-chat-mvp    -> origin/feat/wms397-chat-mvp
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6963956Z  * [new branch]          feat/wms401-mobile-followup -> origin/feat/wms401-mobile-followup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6964406Z  * [new branch]          feat/wms433-assistant-release -> origin/feat/wms433-assistant-release
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6964827Z  * [new branch]          feat/wms433-tenant-rollout -> origin/feat/wms433-tenant-rollout
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6965220Z  * [new branch]          feat/wms447-fbs-box-count -> origin/feat/wms447-fbs-box-count
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6965661Z  * [new branch]          feat/wms453-455-boxes-shared-pool -> origin/feat/wms453-455-boxes-shared-pool
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6966103Z  * [new branch]          feat/wms469-stock-dialog -> origin/feat/wms469-stock-dialog
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6966510Z  * [new branch]          feat/wms529-stock-vs-location -> origin/feat/wms529-stock-vs-location
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6967102Z  * [new branch]          feat/wms534-intake-box  -> origin/feat/wms534-intake-box
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6967480Z  * [new branch]          feat/wms536-scan-layer  -> origin/feat/wms536-scan-layer
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6967911Z  * [new branch]          feat/wms539-artmaks-cells-import -> origin/feat/wms539-artmaks-cells-import
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6968342Z  * [new branch]          feat/wms631-print-agent -> origin/feat/wms631-print-agent
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6968706Z  * [new branch]          feat/wms633-chz-copies  -> origin/feat/wms633-chz-copies
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6969122Z  * [new branch]          feat/wms636-wb-rejected-filter -> origin/feat/wms636-wb-rejected-filter
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6969549Z  * [new branch]          feat/wms641-support-agent -> origin/feat/wms641-support-agent
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6969939Z  * [new branch]          feat/wms650-sorting-impl -> origin/feat/wms650-sorting-impl
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6970331Z  * [new branch]          feat/wms650-sorting-mockup -> origin/feat/wms650-sorting-mockup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6970751Z  * [new branch]          fix/auth-staff-e2e-20260815 -> origin/fix/auth-staff-e2e-20260815
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6971276Z  * [new branch]          fix/cis-pool-full-20260821 -> origin/fix/cis-pool-full-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6971690Z  * [new branch]          fix/cz-artifact-print-scale -> origin/fix/cz-artifact-print-scale
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6972094Z  * [new branch]          fix/deploy-hard-reset   -> origin/fix/deploy-hard-reset
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6972509Z  * [new branch]          fix/fbs-box-controls-20260901 -> origin/fix/fbs-box-controls-20260901
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6972956Z  * [new branch]          fix/fbs-supplier-status-sync -> origin/fix/fbs-supplier-status-sync
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6973431Z  * [new branch]          fix/inventory-owner-block-20260902 -> origin/fix/inventory-owner-block-20260902
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6974016Z  * [new branch]          fix/inventory-unexpected-product-scan-20260901 -> origin/fix/inventory-unexpected-product-scan-20260901
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6974556Z  * [new branch]          fix/kiz-gs-restore-20260821 -> origin/fix/kiz-gs-restore-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6974991Z  * [new branch]          fix/no-distribution-20260821 -> origin/fix/no-distribution-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6975511Z  * [new branch]          fix/outbound-reserve-from-sorting-20260902 -> origin/fix/outbound-reserve-from-sorting-20260902
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6976044Z  * [new branch]          fix/packing-optional-20260819 -> origin/fix/packing-optional-20260819
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6976493Z  * [new branch]          fix/packing-optional-to-prod -> origin/fix/packing-optional-to-prod
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6977092Z  * [new branch]          fix/picklist-size-20260819 -> origin/fix/picklist-size-20260819
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6977487Z  * [new branch]          fix/print-pdf-dialog    -> origin/fix/print-pdf-dialog
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6977879Z  * [new branch]          fix/print-restore-proven -> origin/fix/print-restore-proven
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6978295Z  * [new branch]          fix/review-findings-20260902 -> origin/fix/review-findings-20260902
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6978905Z  * [new branch]          fix/seller-honest-sign-sync-20260819 -> origin/fix/seller-honest-sign-sync-20260819
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6979414Z  * [new branch]          fix/warehouse-single-20260821 -> origin/fix/warehouse-single-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6979878Z  * [new branch]          fix/wb-label-seller-line-height -> origin/fix/wb-label-seller-line-height
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6980337Z  * [new branch]          fix/wb-label-seller-line-trim -> origin/fix/wb-label-seller-line-trim
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6980788Z  * [new branch]          fix/wb-meta-method-20260821 -> origin/fix/wb-meta-method-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6981178Z  * [new branch]          fix/wb-token-save-500   -> origin/fix/wb-token-save-500
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6981599Z  * [new branch]          fix/wms-fbs-single-pick-by-cell -> origin/fix/wms-fbs-single-pick-by-cell
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6982040Z  * [new branch]          fix/wms-session-regression -> origin/fix/wms-session-regression
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6982519Z  * [new branch]          fix/wms487-tape-print-missing-codes -> origin/fix/wms487-tape-print-missing-codes
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6982982Z  * [new branch]          fix/wms517-price-snapshot -> origin/fix/wms517-price-snapshot
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6983363Z  * [new branch]          fix/wms517-sold-only    -> origin/fix/wms517-sold-only
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6983756Z  * [new branch]          fix/wms625-on-etalon-20261003 -> origin/fix/wms625-on-etalon-20261003
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6984182Z  * [new branch]          fix/wms634-fbo-date-delegated -> origin/fix/wms634-fbo-date-delegated
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6984590Z  * [new branch]          fix/wms635-kiz-no-wb-wait -> origin/fix/wms635-kiz-no-wb-wait
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6985008Z  * [new branch]          fix/wms639-scan-no-wb-readback -> origin/fix/wms639-scan-no-wb-readback
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6985458Z  * [new branch]          fix/wms640-scan-kiz-no-wb-wait -> origin/fix/wms640-scan-kiz-no-wb-wait
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6985930Z  * [new branch]          fix/wms641-kiz-delete-background -> origin/fix/wms641-kiz-delete-background
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6986515Z  * [new branch]          fix/wms642-kiz-no-locks-handover -> origin/fix/wms642-kiz-no-locks-handover
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6987081Z  * [new branch]          fix/wms643-no-print-when-unchecked -> origin/fix/wms643-no-print-when-unchecked
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6987569Z  * [new branch]          fix/wms652-contract-check-merge -> origin/fix/wms652-contract-check-merge
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6987996Z  * [new branch]          fix/wms656-full-kiz-label -> origin/fix/wms656-full-kiz-label
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6988417Z  * [new branch]          fix/wms666-product-stock-scope -> origin/fix/wms666-product-stock-scope
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6988951Z  * [new branch]          hotfix/avpack-bulk-print-after-kiz-clear -> origin/hotfix/avpack-bulk-print-after-kiz-clear
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6989445Z  * [new branch]          hotfix/boxes-print-all-qr -> origin/hotfix/boxes-print-all-qr
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6989927Z  * [new branch]          hotfix/cz-print-regression-2026-07-07 -> origin/hotfix/cz-print-regression-2026-07-07
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6990413Z  * [new branch]          hotfix/inbound-qty-blur-v2 -> origin/hotfix/inbound-qty-blur-v2
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6990896Z  * [new branch]          hotfix/inbound-table-header-alignment -> origin/hotfix/inbound-table-header-alignment
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6991412Z  * [new branch]          hotfix/ozon-requirements-int-sku -> origin/hotfix/ozon-requirements-int-sku
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6991897Z  * [new branch]          hotfix/tz-print-landscape-revert -> origin/hotfix/tz-print-landscape-revert
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6992400Z  * [new branch]          hotfix/wb-unified-token-fbs-intake -> origin/hotfix/wb-unified-token-fbs-intake
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6992842Z  * [new branch]          hotfix/wms622-628-restore -> origin/hotfix/wms622-628-restore
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6993261Z  * [new branch]          integration/fbs-fixes-20260821 -> origin/integration/fbs-fixes-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6993745Z  * [new branch]          main                    -> origin/main
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6994125Z  * [new branch]          mobile/android7-v014-recovery -> origin/mobile/android7-v014-recovery
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6994520Z  * [new branch]          mobile/feat-fbs         -> origin/mobile/feat-fbs
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6994879Z  * [new branch]          mockup/psp2-clickable   -> origin/mockup/psp2-clickable
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6995489Z  * [new branch]          night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup -> origin/night/catalog-box-lookup-20260823/lane-1/01-catalog-box-lookup
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6996212Z  * [new branch]          night/volna-9-recovery/lane-1/01-wb-marking -> origin/night/volna-9-recovery/lane-1/01-wb-marking
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6997010Z  * [new branch]          night/volna-9-recovery/lane-1/04-warehouse-switch -> origin/night/volna-9-recovery/lane-1/04-warehouse-switch
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6997623Z  * [new branch]          night/volna-9-recovery/lane-1/07-reporting -> origin/night/volna-9-recovery/lane-1/07-reporting
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6998231Z  * [new branch]          night/volna-9-recovery/lane-2/02-verdikt-screen -> origin/night/volna-9-recovery/lane-2/02-verdikt-screen
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6998834Z  * [new branch]          night/volna-9-recovery/lane-2/05-prod-slow -> origin/night/volna-9-recovery/lane-2/05-prod-slow
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.6999394Z  * [new branch]          night/volna-9-recovery/lane-2/08-storage -> origin/night/volna-9-recovery/lane-2/08-storage
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7000019Z  * [new branch]          night/volna-9-recovery/lane-3/03-no-distribution-mode -> origin/night/volna-9-recovery/lane-3/03-no-distribution-mode
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7000697Z  * [new branch]          night/volna-9-recovery/lane-3/06-picking-list-order -> origin/night/volna-9-recovery/lane-3/06-picking-list-order
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7001287Z  * [new branch]          night/volna-9-recovery/lane-3/09-billing -> origin/night/volna-9-recovery/lane-3/09-billing
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7001802Z  * [new branch]          night/volna-9/lane-1/01-wb-marking -> origin/night/volna-9/lane-1/01-wb-marking
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7002424Z  * [new branch]          night/volna-9/lane-1/07-reporting -> origin/night/volna-9/lane-1/07-reporting
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7002891Z  * [new branch]          night/volna-9/lane-1/defect-01 -> origin/night/volna-9/lane-1/defect-01
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7003340Z  * [new branch]          night/volna-9/lane-1/feature-07 -> origin/night/volna-9/lane-1/feature-07
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7003824Z  * [new branch]          night/volna-9/lane-2/02-verdikt-screen -> origin/night/volna-9/lane-2/02-verdikt-screen
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7004305Z  * [new branch]          night/volna-9/lane-2/08-storage -> origin/night/volna-9/lane-2/08-storage
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7004742Z  * [new branch]          night/volna-9/lane-2/defect-02 -> origin/night/volna-9/lane-2/defect-02
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7005255Z  * [new branch]          night/volna-9/lane-3/03-no-distribution-mode -> origin/night/volna-9/lane-3/03-no-distribution-mode
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7005768Z  * [new branch]          night/volna-9/lane-3/09-billing -> origin/night/volna-9/lane-3/09-billing
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7006215Z  * [new branch]          night/volna-9/lane-3/defect-03 -> origin/night/volna-9/lane-3/defect-03
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7006855Z  * [new branch]          night/volna-9/lane-4/04-warehouse-switch -> origin/night/volna-9/lane-4/04-warehouse-switch
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7007419Z  * [new branch]          night/volna-9/lane-4/defect-04 -> origin/night/volna-9/lane-4/defect-04
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7007874Z  * [new branch]          night/volna-9/lane-5/05-prod-slow -> origin/night/volna-9/lane-5/05-prod-slow
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7008328Z  * [new branch]          night/volna-9/lane-5/defect-05 -> origin/night/volna-9/lane-5/defect-05
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7008829Z  * [new branch]          night/volna-9/lane-6/06-picking-list-order -> origin/night/volna-9/lane-6/06-picking-list-order
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7009324Z  * [new branch]          night/volna-9/lane-6/defect-06 -> origin/night/volna-9/lane-6/defect-06
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7009857Z  * [new branch]          night/wms-653-5beb52da  -> origin/night/wms-653-5beb52da
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7010226Z  * [new branch]          night/wms-654-5beb52da  -> origin/night/wms-654-5beb52da
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7010573Z  * [new branch]          night/wms-657-5beb52da  -> origin/night/wms-657-5beb52da
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7010920Z  * [new branch]          night/wms-658-5beb52da  -> origin/night/wms-658-5beb52da
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7011305Z  * [new branch]          night/wms-659-5beb52da  -> origin/night/wms-659-5beb52da
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7011795Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/01 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/01
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7012394Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-1/07 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-1/07
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7013019Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/02 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/02
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7013603Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-2/08 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-2/08
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7014180Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/03 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/03
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7014760Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-3/09 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-3/09
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7015333Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-4/04 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-4/04
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7016004Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-5/05 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-5/05
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7016938Z  * [new branch]          night/zadachi-2026-08-21-20260821-r04/lane-6/06 -> origin/night/zadachi-2026-08-21-20260821-r04/lane-6/06
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7017731Z  * [new branch]          process/pipeline-on-etalon-20260821 -> origin/process/pipeline-on-etalon-20260821
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7018491Z  * [new branch]          release/2026-10-02-packing-stock -> origin/release/2026-10-02-packing-stock
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7019004Z  * [new branch]          release/2026-10-03-ready -> origin/release/2026-10-03-ready
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7019421Z  * [new branch]          release/barcode-tall-label -> origin/release/barcode-tall-label
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7019836Z  * [new branch]          release/inbound-print-fix -> origin/release/inbound-print-fix
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7020241Z  * [new branch]          release/wms641-agent-v1 -> origin/release/wms641-agent-v1
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7020608Z  * [new branch]          release/wms641-agent-v2 -> origin/release/wms641-agent-v2
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7020974Z  * [new branch]          release/wms641-agent-v3 -> origin/release/wms641-agent-v3
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7021443Z  * [new branch]          review/pick-and-binding-fixes-20260816 -> origin/review/pick-and-binding-fixes-20260816
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7022017Z  * [new branch]          review/system-wide-orchestrator-20260812 -> origin/review/system-wide-orchestrator-20260812
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7022508Z  * [new branch]          speed/test-infra-20260830 -> origin/speed/test-infra-20260830
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7022860Z  * [new branch]          staging                 -> origin/staging
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7023210Z  * [new branch]          support-task/WMS-651-4  -> origin/support-task/WMS-651-4
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7023580Z  * [new branch]          support-task/WMS-653-6  -> origin/support-task/WMS-653-6
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7023946Z  * [new branch]          support-task/WMS-654-7  -> origin/support-task/WMS-654-7
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7024313Z  * [new branch]          support-task/WMS-657-8  -> origin/support-task/WMS-657-8
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7024669Z  * [new branch]          support-task/WMS-658-9  -> origin/support-task/WMS-658-9
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7025039Z  * [new branch]          support-task/WMS-661-14 -> origin/support-task/WMS-661-14
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7025525Z  * [new branch]          support-task/WMS-667-18 -> origin/support-task/WMS-667-18
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7025896Z  * [new branch]          support-task/WMS-677-22 -> origin/support-task/WMS-677-22
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7026270Z  * [new branch]          support-task/WMS-679-26 -> origin/support-task/WMS-679-26
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7026630Z  * [new branch]          support-task/WMS-680-27 -> origin/support-task/WMS-680-27
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7027089Z  * [new branch]          support-task/WMS-683-29 -> origin/support-task/WMS-683-29
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7027505Z  * [new branch]          test/wms672-c7-c10-c11-20261006 -> origin/test/wms672-c7-c10-c11-20261006
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7027878Z  * [new tag]             tsd-preview             -> tsd-preview
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7028242Z  * [new tag]             wms-print-direct-v2026.09.30.1 -> wms-print-direct-v2026.09.30.1
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7028656Z  * [new tag]             wms-print-direct-v2026.09.30.2 -> wms-print-direct-v2026.09.30.2
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7029058Z  * [new tag]             wms-print-direct-v2026.09.30.3 -> wms-print-direct-v2026.09.30.3
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7029455Z  * [new tag]             wms-print-direct-v2026.09.30.4 -> wms-print-direct-v2026.09.30.4
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7029844Z  * [new tag]             wms-print-direct-v2026.09.30.5 -> wms-print-direct-v2026.09.30.5
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7030273Z  * [new tag]             wms-print-direct-v2026.10.01.1-rc1 -> wms-print-direct-v2026.10.01.1-rc1
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7030665Z  * [new tag]             wms-print-v2026.09.13.1 -> wms-print-v2026.09.13.1
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7030990Z  * [new tag]             wms-print-v2026.09.13.2 -> wms-print-v2026.09.13.2
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7031308Z  * [new tag]             wms-print-v2026.09.13.3 -> wms-print-v2026.09.13.3
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7032630Z [command]/usr/bin/git branch --list --remote origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7033078Z   origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7033780Z [command]/usr/bin/git rev-parse refs/remotes/origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7034336Z a6bbb5863f9365a45eb6bc11d510a5455b555229
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7034917Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7035220Z ##[group]Determining the checkout info
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7035545Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7035743Z [command]/usr/bin/git sparse-checkout disable
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7036322Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7037174Z ##[group]Checking out the ref
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:17.7037775Z [command]/usr/bin/git checkout --progress --force -B codex/wms652-etalon-invalid-id-identity-diagnostic refs/remotes/origin/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.8206145Z Switched to a new branch 'codex/wms652-etalon-invalid-id-identity-diagnostic'
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.8965763Z branch 'codex/wms652-etalon-invalid-id-identity-diagnostic' set up to track 'origin/codex/wms652-etalon-invalid-id-identity-diagnostic'.
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9024746Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9068986Z [command]/usr/bin/git log -1 --format=%H
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9093509Z a6bbb5863f9365a45eb6bc11d510a5455b555229
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9102287Z ##[group]Removing auth
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9105506Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9133222Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9334775Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9360653Z http.https://github.com/.extraheader
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9368990Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9398868Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9600032Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9629411Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+etalon-identity-browser43-diagnostic	Run actions/checkout@v4	2026-10-07T04:00:18.9827956Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	﻿2026-10-07T04:00:19.0007844Z ##[group]Run test "$DISPATCH_REF" = 'refs/heads/codex/wms652-etalon-invalid-id-identity-diagnostic'
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.0008486Z [36;1mtest "$DISPATCH_REF" = 'refs/heads/codex/wms652-etalon-invalid-id-identity-diagnostic'[0m
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.0008897Z [36;1mtest "$DISPATCH_SHA" = "$(git rev-parse HEAD)"[0m
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.0009169Z [36;1mtest "$DISPATCH_ATTEMPT" = '1'[0m
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2657948Z shell: /usr/bin/bash -e {0}
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2658231Z env:
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2658555Z   DISPATCH_REF: refs/heads/codex/wms652-etalon-invalid-id-identity-diagnostic
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2658941Z   DISPATCH_SHA: a6bbb5863f9365a45eb6bc11d510a5455b555229
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2659194Z   DISPATCH_ATTEMPT: 1
+etalon-identity-browser43-diagnostic	Require isolated exact dispatch identity, never a retry	2026-10-07T04:00:19.2659374Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	﻿2026-10-07T04:00:19.2860830Z ##[group]Run actions/setup-node@v4
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2861069Z with:
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2861236Z   node-version: 24.21.0
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2861421Z   always-auth: false
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2861595Z   check-latest: false
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2863635Z   token: ***
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.2863804Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.3944748Z Found in cache @ /opt/hostedtoolcache/node/24.21.0/x64
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.3949030Z (node:2243) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.3949896Z (Use `node --trace-deprecation ...` to show where the warning was created)
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.3951260Z ##[group]Environment details
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.9297012Z node: v24.21.0
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.9297377Z npm: 11.19.0
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.9297609Z yarn: 1.22.22
+etalon-identity-browser43-diagnostic	Run actions/setup-node@v4	2026-10-07T04:00:19.9298402Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	﻿2026-10-07T04:00:19.9394787Z ##[group]Run npm ci --prefix frontend
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9395096Z [36;1mnpm ci --prefix frontend[0m
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9395507Z [36;1mnpm install --prefix "$RUNNER_TEMP/print-contract-tools" --no-package-lock --no-save playwright@1.56.1[0m
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9396081Z [36;1mnode "$RUNNER_TEMP/print-contract-tools/node_modules/playwright/cli.js" install --with-deps chromium[0m
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9397228Z [36;1mnode --input-type=module -e "import {chromium} from '$RUNNER_TEMP/print-contract-tools/node_modules/playwright/index.mjs'; console.log('WMS672_CHROMIUM='+chromium.executablePath())" >> "$GITHUB_ENV"[0m
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9459422Z shell: /usr/bin/bash -e {0}
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:19.9459653Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:21.2768464Z npm warn deprecated whatwg-encoding@3.1.1: Use @exodus/bytes instead for a more spec-conformant and faster implementation
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.1762115Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.1763324Z added 329 packages, and audited 330 packages in 10s
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.1764002Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.1764472Z 85 packages are looking for funding
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.1765065Z   run `npm fund` for details
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2244611Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2245766Z 15 vulnerabilities (1 low, 3 moderate, 9 high, 2 critical)
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2246165Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2246441Z To address issues that do not require attention, run:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2246976Z   npm audit fix
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2247140Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2247435Z To address all issues (including breaking changes), run:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2247879Z   npm audit fix --force
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2248063Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2248217Z Run `npm audit` for details.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2267705Z npm warn install-scripts 1 package has install scripts not yet covered by allowScripts:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2268622Z npm warn install-scripts   esbuild@0.28.1 (postinstall: node install.js)
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2269495Z npm warn install-scripts
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:30.2270657Z npm warn install-scripts Run `npm install-scripts ls` to review, or `npm install-scripts approve <pkg>` to allow.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:31.9617234Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:31.9617894Z added 2 packages in 2s
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.3873685Z Installing dependencies...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.3924770Z Switching to root user to install dependencies...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7057961Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7129441Z Get:3 https://packages.microsoft.com/ubuntu/24.04/prod noble InRelease [3600 B]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7329832Z Hit:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7340709Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease [126 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7377905Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease [126 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.7395535Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease [126 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.9531058Z Get:7 https://packages.microsoft.com/ubuntu/24.04/prod noble/main amd64 Packages [519 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.9728705Z Get:8 https://packages.microsoft.com/ubuntu/24.04/prod noble/main armhf Packages [12.6 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:32.9745204Z Get:9 https://packages.microsoft.com/ubuntu/24.04/prod noble/main arm64 Packages [463 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2273505Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Packages [1375 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2418610Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main Translation-en [306 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2458783Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 Components [181 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2467236Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Packages [1701 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2610029Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe Translation-en [341 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2618330Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble-updates/universe amd64 Components [388 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2655151Z Get:16 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted amd64 Packages [1730 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2772289Z Get:17 http://azure.archive.ubuntu.com/ubuntu noble-updates/restricted Translation-en [396 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2813646Z Get:18 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse Translation-en [13.3 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.2823807Z Get:19 http://azure.archive.ubuntu.com/ubuntu noble-updates/multiverse amd64 Components [940 B]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3260886Z Get:20 http://azure.archive.ubuntu.com/ubuntu noble-backports/main amd64 Components [5752 B]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3271424Z Get:21 http://azure.archive.ubuntu.com/ubuntu noble-backports/universe amd64 Components [12.6 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3285841Z Get:22 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Packages [1073 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3340002Z Get:23 http://azure.archive.ubuntu.com/ubuntu noble-security/main Translation-en [223 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3358884Z Get:24 http://azure.archive.ubuntu.com/ubuntu noble-security/main amd64 Components [46.4 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3373046Z Get:25 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Packages [1218 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3432294Z Get:26 http://azure.archive.ubuntu.com/ubuntu noble-security/universe Translation-en [245 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3451468Z Get:27 http://azure.archive.ubuntu.com/ubuntu noble-security/universe amd64 Components [76.3 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3466873Z Get:28 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted amd64 Packages [1566 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3547820Z Get:29 http://azure.archive.ubuntu.com/ubuntu noble-security/restricted Translation-en [361 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:33.3568159Z Get:30 http://azure.archive.ubuntu.com/ubuntu noble-security/multiverse Translation-en [11.6 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:42.1691196Z Fetched 12.6 MB in 2s (7679 kB/s)
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:42.8493883Z Reading package lists...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:42.8699993Z Reading package lists...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.0689257Z Building dependency tree...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.0695631Z Reading state information...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2180380Z libasound2t64 is already the newest version (1.2.11-1ubuntu0.3).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2181046Z libasound2t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2181616Z libatk-bridge2.0-0t64 is already the newest version (2.52.0-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2182197Z libatk-bridge2.0-0t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2182824Z libatk1.0-0t64 is already the newest version (2.52.0-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2183316Z libatk1.0-0t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2183832Z libatspi2.0-0t64 is already the newest version (2.52.0-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2184325Z libatspi2.0-0t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2184899Z libcairo2 is already the newest version (1.18.0-3build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2185373Z libcairo2 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2185926Z libcups2t64 is already the newest version (2.4.7-1.2ubuntu7.14).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2186449Z libcups2t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2187185Z libdbus-1-3 is already the newest version (1.14.10-4ubuntu4.1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2187767Z libdbus-1-3 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2188316Z libdrm2 is already the newest version (2.4.125-1ubuntu0.1~24.04.2).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2188863Z libdrm2 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2189382Z libglib2.0-0t64 is already the newest version (2.80.0-6ubuntu3.9).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2189880Z libglib2.0-0t64 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2190383Z libnspr4 is already the newest version (2:4.35-1.1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2190807Z libnspr4 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2191210Z libnss3 is already the newest version (2:3.98-1ubuntu0.2).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2191612Z libnss3 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2191938Z libpango-1.0-0 is already the newest version (1.52.1+ds-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2192268Z libpango-1.0-0 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2192572Z libx11-6 is already the newest version (2:1.8.7-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2193360Z libx11-6 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2193645Z libxcb1 is already the newest version (1.15-1ubuntu2).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2193920Z libxcb1 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2194243Z libxcomposite1 is already the newest version (1:0.4.5-1build3).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2194558Z libxcomposite1 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2194900Z libxdamage1 is already the newest version (1:1.1.6-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2195271Z libxdamage1 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2195572Z libxext6 is already the newest version (2:1.3.4-1build2).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2195855Z libxext6 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2196182Z libxfixes3 is already the newest version (1:6.0.0-2build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2196521Z libxfixes3 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2197059Z libxkbcommon0 is already the newest version (1.6.0-1build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2197493Z libxkbcommon0 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2197941Z libxrandr2 is already the newest version (2:1.5.2-2build1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2198425Z libxrandr2 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2198876Z xvfb is already the newest version (2:21.1.12-1ubuntu1.8).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2199488Z fonts-noto-color-emoji is already the newest version (2.047-0ubuntu0.24.04.1).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2199976Z libfontconfig1 is already the newest version (2.15.0-1.1ubuntu2).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2200298Z libfontconfig1 set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2200736Z fonts-liberation is already the newest version (1:2.1.5-3).
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2201234Z fonts-liberation set to manually installed.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2201728Z The following additional packages will be installed:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2202279Z   libgl1-mesa-dri libglx-mesa0 mesa-libgallium xfonts-encodings xfonts-utils
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2202767Z Recommended packages:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2202990Z   fonts-ipafont-mincho fonts-tlwg-loma
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2377022Z The following NEW packages will be installed:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2377658Z   fonts-freefont-ttf fonts-ipafont-gothic fonts-tlwg-loma-otf fonts-unifont
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2382132Z   fonts-wqy-zenhei xfonts-cyrillic xfonts-encodings xfonts-scalable
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2382600Z   xfonts-utils
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2385769Z The following packages will be upgraded:
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2389704Z   libfreetype6 libgbm1 libgl1-mesa-dri libglx-mesa0 mesa-libgallium
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2534986Z 5 upgraded, 9 newly installed, 0 to remove and 24 not upgraded.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2535553Z Need to get 32.5 MB of archives.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2536108Z After this operation, 79.5 MB of additional disk space will be used.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.2536855Z Get:1 file:/etc/apt/apt-mirrors.txt Mirrorlist [144 B]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.3122916Z Get:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [3513 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.5116414Z Get:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [5641 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.6588321Z Get:4 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-tlwg-loma-otf all 1:0.7.3-1 [107 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.7437194Z Get:5 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-unifont all 1:15.1.01-1build1 [2993 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:43.8768613Z Get:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8 [7472 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.0402949Z Get:7 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libfreetype6 amd64 2.13.2+dfsg-1ubuntu0.2 [403 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.0691446Z Get:8 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgl1-mesa-dri amd64 25.2.8-0ubuntu0.24.04.4 [38.0 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.0908247Z Get:9 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libglx-mesa0 amd64 25.2.8-0ubuntu0.24.04.4 [110 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.1131682Z Get:10 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 libgbm1 amd64 25.2.8-0ubuntu0.24.04.4 [34.2 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.1357215Z Get:11 http://azure.archive.ubuntu.com/ubuntu noble-updates/main amd64 mesa-libgallium amd64 25.2.8-0ubuntu0.24.04.4 [10.8 MB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.2815828Z Get:12 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-encodings all 1:1.0.5-0ubuntu2 [578 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.3228646Z Get:13 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-utils amd64 1:7.7+6build3 [94.4 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.3463631Z Get:14 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 xfonts-cyrillic all 1:1.0.5+nmu1 [384 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.3734591Z Get:15 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 xfonts-scalable all 1:1.0.3-1.3 [304 kB]
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.5949548Z Fetched 32.5 MB in 1s (28.7 MB/s)
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6162056Z Selecting previously unselected package fonts-ipafont-gothic.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6368247Z (Reading database ... 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6368625Z (Reading database ... 5%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6368943Z (Reading database ... 10%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6369275Z (Reading database ... 15%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6369865Z (Reading database ... 20%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6370175Z (Reading database ... 25%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6370467Z (Reading database ... 30%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6370721Z (Reading database ... 35%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6370905Z (Reading database ... 40%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6371096Z (Reading database ... 45%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6371287Z (Reading database ... 50%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:44.6567878Z (Reading database ... 55%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.0229757Z (Reading database ... 60%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.2335926Z (Reading database ... 65%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.4367194Z (Reading database ... 70%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.6841970Z (Reading database ... 75%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.8138437Z (Reading database ... 80%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:45.9780336Z (Reading database ... 85%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.0839762Z (Reading database ... 90%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.5366650Z (Reading database ... 95%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.5367232Z (Reading database ... 100%
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.5367745Z (Reading database ... 202296 files and directories currently installed.)
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.5409114Z Preparing to unpack .../00-fonts-ipafont-gothic_00303-21ubuntu1_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.5536111Z Unpacking fonts-ipafont-gothic (00303-21ubuntu1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.8018947Z Selecting previously unselected package fonts-freefont-ttf.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.8129318Z Preparing to unpack .../01-fonts-freefont-ttf_20211204+svn4273-2_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:46.8134527Z Unpacking fonts-freefont-ttf (20211204+svn4273-2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.0017787Z Selecting previously unselected package fonts-tlwg-loma-otf.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.0127222Z Preparing to unpack .../02-fonts-tlwg-loma-otf_1%3a0.7.3-1_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.0133322Z Unpacking fonts-tlwg-loma-otf (1:0.7.3-1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.1260592Z Selecting previously unselected package fonts-unifont.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.1373772Z Preparing to unpack .../03-fonts-unifont_1%3a15.1.01-1build1_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:47.1867734Z Unpacking fonts-unifont (1:15.1.01-1build1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:48.5960771Z Selecting previously unselected package fonts-wqy-zenhei.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:48.6074519Z Preparing to unpack .../04-fonts-wqy-zenhei_0.9.45-8_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:48.6982263Z Unpacking fonts-wqy-zenhei (0.9.45-8) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:49.3353405Z Preparing to unpack .../05-libfreetype6_2.13.2+dfsg-1ubuntu0.2_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:49.4078182Z Unpacking libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) over (2.13.2+dfsg-1ubuntu0.1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:49.7805402Z Preparing to unpack .../06-libgl1-mesa-dri_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:49.8336110Z Unpacking libgl1-mesa-dri:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:50.7943076Z Preparing to unpack .../07-libglx-mesa0_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:50.8558525Z Unpacking libglx-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:51.1582219Z Preparing to unpack .../08-libgbm1_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:51.1938497Z Unpacking libgbm1:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:51.3014969Z Preparing to unpack .../09-mesa-libgallium_25.2.8-0ubuntu0.24.04.4_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:51.3279502Z Unpacking mesa-libgallium:amd64 (25.2.8-0ubuntu0.24.04.4) over (25.2.8-0ubuntu0.24.04.2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.0921094Z Selecting previously unselected package xfonts-encodings.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.1046981Z Preparing to unpack .../10-xfonts-encodings_1%3a1.0.5-0ubuntu2_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.1177097Z Unpacking xfonts-encodings (1:1.0.5-0ubuntu2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.3765385Z Selecting previously unselected package xfonts-utils.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.3879340Z Preparing to unpack .../11-xfonts-utils_1%3a7.7+6build3_amd64.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.3947690Z Unpacking xfonts-utils (1:7.7+6build3) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.5543119Z Selecting previously unselected package xfonts-cyrillic.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.5667726Z Preparing to unpack .../12-xfonts-cyrillic_1%3a1.0.5+nmu1_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.5727794Z Unpacking xfonts-cyrillic (1:1.0.5+nmu1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.6567373Z Selecting previously unselected package xfonts-scalable.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.6682735Z Preparing to unpack .../13-xfonts-scalable_1%3a1.0.3-1.3_all.deb ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.6730529Z Unpacking xfonts-scalable (1:1.0.3-1.3) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.7513717Z Setting up mesa-libgallium:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.7657537Z Setting up libgbm1:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.7798053Z Setting up libgl1-mesa-dri:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.7897703Z Setting up fonts-wqy-zenhei (0.9.45-8) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8120536Z Setting up fonts-freefont-ttf (20211204+svn4273-2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8157911Z Setting up fonts-tlwg-loma-otf (1:0.7.3-1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8198643Z Setting up libfreetype6:amd64 (2.13.2+dfsg-1ubuntu0.2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8236929Z Setting up xfonts-encodings (1:1.0.5-0ubuntu2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8317813Z Setting up fonts-ipafont-gothic (00303-21ubuntu1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8469248Z update-alternatives: using /usr/share/fonts/opentype/ipafont-gothic/ipag.ttf to provide /usr/share/fonts/truetype/fonts-japanese-gothic.ttf (fonts-japanese-gothic.ttf) in auto mode
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8558379Z Setting up fonts-unifont (1:15.1.01-1build1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8741600Z Setting up libglx-mesa0:amd64 (25.2.8-0ubuntu0.24.04.4) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8778540Z Setting up xfonts-utils (1:7.7+6build3) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.8877711Z Setting up xfonts-cyrillic (1:1.0.5+nmu1) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.9259073Z Setting up xfonts-scalable (1:1.0.3-1.3) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:52.9763657Z Processing triggers for libc-bin (2.39-0ubuntu8.9) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:53.6795750Z Processing triggers for man-db (2.12.0-4build2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:53.6850382Z Not building database; man-db/auto-update is not 'true'.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:53.6884855Z Processing triggers for fontconfig (2.15.0-1.1ubuntu2) ...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.6907981Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.6908828Z Running kernel seems to be up-to-date.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.6909328Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.6909561Z Restarting services...
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.6978907Z  systemctl restart php8.3-fpm.service
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8987319Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8988260Z No containers need to be restarted.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8988565Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8988789Z No user sessions are running outdated binaries.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8989053Z 
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:54.8989381Z No VM guests are running outdated hypervisor (qemu) binaries on this host.
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.0153632Z Downloading Chromium 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-linux.zip
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.1323311Z |                                                                                |   0% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.2204023Z |■■■■■■■■                                                                        |  10% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.2671102Z |■■■■■■■■■■■■■■■■                                                                |  20% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.3130773Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.3749011Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.4165294Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.4699406Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.5174952Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.5694875Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.6121417Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:56.6561101Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 173.9 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.2385516Z Chromium 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium-1194
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.2389462Z Downloading FFMPEG playwright build v1011 from https://cdn.playwright.dev/dbazure/download/playwright/builds/ffmpeg/1011/ffmpeg-linux.zip
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3588115Z |                                                                                |   0% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3630243Z |■■■■■■■■                                                                        |  10% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3659553Z |■■■■■■■■■■■■■■■■                                                                |  20% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3680793Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3696962Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3712717Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3724380Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3774146Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3785939Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3794868Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.3809895Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 2.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.4239106Z FFMPEG playwright build v1011 downloaded to /home/runner/.cache/ms-playwright/ffmpeg-1011
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.4242293Z Downloading Chromium Headless Shell 141.0.7390.37 (playwright build v1194) from https://cdn.playwright.dev/dbazure/download/playwright/builds/chromium/1194/chromium-headless-shell-linux.zip
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.5343943Z |                                                                                |   0% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.6012677Z |■■■■■■■■                                                                        |  10% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.6407427Z |■■■■■■■■■■■■■■■■                                                                |  20% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.6682527Z |■■■■■■■■■■■■■■■■■■■■■■■■                                                        |  30% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.6969444Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                                |  40% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.7318960Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                        |  50% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.7692215Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                                |  60% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.8066397Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                        |  70% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.8364743Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■                |  80% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.8722592Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■        |  90% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:00:59.8997640Z |■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■■| 100% of 104.3 MiB
+etalon-identity-browser43-diagnostic	Original frontend dependencies and same Playwright Chrome141	2026-10-07T04:01:01.2482127Z Chromium Headless Shell 141.0.7390.37 (playwright build v1194) downloaded to /home/runner/.cache/ms-playwright/chromium_headless_shell-1194
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	﻿2026-10-07T04:01:01.5279247Z ##[group]Run bash scripts/ci/wms652-identity-diagnostic/run.sh
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	2026-10-07T04:01:01.5279769Z [36;1mbash scripts/ci/wms652-identity-diagnostic/run.sh[0m
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	2026-10-07T04:01:01.5335211Z shell: /usr/bin/bash -e {0}
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	2026-10-07T04:01:01.5335426Z env:
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	2026-10-07T04:01:01.5335714Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+etalon-identity-browser43-diagnostic	One complete unchanged 43-case command, observation only	2026-10-07T04:01:01.5336050Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	﻿2026-10-07T04:02:59.8267942Z ##[group]Run actions/upload-artifact@v4
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8268187Z with:
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8268524Z   name: wms652-etalon-identity-browser43-a6bbb5863f9365a45eb6bc11d510a5455b555229-37569342434-1
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8269786Z   path: /home/runner/work/_temp/wms652-identity-diagnostic
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	/home/runner/work/_temp/release-print/critical-fbs/result.json
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	/home/runner/work/_temp/release-print/critical-fbs/cdp-transport.json
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	/home/runner/work/_temp/release-print/critical-fbs/identity-telemetry.json
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	/home/runner/work/_temp/release-print/critical-fbs/chrome.log
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	/home/runner/work/_temp/release-print/critical-fbs/vite.log
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8270891Z   if-no-files-found: error
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8271080Z   retention-days: 14
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8271256Z   compression-level: 6
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8271427Z   overwrite: false
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8271603Z   include-hidden-files: false
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8271795Z env:
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8272061Z   WMS672_CHROMIUM: /home/runner/.cache/ms-playwright/chromium-1194/chrome-linux/chrome
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.8272405Z ##[endgroup]
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9617669Z (node:3530) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9618345Z (Use `node --trace-deprecation ...` to show where the warning was created)
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9715841Z Multiple search paths detected. Calculating the least common ancestor of all paths
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9718320Z The least common ancestor is /home/runner/work/_temp. This will be the root directory of the artifact
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9719077Z With the provided path, there will be 17 files uploaded
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9719736Z Artifact name is valid!
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:02:59.9720084Z Root directory input is valid!
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.1927473Z Beginning upload of artifact content to blob storage
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.4815520Z (node:3530) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.7224592Z Uploaded bytes 2080821
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.7538092Z Finished uploading artifact content to blob storage!
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.7539136Z SHA256 digest of uploaded artifact zip is 2c9c269774eeae02bdc2f6f540b8f48d660a6e9f79f92a1bb3d410af5b535603
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.7540589Z Finalizing artifact upload
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.9715742Z Artifact wms652-etalon-identity-browser43-a6bbb5863f9365a45eb6bc11d510a5455b555229-37569342434-1.zip successfully finalized. Artifact ID 11459428762
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.9717107Z Artifact wms652-etalon-identity-browser43-a6bbb5863f9365a45eb6bc11d510a5455b555229-37569342434-1 has been successfully uploaded! Final size is 2080821 bytes. Artifact ID is 11459428762
+etalon-identity-browser43-diagnostic	Preserve original strict result, identities, source proof and exact copies	2026-10-07T04:03:00.9721661Z Artifact download URL: https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37569342434/artifacts/11459428762
+etalon-identity-browser43-diagnostic	Post Run actions/setup-node@v4	﻿2026-10-07T04:03:00.9902121Z Post job cleanup.
+etalon-identity-browser43-diagnostic	Post Run actions/setup-node@v4	2026-10-07T04:03:01.0896223Z (node:3543) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+etalon-identity-browser43-diagnostic	Post Run actions/setup-node@v4	2026-10-07T04:03:01.0897412Z (Use `node --trace-deprecation ...` to show where the warning was created)
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	﻿2026-10-07T04:03:01.1033661Z Post job cleanup.
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1744895Z [command]/usr/bin/git version
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1783172Z git version 2.55.0
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1815739Z Temporarily overriding HOME='/home/runner/work/_temp/805c4c8d-6df3-4fd5-8c3e-1d474c499150' before making global git config changes
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1817002Z Adding repository directory to the temporary git global config as a safe directory
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1821142Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/WMS/WMS
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1868303Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.1893893Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.2191894Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.2244896Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.2471152Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+etalon-identity-browser43-diagnostic	Post Run actions/checkout@v4	2026-10-07T04:03:01.2522106Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+etalon-identity-browser43-diagnostic	Complete job	﻿2026-10-07T04:03:01.2853685Z Cleaning up orphan processes
+etalon-identity-browser43-diagnostic	Complete job	2026-10-07T04:03:01.3113474Z ##[warning]Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@v4, actions/setup-node@v4, actions/upload-artifact@v4. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/

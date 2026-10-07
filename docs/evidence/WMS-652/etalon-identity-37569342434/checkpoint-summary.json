@@ -1,0 +1,27 @@
+{
+  "strict43": {
+    "status": "PASS",
+    "count": 43,
+    "outcomes": {
+      "PASS": 43
+    }
+  },
+  "telemetry_records": 53957,
+  "drop_counts": {
+    "events": 0,
+    "bytes": 0,
+    "observerErrors": 0
+  },
+  "pending_command_ids": [],
+  "native_error_count": 0,
+  "native_send_count": 11663,
+  "exit_results": {
+    "original_browser_command_exit": 0,
+    "exact43_complete": true,
+    "strict43_pass": true,
+    "source_bytes_unchanged": true,
+    "actual_run": true
+  },
+  "source_bindings": 2546,
+  "source_sha256": 2546
+}
