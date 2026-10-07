@@ -1,0 +1,48 @@
+{
+  "captured_at_utc": "2026-10-07T06:05:40.794956+00:00/2026-10-07T06:05:46.725177+00:00",
+  "transaction": "REPEATABLE READ, READ ONLY; rollback",
+  "scope": {
+    "orders": 31,
+    "positions": 31,
+    "supply_status": "draft",
+    "source": "wms",
+    "marketplace": "ozon"
+  },
+  "order_status_counts": {"cancelled": 5, "done": 14, "in_delivery": 12},
+  "reserved_quantity": 12,
+  "ledger": {"recipes": 31, "shipment_or_writeoff": 0, "reversal": 0},
+  "operation_summary": [
+    ["supply_from_orders", "confirmed", null],
+    ["supply_deliver", "failed", "ozon_order_not_assembled"]
+  ],
+  "observed_handoff_present": false,
+  "fact_ids": [
+    "0062209a-15bd-4620-8952-2afbb8b80918", "05e5c2b4-d548-4e3b-9eb9-f2e95fa5091f",
+    "105d1582-4ed4-49de-ba43-5c7216d41472", "2781a4fd-073a-4fe6-aac4-60694fc88702",
+    "308eb336-1cb1-4738-a2ed-eb8399180177", "77d63945-1cfd-4adc-8f2b-68a4277363da",
+    "9158e494-faea-4804-9f99-1b73d9c2cdd7", "a47aaada-0aa6-4434-b100-4343acb4bdfc",
+    "aeaf19be-59b5-4e05-af9b-1dc301576463", "b94a8939-c770-4c9a-9c0b-421a7061ebc5",
+    "bea50467-5d2c-419b-865d-7d4dd24900d9", "d6b6ea09-64fa-40ea-8e37-bfc21ab5b6a2",
+    "e4a12a1a-84b2-4b85-b812-7ac450fe6596", "fb5d0cef-4386-4f4d-919f-2e5a0531cbdc"
+  ],
+  "charge_ids": [
+    "0077ca84-2a0c-4184-a8c5-5ca6ce81716d", "09d9fe54-0ff5-4f7b-b24f-ebb9e781977f",
+    "0c082342-a71b-4ed3-bc00-f7212d772ca5", "1d6663a2-f033-4cc8-a8c5-e542d0dc08e7",
+    "1e185add-f24b-4735-acd8-a54f6a65ab2d", "1f2b51c1-4780-4fd3-bc1d-f748c3d59fde",
+    "2605640e-8dd0-417e-aeef-b47356ef1fa3", "293c3b06-3345-4c62-88cb-72a7f76d994f",
+    "2e1a6c7a-ae8e-45cc-89b9-3a1330b100c4", "47a300a5-aa8b-4fe6-a74c-724ae5cf7b02",
+    "58d0d609-bf02-494a-abfe-c110aac74901", "67df59fc-0d8b-4928-9430-37b878d4c7a1",
+    "78b30514-a778-4ee1-9fb2-a3d433a013d2", "7a4a6b7f-c1b0-475c-bda1-873b61717010",
+    "961b6fee-456b-4146-aef2-7efb48c998a6", "9a753f9a-0e52-49e3-b153-aaa131fc5df0",
+    "acf3f052-edc2-4c75-954f-4a357dc415c5", "b36201e7-d579-4f5c-8c53-9992300323bd",
+    "b7030cf8-fcf4-4571-b840-70dcdc7cc50d", "c50225c0-0ecb-4077-8ea3-730db435d6fc",
+    "cd603ba1-79df-47c1-9b68-7ea438a8799f", "d3cd3a99-77a6-430d-93d6-558d8f6f25ca",
+    "dc53b9c5-26cf-4be7-9a7e-ec18ef18e64f", "de2f92fd-f932-49fe-b431-eb83ac24de56",
+    "e153cc72-287a-4325-9846-5c7c43f3566d", "e424e56f-906b-41c5-b7d1-b7efb0b09481",
+    "e8193e54-52f5-49b1-a63d-0dd4d55a5f2c", "ee234a37-7025-46cb-b555-0d96bd5da26d"
+  ],
+  "fact_ids_sha256": "da4b4ba0ad992568dba0de10987dd1ff24f69094889fed2718144d04a8bc8198",
+  "charge_ids_sha256": "c104aa9df459cb230a0c51de1e99757aa1beefc6bd4921abd2b794042e87517a",
+  "writes": 0,
+  "secret_fields": "omitted"
+}
