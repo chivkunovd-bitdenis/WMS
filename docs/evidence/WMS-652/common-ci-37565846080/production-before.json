@@ -1,0 +1,13 @@
+{
+  "observed_at": "2026-10-07T03:29:34.909617+00:00",
+  "exit_code": 0,
+  "checkout_and_services": [
+    "8f11d912351e8de7633b4abcf74d195badaeb254",
+    "api running  wms_prod-api",
+    "celery_beat running  wms_prod-celery_beat",
+    "celery_worker running  wms_prod-celery_worker",
+    "db running healthy postgres:16",
+    "redis running healthy redis:7-alpine",
+    "web running  wms_prod-web"
+  ]
+}

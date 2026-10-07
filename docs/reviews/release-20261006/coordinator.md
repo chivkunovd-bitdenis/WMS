@@ -496,3 +496,10 @@ Ordinaryconfiguration-onlyPR397 headcde9dc84bb5d4566a2f36c3d9e8dcfca58f56a57 mer
 Actual37565846080 attempt1/head1e148/tested64aef completedSUCCESS03:27:39UTC,773seconds12m53. Original22suite1192required reports verified strictly, exact4643collection/two receipts partition2322+2321 and executed-JUnit union;4445PASS198ordinaryskips0FAIL/error, all627requiredbackend0skip. All37mandatoryPG/30Linux/29Windows/frontend1566required204/Mac110/43browser/oldprint17/new12/CDP7/6735/guard20+51PASS. Actualproofartifact11458234741 and latestmanualprocess-integrity112616517605SUCCESS03:28:10 bindexacthead/tested/base/source907/policy58a95. Successfulrun meetsowner10–15goal; no timingclaim fromoldfailedruns.
 
 OrdinaryPRmerge --match-head1e rejectedactualbranchpolicy: initialpull_request_targetanchor37565846149 ownrequiredprocess-integrityjobstillFAIL alongsidepublishedmanualSUCCESS. ONLYtrustedanchor rerun aftercompleteCI authorized/executed; noadmin/bypass/sourcechange/fullCIretry. PRhead1e staysfrozen. Fresh03:26stagemetadataALL4stillcc8e,03:23readonlyproductionHEAD8f11/servicesrunning. No deployclaim.
+
+
+## Checkpoint 03:32 UTC: ordinary etalon merge; exact push CI underway
+
+Trustedindependentanchor37565846149 attempt2completedSUCCESS afterexactcommonrawproof. FreshPR387stateCLEAN/head1e/base4b allowedordinary --merge --match-head1e withnoadmin/bypass; actualmerged03:29:46UTC etalon4c532f0cccfb8f99b34d68d9630a3763038fbc5f. Finalcommonactualraw/checkpointpublishedffa3fc57e oncoordinationbranchonly; PRheadwasnotadvanced. Latestcommon12m53successfulgoalreal,1192requiredPASS/4643fullcollectionretained.
+
+RequiredexactetalonPUSH CI37567017373 attempt1 created03:29:56UTC on4c532 isrunning; itwillproduceitsownactualraw/proof, priorPRsyntheticproofdoesnotauthorizeproduction. Fresh03:29productionbefore readback8f11allservicesrunning persisted. All4stagebeforecc8e; no runtimechanges. Main6474config/source907/9strictchecks/environmentetalononly unchanged. Nextnormalstageandproductionafteretalonactualsuccess.
