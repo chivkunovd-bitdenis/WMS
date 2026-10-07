@@ -1,0 +1,231 @@
+{
+  "case": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal",
+  "mode": "stops",
+  "base": "6232cf29765f1b25466e96919ee7840bf5874c62",
+  "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+  "functions_sha256": "e5bca039472ffc35243399d6d64c85eda4ccdc6bf0ccb7e6b436dbd03c282347",
+  "test_sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed",
+  "native_exit": 0,
+  "stdout": "rollback_returned=0\ntransaction=0\n",
+  "stderr": "",
+  "transaction": 0,
+  "before": {
+    "app": {
+      ".": [
+        "directory",
+        493
+      ],
+      "build.json": [
+        "file",
+        420,
+        "1a6331195b3336edfd4465aa1aba4638ddadc833186ca21fb0f36a0ac0527fd9"
+      ],
+      "link": [
+        "link",
+        493,
+        "mode-file"
+      ],
+      "mode-file": [
+        "file",
+        384,
+        "bed42e4733cfc28739f632dba872442980770708f49b5dda1bc6dd1473f5a093"
+      ],
+      "wms-print": [
+        "file",
+        493,
+        "3143e60999cc6cf468a64b4715096946ad02c80e2e36ec210f2056b29f287409"
+      ]
+    },
+    "work/previous": {
+      ".": [
+        "directory",
+        493
+      ],
+      "build.json": [
+        "file",
+        420,
+        "426bf3d9e87913a7ddf42603fbd16e1e8892cdb76be6ba84c7bf77d6bacdfa97"
+      ],
+      "link": [
+        "link",
+        493,
+        "mode-file"
+      ],
+      "mode-file": [
+        "file",
+        384,
+        "bed42e4733cfc28739f632dba872442980770708f49b5dda1bc6dd1473f5a093"
+      ],
+      "wms-print": [
+        "file",
+        493,
+        "252b1bf27fb2efbcfb5c61cab59f3278cb8ee6e2234ef916c8da707688901d1d"
+      ]
+    },
+    "backup": {
+      ".": [
+        "directory",
+        493
+      ],
+      "application": [
+        "directory",
+        493
+      ],
+      "application/build.json": [
+        "file",
+        420,
+        "426bf3d9e87913a7ddf42603fbd16e1e8892cdb76be6ba84c7bf77d6bacdfa97"
+      ],
+      "application/link": [
+        "link",
+        493,
+        "mode-file"
+      ],
+      "application/mode-file": [
+        "file",
+        384,
+        "bed42e4733cfc28739f632dba872442980770708f49b5dda1bc6dd1473f5a093"
+      ],
+      "application/wms-print": [
+        "file",
+        493,
+        "252b1bf27fb2efbcfb5c61cab59f3278cb8ee6e2234ef916c8da707688901d1d"
+      ]
+    },
+    "state": {
+      ".": [
+        "directory",
+        493
+      ],
+      "direct-jobs.json": [
+        "file",
+        420,
+        "69c20a6a1d7d3c75c983b9824f142e7ae90ecd23c19654aa47747a2996897a4c"
+      ],
+      "jobs-v2": [
+        "directory",
+        493
+      ],
+      "jobs-v2/accepted-key.json": [
+        "file",
+        420,
+        "210755b02306962f5355e4bbb2b093f3852715a58fdc023128fe8e6e576c32bb"
+      ],
+      "jobs-v2/unknown-key.json": [
+        "file",
+        420,
+        "817600faf477a4adbd40f6c872a5b5d15de13a0f6998035d4d5c301e69e97a71"
+      ],
+      "labels": [
+        "directory",
+        493
+      ],
+      "labels/retained.png": [
+        "file",
+        420,
+        "b1e7cb93b265b0db30d69e34e476614c2fa5580a16953210a0d440dd99bda4db"
+      ]
+    }
+  },
+  "after": {
+    "app": {
+      ".": [
+        "directory",
+        493
+      ],
+      "build.json": [
+        "file",
+        420,
+        "426bf3d9e87913a7ddf42603fbd16e1e8892cdb76be6ba84c7bf77d6bacdfa97"
+      ],
+      "link": [
+        "link",
+        493,
+        "mode-file"
+      ],
+      "mode-file": [
+        "file",
+        384,
+        "bed42e4733cfc28739f632dba872442980770708f49b5dda1bc6dd1473f5a093"
+      ],
+      "wms-print": [
+        "file",
+        493,
+        "252b1bf27fb2efbcfb5c61cab59f3278cb8ee6e2234ef916c8da707688901d1d"
+      ]
+    },
+    "work/previous": null,
+    "backup": {
+      ".": [
+        "directory",
+        493
+      ],
+      "application": [
+        "directory",
+        493
+      ],
+      "application/build.json": [
+        "file",
+        420,
+        "426bf3d9e87913a7ddf42603fbd16e1e8892cdb76be6ba84c7bf77d6bacdfa97"
+      ],
+      "application/link": [
+        "link",
+        493,
+        "mode-file"
+      ],
+      "application/mode-file": [
+        "file",
+        384,
+        "bed42e4733cfc28739f632dba872442980770708f49b5dda1bc6dd1473f5a093"
+      ],
+      "application/wms-print": [
+        "file",
+        493,
+        "252b1bf27fb2efbcfb5c61cab59f3278cb8ee6e2234ef916c8da707688901d1d"
+      ]
+    },
+    "state": {
+      ".": [
+        "directory",
+        493
+      ],
+      "direct-jobs.json": [
+        "file",
+        420,
+        "69c20a6a1d7d3c75c983b9824f142e7ae90ecd23c19654aa47747a2996897a4c"
+      ],
+      "jobs-v2": [
+        "directory",
+        493
+      ],
+      "jobs-v2/accepted-key.json": [
+        "file",
+        420,
+        "210755b02306962f5355e4bbb2b093f3852715a58fdc023128fe8e6e576c32bb"
+      ],
+      "jobs-v2/unknown-key.json": [
+        "file",
+        420,
+        "817600faf477a4adbd40f6c872a5b5d15de13a0f6998035d4d5c301e69e97a71"
+      ],
+      "labels": [
+        "directory",
+        493
+      ],
+      "labels/retained.png": [
+        "file",
+        420,
+        "b1e7cb93b265b0db30d69e34e476614c2fa5580a16953210a0d440dd99bda4db"
+      ]
+    }
+  },
+  "intent_unchanged": false,
+  "intent_absent": true,
+  "process_alive": false,
+  "signals": [
+    "-TERM 42424242",
+    "-0 42424242"
+  ],
+  "failed_target_exists": false
+}
