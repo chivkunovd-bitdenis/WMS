@@ -1175,6 +1175,10 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
           ? 'Ozon не вернул готовые этикетки для этой поставки.'
           : 'WB не вернул готовые QR для этой поставки.'
       )
+      if (failures.length > 0) {
+        const assetLabel = isOzon ? 'этикетки поставки Ozon' : 'QR поставки WB'
+        missingAssetsMessage = `Не удалось получить ${assetLabel}: ${failures.join(' · ')}`
+      }
     }
     setPrintingSupplyId(null)
     await load()

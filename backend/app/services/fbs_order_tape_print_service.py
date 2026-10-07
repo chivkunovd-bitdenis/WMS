@@ -460,7 +460,9 @@ async def print_fbs_order_tape(
                     message="nothing_to_reprint",
                 ))
                 continue
-        if line is None:
+        if line is None and (
+            supply.packaging_task_id is not None or order.product_id is None
+        ):
             errors.append(
                 FbsOrderTapeError(
                     order_id=order.id,
@@ -481,6 +483,7 @@ async def print_fbs_order_tape(
                 reprint=reprint,
                 actor_user_id=actor_user_id,
                 reprint_marking_ids=selected_reprint_marking_ids,
+                document_number=supply.document_number,
             )
         except (mc_svc.MarkingCodeServiceError, marking_svc.FbsMarkingError) as exc:
             errors.append(
@@ -834,13 +837,14 @@ async def _print_or_reprint_order_code(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     order: FbsOrder,
-    line: PackagingTaskLine,
+    line: PackagingTaskLine | None,
     layout: PrintLayout,
     *,
     allow_partial: bool,
     reprint: bool,
     actor_user_id: uuid.UUID,
     reprint_marking_ids: set[uuid.UUID],
+    document_number: str | None,
 ) -> mc_svc.PrintMarkingCodesResult:
     existing = _selected_sgtin_marking(order, reprint_marking_ids) or _existing_sgtin_marking(order)
     if reprint_marking_ids and (
@@ -860,13 +864,19 @@ async def _print_or_reprint_order_code(
                 code=code,
                 event_type=EVENT_REPRINTED,
                 actor=actor_user_id,
-                document_number=line.task.document_number if line.task else None,
+                document_number=(
+                    line.task.document_number
+                    if line is not None and line.task
+                    else document_number
+                ),
                 packaging_task=line,
                 copies=mc_svc.cz_copies_from_layout(layout),
                 source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
             )
         return mc_svc.PrintMarkingCodesResult(
-            packaging_task_line_id=line.id,
+            packaging_task_line_id=(
+                line.id if line is not None else mc_svc.CATALOG_PRINT_LINE_SENTINEL
+            ),
             quantity=1,
             duplicate_copies=mc_svc.cz_copies_from_layout(layout),
             is_reprint=reprint,
@@ -887,6 +897,34 @@ async def _print_or_reprint_order_code(
     # the pool instead of failing the whole tape with nothing_to_reprint.
     if reprint and not _order_requires_sgtin(order):
         raise mc_svc.MarkingCodeServiceError("nothing_to_reprint")
+
+    if line is None:
+        if order.product_id is None:
+            raise mc_svc.MarkingCodeServiceError("product_not_found")
+        # Ordinary FBS preparation may still be retrying task creation. Manual
+        # KIZ printing is an order operation: allocate one existing seller/product
+        # pool code and bind it to the order without making the accounting task a
+        # prerequisite. Keep the allocation and binding in the tape transaction.
+        result = await mc_svc.print_codes_for_product(
+            session,
+            tenant_id,
+            order.product_id,
+            acting_user_id=actor_user_id,
+            quantity=1,
+            layout=layout,
+            allow_partial=allow_partial,
+            force_required=_order_requires_sgtin(order),
+            commit=False,
+            source_process=mc_svc.MARKING_SOURCE_PACKING_FBS_PRINT,
+            document_number=document_number,
+        )
+        if result.quantity < 1 or not result.printed_codes:
+            return result
+        printed_code = await session.get(MarkingCode, result.printed_codes[0].id)
+        if printed_code is None or printed_code.status != STATUS_PRINTED:
+            raise mc_svc.MarkingCodeServiceError("code_not_found")
+        await _assign_printed_code_to_order(session, order, printed_code)
+        return result
 
     result = await mc_svc.print_codes_for_packaging_line(
         session,
