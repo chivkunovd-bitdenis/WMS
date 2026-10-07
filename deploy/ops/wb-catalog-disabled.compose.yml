@@ -1,0 +1,11 @@
+# WMS-689: emergency runtime override; use after the production/host overlays.
+# Recreate only celery_beat with --no-deps --no-build. Other schedules stay active.
+services:
+  celery_beat:
+    command:
+      - python
+      - -c
+      - >-
+        from app.celery_app import celery_app;
+        celery_app.conf.beat_schedule.pop('wb-catalog-hourly', None);
+        celery_app.Beat(loglevel='info').run()
