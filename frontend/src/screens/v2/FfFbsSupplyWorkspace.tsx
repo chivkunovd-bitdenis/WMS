@@ -1180,10 +1180,11 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
-  // The unified list has no per-supply Start button. Prepare the missing
-  // marketplace stickers on entry, without waiting for the first product scan.
+  // Both packing entry points have no per-supply Start button. Fetch missing
+  // WB stickers on entry, without waiting for a scan or sending them to print.
   useEffect(() => {
-    if (!open || stage !== 'packing' || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
+    if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
+    if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
     if (!missing.length) return
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
