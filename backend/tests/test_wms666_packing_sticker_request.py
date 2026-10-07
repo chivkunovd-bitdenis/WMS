@@ -110,3 +110,89 @@ async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
     )
     assert sticker["code"] == "5877994 0283"
     assert sticker["asset_url"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_fails", [False, True])
+async def test_creation_prefetches_stickers_and_preserves_supply_on_provider_failure(
+    async_client: httpx.AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+    provider_fails: bool,
+) -> None:
+    from app.services.wildberries_client import WildberriesClientError
+    from tests.test_fbs_supply_from_orders import (
+        _create_product,
+        _create_ready_order,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _register_ff_admin as register,
+    )
+    from tests.test_fbs_supply_from_orders import (
+        _setup_seller_with_token as setup,
+    )
+
+    monkeypatch.setattr(settings, "e2e_mock_wb_marketplace_supplies", True)
+    headers, suffix = await register(async_client)
+    me = await async_client.get("/auth/me", headers=headers)
+    tenant = uuid.UUID(me.json()["tenant_id"])
+    seller, warehouse, location = await setup(async_client, headers, suffix)
+    product = await _create_product(async_client, headers, seller, sku=f"sticker-{suffix}")
+    order_id = await _create_ready_order(
+        tenant,
+        uuid.UUID(seller),
+        uuid.UUID(warehouse),
+        uuid.UUID(location),
+        product,
+        order_id=666777002,
+    )
+    calls = []
+
+    async def stickers(client, *, api_token, order_ids, **kwargs):
+        calls.append(order_ids)
+        if provider_fails:
+            raise WildberriesClientError("transport_error")
+        return [
+            {
+                "orderId": oid,
+                "partA": "5877994",
+                "partB": "0283",
+                "barcode": "*fixture666",
+                "file": base64.b64encode(PNG).decode(),
+            }
+            for oid in order_ids
+        ]
+
+    monkeypatch.setattr(
+        "app.services.fbs_print_asset_service.fetch_marketplace_order_stickers", stickers
+    )
+    body = {
+        "name": "Immediate stickers",
+        "order_ids": [str(order_id)],
+        "planned_delivery_type": "warehouse_sc",
+        "idempotency_key": str(uuid.uuid4()),
+    }
+    response = await async_client.post(
+        "/operations/fbs-supplies/from-orders", headers=headers, json=body
+    )
+    assert response.status_code == 201, response.text
+    assert calls == [[666777002]]
+    result = response.json()
+    assert result["supply"]["status"] == "draft"
+    assert result["supply"]["packaging_task_id"] is None
+    assert result["orders"][0]["sticker"]["code"] == (None if provider_fails else "5877994 0283")
+    readback = await async_client.get(
+        f"/operations/fbs-supplies/{result['supply']['id']}/workspace", headers=headers
+    )
+    assert readback.status_code == 200
+    assert len(readback.json()["orders"]) == 1
+    if not provider_fails:
+        content = await async_client.get(
+            result["orders"][0]["sticker"]["asset_url"], headers=headers
+        )
+        assert content.status_code == 200 and content.content == PNG
+        repeat = await async_client.post(
+            "/operations/fbs-supplies/from-orders", headers=headers, json=body
+        )
+        assert repeat.status_code == 201, repeat.text
+        assert repeat.json()["supply"]["id"] == result["supply"]["id"]
+        assert calls == [[666777002]]

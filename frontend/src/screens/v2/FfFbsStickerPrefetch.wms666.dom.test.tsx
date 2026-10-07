@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 // @vitest-environment jsdom
 // WMS-666: post-release regression guard. Mount real screens with initially missing stickers.
 import { act } from 'react'
@@ -14,6 +15,7 @@ const { fetchWorkspace, fetchBatch, printQr, printMarking, startWork } = vi.hois
 vi.mock('./fbsApi', async (original) => ({
   ...await original<typeof import('./fbsApi')>(),
   fetchFbsWorkspace: fetchWorkspace, fetchFbsPrintBatch: fetchBatch, startFbsSupplyWork: startWork,
+  getFbsPickOptions: vi.fn(async () => []), getFbsPickingContext: vi.fn(async () => []),
 }))
 vi.mock('../ff/unload-pick/FfUnloadPickPage', () => ({ FfUnloadPickPage: () => null }))
 vi.mock('./FfFbsAssemblyPick', () => ({ FfFbsAssemblyPick: () => null }))
@@ -153,7 +155,7 @@ async function render(mode: 'supply' | 'assembly', ids = ['a'], stage = 'packing
     window.sessionStorage.setItem(`wms:fbs:${ids[0]}:stage`, stage)
     await act(async () => root.render(<FfFbsSupplyWorkspace token={TOKEN} authHeaders={authHeaders} supplyId={ids[0]!} open onClose={() => undefined} />))
   } else {
-    saveFbsAssemblyStage(ids, 'packing', window.sessionStorage)
+    saveFbsAssemblyStage(ids, stage as 'packing' | 'picking' | 'composition', window.sessionStorage)
     await act(async () => root.render(<FfFbsSupplyAssembly token={TOKEN} authHeaders={authHeaders} supplyIds={ids} open onClose={() => undefined} />))
   }
   await settle()
@@ -244,4 +246,65 @@ it('does not restart an existing packaging task', async () => {
   await render('supply')
   expect(startWork).not.toHaveBeenCalled()
   expect(document.querySelector('[data-testid="fbs-packing-marking-available"]')?.textContent).toContain('81')
+})
+
+// WMS-666 incident WB-GI-289512840: stickers must exist before packing.
+it.each(['supply', 'assembly'] as const)('%s: picking fetches missing stickers without starting packaging', async mode => {
+  await render(mode, ['a'], 'picking')
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
+  expect(state.a!.orders[0]!.sticker.code).toBe('5877994 0283')
+  expect(startWork).not.toHaveBeenCalled()
+  expect(printQr).not.toHaveBeenCalled()
+})
+it('retries missing stickers on tab transition after failure, without looping', async () => {
+  const succeed = fetchBatch.getMockImplementation()!
+  fetchBatch.mockRejectedValueOnce(new Error('WB temporarily unavailable'))
+  await render('supply', ['a'], 'picking')
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
+  fetchBatch.mockImplementation(succeed)
+  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    .find(tab => tab.textContent?.includes('Упаковка'))!
+  await act(async () => tab.click())
+  await settle()
+  expect(fetchBatch).toHaveBeenCalledTimes(2)
+  expect(state.a!.orders[0]!.sticker.code).toBe('5877994 0283')
+})
+it('switching from picking to packing does not request an already received sticker', async () => {
+  await render('supply', ['a'], 'picking')
+  const tab = Array.from(document.querySelectorAll<HTMLButtonElement>('[role="tab"]'))
+    .find(tab => tab.textContent?.includes('Упаковка'))!
+  await act(async () => tab.click())
+  await settle()
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
+})
+it.each(['supply', 'assembly'] as const)('%s: printing directly from composition gets stickers into the HTML', async mode => {
+  const write = vi.fn()
+  const popup = { opener: null, closed: false, close: vi.fn(), document: { write, open: vi.fn(), close: vi.fn() } }
+  const open = vi.spyOn(window, 'open').mockReturnValue(popup as unknown as Window)
+  try {
+    await render(mode, ['a'], 'composition')
+    const button = document.querySelector<HTMLButtonElement>('[data-testid="fbs-pick-list-print"]')!
+    expect(button).toBeDefined()
+    await act(async () => button.click())
+    await settle()
+    expect(fetchBatch).toHaveBeenCalledTimes(1)
+    const html = new DOMParser().parseFromString(write.mock.calls.map(call => call[0]).join(''), 'text/html')
+    expect(html.querySelector('td.sticker')?.textContent).toBe('5877994 0283')
+    expect(startWork).not.toHaveBeenCalled()
+  } finally { open.mockRestore() }
+})
+
+it('tab entry and print share one request; cancelled orders are excluded', async () => {
+  const cancelled = clone(state.a!.orders[0]!)
+  cancelled.id = 'cancelled-order'
+  cancelled.status = 'cancelled'
+  state.a!.orders.push(cancelled)
+  const [tab, print] = await Promise.all([
+    ensureFbsStickers(TOKEN, authHeaders, state.a!),
+    ensureFbsStickers(TOKEN, authHeaders, state.a!),
+  ])
+  expect(fetchBatch).toHaveBeenCalledTimes(1)
+  expect(fetchBatch.mock.calls[0]?.[3].order_ids).toEqual(['a-order'])
+  expect(tab.orders[0]!.sticker.code).toBe('5877994 0283')
+  expect(print).toBe(tab)
 })

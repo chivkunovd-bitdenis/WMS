@@ -1,3 +1,4 @@
+import { ensureFbsStickers } from './fbsStickerPrefetch'
 import { OzonDocumentsAbsence } from './OzonDocumentsAbsence'
 import { createPortal } from 'react-dom'
 import { createPackingScanController, makePackingScanDeps, packingSerialBusy, routePackingScan, runPackingSerial } from './fbsSequentialPacking'
@@ -836,7 +837,7 @@ export function FfFbsSupplyWorkspace({
   useEffect(() => {
     unifiedStickerAttempts.current.clear()
     ordinaryPreparationAttempt.current = false
-  }, [open, supplyId])
+  }, [open, supplyId, stage])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
@@ -1185,28 +1186,25 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
-  // Both packing entry points have no per-supply Start button. Fetch missing
-  // WB stickers on entry, without waiting for a scan or sending them to print.
+  // WMS-666: prepare missing WB stickers on picking and packing entry.
+  // Packaging preparation remains exclusive to the ordinary packing tab.
   useEffect(() => {
-    if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
+    if (!open || (stage !== 'picking' && stage !== 'packing') || !workspace || isOzonSupply) return
     if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
-    const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
+    const missing = workspace.orders.filter((order) => !order.sticker.code && order.status !== 'cancelled' && !unifiedStickerAttempts.current.has(order.id))
     // Manual printing needs the task formerly created by the removed Start button.
-    const prepare = !assemblyFrame && !workspace.supply.packaging_task_id
+    const prepare = stage === 'packing' && !assemblyFrame && !workspace.supply.packaging_task_id
       && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
       && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
     if (!missing.length && !prepare) return
     if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
-    const requested = missing.length ? fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
-      kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
-    }) : Promise.resolve(null)
-    void requested.then(async (batch) => {
+    const requested = ensureFbsStickers(token, authHeaders, workspace)
+    void requested.then(async () => {
       if (!write.isCurrent()) return
       if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
       else void load(true)
-      if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
     }).catch((cause: unknown) => {
       if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     })
@@ -3095,19 +3093,26 @@ export function FfFbsSupplyWorkspace({
     printWindow.document.write('<title>Лист подбора</title><p style="font:14px Arial,sans-serif">Готовим лист подбора…</p>')
     // WMS-528: где брать — ячейки и тара по убыванию остатка, ровно на покрытие подбора.
     // Без ответа сервера лист печатается с прежними ячейками, печать не блокируется.
-    let rows: typeof pickingRows = pickingRows
+    let printableRows = pickingRows
+    try {
+      const fresh = await ensureFbsStickers(token, authHeaders, workspace)
+      printableRows = fbsBuildPickingRows(fresh.orders, isOzonSupply).rows
+    } catch (cause) {
+      setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
+    }
+    let rows: typeof pickingRows = printableRows
     try {
       // Подобранное берём из того же свежего ответа, что и места: экран мог не перечитаться после подбора.
       const options = new Map((await getFbsPickOptions(token, authHeaders, workspace.supply.id))
         .map((option) => [option.product_id, option]))
-      rows = pickingRows.map((row) => {
+      rows = printableRows.map((row) => {
         const option = options.get(row.key)
         if (!option) return row
         const picked = Math.min(option.picked_qty, row.required)
         return { ...row, picked, locations: fbsPickSourceLabels(option.locations, row.required - picked) }
       })
     } catch {
-      rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
+      rows = printableRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
     }
     try {
