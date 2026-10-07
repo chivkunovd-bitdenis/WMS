@@ -1,0 +1,37 @@
+--- exact4c532/browser.mjs
++++ untracked/browser.identity-diagnostic.untracked.mjs
+@@ -1,3 +1,5 @@
++import { createObserver } from './identity-observer.untracked.mjs';
++const identityObserver=createObserver();
+ // WMS652 critical real-screen contracts. No mocked product controllers.
+ import { spawn, execFileSync } from 'node:child_process';
+ import { mkdir, writeFile } from 'node:fs/promises';
+@@ -38,6 +40,7 @@
+     this.ready = new Promise((resolve, reject) => { this.ws.onopen = resolve; this.ws.onerror = reject; });
+     this.ws.onmessage = event => {
+       const msg = JSON.parse(event.data);
++      identityObserver.message(this,msg);
+       if (msg.id) {
+         const p = this.pending.get(msg.id); this.pending.delete(msg.id);
+         if (p) {
+@@ -99,10 +102,12 @@
+     this.record({kind:'command-send',commandId:id,method,...identity,attempt:token?.attempts});
+     return new Promise((resolve, reject) => {
+       const timer = setTimeout(() => {
++        identityObserver.timedOut(this,id,method);
+         this.pending.delete(id); this.record({kind:'command-timeout',commandId:id,method,...identity});
+         reject(Error(`CDP timeout ${method}`));
+       }, 12000);
+       this.pending.set(id, {resolve,reject,timer,method,identity,token,retirable});
++      identityObserver.sent(this,id,method,params);
+       this.ws.send(JSON.stringify({id,method,params}));
+     });
+   }
+@@ -295,6 +300,7 @@
+   report.status='PASS';
+ }catch(e){if(report.currentCase&&!report.cases.some(one=>one.id===report.currentCase))report.cases.push({id:report.currentCase,status:'FAIL',failure:String(e)});report.status='FAIL';report.failure=String(e);report.stack=e.stack;console.error(e);process.exitCode=1;}
+ finally{
++  await writeFile(`${dir}/identity-telemetry.json`,JSON.stringify(identityObserver.snapshot(cdp,report)));
+   await writeFile(`${dir}/cdp-transport.json`,JSON.stringify({events:cdp?.transport ?? [],pendingCommandIds:[...cdp?.pending.keys() ?? []]},null,2));
+   await writeFile(`${dir}/result.json`,JSON.stringify(report,null,2));
+   await writeFile(`${dir}/last-requests.json`,JSON.stringify({requestLog,printLog,trace,blocked,errors},null,2));
