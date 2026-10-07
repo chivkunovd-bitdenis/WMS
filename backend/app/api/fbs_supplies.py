@@ -224,10 +224,17 @@ class FbsPickOptionLocationOut(BaseModel):
     sources: list[FbsPickOptionSourceOut]
 
 
+class FbsPickingSourceGroupOut(BaseModel):
+    key: str
+    title: str
+    lines: list[str]
+
+
 class FbsPickingContextOut(BaseModel):
     product_id: str
     inbound_supplies: list[str]
     locations: list[str]
+    source_groups: list[FbsPickingSourceGroupOut] = Field(default_factory=list)
 
 
 class FbsPickOptionProductOut(BaseModel):

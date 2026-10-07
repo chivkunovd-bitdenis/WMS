@@ -2148,6 +2148,7 @@ export type FbsPickingContext = {
   product_id: string
   inbound_supplies: string[]
   locations: string[]
+  source_groups: Array<{ key: string; title: string; lines: string[] }>
 }
 
 export async function getFbsPickingContext(

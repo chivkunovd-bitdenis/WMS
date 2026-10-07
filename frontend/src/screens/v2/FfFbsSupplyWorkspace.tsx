@@ -3120,7 +3120,7 @@ export function FfFbsSupplyWorkspace({
         .map((item) => [item.product_id, item]))
       rows = rows.map((row) => {
         const item = context.get(row.key)
-        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies } : row
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
       })
     } catch {
       setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
