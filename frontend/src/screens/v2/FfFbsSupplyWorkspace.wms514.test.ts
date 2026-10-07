@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
+const printSource = readFileSync(new URL('../../utils/printMarkingCodeLabel.ts', import.meta.url), 'utf8')
 
 describe('WMS-514 · scan classification and silent print wiring', () => {
   it('renders exactly the three requested WB controls with mutually exclusive CHZ modes', () => {
@@ -105,7 +106,7 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(idleScan).toContain('releaseFbsScanAutoPrintTargetClaim(')
   })
 
-  it('WMS-666 P1 revalidates the claimed exact CHZ binding immediately before scan print dispatch', () => {
+  it('WMS-666 P1 passes exact claimed binding validation to the final scan print dispatch', () => {
     const idleScan = source.slice(
       source.indexOf('const scanIdleCode = useCallback'),
       source.indexOf('const scanKizCode = useCallback'),
@@ -113,17 +114,18 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     const chzStart = idleScan.indexOf('if (plan.printChz && !result.requires_honest_sign)')
     const reprintStart = idleScan.indexOf('if (waitingForReprintKiz)', chzStart)
     const chzDispatch = idleScan.slice(chzStart, reprintStart)
-    const validate = chzDispatch.indexOf('validateFbsPrintBindings(')
-    const dispatch = chzDispatch.indexOf('printMarkingCodeTape(')
+    const tapePrinter = printSource.slice(printSource.indexOf('export async function printMarkingCodeTape('))
 
     expect(chzStart).toBeGreaterThan(-1)
     expect(reprintStart).toBeGreaterThan(chzStart)
-    expect(validate).toBeGreaterThan(-1)
-    expect(validate).toBeLessThan(dispatch)
+    expect(chzDispatch).toContain('const validateCurrentBinding = async () => validateFbsPrintBindings(token, [{')
+    expect(chzDispatch).toContain('beforeDispatch: validateCurrentBinding')
     expect(chzDispatch).toContain('order_id: result.order_id')
     expect(chzDispatch).toContain('supply_id: printed.supply_id')
     expect(chzDispatch).toContain('marking_id: printed.marking_id')
     expect(chzDispatch).toContain('cis_code: kiz')
+    expect(tapePrinter).toContain('await buildMarkingTapeSections(')
+    expect(tapePrinter).toContain('printTapeSections(sections, options?.labelSize, options?.beforeDispatch)')
   })
 
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {
