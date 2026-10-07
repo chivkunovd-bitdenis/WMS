@@ -117,7 +117,16 @@ async def get_supply_workspace(
     cargo_places = await _build_cargo_places(session, tenant_id, supply)
     boxes = await _build_boxes(session, tenant_id, supply_id)
     boxes_without_distribution = await packing_box_svc._supply_without_distribution(session, supply)
-    marking_pool = await _build_marking_pool(session, tenant_id, orders)
+    marking_pool, available_by_product = await _build_marking_pool_with_product_counts(
+        session, tenant_id, orders
+    )
+    for item in worklist_items:
+        product_id = (item.get("product") or {}).get("id")
+        item["marking_available_count"] = (
+            available_by_product.get(uuid.UUID(str(product_id)), 0)
+            if product_id
+            else 0
+        )
     progress = _compute_progress(orders, worklist_items)
     picking_auto_passed_reason = await _picking_auto_passed_reason(
         session, tenant_id, supply, orders
@@ -709,9 +718,26 @@ async def _build_marking_pool(
     tenant_id: uuid.UUID,
     orders: list[FbsOrder],
 ) -> dict[str, Any]:
+    marking_pool, _ = await _build_marking_pool_with_product_counts(
+        session, tenant_id, orders
+    )
+    return marking_pool
+
+
+async def _build_marking_pool_with_product_counts(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    orders: list[FbsOrder],
+) -> tuple[dict[str, Any], dict[uuid.UUID, int]]:
     """Honest Sign deficit for the whole supply, reusing the pool count logic
     from marking_code_service (no ad-hoc query on MarkingCode here).
     """
+    workspace_product_ids = {
+        order.product_id for order in orders if order.product_id is not None
+    }
+    available_by_product = await count_available_for_products_batch(
+        session, tenant_id, workspace_product_ids
+    )
     order_ids = [order.id for order in orders]
     marked_order_ids: set[uuid.UUID] = set()
     if order_ids:
@@ -729,10 +755,12 @@ async def _build_marking_pool(
         if _order_needs_marking_code(order) and order.id not in marked_order_ids
     ]
     if not needing_orders:
-        return {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []}
+        return (
+            {"required": 0, "available": 0, "shortage": 0, "orders_without_code": []},
+            available_by_product,
+        )
 
     product_ids = {order.product_id for order in needing_orders if order.product_id is not None}
-    available_by_product = await count_available_for_products_batch(session, tenant_id, product_ids)
     total_available = sum(available_by_product.get(pid, 0) for pid in product_ids)
 
     # Deterministic allocation: give the earliest-deadline orders first crack at
@@ -751,12 +779,15 @@ async def _build_marking_pool(
 
     required = len(needing_orders)
     shortage = max(0, required - total_available)
-    return {
-        "required": required,
-        "available": total_available,
-        "shortage": shortage,
-        "orders_without_code": orders_without_code,
-    }
+    return (
+        {
+            "required": required,
+            "available": total_available,
+            "shortage": shortage,
+            "orders_without_code": orders_without_code,
+        },
+        available_by_product,
+    )
 
 
 def _map_cargo_place(trbx: FbsTrbx, qr_asset: FbsPrintAsset | None) -> dict[str, Any]:

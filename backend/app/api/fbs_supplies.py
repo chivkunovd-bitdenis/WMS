@@ -776,6 +776,7 @@ class FbsWorkspaceProductOut(FbsWorklistProductOut):
 class FbsWorkspaceOrderOut(FbsWorklistOrderOut):
     product: FbsWorkspaceProductOut
     tape_order_index: int
+    marking_available_count: int = 0
 
 
 class FbsWorkspaceMarkingPoolOut(BaseModel):

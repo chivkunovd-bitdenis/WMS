@@ -2860,9 +2860,14 @@ export function FfFbsSupplyWorkspace({
     for (const order of orders) {
       if (!requiresOrderHonestSign(order) || !order.product.id || seen.has(order.product.id)) continue
       seen.add(order.product.id)
-      total += packLineByProduct.get(order.product.id)?.marking_available_count ?? 0
+      total += markingAvailableForOrder(order)
     }
     return total
+  }
+
+  const markingAvailableForOrder = (order: FbsWorkspace['orders'][number]) => {
+    const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
+    return line?.marking_available_count ?? order.marking_available_count ?? 0
   }
 
   const markingShortageForOrders = (orders: FbsWorkspace['orders']) => {
@@ -2873,7 +2878,9 @@ export function FfFbsSupplyWorkspace({
       }
     }
     return [...needed].reduce((sum, [productId, quantity]) =>
-      sum + Math.max(0, quantity - (packLineByProduct.get(productId)?.marking_available_count ?? 0)), 0)
+      sum + Math.max(0, quantity - markingAvailableForOrder(
+        orders.find((order) => order.product.id === productId)!,
+      )), 0)
   }
 
   const openBulkOrderMarkingPrint = (
@@ -3009,7 +3016,7 @@ export function FfFbsSupplyWorkspace({
         sellerId: workspace?.supply.seller.id,
         documentNumber: workspace?.supply.name ?? null,
         qtyNeedPack: printsHonestSign ? 1 : 0,
-        markingAvailable: printsHonestSign ? (line?.marking_available_count ?? 0) : 0,
+        markingAvailable: printsHonestSign ? markingAvailableForOrder(order) : 0,
         qtyMarkingPrinted: orderPrintDone(order) ? 1 : 0,
         requiresHonestSign: printsHonestSign,
         skuCode: ozonPosition?.sku ?? ozonPosition?.seller_article ?? line?.sku_code ?? order.product.sku ?? order.product.seller_article
@@ -3809,7 +3816,7 @@ export function FfFbsSupplyWorkspace({
                       const printed = orderPrintDone(order)
                       const needsHonestSign = requiresOrderHonestSign(order)
                       const markingNeeded = order.product.id ? markingNeededByProduct.get(order.product.id) ?? 0 : Number(needsHonestSign)
-                      const markingAvailable = line?.marking_available_count ?? 0
+                      const markingAvailable = markingAvailableForOrder(order)
                       const markingShortage = needsHonestSign && markingAvailable < markingNeeded
                       const mutedColor = printed ? 'text.secondary' : 'text.primary'
                       const kizRowActive = (sequentialScanner?.view()?.orderId ?? kizScanActive?.order_id) === order.id

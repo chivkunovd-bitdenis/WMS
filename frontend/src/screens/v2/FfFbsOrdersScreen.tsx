@@ -1163,20 +1163,24 @@ export function FfFbsOrdersScreen({ token, authHeaders, sellers, onDirtyChange, 
       assets,
       order_errors: [],
     })
+    let missingAssetsMessage: string | null = null
     if (ready > 0) {
       setSupplyQrPreviewOpen(true)
       if (failures.length > 0) {
         setSupplyQrWarning(`Часть этикеток не получена: ${failures.join(' · ')}`)
       }
     } else {
-      setError(failures.join(' · ') || (
+      missingAssetsMessage = failures.join(' · ') || (
         isOzon
           ? 'Ozon не вернул готовые этикетки для этой поставки.'
           : 'WB не вернул готовые QR для этой поставки.'
-      ))
+      )
     }
     setPrintingSupplyId(null)
     await load()
+    // load() clears the shared screen alert while refreshing the table. Restore
+    // the failed QR result afterward so the operator can see why no preview opened.
+    if (missingAssetsMessage) setError(missingAssetsMessage)
   }, [token, authHeaders, load])
 
   const confirmSupplyQrApplied = useCallback(async (asset: FbsPrintAsset) => {
