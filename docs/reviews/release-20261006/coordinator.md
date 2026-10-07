@@ -338,3 +338,14 @@ Replacement Solаналитик4eb81c378babf081b3342f3bf36ac17bf136a8bf отде
 Testwriter88343975e13f8819d6b81cd03cddbba1d67db078 изменил ONLYодинliteralвassertIn test_ci_release_additions.py с OLDd618 на отдельноaccepted25eb; все3IDs/второйJUnitassert/остальныеassertions ибайты сохранены. BEFORE2PASS1targetFAIL→AFTER3PASS0skip; negativeoldreferencecopy1targetRED безtrackedCI/product edits. Интегратор обновил ONLYэтотprotectedfiledigest;229files/21suites1173IDs прежние. Frozen51scope/script/new12/business/browserhelpercases побайтнонеизменны.
 
 Это preparedmigration; новое независимоеreview/отдельныйаналитическийdelta/newSOURCEpin ещёвпереди. Actualrun37548248403 не отменяется; releasePRHEAD eab пока не меняется, пока собираютсявсеoutputs. Frontend/backendchecks ужеPASS; полныйbackend/print продолжаются. НетblindCIretry/новогопродукта/physicalclaims.
+
+
+## Checkpoint 00:03 UTC: полный commonCI завершён, четыре инфраструктурные причины объединяются
+
+37548248403/attempt1 HEAD eab/testedmergeac845 завершилсяFAILURE за743s (12m23); успешная цель10–15 ещё не доказана. Rawactualbackend receipts/XML даютexact4631 union бездублей:2316/2315,4432PASS198XMLskip1FAIL. ЕдинственныйbackendFAIL — новыйpreservationmetadata test: Python3.11 fullASTdigest0632023 против Mac3.14 defaultomit-empty ddbfe3; explicitshow_emptyTrueна3.14 даёт EXACT0632023, исходные23assertions/7params неизменны. Targetedportableproof пишетотдельный Soltestwriter. RequiredPG послеfailedshard не исполнились и не объявленыPASS.
+
+PrintrawALLold67211PASS (328.855s),remaining6PASS,new12PASS; frozen43FBS42PASS1FAIL. Единственныйfailedcase remount-after-lost-ack/supply_id=A имеетblocked=[]/errors=[CDP -32602 Invalid InterceptionId]; businesstrace/keyrecovery/pack какуPASSsibling. Independent lifecycle diagnosis устанавливаетточнуюграницупротокола; generalerrorignore/errors.length ослабление запрещены. SameSoldeveloper resumed дляisolated selectedLinux141 telemetry толькопослеscopecheck; dispatcherединственныйинтегратор.
+
+Двеужеопубликованные technicalcorrections:883literalaccepted25eb+ab0independentreview3PASS и8e029CryptoPro %j длядвухdistinctparamreportIDs (37targetPASS, строгийduplicateparser/controlREDсохранён). Последнийfileunprotected/случаиunprotected, coverage/array/assertions неизменны. Frontendactual1566assertions/Mac110exactPASS/204mandatoryFBS uniquelyPASS сохранены, ноrawparserсамкорректноFAILduplicate, поэтомуpartialpasses не finalproof.
+
+Всечетырепричины входят в ОДИН следующий acceptedcandidate/SOURCE/полныйCI. ТекущийPRHEAD не менялся/run не отменён. Новаяreference/AST/CDPtesthash миграция ещё не activatingnewmainpin; source9dae/main8df историческиinstalled, приложениеmain/stagingcc8e/production8f11d912 прежние.
