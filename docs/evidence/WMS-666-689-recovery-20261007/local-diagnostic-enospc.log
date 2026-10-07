@@ -1,0 +1,80 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.14.3, pytest-9.1.1, pluggy-1.6.0 -- /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /Users/deniscivkunov/Projects/WMS/.worktrees/wms-666-689-recovery/backend
+configfile: pyproject.toml
+plugins: xdist-3.8.0, asyncio-1.4.0, anyio-4.14.2
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 192 items
+
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[filled-accepted] PASSED [  0%]
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[optional-allowed_without_check] PASSED [  1%]
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[pending-pending] PASSED [  1%]
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[required-None] PASSED [  2%]
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[invalid-rejected] PASSED [  2%]
+tests/test_fbs_kiz.py::test_wb_decision_mapping_covers_safe_sync_states[something-new-None] PASSED [  3%]
+tests/test_fbs_kiz.py::test_universal_test_kiz_is_opt_in_and_unique_per_order PASSED [  3%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_strips_aim_prefix[]d2] PASSED [  4%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_strips_aim_prefix[]d1] PASSED [  4%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_strips_aim_prefix[]Q1] PASSED [  5%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_strips_aim_prefix[]Q3] PASSED [  5%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_strips_aim_prefix[]C1] PASSED [  6%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[~] PASSED [  6%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[|] PASSED [  7%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[#] PASSED [  7%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[<GS>] PASSED [  8%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[{GS}] PASSED [  8%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[\\x1d] PASSED [  9%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[<gs>] PASSED [  9%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_gs_substitute_only_at_separator[{gs}] PASSED [ 10%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_repairs_keyboard_layout PASSED [ 10%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_trims_scanner_suffix PASSED [ 11%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_repairs_keyboard_layout_and_gs_together PASSED [ 11%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_clean_value_has_no_hints PASSED [ 12%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_restores_separator_before_weight_ai PASSED [ 13%]
+tests/test_fbs_kiz.py::test_normalize_scanned_cis_repairs_russian_aim_prefix_after_layout PASSED [ 13%]
+tests/test_fbs_kiz.py::test_windows_russian_keyboard_layout_mapping_is_complete PASSED [ 14%]
+tests/test_fbs_kiz.py::test_is_probably_cis_rejects_garbage PASSED       [ 14%]
+tests/test_fbs_kiz.py::test_scan_debug_masks_gs_in_edges PASSED          [ 15%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_matches_tolerant_sticker_fields[sticker_code] PASSED [ 15%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_matches_tolerant_sticker_fields[wb_barcode] PASSED [ 16%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_garbage_sticker_returns_404 PASSED [ 16%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_foreign_supply_sticker_returns_404 PASSED [ 17%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_frozen_order_returns_409 PASSED [ 17%]
+tests/test_fbs_kiz.py::test_fbs_kiz_lookup_existing_pool_kiz_needs_confirmation PASSED [ 18%]
+tests/test_fbs_kiz.py::test_fbs_kiz_validate_normalizes_and_does_not_write PASSED [ 18%]
+tests/test_fbs_kiz.py::test_fbs_kiz_validate_rejects_garbage_with_debug PASSED [ 19%]
+tests/test_fbs_kiz.py::test_fbs_kiz_validate_duplicate_marking_returns_order_context PASSED [ 19%]
+tests/test_fbs_kiz.py::test_fbs_kiz_validate_frozen_order_returns_409 PASSED [ 20%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_partial_success_keeps_other_transactions PASSED [ 20%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_existing_kiz_needs_confirmation_without_writes PASSED [ 21%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_confirmed_replaces_old_kiz_and_voids_code PASSED [ 21%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_success_creates_records_event_and_counter PASSED [ 22%]
+tests/test_fbs_kiz.py::test_fbs_kiz_delete_wb_error_does_not_change_records PASSED [ 22%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_same_pair_is_idempotent_without_second_wb_call PASSED [ 23%]
+tests/test_fbs_kiz.py::test_fbs_kiz_external_marking_counts_as_printed_for_pool_and_gate PASSED [ 23%]
+tests/test_fbs_kiz.py::test_fbs_kiz_validate_rejects_available_pool_code_owner_mismatches PASSED [ 24%]
+tests/test_fbs_kiz.py::test_fbs_kiz_commit_claims_available_pool_code_without_reclassifying_it PASSED [ 25%]
+tests/test_fbs_kiz.py::test_fbs_kiz_replacement_runs_registry_checks_before_wb_delete PASSED [ 25%]
+tests/test_fbs_kiz.py::test_fbs_kiz_replacement_restores_old_wb_value_when_new_value_is_rejected PASSED [ 26%]
+tests/test_fbs_kiz.py::test_fbs_kiz_replacement_persists_reason_when_wb_restore_also_fails PASSED [ 26%]
+tests/test_fbs_kiz.py::test_fbs_kiz_pool_to_external_replacement_does_not_double_count_unit PASSED [ 27%]
+tests/test_fbs_kiz.py::test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[False-accepted] PASSED [ 27%]
+tests/test_fbs_kiz.py::test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[True-pending] PASSED [ 28%]
+tests/test_fbs_kiz.py::test_fbs_order_tape_reprints_operator_kiz_without_pool_mutation[True-rejected] PASSED [ 28%]
+tests/test_fbs_kiz.py::test_fbs_marking_readers_prefer_active_row_over_newer_rejected_row PASSED [ 29%]
+tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[filled-same-accepted-ok] PASSED [ 29%]
+tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[optional-same-allowed_without_check-no_check] PASSED [ 30%]
+tests/test_fbs_kiz.py::test_fbs_marking_wb_meta_decision_is_safe_and_preserves_raw_detail[optional-same-allowed_without_check-no_check] ERROR [ 30%]Traceback (most recent call last):
+  File "<frozen runpy>", line 198, in _run_module_as_main
+  File "<frozen runpy>", line 88, in _run_code
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/pytest/__main__.py", line 9, in <module>
+    raise SystemExit(_console_main())
+                     ~~~~~~~~~~~~~^^
+  File "/Users/deniscivkunov/Projects/WMS/backend/.venv/lib/python3.14/site-packages/_pytest/config/__init__.py", line 254, in _console_main
+    sys.stdout.flush()
+    ~~~~~~~~~~~~~~~~^^
+OSError: [Errno 28] No space left on device
+Exception ignored while flushing sys.stdout:
+OSError: [Errno 28] No space left on device
+<sys>:0: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
