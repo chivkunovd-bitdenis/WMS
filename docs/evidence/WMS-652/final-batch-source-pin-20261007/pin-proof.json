@@ -1,0 +1,121 @@
+{
+  "verdict": "APPROVED exact bootstrap BASE/SOURCE pair; accepted prepared candidate only",
+  "BASE": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "SOURCE": "90744e4b8dde3cc69a951269c00f6f1daa0a4d00",
+  "PRODUCT": "1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333",
+  "policy_sha256": "58a95dc526e15dff10999925d33f8ed935c2100b6231f0bfb70ab2b7985ed6e8",
+  "regular_Git_files": 238,
+  "modes": {
+    "100644": 230,
+    "100755": 8
+  },
+  "suites": 22,
+  "required_IDs": 1192,
+  "backend_required_cases": 627,
+  "all238_actual_hashes_match_policy_and_Git_objects_identical_to": "3867d9e74cce3807b5e719c3f2c912fc0cfbd8d6",
+  "actual_git_rows_sha256": "8fc0602e3552a58264e1837a1b4cc9fad3fff42d61407a893d03d430f2624ed5",
+  "old_retention_and_previously_reviewed_hash_migrations": {
+    "93b0757103fbd29fb00d4f198f6baab8def85172": {
+      "files": 210,
+      "IDs": 955,
+      "paths_modes_IDs_order_and_suite_definitions_retained": true,
+      "existing_digest_migrations": {
+        ".github/workflows/ci.yml": {
+          "before": "ff93f57e9760718e42f97394bf34a74ca556ef201e2705267a7696dd3d385a15",
+          "after": "1888cd23eddfc95d7c3314423f22f2dcef8453371ff4039ce30ddd7023fa9a82"
+        },
+        "frontend/tests-e2e/wms652-critical/browser.mjs": {
+          "before": "c34723ca88f5af1864912de5db2f6366d06ab81bfc487366272bab6fb039d436",
+          "after": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6"
+        },
+        "frontend/tests-e2e/wms652-critical/cases.json": {
+          "before": "1ef736d9c61eddae8d0c70302d930a7cf610e8f3605c3cedd6646855d23fe2e2",
+          "after": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9"
+        },
+        "scripts/ops/tests/wms517-mac-dom.test.cjs": {
+          "before": "9d96c45a340931278119005ae91efa22c0d22c88c09a348e58c93fb5eb77e0d6",
+          "after": "bda5ad08b093cc0075553ec0540f3449a8c6c908bbf5f3ffc5f74edc7604026e"
+        },
+        "scripts/ops/tests/wms517-mac-launcher.test.cjs": {
+          "before": "b2e24955a34e2efa9369630ed5b2984aacb70f8ee07720187f5d9360a0cbc954",
+          "after": "766f4959600a053c6db879dc657b9e2f51fd152d9a58f3d5a465bd5d3dbe4ac8"
+        }
+      }
+    },
+    "b815b166fbcd4db9d014ed1a9d961d7c56225130": {
+      "files": 233,
+      "IDs": 1184,
+      "paths_modes_IDs_order_and_suite_definitions_retained": true,
+      "existing_digest_migrations": {}
+    },
+    "5b9df5acfba055bf94d5b3b21793ce2a233edff6": {
+      "files": 235,
+      "IDs": 1186,
+      "paths_modes_IDs_order_and_suite_definitions_retained": true,
+      "existing_digest_migrations": {}
+    }
+  },
+  "docs_only_delta_from_reviewed_source": [
+    "docs/KANONICHESKIY_BACKLOG.md",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/README.md",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/manifest.json",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/precode-red.log",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/precode-red.xml",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/preservation.json",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/ruff-target.log",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/targeted-green.log",
+    "docs/evidence/WMS-652/batch-exact-pair-developer-20261007/targeted-green.xml",
+    "docs/evidence/WMS-652/batch-exact-pair-review-20261007/probe.py",
+    "docs/evidence/WMS-652/batch-exact-pair-review-20261007/proof.json",
+    "docs/evidence/WMS-652/batch-exact-pair-review-20261007/review.md",
+    "docs/evidence/WMS-652/batch-release-acceptance-20261007/README.md",
+    "docs/evidence/WMS-652/batch-release-acceptance-20261007/source-probe.json",
+    "docs/requirements/WMS-652.md",
+    "docs/requirements/WMS-662.md",
+    "docs/reviews/contract-corrections/WMS-662.json",
+    "docs/reviews/release-20261006/coordinator.md",
+    "docs/reviews/wms652-batch-exact-fixture-review-20261007.md"
+  ],
+  "previous_independent_review": "830e8ad6de4faa6cf6c23e6936994f2cb9c8e134",
+  "ledger_commit": "353b711dd10297ae86f9cd8184de52d99c33df5a",
+  "ledger_sha256": "9d6696d879469cf1ba7adb440df859ecddb8c3314bddbf5b0ea17e9d63b7d039",
+  "ledger_matches_approved_complete_template": true,
+  "owner_supersessions_verbatim_preserved": true,
+  "actual_review_import_changed_artifact": "07b49705462eeb2f4da934b1a946afe751a82b43",
+  "artifact_blob": "b566e9896a7571ce46cde3ffe385c3800867b66e",
+  "whole_APP_equal_PRODUCT": true,
+  "distinct_analyst_commit": "7e671452408563b6091555cf6287d4eff4b0f758",
+  "analyst_source": "d5a3d5391c6a030a4d075bf18cea00c09c2ec178",
+  "actor_documents_sha256": {
+    "docs/evidence/WMS-652/batch-release-acceptance-20261007/README.md": "a8d175eb1cc72b671c16827e00304af4a545715c876c2433101d212ab71961d8",
+    "docs/evidence/WMS-652/batch-release-acceptance-20261007/source-probe.json": "a1187743adb3a022171c3e5f72e653ad8a53cdcaed566b4bca70b35bf0b4737f",
+    "docs/requirements/WMS-652.md": "f1eb930d3fcffebe007cc31eebcb963e3b25c6a21b0c9f338d1aab3ea724e171",
+    "docs/requirements/WMS-662.md": "23c682e27f624600e28ed0af54bf691665e678552d8a06ce3bc1769ac171008c",
+    "docs/KANONICHESKIY_BACKLOG.md": "a7df5d1b30abe0425011ce4d881cf50c903fd5ef4b44ebc58f9279a36330d496"
+  },
+  "native_PG_receipts_unchanged_and_prior_verdict_retained": {
+    "run": 37563300572,
+    "attempt": 1,
+    "source": "b568bfdddd8b106799428ce81451b406ffe9860b",
+    "native_command_outcomes": 16,
+    "all_exit0": true,
+    "required_PG_PASS": 37,
+    "native_Linux_PASS": 30,
+    "new_SOURCE_fullCI": false,
+    "batch_writers": [
+      219,
+      209
+    ],
+    "steady_writers": [
+      225,
+      224
+    ]
+  },
+  "historical_full_CI": 37561608930,
+  "historical_full_CI_conclusion": "failure",
+  "successful_full_CI_10_to_15_minutes_proven": false,
+  "historical_SQLite_lock_owner": "UNKNOWN",
+  "new_tests_build_PG_browser_CI_document_gate_runs": [],
+  "main_pin_activation_release_deploy_or_physical_proof": "NOT performed or claimed",
+  "next": "ordinary configuration-only PR pins exact SOURCE90744e; fresh full candidate CI remains mandatory"
+}
