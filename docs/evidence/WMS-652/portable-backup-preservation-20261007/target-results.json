@@ -1,0 +1,21 @@
+{
+  "python": "3.14.3",
+  "target_id": "backend/tests/test_prod_deploy_backup_gate_boundary.py::test_all_seven_backup_variants_and_original_assertions_are_preserved",
+  "execution": "Compile actual function AST only, with real stdlib modules and actual SOURCE binding.",
+  "after": {
+    "pass": 1,
+    "fail": 0,
+    "skipped": 0
+  },
+  "negative": {
+    "expected_fail": 1,
+    "assertions": 23,
+    "failure_line": 34,
+    "reason": "Hardcoded full-format preservation hash rejects changed ordering assertion."
+  },
+  "original_source_sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+  "mutated_copy_sha256": "d0b84d5fcdd3f48b2ccaab8c3c574172879e5b0865e5a2208410e8f0e97daece",
+  "tracked_source_and_boundary_unchanged_by_execution": true,
+  "temporary_copy_removed": true,
+  "command": "python3 -B docs/evidence/WMS-652/portable-backup-preservation-20261007/preservation-proof.py"
+}

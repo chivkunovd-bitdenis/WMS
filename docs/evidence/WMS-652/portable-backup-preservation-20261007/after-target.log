@@ -1,0 +1,3 @@
+Python 3.14.3 stdlib execution of actual extracted function
+backend/tests/test_prod_deploy_backup_gate_boundary.py::test_all_seven_backup_variants_and_original_assertions_are_preserved PASS
+1 target passed;0 failures;0 skips. No pytest import, gate variants or Docker execution.
