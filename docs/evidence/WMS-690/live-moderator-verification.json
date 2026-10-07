@@ -1,0 +1,61 @@
+{
+  "task": "WMS-690",
+  "checked_at": "2026-10-07T14:18:39.725371+00:00",
+  "moderator_thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+  "model": "gpt-6.1-sol",
+  "profile_proof": "native-full-access-probe.json",
+  "live_moderator_turn_id": "01a116aa-eb5c-7db0-a4f9-bbd210195ab4",
+  "native_child_id": "/root/imperiya_actual_boxes",
+  "second_child_result_received": true,
+  "native_operations_observed": [
+    "spawn_agent",
+    "followup_task",
+    "send_message"
+  ],
+  "media_read": [
+    859,
+    865,
+    871,
+    873
+  ],
+  "startup_boundary": "startup-boundary.json",
+  "card": {
+    "number": 4,
+    "topic_id": "imperiya-boxes-860",
+    "chat_id": -4899527415,
+    "title": "Списание из фактически использованных коробов",
+    "statuses": {
+      "working": true,
+      "analysis_done": false,
+      "answer_sent": false,
+      "owner_needed": false
+    },
+    "message_id": "1007",
+    "delivery": "sent"
+  },
+  "card_created_by": "ordinary native moderator",
+  "historical_card_ids_preserved": [
+    "1004",
+    "1005",
+    "1006"
+  ],
+  "card_count": 4,
+  "heartbeat": {
+    "id": "wms-4",
+    "kind": "heartbeat",
+    "status": "ACTIVE",
+    "target_thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+    "rrule": "FREQ=MINUTELY;INTERVAL=1"
+  },
+  "sending": {
+    "native_paused": false,
+    "native_ready": true,
+    "client_replies_enabled": true
+  },
+  "inventory_mutations_performed": false,
+  "limitations": [
+    "The client request remains under investigation and the promised list is not yet received.",
+    "Automated short-context rollover at250000tokens has not been observed; fork retains history.",
+    "ACTIVE heartbeat configuration and target are verified; the active investigation has not yet yielded a separate idle scheduled turn."
+  ]
+}
