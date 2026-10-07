@@ -1,0 +1,182 @@
+{
+  "task": "WMS-607",
+  "kind": "additive test-first P1 rollback-stop boundary",
+  "role": "separate testwriter",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "base": "6232cf29765f1b25466e96919ee7840bf5874c62",
+  "independent_P1_review": "30ffc6bce9fffcdc1b4e0b95b9c8782bfb41896c",
+  "requirements": [
+    "R-U4",
+    "R-U5",
+    "R-U6"
+  ],
+  "checks": [
+    "U-C4",
+    "U-C5",
+    "U-C6"
+  ],
+  "classification": "\u043d\u0430\u0432\u0441\u0435\u0433\u0434\u0430",
+  "old_contract": "a40bf5b9a2f833a16cb9ff8c941c46c02a0b9d72",
+  "old_contract_immutable": true,
+  "requirements_unchanged": true,
+  "suite": {
+    "name": "WMS607.updaterRollbackStop",
+    "format": "junit",
+    "exact": true,
+    "xml_ids": [
+      "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+      "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+      "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+      "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+    ],
+    "count": 4,
+    "skip_or_error_is_not_acceptance": true
+  },
+  "raw_report_command": "WMS607_STOP_RAW=<owned-raw-dir> python3 -B tools/print-agent/test_macos_direct_updater_stop_contract.py --report <owned-report-dir>/updater-stop.xml",
+  "precode_command": "WMS607_STOP_RAW=docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode python3 -B tools/print-agent/test_macos_direct_updater_stop_contract.py --report docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode.xml",
+  "precode": {
+    "total": 4,
+    "PASS": 2,
+    "target_behavior_FAIL": 2,
+    "ERROR": 0,
+    "SKIP": 0,
+    "native_runner_exit": 1,
+    "cases": [
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "assertion": "PASS",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "assertion": "FAIL",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "assertion": "FAIL",
+        "native_rollback_exit": 1,
+        "process_alive": true,
+        "transaction": 0,
+        "intent_unchanged": false
+      },
+      {
+        "id": "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal",
+        "assertion": "PASS",
+        "native_rollback_exit": 0,
+        "process_alive": false,
+        "transaction": 0,
+        "intent_unchanged": false
+      }
+    ]
+  },
+  "source": {
+    "path": "tools/print-agent/update_macos_direct.sh",
+    "git_blob": "c40888ff857f46dd1b611d9b096d4f3c3a9346b9",
+    "mode": "100755",
+    "sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a"
+  },
+  "test": {
+    "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+    "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+  },
+  "closure": [
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+      "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed",
+      "bytes": 11201
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/source-probe.py",
+      "sha256": "1df817a524be721bbe8039dcb6615bee4ef600922bb7169d72b2dabb8c6a60bf",
+      "bytes": 3436
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-control.py",
+      "sha256": "28b4ea1a2b3a3b1afce37b5edb3e9431fe6bfc55dac8c94541ed7d8c447db22b",
+      "bytes": 2812
+    }
+  ],
+  "actual_execution": [
+    "committed port_pid/process_path/process_matches/owned_pid/stop_owned/rollback/clear_transaction/tree_inventory functions and hash helper",
+    "real temporary application/previous/archive/journal bytes, modes and links",
+    "real filesystem rename/delete/inventory comparisons"
+  ],
+  "controlled_external": [
+    "lsof",
+    "ps",
+    "kill",
+    "sleep"
+  ],
+  "journal_seed": "synthetic current accepted receipt/unknown bytes; no native Swift replay or print claim",
+  "negative_cases": [
+    "TERM returns zero but owned process survives",
+    "TERM returns error and owned process survives"
+  ],
+  "required_owned_failure_result": [
+    "nonzero",
+    "truthful owned-stop failure, not foreign",
+    "target installed bytes unchanged",
+    "previous copy unchanged",
+    "backup unchanged",
+    "recovery intent and active transaction retained",
+    "current journal/payload unchanged"
+  ],
+  "positive_cases": [
+    "successful owned stop performs existing application-only recovery",
+    "confirmed foreign owner is not signaled and existing application-only recovery reports unconfirmed restart"
+  ],
+  "copy_controls": {
+    "tracked_source_unchanged": true,
+    "temporary_copies_removed": true,
+    "controls": [
+      {
+        "name": "clear-intent",
+        "case": "RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal",
+        "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+        "copy_sha256": "c4a6f64b60d23a8bcd568c776476f3f11e558193880012ddfd6a6656700876c8",
+        "edits": [
+          [
+            "    clear_transaction\n",
+            "    : # COPY: omit successful recovery finalization\n"
+          ]
+        ],
+        "native_exit": 1,
+        "assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      },
+      {
+        "name": "foreign-ownership",
+        "case": "RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+        "copy_sha256": "2a063d39c8582d374448a6d62a1990a2300173aa00bd4eb290339c7d43e8aa95",
+        "edits": [
+          [
+            "    process_matches \"$pid\" || return 2\n",
+            "    : # COPY: ignore owner identity\n"
+          ],
+          [
+            "    # Recheck immediately before TERM. No blanket process-name kill or forced kill.\n    process_matches \"$pid\" || return 1\n",
+            "    : # COPY: ignore pre-TERM ownership recheck\n"
+          ]
+        ],
+        "native_exit": 1,
+        "assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      }
+    ]
+  },
+  "copy_control_command": "python3 -B docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-control.py",
+  "source_selection": "actual checkout updater bytes, otherwise HEAD Git blob in sparse checkout; COPY override only for recorded negative controls",
+  "immutable_for_developer": true,
+  "implementation_or_acceptance_claimed": false
+}

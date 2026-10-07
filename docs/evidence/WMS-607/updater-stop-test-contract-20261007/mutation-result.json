@@ -1,0 +1,42 @@
+{
+  "tracked_source_unchanged": true,
+  "temporary_copies_removed": true,
+  "controls": [
+    {
+      "name": "clear-intent",
+      "case": "RollbackStopContract.test_successful_owned_stop_restores_previous_and_preserves_journal",
+      "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+      "copy_sha256": "c4a6f64b60d23a8bcd568c776476f3f11e558193880012ddfd6a6656700876c8",
+      "edits": [
+        [
+          "    clear_transaction\n",
+          "    : # COPY: omit successful recovery finalization\n"
+        ]
+      ],
+      "native_exit": 1,
+      "assertion_FAIL": true,
+      "ERROR": 0,
+      "SKIP": 0
+    },
+    {
+      "name": "foreign-ownership",
+      "case": "RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+      "source_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+      "copy_sha256": "2a063d39c8582d374448a6d62a1990a2300173aa00bd4eb290339c7d43e8aa95",
+      "edits": [
+        [
+          "    process_matches \"$pid\" || return 2\n",
+          "    : # COPY: ignore owner identity\n"
+        ],
+        [
+          "    # Recheck immediately before TERM. No blanket process-name kill or forced kill.\n    process_matches \"$pid\" || return 1\n",
+          "    : # COPY: ignore pre-TERM ownership recheck\n"
+        ]
+      ],
+      "native_exit": 1,
+      "assertion_FAIL": true,
+      "ERROR": 0,
+      "SKIP": 0
+    }
+  ]
+}

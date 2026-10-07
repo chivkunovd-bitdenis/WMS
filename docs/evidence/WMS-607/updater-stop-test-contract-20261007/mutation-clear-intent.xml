@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.updaterRollbackStop" tests="1" failures="1" errors="0" skipped="0"><testcase classname="test_macos_direct_updater_stop_contract.RollbackStopContract" name="test_successful_owned_stop_restores_previous_and_preserves_journal"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 160, in test_successful_owned_stop_restores_previous_and_preserves_journal
+    self.assertEqual(actual['transaction'], 0)
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0
+</failure></testcase></testsuite>

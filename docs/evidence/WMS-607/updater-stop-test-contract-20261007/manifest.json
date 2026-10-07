@@ -1,0 +1,100 @@
+{
+  "members": [
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/README.md",
+      "sha256": "307511c9049f9944906aaa5080b5e5eb97468993dc05cf508b2a23b3c77a22fb",
+      "bytes": 5415
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/contract.json",
+      "sha256": "d59e7e8b83b0d670c2c28543c13d6867e1cb7956d7368b656a6e35d1c511bc91",
+      "bytes": 7274
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent/test_successful_owned_stop_restores_previous_and_preserves_journal.json",
+      "sha256": "45fc2f5731cdb81e9b94f51b0b7c7ecab581fbd70c25d7b7e4ffc8d973b5f0fa",
+      "bytes": 5382
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent.log",
+      "sha256": "43b70e8a67aed42e900f23a779375ff3b3d38d84a326fac6099432d1aa35f963",
+      "bytes": 983
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent.xml",
+      "sha256": "66fbc20c8e015f2b56fbe3935353fe0e9f24d3647f3778cd7b3c5c635a247ff1",
+      "bytes": 708
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-control.py",
+      "sha256": "28b4ea1a2b3a3b1afce37b5edb3e9431fe6bfc55dac8c94541ed7d8c447db22b",
+      "bytes": 2812
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json",
+      "sha256": "2d27df1a6dec77cd1ece9fcca4da2617d233acbc54b9c6db9175a7e4e3b84b97",
+      "bytes": 5459
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership.log",
+      "sha256": "278348552d0897cc778c4a04a74d414c1ce11ccec17b9ebb09d09dd016703bf0",
+      "bytes": 1145
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership.xml",
+      "sha256": "18fef05660f3911e8d3e330f7309bcd03645cf3248f23ad1390cf3f810b884fb",
+      "bytes": 855
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-result.json",
+      "sha256": "bb66dd30fc03dc8c89bdeead2867f77ee33c1b4a152448849d8ce5f7aa0353de",
+      "bytes": 1462
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json",
+      "sha256": "ad49e18c42625f2cea12270240a3c525ddb7eebeaec35e681bb8f0a3b56fcdde",
+      "bytes": 5498
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_owned_TERM_error_retains_target_and_recovery.json",
+      "sha256": "2738a160a2fd80ae9bf3f79c76bbf2626274b6fff36e460762690abfe0a533c7",
+      "bytes": 5481
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_owned_TERM_success_survivor_retains_target_and_recovery.json",
+      "sha256": "685cb5f51250daab1708c4287335a09874102f78e772eaec49668ac80c08a839",
+      "bytes": 5511
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_successful_owned_stop_restores_previous_and_preserves_journal.json",
+      "sha256": "22617495b724ac4aae0f54416a774c286357bb506c03a7da05ec2a0d556a85aa",
+      "bytes": 5382
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode.log",
+      "sha256": "ffcc5e2b333c93d333d86919459f26952af89b810230c09b84f27a21eb152617",
+      "bytes": 3339
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode.xml",
+      "sha256": "33ec045b75097b0d9772d2b5abefe29359103a78b784146ebfb218c291100ca6",
+      "bytes": 2796
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/source-checks.json",
+      "sha256": "698eabd3f9ce31d2f98d82fc97782565501bcbb86e41c1b8b2b8472f2472d586",
+      "bytes": 6998
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/source-probe.py",
+      "sha256": "1df817a524be721bbe8039dcb6615bee4ef600922bb7169d72b2dabb8c6a60bf",
+      "bytes": 3436
+    }
+  ],
+  "additional_test": {
+    "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+    "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed",
+    "bytes": 11201
+  },
+  "result_md": "separate handoff record naming immutable contract commit"
+}

@@ -1,0 +1,22 @@
+test_foreign_owner_not_signaled_existing_application_recovery_preserved (__main__.RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved) ... FAIL
+
+======================================================================
+FAIL: test_foreign_owner_not_signaled_existing_application_recovery_preserved (__main__.RollbackStopContract.test_foreign_owner_not_signaled_existing_application_recovery_preserved)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 168, in test_foreign_owner_not_signaled_existing_application_recovery_preserved
+    self.assertEqual(actual['signals'], [])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: Lists differ: ['-TERM 42424242'] != []
+
+First list contains 1 additional elements.
+First extra element 0:
+'-TERM 42424242'
+
+- ['-TERM 42424242']
++ []
+
+----------------------------------------------------------------------
+Ran 1 test in 0.122s
+
+FAILED (failures=1)
