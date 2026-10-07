@@ -1,0 +1,33 @@
+{
+  "case": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+  "base": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "mode": "foreign",
+  "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+  "functions_sha256": "a60da405bbb00602ed5a3d9c074e4418bf4afeea3f0ffdf190846ce9cbcd4460",
+  "json_helper_sha256": "1af5ae761c1dd97c76fb7914d44d693c02edb1aba7593ead9e6902f22fd41ac5",
+  "test_sha256": "b262fb579e4a5c082ed1faff53172707ff2eedb0a93e880ca0df68cf65d436fc",
+  "native_exit": 1,
+  "stdout": "startup_returned=1\n",
+  "stderr": "Port 17843 belongs to a foreign executable; startup aborted without further waiting or signaling it.\n",
+  "events": [
+    "lsof",
+    "nohup|$CASE/app/wms-print --updater-start $CASE/state",
+    "lsof",
+    "ps|foreign|42424242",
+    "launcher-released"
+  ],
+  "app_unchanged": true,
+  "state_unchanged": true,
+  "intent_unchanged": true,
+  "before": {
+    "app": {
+      "wms-print": "4e2d5c607994df9b0536242ddd80e77adace4410186e51ffd67a31f117e6faff"
+    },
+    "state": {
+      "jobs-v2/accepted.json": "0063a3ff0245da7077788212eeecc558419afc8311c75531d689a77857aff01d",
+      "jobs-v2/unknown.json": "9d315587c2e912af817c27ab02024c75c7398c1081e5f6095efb761d386bfeb8"
+    }
+  },
+  "health200_available": true,
+  "fixture_launcher_released": true
+}

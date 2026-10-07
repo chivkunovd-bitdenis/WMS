@@ -1,0 +1,203 @@
+{
+  "overall": "FAIL",
+  "run_id": 37583326182,
+  "attempt": 1,
+  "run_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37583326182",
+  "SOURCE": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+  "HARNESS": "1c2bddd844ff6baf331eae53b3a44304d834cc01",
+  "arm64": {
+    "architecture": "arm64",
+    "run_id": 37583326182,
+    "attempt": 1,
+    "SOURCE": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+    "HARNESS": "1c2bddd844ff6baf331eae53b3a44304d834cc01",
+    "job_id": 112667738423,
+    "job_conclusion": "success",
+    "artifact_id": 11465731935,
+    "artifact_name": "WMS607-Direct-arm64-a475a7342c0da72dd49b2990bd998c522ecc2c2b-37583326182-1",
+    "original_wrapper_sha256": "0a4de3fbeece3506dcfdfeb8e954c8ea06d8d3452f5e61944427c40882ae4906",
+    "original_wrapper_bytes": 229059,
+    "wrapper_payload_members": 34,
+    "reports": [
+      {
+        "report": "updater.xml",
+        "sha256": "d42a1a1a2460fffdb279377879d19a38f297fdd88196df23c70d73d34103e1fa",
+        "PASS": 10,
+        "IDs": [
+          "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+          "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+        ]
+      },
+      {
+        "report": "stop.xml",
+        "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+        "PASS": 4,
+        "IDs": [
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+        ]
+      },
+      {
+        "report": "existing.xml",
+        "sha256": "7c80aafe47011792e8d91fa852482dc5cbb7343c0499fc6a743a84b9b5bad37d",
+        "PASS": 19,
+        "IDs": [
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+          "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+          "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+          "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+          "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+          "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+          "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+          "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+          "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+        ]
+      },
+      {
+        "report": "startup-owner.xml",
+        "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374",
+        "PASS": 3,
+        "IDs": [
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+        ]
+      }
+    ],
+    "total_PASS": 36,
+    "FAIL": 0,
+    "ERROR": 0,
+    "SKIP": 0,
+    "raw_source_identity_records": [
+      {
+        "path": "_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+        "sha256": "e58b7a6e1d79ec648b776b319b9e8d32307dc475a438d278c55743fe14d91aaf"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+        "sha256": "794f0538dd1f553fd9389fa94ad5db7d623e9735570ed01aa6e6b8f392afe9d3"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+        "sha256": "21aae4f04ccff155975526025e2e3bf3f054073372ad9a4a7edefa4393f37866"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+        "sha256": "048aac8700dfed2a4dc64022068669a36066a493a7d93294aaa91ce384a9819d"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+        "sha256": "0046098d68b0d9b45edf01e16d9c95d9fe01e5f6d541b00a2949c63d81d659ef"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+        "sha256": "f3e269af448ff60af72f69a9aba4a8c9dba25fd57511ebf720d6948f85985ff7"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+        "sha256": "99bb5311940cb358199d3dbc318872e05d736971a0588506bcc98f1fcc76cef6"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+        "sha256": "9c163446c4935aabe26fbd51956ca91ad8f9e24f5bf00e3fa4fbbcd08022254e"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+        "sha256": "464e7705308f1546e7a68b6b62a0f638b0f4309187e8350b8f4dc51b0e161d3e"
+      },
+      {
+        "path": "_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+        "sha256": "8e83640e0948a263271349e1e7eb9818b803cc0ff89590c07248b538423aaa19"
+      },
+      {
+        "path": "_temp/wms607-package/startup-owner/test_no_owner_yet_can_warm_until_owned_ready.json",
+        "sha256": "43cbe237e5fffa04ec784b013f843906929015dfd0e4e4d9fff9a21545b313b2"
+      },
+      {
+        "path": "_temp/wms607-package/startup-owner/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+        "sha256": "ec0fe539f243700d256177bdc0aa39c3a197c69884d5def91b32917c3a411b1b"
+      },
+      {
+        "path": "_temp/wms607-package/startup-owner/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+        "sha256": "9c875ef44fb2d68c13af797491b79e086301ee863b86a467be0c8a7b33ae9cfa"
+      },
+      {
+        "path": "_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json",
+        "sha256": "d6f2fae540eb44e03b92b57e354ed1bbd311e69d5d38ef21b97534ee3109620c"
+      },
+      {
+        "path": "_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+        "sha256": "39fb95b1543a5049b516a5a04440b9d63ac11f61d4ec91e40e6d712e9d15d861"
+      },
+      {
+        "path": "_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json",
+        "sha256": "7c650ad445b8f6cbf281958c0c70ba8d6223135893ecfb134ebab5b7d7d2a846"
+      },
+      {
+        "path": "_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+        "sha256": "43ed89da06d434c77a2a3cf3b0bd6efc0a739ca3e168615ac4691e7370ceed70"
+      },
+      {
+        "path": "_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+        "sha256": "b4ab639a1a6ca1bf3bc56d269b77c74f32c0870d72ddd6246fb02d77d9d0b61f"
+      }
+    ],
+    "original_native_archive": "artifacts/arm64/payload/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+    "archive_sha256": "ae50b3fcbb269e12f77611ff05652af2a9ce5681a3ed6477e389d53325f7467b",
+    "archive_bytes": 181837,
+    "build": {
+      "source_commit": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+      "platform": "darwin",
+      "architecture": "arm64",
+      "runtime": "direct",
+      "console": true,
+      "physical_print_verified": false
+    },
+    "executable_sha256": "e7f974c13e9751116fb57e9e060d4bf17455aa016c8e7bf98c8413fe60db99c5",
+    "MachO64_native_CPU_type_verified": true,
+    "embedded_updater_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+    "embedded_updater_equals_accepted_SOURCE": true,
+    "CI_codesign_unpacked_selftest_and_provenance_steps_success": true,
+    "full_joblog_sha256": "efdc0cef1e1ce58a055d33f49ed99fb4f727767d0249076b943805ed1be95d20",
+    "client_install_public_release_physical_print_verified": false
+  },
+  "x86_64": {
+    "job_id": 112667738205,
+    "conclusion": "failure",
+    "test_and_exact36_gate_steps": "success per original job API/log",
+    "raw_XML_independently_verified": false,
+    "failed_case": null,
+    "failed_step": "Preserve exact native archives and all actual raw checks",
+    "exact_error": "2026-10-07T06:52:35.2417510Z ##[error]Failed to CreateArtifact: Failed to make request after 5 attempts: Request timeout: /twirp/github.actions.results.api.v1.ArtifactService/CreateArtifact",
+    "built_in_artifact_service_attempts": 5,
+    "artifact_or_native_archive_available": false,
+    "native_archive_sha256": null,
+    "source_harness_archive_payload_available": false,
+    "provenance_build_unpacked_selftest_steps": "success per job API; payload unavailable"
+  },
+  "available_artifacts": 1,
+  "expected_architecture_artifacts": 2,
+  "collector_dispatch_retry_retest_native_exec_build_install_messages": false,
+  "historical_37579919987_Intel_FAILURE_preserved": true,
+  "public_release_customer_install_permissions_physical_print_verified": false
+}

@@ -1,0 +1,287 @@
+{
+  "wrapper_sha256": "0a4de3fbeece3506dcfdfeb8e954c8ea06d8d3452f5e61944427c40882ae4906",
+  "members": [
+    {
+      "member": "WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+      "bytes": 181837,
+      "sha256": "ae50b3fcbb269e12f77611ff05652af2a9ce5681a3ed6477e389d53325f7467b",
+      "ZIP_CRC32": 4092006024,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/archive.json",
+      "bytes": 370,
+      "sha256": "fdcd5155da99d8cd8732b0345fcc56a90b2fa59b4f3299d3e9f2a93c031f8788",
+      "ZIP_CRC32": 3795647542,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/build.log",
+      "bytes": 374,
+      "sha256": "317b1aebfdf88f85c4b917eb58fbae1e55cefc44e4e56ab7b6009e6e4346d27d",
+      "ZIP_CRC32": 1228624077,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/documents.log",
+      "bytes": 93,
+      "sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+      "ZIP_CRC32": 3807273461,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/environment.txt",
+      "bytes": 310,
+      "sha256": "4bf0a234a99a581033727654127dea7366fb10df1ad7b682495d27ee39e0b86f",
+      "ZIP_CRC32": 858768085,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/existing.log",
+      "bytes": 3109,
+      "sha256": "47d71a5ab04b5367a80f87cd2020df6937be286676f77d88da1ffc0a889ec68d",
+      "ZIP_CRC32": 2464314307,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/existing.xml",
+      "bytes": 3080,
+      "sha256": "7c80aafe47011792e8d91fa852482dc5cbb7343c0499fc6a743a84b9b5bad37d",
+      "ZIP_CRC32": 4043271719,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/harness.txt",
+      "bytes": 41,
+      "sha256": "56121e7822d30d38207bebbb32a26ba2682fc8c8608c61afa6f7205d4193dfee",
+      "ZIP_CRC32": 3763553352,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json",
+      "bytes": 6189,
+      "sha256": "7c650ad445b8f6cbf281958c0c70ba8d6223135893ecfb134ebab5b7d7d2a846",
+      "ZIP_CRC32": 2275533395,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+      "bytes": 3667,
+      "sha256": "b4ab639a1a6ca1bf3bc56d269b77c74f32c0870d72ddd6246fb02d77d9d0b61f",
+      "ZIP_CRC32": 3112067034,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+      "bytes": 10548,
+      "sha256": "43ed89da06d434c77a2a3cf3b0bd6efc0a739ca3e168615ac4691e7370ceed70",
+      "ZIP_CRC32": 3415248347,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json",
+      "bytes": 6648,
+      "sha256": "d6f2fae540eb44e03b92b57e354ed1bbd311e69d5d38ef21b97534ee3109620c",
+      "ZIP_CRC32": 442584757,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+      "bytes": 6524,
+      "sha256": "39fb95b1543a5049b516a5a04440b9d63ac11f61d4ec91e40e6d712e9d15d861",
+      "ZIP_CRC32": 1646266689,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/self-test.log",
+      "bytes": 176,
+      "sha256": "1ee761108aa212afd17136e8bcdb991245a810e4c97b3b280ad849ea26c1f590",
+      "ZIP_CRC32": 3826343692,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/source.txt",
+      "bytes": 41,
+      "sha256": "62791c6ab0b115e89941ecd8269911a29d4700258fdb35b4a2b60a25ea2caf89",
+      "ZIP_CRC32": 2038695073,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/startup-owner/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+      "bytes": 1404,
+      "sha256": "ec0fe539f243700d256177bdc0aa39c3a197c69884d5def91b32917c3a411b1b",
+      "ZIP_CRC32": 2557191952,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/startup-owner/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "bytes": 1403,
+      "sha256": "43cbe237e5fffa04ec784b013f843906929015dfd0e4e4d9fff9a21545b313b2",
+      "ZIP_CRC32": 3885352244,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/startup-owner/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "bytes": 1365,
+      "sha256": "9c875ef44fb2d68c13af797491b79e086301ee863b86a467be0c8a7b33ae9cfa",
+      "ZIP_CRC32": 4163345578,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/startup-owner.log",
+      "bytes": 571,
+      "sha256": "b685f150eb6d9f13ea59131516ad4c8be2253e668d4743ed5ec1322b54a967d0",
+      "ZIP_CRC32": 3679053022,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/startup-owner.xml",
+      "bytes": 610,
+      "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374",
+      "ZIP_CRC32": 1349877605,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/stop.log",
+      "bytes": 754,
+      "sha256": "e9c24c6a8db8af227fb62dd7ebc0f78f20e7a1b1329732359e351afc4d08cb03",
+      "ZIP_CRC32": 2153393190,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/stop.xml",
+      "bytes": 760,
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+      "ZIP_CRC32": 142195759,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+      "bytes": 4653,
+      "sha256": "048aac8700dfed2a4dc64022068669a36066a493a7d93294aaa91ce384a9819d",
+      "ZIP_CRC32": 2463368047,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+      "bytes": 8271,
+      "sha256": "794f0538dd1f553fd9389fa94ad5db7d623e9735570ed01aa6e6b8f392afe9d3",
+      "ZIP_CRC32": 522353073,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+      "bytes": 18828,
+      "sha256": "21aae4f04ccff155975526025e2e3bf3f054073372ad9a4a7edefa4393f37866",
+      "ZIP_CRC32": 2760175308,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+      "bytes": 24046,
+      "sha256": "99bb5311940cb358199d3dbc318872e05d736971a0588506bcc98f1fcc76cef6",
+      "ZIP_CRC32": 3799375804,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+      "bytes": 11439,
+      "sha256": "e58b7a6e1d79ec648b776b319b9e8d32307dc475a438d278c55743fe14d91aaf",
+      "ZIP_CRC32": 1069194790,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+      "bytes": 9521,
+      "sha256": "464e7705308f1546e7a68b6b62a0f638b0f4309187e8350b8f4dc51b0e161d3e",
+      "ZIP_CRC32": 2972306371,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+      "bytes": 13230,
+      "sha256": "f3e269af448ff60af72f69a9aba4a8c9dba25fd57511ebf720d6948f85985ff7",
+      "ZIP_CRC32": 2848067064,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+      "bytes": 19564,
+      "sha256": "0046098d68b0d9b45edf01e16d9c95d9fe01e5f6d541b00a2949c63d81d659ef",
+      "ZIP_CRC32": 2080704353,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+      "bytes": 21107,
+      "sha256": "9c163446c4935aabe26fbd51956ca91ad8f9e24f5bf00e3fa4fbbcd08022254e",
+      "ZIP_CRC32": 2504902879,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+      "bytes": 13678,
+      "sha256": "8e83640e0948a263271349e1e7eb9818b803cc0ff89590c07248b538423aaa19",
+      "ZIP_CRC32": 1883656682,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater.log",
+      "bytes": 2023,
+      "sha256": "5c1d29f691b2defbd7a18a68628496cbc4e9673307f3e9b141da8b4beeaf630f",
+      "ZIP_CRC32": 2252972769,
+      "zip_external_attr": 2175008800
+    },
+    {
+      "member": "_temp/wms607-package/updater.xml",
+      "bytes": 1810,
+      "sha256": "d42a1a1a2460fffdb279377879d19a38f297fdd88196df23c70d73d34103e1fa",
+      "ZIP_CRC32": 1485941477,
+      "zip_external_attr": 2175008800
+    }
+  ],
+  "native_archive_members": [
+    {
+      "member": "wms-print/",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "ZIP_CRC32": 0,
+      "zip_external_attr": 1106067456
+    },
+    {
+      "member": "wms-print/wms-print",
+      "bytes": 499408,
+      "sha256": "e7f974c13e9751116fb57e9e060d4bf17455aa016c8e7bf98c8413fe60db99c5",
+      "ZIP_CRC32": 2756289702,
+      "zip_external_attr": 2179809280
+    },
+    {
+      "member": "wms-print/history.html",
+      "bytes": 5643,
+      "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "ZIP_CRC32": 790000563,
+      "zip_external_attr": 2175025152
+    },
+    {
+      "member": "wms-print/README.txt",
+      "bytes": 630,
+      "sha256": "116759ea1e7d6b9bb4b049f522a483ce61f3683ed6b6e6416501f12e6b04a12e",
+      "ZIP_CRC32": 1920225259,
+      "zip_external_attr": 2175025152
+    },
+    {
+      "member": "wms-print/build.json",
+      "bytes": 194,
+      "sha256": "2dc99de4a79f72c8a0f6f7574fa864bdd9e6c03a95da109fcfabde26f228efc8",
+      "ZIP_CRC32": 3341315769,
+      "zip_external_attr": 2175025152
+    },
+    {
+      "member": "wms-print/update_macos_direct.sh",
+      "bytes": 18130,
+      "sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+      "ZIP_CRC32": 2681455825,
+      "zip_external_attr": 2179809280
+    }
+  ]
+}

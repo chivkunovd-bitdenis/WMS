@@ -1,0 +1,254 @@
+{
+  "case": "test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+  "provenance": {
+    "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "transformed_source_sha256": "e73d0e94d40f1e5f6c3e4937689fed6716086c1a85aa8f1476b3dfcaebf3031d",
+    "swift": "Apple Swift version 5.10 (swiftlang-5.10.0.13 clang-1500.3.9.4)\nTarget: arm64-apple-macosx14.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "physicalConfirmationSupported": false,
+        "historyUrl": "http://127.0.0.1:49918",
+        "app": "WMS Print Direct",
+        "protocolVersion": 2
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "imageAvailable": true,
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "queueObservation": {},
+        "reprints": [],
+        "idempotencyKey": "same-scan",
+        "status": "failed_before_submit",
+        "paperStatus": "unconfirmed",
+        "physicalConfirmationSupported": false,
+        "error": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан. История: http://127.0.0.1:49918",
+        "legacy": false,
+        "createdAt": "2026-10-07T06:47:55Z",
+        "reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "widthMm": 58,
+        "observations": [
+          "2026-10-07T06:47:55Z saved",
+          "2026-10-07T06:47:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан."
+        ],
+        "context": {},
+        "updatedAt": "2026-10-07T06:47:55Z",
+        "heightMm": 40
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "queue": "Label_Printer",
+        "title": "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+        "imageAvailable": true,
+        "receipt": "Label_Printer-41",
+        "queueObservation": {},
+        "reprints": [],
+        "idempotencyKey": "recovery-control",
+        "status": "accepted",
+        "paperStatus": "unconfirmed",
+        "physicalConfirmationSupported": false,
+        "legacy": false,
+        "createdAt": "2026-10-07T06:47:55Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "widthMm": 58,
+        "observations": [
+          "2026-10-07T06:47:55Z saved",
+          "2026-10-07T06:47:55Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:47:55Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ],
+        "context": {},
+        "updatedAt": "2026-10-07T06:47:55Z",
+        "heightMm": 40
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "context": {},
+        "observations": [
+          "2026-10-07T06:47:55Z saved",
+          "2026-10-07T06:47:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+          "2026-10-07T06:47:55Z saved: Оператор повторил доказанно неотправленное задание",
+          "2026-10-07T06:47:55Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:47:55Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ],
+        "receipt": "Label_Printer-41",
+        "reprints": [],
+        "paperStatus": "unconfirmed",
+        "heightMm": 40,
+        "createdAt": "2026-10-07T06:47:55Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "queueObservation": {},
+        "widthMm": 58,
+        "status": "accepted",
+        "imageAvailable": true,
+        "updatedAt": "2026-10-07T06:47:55Z",
+        "legacy": false,
+        "physicalConfirmationSupported": false,
+        "queue": "Label_Printer",
+        "idempotencyKey": "same-scan"
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "queue": "Label_Printer",
+        "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+        "imageAvailable": true,
+        "receipt": "Label_Printer-41",
+        "queueObservation": {},
+        "reprints": [],
+        "idempotencyKey": "same-scan",
+        "status": "accepted",
+        "paperStatus": "unconfirmed",
+        "physicalConfirmationSupported": false,
+        "legacy": false,
+        "createdAt": "2026-10-07T06:47:55Z",
+        "reason": "Системная очередь приняла задание; бумага не подтверждена",
+        "widthMm": 58,
+        "observations": [
+          "2026-10-07T06:47:55Z saved",
+          "2026-10-07T06:47:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+          "2026-10-07T06:47:55Z saved: Оператор повторил доказанно неотправленное задание",
+          "2026-10-07T06:47:55Z submitting: Начата передача в системную очередь",
+          "2026-10-07T06:47:55Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+        ],
+        "context": {},
+        "updatedAt": "2026-10-07T06:47:55Z",
+        "heightMm": 40
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p"
+    ],
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/3d1cac976bbfd038ac298bf3f30e28bd1fec4058e50decc78c00baa2582e1664.png"
+    ],
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/5ea81272180596aba4841654cea2f4511ad44184a1091c9e7500378c48c190ef.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "context": {},
+      "title": "WMS-f06076fa1d0c5f7cbbdb7146a3746181a2de3ef2e5c5718ed48c323e65120f1e",
+      "legacy": false,
+      "observations": [
+        "2026-10-07T06:47:55Z saved",
+        "2026-10-07T06:47:55Z submitting: Начата передача в системную очередь",
+        "2026-10-07T06:47:55Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+      ],
+      "createdAt": "2026-10-07T06:47:55Z",
+      "widthMm": 58,
+      "status": "accepted",
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "receipt": "Label_Printer-41",
+      "idempotencyKey": "recovery-control",
+      "queueObservation": {},
+      "updatedAt": "2026-10-07T06:47:55Z",
+      "queue": "Label_Printer",
+      "reason": "Системная очередь приняла задание; бумага не подтверждена",
+      "heightMm": 40
+    },
+    {
+      "queue": "Label_Printer",
+      "idempotencyKey": "same-scan",
+      "createdAt": "2026-10-07T06:47:55Z",
+      "updatedAt": "2026-10-07T06:47:55Z",
+      "status": "accepted",
+      "widthMm": 58,
+      "reason": "Системная очередь приняла задание; бумага не подтверждена",
+      "queueObservation": {},
+      "context": {},
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "receipt": "Label_Printer-41",
+      "heightMm": 40,
+      "legacy": false,
+      "observations": [
+        "2026-10-07T06:47:55Z saved",
+        "2026-10-07T06:47:55Z failed_before_submit: Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+        "2026-10-07T06:47:55Z saved: Оператор повторил доказанно неотправленное задание",
+        "2026-10-07T06:47:55Z submitting: Начата передача в системную очередь",
+        "2026-10-07T06:47:55Z accepted: Системная очередь приняла задание; бумага не подтверждена"
+      ],
+      "title": "WMS-c3da1b4adb5bed1ccb6b4efdba138cadbf266fef6065a8a63967e1f8cf489d1d"
+    }
+  ]
+}

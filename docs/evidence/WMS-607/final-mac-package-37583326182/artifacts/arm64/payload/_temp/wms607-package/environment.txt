@@ -1,0 +1,4 @@
+Darwin iad20-fj918-42ca9068-f58c-43eb-87cf-5d3881e52dc6-CADD61993EE4.local 23.6.0 Darwin Kernel Version 23.6.0: Tue Jul 21 21:56:54 PDT 2026; root:xnu-10063.141.1.713.39~1/RELEASE_ARM64_VMAPPLE arm64
+Python 3.13.15
+Apple Swift version 5.10 (swiftlang-5.10.0.13 clang-1500.3.9.4)
+Target: arm64-apple-macosx14.0
