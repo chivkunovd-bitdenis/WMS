@@ -1,0 +1,59 @@
+{
+  "sha": "877ccb6cdd86697cc2099a56e5bb65b0b7e790bf",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_id;delete-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;delete-after-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;replace-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;replace-after-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_id;manual-then-delete-scan]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;delete-after-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;replace-before-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;replace-after-claim]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: printed CIS must still belong to the scanned order at dispatch\n\nfalse !== true\n"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: manual printed CIS must still belong to its original order after the other operator scan"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "REAL_LOCAL_API_POSTGRES_SYNTHETIC_WB",
+  "currentCase": "WMS666.actualPool[supply_ids;manual-then-delete-scan]",
+  "productSha": "212f19d548496fef7baf75c83204b771e304281b"
+}

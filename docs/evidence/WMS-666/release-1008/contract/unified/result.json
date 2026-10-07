@@ -1,0 +1,19 @@
+{
+  "sha": "877ccb6cdd86697cc2099a56e5bb65b0b7e790bf",
+  "cases": [
+    {
+      "id": "WMS666.actualPool[supply_ids;unified-queue]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: one shared selection/print panel is present for grouped supplies"
+    },
+    {
+      "id": "WMS666.actualPool[supply_ids;unified-cancel]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: one shared selection/print panel is present for grouped supplies"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "REAL_LOCAL_API_POSTGRES_SYNTHETIC_WB",
+  "currentCase": "WMS666.actualPool[supply_ids;unified-cancel]",
+  "productSha": "212f19d548496fef7baf75c83204b771e304281b"
+}

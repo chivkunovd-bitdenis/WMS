@@ -1,0 +1,2 @@
+{"id":"WMS666.actualPool[supply_ids;unified-queue]","status":"FAIL","failure":"AssertionError [ERR_ASSERTION]: one shared selection/print panel is present for grouped supplies"}
+{"id":"WMS666.actualPool[supply_ids;unified-cancel]","status":"FAIL","failure":"AssertionError [ERR_ASSERTION]: one shared selection/print panel is present for grouped supplies"}
