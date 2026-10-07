@@ -185,6 +185,11 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
   const [catalogById, setCatalogById] = useState<Map<string, MarketplaceProductCatalogRow>>(() => new Map())
   const [catalogError, setCatalogError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const mounted = useRef(false)
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [version, setVersion] = useState(0)
@@ -513,18 +518,21 @@ export function FfFbsAssemblyPick({ token, supplies }: Props) {
           if (err instanceof PickQuantityChangedError) {
             setError(err.message)
             await refreshSupply(err.index)
-            return
+            throw err
           }
           const message = err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
           setError(message)
           await load(false)
           setError(message)
+          throw new Error(message)
         } finally {
           setBusy(false)
         }
       })
-      trackPickSave(supplyIds.map((id) => `${FBS_BASE}/${id}`), run)
-      return run
+      trackPickSave(supplyIds.map((id) => `${FBS_BASE}/${id}`), run, () => !mounted.current)
+      // The tracker sees rejection; the UI callback keeps its existing handled
+      // error contract after showing the readback and message.
+      return run.catch(() => undefined)
     },
     [applyPicked, enqueue, load, refreshSupply, screenData, statesFor, supplyIds, token],
   )

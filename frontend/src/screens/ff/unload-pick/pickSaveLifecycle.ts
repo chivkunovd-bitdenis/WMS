@@ -3,7 +3,7 @@
 const pending = new Map<string, Set<Promise<unknown>>>()
 const failed = new Map<string, Error>()
 
-export function trackPickSave(ids: string[], save: Promise<unknown>): void {
+export function trackPickSave(ids: string[], save: Promise<unknown>, keepFailure: () => boolean = () => true): void {
   for (const id of ids) {
     failed.delete(id)
     const saves = pending.get(id) ?? new Set<Promise<unknown>>()
@@ -19,7 +19,9 @@ export function trackPickSave(ids: string[], save: Promise<unknown>): void {
   }
   void save.then(release, (cause: unknown) => {
     const error = cause instanceof Error ? cause : new Error('Не удалось сохранить подбор. Проверьте количество после обновления.')
-    for (const id of ids) failed.set(id, error)
+    // An open screen already shows its readback/error; a closed screen needs
+    // to carry that failure to the next opening.
+    if (keepFailure()) for (const id of ids) failed.set(id, error)
     release()
   })
 }
