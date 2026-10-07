@@ -20,9 +20,10 @@ async def get_picking_context(
     if not product_ids:
         return []
     result: dict[uuid.UUID, dict[str, Any]] = {
-        pid: {"product_id": str(pid), "inbound_supplies": [], "locations": []}
+        pid: {"product_id": str(pid), "inbound_supplies": [], "locations": [], "source_groups": []}
         for pid in product_ids
     }
+    groups: dict[uuid.UUID, dict[str, dict[str, Any]]] = {pid: {} for pid in product_ids}
     params = {"tenant": tenant_id, "seller": supply.seller_id,
               "warehouse": supply.warehouse_id, "products": product_ids}
     receipts = await session.execute(text("""
@@ -47,12 +48,22 @@ async def get_picking_context(
         if row["operation_type"] == "return":
             label = f"Возврат {label}"
         result[row["product_id"]]["inbound_supplies"].append(label)
+        kind = "В" if row["operation_type"] == "return" else "П"
+        key = f"inbound:{row['id']}"
+        groups[row["product_id"]][key] = {
+            "key": key, "title": f"{kind}: {number or date}", "lines": []
+        }
     places = await session.execute(text("""
         SELECT b.product_id, b.quantity, s.code AS location_code,
                b.container_kind, b.container_id,
                coalesce(wb.internal_barcode, ib.internal_barcode,
                         cp.internal_barcode, p.barcode) AS barcode,
-               ib.box_number, cp.place_number, p.code AS pallet_code
+               ib.box_number, cp.place_number, p.code AS pallet_code,
+               coalesce(ib.request_id,cp.request_id,wb.inbound_request_id) AS request_id,
+               origin.count_id AS inventory_count_id,
+               origin_request.display_number AS origin_number,
+               origin_request.document_number AS origin_document_number,
+               origin_request.operation_type AS origin_operation_type
         FROM inventory_balances b
         JOIN storage_locations s ON s.id=b.storage_location_id
         LEFT JOIN warehouse_boxes wb ON wb.id=b.container_id
@@ -68,6 +79,16 @@ async def get_picking_context(
                (wb.inbound_request_id=cp.request_id AND wb.internal_barcode=cp.internal_barcode))
         LEFT JOIN pallets p ON p.id=b.container_id AND p.tenant_id=:tenant
           AND p.warehouse_id=:warehouse AND b.container_kind='pallet'
+        LEFT JOIN inbound_intake_requests origin_request
+          ON origin_request.id=coalesce(ib.request_id,cp.request_id,wb.inbound_request_id)
+          AND origin_request.tenant_id=:tenant AND origin_request.seller_id=:seller
+        LEFT JOIN LATERAL (
+            SELECT created.count_id FROM inventory_count_created_containers created
+            JOIN inventory_counts ic ON ic.id=created.count_id AND ic.tenant_id=:tenant
+            WHERE created.tenant_id=:tenant AND created.container_id=b.container_id
+              AND created.container_kind=b.container_kind
+            ORDER BY created.created_at, created.id LIMIT 1
+        ) origin ON true
         WHERE b.tenant_id=:tenant AND s.tenant_id=:tenant
           AND s.warehouse_id=:warehouse AND b.product_id IN :products
           AND b.quantity > 0
@@ -94,4 +115,20 @@ async def get_picking_context(
         result[row["product_id"]]["locations"].append(
             f"{location} · {container}: {row['quantity']} шт."
         )
+        pid = row["product_id"]
+        key = f"inbound:{row['request_id']}" if row["request_id"] else ""
+        if key not in groups[pid]:
+            if key and (row["origin_number"] or row["origin_document_number"]):
+                prefix = "В" if row["origin_operation_type"] == "return" else "П"
+                title = f"{prefix}: {row['origin_number'] or row['origin_document_number']}"
+            elif row["inventory_count_id"]:
+                key = f"inventory:{row['inventory_count_id']}"
+                title = f"И: {str(row['inventory_count_id'])[:8]}"
+            else:
+                key, title = "unlinked", "Без привязки к документу:"
+            groups[pid].setdefault(key, {"key": key, "title": title, "lines": []})
+        cell = "" if row["location_code"] == SORTING_LOCATION_CODE else f" · {location}"
+        groups[pid][key]["lines"].append(f"{container}{cell}: {row['quantity']} шт.")
+    for pid in product_ids:
+        result[pid]["source_groups"] = list(groups[pid].values())
     return list(result.values())
