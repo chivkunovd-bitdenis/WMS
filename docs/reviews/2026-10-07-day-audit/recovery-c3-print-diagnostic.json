@@ -1,0 +1,56 @@
+{
+  "run": 37674204046,
+  "candidate": "c3c44af2db0aa1514e374a06446c444fa129aa8b",
+  "result": "C5 failed in renderTape after production assertComplete(300)",
+  "inference": "Resource retention in the second test page is a hypothesis; no bad or differing PNG source was found. No PASS claimed.",
+  "fixtures": [
+    {
+      "fixture": 2,
+      "count": 300,
+      "dimensions": [
+        [
+          836,
+          356
+        ]
+      ],
+      "all_chunk_crc_and_zlib_valid": true,
+      "ordered_png_sha256": "fe04b019e9ff0136e931243a143f81f6210918d36731ffe81dac5f7b182da22d"
+    },
+    {
+      "fixture": 4,
+      "count": 300,
+      "dimensions": [
+        [
+          836,
+          356
+        ]
+      ],
+      "all_chunk_crc_and_zlib_valid": true,
+      "ordered_png_sha256": "fe04b019e9ff0136e931243a143f81f6210918d36731ffe81dac5f7b182da22d"
+    },
+    {
+      "fixture": 10,
+      "count": 300,
+      "dimensions": [
+        [
+          836,
+          356
+        ]
+      ],
+      "all_chunk_crc_and_zlib_valid": true,
+      "ordered_png_sha256": "fe04b019e9ff0136e931243a143f81f6210918d36731ffe81dac5f7b182da22d"
+    },
+    {
+      "fixture": 11,
+      "count": 300,
+      "dimensions": [
+        [
+          836,
+          356
+        ]
+      ],
+      "all_chunk_crc_and_zlib_valid": true,
+      "ordered_png_sha256": "fe04b019e9ff0136e931243a143f81f6210918d36731ffe81dac5f7b182da22d"
+    }
+  ]
+}
