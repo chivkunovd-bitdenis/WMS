@@ -184,7 +184,7 @@ export function harness() {
       frame.contentDocument!.open()
       frame.contentDocument!.write(frame.srcdoc)
       frame.contentDocument!.close()
-      const printWindow = frame.contentWindow!
+      const printWindow: Window & typeof globalThis = frame.contentWindow! as Window & typeof globalThis
       Object.defineProperty(printWindow.HTMLImageElement.prototype, 'decode', {
         configurable: true,
         value: async () => undefined,
