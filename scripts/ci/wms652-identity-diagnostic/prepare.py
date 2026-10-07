@@ -24,8 +24,11 @@ def sha(data):
 
 INSERTIONS = [
     (b"// WMS652 critical real-screen contracts.",
-     b"import { createJobLookupObserver } from './identity-observer.untracked.mjs';\nconst errorContext=createJobLookupObserver();\n"),
+     b"import { createWorkspaceContextObserver } from './identity-observer.untracked.mjs';\nconst errorContext=createWorkspaceContextObserver();\n"),
     (b"      if (msg.id) {", b"      try { errorContext.message(this,msg); } catch { errorContext.observerFailure(); }\n"),
+    (b"    this.record({kind:'command-send',commandId:id,method,...identity,attempt:token?.attempts});",
+     b"    try { errorContext.command(this,{id,method,params,identity}); } catch { errorContext.observerFailure(); }\n"),
+    (b"  await cdp.send('Fetch.enable'", b"  await errorContext.install(cdp);\n"),
     (b"  await writeFile(`${dir}/cdp-transport.json`",
      b"  await writeFile(`${dir}/error-context.json`,errorContext.serialize(cdp,report));\n"),
 ]
@@ -85,21 +88,17 @@ def main():
     cases = json.loads((ROOT / (PREFIX + "cases.json")).read_text())
     if len(cases) != 43 or len(set(cases)) != 43:
         raise ValueError("Expected exact 43 unique frozen browser cases")
-    focused_path = OBSERVER.with_name("error-context.mjs")
-    for path in [RUNNER, OBSERVER, focused_path]:
+    for path in [RUNNER, OBSERVER]:
         if git("ls-files", "--", str(path.relative_to(ROOT))).strip():
             raise ValueError("Generated copy must be untracked")
         if path.exists():
             raise ValueError(f"Refusing to overwrite generated copy: {path}")
-    observer = (HERE / "job-lookup.mjs").read_bytes()
-    focused = (HERE / "error-context.mjs").read_bytes()
+    observer = (HERE / "workspace-context.mjs").read_bytes()
     RUNNER.write_bytes(generated)
     OBSERVER.write_bytes(observer)
-    focused_path.write_bytes(focused)
     (out / "frozen-browser-source.mjs").write_bytes(original)
     (out / "generated-browser.mjs").write_bytes(generated)
     (out / "generated-observer.mjs").write_bytes(observer)
-    (out / "generated-error-context.mjs").write_bytes(focused)
     shell_source = git("show", f"{SOURCE}:scripts/ci/run_critical_fbs_browser.sh")
     old = b"node frontend/tests-e2e/wms652-critical/browser.mjs"
     new = b"node frontend/tests-e2e/wms652-critical/browser.identity-diagnostic.untracked.mjs"
@@ -112,11 +111,11 @@ def main():
     shell_path.write_bytes(shell_copy)
     (out / "original-shell.sh").write_bytes(shell_source)
     (out / "generated-shell.sh").write_bytes(shell_copy)
-    receipt = {"source": SOURCE, "diagnostic_head": git("rev-parse", "HEAD").decode().strip(), "mode": "exact-id-job-lookup",
+    receipt = {"source": SOURCE, "diagnostic_head": git("rev-parse", "HEAD").decode().strip(), "mode": "passive-workspace-runtime-context",
                "source_git_bindings": bindings, "source_sha256": hashes, "cases": cases, "insertions": len(INSERTIONS),
                "source_browser_sha256": sha(original), "reverse_recovered_sha256": sha(recovered),
                "reverse_byte_equal": recovered == original, "generated_browser_sha256": sha(generated),
-               "generated_observer_sha256": sha(observer), "generated_focused_sha256": sha(focused),
+               "generated_observer_sha256": sha(observer),
                "request_only_pattern_sha256": sha(pattern), "request_only_pattern_byte_pin": pattern.decode(), "runner": str(RUNNER.relative_to(ROOT)),
                "observer": str(OBSERVER.relative_to(ROOT)), "source_shell_sha256": sha(shell_source),
                "generated_shell_sha256": sha(shell_copy), "shell_reverse_byte_equal": shell_copy.replace(new, old, 1) == shell_source}

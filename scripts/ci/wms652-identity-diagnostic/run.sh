@@ -8,11 +8,10 @@ export WMS652_EVIDENCE="$RUNNER_TEMP/release-print/critical-fbs"
 mkdir -p "$WMS652_EVIDENCE"
 node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/observer.test.mjs > "$out/observer-controls.tap"
 node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/error-context.test.mjs > "$out/error-context-controls.tap"
-node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/job-lookup.test.mjs > "$out/job-lookup-controls.tap"
+node --test --test-reporter=tap scripts/ci/wms652-identity-diagnostic/workspace-context.test.mjs > "$out/workspace-context-controls.tap"
 python3 scripts/ci/wms652-identity-diagnostic/prepare.py "$out" > "$out/preparation-summary.json"
 node --check frontend/tests-e2e/wms652-critical/browser.identity-diagnostic.untracked.mjs
 node --check frontend/tests-e2e/wms652-critical/identity-observer.untracked.mjs
-node --check frontend/tests-e2e/wms652-critical/error-context.mjs
 bash -n scripts/ci/run_critical_fbs_browser.observed.untracked.sh
 {
   uname -a
