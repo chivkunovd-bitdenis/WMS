@@ -104,7 +104,7 @@ describe('WMS-673 PDF input contract without browser execution', () => {
     expect(css).not.toMatch(/\.size\s*\{[^}]*width:\s*78px;/)
     expect(css).not.toMatch(/\.quantity\s*\{[^}]*width:\s*62px;/)
     const headers = [...document.querySelectorAll('thead th')].map(th => th.textContent)
-    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     const widths = [...document.querySelectorAll('col')].map((col) => Number.parseFloat(col.getAttribute('style')?.match(/[\d.]+/)?.[0] ?? 'NaN'))
     expect(widths).toHaveLength(12)
     for (const index of [3, 4, 5, 7, 9, 10, 11]) expect(widths[index]).toBeLessThan(widths[2])
@@ -114,7 +114,7 @@ describe('WMS-673 PDF input contract without browser execution', () => {
   it('C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required', () => {
     const document = new DOMParser().parseFromString(htmlFor(1), 'text/html')
     const headers = [...document.querySelectorAll('thead th')].map(th => th.textContent)
-    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(headers).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     expect(document.querySelector('tbody tr')!.children[4].textContent).toBe(`${LONG_COLOR} ЦВЕТ000`)
     expect(document.querySelector('tbody tr')!.children[3].textContent).toBe('LONG-IDENTIFIER-0-WMS673-ABCDEFGHIJKLMNOPQRST')
     expect(document.querySelector('tbody tr')!.children[5].textContent).toBe('Универсальный')

@@ -1,0 +1,399 @@
+{
+  "reviewCommit": "a0e86655aba64d5d449f036ce2cafea0ee9db358",
+  "productCommit": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+  "entries": [
+    {
+      "commit": "a4c201b8d947336c6b512da639d867bd0e649f4d",
+      "changedPaths": [
+        "docs/KANONICHESKIY_BACKLOG.md",
+        "docs/requirements/WMS-666.md",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "scripts/ops/wms666_recover_avpack_stickers.py"
+      ],
+      "files": [
+        {
+          "path": "scripts/ops/wms666_recover_avpack_stickers.py",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 5f0c776649f67535610d8cb2f80a68f366de2125\tscripts/ops/wms666_recover_avpack_stickers.py"
+        }
+      ]
+    },
+    {
+      "commit": "ab89b31d66d39b2d91aea993717c3526925719b8",
+      "changedPaths": [
+        ".github/workflows/wms666-sticker-guard.yml",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "frontend/src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx",
+        "scripts/ops/wms666_recover_avpack_stickers.py"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/wms666-sticker-guard.yml",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 0e31fb11f53d3a2e953b79db20eb893b9fdc5ed0\t.github/workflows/wms666-sticker-guard.yml"
+        },
+        {
+          "path": "scripts/ops/wms666_recover_avpack_stickers.py",
+          "beforeEntry": "100644 blob 5f0c776649f67535610d8cb2f80a68f366de2125\tscripts/ops/wms666_recover_avpack_stickers.py",
+          "afterEntry": "100644 blob ea1e7f4456198a170505069f4180c9234f81b9ad\tscripts/ops/wms666_recover_avpack_stickers.py"
+        }
+      ]
+    },
+    {
+      "commit": "6215d45bbd9444ec3b3a5dd3797c57222d3a563c",
+      "changedPaths": [
+        ".github/workflows/wms666-sticker-guard.yml",
+        "frontend/src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/wms666-sticker-guard.yml",
+          "beforeEntry": "100644 blob 0e31fb11f53d3a2e953b79db20eb893b9fdc5ed0\t.github/workflows/wms666-sticker-guard.yml",
+          "afterEntry": "100644 blob a072b809c34675b0f9fcf10cbab859127dd95096\t.github/workflows/wms666-sticker-guard.yml"
+        }
+      ]
+    },
+    {
+      "commit": "41f2800d820bdf6362cefa567eecadf9ef01d3c6",
+      "changedPaths": [
+        ".github/workflows/wms666-sticker-guard.yml"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/wms666-sticker-guard.yml",
+          "beforeEntry": "100644 blob a072b809c34675b0f9fcf10cbab859127dd95096\t.github/workflows/wms666-sticker-guard.yml",
+          "afterEntry": "100644 blob cdc0dae1d2f98f98a8d065e9d4452cb866bfeb60\t.github/workflows/wms666-sticker-guard.yml"
+        }
+      ]
+    },
+    {
+      "commit": "ad522306d09dff0d74ec01082502c21d291ab60f",
+      "changedPaths": [
+        ".github/workflows/wms666-sticker-guard.yml",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "docs/requirements/WMS-666.md"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/wms666-sticker-guard.yml",
+          "beforeEntry": "100644 blob cdc0dae1d2f98f98a8d065e9d4452cb866bfeb60\t.github/workflows/wms666-sticker-guard.yml",
+          "afterEntry": "100644 blob e37c3c469291fef435bba037519278f0cebe8993\t.github/workflows/wms666-sticker-guard.yml"
+        }
+      ]
+    },
+    {
+      "commit": "c2623ede4305d5cc7bd5191c15735a659e6d36d9",
+      "changedPaths": [
+        ".github/workflows/fbs-picking.yml",
+        "backend/app/celery_app.py",
+        "backend/app/services/fbs_supply_service.py",
+        "backend/tests/fbs_picking_browser_extended_seed.py",
+        "backend/tests/fbs_picking_browser_seed.py",
+        "backend/tests/fbs_picking_browser_verify.py",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "backend/tests/test_wms689_catalog_schedule.py",
+        "docs/KANONICHESKIY_BACKLOG.md",
+        "docs/evidence/WMS-693-698/README.md",
+        "docs/evidence/WMS-693-698/verification.json",
+        "docs/requirements/WMS-666.md",
+        "docs/requirements/WMS-689.md",
+        "docs/requirements/WMS-693.md",
+        "docs/requirements/WMS-694.md",
+        "docs/requirements/WMS-695.md",
+        "docs/requirements/WMS-696.md",
+        "docs/requirements/WMS-697.md",
+        "docs/requirements/WMS-698.md",
+        "frontend/src/hooks/useBarcodeScanner.ts",
+        "frontend/src/hooks/useBarcodeScanner.wms696.test.ts",
+        "frontend/src/hooks/useScanIntake.ts",
+        "frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx",
+        "frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx",
+        "frontend/src/screens/ff/unload-pick/UnloadPickScreen.wms693697.dom.test.tsx",
+        "frontend/src/screens/ff/unload-pick/pickSaveLifecycle.test.ts",
+        "frontend/src/screens/ff/unload-pick/pickSaveLifecycle.ts",
+        "frontend/src/screens/v2/FfFbsAssemblyPick.tsx",
+        "frontend/src/screens/v2/FfFbsAssemblyPick.wms693.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx",
+        "frontend/src/screens/v2/fbsStickerPrefetch.ts",
+        "frontend/tests-e2e/fbs-picking/PROCESS_RU.md",
+        "frontend/tests-e2e/fbs-picking/README.md",
+        "frontend/tests-e2e/fbs-picking/browser.mjs",
+        "frontend/tests-e2e/fbs-picking/compose.yml",
+        "frontend/tests-e2e/fbs-picking/extended.mjs",
+        "scripts/ci/run_fbs_picking_browser.sh"
+      ],
+      "files": [
+        {
+          "path": ".github/workflows/fbs-picking.yml",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob c544fbfc6fd0937cb8293b108d8772d228979f16\t.github/workflows/fbs-picking.yml"
+        },
+        {
+          "path": "backend/app/celery_app.py",
+          "beforeEntry": "100644 blob 0409a3514b669ea36faa7bddff8250a0ddfd357f\tbackend/app/celery_app.py",
+          "afterEntry": "100644 blob 71c35de3799bc4ce36913e242bb33891d8511d5a\tbackend/app/celery_app.py"
+        },
+        {
+          "path": "backend/app/services/fbs_supply_service.py",
+          "beforeEntry": "100644 blob 44884d3cc07d0ff8071688ae9a9844e4cc6225a9\tbackend/app/services/fbs_supply_service.py",
+          "afterEntry": "100644 blob 09f2e4e40b7ba08d717bfcca3bd039ba9560c9a0\tbackend/app/services/fbs_supply_service.py"
+        },
+        {
+          "path": "docs/evidence/WMS-693-698/README.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob bb402212913b16541b6d63b6f0785fe359d09e9b\tdocs/evidence/WMS-693-698/README.md"
+        },
+        {
+          "path": "docs/evidence/WMS-693-698/verification.json",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 524b57a2177217be84131c626b8615849f15ee0a\tdocs/evidence/WMS-693-698/verification.json"
+        },
+        {
+          "path": "docs/requirements/WMS-689.md",
+          "beforeEntry": "100644 blob ba6e421802c702aa6a80be47388483e77a91e53b\tdocs/requirements/WMS-689.md",
+          "afterEntry": "100644 blob 3e33e1fddcfe516dd16a1d0fe492e0537189a4aa\tdocs/requirements/WMS-689.md"
+        },
+        {
+          "path": "docs/requirements/WMS-693.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob e276cf289b06d43021f92b97d427bf773492ec94\tdocs/requirements/WMS-693.md"
+        },
+        {
+          "path": "docs/requirements/WMS-694.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 1aa01bfe60bf6215339f61a4e42cd7040252344f\tdocs/requirements/WMS-694.md"
+        },
+        {
+          "path": "docs/requirements/WMS-695.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 61abe13d823e359379b460e6049025e5ab35f47f\tdocs/requirements/WMS-695.md"
+        },
+        {
+          "path": "docs/requirements/WMS-696.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 961248f1778951df43fd0cd1207f74886360a8cb\tdocs/requirements/WMS-696.md"
+        },
+        {
+          "path": "docs/requirements/WMS-697.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 837dd53b5384f95dc3766319b622043e2a665968\tdocs/requirements/WMS-697.md"
+        },
+        {
+          "path": "docs/requirements/WMS-698.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob fb863067de6bcf99427c203dd29b2edb287eb152\tdocs/requirements/WMS-698.md"
+        },
+        {
+          "path": "frontend/src/hooks/useBarcodeScanner.ts",
+          "beforeEntry": "100644 blob 9ff5b1dbe7120d36f6efabcfaf64a605aa6296fb\tfrontend/src/hooks/useBarcodeScanner.ts",
+          "afterEntry": "100644 blob 3e02c76d96e72b4e98d4e1e5e7c2f8b46227d926\tfrontend/src/hooks/useBarcodeScanner.ts"
+        },
+        {
+          "path": "frontend/src/hooks/useScanIntake.ts",
+          "beforeEntry": "100644 blob d5052add2020334168cf2dfa17058c916d63a455\tfrontend/src/hooks/useScanIntake.ts",
+          "afterEntry": "100644 blob 4b2a7e6c1733b0ec8eacf23aee03649ffd665324\tfrontend/src/hooks/useScanIntake.ts"
+        },
+        {
+          "path": "frontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx",
+          "beforeEntry": "100644 blob bcfae1948f58bcb96192b3ca6eab00bd48faf3f4\tfrontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx",
+          "afterEntry": "100644 blob 541d7296bd0bc3c9bb9d71417f8ed0124d4f786e\tfrontend/src/screens/ff/unload-pick/FfUnloadPickPage.tsx"
+        },
+        {
+          "path": "frontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx",
+          "beforeEntry": "100644 blob 11664cc7e4204e1a36a6152d19754e5d2fd689ae\tfrontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx",
+          "afterEntry": "100644 blob 36d4224f9099641eea2cf576c73b52fc8d71954f\tfrontend/src/screens/ff/unload-pick/UnloadPickScreen.tsx"
+        },
+        {
+          "path": "frontend/src/screens/ff/unload-pick/pickSaveLifecycle.ts",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 329ec2829ff88d4c3140c742d95d78e06e5518b7\tfrontend/src/screens/ff/unload-pick/pickSaveLifecycle.ts"
+        },
+        {
+          "path": "frontend/tests-e2e/fbs-picking/PROCESS_RU.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 50150162fc615a70b7ce62f933643566c0260c9d\tfrontend/tests-e2e/fbs-picking/PROCESS_RU.md"
+        },
+        {
+          "path": "frontend/tests-e2e/fbs-picking/README.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob b74dbee7ed67d98a48a1e7f2bfe10742519c86f4\tfrontend/tests-e2e/fbs-picking/README.md"
+        },
+        {
+          "path": "frontend/tests-e2e/fbs-picking/browser.mjs",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob fcf2432b89e067072cb71e29db359a371a2157ef\tfrontend/tests-e2e/fbs-picking/browser.mjs"
+        },
+        {
+          "path": "frontend/tests-e2e/fbs-picking/compose.yml",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob ef942338513278694086ba6b57b5f81f147145d7\tfrontend/tests-e2e/fbs-picking/compose.yml"
+        },
+        {
+          "path": "frontend/tests-e2e/fbs-picking/extended.mjs",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 9b53f6576bb3fc3cd911a663f8b37ca193e3b086\tfrontend/tests-e2e/fbs-picking/extended.mjs"
+        },
+        {
+          "path": "scripts/ci/run_fbs_picking_browser.sh",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob e78779d0574cecdafa6da6a4f56dcfc6ae108b14\tscripts/ci/run_fbs_picking_browser.sh"
+        }
+      ]
+    },
+    {
+      "commit": "c3c44af2db0aa1514e374a06446c444fa129aa8b",
+      "changedPaths": [
+        "backend/app/services/fbs_supply_service.py",
+        "backend/tests/fbs_picking_browser_extended_seed.py",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "deploy/ops/wb-catalog-disabled.compose.yml",
+        "docs/evidence/WMS-666-689-recovery-20261007/README.md",
+        "docs/evidence/WMS-666-689-recovery-20261007/catalog-post-stop.json",
+        "frontend/src/screens/v2/FfFbsStickerPrefetch.wms666.dom.test.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+      ],
+      "files": [
+        {
+          "path": "backend/app/services/fbs_supply_service.py",
+          "beforeEntry": "100644 blob 09f2e4e40b7ba08d717bfcca3bd039ba9560c9a0\tbackend/app/services/fbs_supply_service.py",
+          "afterEntry": "100644 blob 68303b403b8d67a8b56b78b16184c41d1d4f065c\tbackend/app/services/fbs_supply_service.py"
+        },
+        {
+          "path": "deploy/ops/wb-catalog-disabled.compose.yml",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 5f779914ce74abcc61c57040ac00970a7ca0ef1b\tdeploy/ops/wb-catalog-disabled.compose.yml"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/README.md",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 4d59003477b9aae5127b9249c580073e38787249\tdocs/evidence/WMS-666-689-recovery-20261007/README.md"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/catalog-post-stop.json",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 614182f8481fcf815bbf36f5eb7e70bb3f6a24c1\tdocs/evidence/WMS-666-689-recovery-20261007/catalog-post-stop.json"
+        }
+      ]
+    },
+    {
+      "commit": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+      "changedPaths": [
+        "backend/app/services/fbs_supply_service.py",
+        "backend/tests/test_wms666_packing_sticker_request.py",
+        "docs/evidence/WMS-666-689-recovery-20261007/README.md",
+        "docs/evidence/WMS-666-689-recovery-20261007/backend18.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/backend19.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/db-cancel-negative.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/frontend-build-final.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/frontend-build.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/kiz31.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/local-checks.json",
+        "docs/evidence/WMS-666-689-recovery-20261007/mypy.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.json",
+        "docs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/ruff.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/stickers17-print20-final.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/stickers17.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/typescript-final.log",
+        "docs/evidence/WMS-666-689-recovery-20261007/typescript.log",
+        "docs/requirements/WMS-695.md",
+        "frontend/src/screens/v2/FfFbsSupplyAssembly.tsx",
+        "frontend/src/screens/v2/FfFbsSupplyWorkspace.tsx"
+      ],
+      "files": [
+        {
+          "path": "backend/app/services/fbs_supply_service.py",
+          "beforeEntry": "100644 blob 68303b403b8d67a8b56b78b16184c41d1d4f065c\tbackend/app/services/fbs_supply_service.py",
+          "afterEntry": "100644 blob 9db6101f2ea51e7018d2bdf9c16a1c531358ce33\tbackend/app/services/fbs_supply_service.py"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/README.md",
+          "beforeEntry": "100644 blob 4d59003477b9aae5127b9249c580073e38787249\tdocs/evidence/WMS-666-689-recovery-20261007/README.md",
+          "afterEntry": "100644 blob 3d0e81df1470c8d9ea16df2e1300c4d4b2f82a6b\tdocs/evidence/WMS-666-689-recovery-20261007/README.md"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/backend18.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 1f379014ec5739067fb1fb7eb90ac52dc6a7d044\tdocs/evidence/WMS-666-689-recovery-20261007/backend18.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/backend19.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 7434dd5b3edab90fe61347a135da11af7e8bb4fb\tdocs/evidence/WMS-666-689-recovery-20261007/backend19.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/db-cancel-negative.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob a212808857ded924127daad31cc9c62ebf39cf15\tdocs/evidence/WMS-666-689-recovery-20261007/db-cancel-negative.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/frontend-build-final.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob df070dadbd10f5df51203b9c7e6dfdf901253a2f\tdocs/evidence/WMS-666-689-recovery-20261007/frontend-build-final.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/frontend-build.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 6390f06acd69c76b0a0b112091ee0d153ee2dfed\tdocs/evidence/WMS-666-689-recovery-20261007/frontend-build.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/kiz31.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 936bcdb394d61b17846b80d02aa18afd4f7c86be\tdocs/evidence/WMS-666-689-recovery-20261007/kiz31.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/local-checks.json",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob a6828519a6f29e25933eac072198c85da7124093\tdocs/evidence/WMS-666-689-recovery-20261007/local-checks.json"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/mypy.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob d1000cb387fc5e1db6a159a9d8ddbb0840163e94\tdocs/evidence/WMS-666-689-recovery-20261007/mypy.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.json",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 6f5b2dbb99457b5d28c60d79d460aafe32476290\tdocs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.json"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 83460e6a9b5594ef285e8870091f8aa1179341ab\tdocs/evidence/WMS-666-689-recovery-20261007/prod212-frontend-baseline.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/ruff.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 1f5f344d054fae10f39140fb7199c99321d9190a\tdocs/evidence/WMS-666-689-recovery-20261007/ruff.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/stickers17-print20-final.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 5ff9a3378159b889b8438324e3a435f2406889ea\tdocs/evidence/WMS-666-689-recovery-20261007/stickers17-print20-final.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/stickers17.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob 2fe8ca2a61ed35a922616d1a38a6a6234e702eda\tdocs/evidence/WMS-666-689-recovery-20261007/stickers17.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/typescript-final.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tdocs/evidence/WMS-666-689-recovery-20261007/typescript-final.log"
+        },
+        {
+          "path": "docs/evidence/WMS-666-689-recovery-20261007/typescript.log",
+          "beforeEntry": "",
+          "afterEntry": "100644 blob e69de29bb2d1d6434b8b29ae775ad8c2e48c5391\tdocs/evidence/WMS-666-689-recovery-20261007/typescript.log"
+        },
+        {
+          "path": "docs/requirements/WMS-695.md",
+          "beforeEntry": "100644 blob 61abe13d823e359379b460e6049025e5ab35f47f\tdocs/requirements/WMS-695.md",
+          "afterEntry": "100644 blob 9b2f1d6c54ddfdf82843b1f516566d4f2b735d87\tdocs/requirements/WMS-695.md"
+        }
+      ]
+    }
+  ]
+}

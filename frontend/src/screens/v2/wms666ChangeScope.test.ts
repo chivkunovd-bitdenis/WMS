@@ -3,6 +3,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { describe, expect, it } from 'vitest'
+import recoveryHistory from '../../../tests/fixtures/wms666AcceptedRecoveryHistory.json'
 
 const WMS_666_CONTRACT = '0e078418bcb7ee45fa654b0d829e5de0ec80ebb0'
 const WMS_666_HISTORY_CHECKOUT_CHANGE = {
@@ -52,9 +53,30 @@ const WMS_666_PROOF_FILES = new Set([
   'docs/reviews/priority-five-source-map-20261006.json',
 ])
 
-export function wms666AcceptedHistoryChange(cwd: string | URL, commit: string, path: string): boolean {
+export function wms666AcceptedHistoryChange(
+  cwd: string | URL, commit: string, path: string, recoveryReads = new Map<string, boolean>(),
+): boolean {
   const accepted = WMS_666_HISTORY_CHECKOUT_CHANGE
   const git = (...args: string[]) => execFileSync('git', args, { cwd, encoding: 'utf8' }).trim()
+  const recovery = recoveryHistory.entries.find((entry) => entry.commit === commit)
+  const recoveredFile = recovery?.files.find((entry) => entry.path === path)
+  if (recovery && recoveredFile) {
+    // Exact independently reviewed history only. No future change of these paths
+    // is permitted, even with identical content or the same task number.
+    if (!recoveryReads.has(commit)) {
+      const changed = git('diff-tree', '--no-commit-id', '--name-only', '--no-renames', '-r', commit)
+        .split('\n').filter(Boolean).sort()
+      const paths = recovery.files.map((file) => file.path)
+      const entries = (ref: string) => git('ls-tree', '--full-tree', ref, '--', ...paths)
+        .split('\n').filter(Boolean).sort()
+      const expected = (side: 'beforeEntry' | 'afterEntry') => recovery.files
+        .map((file) => file[side]).filter(Boolean).sort()
+      recoveryReads.set(commit, JSON.stringify(changed) === JSON.stringify([...recovery.changedPaths].sort())
+        && JSON.stringify(entries(`${commit}^`)) === JSON.stringify(expected('beforeEntry'))
+        && JSON.stringify(entries(commit)) === JSON.stringify(expected('afterEntry')))
+    }
+    return recoveryReads.get(commit) === true
+  }
   const documents = WMS_666_DOCUMENT_HISTORY.find((entry) => entry.commit === commit)
   const file = documents?.files.find((entry) => entry.path === path)
   if (documents && file) {
@@ -84,6 +106,8 @@ export function wms666TaskChangedPaths(
   const history = git('log', '--ancestry-path', '--format=%H%x09%P%x09%s', `${contract}..${head}`)
   const root = git('show', '-s', '--format=%H%x09%P%x09%s', contract)
   const paths = new Set<string>()
+  // Reuse only immutable commit verification within this single history walk.
+  const recoveryReads = new Map<string, boolean>()
   for (const line of (root + history).trim().split('\n')) {
     const [commit, parents, subject] = line.split('\t')
     // Attribution is by task lineage and primary task number, never allowed paths.
@@ -93,7 +117,7 @@ export function wms666TaskChangedPaths(
       ...(merge ? ['--cc'] : ['--root']), commit)
     // A merge's combined diff catches its own resolutions, not imported task trees.
     for (const path of changed.split('\0')) {
-      if (path && !wms666AcceptedHistoryChange(cwd, commit, path)) paths.add(path)
+      if (path && !wms666AcceptedHistoryChange(cwd, commit, path, recoveryReads)) paths.add(path)
     }
   }
   // Include unstaged, staged and new files. Uncommitted changes cannot hide a defect.
@@ -253,6 +277,20 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
       expect(wms666ScopeViolations(wms666TaskChangedPaths(repo.cwd, repo.contract))).toEqual([path])
     } finally {
       repo.close()
+    }
+  })
+
+  it('accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths', () => {
+    const cwd = new URL('../../../..', import.meta.url)
+    expect(recoveryHistory.productCommit).toBe('7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b')
+    expect(recoveryHistory.reviewCommit).toBe('a0e86655aba64d5d449f036ce2cafea0ee9db358')
+    for (const entry of recoveryHistory.entries) {
+      for (const file of entry.files) {
+        expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)
+        expect(wms666AcceptedHistoryChange(cwd, WMS_666_CONTRACT, file.path)).toBe(false)
+      }
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'guards/MANIFEST.json')).toBe(false)
+      expect(wms666AcceptedHistoryChange(cwd, entry.commit, 'backend/app/services/inventory_service.py')).toBe(false)
     }
   })
 

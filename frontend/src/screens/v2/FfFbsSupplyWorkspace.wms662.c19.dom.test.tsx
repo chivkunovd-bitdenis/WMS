@@ -24,6 +24,20 @@ const full = workspaces.find((entry) => (entry.body as FbsWorkspace).supply.stat
 const supplyId = partial.supply.id
 const authHeaders = () => ({ Authorization: 'Bearer c19-fixture' })
 const originalFetch = globalThis.fetch
+// Derived prepared state isolates C19's read-only navigation contract. The saved
+// partial/full order facts remain untouched; ordinary unprepared entry is covered
+// separately by the WMS-666 sticker/marking regression suite.
+const preparedTaskId = 'c19-already-prepared-task'
+function preparedWorkspace(snapshot: FbsWorkspace): FbsWorkspace {
+  const prepared = structuredClone(snapshot)
+  prepared.supply.packaging_task_id = preparedTaskId
+  for (const order of prepared.orders) order.sticker.code = `C19-ready-${order.id}`
+  const restored = structuredClone(prepared)
+  restored.supply.packaging_task_id = snapshot.supply.packaging_task_id
+  restored.orders.forEach((order, index) => { order.sticker.code = snapshot.orders[index].sticker.code })
+  expect(restored, 'only task ID and sticker codes derive the already prepared fixture').toEqual(snapshot)
+  return prepared
+}
 let current: FbsWorkspace
 let requests: string[]
 let host: HTMLDivElement
@@ -34,7 +48,7 @@ beforeAll(() => {
 })
 
 beforeEach(() => {
-  current = partial
+  current = preparedWorkspace(partial)
   requests = []
   window.sessionStorage.clear()
   window.localStorage.clear()
@@ -48,6 +62,11 @@ beforeEach(() => {
     requests.push(`${method} ${url.pathname}`)
     // Fail closed: no real network, stock writes, shipment or print requests.
     if (method !== 'GET') throw new Error(`Unexpected mutation: ${method} ${url.pathname}`)
+    if (url.pathname.endsWith(`/operations/packaging-tasks/${preparedTaskId}`)) {
+      return new Response(JSON.stringify({ id: preparedTaskId, status: 'in_progress', lines: [] }), {
+        status: 200, headers: { 'Content-Type': 'application/json' },
+      })
+    }
     const saved = proof.http.find((entry) => new URL(entry.url).pathname === url.pathname)
     if (!saved) throw new Error(`Unexpected read: ${url.pathname}`)
     const body = url.pathname.endsWith('/workspace') ? current : saved.body
@@ -125,7 +144,7 @@ async function checkComposition(phase: 'partial' | 'full', checkpoint: string) {
 it('C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged', { timeout: 15_000 }, async () => {
   const immutableProof = JSON.stringify(proof)
   for (const phase of ['partial', 'full'] as const) {
-    current = phase === 'partial' ? partial : full
+    current = preparedWorkspace(phase === 'partial' ? partial : full)
     // Both states come from the same real document; no fixture state is inferred from picking.
     expect(current.supply.id).toBe(supplyId)
     expect(current.orders.map((order) => order.pick.status)).toEqual(['pending', 'pending'])
