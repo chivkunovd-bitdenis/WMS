@@ -115,6 +115,12 @@ NIGHT_REVIEWED_FIXTURE_PAIRS["wms681-integration-assembly-qr-recovery"] = (
     "58e64cc04d11be4fd7ad25b5fcb93bfb254d99f3",
     "12358c8953c842819db9a1b277ce51cbd83b9915",
 )
+NIGHT_REVIEWED_FIXTURE_PAIRS["wms662-confirmed-wait-pid-pair"] = FIXTURE_BLOB_PAIRS["wms662-confirmed-wait-pid-pair"]
+NIGHT_REVIEWED_COMPANIONS["wms662-confirmed-wait-pid-pair"] = [{
+    "path": "docs/evidence/wms652/wms662-f6-pid-fixture-correction.md",
+    "before_blob": None,
+    "after_blob": "fcfd9a45460e04ee41a1490148dd01a5bfa9316d",
+}]
 FIXTURE_BLOB_PAIRS.update(NIGHT_REVIEWED_FIXTURE_PAIRS)
 
 POSITIVE_STATUS_TRANSFORM = "wms663-complete-positive-status-fixtures"

@@ -61,7 +61,13 @@
           "after_blob": "bf7c850d9c7948ffd3b7cef5cbea9b3c1404923e"
         }
       ],
-      "companion_files": [],
+      "companion_files": [
+        {
+          "path": "docs/evidence/wms652/wms662-f6-pid-fixture-correction.md",
+          "before_blob": null,
+          "after_blob": "fcfd9a45460e04ee41a1490148dd01a5bfa9316d"
+        }
+      ],
       "review": {
         "model": "gpt-6.1-sol",
         "effort": "high",
