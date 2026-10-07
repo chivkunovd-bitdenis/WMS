@@ -1,0 +1,33 @@
+{
+  "source_commit": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "harness_commit": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+  "run_id": 37579919987,
+  "attempt": 1,
+  "complete_pair": false,
+  "missing_architecture": "x86_64",
+  "public_release_ready": false,
+  "candidates": [
+    {
+      "run_id": 37579919987,
+      "attempt": 1,
+      "source_commit": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+      "harness_commit": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+      "artifact_id": 11464690557,
+      "job_id": 112656988359,
+      "platform": "darwin",
+      "architecture": "arm64",
+      "runtime": "direct",
+      "console": true,
+      "physical_print_verified": false,
+      "archive_file": "WMS-Print-Console-Mac-arm64.zip",
+      "archive_sha256": "85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab",
+      "archive_size": 181772,
+      "executable_sha256": "e7f974c13e9751116fb57e9e060d4bf17455aa016c8e7bf98c8413fe60db99c5",
+      "build_json_sha256": "ea622dbc5dd8424665620331c2663b03eda2cecb57af840b9be081e981f7e57c",
+      "updater_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+      "payload_path": "raw/arm64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+      "public_url": null,
+      "public_promotion_status": "NOT_PERFORMED"
+    }
+  ]
+}

@@ -1,0 +1,463 @@
+{
+  "run_id": 37579919987,
+  "attempt": 1,
+  "run_conclusion": "failure",
+  "source_commit": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "harness_commit": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+  "source_baselines": {
+    "updater.xml": {
+      "source_path": "docs/evidence/WMS-607/updater-stop-fix-20261007/updater.xml",
+      "sha256": "2448a9c897828a6c77f45a85657386539cb82c85462f7257a3fec5092b5bab03",
+      "ids": [
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+      ],
+      "count": 10
+    },
+    "stop.xml": {
+      "source_path": "docs/evidence/WMS-607/updater-stop-fix-20261007/green.xml",
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+      "ids": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ],
+      "count": 4
+    },
+    "existing.xml": {
+      "source_path": "docs/evidence/WMS-607/updater-stop-fix-20261007/existing.xml",
+      "sha256": "c6b63daaeb38da1e21ad702e507235e198f9fc578a4bd963ca754b25e49ec3d8",
+      "ids": [
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+        "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+        "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+        "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+        "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+        "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+        "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+        "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+        "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+      ],
+      "count": 19
+    }
+  },
+  "architectures": [
+    {
+      "architecture": "arm64",
+      "artifact_id": 11464690557,
+      "job_id": 112656988359,
+      "job_conclusion": "success",
+      "source_txt": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+      "harness_txt": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+      "environment": "Darwin iad20-eo1205-b02a1eab-f856-42c1-96f6-24973421b330-AA03B28A16B8.local 23.6.0 Darwin Kernel Version 23.6.0: Tue Jul 21 21:56:54 PDT 2026; root:xnu-10063.141.1.713.39~1/RELEASE_ARM64_VMAPPLE arm64\nPython 3.13.15\nApple Swift version 5.10 (swiftlang-5.10.0.13 clang-1500.3.9.4)\nTarget: arm64-apple-macosx14.0\n",
+      "actual_tests": 33,
+      "actual_passed": 33,
+      "actual_failures": 0,
+      "actual_errors": 0,
+      "actual_junit_skips": 0,
+      "actual_duplicate_ids": 0,
+      "strict33_complete_pass": true,
+      "reports": [
+        {
+          "report": "updater.xml",
+          "root_counts": {
+            "name": "WMS607.directMacUpdater",
+            "tests": "10",
+            "failures": "0",
+            "errors": "0",
+            "skipped": "0"
+          },
+          "case_count": 10,
+          "unique_case_count": 10,
+          "exact_accepted_baseline_ID_set": true,
+          "baseline_sha256": "2448a9c897828a6c77f45a85657386539cb82c85462f7257a3fec5092b5bab03",
+          "actual_IDs": [
+            "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+            "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+          ],
+          "counts": {
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "passed": 10,
+          "failures": []
+        },
+        {
+          "report": "stop.xml",
+          "root_counts": {
+            "name": "WMS607.updaterRollbackStop",
+            "tests": "4",
+            "failures": "0",
+            "errors": "0",
+            "skipped": "0"
+          },
+          "case_count": 4,
+          "unique_case_count": 4,
+          "exact_accepted_baseline_ID_set": true,
+          "baseline_sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+          "actual_IDs": [
+            "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+            "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+            "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+            "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+          ],
+          "counts": {
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "passed": 4,
+          "failures": []
+        },
+        {
+          "report": "existing.xml",
+          "root_counts": {
+            "name": "WMS607.existingMacContracts",
+            "tests": "19",
+            "failures": "0",
+            "errors": "0",
+            "skipped": "0"
+          },
+          "case_count": 19,
+          "unique_case_count": 19,
+          "exact_accepted_baseline_ID_set": true,
+          "baseline_sha256": "c6b63daaeb38da1e21ad702e507235e198f9fc578a4bd963ca754b25e49ec3d8",
+          "actual_IDs": [
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+            "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+            "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+            "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+            "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+            "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+            "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+            "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+            "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+            "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+            "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+            "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+            "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+            "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+            "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+          ],
+          "counts": {
+            "failures": 0,
+            "errors": 0,
+            "skipped": 0
+          },
+          "passed": 19,
+          "failures": []
+        }
+      ],
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require isolated dispatch and exact full source identity",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record actual source and architecture before all native checks",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require filled accepted WMS-607 requirements from the complete source checkout",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Frozen updater ten cases including actual native journal",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Frozen rollback four cases",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Preserved nineteen native HTTP resolver and print cases",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require exact actual executed identities without skips or errors",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Original native Direct console builder and unpacked self-test",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Verify archive provenance and source remains unchanged",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Preserve exact native archives and all actual raw checks",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "package": {
+        "archive_name": "WMS-Print-Console-Mac-arm64.zip",
+        "payload_path": "raw/arm64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+        "archive_sha256": "85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab",
+        "archive_bytes": 181772,
+        "embedded_build": {
+          "source_commit": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+          "platform": "darwin",
+          "architecture": "arm64",
+          "runtime": "direct",
+          "console": true,
+          "physical_print_verified": false
+        },
+        "embedded_build_json_sha256": "ea622dbc5dd8424665620331c2663b03eda2cecb57af840b9be081e981f7e57c",
+        "executable_sha256": "e7f974c13e9751116fb57e9e060d4bf17455aa016c8e7bf98c8413fe60db99c5",
+        "executable_bytes": 499408,
+        "MachO": {
+          "magic": "0xfeedfacf",
+          "cpu_type": "0x100000c",
+          "cpu_subtype": 0,
+          "filetype": 2,
+          "architecture": "arm64",
+          "mode": "0o100755",
+          "code_signature_load_command": {
+            "offset": 477392,
+            "size": 22016
+          }
+        },
+        "updater_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+        "updater_bytes": 17883,
+        "updater_matches_exact_Git_SOURCE": true,
+        "original_payload_unchanged": true,
+        "payload_member_names": [
+          "wms-print/",
+          "wms-print/wms-print",
+          "wms-print/history.html",
+          "wms-print/README.txt",
+          "wms-print/build.json",
+          "wms-print/update_macos_direct.sh"
+        ],
+        "actual_native_CI_builder_codesign_archive_unpacked_selftest": "PASS"
+      }
+    },
+    {
+      "architecture": "x86_64",
+      "artifact_id": 11463988544,
+      "job_id": 112656988553,
+      "job_conclusion": "failure",
+      "source_txt": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+      "harness_txt": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+      "environment": "Darwin iad01-dz253-e85a66b1-4f3f-4835-829d-9a172b6c737a-A6B6FD98071B.local 24.6.0 Darwin Kernel Version 24.6.0: Tue Jul 21 20:50:07 PDT 2026; root:xnu-11417.140.69.711.44~1/RELEASE_X86_64 x86_64\nPython 3.13.15\nApple Swift version 6.1.2 (swiftlang-6.1.2.1.2 clang-1700.0.13.5)\nTarget: x86_64-apple-macosx15.0\n",
+      "actual_tests": 10,
+      "actual_passed": 9,
+      "actual_failures": 0,
+      "actual_errors": 1,
+      "actual_junit_skips": 0,
+      "actual_duplicate_ids": 0,
+      "strict33_complete_pass": false,
+      "reports": [
+        {
+          "report": "updater.xml",
+          "root_counts": {
+            "name": "WMS607.directMacUpdater",
+            "tests": "10",
+            "failures": "0",
+            "errors": "1",
+            "skipped": "0"
+          },
+          "case_count": 10,
+          "unique_case_count": 10,
+          "exact_accepted_baseline_ID_set": true,
+          "baseline_sha256": "2448a9c897828a6c77f45a85657386539cb82c85462f7257a3fec5092b5bab03",
+          "actual_IDs": [
+            "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+            "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+            "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+          ],
+          "counts": {
+            "failures": 0,
+            "errors": 1,
+            "skipped": 0
+          },
+          "passed": 9,
+          "failures": [
+            {
+              "id": "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+              "kind": "error",
+              "trace": "Traceback (most recent call last):\n  File \"/Users/runner/work/WMS/WMS/tools/print-agent/test_macos_direct_updater_contract.py\", line 361, in test_uc4_foreign_port_owner_and_health200_wrong_process\n    self.assertNotEqual(self.run_update().returncode,0);self.assertEqual(snapshot(self.app),self.original_app)\n                        ~~~~~~~~~~~~~~~^^\n  File \"/Users/runner/work/WMS/WMS/tools/print-agent/test_macos_direct_updater_contract.py\", line 255, in run_update\n    r=subprocess.run(['/bin/bash','-c',wrapper,'fixture',str(copy),'--app-dir',str(self.app),'--state-dir',str(self.state),\n                      '--backup-dir',str(self.backups),'--manifest',str(self.root/'manifest.json')],env=env,capture_output=True,text=True,timeout=15)\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py\", line 556, in run\n    stdout, stderr = process.communicate(input, timeout=timeout)\n                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py\", line 1222, in communicate\n    stdout, stderr = self._communicate(input, endtime, timeout)\n                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py\", line 2155, in _communicate\n    self._check_timeout(endtime, orig_timeout, stdout, stderr)\n    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py\", line 1269, in _check_timeout\n    raise TimeoutExpired(\n    ...<2 lines>...\n            stderr=b''.join(stderr_seq) if stderr_seq else None)\nsubprocess.TimeoutExpired: Command '['/bin/bash', '-c', 'function kill(){ \"$WMS607_FX_BIN/kill\" \"$@\"; }; export -f kill; exec /bin/bash \"$@\"', 'fixture', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/entry-copy-0e43841b0b5f43efab17ec2cfeffd624.sh', '--app-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/app', '--state-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/state', '--backup-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/backups', '--manifest', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/manifest.json']' timed out after 15 seconds\n"
+            }
+          ]
+        },
+        {
+          "report": "stop.xml",
+          "status": "NOT_RUN",
+          "case_count": 0
+        },
+        {
+          "report": "existing.xml",
+          "status": "NOT_RUN",
+          "case_count": 0
+        }
+      ],
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require isolated dispatch and exact full source identity",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Record actual source and architecture before all native checks",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Require filled accepted WMS-607 requirements from the complete source checkout",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Frozen updater ten cases including actual native journal",
+          "status": "completed",
+          "conclusion": "failure"
+        },
+        {
+          "name": "Frozen rollback four cases",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Preserved nineteen native HTTP resolver and print cases",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Require exact actual executed identities without skips or errors",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Original native Direct console builder and unpacked self-test",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Verify archive provenance and source remains unchanged",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Preserve exact native archives and all actual raw checks",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Post Run actions/setup-python@v5",
+          "status": "completed",
+          "conclusion": "skipped"
+        },
+        {
+          "name": "Post Run actions/checkout@v4",
+          "status": "completed",
+          "conclusion": "success"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success"
+        }
+      ],
+      "package": null
+    }
+  ],
+  "both_architectures_strict33_PASS": false,
+  "both_native_payloads_exist": false,
+  "public_promotion": "NOT_PERFORMED",
+  "blocking_fact": "Intel UC4 subprocess.TimeoutExpired after15s; downstream stop/existing/build/provenance steps skipped; no Intel payload"
+}

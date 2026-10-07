@@ -1,0 +1,46 @@
+{
+  "run-initial.json": {
+    "bytes": 12928,
+    "sha256": "6d91748c6b5d39ba80c4e8666f015f53d196af88a83afb7f5094d990a72a8194"
+  },
+  "jobs-initial.json": {
+    "bytes": 6889,
+    "sha256": "b3321c89cbf8bbbf396ea63b0afc83d0020893a17cd00daf29141b2147849b55"
+  },
+  "run-final.json": {
+    "bytes": 12931,
+    "sha256": "8fffa00658fc5739de962a4343eed2c65c56a83e6e0ada7fe3ce35ed66930531"
+  },
+  "jobs-final.json": {
+    "bytes": 7883,
+    "sha256": "7927242c2a7904fa8c2cfddbc3f6272f9547f3ac418ddbb84ca9e4f9ab2ab3a1"
+  },
+  "artifacts.json": {
+    "bytes": 1617,
+    "sha256": "245f4231fb71b1a0f30b38321a2b80f0bb388fc6a907fb56687a6808bfe9f0eb"
+  },
+  "job-arm64.log": {
+    "bytes": 108617,
+    "sha256": "3c41aff667dfa5a6e8cb24d7baef7b1c202128a0fc540d71d20b54c436e9059b"
+  },
+  "job-x86_64.log": {
+    "bytes": 103690,
+    "sha256": "a6890f746888585d727723ce4c6c563892a0e0cc8be2f423c9535f3c26b35ccb"
+  },
+  "raw-manifest.json": {
+    "bytes": 25964,
+    "sha256": "ee23c3cee1b1334531367f9c46f6eed75af27b289a7b69329f565bdb1be7b20c"
+  },
+  "ledger.json": {
+    "bytes": 24270,
+    "sha256": "71bfa49f18bf3fc03087404299d9ea6a14e981bde181a6c5a9dd32556a478dca"
+  },
+  "manifest-candidate-data.json": {
+    "bytes": 1340,
+    "sha256": "35b8b21128b954a96acf5e3bb98e1e013f236838e4b73db9401be621c01b000d"
+  },
+  "result.md": {
+    "bytes": 4463,
+    "sha256": "5d73190cb23d4cdca828c3c739747e99aa8aed091c94448d4f465fcd72bbf379"
+  }
+}

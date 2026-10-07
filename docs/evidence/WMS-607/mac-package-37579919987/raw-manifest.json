@@ -1,0 +1,480 @@
+{
+  "run_id": 37579919987,
+  "attempt": 1,
+  "source": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "harness": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+  "artifacts": [
+    {
+      "architecture": "arm64",
+      "artifact_id": 11464690557,
+      "artifact_name": "WMS607-Direct-arm64-a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6-37579919987-1",
+      "wrapper_bytes": 225269,
+      "wrapper_sha256": "6bc10c9873346465fa8fc4ce1573eb2974e72303060e82b8cfe8226930b3d630",
+      "member_count": 29,
+      "all_members_recoverable": true,
+      "members": [
+        {
+          "artifact_member": "_temp/wms607-package/archive.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/archive.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 370,
+          "original_sha256": "31ea8e50e68e866915cdb1fa20df4b6f66f245f348276c49a1335cfb6ac10b7b",
+          "stored_bytes": 268,
+          "stored_sha256": "133100f931b3c7749340b01fa735778c8ae4524ad62c0be8e80714a8afa68c98",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/documents.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/documents.log",
+          "encoding": "identity",
+          "original_bytes": 93,
+          "original_sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+          "stored_bytes": 93,
+          "stored_sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/build.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/build.log",
+          "encoding": "identity",
+          "original_bytes": 374,
+          "original_sha256": "317b1aebfdf88f85c4b917eb58fbae1e55cefc44e4e56ab7b6009e6e4346d27d",
+          "stored_bytes": 374,
+          "stored_sha256": "317b1aebfdf88f85c4b917eb58fbae1e55cefc44e4e56ab7b6009e6e4346d27d",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+          "stored_path": "raw/arm64/WMS/WMS/tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+          "encoding": "identity",
+          "original_bytes": 181772,
+          "original_sha256": "85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab",
+          "stored_bytes": 181772,
+          "stored_sha256": "85326f28ff7702042c56cee7bb23c7b81fd0f09b00f921ede23bd184b86f85ab",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/environment.txt",
+          "stored_path": "raw/arm64/_temp/wms607-package/environment.txt",
+          "encoding": "identity",
+          "original_bytes": 311,
+          "original_sha256": "19c87930b38cd74405f07191dfbb361b038aefc2ab7620e877b1530337087d4c",
+          "stored_bytes": 311,
+          "stored_sha256": "19c87930b38cd74405f07191dfbb361b038aefc2ab7620e877b1530337087d4c",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/existing.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/existing.log",
+          "encoding": "identity",
+          "original_bytes": 3109,
+          "original_sha256": "6d5d187a01b89c047b6e519aaf2eb77832b79aff38d4cf823cab4f365e39395b",
+          "stored_bytes": 3109,
+          "stored_sha256": "6d5d187a01b89c047b6e519aaf2eb77832b79aff38d4cf823cab4f365e39395b",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/existing.xml",
+          "stored_path": "raw/arm64/_temp/wms607-package/existing.xml",
+          "encoding": "identity",
+          "original_bytes": 3070,
+          "original_sha256": "b6029f695e3948668ff62d586d3cc3e6887ece97f2a62c30c050d35ac88a9eee",
+          "stored_bytes": 3070,
+          "stored_sha256": "b6029f695e3948668ff62d586d3cc3e6887ece97f2a62c30c050d35ac88a9eee",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/harness.txt",
+          "stored_path": "raw/arm64/_temp/wms607-package/harness.txt",
+          "encoding": "identity",
+          "original_bytes": 41,
+          "original_sha256": "9c5b6d4fff41b2cb3bcc946ebdd1f59abe5f8b3ef6a593e9ad59476c52669f2a",
+          "stored_bytes": 41,
+          "stored_sha256": "9c5b6d4fff41b2cb3bcc946ebdd1f59abe5f8b3ef6a593e9ad59476c52669f2a",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/http/test_accepted_receipt_same_key_never_resubmits.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 6189,
+          "original_sha256": "9fc60d0da686ef66572055475896d315fd81ab5052560a8bf6fa42ff7b31adb4",
+          "stored_bytes": 1381,
+          "stored_sha256": "4e8be0872d0c530ccea5dd48e53a92d8d28c499efd4075ee0e9b857ad1e445ee",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/http/test_legacy_error_preserves_specific_pre_submit_reason.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 3667,
+          "original_sha256": "f43c28e0605e789d05dd099b5eac1851e5894d9a75516cee0d630c5e4e5a8983",
+          "stored_bytes": 1169,
+          "stored_sha256": "d0057825cf57ca369b281e53920b15b468be6c22b284d33d4176767ad3013a1e",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 10548,
+          "original_sha256": "8432c05f693b760e705ebdfc3e725fef9f5528ab62b8bb928622853a1e2b4dc1",
+          "stored_bytes": 1804,
+          "stored_sha256": "4467f59f48dd4b56ab5de2ac80e875f0345cafa2208157451e043edd79b84dc8",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/http/test_submitting_same_key_has_one_live_external_submission.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 6648,
+          "original_sha256": "2a2196c2ca2b818679c7b2fd48fead57a1746302172d6e80fbe71487568b45f2",
+          "stored_bytes": 1446,
+          "stored_sha256": "2fa4cabd43efa5b4bf7b40178c7f157d7e5b556e3f1e0ea7b34a34b13736f1a3",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 6524,
+          "original_sha256": "a7bf2b33e411f94e797d86b908cd26b575ce56621bcc6fd5760191dad170260a",
+          "stored_bytes": 1459,
+          "stored_sha256": "cfa2e7229f30262cce1e7fd46b6240826c9c56439079515b360ef1bd00daa04a",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/self-test.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/self-test.log",
+          "encoding": "identity",
+          "original_bytes": 176,
+          "original_sha256": "1ee761108aa212afd17136e8bcdb991245a810e4c97b3b280ad849ea26c1f590",
+          "stored_bytes": 176,
+          "stored_sha256": "1ee761108aa212afd17136e8bcdb991245a810e4c97b3b280ad849ea26c1f590",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/source.txt",
+          "stored_path": "raw/arm64/_temp/wms607-package/source.txt",
+          "encoding": "identity",
+          "original_bytes": 41,
+          "original_sha256": "bc8fe5bf3bfe572b75a1c260e4710c26a3df3c31252d7e00b55976a3cc9d5325",
+          "stored_bytes": 41,
+          "stored_sha256": "bc8fe5bf3bfe572b75a1c260e4710c26a3df3c31252d7e00b55976a3cc9d5325",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/stop.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/stop.log",
+          "encoding": "identity",
+          "original_bytes": 754,
+          "original_sha256": "aa4932e5a79752c9fd2f2e29611a2b0fae79a6deb9eb906f4af53e0eb8432307",
+          "stored_bytes": 754,
+          "stored_sha256": "aa4932e5a79752c9fd2f2e29611a2b0fae79a6deb9eb906f4af53e0eb8432307",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/stop.xml",
+          "stored_path": "raw/arm64/_temp/wms607-package/stop.xml",
+          "encoding": "identity",
+          "original_bytes": 760,
+          "original_sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+          "stored_bytes": 760,
+          "stored_sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 4653,
+          "original_sha256": "78eb4992b6f92fb74c1b491aa6a972d9bfa7415d7fa1cefc307146e372d88c3e",
+          "stored_bytes": 1798,
+          "stored_sha256": "ab8825fb44ac6cfce74ac8ec304d01c029786d88c15125dbbcfbfd7898415e16",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 8271,
+          "original_sha256": "7469a85f17c3454e52ae30784cbdf72c19d05f08c10a564f9e5654826e23414e",
+          "stored_bytes": 2168,
+          "stored_sha256": "b9b94e8af80186a4707e88df3c32e64e62040302466aeba3ee3a3fb274e53b2b",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 18828,
+          "original_sha256": "f25224444e51e3b04d321a34902c33c1aca8203960e242fe4c300745c2d3fb08",
+          "stored_bytes": 2744,
+          "stored_sha256": "07942898d73667a564547f9805d9873caec08b35ade94d9fe689225abd0c31de",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 11439,
+          "original_sha256": "f845783bbc2e87a690aef29c09a7525c08495d180c68d3965d84b53d61bf0f39",
+          "stored_bytes": 2571,
+          "stored_sha256": "be13b7000e7fc78e4a64f519b2fb0a4aa26dd4c881bd3dc01d8237a9b6d4a5ee",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 24046,
+          "original_sha256": "26f2ab3412781e4e70a68b01ab1bc1c2efd676a72b94c8630a1233f799cebdd0",
+          "stored_bytes": 2997,
+          "stored_sha256": "f8c73ac43d9b0f641b8f4058648408c036e83a28c76e36db89866731ed32d85a",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 18170,
+          "original_sha256": "1210a16a309eca6996e988963c931dafb500cd67dbf3b1766c4302f4a348ead9",
+          "stored_bytes": 2779,
+          "stored_sha256": "d41b51b409342ff6c4592888352f7378d4562c474aa7f6732ee8b693cc87a16b",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 13230,
+          "original_sha256": "b6582f548b16126f684ba2ca99c28ad40ca6d37d090f842d1c4e4fc9cdffac54",
+          "stored_bytes": 2779,
+          "stored_sha256": "39b6f3ca851069998fa9dd3dcfe333beab114fef24ad2764adcef8049c8e73b4",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 19762,
+          "original_sha256": "75762f13897360d1a31e5786cf1f14857361dcfdcc40856a17ab6c7dd610de8d",
+          "stored_bytes": 2819,
+          "stored_sha256": "2214b47970c3b7ae203eeca188ea33a0975bd479cf6d975b5d605549bc5d8980",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 21013,
+          "original_sha256": "aa43aaf3ba46765d71320b1b11948b6e5c478931ff84020565a7a4b6f268d517",
+          "stored_bytes": 3327,
+          "stored_sha256": "fdd0f6a5c3eeeb4ec49535671ba8eb2a3707c75bece92e8e41c9711e4ac07ff4",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 13678,
+          "original_sha256": "2efd8a7e66a374902b348c4abb3d423943808f16c39dbaf5a6862342ebcd61d2",
+          "stored_bytes": 2754,
+          "stored_sha256": "4b37a5c15b0f21f43ad8ea093cfb6e5bf63b50d4aef27fedc71490ad1b8b1ea6",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater.log",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater.log",
+          "encoding": "identity",
+          "original_bytes": 2023,
+          "original_sha256": "a24e3b7d7e6f050ac47ebb1205c58f036196b193c3ec5cae319f16bb6d063ba4",
+          "stored_bytes": 2023,
+          "stored_sha256": "a24e3b7d7e6f050ac47ebb1205c58f036196b193c3ec5cae319f16bb6d063ba4",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater.xml",
+          "stored_path": "raw/arm64/_temp/wms607-package/updater.xml",
+          "encoding": "identity",
+          "original_bytes": 1812,
+          "original_sha256": "d4e52cc079874ff7256be6130e647668dd0d1b897a620b1b56c580db3e011d6b",
+          "stored_bytes": 1812,
+          "stored_sha256": "d4e52cc079874ff7256be6130e647668dd0d1b897a620b1b56c580db3e011d6b",
+          "recovered_byte_equal": true
+        }
+      ]
+    },
+    {
+      "architecture": "x86_64",
+      "artifact_id": 11463988544,
+      "artifact_name": "WMS607-Direct-x86_64-a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6-37579919987-1",
+      "wrapper_bytes": 33143,
+      "wrapper_sha256": "b9e0f7a2b76fde631cddafba6e02fa1d30dd4e7c56e266533b1acd44f09e1be5",
+      "member_count": 16,
+      "all_members_recoverable": true,
+      "members": [
+        {
+          "artifact_member": "_temp/wms607-package/documents.log",
+          "stored_path": "raw/x86_64/_temp/wms607-package/documents.log",
+          "encoding": "identity",
+          "original_bytes": 93,
+          "original_sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+          "stored_bytes": 93,
+          "stored_sha256": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/environment.txt",
+          "stored_path": "raw/x86_64/_temp/wms607-package/environment.txt",
+          "encoding": "identity",
+          "original_bytes": 308,
+          "original_sha256": "7ecdb10cf92174aa16bcf59e0adb704402c059e3e4f65e6250a7f189530bd82c",
+          "stored_bytes": 308,
+          "stored_sha256": "7ecdb10cf92174aa16bcf59e0adb704402c059e3e4f65e6250a7f189530bd82c",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/harness.txt",
+          "stored_path": "raw/x86_64/_temp/wms607-package/harness.txt",
+          "encoding": "identity",
+          "original_bytes": 41,
+          "original_sha256": "9c5b6d4fff41b2cb3bcc946ebdd1f59abe5f8b3ef6a593e9ad59476c52669f2a",
+          "stored_bytes": 41,
+          "stored_sha256": "9c5b6d4fff41b2cb3bcc946ebdd1f59abe5f8b3ef6a593e9ad59476c52669f2a",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/source.txt",
+          "stored_path": "raw/x86_64/_temp/wms607-package/source.txt",
+          "encoding": "identity",
+          "original_bytes": 41,
+          "original_sha256": "bc8fe5bf3bfe572b75a1c260e4710c26a3df3c31252d7e00b55976a3cc9d5325",
+          "stored_bytes": 41,
+          "stored_sha256": "bc8fe5bf3bfe572b75a1c260e4710c26a3df3c31252d7e00b55976a3cc9d5325",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_preservation_actual_direct_build_metadata.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 4653,
+          "original_sha256": "7050211989fabb9e9f9dde8a3ba7a41de52b0fbb6ddeb250023391a15d9a1bf8",
+          "stored_bytes": 1808,
+          "stored_sha256": "3c474321e99d552fc4893d3704c0d0f73a84c59f7f04e89c7ac4a8ab45f5357d",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_preservation_actual_public_and_current_journal_replay.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 8271,
+          "original_sha256": "e7bf300a6c54acd2fe295ea3348455407bec829f9f18446c631fc89b92dc6d89",
+          "stored_bytes": 2186,
+          "stored_sha256": "92613c31fb982a4678c7f8aafc8101774d5e9bf0d85cc303b73ab62e83aa9641",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 18828,
+          "original_sha256": "8687c0aee9382cdaf7be677fdaf865a66d319965f0b24a15d33e0357aaf49a45",
+          "stored_bytes": 2743,
+          "stored_sha256": "6dec9fd380cdc433b383354143471fa3e7a128eded0fe0c407a2663416454cde",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 24046,
+          "original_sha256": "6ca7108b4065068a0df542350f63af8a4e19bf5c1405a365b8428f6a9c5caf98",
+          "stored_bytes": 2979,
+          "stored_sha256": "8d2dd9485d8a2096fcc97cbc15404b82574a6021d11afd6fc49ceca23201eb0e",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 11439,
+          "original_sha256": "8ff52dc939a5068439fede6b4fe124e5e77711596ba24a594540df5274a06443",
+          "stored_bytes": 2570,
+          "stored_sha256": "a289a71e6c5b1a8064902437740bd65e2a514e58601c576aa450f0ef2eceb7a3",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 13197,
+          "original_sha256": "6df613c53254f9f5aabb29cf39828cbe9d58f08303665842e0146da53b3cc9fb",
+          "stored_bytes": 2416,
+          "stored_sha256": "ce8e28cd31632f085fb824d294951a9b9ab034f1c14377acd05e1bee62e009ca",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 13230,
+          "original_sha256": "19950aae8f18b59e5660038c0efde197119215a157a8bf6c9e25fe43def3dce7",
+          "stored_bytes": 2773,
+          "stored_sha256": "f0966c98ddbc1ba8e697b80db63ef4604fb3c88bd415d7d210814724c5862eb1",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 20752,
+          "original_sha256": "79e49b140efd7dce5e0bf424ee6f92bde3d46bd191be1cb38674d439198acfee",
+          "stored_bytes": 2864,
+          "stored_sha256": "021ef26dd061ec57a963b9a045ccb376ba3d102c489d22b663eb706167b83602",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 21013,
+          "original_sha256": "3cc204d6443822aa3160378af4c3d8ee0c235765b6bafa409085cc9ee6c15f9f",
+          "stored_bytes": 3315,
+          "stored_sha256": "b8135c3ec3b92cc57cd02685e0cdb7dae678229fccdacaa99c30fccdd43ff1f3",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json.gz",
+          "encoding": "gzip",
+          "original_bytes": 13678,
+          "original_sha256": "5633a09f7c539cdd3706e5068bc986505375693eb4014613e9ed0e776810bf74",
+          "stored_bytes": 2750,
+          "stored_sha256": "2a935425a7aa0537d817b7752a9183948095bf64eb32237ddd7cf4cbdef91297",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater.log",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater.log",
+          "encoding": "identity",
+          "original_bytes": 4776,
+          "original_sha256": "85247cb330aac1a9a21ffc0887257028080c4124acd02f16df338663f106f58f",
+          "stored_bytes": 4776,
+          "stored_sha256": "85247cb330aac1a9a21ffc0887257028080c4124acd02f16df338663f106f58f",
+          "recovered_byte_equal": true
+        },
+        {
+          "artifact_member": "_temp/wms607-package/updater.xml",
+          "stored_path": "raw/x86_64/_temp/wms607-package/updater.xml",
+          "encoding": "identity",
+          "original_bytes": 4262,
+          "original_sha256": "cf1c1c1fc8b8057d83615f5f44baf15d3836e7c746ed2cbd47e9261a3c928f9b",
+          "stored_bytes": 4262,
+          "stored_sha256": "cf1c1c1fc8b8057d83615f5f44baf15d3836e7c746ed2cbd47e9261a3c928f9b",
+          "recovered_byte_equal": true
+        }
+      ]
+    }
+  ]
+}

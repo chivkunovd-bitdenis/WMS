@@ -1,0 +1,23 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.directMacUpdater" tests="10" failures="0" errors="1" skipped="0"><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_direct_build_metadata" time="0.6452925989999585" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_preservation_actual_public_and_current_journal_replay" time="0.4608943449999856" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported" time="19.316649385000005" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed" time="34.05408613499998" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc3_lossless_backup_and_archive_or_space_failure" time="13.667469406999999" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc4_foreign_port_owner_and_health200_wrong_process" time="17.590736015000004"><error>Traceback (most recent call last):
+  File "/Users/runner/work/WMS/WMS/tools/print-agent/test_macos_direct_updater_contract.py", line 361, in test_uc4_foreign_port_owner_and_health200_wrong_process
+    self.assertNotEqual(self.run_update().returncode,0);self.assertEqual(snapshot(self.app),self.original_app)
+                        ~~~~~~~~~~~~~~~^^
+  File "/Users/runner/work/WMS/WMS/tools/print-agent/test_macos_direct_updater_contract.py", line 255, in run_update
+    r=subprocess.run(['/bin/bash','-c',wrapper,'fixture',str(copy),'--app-dir',str(self.app),'--state-dir',str(self.state),
+                      '--backup-dir',str(self.backups),'--manifest',str(self.root/'manifest.json')],env=env,capture_output=True,text=True,timeout=15)
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 556, in run
+    stdout, stderr = process.communicate(input, timeout=timeout)
+                     ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 1222, in communicate
+    stdout, stderr = self._communicate(input, endtime, timeout)
+                     ~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 2155, in _communicate
+    self._check_timeout(endtime, orig_timeout, stdout, stderr)
+    ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/Library/Frameworks/Python.framework/Versions/3.13/lib/python3.13/subprocess.py", line 1269, in _check_timeout
+    raise TimeoutExpired(
+    ...&lt;2 lines&gt;...
+            stderr=b''.join(stderr_seq) if stderr_seq else None)
+subprocess.TimeoutExpired: Command '['/bin/bash', '-c', 'function kill(){ "$WMS607_FX_BIN/kill" "$@"; }; export -f kill; exec /bin/bash "$@"', 'fixture', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/entry-copy-0e43841b0b5f43efab17ec2cfeffd624.sh', '--app-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/app', '--state-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/state', '--backup-dir', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/backups', '--manifest', '/var/folders/20/jp1_0n3n7kndh6rnbqb5344m0000gn/T/wms607-updater-case-ralcf9k6/manifest.json']' timed out after 15 seconds
+</error></testcase><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc5_replace_and_start_rollback_preserve_current_journal" time="13.391329228000018" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc6_repeat_concurrent_and_interrupted_update_recover" time="16.264831393999998" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc7_actual_journal_replay_after_update_and_failed_restart" time="9.987517963000016" /><testcase classname="test_macos_direct_updater_contract.UpdaterContract" name="test_uc8_no_security_printer_or_dependencies_change_permission_recovery" time="9.835141726000018" /></testsuite>

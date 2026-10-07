@@ -1,0 +1,24 @@
+test_default_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_default_timeout_is_distinct_and_retryable) ... ok
+test_installed_size_aware_receipt_replays_after_upgrade_and_restart (test_macos_artmaks_contract.ArtMaksMacContract.test_installed_size_aware_receipt_replays_after_upgrade_and_restart) ... ok
+test_new_label_passes_58x40_to_actual_lp (test_macos_artmaks_contract.ArtMaksMacContract.test_new_label_passes_58x40_to_actual_lp) ... ok
+test_printer_list_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_printer_list_timeout_is_distinct_and_retryable) ... ok
+test_queue_validation_timeout_is_distinct_and_retryable (test_macos_artmaks_contract.ArtMaksMacContract.test_queue_validation_timeout_is_distinct_and_retryable) ... ok
+test_same_png_with_changed_size_is_rejected (test_macos_artmaks_contract.ArtMaksMacContract.test_same_png_with_changed_size_is_rejected) ... ok
+test_cups_unreachable_is_not_missing_default (test_macos_default_printer.DefaultPrinterTests.test_cups_unreachable_is_not_missing_default) ... ok
+test_error_text_is_not_a_queue_or_uncertain_job (test_macos_default_printer.DefaultPrinterTests.test_error_text_is_not_a_queue_or_uncertain_job) ... ok
+test_localized_default_and_replay (test_macos_default_printer.DefaultPrinterTests.test_localized_default_and_replay) ... ok
+test_stale_default_keeps_same_key_recoverable (test_macos_default_printer.DefaultPrinterTests.test_stale_default_keeps_same_key_recoverable) ... ok
+test_valid_default_with_warning_still_prints (test_macos_default_printer.DefaultPrinterTests.test_valid_default_with_warning_still_prints) ... ok
+test_compiled_store_crash_faults_and_retry_self_test (test_macos_native.NativeRuntimeTest.test_compiled_store_crash_faults_and_retry_self_test) ... ok
+test_cups_unique_title_receipt_state_and_reasons (test_macos_native.NativeRuntimeTest.test_cups_unique_title_receipt_state_and_reasons) ... ok
+test_http_async_legacy_recovery_and_restart (test_macos_native.NativeRuntimeTest.test_http_async_legacy_recovery_and_restart) ... ok
+swift-driver version: 1.90.11.1 test_accepted_receipt_same_key_never_resubmits (test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_accepted_receipt_same_key_never_resubmits) ... ok
+test_legacy_error_preserves_specific_pre_submit_reason (test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason) ... ok
+test_legacy_same_key_recovers_only_after_proven_pre_submit_failure (test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure) ... ok
+test_submitting_same_key_has_one_live_external_submission (test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_submitting_same_key_has_one_live_external_submission) ... ok
+test_unknown_same_key_never_resubmits_after_queue_recovery (test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery) ... ok
+
+----------------------------------------------------------------------
+Ran 19 tests in 45.859s
+
+OK
