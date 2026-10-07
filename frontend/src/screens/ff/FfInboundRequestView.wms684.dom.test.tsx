@@ -5,8 +5,16 @@ import { printBarcodeLabel } from '../../utils/printBarcodeLabel'
 import { renderBarcodeDataUrl } from '../../utils/renderBarcodeDataUrl'
 
 let h: ReturnType<typeof harness>
-beforeEach(() => { h = harness() })
-afterEach(async () => { await h.dispose(); vi.useRealTimers() })
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+  h = harness()
+})
+afterEach(async () => {
+  try { await h.dispose() } finally {
+    vi.clearAllTimers()
+    vi.useRealTimers()
+  }
+})
 
 function labels(doc: Document) { return [...doc.querySelectorAll('section.label')] }
 function assertIdentity(doc: Document, seller = 'ИП Иванов', number = '№000684', date = '28.09.2026') {
@@ -107,6 +115,7 @@ describe('WMS-684 acceptance box labels', () => {
       expect(document.body.textContent).toContain(mode === 'http' ? 'label mark failed' : 'label response lost after commit')
       expect(h.markCalls).toHaveLength(1)
       expect(document.querySelectorAll('iframe')).toHaveLength(1)
+      expect(window.__WMS_PRINT_JOB_COUNT__).toBe(1)
       expect(h.current.boxes.map(box => [box.id, box.box_number, box.internal_barcode])).toEqual(codes)
       expect(JSON.stringify(h.current.lines)).toBe(lines)
       h.markMode = 'ok'
@@ -115,10 +124,12 @@ describe('WMS-684 acceptance box labels', () => {
       // The durable attempt is reconciled on the next explicit action, without
       // sending a second tape or a second mark for that already printed box.
       expect(h.markCalls).toHaveLength(mode === 'http' ? 2 : 1)
+      expect(window.__WMS_PRINT_JOB_COUNT__).toBe(1)
       h.current = makeDetail('B')
       await h.render()
       await h.print(false, 1)
       expect(h.markCalls).toHaveLength(mode === 'http' ? 3 : 2)
+      expect(window.__WMS_PRINT_JOB_COUNT__).toBe(2)
     })
   }
   it('keeps cargo, default and storageCell printing free of receipt metadata', async () => {

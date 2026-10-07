@@ -39,18 +39,22 @@ export async function flush() {
  * effect, instead of assuming that two microtasks have crossed the print
  * iframe's decode and timer boundary.
  */
-async function waitForInboundState(assertion: () => void) {
+async function waitForInboundState(assertion: () => void, signal: AbortSignal) {
   let lastError: unknown
   for (let attempt = 0; attempt < 200; attempt++) {
+    signal.throwIfAborted()
     try {
       assertion()
       return
     } catch (error) {
       lastError = error
     }
-    // Give React one real event-loop turn to process the iframe/load/timer
-    // callback. This is bounded polling of the asserted state, not a delay.
-    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+    // Execute the real callbacks on the controlled DOM-test clock. PDF tests
+    // retain real timers; both paths still require the same observed state.
+    await act(async () => {
+      if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(10)
+      else await new Promise(resolve => setTimeout(resolve, 10))
+    })
   }
   throw lastError
 }
@@ -109,6 +113,13 @@ export function installCanvas() {
 export function harness() {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
   const token = `contract.${btoa(JSON.stringify({ tenant_id: 'contract-tenant', sub: 'contract-user' }))}.signature`
+  const lifecycle = new AbortController()
+  const waits = new Set<Promise<void>>()
+  const waitForState = async (assertion: () => void) => {
+    const pending = waitForInboundState(assertion, lifecycle.signal)
+    waits.add(pending)
+    try { await pending } finally { waits.delete(pending) }
+  }
   const host = document.createElement('div')
   document.body.append(host)
   let root: Root = createRoot(host)
@@ -178,6 +189,10 @@ export function harness() {
   const loadPrintFrames = () => {
     for (const frame of frames.filter(node => !node.dataset.wms684Loaded)) {
       frame.dataset.wms684Loaded = 'yes'
+      const onload = frame.onload!
+      // Supply exactly one navigation event. document.close() can otherwise
+      // schedule a second jsdom load after this explicit platform handoff.
+      frame.onload = null
       // jsdom does not navigate iframe.srcdoc. This is the same platform
       // adapter used by the durable WMS-672 print test: the production utility
       // still owns onload, image.decode(), its delayed print handoff and Promise.
@@ -191,7 +206,7 @@ export function harness() {
       })
       printWindow.focus = () => undefined
       printWindow.print = () => undefined
-      frame.onload!(new Event('load') as Event)
+      onload.call(frame, new Event('load'))
     }
   }
   return {
@@ -202,7 +217,7 @@ export function harness() {
       const loadsBefore = detailLoads()
       await act(async () => root.render(<FfInboundRequestView token={token} requestId={current.id}
         isFulfillmentAdmin workspace="reception" numberedInboundBoxLabels={numbered} onClose={() => undefined} />))
-      await waitForInboundState(() => {
+      await waitForState(() => {
         expect(detailLoads()).toBeGreaterThan(loadsBefore)
         expect(document.querySelector('[data-testid="ff-inbound-packages-toggle"]')).toBeTruthy()
       })
@@ -224,9 +239,9 @@ export function harness() {
       let sawBusy = false
       const actionButton = () => byId(printButtonId) as HTMLButtonElement
       await click(actionButton())
-      await waitForInboundState(() => expect(document.querySelector('[data-testid="ff-inbound-box-print-dialog-confirm"]')).toBeTruthy())
+      await waitForState(() => expect(document.querySelector('[data-testid="ff-inbound-box-print-dialog-confirm"]')).toBeTruthy())
       await click(byId('ff-inbound-box-print-dialog-confirm'))
-      await waitForInboundState(() => {
+      await waitForState(() => {
         sawBusy ||= actionButton().disabled
         const framePrepared = frames.length > framesBefore
         const recoveryRead = detailLoads() > loadsBefore
@@ -235,7 +250,7 @@ export function harness() {
       })
       const framePrepared = frames.length > framesBefore
       if (framePrepared) loadPrintFrames()
-      await waitForInboundState(() => {
+      await waitForState(() => {
         const handedOff = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) > jobsBefore
         sawBusy ||= actionButton().disabled
         const recovered = detailLoads() > loadsBefore
@@ -251,6 +266,10 @@ export function harness() {
       return new DOMParser().parseFromString(html!, 'text/html')
     },
     async dispose() {
+      lifecycle.abort()
+      // Vitest's deadline does not cancel the test body's pending promises.
+      // Finish any owned act() turn before unmounting/restoring global mocks.
+      await Promise.allSettled([...waits])
       await act(async () => root.unmount())
       host.remove()
       document.querySelectorAll('iframe').forEach(node => node.remove())

@@ -1,0 +1,38 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-dom-ci/frontend
+
+ ❯ src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx (11 tests | 1 failed | 6 skipped) 3404ms
+   ↓ WMS-684 acceptance box labels > single label preserves own box and metadata numbered=true generated=true
+   ↓ WMS-684 acceptance box labels > single label preserves own box and metadata numbered=true generated=false
+   ↓ WMS-684 acceptance box labels > single label preserves own box and metadata numbered=false generated=true
+   ↓ WMS-684 acceptance box labels > single label preserves own box and metadata numbered=false generated=false
+   ↓ WMS-684 acceptance box labels > bulk is one job with three pages in original order and no trailing break
+   ↓ WMS-684 acceptance box labels > refresh and navigation preserve identities without stale seller/date/box data
+   × WMS-684 acceptance box labels > uses the Moscow document date and handles missing or invalid metadata without refusing print 1516ms
+     → Test timed out in 1500ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+   ✓ WMS-684 acceptance box labels > escapes complete long seller text in single and bulk HTML  481ms
+   ✓ WMS-684 acceptance box labels > mark http failure reports error, releases busy and never reprints automatically  579ms
+   ✓ WMS-684 acceptance box labels > mark lost failure reports error, releases busy and never reprints automatically  439ms
+   ✓ WMS-684 acceptance box labels > keeps cargo, default and storageCell printing free of receipt metadata  389ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx > WMS-684 acceptance box labels > uses the Moscow document date and handles missing or invalid metadata without refusing print
+Error: Test timed out in 1500ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx:77:3
+     75|     expect(h.fetcher.mock.calls.filter(([, init]) => init?.method === …
+     76|   })
+     77|   it('uses the Moscow document date and handles missing or invalid met…
+       |   ^
+     78|     vi.setSystemTime(new Date('2026-10-06T12:00:00Z'))
+     79|     h.current.created_at = '2026-09-28T21:30:00Z'
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed | 6 skipped (11)
+   Start at  09:53:19
+   Duration  6.39s (transform 689ms, setup 0ms, collect 2.48s, tests 3.40s, environment 345ms, prepare 45ms)
