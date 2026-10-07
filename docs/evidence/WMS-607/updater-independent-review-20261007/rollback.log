@@ -1,0 +1,17 @@
+{
+  "product_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "updater_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+  "extracted_functions_sha256": "84c5ac820e1683a05869e7d4bac35d38764502a3b0c9ada9e1bc240b51dab1ec",
+  "boundary": "actual stop_owned/rollback/inventory/clear_transaction; controlled lsof/ps/kill/sleep only",
+  "stdout": "rollback_exit=1\ntransaction=0\n",
+  "stderr": "Owned executable did not stop; application was not replaced.\nPrevious application bytes restored; foreign port owner retained, restart not confirmed.\n",
+  "application_after": "PREVIOUS BYTES",
+  "recovery_intent_retained": false,
+  "previous_tree_retained": false,
+  "failed_target_retained": false,
+  "current_journal_unchanged": true,
+  "TERM_attempts": 1,
+  "controlled_process_remains_alive": true,
+  "finding_reproduced": true,
+  "required_safety_invariant": "failed owned stop must retain target/recovery intent until safe recovery; cannot replace underneath live process"
+}

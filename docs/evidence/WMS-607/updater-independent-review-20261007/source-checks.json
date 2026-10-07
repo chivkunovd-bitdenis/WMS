@@ -1,0 +1,200 @@
+{
+  "reviewed_product": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "receipt_base": "6232cf29765f1b25466e96919ee7840bf5874c62",
+  "frozen_contract": "a40bf5b9a2f833a16cb9ff8c941c46c02a0b9d72",
+  "fresh_origin_etalon": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "products": [
+    {
+      "path": "tools/print-agent/build_console.py",
+      "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e",
+      "same_at_receipt_base": true
+    },
+    {
+      "path": "tools/print-agent/update_macos_direct.sh",
+      "sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+      "same_at_receipt_base": true
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+      "same_at_receipt_base": true
+    }
+  ],
+  "unchanged": [
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_publish_release.py",
+      "sha256": "f3a868008d4b78cbc9fc3af55d25bf1b5c956b49071ea0a99e5c24b08aa4dfef",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_wms_cups_observe.c",
+      "sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_agent.py",
+      "sha256": "636e51c942cee2138b2f87e4dbe848d4f8d5cf3b0ae759d48a478ff73de95c80",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_direct.py",
+      "sha256": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/test_wms_print_runtime.py",
+      "sha256": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "docs/requirements/WMS-607.md",
+      "sha256": "706159108016721c5e39e2d2c3e6726c5ee67b65f142ac37ae8d969d2f60eb31",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/contract.json",
+      "sha256": "18550049b6892de66e25bb3e8b86e3ed5e5ae48d5ab89fd191a1cbd923470750",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+      "sha256": "518c52e6f00ffe53371a6d030c0a906dcc09a03f2bf77e5b79fde7c201901fc3",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/history.html",
+      "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6",
+      "byte_equal_contract_base": true
+    },
+    {
+      "path": "tools/print-agent/wms_cups_observe.c",
+      "sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a",
+      "byte_equal_contract_base": true
+    }
+  ],
+  "whole_Swift_equal_after_reversing_only_authorized_technical_delta": true,
+  "normal_default_entry_HTTP_handlers_and_selftest_preserved": true,
+  "reports": {
+    "final": {
+      "sha256": "e1197628066e3f5ea5ab8d2e859be9975461be246e00a19a321053438451e823",
+      "counts": {
+        "name": "WMS607.directMacUpdater",
+        "tests": "10",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      },
+      "IDs": [
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+      ]
+    },
+    "existing": {
+      "sha256": "44bf721048aa2998ed9226f3f5f850cc8715fc989eb88769f11c073195f36479",
+      "counts": {
+        "name": "WMS607.existingMacContracts",
+        "tests": "19",
+        "failures": "0",
+        "errors": "0",
+        "skipped": "0"
+      },
+      "IDs": [
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+        "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+        "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+        "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+        "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+        "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+        "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+        "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+        "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+      ]
+    }
+  },
+  "all_10_final_raw_records_bound_to_product_and_frozen_test_hashes": true,
+  "local_ARM64_receipt": {
+    "kind": "local actual native ARM64 build; not a distribution release",
+    "source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+    "metadata": {
+      "source_commit": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+      "platform": "darwin",
+      "architecture": "arm64",
+      "runtime": "direct",
+      "console": true,
+      "physical_print_verified": false
+    },
+    "artifact_path": "tools/print-agent/dist-console/WMS-Print-Console-Mac-arm64.zip",
+    "artifact_bytes": 182031,
+    "archive_sha256": "409f1afd0ab3743729dad0f1f3105f86822d89d99e509dad02ccf94dd7a09cf3",
+    "executable_sha256": "6e114c15815ebc02e25dd91478f66c7ca6a5030b6d1e7c8fa8480a4bbfb0d007",
+    "updater_sha256": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+    "archive_entries": [
+      "wms-print/",
+      "wms-print/wms-print",
+      "__MACOSX/",
+      "__MACOSX/wms-print/",
+      "__MACOSX/wms-print/._wms-print",
+      "wms-print/history.html",
+      "__MACOSX/wms-print/._history.html",
+      "wms-print/README.txt",
+      "__MACOSX/wms-print/._README.txt",
+      "wms-print/build.json",
+      "__MACOSX/wms-print/._build.json",
+      "wms-print/update_macos_direct.sh",
+      "__MACOSX/wms-print/._update_macos_direct.sh"
+    ],
+    "architecture_verified": "arm64",
+    "archive_readback_matches": true,
+    "codesign_verify_and_unpacked_selftest": "builder exit 0; local-arm64-build.log",
+    "public_url": null,
+    "review": false,
+    "analytical_acceptance": false,
+    "Intel_build": false,
+    "client_install": false,
+    "physical_print_verified": false
+  },
+  "limitations": "Read-only saved receipts validation; no test/build/package rerun, public release, Intel execution, client install or physical print"
+}
