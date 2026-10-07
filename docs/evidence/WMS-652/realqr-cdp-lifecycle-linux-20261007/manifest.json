@@ -1,0 +1,132 @@
+{
+  "run_id": 37550768806,
+  "attempt": 1,
+  "diagnostic_sha": "8754c164be9d3c60567dfce0d319f11a4a66db9b",
+  "files": [
+    {
+      "path": "raw/artifacts.json",
+      "bytes": 782,
+      "sha256": "ee48a3006f0784effde7f079a556d7ce7606e0a4418530c9ee26ecd4d5982ae0"
+    },
+    {
+      "path": "raw/environment.txt",
+      "bytes": 546,
+      "sha256": "6fd58eccf7b101cf7782082bff696c135a4e96e1f1fc7d6d5c9b4c2de2e7f24b"
+    },
+    {
+      "path": "raw/exit-results.json",
+      "bytes": 39,
+      "sha256": "5ee6429e92f2406d47e75f8d3145a0054a137cf4a9a54085d425e87061e8f525"
+    },
+    {
+      "path": "raw/job.log",
+      "bytes": 172196,
+      "sha256": "229c3556bdfcde6fc1bc6e6f9e2c2a694f1d237f05042b50f78f3e5fe473fc9c"
+    },
+    {
+      "path": "raw/jobs.json",
+      "bytes": 2542,
+      "sha256": "9a423cba991d6acdeaf00241c661f30f2c555b90fd24f096918cd0f352ee4353"
+    },
+    {
+      "path": "raw/preparation.log",
+      "bytes": 1527,
+      "sha256": "ce112a3f6130a454ad6cd012086c145237645611d6f1d21b394a625f8ca57659"
+    },
+    {
+      "path": "raw/protected-after.sha256",
+      "bytes": 972,
+      "sha256": "1c15ffc72f41696d7f06215eb5f0beee4f16c07e20d021c0f67bb687c60da9d9"
+    },
+    {
+      "path": "raw/protected-before.sha256",
+      "bytes": 972,
+      "sha256": "1c15ffc72f41696d7f06215eb5f0beee4f16c07e20d021c0f67bb687c60da9d9"
+    },
+    {
+      "path": "raw/provenance.json",
+      "bytes": 1527,
+      "sha256": "ce112a3f6130a454ad6cd012086c145237645611d6f1d21b394a625f8ca57659"
+    },
+    {
+      "path": "raw/run.json",
+      "bytes": 12913,
+      "sha256": "d60dc3012639616427c7defa0fac1bbbf19d27f329c7b71b83742851a8c75911"
+    },
+    {
+      "path": "raw/selected/WMS652-realQrFlags-remount-after-lost-ack-supply_id-A-.json",
+      "bytes": 13183,
+      "sha256": "3446dd07796a84acd8ffd1491b47264b2302509f2ba072fadd9a172fd1c39527"
+    },
+    {
+      "path": "raw/selected/cdp-lifecycle.json",
+      "bytes": 912256,
+      "sha256": "2cec68cba3bc3e7390067c425f517d3fa7f81b6a39448bb949785c1063aa9275"
+    },
+    {
+      "path": "raw/selected/chrome.log",
+      "bytes": 5018,
+      "sha256": "8761b2db079e55d311ba38b84d2316e6ce15bbe5a5462f3baac272f106d577ce"
+    },
+    {
+      "path": "raw/selected/last-requests.json",
+      "bytes": 13105,
+      "sha256": "f025bb49c7c8420ce83edff60153f15cb1ebbde5c91942c80d3aad85fe01d485"
+    },
+    {
+      "path": "raw/selected/result.json",
+      "bytes": 729,
+      "sha256": "646dbe5ace3dc133ae834028766db065079ccb35e369bf00f65dd9c4b3b5ae06"
+    },
+    {
+      "path": "raw/selected-runner.mjs",
+      "bytes": 35746,
+      "sha256": "dd4149e6caac3fddd15670a20606d06616df83538a25421902f25c3244521add"
+    },
+    {
+      "path": "raw/selected.log",
+      "bytes": 61,
+      "sha256": "33ded0e3b18e2e062aae6a8b37b9c86696b8fc7cb09c5cd5b215e11dd5f63007"
+    },
+    {
+      "path": "raw/transport/transport-chrome.log",
+      "bytes": 5018,
+      "sha256": "6fc6aebd58b69834a125568c1ae2b4a300f1786549f3bfd48ad0fb03c03fd9ab"
+    },
+    {
+      "path": "raw/transport/transport-lifecycle.json",
+      "bytes": 15162,
+      "sha256": "077ab05cfe2608540892c4153ad7c6549f319878ce0bd0a18c1c40f00d584af0"
+    },
+    {
+      "path": "raw/transport/transport-probe.json",
+      "bytes": 1532,
+      "sha256": "9234ffb615def7de4d90ad24790a431010326f150ca84c57b31103094c9e65ab"
+    },
+    {
+      "path": "raw/transport-observer.mjs",
+      "bytes": 3134,
+      "sha256": "e84a39e63d4541945cc5e0744efb2d7b882a5cf71355825c092fe65eeffa89f1"
+    },
+    {
+      "path": "raw/transport.log",
+      "bytes": 1533,
+      "sha256": "9d1029d3647a881c46763bc1958375f8f9d8d61239d8cf52a211c346a232ce8c"
+    },
+    {
+      "path": "raw/vite.log",
+      "bytes": 272,
+      "sha256": "0f33c5c4680cdca7f4f591fe3efc9cde5afb7f98b7ced7461aea3b442a4c64f5"
+    },
+    {
+      "path": "diagnostic-summary.json",
+      "bytes": 8660,
+      "sha256": "95a1ccb350f642a0700964a3339d7181dab7eef8f65e3d9f5dceae33de0bbf3e"
+    },
+    {
+      "path": "result.md",
+      "bytes": 3460,
+      "sha256": "6c843475b8741c59a1ad5236ee8e8a6156e113c82dc117310ff44a633994ef65"
+    }
+  ]
+}
