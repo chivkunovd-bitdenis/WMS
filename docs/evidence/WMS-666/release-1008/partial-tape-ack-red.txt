@@ -1,0 +1,39 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend
+
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > submits despite a stale empty pool and shows the current server shortage
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > prints the screenshot case: 12 orders, ЧЗ=0, ШК=1, QR, empty pool
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > builds QR plus barcode for every marked WB product when ЧЗ=0
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > retries only the unconfirmed QR after a successful tape dispatch
+ × src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch 220ms
+   → expected '' to contain 'QR order 612 failed'
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > allows an assigned-code batch even when no free codes remain
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > preserves busy and empty-selection protection
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > preserves pool validation outside FBS
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch
+AssertionError: expected '' to contain 'QR order 612 failed'
+
+- Expected
++ Received
+
+- QR order 612 failed
+
+ ❯ src/components/MarkingPrintDialog.availability.dom.test.tsx:187:94
+    185|     expect(printTapeSections).toHaveBeenCalledTimes(1)
+    186|     expect(confirmQrApplied.mock.calls.map(([asset]) => asset.id)).toE…
+    187|     expect(document.querySelector('[data-testid="marking-print-error"]…
+       |                                                                                              ^
+    188|     expect(onPrinted).toHaveBeenCalledTimes(1)
+    189|     expect(completed).not.toHaveBeenCalled()
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 7 skipped (8)
+   Start at  02:03:48
+   Duration  1.72s (transform 213ms, setup 0ms, collect 1.01s, tests 221ms, environment 215ms, prepare 83ms)
+
