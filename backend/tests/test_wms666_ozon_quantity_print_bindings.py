@@ -180,7 +180,11 @@ async def test_ozon_equal_timestamp_cutoff_keeps_every_current_binding(
     assert order is not None
     current = current_markings(order, [*markings, replacement])
     assert len(current) == 4  # The existing Ozon reader retains the tied cutoff.
+    current_replacement = _bindings(order, supply, [replacement])
+    superseded_exemplar = _bindings(order, supply, [markings[0]])
     still_current = next(row for row in current if row.meta_details_json["exemplar_id"] == 83)
     binding = _bindings(order, supply, [still_current])
 
+    assert await print_bindings_current(db_session, order.tenant_id, current_replacement) is True
+    assert await print_bindings_current(db_session, order.tenant_id, superseded_exemplar) is False
     assert await print_bindings_current(db_session, order.tenant_id, binding) is True
