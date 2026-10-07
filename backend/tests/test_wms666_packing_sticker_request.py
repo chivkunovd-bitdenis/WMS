@@ -3,6 +3,7 @@
 import base64
 import json
 import uuid
+from typing import Any
 
 import httpx
 import pytest
@@ -54,7 +55,7 @@ async def test_packing_request_calls_wb_and_returns_saved_sticker_content(
     wb_requests: list[dict[str, object]] = []
 
     async def send(
-        client: httpx.AsyncClient, request: httpx.Request, **kwargs: object
+        client: httpx.AsyncClient, request: httpx.Request, **kwargs: Any
     ) -> httpx.Response:
         if request.url.path == "/api/v3/orders/stickers":
             assert request.method == "POST"

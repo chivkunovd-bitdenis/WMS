@@ -2,7 +2,7 @@ name: WB packing stickers
 on:
   pull_request:
   push:
-    branches: [etalon, codex/wms666-sticker-prefetch]
+    branches: [etalon]
   workflow_dispatch:
 concurrency:
   group: wb-packing-stickers-${{ github.sha }}
