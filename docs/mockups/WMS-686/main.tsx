@@ -1,12 +1,18 @@
-import React from "react";
-import { createRoot } from "react-dom/client";
-import { BrowserRouter } from "react-router-dom";
-import { ThemeProvider, CssBaseline } from "@mui/material";
-import { muiTheme } from "../../../frontend/src/mui/theme";
-import { FfSuppliesShipmentsPage } from "../../../frontend/src/screens/ff/FfSuppliesShipmentsPage";
-import { installMockApi, detail, secondaryDetail, getDemo } from "./mockApi";
-installMockApi();
-createRoot(document.getElementById("root")!).render(
+import { createRoot } from 'react-dom/client'
+import { BrowserRouter } from 'react-router-dom'
+import { ThemeProvider, CssBaseline } from '@mui/material'
+import { muiTheme } from '../../../frontend/src/mui/theme'
+import { FfSuppliesShipmentsPage } from '../../../frontend/src/screens/ff/FfSuppliesShipmentsPage'
+import { detailFor, installMockApi, products, shipments } from './mockApi'
+import { DemoPalette } from './Controls'
+
+// WMS-686 · настоящий экран «Отгрузки на МП» с вымышленными данными и локальным API.
+installMockApi()
+
+const params = new URLSearchParams(location.search)
+const opened = shipments.find((shipment) => shipment.id === params.get('open_mp'))?.id ?? shipments[0].id
+
+createRoot(document.getElementById('root')!).render(
   <ThemeProvider theme={muiTheme}>
     <CssBaseline />
     <BrowserRouter>
@@ -17,27 +23,24 @@ createRoot(document.getElementById("root")!).render(
         infoNotice={null}
         onDismissInfoNotice={() => {}}
         token="fictional-demo-token"
-        sellers={[{ id: "demo-seller", name: "Демо селлер" }]}
-        productPicklist={detail.lines.map((l) => ({
-          id: l.product_id,
-          sku_code: l.sku_code,
-          name: l.product_name,
-        }))}
+        sellers={[{ id: 'demo-seller', name: 'Демо селлер · ИП Иванов' }]}
+        productPicklist={products.map((product) => ({ id: product.id, sku_code: product.sku, name: product.name }))}
         onRefreshFfSupplyExtras={async () => {}}
         inboundSummaries={[]}
         outboundSummaries={[]}
-        marketplaceUnloadSummaries={[
-          { ...detail, line_count: detail.lines.length },
-          { ...secondaryDetail, line_count: secondaryDetail.lines.length },
-        ]}
+        marketplaceUnloadSummaries={shipments.map((shipment) => {
+          const detail = detailFor(shipment.id)
+          return { ...detail, line_count: detail.lines.length }
+        })}
         discrepancyActSummaries={[]}
         onOpenInbound={() => {}}
         onOpenOutbound={() => {}}
         onCreateMpShipment={async () => null}
         onCreateDiverge={async () => null}
-        initialMarketplaceUnloadId={getDemo().activeShipmentId}
+        initialMarketplaceUnloadId={opened}
         addressStorageEnabled
       />
+      <DemoPalette />
     </BrowserRouter>
   </ThemeProvider>,
-);
+)

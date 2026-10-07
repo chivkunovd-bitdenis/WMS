@@ -5,6 +5,15 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false
   },
-  "include": ["*.ts", "*.tsx", "../../../frontend/src/**/*.d.ts"],
-  "exclude": ["model.test.ts"]
+  "include": [
+    "*.ts",
+    "*.tsx",
+    "../../../frontend/src/**/*.d.ts"
+  ],
+  "exclude": [
+    "model.test.ts",
+    "fbo.test.ts",
+    "dist",
+    "ci"
+  ]
 }
