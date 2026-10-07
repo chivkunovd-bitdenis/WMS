@@ -5,6 +5,8 @@ import {
   buildProductLabelTextLines,
   labelScale,
   labelTextFontScale,
+  productLabelBodyScale,
+  productLabelBarcodeHeightMm,
   trimProductLabelTextLinesFromBottom,
   type ProductThermalLabelData,
 } from './printProductThermalLabel'
@@ -92,7 +94,7 @@ describe('printProductThermalLabel', () => {
     expect(css).toMatch(/\.seller \{[\s\S]*min-height:/)
     // Межстрочный зазор — margin-bottom на строках, а не flex gap: термопринтер
     // игнорирует gap и строки слипаются (наезд названия на «Артикул»).
-    expect(css).toMatch(/\.body > p \{[\s\S]*margin:\s*0 0 [0-9.]+mm/)
+    expect(css).toMatch(/\.body > p \{[\s\S]*margin:\s*0 0 calc\([0-9.]+mm/)
     expect(css).not.toMatch(/\.body \{[\s\S]*gap:/)
     expect(css).toMatch(/margin-top:\s*[0-9.]+mm/)
   })
@@ -164,5 +166,61 @@ describe('printProductThermalLabel', () => {
       size,
     )
     expect(trimmed.some((line) => line.text.startsWith('Состав:'))).toBe(true)
+  })
+
+  it.each(['58x40', '60x40'] as const)('%s fits all seven WB rows instead of clipping brand/composition', (id) => {
+    const size = resolveLabelSize(id)
+    const product: ProductThermalLabelData = {
+      product_name: 'Кардиган классический',
+      sku_code: '1755834805',
+      barcode: '2057623103586',
+      seller_name: 'ИП Савкина В.А.',
+      wb_size: 'S (42-44)',
+      wb_color: 'Коричневый',
+      wb_brand: 'ASVOYA',
+      wb_composition: 'Вискоза — 50%, полиэстер — 30%, нейлон — 20%',
+    }
+    const lines = buildProductLabelTextLines(product, undefined, size)
+    expect(lines).toHaveLength(7)
+    const scale = productLabelBodyScale(lines, size)
+    // Browser before-fix evidence: seven unscaled rows take >26 mm in a 19 mm body.
+    expect(scale).toBeGreaterThan(0.6)
+    expect(scale).toBeLessThanOrEqual(0.75)
+    const html = buildProductLabelSectionHtml(product, 'data:image/png;base64,xx', undefined, size)
+    expect(html).toContain(`--product-label-body-scale: ${scale}`)
+    for (const line of lines) expect(html).toContain(line.text)
+    expect(html).toContain('2057623103586')
+    expect(html).toContain('Пожалуйста оставьте отзыв')
+  })
+
+  it('fits only the selected rows and leaves spacious labels at their original font size', () => {
+    const product = { ...SUNGLASSES_LABEL, wb_size: 'S', wb_composition: 'Хлопок' }
+    const compact = resolveLabelSize('58x40')
+    const all = buildProductLabelTextLines(product, undefined, compact)
+    const reduced = buildProductLabelTextLines(product, { includeBrand: false, includeComposition: false }, compact)
+    expect(productLabelBodyScale(reduced, compact)).toBeGreaterThan(productLabelBodyScale(all, compact))
+    for (const id of ['60x80', '70x120'] as const) {
+      expect(productLabelBodyScale(buildProductLabelTextLines(product, undefined, resolveLabelSize(id)), resolveLabelSize(id))).toBe(1)
+    }
+  })
+
+  it('uses valid PNG dimensions for height:auto and falls back conservatively for invalid inputs', () => {
+    const size = resolveLabelSize('58x40')
+    const header = Buffer.alloc(33)
+    Buffer.from('\x89PNG\r\n\x1a\n', 'latin1').copy(header)
+    header.write('IHDR', 12)
+    header.writeUInt32BE(248, 16)
+    header.writeUInt32BE(52, 20)
+    const png = () => `data:image/png;base64,${header.toString('base64')}`
+    expect(productLabelBarcodeHeightMm(png(), size)).toBeCloseTo(52 * 52 / 248)
+    header.writeUInt32BE(10, 16)
+    expect(productLabelBarcodeHeightMm(png(), size)).toBe(12)
+    header.writeUInt32BE(0, 16)
+    expect(productLabelBarcodeHeightMm(png(), size)).toBe(12)
+    header[0] = 0
+    expect(productLabelBarcodeHeightMm(png(), size)).toBe(12)
+    for (const input of ['data:image/jpeg;base64,abc', 'data:image/png;base64,@@', 'data:image/png;base64,aQ==']) {
+      expect(productLabelBarcodeHeightMm(input, size)).toBe(12)
+    }
   })
 })

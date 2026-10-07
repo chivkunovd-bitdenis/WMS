@@ -1,0 +1,23 @@
+{
+  "reviewer": "/root/wb_label_review",
+  "source_blob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+  "source_review": "passed",
+  "material_code_defects_remaining": 0,
+  "independent_tests": {
+    "thermal": 19,
+    "marking": 32,
+    "label_size": 13,
+    "passed": 64
+  },
+  "visual_pngs_reviewed": 6,
+  "compact_font_pt": {
+    "58x40": 5.8368,
+    "60x40": 5.7828
+  },
+  "full_matrix_replayed": false,
+  "full_matrix_evidence_reviewed": true,
+  "physical_paper": false,
+  "CI": "pending",
+  "deploy": "pending",
+  "provenance": "Independent reviewer report via collaboration message, recorded without substituting implementer verification"
+}
