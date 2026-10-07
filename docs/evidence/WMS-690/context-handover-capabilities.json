@@ -1,0 +1,110 @@
+{
+  "task": "WMS-690",
+  "date": "2026-10-07",
+  "scope": "Only WMS moderator, WMS worktree, installed Codex application code and official documentation",
+  "moderator_thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+  "supported_operations": {
+    "manual": {
+      "method": "thread/compact/start",
+      "params": {
+        "threadId": "01a116a6-e508-7a31-a056-1a68f5b5880c"
+      },
+      "official_documentation": "https://developers.openai.com/codex/app-server",
+      "confirmed_in_installed_application_code": true,
+      "callable_through_available_application_tools": false,
+      "live_operator_invoked": false
+    },
+    "automatic": {
+      "setting": "model_auto_compact_token_limit",
+      "scope_setting": "model_auto_compact_token_limit_scope",
+      "official_documentation": "https://developers.openai.com/codex/config-reference",
+      "proposed_threshold": 250000,
+      "proposed_scope": "total",
+      "setting_changed": true,
+      "desktop_configuration_reload_verified": true,
+      "installed_threshold": 250000,
+      "installed_scope": "total",
+      "installed_path": "/Users/deniscivkunov/Projects/WMS/.codex/config.toml",
+      "test_threshold": 100000,
+      "reload_method": "public archive/unarchive of the same thread followed by cold resume"
+    },
+    "public_cli_transport": {
+      "documented_command": "codex app-server proxy --sock PATH",
+      "confirmed_by_installed_cli_help": true,
+      "desktop_public_control_socket_address_available": false,
+      "prior_default_proxy_result": "No such file; no connection to a live desktop thread",
+      "hidden_endpoint_scan_performed": false,
+      "separate_app_server_started": false
+    }
+  },
+  "configuration_limit": "The owner authorized project-scoped installation in the main WMS cwd. Source config contains only the two compaction keys; installer merges them while preserving other user fields.",
+  "mutations": {
+    "live_moderator_compacted": true,
+    "live_moderator_forked": true,
+    "global_configuration_changed": false,
+    "project_configuration_created": true,
+    "rollout_or_database_edited": false,
+    "other_project_accessed": false
+  },
+  "verdict": "PASS: the actual desktop moderator loaded WMS project compaction settings after supported cold resume, compacted its real existing context while preserving full history and access, restored permanent 250k, and handed over to a short full-access numbered successor with a real scheduled turn. No artificial 250k workload was accumulated.",
+  "initial_observation": {
+    "cwd": "/Users/deniscivkunov/Projects/WMS",
+    "approval_policy": "never",
+    "model": "gpt-6.1-sol",
+    "last_input_tokens": 170467,
+    "last_output_tokens": 488,
+    "model_context_window": 354350,
+    "compaction_records_found": 0
+  },
+  "initial_observed_turn_id": "01a116c3-ef6f-7932-9291-c63488d6e517",
+  "live_compaction_proof": {
+    "thread_id": "01a116a6-e508-7a31-a056-1a68f5b5880c",
+    "turn_id": "01a11737-4e2a-7033-b2f8-883ade1aefab",
+    "turn_status": "completed",
+    "context_compaction_item_id": "01a11737-5637-7da2-8df2-b7de3b3ac55e",
+    "compacted_timestamp": "2026-10-07T16:36:27.440Z",
+    "input_tokens_before": 170467,
+    "input_tokens_after": 47170,
+    "last_output_tokens_after": 132,
+    "original_history_bytes": 1757898,
+    "original_history_sha256": "7cccb961d6f359f1f14fab36e7919ed1e078b98b07c287757092cf094b28767d",
+    "original_history_prefix_preserved": true,
+    "new_turn_model": "gpt-6.1-sol",
+    "new_turn_approval_policy": "never",
+    "new_turn_sandbox": "danger-full-access",
+    "pwd_exit_code": 0,
+    "independently_observed_by": [
+      "live_moderator_continuity",
+      "live_moderator_delivery"
+    ]
+  },
+  "permanent_threshold_restoration": {
+    "threshold": 250000,
+    "scope": "total",
+    "cold_resume_completed": true,
+    "probe_turn_id": "01a1173d-0ace-7f42-8119-cda1e763300d",
+    "pwd_exit_code": 0,
+    "approval_requested": false,
+    "observer": "live_moderator_delivery"
+  },
+  "actual_handover": {
+    "created_by": "ordinary moderator number 3 using supported fork",
+    "successor_thread_id": "01a1173e-cbaa-7363-9e4c-25b6a9c79aaa",
+    "successor_name": "Чат разбора №4",
+    "successor_context_tokens": 73054,
+    "successor_model": "gpt-6.1-sol",
+    "successor_approval_policy": "never",
+    "successor_sandbox": "danger-full-access",
+    "predecessor_archived": true,
+    "service_target_updated": true,
+    "heartbeat_id": "wms-4",
+    "scheduled_at": "2026-10-07T16:46:51.813Z",
+    "scheduled_turn_id": "01a11742-bba6-7792-83db-375435a71057",
+    "inbox_after_message": 874,
+    "inbox_after_edit": 10,
+    "saved_case_resumed_by_native_agent_id": "01a11743-9f77-7c31-9780-eeaee0c969ff",
+    "cross_tree_native_transfer_claimed": false,
+    "consumed_compaction_timestamp": "2026-10-07T16:36:27.440Z",
+    "observer": "live_moderator_delivery"
+  }
+}
