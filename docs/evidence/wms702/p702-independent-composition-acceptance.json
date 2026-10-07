@@ -1,0 +1,199 @@
+{
+  "task": "WMS-702",
+  "stage": "P702 independent composition review and digital acceptance",
+  "status": "PASS",
+  "releaseReady": false,
+  "reviewer": "Independent replacement session /root/wms702_composition_acceptance; gpt-6.1-sol/high",
+  "replacement": {
+    "priorSession": "/root/wb_label_review",
+    "reason": "Parent explicitly recorded unavailable original follow-up (not found) in successor8",
+    "originalEvidenceReused": true
+  },
+  "scope": "Ordinary WB product barcode hotfix only; bounded integration on accepted SOURCE39d. No independent approval of source-policy/reference upgrade.",
+  "p702Sha": "86f450ad54745a5a2f2d77b3facdac8b778ac442",
+  "publishedBranch": "codex/wms702-accepted-source-release",
+  "remoteReadbackSha": "86f450ad54745a5a2f2d77b3facdac8b778ac442",
+  "generatorBlob": "e6314c4c4f5126f5f951a342707a1e77db831ea8",
+  "acceptedBaseline": {
+    "source": "39d1afdc8f37cdfda3c7768804ccccc3c9ad4e6e",
+    "product": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+    "fixtures": "b9b1a83ee943523cec795de021862fa10ce8f04b",
+    "independentAcceptanceCommit": "154cdb1ff3e84ed4e592d883688c7df560579015",
+    "independentAcceptanceDocument": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
+    "productionAncestor": "212f19d548496fef7baf75c83204b771e304281b",
+    "limits": "Existing acceptance reused within its stated scope. No new live KIZ signature, deployment or physical/operator acceptance."
+  },
+  "original702Review": {
+    "sha": "d9e1077fc6a55deda5538b43c7f1f8b92b32b6f1",
+    "contract": "1f593b4a7ab24f34989e21c495d5ae8306989245",
+    "implementation": "648df3e2d723d478c69553c152d99e74d21960aa",
+    "sourceReview": "PASS",
+    "independentUnits": 64,
+    "independentRealChromeSubset": 8,
+    "independentVisualPNGs": 6,
+    "full48FinalTargetCI": {
+      "sha": "0f969e0e7843d56a045507cc7aff9c041c36c6de",
+      "run": 37690194625,
+      "job": 113028709410,
+      "durationMs": 75650,
+      "result": "PASS for702 only; fullrun notgreen",
+      "source": "Previously independently audited release-route report; not rerun in this acceptance"
+    }
+  },
+  "readCompleted": [
+    "origin/etalon:AGENTS.md",
+    "docs/reviews/2026-09-11-analyst-draft/owner-cases.md (full)",
+    "docs/reviews/2026-09-11-analyst-draft/failure-cases.md (full)",
+    "docs/reviews/2026-09-11-analyst-draft/skills/wms-product-analyst/SKILL.md",
+    "var/support-conversations/moderator/wb-product-label-hotfix-successor7-result.json",
+    "var/support-conversations/moderator/wms702-independent-review.json",
+    "var/support-conversations/moderator/wms702-release-route-successor8.json",
+    "var/support-conversations/moderator/wms702-p702-preparation-successor8.json",
+    "Exact P702 docs/requirements/WMS-702.md",
+    "Exact accepted baseline recovery-p2-source-review.md",
+    "Exact702 product diff and source"
+  ],
+  "composition": {
+    "acceptedSourceAncestor": true,
+    "productionAncestor": true,
+    "runtimeDelta": [
+      "frontend/src/utils/printProductThermalLabel.ts"
+    ],
+    "otherAcceptedRuntimeBytesUnchanged": true,
+    "allOriginal702EvidenceBytesIdentical": true,
+    "original702TestsAndRunReleasePrintHookIdentical": true,
+    "relativeDependencyClosure": {
+      "files": 25,
+      "changedVsOriginalReview": [],
+      "unresolvedRelativeImports": [],
+      "meaning": "Includes shared generator, barcode renderer, label sizes/options, marking tape, shared preview/dialog, required runtime dependencies and test contracts. No new integration behavior or changed dependency bytes."
+    },
+    "unchangedFrom39d": [
+      "guards/PROCESS_CONTRACTS.json",
+      "guards/MANIFEST.json",
+      ".github/workflows/ci.yml",
+      "scripts/ci/tests/fixtures/wms652_source_binding_transition.json",
+      "frontend/src/guards tree",
+      "backend/tests/guards tree"
+    ],
+    "originalTestContractBeforeImplementationPreserved": true,
+    "worktreeHeadBeforeAndAfter": "86f450ad54745a5a2f2d77b3facdac8b778ac442",
+    "trackedWorktreeStatusAfter": "clean",
+    "noNewMaterialIntegrationRisk": true
+  },
+  "independentChecks": {
+    "targetUnits": {
+      "result": "PASS",
+      "passed": 64,
+      "failed": 0,
+      "files": 3,
+      "thermal": 19,
+      "markingTape": 32,
+      "labelSizes": 13,
+      "durationSeconds": 1.16,
+      "executionRoot": "/Users/deniscivkunov/Projects/WMS/.worktrees/wms702-accepted-source-release/frontend",
+      "runner": "Installed existing WMS Vitest; in-memory resolve aliases to installed jsbarcode,bwip-js,pngjs,@zxing/library; config=false,maxWorkers=1,fileParallelism=false. No test/source bytes altered.",
+      "firstAttempt": "13 label-size tests passed; other suites could not load existing dependencies because sparse checkout lacks node_modules. This was a runner setup failure, resolved without installation or repository writes."
+    },
+    "visual": {
+      "result": "PASS for saved digital examples",
+      "method": "view_image of exact tracked203dpi rendered PDFs, equality against original reviewed Git evidence checked",
+      "cases": [
+        "58x40-seven-fields-shared-tape.png",
+        "58x40-two-line-name-no-brand-ordinary.png"
+      ],
+      "finding": "Selected fields visible in distinct rows; article and footer do not overlap title/details. Existing horizontal ellipsis remains observable. No new browser/printer run."
+    },
+    "gitDiffCheck": "PASS 39d..P702",
+    "taskDocuments": "PASS check_task_documents.py39d; AGENTS.md equals CLAUDE.md",
+    "full48Rerun": false,
+    "reasonNoFull48Rerun": "Generator, complete relevant dependency closure, geometry test, explicit release hook and all saved evidence are unchanged from reviewed and realCI-tested versions. Repeating fullmatrix would not test new composition behavior.",
+    "exactRemotePublication": "PASS git ls-remote fixedbranch matches P702 after checks"
+  },
+  "requirementsChecks": [
+    {
+      "id": "C1",
+      "requirements": [
+        "R1"
+      ],
+      "verdict": "confirmed within existing inspected source/history/public-asset evidence",
+      "fact": "The exact active generator/history was previously independently verified; P702 preserves same source lineage. No FBS order QR, WMS700 KIZ or701 picklist product delta. Photo causality remains unproved."
+    },
+    {
+      "id": "C2",
+      "requirements": [
+        "R2"
+      ],
+      "verdict": "confirmed for digital generator in P702 composition",
+      "fact": "Identical e631 generator and25-file dependency closure retain independent8realChrome replay, reviewed saved geometry/PNGs and full48 realCI targetedPASS. Current saved compact/two-line/tape PNGs independently viewed. No fields hidden to cure overflow."
+    },
+    {
+      "id": "C3",
+      "requirements": [
+        "R3"
+      ],
+      "verdict": "confirmed for P702 digital composition",
+      "fact": "Current exactP702 64 targetunitsPASS. Options, barcode renderer/payload, labelsize/copynumber code, sharedtape dependencies and evidence unchanged. Existing four-size/two-copy physical-sizePDF and decodedbarcode assertions retained."
+    },
+    {
+      "id": "C4",
+      "requirements": [
+        "R4"
+      ],
+      "verdict": "confirmed source/tests/artifacts committed and published; release pending",
+      "fact": "Contract precedes implementation in namedbranch; fixedP702 remotereadback verified twice; clean trackedworktree and diff/docchecksPASS. Earlier tsc/build retained evidence only, not claimed as newP702 run."
+    },
+    {
+      "id": "C5",
+      "requirements": [
+        "R2",
+        "R3"
+      ],
+      "verdict": "not checked",
+      "fact": "No physical printer/paper or live operator acceptance; separate release limit."
+    },
+    {
+      "id": "C6",
+      "requirements": [
+        "R4"
+      ],
+      "verdict": "confirmed",
+      "fact": "This independent replacement accepts exact publishedP702 composition on39d, with prod212 ancestry and prior accepted runtime preserved."
+    }
+  ],
+  "conclusion": "PASS for independent product composition review and digital acceptance of exact published P70286f450ad54745a5a2f2d77b3facdac8b778ac442. Existing independent source review/digital acceptance of e631 applies to this P702 composition because source,25-file relative dependency closure, tests,hook and evidence are unchanged, accepted runtime outside702 is preserved, and64 exactP702 targetunits pass. No remaining material product defect or new material integration risk found.",
+  "sourceUpgradeAcceptance": false,
+  "acceptanceCommit": null,
+  "acceptanceCommitNote": "Raw independently accepted report; parent may preserve in separate A702 Gitcommit. No approval/acceptanceSHA invented.",
+  "remaining": [
+    "Separate bounded source-transition testcontract and independent S702 policy/reference review; changed protected run_release_print hook is retained but this product report does not approve its derivative hash/binding update.",
+    "Concrete exact mainpinPR merge requires separate owner authorization.",
+    "Full CI exact final releaseSHA and successful etalonpush CI/processproof remain required; no fullgreenP702 claim.",
+    "Reread actual production and use existing approved deploymentroute; verify servedSHA and operator result.",
+    "Physical printed paper acceptance remains unobserved."
+  ],
+  "production": {
+    "lastReportedSha": "212f19d548496fef7baf75c83204b771e304281b",
+    "source": "Parent and saved independent read-only reports; not live reread by this bounded reviewer",
+    "deployedByThisReview": false
+  },
+  "boundaries": {
+    "clientRepliesEnabled": false,
+    "clientMessagesSent": false,
+    "outboxTouched": false,
+    "sourceMutations": false,
+    "testMutations": false,
+    "policyReferenceMutations": false,
+    "commits": false,
+    "pushes": false,
+    "mainMerged": false,
+    "etalonMerged": false,
+    "CIDispatched": false,
+    "physicalPrinterUsed": false,
+    "dependenciesInstalled": false,
+    "cleanupPerformed": false,
+    "otherProjectsAccessed": false,
+    "secretsModified": false
+  },
+  "writtenAt": "2026-10-07T21:56:51.179Z"
+}
