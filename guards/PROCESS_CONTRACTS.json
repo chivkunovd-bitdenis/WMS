@@ -34,7 +34,7 @@
     "backend/tests/test_ozon_box_assembly.py": "f3df76ad46c75fc87babc436c713c48461b13033b7276bcaa81dfc9c51c66a08",
     "backend/tests/test_ozon_box_positions.py": "889b0623463cb5584ad60d58a05ec16265b5184dd2fb80c88392819c9e24d5c6",
     "backend/tests/test_prod_deploy_backup.py": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
-    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "68736000c4a46d809db178459ce09a21a192e114f2c708fe500915929ead7db9",
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py": "6b3c86f2f4f685b9b722d6e2ac3d89570cd288815ef0dcac588c757b29d7a04c",
     "backend/tests/test_product_fbs_rule_bulk_read_api.py": "d70e45c8df51c72360143dafdce8361d5b53368fc557d7d491e15a01b1241ca8",
     "backend/tests/test_true_api_withdrawal.py": "36a96153a78a0fceac8f4f21eac834625238759629bf0d9cef917f86d430e3c5",
     "backend/tests/test_wb_order_price_snapshot.py": "27c680ccf7fffd7567c92ef76f6c4cbe872d2cb57281815eb069e21d159fc9ce",
