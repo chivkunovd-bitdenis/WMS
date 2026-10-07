@@ -1,0 +1,32 @@
+{
+  "previous_docx": "/Users/deniscivkunov/Projects/WMS/.worktrees/support-job-6f3e370ab6217c51/docs/WMS Print установка и сканирование.docx",
+  "previous_docx_sha256": "37f4501ed50e5964c249e585dc8a82915881f5e73c164ba38a24da8a8d070608",
+  "previous_source_commit": "725b95158c5cd666377e8200f2a768648bdf0944",
+  "release_source": "a475a7342c0da72dd49b2990bd998c522ecc2c2b",
+  "command_original_chat": -5414355172,
+  "command_original_message": "261",
+  "command_exact": true,
+  "output_docx_sha256": "e0a83cc1ca39dcdf3aa273f0edc58fec0f2127a757b591a5aa60634517c2abe2",
+  "edited_at": "2026-10-07T07:28:57.144297+00:00",
+  "page_count": 4,
+  "renderer": "bundled LibreOffice through documents/render_docx.py",
+  "visual_review": "ALL4 PNG pages inspected; readable, no clipping, overlap or extra pages",
+  "docx_sha256": "e0a83cc1ca39dcdf3aa273f0edc58fec0f2127a757b591a5aa60634517c2abe2",
+  "command_sha256": "caee388d03ed576982bd85e36f20929ec31c5785595dda0f8a7c3ff5dccd008b",
+  "bash_syntax_exit": 0,
+  "previous_sent_document": {
+    "chat_id": -1004441620578,
+    "message_id": "530",
+    "outbox_id": 135
+  },
+  "public_mac_release": "wms-print-direct-v2026.10.07.1",
+  "windows_stable_release": "wms-print-direct-v2026.09.30.5",
+  "windows_source": "1bdd6cdf53960419d62fed6c62870f0cf27ed30d",
+  "sources": [
+    "https://support.apple.com/ru-ru/guide/terminal/trmlb20c7888/mac",
+    "https://support.apple.com/ru-ru/guide/mac-help/mh40616/mac",
+    "https://support.microsoft.com/en-us/windows/hardware/printer/set-a-default-printer-in-windows"
+  ],
+  "physical_print_or_client_install_verified": false,
+  "free_before_commit": 320774144
+}
