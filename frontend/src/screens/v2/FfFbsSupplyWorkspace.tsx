@@ -5158,13 +5158,12 @@ export function FfFbsSupplyWorkspace({
     >
       {workspace?.supply.source === 'wb' ? (
         <Alert
-          severity="error"
-          variant="filled"
-          sx={{ borderRadius: 0, fontWeight: 700 }}
+          severity="info"
+          sx={{ borderRadius: 0 }}
           data-testid="fbs-supply-from-seller-cabinet"
         >
-          Поставка собрана в кабинете продавца. Работать с ней можно как с обычной,
-          но её состав меняет продавец, а не мы — перед передачей сверьте заказы.
+          Поставка создана в кабинете WB.
+          {packagingEditable ? ' В WMS можно добавлять и переносить заказы, собирать и упаковывать товар.' : ''}
         </Alert>
       ) : null}
       <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#fff' }}>
