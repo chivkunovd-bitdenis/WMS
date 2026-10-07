@@ -12,6 +12,12 @@ match these exact values. Both document checks passed. API/job/full logs preserv
 |112656988359, macos-14 arm64|11464690557|10 updater +4 rollback +19 existing|33PASS;0 failure/error/skip/duplicate|WMS-Print-Console-Mac-arm64.zip|
 |112656988553, macos-15-intel x86_64|11463988544|10 updater|9PASS/1ERROR;0 failure/skip/duplicate|NOT BUILT|
 
+Original artifact-wrapper checksums (distinct from the native payload):
+- arm64, artifact 11464690557: 225269 bytes,
+  SHA256 6bc10c9873346465fa8fc4ce1573eb2974e72303060e82b8cfe8226930b3d630.
+- x86_64, artifact 11463988544: 33143 bytes,
+  SHA256 b9e0f7a2b76fde631cddafba6e02fa1d30dd4e7c56e266533b1acd44f09e1be5.
+
 All actual executed testcase IDs equal the corresponding accepted baseline sets
 from SOURCE docs/evidence/WMS-607/updater-stop-fix-20261007/updater.xml,green.xml,
 existing.xml. ARM executes all33 unique IDs. Intel executes the exact10 updater IDs,
