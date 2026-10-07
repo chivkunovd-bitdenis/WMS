@@ -50,8 +50,8 @@ jobs:
         with:
           python-version: '3.12'
           cache: pip
-          cache-dependency-path: backend/requirements.txt
-      - run: pip install -r requirements.txt
+          cache-dependency-path: backend/pyproject.toml
+      - run: pip install -e ".[dev]"
         working-directory: backend
       - name: Request must reach WB and persist a downloadable PNG and visible number
         working-directory: backend
