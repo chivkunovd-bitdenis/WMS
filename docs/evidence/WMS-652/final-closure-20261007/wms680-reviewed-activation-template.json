@@ -1,10 +1,10 @@
 {
   "status": "PROPOSED_ONLY_PENDING_GENUINE_INDEPENDENT_PASS",
-  "immutable_correction": "4ed0c391135c95b67879c954195034b9c43d4980",
+  "immutable_correction": "535e8a970928e8834147553ad4c0139fcc5f10da",
   "record": {
-    "reviewed_source_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+    "reviewed_source_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
     "original_contract": "24009478c3a58b558ad8a661d83dc5920108cb00",
-    "final_correction_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+    "final_correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
     "report": {
       "path": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
       "commit": "ACTUAL_FINAL_REVIEW_PUBLICATION_SHA",
@@ -62,13 +62,13 @@
         ],
         "frontend/src/utils/wms680PrintGeometry.test.ts": [
           "11ec2e43dcf3b696288bcaa55d6cd83a454858d8",
-          "00162dc5c08858803c5a988c75328dab0f00cfdc"
+          "81a83b3794340eadd60abba94594d6ff09d533ae"
         ]
       },
       "739bcadf1be4fe92e24af3d30b42f892f858e598": {
         "frontend/src/utils/wms680PrintGeometry.test.ts": [
           "34f4ef6ca82d72cf65583d6ba6bdcefb689128a6",
-          "00162dc5c08858803c5a988c75328dab0f00cfdc"
+          "81a83b3794340eadd60abba94594d6ff09d533ae"
         ]
       }
     },
@@ -154,6 +154,18 @@
             "00162dc5c08858803c5a988c75328dab0f00cfdc"
           ]
         }
+      },
+      {
+        "kind": "exact_fixture_correction",
+        "transform": "wms680-real-pdf-cell-isolation",
+        "source": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "correction": "535e8a970928e8834147553ad4c0139fcc5f10da",
+        "files": {
+          "frontend/src/utils/wms680PrintGeometry.test.ts": [
+            "00162dc5c08858803c5a988c75328dab0f00cfdc",
+            "81a83b3794340eadd60abba94594d6ff09d533ae"
+          ]
+        }
       }
     ]
   },
@@ -162,6 +174,12 @@
       "frontend/src/utils/wms680PrintGeometry.test.ts": [
         "0c7cc8f9f06fad5df0f7f3bd924dde607179a068",
         "00162dc5c08858803c5a988c75328dab0f00cfdc"
+      ]
+    },
+    "535e8a970928e8834147553ad4c0139fcc5f10da": {
+      "frontend/src/utils/wms680PrintGeometry.test.ts": [
+        "00162dc5c08858803c5a988c75328dab0f00cfdc",
+        "81a83b3794340eadd60abba94594d6ff09d533ae"
       ]
     }
   },
@@ -332,15 +350,15 @@
         }
       },
       {
-        "contract_commit": "0df92673934df8768efabe470baeca6f2f4568af",
-        "source_commit": "0df92673934df8768efabe470baeca6f2f4568af",
-        "correction_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+        "contract_commit": "5739ed2ea900b8d6ddc8a9326bf1dc07e687fd8e",
+        "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
         "files": [
           {
-            "transform": "wms680-linux-wrapped-text-and-browser-exit",
+            "transform": "wms680-real-pdf-cell-isolation",
             "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
-            "before_blob": "0c7cc8f9f06fad5df0f7f3bd924dde607179a068",
-            "after_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc"
+            "before_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc",
+            "after_blob": "81a83b3794340eadd60abba94594d6ff09d533ae"
           }
         ],
         "companion_files": [],
@@ -348,8 +366,32 @@
           "model": "gpt-6.1-sol",
           "effort": "high",
           "verdict": "PASS",
-          "source_commit": "0df92673934df8768efabe470baeca6f2f4568af",
-          "correction_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+          "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+          "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+          "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+          "evidence_commit": "ACTUAL_FINAL_REVIEW_PUBLICATION_SHA",
+          "evidence_blob": "DERIVED_FROM_ACTUAL_REVIEW_PUBLICATION"
+        }
+      },
+      {
+        "contract_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+        "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
+        "files": [
+          {
+            "transform": "wms680-real-pdf-cell-isolation",
+            "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
+            "before_blob": "00162dc5c08858803c5a988c75328dab0f00cfdc",
+            "after_blob": "81a83b3794340eadd60abba94594d6ff09d533ae"
+          }
+        ],
+        "companion_files": [],
+        "review": {
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "verdict": "PASS",
+          "source_commit": "58fb2f240e83f997ee79e87ba1e0dd6cb76ef982",
+          "correction_commit": "535e8a970928e8834147553ad4c0139fcc5f10da",
           "evidence": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
           "evidence_commit": "ACTUAL_FINAL_REVIEW_PUBLICATION_SHA",
           "evidence_blob": "DERIVED_FROM_ACTUAL_REVIEW_PUBLICATION"
@@ -357,5 +399,6 @@
       }
     ]
   },
-  "dynamic_input": "Only actual report publication SHA. Report path fixed above; blob must be obtained with git rev-parse ACTUAL_REPORT_SHA:fixed_path, never supplied arbitrarily."
+  "dynamic_input": "Only actual report publication SHA. Report path fixed above; blob must be obtained with git rev-parse ACTUAL_REPORT_SHA:fixed_path, never supplied arbitrarily.",
+  "intermediate_status": "c4fa/4ed standalone rejected by genuine independent reviewer. This template requests acceptance of completed two-edge final chain ONLY; no intermediate candidate PASS claim."
 }
