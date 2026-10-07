@@ -1,6 +1,6 @@
 // Real built SPA + API + DB. Interception is only explicit failure injection.
 import assert from 'node:assert/strict'
-import { readFile, mkdir, writeFile } from 'node:fs/promises'
+import { readFile, mkdir, writeFile, appendFile } from 'node:fs/promises'
 import { spawnSync } from 'node:child_process'
 import path from 'node:path'
 const { chromium, expect } = await import(process.env.WMS_PLAYWRIGHT_MODULE || '@playwright/test')
@@ -24,7 +24,7 @@ const screen = page => page.getByTestId('unload-pick-screen')
 const scanner = page => page.getByTestId('pick-scan')
 const qty = (page,f,pi=0,si=0) => screen(page).locator(`input[data-testid^="pick-place-qty-${f.products[pi].id}-"][data-testid*="${f.sources[si].container_id || f.sources[si].location_id}"]`).first()
 async function login(context,role='admin') {
-  const r = await context.request.post(`${root}/api/auth/login`,{data:role==='admin'?seed.login:seed.role_logins[role]})
+  const r = await context.request.post(`${root}/api/auth/login`,{data:role==='admin'?seed.login:seed.role_logins[role],timeout:10000})
   assert(r.ok(),`dependencyblocked: login ${r.status()}`)
   const {access_token:token} = await r.json()
   await context.addInitScript(token=>localStorage.setItem('wms_token_ff',token),token)
@@ -65,6 +65,22 @@ async function state(name,f,count,{pi=0,si=0}={}) {
     assert.equal(p.container,s.container_id,'Exact source container')
     if(p.order) assert(f.orders.some(o=>o.id===p.order&&o.product===p.product&&o.supply===p.supply),'Assignment belongs to real planned order')
     if(p.order) assert(db.reserves.some(r=>r.order===p.order&&r.product===p.product&&r.quantity===1),'Order reserve remains')
+    if(p.position) {
+      const planned=f.positions.find(position=>position.id===p.position)
+      assert(planned,'Ozon pick names an exact planned position')
+      assert.equal(planned.product,p.product)
+      assert.equal(planned.supply,p.supply)
+      const position=db.positions.find(position=>position.id===p.position)
+      for(const key of ['id','order','product','supply','warehouse','quantity']) assert.equal(position?.[key],planned[key],`Ozon position ${key}`)
+      const reserve=db.position_reserves.find(r=>r.position===p.position)
+      assert(reserve,'Persisted Ozon per-position reserve exists')
+      assert.equal(reserve.product,planned.product)
+      assert.equal(reserve.warehouse,planned.warehouse)
+      assert.equal(reserve.quantity,planned.quantity,'Picking preserves the whole per-position reserve')
+      assert.equal(position.reserved_quantity,planned.quantity)
+      assert.equal(position.picked_quantity,db.picks.filter(one=>one.active&&one.position===p.position).length,'Position picked counter equals its actual unit assignments')
+    }
+
   }
   assert.equal(new Set(active.filter(p=>p.order).map(p=>p.order)).size,active.filter(p=>p.order).length,'No double active order assignment')
   const initial=s.initial[f.products[pi].id]
@@ -81,39 +97,70 @@ async function run(name,test) {
   if(selected?.length&&!selected.includes(name)) return
   const f=seed.picking[name]
   const context=await browser.newContext({viewport:{width:1440,height:1050},acceptDownloads:true})
+  context.setDefaultTimeout(10000)
+  context.setDefaultNavigationTimeout(30000)
   await context.tracing.start({screenshots:true,snapshots:true,sources:true})
   const page=await context.newPage()
   const responses=[],errors=[]
   let phase='prepare'
+  let caseTimer
+  let testPromise
+  let deadlineExceeded=false
+  await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:'running',phase,started_at:new Date().toISOString()}))
+  const deadline=new Promise((_,reject)=>{caseTimer=setTimeout(()=>{deadlineExceeded=true;reject(new Error('Case budget exceeded: 60000ms'))},60000)})
   page.on('pageerror',e=>errors.push(e.message))
   page.on('response',async r=>{
     if(!r.url().includes('/api/operations/fbs'))return
     const body=await r.json().catch(()=>null)
-    responses.push({url:r.url(),status:r.status(),method:r.request().method(),request:r.request().postData(),body})
+    const observed={url:r.url(),status:r.status(),method:r.request().method(),request:r.request().postData(),body}
+    responses.push(observed)
+    await appendFile(path.join(evidence,`${name}-api.jsonl`),JSON.stringify(observed)+'\n').catch(()=>{})
   })
   try {
+    testPromise=(async()=>{
     const token=await login(context)
-    const catalogResponse=await context.request.get(`${root}/api/products/linked-wb-catalog`,{headers:{Authorization:`Bearer ${token}`}})
+    const catalogResponse=await context.request.get(`${root}/api/products/linked-wb-catalog`,{headers:{Authorization:`Bearer ${token}`},timeout:10000})
     assert(catalogResponse.ok(),`dependencyblocked: catalog ${catalogResponse.status()}`)
     const catalog=await catalogResponse.json()
     await writeFile(path.join(evidence,`${name}-catalog.json`),JSON.stringify(catalog.filter(row=>f.products.some(p=>p.id===row.id)),null,2))
     if(!name.startsWith('ozon')) for(const p of f.products){const row=catalog.find(row=>row.id===p.id);assert(row,`Fixture missing from real catalog: ${p.id}`);assert(row.wb_barcodes.includes(p.barcode),'Fixture primary barcode missing from catalog');assert(row.wb_barcodes.includes(p.alt),'Fixture extra barcode missing from catalog')}
     await open(page,f)
     phase='process'
+    await page.screenshot({path:path.join(evidence,`${name}-opened.png`),fullPage:true})
+    await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:'running',phase,at:new Date().toISOString()}))
     await test(page,f,{context,token})
     assert.deepEqual(errors,[],'Unhandled browser error')
+    })()
+    await Promise.race([deadline,testPromise])
     results.push({name,status:'passed',responses})
   } catch(e) {
     results.push({name,status:phase==='prepare'?'preparefailure':'failed',phase,error:String(e.stack||e),responses,browserErrors:errors})
+    if(deadlineExceeded) {
+      await context.tracing.stop({path:path.join(evidence,`${name}-trace.zip`)}).catch(()=>{})
+      await context.close({reason:'Case deadline exceeded: cancel outstanding browser actions'})
+      // Wait for the losing branch, including secondary-context cleanup, before the next case.
+      await Promise.allSettled([testPromise])
+    }
   } finally {
+    clearTimeout(caseTimer)
     try { const db=snapshot();await writeFile(path.join(evidence,`${name}-final-db.json`),JSON.stringify(db,null,2));assert(db.unchanged,'Final physical stock changed');assert(db.balances.every(b=>b.quantity>=0),'Final negative source') }catch(e){results.at(-1).dbError=String(e);if(results.at(-1).status==='passed')results.at(-1).status='dependencyblocked'}
-    await page.screenshot({path:path.join(evidence,`${name}.png`),fullPage:true}).catch(()=>{})
-    await context.tracing.stop({path:path.join(evidence,`${name}-trace.zip`)})
+    await page.screenshot({path:path.join(evidence,`${name}.png`),fullPage:true,timeout:10000}).catch(()=>{})
+    await context.tracing.stop({path:path.join(evidence,`${name}-trace.zip`)}).catch(error=>{results.at(-1).traceError=String(error)})
     await context.close()
+    await writeFile(path.join(evidence,`${name}-progress.json`),JSON.stringify({name,status:results.at(-1).status,phase,at:new Date().toISOString()}))
     await writeFile(path.join(evidence,'results.json'),JSON.stringify(results,null,2))
     console.log(`${name}: ${results.at(-1).status}`)
   }
 }
+await run('packing-flag',async(page,f)=>{
+  const before=snapshot()
+  const physical=before.balances.find(b=>b.product===f.products[0].id&&b.location===f.sources[0].location_id)
+  assert.equal(physical.quantity,30);assert.equal(physical.packed,30);assert.equal(physical.unpacked,0)
+  assert.equal(before.picks.filter(p=>p.active&&p.product===f.products[0].id).length,0)
+  await source(page,f);await scan(page,f.products[0].sku)
+  await state('packing-flag',f,1)
+  await expect(qty(page,f)).toHaveValue('1')
+})
 await run('sources',async(page,f)=>{
   for(const title of ['Ячейка / тара / товар','ШК','Размер','Собрать','Собрано']) await expect(screen(page).getByRole('columnheader',{name:title,exact:true})).toBeVisible()
   await expect(page.getByTestId('pick-left-qty')).toHaveText('3')
@@ -275,6 +322,7 @@ await run('network',async(page,f)=>{
 })
 await run('last-unit',async(page,f,{context})=>{
   const other=await browser.newContext({viewport:{width:1440,height:1050}})
+  other.setDefaultTimeout(10000);other.setDefaultNavigationTimeout(30000)
   try {
     await login(other,'operator');const page2=await other.newPage();await open(page2,f,1)
     await source(page,f);await source(page2,f)
@@ -288,6 +336,7 @@ await run('last-unit',async(page,f,{context})=>{
 })
 await run('manual-conflict',async(page,f)=>{
   const other=await browser.newContext({viewport:{width:1440,height:1050}})
+  other.setDefaultTimeout(10000);other.setDefaultNavigationTimeout(30000)
   try {
     await login(other,'operator');const page2=await other.newPage();await open(page2,f)
     await qty(page,f).fill('2');await qty(page,f).press('Tab');await state('manual-conflict-first',f,2)
@@ -298,7 +347,7 @@ await run('manual-conflict',async(page,f)=>{
 })
 await run('tabs',async(page,f)=>{
   const w=page.getByTestId('fbs-workspace')
-  for(const tab of ['Упаковка и маркировка','Короба','Состав','Подбор']) {await w.getByRole('tab',{name:tab,exact:true}).click()}
+  for(const tab of ['Упаковка и маркировка','Короба','Состав','Подбор']) {await w.getByRole('tab',{name:new RegExp(`^${tab}(?: ✓)?$`)}).click()}
   await source(page,f);await scan(page,f.products[0].sku);await state('tabs',f,1)
 })
 await run('print',async(page,f)=>{

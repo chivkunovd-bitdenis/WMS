@@ -16,7 +16,12 @@ from sqlalchemy.engine import make_url
 
 from app.db.session import SessionLocal
 from app.models.fbs_assembly_task import FbsAssemblyTask, FbsAssemblyTaskSupply
-from app.models.fbs_order import FbsOrder, FbsOrderProduct, FbsOrderReservation
+from app.models.fbs_order import (
+    FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
+)
 from app.models.fbs_supply import FbsSupply
 from app.models.inventory_balance import InventoryBalance
 from app.models.product import Product
@@ -26,8 +31,10 @@ from app.models.seller import Seller
 from app.models.storage_location import StorageLocation
 from app.models.warehouse import Warehouse
 from app.models.warehouse_box import WarehouseBox
+from app.services.inventory_service import record_movement_and_adjust_balance
 from app.services.sorting_location_service import get_or_create_sorting_location
 from tests.fbs_browser_e2e_seed import _main as base_seed
+from tests.inventory_actor_helpers import resolve_test_actor_user_id
 
 CASES = [
     "sources",
@@ -58,6 +65,7 @@ CASES = [
     "focus",
     "group-sellers",
     "ozon-null",
+    "packing-flag",
 ]
 
 
@@ -79,6 +87,7 @@ async def main() -> None:
     manifest = {}
     now = datetime.now(UTC)
     async with SessionLocal() as session:
+        actor_id = await resolve_test_actor_user_id(session, tenant)
         sellers = (
             await session.scalars(
                 select(Seller).where(Seller.tenant_id == tenant, Seller.id != seller)
@@ -92,7 +101,14 @@ async def main() -> None:
         await session.flush()
         await get_or_create_sorting_location(session, tenant, warehouse2.id)
         for index, name in enumerate(CASES):
-            f = {"name": name, "products": [], "sources": [], "supplies": [], "orders": []}
+            f = {
+                "name": name,
+                "products": [],
+                "sources": [],
+                "supplies": [],
+                "orders": [],
+                "positions": [],
+            }
             product_count = (
                 16
                 if name == "burst"
@@ -198,16 +214,32 @@ async def main() -> None:
                         (loc == locs[0] and pi == 1) or (loc == locs[1] and pi == 0)
                     ):
                         qty = 0
-                    session.add(
-                        InventoryBalance(
+                    if qty:
+                        await record_movement_and_adjust_balance(
+                            session,
                             tenant_id=tenant,
                             storage_location_id=loc.id,
                             product_id=uuid.UUID(p["id"]),
                             container_kind=kind,
                             container_id=box.id if box else None,
-                            quantity=qty,
+                            quantity_delta=qty,
+                            quantity_packed_delta=qty if name == "packing-flag" else 0,
+                            movement_type="inbound_intake",
+                            actor_user_id=actor_id,
                         )
-                    )
+                    else:
+                        session.add(
+                            InventoryBalance(
+                                tenant_id=tenant,
+                                storage_location_id=loc.id,
+                                product_id=uuid.UUID(p["id"]),
+                                container_kind=kind,
+                                container_id=box.id if box else None,
+                                quantity=0,
+                                quantity_unpacked=0,
+                                quantity_packed=0,
+                            )
+                        )
                     sf["initial"][p["id"]] = qty
                 f["sources"].append(sf)
             count_supplies = (
@@ -281,17 +313,37 @@ async def main() -> None:
                             {"id": str(order.id), "supply": str(supply.id), "product": p["id"]}
                         )
                         if is_ozon:
+                            position = FbsOrderProduct(
+                                id=uuid.uuid4(),
+                                order_id=order.id,
+                                product_id=uuid.UUID(p["id"]),
+                                ozon_sku=770000 + index * 10 + pi,
+                                offer_id=f"OZ-ART-{index}-{pi}",
+                                name=p["name"],
+                                quantity=plan,
+                                reserved_quantity=plan,
+                                position_index=pi,
+                            )
+                            session.add(position)
+                            await session.flush()
                             session.add(
-                                FbsOrderProduct(
-                                    order_id=order.id,
-                                    product_id=uuid.UUID(p["id"]),
-                                    ozon_sku=770000 + index * 10 + pi,
-                                    offer_id=f"OZ-ART-{index}-{pi}",
-                                    name=p["name"],
+                                FbsOrderProductReservation(
+                                    tenant_id=tenant,
+                                    order_product_id=position.id,
+                                    product_id=position.product_id,
+                                    warehouse_id=supply_warehouse,
                                     quantity=plan,
-                                    reserved_quantity=plan,
-                                    position_index=pi,
                                 )
+                            )
+                            f["positions"].append(
+                                {
+                                    "id": str(position.id),
+                                    "order": str(order.id),
+                                    "product": p["id"],
+                                    "supply": str(supply.id),
+                                    "warehouse": str(supply_warehouse),
+                                    "quantity": plan,
+                                }
                             )
                         else:
                             session.add(
@@ -299,7 +351,7 @@ async def main() -> None:
                                     tenant_id=tenant,
                                     fbs_order_id=order.id,
                                     product_id=uuid.UUID(p["id"]),
-                                    warehouse_id=warehouse,
+                                    warehouse_id=supply_warehouse,
                                     quantity=1,
                                 )
                             )
@@ -324,6 +376,9 @@ async def main() -> None:
         ).all()
         stock = {}
         for b in balances:
+            assert b.quantity == b.quantity_unpacked + b.quantity_packed, (
+                "Fixture physical split must be coherent"
+            )
             stock[str(b.product_id)] = stock.get(str(b.product_id), 0) + b.quantity
     seed["picking"] = manifest
     seed["stock_by_product"] = stock

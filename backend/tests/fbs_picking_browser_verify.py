@@ -10,7 +10,13 @@ import uuid
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import FbsOrderProductPick, FbsOrderReservation
+from app.models.fbs_order import (
+    FbsOrder,
+    FbsOrderProduct,
+    FbsOrderProductPick,
+    FbsOrderProductReservation,
+    FbsOrderReservation,
+)
 from app.models.fbs_order_pick import FbsOrderPick
 from app.models.inventory_balance import InventoryBalance
 from tests.fbs_picking_browser_seed import guard
@@ -37,6 +43,20 @@ async def main() -> None:
         reserves = (
             await session.scalars(
                 select(FbsOrderReservation).where(FbsOrderReservation.tenant_id == tenant)
+            )
+        ).all()
+        position_reserves = (
+            await session.scalars(
+                select(FbsOrderProductReservation).where(
+                    FbsOrderProductReservation.tenant_id == tenant
+                )
+            )
+        ).all()
+        positions = (
+            await session.execute(
+                select(FbsOrderProduct, FbsOrder)
+                .join(FbsOrder, FbsOrder.id == FbsOrderProduct.order_id)
+                .where(FbsOrder.tenant_id == tenant)
             )
         ).all()
         stock = {}
@@ -67,10 +87,34 @@ async def main() -> None:
                     "location": str(b.storage_location_id),
                     "container": str(b.container_id) if b.container_id else None,
                     "quantity": b.quantity,
+                    "unpacked": b.quantity_unpacked,
+                    "packed": b.quantity_packed,
                 }
                 for b in balances
             ],
             "picks": [one(p) for p in [*picks, *ozon]],
+            "positions": [
+                {
+                    "id": str(position.id),
+                    "order": str(order.id),
+                    "product": str(position.product_id),
+                    "supply": str(order.supply_id),
+                    "warehouse": str(order.warehouse_id),
+                    "quantity": position.quantity,
+                    "reserved_quantity": position.reserved_quantity,
+                    "picked_quantity": position.picked_quantity,
+                }
+                for position, order in positions
+            ],
+            "position_reserves": [
+                {
+                    "position": str(r.order_product_id),
+                    "product": str(r.product_id),
+                    "warehouse": str(r.warehouse_id),
+                    "quantity": r.quantity,
+                }
+                for r in position_reserves
+            ],
             "reserves": [
                 {"order": str(r.fbs_order_id), "product": str(r.product_id), "quantity": r.quantity}
                 for r in reserves
