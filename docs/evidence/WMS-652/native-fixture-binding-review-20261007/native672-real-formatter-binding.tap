@@ -1,0 +1,86 @@
+TAP version 13
+# Subtest: C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+ok 1 - C5 native iframe EncodingError 150 valid PNG source preserves reason and aborts entire tape
+  ---
+  duration_ms: 582.20125
+  type: 'test'
+  ...
+# Subtest: C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+ok 2 - C5 native iframe EncodingError 299 valid PNG source preserves reason and aborts entire tape
+  ---
+  duration_ms: 784.5085
+  type: 'test'
+  ...
+# Subtest: C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+ok 3 - C5 native iframe EncodingError 150 invalid PNG preserves reason and aborts entire tape
+  ---
+  duration_ms: 427.320208
+  type: 'test'
+  ...
+# Subtest: C5 blank message retains existing generic preparation error and zero external actions
+ok 4 - C5 blank message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 115.710708
+  type: 'test'
+  ...
+# Subtest: C5 nonstring message retains existing generic preparation error and zero external actions
+ok 5 - C5 nonstring message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 103.469792
+  type: 'test'
+  ...
+# Subtest: C5 no message retains existing generic preparation error and zero external actions
+ok 6 - C5 no message retains existing generic preparation error and zero external actions
+  ---
+  duration_ms: 86.656916
+  type: 'test'
+  ...
+# Subtest: C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+ok 7 - C4/R4 300 held images overlap but complete readiness and source precede one transfer and all marks
+  ---
+  duration_ms: 914.423583
+  type: 'test'
+  ...
+# Subtest: C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+ok 8 - C5 first native EncodingError with a later peer rejection drains held active peers before cleanup and retry readiness
+  ---
+  duration_ms: 238.985709
+  type: 'test'
+  ...
+# {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":14,"cleanup":[{"pending":0,"ready":14}],"finished":true}}
+# Subtest: C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+ok 9 - C5 synchronous decode throw drains held active peers before cleanup and retry readiness
+  ---
+  duration_ms: 115.670375
+  type: 'test'
+  ...
+# {"held":{"connected":true,"finished":false,"busy":true,"active":true,"cleanup":[],"started":16},"afterRelease":{"pending":0,"ready":15,"cleanup":[{"pending":0,"ready":15}],"finished":true}}
+# Subtest: RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer
+ok 10 - RR1 R3/R4 decoded original cohorts raster-consume retained resources before later decode; all 300 precede one transfer
+  ---
+  duration_ms: 2863.226625
+  type: 'test'
+  ...
+# {"started":300,"ready":300,"maxPending":16,"peakRetained":16,"releases":288,"firstBoundary":{"ready":16,"retained":16,"eligible":16,"problems":[]},"violations":[],"transfers":1}
+# Subtest: RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+ok 11 - RR2 R4/R6 stalled parent frames still complete 300 native decodes and restore exact original tape before one handoff
+  ---
+  duration_ms: 101.732708
+  type: 'test'
+  ...
+# Subtest: RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+ok 12 - RR3 R4/R6 native refusal drains every started peer and restores original styles/source before cleanup with same reason and zero handoff
+  ---
+  duration_ms: 59.90175
+  type: 'test'
+  ...
+# {"held":{"connected":true,"finished":false,"cleanup":0,"started":16},"afterDrain":{"pending":0,"ready":15,"started":16,"saves":0,"transfers":0}}
+1..12
+# tests 12
+# suites 0
+# pass 12
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 3629.642833
