@@ -1,0 +1,212 @@
+{
+  "run_id": 37574399962,
+  "attempt": 1,
+  "diagnostic_sha": "bb8528b3127f3375fb29685577b2ab045d607658",
+  "artifact_id": 11462046578,
+  "downloaded_zip_bytes": 1232280,
+  "downloaded_zip_sha256": "dd0e30ed1af5d7695d4552b4f41927a9aef6704a01216276a2780d6cb0c3c0cd",
+  "member_count": 20,
+  "all_members_recoverable": true,
+  "members": [
+    {
+      "artifact_member": "wms652-identity-diagnostic/browser43.log",
+      "stored_path": "raw/wms652-identity-diagnostic/browser43.log",
+      "encoding": "identity",
+      "original_bytes": 2114,
+      "original_sha256": "4d123b081cf581e5ea25f5781edaa26412013232ce22c2786b21f2b400f9420b",
+      "stored_bytes": 2114,
+      "stored_sha256": "4d123b081cf581e5ea25f5781edaa26412013232ce22c2786b21f2b400f9420b",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/environment.txt",
+      "stored_path": "raw/wms652-identity-diagnostic/environment.txt",
+      "encoding": "identity",
+      "original_bytes": 594,
+      "original_sha256": "97346235b51da9bbb94edbc2224e4cd5d754be369c59ed9793c7b92680a77a71",
+      "stored_bytes": 594,
+      "stored_sha256": "97346235b51da9bbb94edbc2224e4cd5d754be369c59ed9793c7b92680a77a71",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/error-context-controls.tap",
+      "stored_path": "raw/wms652-identity-diagnostic/error-context-controls.tap",
+      "encoding": "identity",
+      "original_bytes": 1084,
+      "original_sha256": "603a83e86c83fbefc9bf3c289caeed25851b589cd7247a89bd32212ef1a40f88",
+      "stored_bytes": 1084,
+      "stored_sha256": "603a83e86c83fbefc9bf3c289caeed25851b589cd7247a89bd32212ef1a40f88",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/exit-results.json",
+      "stored_path": "raw/wms652-identity-diagnostic/exit-results.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 150,
+      "original_sha256": "bc9288cb1ba4e8d069c6f4858aadeb7cd0b33b2a3d29b7f957ffac5a4476687e",
+      "stored_bytes": 126,
+      "stored_sha256": "774d41d67ef6fcf501b43250c9d31dc98c7e7160e49cbf4860eaccc013e395b8",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/frozen-browser-source.mjs",
+      "stored_path": "raw/wms652-identity-diagnostic/frozen-browser-source.mjs",
+      "encoding": "identity",
+      "original_bytes": 42483,
+      "original_sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+      "stored_bytes": 42483,
+      "stored_sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/generated-browser.mjs",
+      "stored_path": "raw/wms652-identity-diagnostic/generated-browser.mjs",
+      "encoding": "identity",
+      "original_bytes": 42777,
+      "original_sha256": "c56c22a86def664ac8106997c485e442cd152d9e8935dd2684ada283e3a8e7ab",
+      "stored_bytes": 42777,
+      "stored_sha256": "c56c22a86def664ac8106997c485e442cd152d9e8935dd2684ada283e3a8e7ab",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/generated-error-context.mjs",
+      "stored_path": "raw/wms652-identity-diagnostic/generated-error-context.mjs",
+      "encoding": "identity",
+      "original_bytes": 5478,
+      "original_sha256": "59b4b84bebd393855d4163010b8c5fc5f1db91adef6f7ef0c61c427543fff6ae",
+      "stored_bytes": 5478,
+      "stored_sha256": "59b4b84bebd393855d4163010b8c5fc5f1db91adef6f7ef0c61c427543fff6ae",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/generated-observer.mjs",
+      "stored_path": "raw/wms652-identity-diagnostic/generated-observer.mjs",
+      "encoding": "identity",
+      "original_bytes": 6078,
+      "original_sha256": "52e128f532b0826d10e91547caafd3ba083196ce5582fb78809e127c95a8976b",
+      "stored_bytes": 6078,
+      "stored_sha256": "52e128f532b0826d10e91547caafd3ba083196ce5582fb78809e127c95a8976b",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/generated-shell.sh",
+      "stored_path": "raw/wms652-identity-diagnostic/generated-shell.sh",
+      "encoding": "identity",
+      "original_bytes": 805,
+      "original_sha256": "0de04a7043a788aa97e1a344c28cc3c52e52d357da3ca808bebca82e00104bdc",
+      "stored_bytes": 805,
+      "stored_sha256": "0de04a7043a788aa97e1a344c28cc3c52e52d357da3ca808bebca82e00104bdc",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/job-lookup-controls.tap",
+      "stored_path": "raw/wms652-identity-diagnostic/job-lookup-controls.tap",
+      "encoding": "identity",
+      "original_bytes": 1552,
+      "original_sha256": "7270aa10e00bea93726e7f5f7cb30345970855161b4d77d7b42f53cf073ac9f0",
+      "stored_bytes": 1552,
+      "stored_sha256": "7270aa10e00bea93726e7f5f7cb30345970855161b4d77d7b42f53cf073ac9f0",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/observer-controls.tap",
+      "stored_path": "raw/wms652-identity-diagnostic/observer-controls.tap",
+      "encoding": "identity",
+      "original_bytes": 1229,
+      "original_sha256": "8c467af805df9ce5421573a469b80de712c63dde33fca0dd1ef97e588fc422bc",
+      "stored_bytes": 1229,
+      "stored_sha256": "8c467af805df9ce5421573a469b80de712c63dde33fca0dd1ef97e588fc422bc",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/original-shell.sh",
+      "stored_path": "raw/wms652-identity-diagnostic/original-shell.sh",
+      "encoding": "identity",
+      "original_bytes": 775,
+      "original_sha256": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
+      "stored_bytes": 775,
+      "stored_sha256": "fe1aefb170ec4ce351bd4d782706de5b98c7708cc31d0a26205ebb15579c3490",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/preparation-summary.json",
+      "stored_path": "raw/wms652-identity-diagnostic/preparation-summary.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 1321,
+      "original_sha256": "62e556acc4e6f5407a2ab840fa2927f0bfe49a42a276cd52d1f6388bfe1c4d14",
+      "stored_bytes": 695,
+      "stored_sha256": "513a01103607267e809c5f6e51dddcef07762985a4e5ef1222e0c5246553e7e6",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/preparation.json",
+      "stored_path": "raw/wms652-identity-diagnostic/preparation.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 605437,
+      "original_sha256": "2a115fc309e15623f8bcb5ccf6d04b5e6270cf160e926877fb05e3aacd7dd6af",
+      "stored_bytes": 216833,
+      "stored_sha256": "6b1737d7258f8ced603ae213e538ca3b85b10d1c01bca5acb2cb9156e5f93746",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "wms652-identity-diagnostic/source-after.json",
+      "stored_path": "raw/wms652-identity-diagnostic/source-after.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 311130,
+      "original_sha256": "6700eae48047435b1e2cbe5a24a4e358c63d6e560d3a3139acdd016e890bfb87",
+      "stored_bytes": 125779,
+      "stored_sha256": "aa72b8f65393151fd06e24b3e3bf8ca2a202a1f81fdebea3f0db6656ef8d5a24",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "release-print/critical-fbs/result.json",
+      "stored_path": "raw/release-print/critical-fbs/result.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 4266,
+      "original_sha256": "e73abfcb7daf56c994c8a52aed69ddad57cb8eac32968718e3a617285a85e5e7",
+      "stored_bytes": 520,
+      "stored_sha256": "02f9ed349a4a040cee7d2c34dbe6d318a967b2122c424ac44767f0d7d5b47de5",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "release-print/critical-fbs/cdp-transport.json",
+      "stored_path": "raw/release-print/critical-fbs/cdp-transport.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 14015482,
+      "original_sha256": "82d05340523e2c8ab2ad7237ba5d57fb68c48b65d0bd77a22c7abb5519ec52fd",
+      "stored_bytes": 353549,
+      "stored_sha256": "1ba1348bd2e0de9f9b483a2eb145026f9bd26c2770aa6378808b7844955f4b34",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "release-print/critical-fbs/error-context.json",
+      "stored_path": "raw/release-print/critical-fbs/error-context.json.gz",
+      "encoding": "gzip",
+      "original_bytes": 8728903,
+      "original_sha256": "b8062eff54cee2b20bd02ee2926f584af814c2dceabd0eb352412ac610767a20",
+      "stored_bytes": 423653,
+      "stored_sha256": "fa47de683a4150be8d5dec4c03347d368c4ef172c3078c83b98e4ac66020008a",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "release-print/critical-fbs/chrome.log",
+      "stored_path": "raw/release-print/critical-fbs/chrome.log",
+      "encoding": "identity",
+      "original_bytes": 6073,
+      "original_sha256": "7491693b7e0145da9f2559f52e4097459f9fcb62a3033543cbe953d1fff85c73",
+      "stored_bytes": 6073,
+      "stored_sha256": "7491693b7e0145da9f2559f52e4097459f9fcb62a3033543cbe953d1fff85c73",
+      "recovered_byte_equal": true
+    },
+    {
+      "artifact_member": "release-print/critical-fbs/vite.log",
+      "stored_path": "raw/release-print/critical-fbs/vite.log",
+      "encoding": "identity",
+      "original_bytes": 271,
+      "original_sha256": "da27c5f0ed67a1dce4dbd0adec350ee26dfa569d8b662fd754a42f3f0e24af4f",
+      "stored_bytes": 271,
+      "stored_sha256": "da27c5f0ed67a1dce4dbd0adec350ee26dfa569d8b662fd754a42f3f0e24af4f",
+      "recovered_byte_equal": true
+    }
+  ]
+}
