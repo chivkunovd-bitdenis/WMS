@@ -282,8 +282,8 @@ describe('WMS-666 C13: narrow UI-only change boundary', () => {
 
   it('accepts only reviewed recovery commit/path/blob triples and rejects adjacent paths', () => {
     const cwd = new URL('../../../..', import.meta.url)
-    expect(recoveryHistory.productCommit).toBe('7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b')
-    expect(recoveryHistory.reviewCommit).toBe('a0e86655aba64d5d449f036ce2cafea0ee9db358')
+    expect(recoveryHistory.productCommit).toBe('d420f8db1e7d69212ad2ea4529a02044689363b0')
+    expect(recoveryHistory.reviewCommit).toBe('154cdb1ff3e84ed4e592d883688c7df560579015')
     for (const entry of recoveryHistory.entries) {
       for (const file of entry.files) {
         expect(wms666AcceptedHistoryChange(cwd, entry.commit, file.path)).toBe(true)

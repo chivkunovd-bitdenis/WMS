@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "de629c0c842b5960eabbd8053fea596bc04441c0152eb85d04cb94f0b411ad66",
+    ".github/workflows/ci.yml": "16dc7b7915b5caaa87922cf77c9d0ab8a4f64d335e7115a7ad49767ae60c4fa0",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -223,7 +223,7 @@
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "07d53e0fc58bfe5ebec4f7f572768b0ca8fe3c90330077a18b688d98fc2daa5a",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "dcaca934f70a348fb7d16cb663f14d889bcca876a79ed167a1d10b8de24e10e2",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
     "scripts/ci/promote_guards.py": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5",
@@ -282,7 +282,7 @@
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
     "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
-    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "3d94878d026bee9b4d19c6ba517d6c936893d0a155f2741c9fb79af040a02d00"
+    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969"
   },
   "suites": {
     "backend-fbs": {

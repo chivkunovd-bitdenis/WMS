@@ -8,9 +8,10 @@
     "98978e667bbc305cc08a9b541016fef06686388e",
     "10c018092ab6f76928a54115eb824a64adc637be",
     "b2a03ec118f9b4a184edfc4c2973ff92e044fd6c",
-    "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b"
+    "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+    "d420f8db1e7d69212ad2ea4529a02044689363b0"
   ],
-  "final_reviewed_source": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+  "final_reviewed_source": "d420f8db1e7d69212ad2ea4529a02044689363b0",
   "self_selecting_references": [
     "HEAD",
     "${GITHUB_SHA}"
@@ -32,8 +33,8 @@
     "unreviewed_candidate_source": "f71b99c0f19bdbf48e8e0b95b62aefe8709307fc"
   },
   "final_binding_rule": "After independent acceptance and freeze, replace final_reviewed_source and the exact workflow pin together; never select HEAD, the current CI SHA, or an unreviewed candidate.",
-  "frozen_source": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
-  "independent_acceptance_record": "982eaea9a3a05e20ee34d48350fded31a7bd19a5",
+  "frozen_source": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+  "independent_acceptance_record": "154cdb1ff3e84ed4e592d883688c7df560579015",
   "independent_review_verdict": "PASS",
   "original_independent_review_commit": "033a5bcedaa6c680947d0c9ff411ec328d9574d1",
   "owner_authorized_targeted_correction": {
@@ -51,11 +52,11 @@
     "independent_review_verdict": "FAIL"
   },
   "owner_authorized_recovery": {
-    "product_commit": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+    "product_commit": "d420f8db1e7d69212ad2ea4529a02044689363b0",
     "base_production_commit": "212f19d548496fef7baf75c83204b771e304281b",
-    "fixture_commit": "52caa65e17cf3e19a9040c7439840823b0d622f2",
-    "acceptance_commit": "982eaea9a3a05e20ee34d48350fded31a7bd19a5",
-    "acceptance_path": "docs/reviews/2026-10-07-day-audit/recovery-fixtures-acceptance-52caa65e.md",
+    "fixture_commit": "b9b1a83ee943523cec795de021862fa10ce8f04b",
+    "acceptance_commit": "154cdb1ff3e84ed4e592d883688c7df560579015",
+    "acceptance_path": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
     "scope": "WMS-666/689 recovery and WMS-693-698; product and exact fixtures accepted, release requires CI and deployed-source readback"
   }
 }

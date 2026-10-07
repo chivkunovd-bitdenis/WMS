@@ -1,14 +1,14 @@
 {
-  "product_reference_P": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
-  "independent_product_review": "982eaea9a3a05e20ee34d48350fded31a7bd19a5",
-  "review_path": "docs/reviews/2026-10-07-day-audit/recovery-fixtures-acceptance-52caa65e.md",
-  "fixture_commit": "52caa65e17cf3e19a9040c7439840823b0d622f2",
+  "product_reference_P": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+  "independent_product_review": "154cdb1ff3e84ed4e592d883688c7df560579015",
+  "review_path": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
+  "fixture_commit": "b9b1a83ee943523cec795de021862fa10ce8f04b",
   "policy_source_identity": "Exact immutable SOURCE commit must be selected by a separately approved trusted-main process_bootstrap pin; this file does not self-select HEAD.",
   "strict_product_scope_result": {
     "unapproved_product_paths": []
   },
   "strict_product_scope_includes_worktree_index_and_ignored_sources": true,
-  "full_picking_run": 37675744539,
+  "full_picking_run": 37679880338,
   "picking_cases": 69,
   "database_checkpoints": 125,
   "further_product_changes_require_new_independent_review": true,
