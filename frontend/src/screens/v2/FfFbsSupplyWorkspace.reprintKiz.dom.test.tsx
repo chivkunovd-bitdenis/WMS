@@ -17,6 +17,7 @@ type OpenPrintCall = {
     qtyNeedPack: number
     fbsTape?: {
       orders: Array<{ orderId: string; requiresHonestSign: boolean }>
+      reprintMarkingIds?: string[]
       print: (args: { layout: unknown; allowPartial: boolean; reprint: boolean }) => Promise<unknown>
     }
   }
