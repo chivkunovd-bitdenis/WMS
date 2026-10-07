@@ -2179,7 +2179,7 @@
       ]
     },
     "postgres-wms662-batch": {
-      "report": "pg/662-batch.xml",
+      "report": "release-postgres/662-batch.xml",
       "format": "junit",
       "exact": true,
       "cases": [
