@@ -27,6 +27,8 @@ export type BarcodeScannerOptions = {
    * кириллицы, по которой сервер включает ремонт. Дефолт false — как было.
    */
   emitRaw?: boolean
+  /** Recover US punctuation from physical keys in a RU scanner burst. */
+  normalizeLayoutPunctuation?: boolean
 }
 
 // Внутреннее представление символа в буфере
@@ -83,8 +85,8 @@ const CYRILLIC_RE = /[а-яёА-ЯЁ]/
  * @param code  - физический код клавиши (e.code)
  * @param shift - был ли зажат Shift
  */
-export function normalizeScanChar(raw: string, code: string, shift: boolean): string {
-  if (!CYRILLIC_RE.test(raw)) {
+export function normalizeScanChar(raw: string, code: string, shift: boolean, russianLayout = false): string {
+  if (!CYRILLIC_RE.test(raw) && !russianLayout) {
     // Раскладка уже латинская — берём как есть
     return raw
   }
@@ -142,6 +144,8 @@ type ScannerListenerOptions = {
   isScanOnlyField?: (el: ActiveElementLike) => boolean
   scanOnlyFieldMinLength?: number
   emitRaw?: boolean
+  /** Recover US punctuation from physical keys in a RU scanner burst. */
+  normalizeLayoutPunctuation?: boolean
 }
 
 /**
@@ -240,10 +244,13 @@ export function createScannerListener(opts: ScannerListenerOptions) {
         e.preventDefault()
         e.stopPropagation()
 
+        // Translate punctuation only for a recognized burst with RU letters.
+        // Literal ASCII/manual input and raw packing codes keep their symbols.
+        const russianLayout = opts.normalizeLayoutPunctuation && buffer.some(({ raw }) => CYRILLIC_RE.test(raw))
         const normalized = opts.emitRaw
           ? buffer.map(({ raw }) => raw).join('')
           : buffer
-            .map(({ raw, code, shift }) => normalizeScanChar(raw, code, shift))
+            .map(({ raw, code, shift }) => normalizeScanChar(raw, code, shift, Boolean(russianLayout)))
             .join('')
 
         // Вычищаем просочившиеся символы из сфокусированного поля
@@ -315,6 +322,7 @@ export function useBarcodeScanner({
   isScanOnlyField,
   scanOnlyFieldMinLength,
   emitRaw = false,
+  normalizeLayoutPunctuation = false,
 }: BarcodeScannerOptions): void {
   // Храним onScan в ref, чтобы не переподписываться на каждый рендер.
   // Обновляем ref внутри useEffect (не во время рендера) — совместимо с react-hooks/refs.
@@ -338,6 +346,7 @@ export function useBarcodeScanner({
       isScanOnlyField: (el) => isScanOnlyFieldRef.current?.(el) ?? false,
       scanOnlyFieldMinLength,
       emitRaw,
+      normalizeLayoutPunctuation,
     })
 
     // Capture-фаза: перехватываем до обработчиков полей
@@ -345,5 +354,5 @@ export function useBarcodeScanner({
     return () => {
       document.removeEventListener('keydown', handler as unknown as (e: Event) => void, true)
     }
-  }, [enabled, minLength, maxIntervalMs, scanOnlyFieldMinLength, emitRaw])
+  }, [enabled, minLength, maxIntervalMs, scanOnlyFieldMinLength, emitRaw, normalizeLayoutPunctuation])
 }

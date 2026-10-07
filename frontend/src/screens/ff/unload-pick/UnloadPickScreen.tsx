@@ -193,7 +193,12 @@ export function UnloadPickScreen({
   // до неё и её номер. Если курсор стоял в этом поле, а пикнули сканером,
   // первые цифры штрихкода успевают попасть в поле и поменять число; такую
   // правку откатываем, когда скан распознан.
-  const pendingManualEdits = useRef<Map<string, { before: number; edit: number }>>(new Map())
+  const pendingManualEdits = useRef<Map<string, { before: number; edit: number; save: () => void }>>(new Map())
+  const savingEdits = useRef(new Map<string, number>())
+  const saveSeq = useRef(0)
+  const serverPicked = useRef(initialPicked)
+  const refreshPending = useRef(false)
+  const [saveTick, setSaveTick] = useState(0)
   const manualEditSeq = useRef(0)
   const lastPrintableKeyAt = useRef(-Infinity)
 
@@ -203,9 +208,45 @@ export function UnloadPickScreen({
     return () => {
       timers.forEach((timer) => clearTimeout(timer))
       timers.clear()
+      // A closed tab must persist its final manual value, even before debounce.
+      const pending = [...edits.values()]
       edits.clear()
+      pending.forEach(({ save }) => save())
     }
   }, [])
+
+  // Server refreshes reconcile completed saves/conflicts without overwriting
+  // a number the operator is still typing or waiting to save.
+  useEffect(() => {
+    if (!initialPicked) return
+    if (serverPicked.current !== initialPicked) {
+      serverPicked.current = initialPicked
+      refreshPending.current = true
+    }
+    if (!refreshPending.current) return
+    refreshPending.current = pendingManualEdits.current.size > 0 || savingEdits.current.size > 0
+    setPicked((current) => {
+      const next = { ...initialPicked }
+      for (const key of new Set([...pendingManualEdits.current.keys(), ...savingEdits.current.keys()])) {
+        next[key] = current[key] ?? 0
+      }
+      return next
+    })
+  }, [initialPicked, saveTick])
+
+  function savePicked(productId: string, place: PickPlace, quantity: number) {
+    if (!onSetPicked) return
+    const key = pickKey(productId, place.key)
+    const seq = ++saveSeq.current
+    savingEdits.current.set(key, seq)
+    void Promise.resolve(onSetPicked?.({ productId, place, quantity }))
+      .catch(() => undefined)
+      .finally(() => {
+        if (savingEdits.current.get(key) !== seq) return
+        savingEdits.current.delete(key)
+        setSaveTick((tick) => tick + 1)
+      })
+  }
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -264,7 +305,7 @@ export function UnloadPickScreen({
     let edit: number | undefined
     if (fromScan) {
       // Скан — одно движение, один запрос: отправляем сразу же, как и раньше.
-      void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+      savePicked(row.product.id, place, nextQuantity)
     } else {
       // Рука в поле места печатает цифру за цифрой: запрос ждёт паузы в
       // наборе, чтобы поле не дёргалось disabled↔enabled на каждый символ —
@@ -275,10 +316,16 @@ export function UnloadPickScreen({
       let pending = pendingManualEdits.current.get(key)
       if (!pending) {
         manualEditSeq.current += 1
-        pending = { before: place.picked, edit: manualEditSeq.current }
+        pending = { before: place.picked, edit: manualEditSeq.current, save: () => undefined }
         pendingManualEdits.current.set(key, pending)
       }
       edit = pending.edit
+      const save = () => {
+        timers.delete(key)
+        pendingManualEdits.current.delete(key)
+        savePicked(row.product.id, place, nextQuantity)
+      }
+      pending.save = save
       const send = () => {
         // Пока клавиши идут пачкой, это может быть скан, попавший в поле:
         // дожидаемся тишины, иначе цифры штрихкода ушли бы на сервер числом.
@@ -286,9 +333,7 @@ export function UnloadPickScreen({
           timers.set(key, setTimeout(send, 400))
           return
         }
-        timers.delete(key)
-        pendingManualEdits.current.delete(key)
-        void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+        save()
       }
       timers.set(key, setTimeout(send, 400))
     }
@@ -327,7 +372,7 @@ export function UnloadPickScreen({
     if (!place) return
     const nextQuantity = Math.max(0, place.picked - operation.qty)
     setPicked((current) => ({ ...current, [key]: nextQuantity }))
-    void onSetPicked?.({ productId: row.product.id, place, quantity: nextQuantity })
+    savePicked(row.product.id, place, nextQuantity)
     setHistory((current) => current.filter((_, position) => position !== index))
     setScanNotice(`${row.product.sku}: снятие ${operation.qty} шт отменено`)
     onNote(`Возврат ${operation.qty} шт — ${place.label}`)
@@ -450,6 +495,7 @@ export function UnloadPickScreen({
   const { bindRoot: bindScanRoot, listening: scannerListening, submit: submitScan } = useScanIntake({
     enabled: true,
     onReceived: revertScannerDigitsInPlaceQty,
+    normalizeLayoutPunctuation: true,
     onScan: handleScan,
   })
 
