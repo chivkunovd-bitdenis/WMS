@@ -1,0 +1,249 @@
+{
+  "verdict": "PASS bounded package harness re-review; initial a98 P1/P2 closed",
+  "reviewer_session": "01a11370-eea3-7533-a616-2943d59a7bca",
+  "harness": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+  "literal_only_accepted_SOURCE": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "previous_findings_review": "a98c85781779a708f250b81a7dc232b1461778c8",
+  "product": "bdd5a8eee8606d667a90a3b61da299b4097dc877",
+  "fresh_etalon": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "remote_heads_verified": {
+    "harness_branch": "d0a0be566e2fd6ea10c64c650875d72319f9a103",
+    "software_acceptance_branch": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6"
+  },
+  "history_closure": {
+    "fetch_depth": 0,
+    "legacy_commit": "9a33b651c309796707053e1056c7f80dff7194d5",
+    "available_via_confirmed_remote_ref": "refs/heads/chore/staging-sync-20261003",
+    "remote_tip": "9301daeddb56337992ca2d6b8cec1de091e6bc05",
+    "legacy_is_remote_tip_ancestor": true,
+    "legacy_blob_sha256": "d47614beef415b86c49cdad0d531e642028c0cadf86652701736ada6385210ad",
+    "review49da_is_SOURCE_ancestor": true
+  },
+  "document_gate": {
+    "actual_saved_receipt": {
+      "command": [
+        "python3",
+        "-B",
+        "scripts/ci/check_task_documents.py",
+        "49da13fd2a0d22f207818248f274cf5ff400e39f"
+      ],
+      "native_exit_code": 0,
+      "stdout_log": "document-gate.log",
+      "aggregate_shell_exit_not_used": true
+    },
+    "receipt_sha256": "446ef7954b360d74085ca6398e9ded56ebe3c27f69c784f0e5c873b681fe4f77",
+    "command_matches_harness": true,
+    "checker_byte_unchanged": true,
+    "requirements_reference_only_correction_count": 12,
+    "locally_rerun": false
+  },
+  "syntax": {
+    "YAML": "PASS existing BaseLoader",
+    "bash": [
+      {
+        "step": "Require isolated dispatch and exact full source identity",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "5a1805ca56ba9e45a7cc6d0c2915a4841d34267f81c25c47dfcaf96e697dabed"
+      },
+      {
+        "step": "Record actual source and architecture before all native checks",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "8a8a2cbabe55e8534b4155d7fa7341be203ca003afb95010e07e864be4b50184"
+      },
+      {
+        "step": "Require filled accepted WMS-607 requirements from the complete source checkout",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "b208f17a1e8730214d2639dce9f7f3adf7305ecb39b1617707f10e8bca77830b"
+      },
+      {
+        "step": "Frozen updater ten cases including actual native journal",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "e810776586ccf813cfbe62746da16d779ef433718f68eeafa5757a693bc20426"
+      },
+      {
+        "step": "Frozen rollback four cases",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "11f969ccb84dd4ef9aa0184a21125ad7e9f390402b20dc78ec0c88c3074bc12c"
+      },
+      {
+        "step": "Preserved nineteen native HTTP resolver and print cases",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "7aad5e5b1b89243d41a00c319f9a822e954c2216d187ceaaa2e548907a7a2615"
+      },
+      {
+        "step": "Require exact actual executed identities without skips or errors",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "6b33ff77016a37bf075e44d7528d4eda959f8413c5ddc91b34b2280bbe8f88e3"
+      },
+      {
+        "step": "Original native Direct console builder and unpacked self-test",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "dcb9694c72d3a81a36062b6ac588f64fc02de7db986c554b5624ed2e955019ad"
+      },
+      {
+        "step": "Verify archive provenance and source remains unchanged",
+        "bash_n_exit_previously_observed": 0,
+        "sha256": "cb6e9b6564aa50cbc9457516c762c4e9220fd5235d9ec800d38d8c65d6a05e5f"
+      }
+    ],
+    "inline_Python": [
+      {
+        "step": "Require exact actual executed identities without skips or errors",
+        "compile_previously_observed": "PASS",
+        "sha256": "b1cd5c6da8a945fe4f1e37c9102df2ddbd20c056076c16a3a9e807846c887679"
+      },
+      {
+        "step": "Verify archive provenance and source remains unchanged",
+        "compile_previously_observed": "PASS",
+        "sha256": "6a58c5ab27bf33f534473c08fb0accee3134dddb3cdd7341c2db8cc5fbe9245c"
+      }
+    ]
+  },
+  "actual_new_XML_validator_COPY_controls": [
+    {
+      "control": "clean10",
+      "actual_acceptance": true,
+      "required_acceptance": true,
+      "case_IDs_unchanged": true,
+      "status_node_count": 0
+    },
+    {
+      "control": "failure",
+      "actual_acceptance": false,
+      "required_acceptance": false,
+      "case_IDs_unchanged": true,
+      "status_node_count": 1
+    },
+    {
+      "control": "error",
+      "actual_acceptance": false,
+      "required_acceptance": false,
+      "case_IDs_unchanged": true,
+      "status_node_count": 1
+    },
+    {
+      "control": "skipped",
+      "actual_acceptance": false,
+      "required_acceptance": false,
+      "case_IDs_unchanged": true,
+      "status_node_count": 1
+    }
+  ],
+  "strict_named_checks_per_architecture": 33,
+  "accepted_baselines_byte_unchanged": [
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-fix-20261007/updater.xml",
+      "sha256": "2448a9c897828a6c77f45a85657386539cb82c85462f7257a3fec5092b5bab03",
+      "IDs": [
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+        "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+        "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+      ]
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-fix-20261007/green.xml",
+      "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+      "IDs": [
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+        "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+      ]
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-stop-fix-20261007/existing.xml",
+      "sha256": "c6b63daaeb38da1e21ad702e507235e198f9fc578a4bd963ca754b25e49ec3d8",
+      "IDs": [
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+        "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+        "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+        "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+        "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+        "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+        "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+        "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+        "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+        "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+        "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+      ]
+    }
+  ],
+  "native_build_artifact_steps_byte_unchanged": [
+    "Record actual source and architecture before all native checks",
+    "Frozen updater ten cases including actual native journal",
+    "Frozen rollback four cases",
+    "Preserved nineteen native HTTP resolver and print cases",
+    "Original native Direct console builder and unpacked self-test",
+    "Verify archive provenance and source remains unchanged",
+    "Preserve exact native archives and all actual raw checks"
+  ],
+  "product_reporters_and_14_plus_19_tests_byte_unchanged": [
+    {
+      "path": "tools/print-agent/update_macos_direct.sh",
+      "sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed"
+    },
+    {
+      "path": "tools/print-agent/build_console.py",
+      "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e"
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee"
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+      "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704"
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a"
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+      "sha256": "518c52e6f00ffe53371a6d030c0a906dcc09a03f2bf77e5b79fde7c201901fc3"
+    },
+    {
+      "path": "docs/evidence/WMS-607/updater-implementation-20261007/run-existing.py",
+      "sha256": "d99239eafdaecfebf6a078980218e6a6e8ad6d0577ba825a774bcc14effee8f2"
+    },
+    {
+      "path": "scripts/ci/check_task_documents.py",
+      "sha256": "92b0e08f4efffac32ae84eb49cd5afbd1bc3280524b616831b7988ac9b135bf4"
+    }
+  ],
+  "review_driver_note": "First read-only probe passed all syntax and actual XML COPY controls, then unnamed checkout/setup entries collided in a name-indexed preservation map. Corrected comparison handles named steps only; checkout separately verified. No syntax/COPY/native rerun.",
+  "native_tests_build_or_CI_run": false,
+  "dispatch_performed": false,
+  "public_archive_client_install_physical_print_verified": false
+}
