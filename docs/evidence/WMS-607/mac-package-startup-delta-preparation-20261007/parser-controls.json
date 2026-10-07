@@ -1,0 +1,26 @@
+[
+  {
+    "control": "exact36",
+    "accepted": true
+  },
+  {
+    "control": "empty_failure",
+    "accepted": false
+  },
+  {
+    "control": "empty_error",
+    "accepted": false
+  },
+  {
+    "control": "empty_skipped",
+    "accepted": false
+  },
+  {
+    "control": "duplicate_new_case",
+    "accepted": false
+  },
+  {
+    "control": "missing_new_report",
+    "accepted": false
+  }
+]

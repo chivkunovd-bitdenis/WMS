@@ -31,7 +31,7 @@ jobs:
           test "$DISPATCH_REF" = refs/heads/codex/wms607-direct-updater-mac-package-20261007
           test "$DISPATCH_ATTEMPT" = 1
           [[ "$REQUESTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          test "$REQUESTED_SOURCE" = a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6
+          test "$REQUESTED_SOURCE" = a475a7342c0da72dd49b2990bd998c522ecc2c2b
       - uses: actions/checkout@v4
         with:
           ref: ${{ inputs.source_sha }}
@@ -58,6 +58,10 @@ jobs:
         run: |
           git merge-base --is-ancestor 49da13fd2a0d22f207818248f274cf5ff400e39f HEAD
           python3 -B scripts/ci/check_task_documents.py 49da13fd2a0d22f207818248f274cf5ff400e39f > "$RUNNER_TEMP/wms607-package/documents.log" 2>&1
+      - name: Frozen startup owner three cases
+        run: |
+          export WMS607_START_OWNER_RAW="$RUNNER_TEMP/wms607-package/startup-owner"
+          python3 -B tools/print-agent/test_macos_direct_updater_start_owner_contract.py --report "$RUNNER_TEMP/wms607-package/startup-owner.xml" > "$RUNNER_TEMP/wms607-package/startup-owner.log" 2>&1
       - name: Frozen updater ten cases including actual native journal
         run: |
           export WMS607_UPDATER_EVIDENCE_DIR="$RUNNER_TEMP/wms607-package/updater"
@@ -85,6 +89,11 @@ jobs:
                   assert len(rows) == expected and len(set(rows)) == expected, path
                   return set(rows)
               assert ids(actual / report) == ids(source / baseline), report
+          import json
+          contract = json.loads(Path('docs/evidence/WMS-607/startup-owner-test-contract-20261007/contract.json').read_text())
+          expected = contract['suite']['count']
+          assert expected == 3
+          assert ids(actual / 'startup-owner.xml') == set(contract['suite']['xml_ids'])
           PYCODE
       - name: Original native Direct console builder and unpacked self-test
         run: |
