@@ -248,11 +248,23 @@ function compact(text: string) {
   return text.replace(/\s+/g, '').toUpperCase()
 }
 
-type PdfWord = { left: number; top: number; right: number; bottom: number; text: string }
+type PdfWord = { left: number; top: number; right: number; bottom: number; text: string; page: number; block: number; line: number }
 
 function pdfWords(xml: string): PdfWord[] {
-  return [...xml.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)]
-    .map((word) => ({ left: Number(word[1]), top: Number(word[2]), right: Number(word[3]), bottom: Number(word[4]), text: word[5]! }))
+  const words: PdfWord[] = []
+  const pages = [...xml.matchAll(/<page\b[^>]*>([\s\S]*?)<\/page>/g)]
+  for (const [page, pageMatch] of pages.entries()) {
+    const blocks = [...pageMatch[1]!.matchAll(/<block\b[^>]*>([\s\S]*?)<\/block>/g)]
+    for (const [block, blockMatch] of blocks.entries()) {
+      const lines = [...blockMatch[1]!.matchAll(/<line\b[^>]*>([\s\S]*?)<\/line>/g)]
+      for (const [line, lineMatch] of lines.entries()) {
+        for (const word of lineMatch[1]!.matchAll(/<word\b[^>]*xMin="([\d.]+)"[^>]*yMin="([\d.]+)"[^>]*xMax="([\d.]+)"[^>]*yMax="([\d.]+)"[^>]*>([\s\S]*?)<\/word>/g)) {
+          words.push({ left: Number(word[1]), top: Number(word[2]), right: Number(word[3]), bottom: Number(word[4]), text: word[5]!, page, block, line })
+        }
+      }
+    }
+  }
+  return words
 }
 
 function pdfTextFragments(words: PdfWord[], expected: string) {
@@ -262,7 +274,16 @@ function pdfTextFragments(words: PdfWord[], expected: string) {
     let joined = ''
     for (let index = firstIndex; index < Math.min(words.length, firstIndex + 12); index += 1) {
       const word = words[index]!
-      if (fragments.length && (Math.abs(word.left - fragments[0]!.left) > 1 || word.top < fragments.at(-1)!.top - 1)) break
+      if (fragments.length) {
+        const first = fragments[0]!
+        const previous = fragments.at(-1)!
+        // A common X-coordinate is insufficient: distinct table rows can share it.
+        // Keep the PDF page/text-block identity and require adjacent wrapped lines.
+        if (word.page !== first.page || word.block !== first.block || word.line !== previous.line + 1) break
+        if (Math.abs(word.left - first.left) > 1 || word.top < previous.top - 1) break
+        const lineHeight = Math.max(previous.bottom - previous.top, word.bottom - word.top)
+        if (word.top - previous.top > lineHeight * 1.5) break
+      }
       const next = `${joined}${compact(word.text)}`
       if (!target.startsWith(next)) break
       fragments.push(word)
@@ -335,6 +356,10 @@ const forms = [
   ['FBS одиночный/групповой', fbs],
 ] as const
 
+function cellOwnershipFixture(rows: string) {
+  return `<!doctype html><meta charset="utf-8"><style>@page{size:A4 landscape;margin:10mm}table{border-collapse:collapse;width:100%;table-layout:fixed;font:14px Arial}th,td{text-align:left;padding:4px;vertical-align:top}td{height:170px}th:first-child{width:40%}</style><table><thead><tr><th>Товар</th><th>АРТИКУЛ</th><th>ЦВЕТ</th><th>РАЗМЕР</th></tr></thead><tbody>${rows}</tbody></table>`
+}
+
 describe('WMS-680 · C680-18 реальная PDF-геометрия', () => {
   it.each(forms)('%s: нормальная и длинная формы сохраняют отдельные колонки внутри реального PDF', async (label, build) => {
     const normal = build(4)
@@ -373,5 +398,27 @@ describe('WMS-680 · C680-18 реальная PDF-геометрия', () => {
     const words = pdfWords(pdf.text)
     const fragments = expectPdfTextFragments(words, expectedName)
     expect(pdfTextFragments(words.filter((word) => word !== fragments.at(-1)), expectedName)).toBeUndefined()
+  }, 120_000)
+
+  it('C680-18: реальный PDF не склеивает название из разных строк под одинаковой X-координатой', async () => {
+    const pdf = await renderPdf(cellOwnershipFixture('<tr><td>PACKAGING-LONG-</td><td></td><td></td><td></td></tr><tr><td>NAME-01-680</td><td></td><td></td><td></td></tr>'), 'cross-row')
+    const words = pdfWords(pdf.text)
+    const first = words.find((word) => word.text === 'PACKAGING-LONG-')!
+    const second = words.find((word) => word.text === 'NAME-01-680')!
+    expect(second.top - first.bottom).toBeGreaterThan(100)
+    expect(() => assertRealPdfGeometry(pdf.text, 'PACKAGING-LONG-NAME-01-680')).toThrow(/полный текст/)
+  }, 120_000)
+
+  it('C680-18: реальный PDF не склеивает название из соседних колонок одной строки', async () => {
+    const pdf = await renderPdf(cellOwnershipFixture('<tr><td>PACKAGING-LONG-</td><td>NAME-01-680</td><td></td><td></td></tr>'), 'cross-column')
+    const words = pdfWords(pdf.text)
+    expect(words.find((word) => word.text === 'NAME-01-680')!.left).toBeGreaterThan(words.find((word) => word.text === 'PACKAGING-LONG-')!.right)
+    expect(() => assertRealPdfGeometry(pdf.text, 'PACKAGING-LONG-NAME-01-680')).toThrow(/полный текст/)
+  }, 120_000)
+
+  it('C680-18: реальный PDF принимает полный перенос названия внутри одной ячейки', async () => {
+    const pdf = await renderPdf(cellOwnershipFixture('<tr><td>PACKAGING-LONG-<br>NAME-01-680</td><td></td><td></td><td></td></tr>'), 'wrapped-cell')
+    expect(pdfWords(pdf.text).filter((word) => /PACKAGING-LONG-|NAME-01-680/.test(word.text))).toHaveLength(2)
+    assertRealPdfGeometry(pdf.text, 'PACKAGING-LONG-NAME-01-680')
   }, 120_000)
 })
