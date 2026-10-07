@@ -27,20 +27,26 @@ async def get_picking_context(
               "warehouse": supply.warehouse_id, "products": product_ids}
     receipts = await session.execute(text("""
         SELECT DISTINCT l.product_id, r.id, r.display_number, r.document_number,
-               r.posted_at, r.created_at
+               r.posted_at, r.created_at, r.operation_type
         FROM inbound_intake_lines l
         JOIN inbound_intake_requests r ON r.id=l.request_id
         WHERE r.tenant_id=:tenant AND r.seller_id=:seller
-          AND l.product_id IN :products AND l.posted_qty > 0
-          AND r.operation_type='inbound'
+          AND l.product_id IN :products
+          AND (l.posted_qty > 0 OR EXISTS (
+              SELECT 1 FROM inventory_movements m
+              WHERE m.tenant_id=:tenant AND m.product_id=l.product_id
+                AND m.inbound_intake_line_id=l.id
+                AND m.movement_type='inbound_intake' AND m.quantity_delta > 0
+          ))
         ORDER BY r.created_at, r.id
     """).bindparams(bindparam("products", expanding=True)), params)
     for row in receipts.mappings():
         number = row["display_number"] or row["document_number"]
         date = (row["posted_at"] or row["created_at"]).strftime("%d.%m.%Y")
-        result[row["product_id"]]["inbound_supplies"].append(
-            f"{number} · {date}" if number else f"Приёмка от {date}"
-        )
+        label = f"{number} · {date}" if number else f"Приёмка от {date}"
+        if row["operation_type"] == "return":
+            label = f"Возврат {label}"
+        result[row["product_id"]]["inbound_supplies"].append(label)
     places = await session.execute(text("""
         SELECT b.product_id, b.quantity, s.code AS location_code,
                b.container_kind, b.container_id,
