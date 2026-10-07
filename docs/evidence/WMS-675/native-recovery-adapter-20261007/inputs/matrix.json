@@ -1,0 +1,1386 @@
+{
+  "scope": {
+    "tenant_id": "b80a893b-ab87-42b6-8fd7-6d41502c900f",
+    "seller_id": "cf6d31c5-944b-4382-af34-636ca9aa8cc3",
+    "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+    "warehouse_id": "2d968c65-4a8d-414e-9076-0f201c2dba63",
+    "sorting_location_id": "7d44fbc9-9c82-4ef1-bac7-4e47fe5de3c1"
+  },
+  "production_source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "accounting_started_at": "2026-10-07T06:26:39.267312+00:00",
+  "accounting_finished_at": "2026-10-07T06:26:58.687738+00:00",
+  "ozon_started_at": "2026-10-07T06:29:01.123213+00:00",
+  "ozon_finished_at": "2026-10-07T06:29:07.337771+00:00",
+  "snapshot_consistency": "Separate readonly snapshots; no locks/recheck/conduct by collector",
+  "accounting_reader_exit": 0,
+  "ozon_reader_exit": 0,
+  "SELECTs_successful": 11,
+  "Ozon_http200_cards": 31,
+  "unknown": 0,
+  "children": 0,
+  "composition_unchanged_all31": true,
+  "positions": [
+    {
+      "posting_number": "0113371235-0054-3",
+      "order_id": "8bf9d518-2702-4c29-89ab-4ed002c0f416",
+      "position_id": "6f15aee8-99db-4b0b-bef0-07123a494574",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0113371235-0054-3.json",
+      "proof_sha256": "e89ba5cdd1cc1bc09b03c18088ac7d98d43cfbf8a3f7aabf479bd74e75761367",
+      "local_status": "in_delivery",
+      "ledger_id": "7067a174-6ae1-4b73-9780-f2666c5c7158",
+      "shipment_movement_id": "7f0e0b8d-17ea-4703-b4f3-e2138f7336db",
+      "written_off_at": "2026-10-07 06:17:36.280026+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "7f0e0b8d-17ea-4703-b4f3-e2138f7336db"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "a4e11406-9c4f-463d-bec5-8421647cc312",
+        "a03c8aa1-3622-4e08-8e72-9e68f42759cd"
+      ],
+      "operation_fact_ids": [
+        "de9ee871-2d54-40c1-8f59-7c7b5b2e92bf"
+      ]
+    },
+    {
+      "posting_number": "0144953533-0124-1",
+      "order_id": "b05ef83a-01c3-4f14-bafd-41669614d4c1",
+      "position_id": "59e67251-a7c4-4d92-9743-66c695d23c06",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0144953533-0124-1.json",
+      "proof_sha256": "89645788ed9fc4ef661ac65947c2c8bc9477c2fe5da91480b0de758e378bb379",
+      "local_status": "in_delivery",
+      "ledger_id": "b3f2aeda-5ddc-48cb-92a3-a66fca6c6a73",
+      "shipment_movement_id": "16ff70dd-6390-459a-ae92-9d1dc4bcd63d",
+      "written_off_at": "2026-10-07 06:17:36.436544+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "16ff70dd-6390-459a-ae92-9d1dc4bcd63d"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "0276adf3-b74a-47de-a7c1-9a811c46d285",
+        "87e9bdbb-9503-42a9-853d-10a1c40f48af"
+      ],
+      "operation_fact_ids": [
+        "e4ae623e-88e6-4172-9d44-69d5dbecc35b"
+      ]
+    },
+    {
+      "posting_number": "0148656673-0134-1",
+      "order_id": "0e9251a4-b8ab-4b65-8cdc-500146e58cd3",
+      "position_id": "e73d0d92-41c3-435d-abc6-4e1bf95ee5d9",
+      "product_id": "605bdc71-baae-43dd-9ed4-fb37e07906c0",
+      "sku": 1695134284,
+      "offer_id": "video.nanny3",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "cancelled",
+      "ozon_substatus": "posting_canceled",
+      "cancellation": {
+        "cancel_reason_id": 359,
+        "cancellation_type": "seller",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0148656673-0134-1.json",
+      "proof_sha256": "a23615b624d51fab34e8c048d01fec125ae8309dc46c02a1ea38cbc0811434f2",
+      "local_status": "cancelled",
+      "ledger_id": "b4091505-336d-4395-88fb-60b7a280d3c0",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 0,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [],
+      "operation_fact_ids": []
+    },
+    {
+      "posting_number": "0153677007-0258-1",
+      "order_id": "3470f8fc-008d-4fe3-8a72-d9c73a46af42",
+      "position_id": "735f391b-95b5-478c-9b6e-3262b7309bab",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_on_way_to_city",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0153677007-0258-1.json",
+      "proof_sha256": "b9fde8934f0102f7fbc68eddb7347b576a069fc96fde43d58c4678eda70497d7",
+      "local_status": "in_delivery",
+      "ledger_id": "eee52630-486b-4cad-b6ee-b6feacdd240e",
+      "shipment_movement_id": "04553936-c245-4300-8470-7b28388d480b",
+      "written_off_at": "2026-10-07 06:17:35.928745+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "04553936-c245-4300-8470-7b28388d480b"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "90509091-369b-46d7-886e-1f3958b03049",
+        "05553c86-d38a-46d5-9ef7-6f211b22c2ae"
+      ],
+      "operation_fact_ids": [
+        "1048beb9-16ca-41a5-8697-d0e8fec32c12"
+      ]
+    },
+    {
+      "posting_number": "0164033835-0039-1",
+      "order_id": "eaabb48b-0174-414e-96b9-518f9220400e",
+      "position_id": "bc5913fc-5984-4e95-b4fb-ee34a2196dfa",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_on_way_to_city",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0164033835-0039-1.json",
+      "proof_sha256": "8a3ada5172493442c0a2621d49cec9cf77998762dba3ff75f734ca0b921bc0b4",
+      "local_status": "in_delivery",
+      "ledger_id": "c0934634-d2e2-48c9-ad89-bbf2bbfe5f0c",
+      "shipment_movement_id": "02542eb4-3cde-4f3c-abc3-a5e14b954c92",
+      "written_off_at": "2026-10-07 06:17:36.676042+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "02542eb4-3cde-4f3c-abc3-a5e14b954c92"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "2c5cdc11-b7fc-47cf-9b63-fabdee0f4448",
+        "5b6d0e61-e428-4b30-ac1c-105ce19be023"
+      ],
+      "operation_fact_ids": [
+        "02a85c17-b03f-4507-b4c8-10ae003e0e82"
+      ]
+    },
+    {
+      "posting_number": "0172663629-0081-1",
+      "order_id": "64a9b26b-3e27-48f7-ae18-c4d2c10ad5a1",
+      "position_id": "5ace2b40-2451-4c1a-b2b6-9394f4c66c05",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_on_way_to_city",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0172663629-0081-1.json",
+      "proof_sha256": "09bae4185d8f871a14d359b03eac420406454ad73c74daa95a50adb634dc9dce",
+      "local_status": "in_delivery",
+      "ledger_id": "b838d583-fab8-415e-933b-7ce2e384e750",
+      "shipment_movement_id": "9dcf313c-d0bb-4984-ad91-e9625e59721e",
+      "written_off_at": "2026-10-07 06:17:36.08459+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "9dcf313c-d0bb-4984-ad91-e9625e59721e"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "dd54ff39-ffb8-43cd-b85d-bb9412291835",
+        "4a050ca2-16ac-453b-90b7-9ddc413f1dd0"
+      ],
+      "operation_fact_ids": [
+        "74336840-ab15-4c1a-8bba-aaef1c1c2be0"
+      ]
+    },
+    {
+      "posting_number": "0181745532-0045-3",
+      "order_id": "27da526e-9e2c-4798-a978-ec15582183f1",
+      "position_id": "9ed595e4-81cb-4272-92fd-dc89f13df672",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "cancelled",
+      "ozon_substatus": "posting_canceled",
+      "cancellation": {
+        "cancel_reason_id": 359,
+        "cancellation_type": "seller",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0181745532-0045-3.json",
+      "proof_sha256": "54c923413c29e0d85ec3a9a9282787c29efb18ee37fe817af0fbabcc1b6eafd7",
+      "local_status": "cancelled",
+      "ledger_id": "8e279508-83ab-4755-b518-18fac90bae2e",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 0,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [],
+      "operation_fact_ids": []
+    },
+    {
+      "posting_number": "0187441457-0073-1",
+      "order_id": "558f8beb-a0b6-489a-a8b6-5dd3a5a494b5",
+      "position_id": "2dba4246-8711-4a0c-90d3-39f79b62b46d",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0187441457-0073-1.json",
+      "proof_sha256": "f886cf7644bebfbd7fb9222abdb0e2ce66eab019b210eda9fcce65f684bb99fb",
+      "local_status": "done",
+      "ledger_id": "756fc56b-0588-4d91-9b6d-5b05ab483942",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "58d0d609-bf02-494a-abfe-c110aac74901",
+        "2605640e-8dd0-417e-aeef-b47356ef1fa3"
+      ],
+      "operation_fact_ids": [
+        "0062209a-15bd-4620-8952-2afbb8b80918"
+      ]
+    },
+    {
+      "posting_number": "0190055173-0461-1",
+      "order_id": "32427a22-b4dd-4c8a-9278-76a067ab41d2",
+      "position_id": "a1dfbe31-ad0f-456f-b89e-978e9ea113fe",
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "offer_id": "video.nanny",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_on_way_to_city",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0190055173-0461-1.json",
+      "proof_sha256": "b95a187f7d0c4a19edd186fba200f1ade1708850022c5a5a4759757dd1de4bcb",
+      "local_status": "in_delivery",
+      "ledger_id": "ee137b50-36b5-4b20-a7a1-72a5275d9adf",
+      "shipment_movement_id": "0d41ab28-857d-4b4e-abc7-276dc819acaa",
+      "written_off_at": "2026-10-07 06:17:35.870976+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "0d41ab28-857d-4b4e-abc7-276dc819acaa"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "9a8674fc-dac6-47de-a039-15408f4179b5",
+        "126b53cb-a359-48a2-9d63-e86b22a4a89e"
+      ],
+      "operation_fact_ids": [
+        "7840c5b8-9037-4f01-a70e-2949c20a034a"
+      ]
+    },
+    {
+      "posting_number": "0236443586-0012-1",
+      "order_id": "2c6241b2-dc71-4b21-bc9d-534c63b8d4ba",
+      "position_id": "70b7f6a5-47da-400f-a395-2571e3637a48",
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "offer_id": "aqua.skreb",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0236443586-0012-1.json",
+      "proof_sha256": "bd4da66f467d2a4fa7f51609cf487ff54cd48fe07fc78ee963537044a7256a98",
+      "local_status": "in_delivery",
+      "ledger_id": "16f3ef1a-e464-49f9-9869-9f3c8d24e327",
+      "shipment_movement_id": "7fd41899-4efb-4c5b-a337-fe6f15a8d63f",
+      "written_off_at": "2026-10-07 06:17:35.790051+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "7fd41899-4efb-4c5b-a337-fe6f15a8d63f"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "582d3bf7-dc33-4f16-b235-938a0a32d6df",
+        "e8e1e58a-9e0a-4e66-888d-21eab780c3dd"
+      ],
+      "operation_fact_ids": [
+        "186d70ff-b3a2-4086-bc82-9146eb91a7b4"
+      ]
+    },
+    {
+      "posting_number": "0249035122-0351-1",
+      "order_id": "c2d7a754-f334-431f-89ed-5e47d3e0c7a4",
+      "position_id": "df4973be-db60-4eda-b0da-2ba1d4f928e6",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0249035122-0351-1.json",
+      "proof_sha256": "d9c446c0f1c0175ecf5d3e13c8a239f7d3f8230ebd56de9c86b71a5e404cd268",
+      "local_status": "done",
+      "ledger_id": "b0673fc6-14c7-493a-ad1a-30c0b26f0b6a",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "7a4a6b7f-c1b0-475c-bda1-873b61717010",
+        "293c3b06-3345-4c62-88cb-72a7f76d994f"
+      ],
+      "operation_fact_ids": [
+        "a47aaada-0aa6-4434-b100-4343acb4bdfc"
+      ]
+    },
+    {
+      "posting_number": "0282817049-0013-1",
+      "order_id": "66f61455-fea9-42a2-b52a-b7a754bb660d",
+      "position_id": "c60d4df6-37a5-415a-89fd-f4030b1f97dc",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "cancelled",
+      "ozon_substatus": "posting_canceled",
+      "cancellation": {
+        "cancel_reason_id": 359,
+        "cancellation_type": "seller",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-0282817049-0013-1.json",
+      "proof_sha256": "0956387eac7586b3f7da00c7998e9545208bc784b976ff416574a1e7b1e6431e",
+      "local_status": "cancelled",
+      "ledger_id": "1e9d8e67-0945-4d6a-84f8-227331f1b898",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 0,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [],
+      "operation_fact_ids": []
+    },
+    {
+      "posting_number": "06383353-1897-1",
+      "order_id": "e203f00e-db36-46c0-aa1b-192539ab88b8",
+      "position_id": "155fedf4-0ecf-4974-b043-0db8d23fa278",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-06383353-1897-1.json",
+      "proof_sha256": "ed87e5e28c98fced842cc0ee60641ea3f144a8c5ef7d57af4d6051f8f18840dc",
+      "local_status": "done",
+      "ledger_id": "45dbdf9a-0998-4c2a-8d82-3b0abf6cb27c",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "1e185add-f24b-4735-acd8-a54f6a65ab2d",
+        "09d9fe54-0ff5-4f7b-b24f-ebb9e781977f"
+      ],
+      "operation_fact_ids": [
+        "2781a4fd-073a-4fe6-aac4-60694fc88702"
+      ]
+    },
+    {
+      "posting_number": "21052558-0445-1",
+      "order_id": "b7216c03-b13d-49d8-a3e8-a7c99c29bda6",
+      "position_id": "9c51b88c-1c35-40e5-8936-40e5da3579b5",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-21052558-0445-1.json",
+      "proof_sha256": "f87af3a72870a6ab1f3af5622ed8a834304ad35174fb622af71f4ed606ac9540",
+      "local_status": "done",
+      "ledger_id": "20d2a093-942b-4d2f-b4ef-435a4ad777a7",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "0c082342-a71b-4ed3-bc00-f7212d772ca5",
+        "ee234a37-7025-46cb-b555-0d96bd5da26d"
+      ],
+      "operation_fact_ids": [
+        "77d63945-1cfd-4adc-8f2b-68a4277363da"
+      ]
+    },
+    {
+      "posting_number": "23388119-0163-1",
+      "order_id": "958ac70f-79b5-4d9c-b0b1-dc2f5237cd25",
+      "position_id": "e9b05ba5-9713-4768-9acc-3118aa28d32a",
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "offer_id": "video.nanny",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_on_way_to_city",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-23388119-0163-1.json",
+      "proof_sha256": "4dff30c34c31930b33c37884dd2d593609eb2fb1eb794e289d76db5c3ce15853",
+      "local_status": "in_delivery",
+      "ledger_id": "fff1cfe5-f37c-414d-a133-b9d44769e7f9",
+      "shipment_movement_id": "a4c439af-0bc3-4a8b-84f6-20c439ddf37a",
+      "written_off_at": "2026-10-07 06:17:36.35194+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "a4c439af-0bc3-4a8b-84f6-20c439ddf37a"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "37b03b12-c5a3-4d9e-879a-40b1be8a1224",
+        "47626374-db7e-4e76-b028-ae2ee948a79f"
+      ],
+      "operation_fact_ids": [
+        "5d36b4b9-77c8-4381-b3aa-14b4fd05ac22"
+      ]
+    },
+    {
+      "posting_number": "28508065-0594-1",
+      "order_id": "ccdd5eaf-cd9b-456c-8415-0868a52fa0af",
+      "position_id": "f6ab08a3-dab6-4035-9d58-a508034fa789",
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "offer_id": "video.nanny",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-28508065-0594-1.json",
+      "proof_sha256": "e7b853cacad85a6b74e6d6e87b8fdb7b0b382468b5de2d2548d56653b9353d44",
+      "local_status": "done",
+      "ledger_id": "8e91e6d7-3c29-42ab-814a-6e5cf059c905",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "d3cd3a99-77a6-430d-93d6-558d8f6f25ca",
+        "67df59fc-0d8b-4928-9430-37b878d4c7a1"
+      ],
+      "operation_fact_ids": [
+        "105d1582-4ed4-49de-ba43-5c7216d41472"
+      ]
+    },
+    {
+      "posting_number": "31853470-0198-1",
+      "order_id": "0d45ad7d-956e-4625-9dc5-f10c2e5b453a",
+      "position_id": "76bc0f7f-373d-4d28-9027-ed8469e98d24",
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "offer_id": "aqua.skreb",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-31853470-0198-1.json",
+      "proof_sha256": "69e6a8ca26a0c40bbfb3f858722f4c0103da2ffe9b941a7db3c04601593ed4b5",
+      "local_status": "done",
+      "ledger_id": "bb5f4f57-c60c-4497-85b5-429d0520e066",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "e8193e54-52f5-49b1-a63d-0dd4d55a5f2c",
+        "e424e56f-906b-41c5-b7d1-b7efb0b09481"
+      ],
+      "operation_fact_ids": [
+        "aeaf19be-59b5-4e05-af9b-1dc301576463"
+      ]
+    },
+    {
+      "posting_number": "45035035-0211-1",
+      "order_id": "6c283f46-7f5b-4620-a322-096f37027c8c",
+      "position_id": "b2b5c626-6db4-4073-b2b2-527a73cc581b",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-45035035-0211-1.json",
+      "proof_sha256": "b7730866ce8534284f52bd02da7a1e7fe5af25ef60c01254e880a85f627b282c",
+      "local_status": "done",
+      "ledger_id": "04a8d96e-0ccd-42b7-b2a0-78a7d1cb5150",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "c50225c0-0ecb-4077-8ea3-730db435d6fc",
+        "e153cc72-287a-4325-9846-5c7c43f3566d"
+      ],
+      "operation_fact_ids": [
+        "d6b6ea09-64fa-40ea-8e37-bfc21ab5b6a2"
+      ]
+    },
+    {
+      "posting_number": "50261136-0017-1",
+      "order_id": "c5177e7d-9db8-437a-ae64-9504275b6bad",
+      "position_id": "9529c313-8aec-4f1c-8c72-4a9539fc7b79",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-50261136-0017-1.json",
+      "proof_sha256": "a100fa1094b48eaa98c364a7baa67dff82f77784b44d8f7738dd90e0ee1b1b2c",
+      "local_status": "in_delivery",
+      "ledger_id": "e3aa09dc-6910-439f-afb5-e14c001ce8f1",
+      "shipment_movement_id": "80ec7b0b-318e-4754-87dd-ae6e12a10691",
+      "written_off_at": "2026-10-07 06:17:36.519321+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "80ec7b0b-318e-4754-87dd-ae6e12a10691"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "f5b7b0c2-32d0-40d9-a4a5-edd10659b472",
+        "be1c8b5b-92f7-4a05-a6c8-82a22fe07799"
+      ],
+      "operation_fact_ids": [
+        "8d671123-aae5-4173-b7b5-736b5670d99b"
+      ]
+    },
+    {
+      "posting_number": "55322493-0272-1",
+      "order_id": "78de0390-f016-4d31-ac4e-7d6de97a20ac",
+      "position_id": "7ddb0838-54c4-42a3-9020-10dbab6a87ad",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-55322493-0272-1.json",
+      "proof_sha256": "ef696c8140212151bbc30c2ad1ab86a55544fafe2685c6c70c87cf323f158298",
+      "local_status": "in_delivery",
+      "ledger_id": "dc9fcd30-c18c-4907-b2a5-32e16cae5cf1",
+      "shipment_movement_id": "fd3f52a6-7350-4414-9277-4c0bd0b76043",
+      "written_off_at": "2026-10-07 06:17:36.20093+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "fd3f52a6-7350-4414-9277-4c0bd0b76043"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "9c97e5ad-cab2-4a35-823e-e4686fe6459e",
+        "df5f2453-f0f3-47bc-9339-1549d4af1c3e"
+      ],
+      "operation_fact_ids": [
+        "0c4d372b-2d9a-49fa-aa17-ba3e28a7ee82"
+      ]
+    },
+    {
+      "posting_number": "56845110-0045-1",
+      "order_id": "6fc67946-d062-49ba-ad8e-9c061a1177e1",
+      "position_id": "f742d910-2fcf-4d96-9ed9-ea46d2a4bbd4",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-56845110-0045-1.json",
+      "proof_sha256": "930ac9f9f8be2bff90dc31c1e7d38b368759270315d0756554378e0d20088b90",
+      "local_status": "done",
+      "ledger_id": "42c6dc1d-0ee3-4265-b8c8-df88c7a45f54",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "dc53b9c5-26cf-4be7-9a7e-ec18ef18e64f",
+        "cd603ba1-79df-47c1-9b68-7ea438a8799f"
+      ],
+      "operation_fact_ids": [
+        "308eb336-1cb1-4738-a2ed-eb8399180177"
+      ]
+    },
+    {
+      "posting_number": "56907807-0024-1",
+      "order_id": "870e99a1-6435-4291-ac7d-cf0a81ab0572",
+      "position_id": "ebf2b86b-f65c-4ec1-99ee-bc57b1b600ab",
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "offer_id": "video.nanny",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-56907807-0024-1.json",
+      "proof_sha256": "05f3a2ef92a85fcd9da33bb03c6f1f0376cfb329796f3756286b3856148cc4d6",
+      "local_status": "done",
+      "ledger_id": "20999e12-36ce-4515-af09-06b06efae281",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "0077ca84-2a0c-4184-a8c5-5ca6ce81716d",
+        "1d6663a2-f033-4cc8-a8c5-e542d0dc08e7"
+      ],
+      "operation_fact_ids": [
+        "b94a8939-c770-4c9a-9c0b-421a7061ebc5"
+      ]
+    },
+    {
+      "posting_number": "59814512-0364-3",
+      "order_id": "4c9f0057-d363-4ec3-9c9b-4006c7f50516",
+      "position_id": "53ade029-83af-44f8-ba05-b3e3fa88bd03",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-59814512-0364-3.json",
+      "proof_sha256": "0fc56debc661996fa68b949b4a6c69d6080aa0a73c96463427e9707c471e86a5",
+      "local_status": "done",
+      "ledger_id": "6d16f0b2-b0bd-43f6-9de2-8e49e9b7e010",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "1f2b51c1-4780-4fd3-bc1d-f748c3d59fde",
+        "acf3f052-edc2-4c75-954f-4a357dc415c5"
+      ],
+      "operation_fact_ids": [
+        "9158e494-faea-4804-9f99-1b73d9c2cdd7"
+      ]
+    },
+    {
+      "posting_number": "62035277-0532-1",
+      "order_id": "6444a2d9-23e0-4ddf-aa43-87abd03f27a7",
+      "position_id": "8ca6064a-f01f-4401-9ba6-6952f43ab6e9",
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "offer_id": "aqua.skreb",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-62035277-0532-1.json",
+      "proof_sha256": "97ccebf089ef3ef96aa2e88d4f5bbf2a4ea56f58c0c7a77d7b9c00996b9f2086",
+      "local_status": "done",
+      "ledger_id": "ec49526d-1716-4b98-baa5-4d894a964061",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "de2f92fd-f932-49fe-b431-eb83ac24de56",
+        "47a300a5-aa8b-4fe6-a74c-724ae5cf7b02"
+      ],
+      "operation_fact_ids": [
+        "05e5c2b4-d548-4e3b-9eb9-f2e95fa5091f"
+      ]
+    },
+    {
+      "posting_number": "66144885-0156-18",
+      "order_id": "89d0cf5c-8811-4ef7-8420-6aa7037b21c6",
+      "position_id": "f89ee8d2-ff80-49f3-b7d5-154210aa2f0b",
+      "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+      "sku": 1695128938,
+      "offer_id": "video.nanny2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-66144885-0156-18.json",
+      "proof_sha256": "405cd49f894c4f7dcd1a4d5509389ccf517588f0c03e0be5cbec014ac7a7b4c4",
+      "local_status": "done",
+      "ledger_id": "148e02fb-c385-45ed-ab66-3acd16169447",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "961b6fee-456b-4146-aef2-7efb48c998a6",
+        "9a753f9a-0e52-49e3-b153-aaa131fc5df0"
+      ],
+      "operation_fact_ids": [
+        "e4a12a1a-84b2-4b85-b812-7ac450fe6596"
+      ]
+    },
+    {
+      "posting_number": "80034639-0273-1",
+      "order_id": "c614ec4d-3c05-49f4-a986-fb6048642456",
+      "position_id": "21fd26d1-9665-47bf-9512-37b65ac3afd0",
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "offer_id": "video.nanny",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "cancelled",
+      "ozon_substatus": "posting_canceled",
+      "cancellation": {
+        "cancel_reason_id": 505,
+        "cancellation_type": "client",
+        "cancelled_after_ship": true
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-80034639-0273-1.json",
+      "proof_sha256": "6af01bbd447a095786efa2b6cd55c7c07ee01dab437f28c5d24a9fd9b4e6fd70",
+      "local_status": "cancelled",
+      "ledger_id": "01c89e3d-cfc5-4eee-8e36-cf7628c64c12",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 0,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [],
+      "operation_fact_ids": []
+    },
+    {
+      "posting_number": "81035721-0742-1",
+      "order_id": "d46f4e6a-c28c-4ec6-a8b7-3c9734528f53",
+      "position_id": "951794c1-c0c0-4902-8aa4-04b8ad6a9122",
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "offer_id": "aqua.skreb",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-81035721-0742-1.json",
+      "proof_sha256": "a393d89b346dbc1428b4739c06a3f118e1c2784fecb3c339ed4bfeaeb479f847",
+      "local_status": "done",
+      "ledger_id": "60f80a2b-6d69-4654-9d53-0c5cc62e29ab",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "b36201e7-d579-4f5c-8c53-9992300323bd",
+        "b7030cf8-fcf4-4571-b840-70dcdc7cc50d"
+      ],
+      "operation_fact_ids": [
+        "fb5d0cef-4386-4f4d-919f-2e5a0531cbdc"
+      ]
+    },
+    {
+      "posting_number": "83893932-0680-2",
+      "order_id": "a8e915f1-3a6f-45de-9cfb-f9f5cae5acde",
+      "position_id": "7f6e10b9-f224-4fd5-b59c-ffb9234fd198",
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "offer_id": "sausage2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivered",
+      "ozon_substatus": "posting_received",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-83893932-0680-2.json",
+      "proof_sha256": "39f9d67fa43fc5b5a23233298f7d93c7f7b88710d58f39c4be8b28b9e02fc175",
+      "local_status": "done",
+      "ledger_id": "1068e338-f9eb-4399-968c-158bc7302905",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 1,
+      "position_reserved_quantity": 1,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "78b30514-a778-4ee1-9fb2-a3d433a013d2",
+        "2e1a6c7a-ae8e-45cc-89b9-3a1330b100c4"
+      ],
+      "operation_fact_ids": [
+        "bea50467-5d2c-419b-865d-7d4dd24900d9"
+      ]
+    },
+    {
+      "posting_number": "85257535-0274-1",
+      "order_id": "cfc68d5f-0694-486e-84b0-136e51ce2532",
+      "position_id": "5107cc5c-7c44-4d7c-a9ba-a788e0198d83",
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "offer_id": "aqua.skreb",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-85257535-0274-1.json",
+      "proof_sha256": "d4035620c09cff378b849b7a952db829abc360c0a91714a30ee01e2f9e3ffd87",
+      "local_status": "in_delivery",
+      "ledger_id": "7e8d433d-57b0-4407-99c5-150b8005bfa0",
+      "shipment_movement_id": "7184e35e-6bc9-492b-a7d7-96cae88ce449",
+      "written_off_at": "2026-10-07 06:17:36.593473+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "7184e35e-6bc9-492b-a7d7-96cae88ce449"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "a20348d3-ab34-405c-a871-16b019501a5d",
+        "357a7dd2-b65b-4ecb-9e8b-c722dda15c75"
+      ],
+      "operation_fact_ids": [
+        "4de69fa5-9c9b-4beb-9dba-94a6c2f7481b"
+      ]
+    },
+    {
+      "posting_number": "99185584-1963-5",
+      "order_id": "e014ba26-8cbc-4480-8ad5-581f9f500f51",
+      "position_id": "72ef64f7-dba8-45fd-a69e-b526f7fddf78",
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "offer_id": "doorBell",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "cancelled",
+      "ozon_substatus": "posting_canceled",
+      "cancellation": {
+        "cancel_reason_id": 79,
+        "cancellation_type": "client",
+        "cancelled_after_ship": true
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-99185584-1963-5.json",
+      "proof_sha256": "518c1cc36eee9a67947afdff28d9fc406f9a366cf94234154ce177a6d6c47218",
+      "local_status": "cancelled",
+      "ledger_id": "e81bcefd-a8ea-4331-923c-17f5d487b2bb",
+      "shipment_movement_id": null,
+      "written_off_at": null,
+      "reversed_at": null,
+      "recipe_movement_ids": [],
+      "proved_unique_quantity": 0,
+      "already_conducted_quantity": 0,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [],
+      "operation_fact_ids": []
+    },
+    {
+      "posting_number": "99630148-0017-1",
+      "order_id": "604b0a9f-910c-42ba-8c14-88b459ef6d12",
+      "position_id": "e5733b53-b0de-4d41-99e9-972b5eb6602a",
+      "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+      "sku": 1695128938,
+      "offer_id": "video.nanny2",
+      "quantity": 1,
+      "composition_unchanged": true,
+      "ozon_status": "delivering",
+      "ozon_substatus": "posting_in_pickup_point",
+      "cancellation": {
+        "cancel_reason_id": 0,
+        "cancellation_type": "",
+        "cancelled_after_ship": false
+      },
+      "children": [],
+      "proof_file": "docs/evidence/WMS-675/fresh-20261007/ozon-20261007T062857Z/posting-99630148-0017-1.json",
+      "proof_sha256": "26b1786f010c0ba47938c9a6ea8c45c4b32846484ae5bfd96d0034d3f609a054",
+      "local_status": "in_delivery",
+      "ledger_id": "fd2b5492-7a4c-4f59-aa0e-e8b3951d0e7d",
+      "shipment_movement_id": "9b5c3cd9-a8a8-45a9-9585-21bf49f7b15c",
+      "written_off_at": "2026-10-07 06:17:36.00989+00",
+      "reversed_at": null,
+      "recipe_movement_ids": [
+        "9b5c3cd9-a8a8-45a9-9585-21bf49f7b15c"
+      ],
+      "proved_unique_quantity": 1,
+      "already_conducted_quantity": 1,
+      "fresh_missing_delta": 0,
+      "position_reserved_quantity": 0,
+      "legacy_reservation_rows_quantity": "0",
+      "position_reservation_rows_quantity": "0",
+      "billing_ids": [
+        "7c3f3379-6f5b-4ad9-af2d-b38301b0a20b",
+        "bc7db537-2931-40bb-8de9-afa8dcc3863a"
+      ],
+      "operation_fact_ids": [
+        "9095a5c0-79ff-4e84-92ea-f8be4b525b1b"
+      ]
+    }
+  ],
+  "status_changes_from_historical_plan": [
+    {
+      "posting": "0148656673-0134-1",
+      "old_status": "awaiting_packaging",
+      "old_substatus": "posting_created",
+      "fresh_status": "cancelled",
+      "fresh_substatus": "posting_canceled"
+    },
+    {
+      "posting": "0187441457-0073-1",
+      "old_status": "delivering",
+      "old_substatus": "posting_in_pickup_point",
+      "fresh_status": "delivered",
+      "fresh_substatus": "posting_received"
+    },
+    {
+      "posting": "56845110-0045-1",
+      "old_status": "delivering",
+      "old_substatus": "posting_in_pickup_point",
+      "fresh_status": "delivered",
+      "fresh_substatus": "posting_received"
+    },
+    {
+      "posting": "83893932-0680-2",
+      "old_status": "delivering",
+      "old_substatus": "posting_on_way_to_city",
+      "fresh_status": "delivered",
+      "fresh_substatus": "posting_received"
+    }
+  ],
+  "stops_for_new_native_execution": [],
+  "proved_unique_units": 26,
+  "already_conducted_units": 12,
+  "fresh_missing_delta": 14,
+  "cancelled_excluded": 5,
+  "position_reserved_quantity": 14,
+  "legacy_reservation_rows_quantity": "0",
+  "position_reservation_rows_quantity": "0",
+  "billing_entries": 52,
+  "billing_duplicates_order_service": 0,
+  "billing_reversal_entries": 0,
+  "billing_amount_null_entries": 52,
+  "old22_billingIDs_quantities_preserved": true,
+  "new_billingIDs_since_old_plan": 30,
+  "operation_facts": 26,
+  "old11_factIDs_preserved": true,
+  "new_factIDs_since_old_plan": 15,
+  "inventory_by_product": [
+    {
+      "product_id": "2ccde129-ed49-44fd-8dcc-4dd092581e26",
+      "sku": 1697770458,
+      "proved": 8,
+      "conducted": 3,
+      "missing": 5,
+      "position_reserved_quantity": 5,
+      "current_balance": "277",
+      "current_sorting_quantity": "277"
+    },
+    {
+      "product_id": "80fa2a1e-1974-4e6e-8497-2defd0176bd5",
+      "sku": 1589998415,
+      "proved": 7,
+      "conducted": 4,
+      "missing": 3,
+      "position_reserved_quantity": 3,
+      "current_balance": "196",
+      "current_sorting_quantity": "196"
+    },
+    {
+      "product_id": "605bdc71-baae-43dd-9ed4-fb37e07906c0",
+      "sku": 1695134284,
+      "proved": 0,
+      "conducted": 0,
+      "missing": 0,
+      "position_reserved_quantity": 0,
+      "current_balance": "238",
+      "current_sorting_quantity": "238"
+    },
+    {
+      "product_id": "1a99998b-1576-4e7f-9f9a-cf9eaf14907e",
+      "sku": 1586484429,
+      "proved": 4,
+      "conducted": 2,
+      "missing": 2,
+      "position_reserved_quantity": 2,
+      "current_balance": "454",
+      "current_sorting_quantity": "454"
+    },
+    {
+      "product_id": "4d7e4a3d-954e-48f6-94a3-45729f2654d0",
+      "sku": 1586466682,
+      "proved": 5,
+      "conducted": 2,
+      "missing": 3,
+      "position_reserved_quantity": 3,
+      "current_balance": "379",
+      "current_sorting_quantity": "379"
+    },
+    {
+      "product_id": "7e159b28-72f7-4f3c-8f92-ebca10e054db",
+      "sku": 1695128938,
+      "proved": 2,
+      "conducted": 1,
+      "missing": 1,
+      "position_reserved_quantity": 1,
+      "current_balance": "533",
+      "current_sorting_quantity": "533"
+    }
+  ],
+  "balances_match_all_movement_totals": true,
+  "unlinked_fbs_movements": 0,
+  "other_unattributed_negative_since_audit": 0,
+  "new_history_attribution": [
+    {
+      "db_at": "2026-10-07 06:26:58.622016+00",
+      "supply_id": "0dcea766-b769-4fbd-a0a9-84e95e1cb186",
+      "name": "FBS 24.09.2026",
+      "status": "in_delivery",
+      "movements": "3",
+      "delta": "-3",
+      "orders": "3",
+      "first_at": "2026-10-07 06:17:27.311613+00",
+      "last_at": "2026-10-07 06:17:27.311613+00"
+    },
+    {
+      "db_at": "2026-10-07 06:26:58.622047+00",
+      "supply_id": "b82d1e9a-30d2-4d7b-b52d-9775c3d266e3",
+      "name": "FBS 02.10.2026",
+      "status": "draft",
+      "movements": "12",
+      "delta": "-12",
+      "orders": "12",
+      "first_at": "2026-10-07 06:17:27.311613+00",
+      "last_at": "2026-10-07 06:17:27.311613+00"
+    },
+    {
+      "db_at": "2026-10-07 06:26:58.622061+00",
+      "supply_id": "f312d22a-e7f0-457a-a6dd-5e517bc399fa",
+      "name": "FBS 06.10.2026",
+      "status": "in_delivery",
+      "movements": "17",
+      "delta": "-17",
+      "orders": "17",
+      "first_at": "2026-10-07 06:17:27.311613+00",
+      "last_at": "2026-10-07 06:17:27.311613+00"
+    }
+  ],
+  "collector_writes": 0,
+  "collector_external_mutations": 0,
+  "native_execution_authorized_to_collector": false,
+  "remaining_boundary": "Integrator must lock/recheck exact scope/current ledger/proof/reservations/billing before any conduct. Fresh snapshot missing14, not old26; amounts remain unknown.",
+  "reserve_channels_note": "Position reserved_quantity14; legacy reservation table0; product-reservation table0. Separate stored channels reported; no claim they must be identical.",
+  "existing_charges_for_all_positive_positions": true,
+  "additional_billing_needed_by_existing_IDs": 0
+}

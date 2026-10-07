@@ -1,0 +1,97 @@
+{
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "evidence_base": "4164430a30240e563fbe9bc5195e8e7b741c16ee",
+  "executed": false,
+  "members": [
+    {
+      "path": "README.md",
+      "bytes": 6083,
+      "sha256": "48320d7b8157093f3abc949132391f571eaf3143fce4a1be20710420028b738c"
+    },
+    {
+      "path": "adapter.py",
+      "bytes": 22352,
+      "sha256": "5d290b28419c72389a85a2f518efcdbf612c43c49d43f62e048dd5c3bf427535"
+    },
+    {
+      "path": "inputs/billing.csv",
+      "bytes": 11553,
+      "sha256": "eb4ee354b677d05a2c16736c46337b56e5f378c2483033587e1f20a6ff816839"
+    },
+    {
+      "path": "inputs/collect_ozon_bound.py",
+      "bytes": 12226,
+      "sha256": "77f56f1100d27db0f369ff7edb436332c9fd91f295d4065c90bcb51e68e80011"
+    },
+    {
+      "path": "inputs/facts.csv",
+      "bytes": 6342,
+      "sha256": "18719c19142fe7d8475d0201e91e4bd89469545cd6d16e3fa2933ec094dd4dcc"
+    },
+    {
+      "path": "inputs/matrix.json",
+      "bytes": 51813,
+      "sha256": "48876fb7e2bc4172964ddfaa176d81bdd3e9c62711a560fb6f2cd9e3db72e934"
+    },
+    {
+      "path": "inputs/ozon_read_plan.json",
+      "bytes": 10862,
+      "sha256": "cccfb2d7c024f02309f23424a67473723cfcb6d7d85312f138f1b152e04bc00b"
+    },
+    {
+      "path": "inputs/queries/balances_locations.sql",
+      "bytes": 706,
+      "sha256": "5f15e48433139306c7f11f3d1409817d6a1529636ad7d7fe9c286f61a97e0150"
+    },
+    {
+      "path": "inputs/queries/balances_vs_all_movements.sql",
+      "bytes": 1056,
+      "sha256": "f0a3f45bbea547b43a7ffff9fd73693d5d9feebe9046f689766ba923236c9e5c"
+    },
+    {
+      "path": "inputs/queries/billing_entries.sql",
+      "bytes": 892,
+      "sha256": "65da36492b3a5ebc4c6ec1b7667ddd9c165b490b5636344d121aa45277d1f9b9"
+    },
+    {
+      "path": "inputs/queries/identity.sql",
+      "bytes": 388,
+      "sha256": "b2a7c9119e4600225725d0d9559c891dce90d64bf438196b1cc2107fa8c92401"
+    },
+    {
+      "path": "inputs/queries/ledger.sql",
+      "bytes": 661,
+      "sha256": "fe3eae4ea8b9bb5df40e40e3ad028a2661ab1922c32598371d25c0ced42b1134"
+    },
+    {
+      "path": "inputs/queries/operation_facts.sql",
+      "bytes": 842,
+      "sha256": "4392c6d9b7d5460b3ce305edfaaad164590ebc8b4f79c010d9f772180b39deb5"
+    },
+    {
+      "path": "inputs/queries/orders_positions_reserves.sql",
+      "bytes": 845,
+      "sha256": "a9c989b6a3b4e2bcb984cb30f907309e3e678bc2f1465a29dc9d367a66b4d77e"
+    },
+    {
+      "path": "inputs/queries/supply_operations.sql",
+      "bytes": 738,
+      "sha256": "96c41636c52086dda4d77032f24def80c086eb1255d0bd0be43a0e8f51d99ba5"
+    },
+    {
+      "path": "inputs/queries/unlinked_fbs_movements.sql",
+      "bytes": 1069,
+      "sha256": "937bd9a92cd79e3ca4a7f1e121247c0a9840f9ebd0f6fe952fc4289a2f8ced2b"
+    },
+    {
+      "path": "preparation.json",
+      "bytes": 499,
+      "sha256": "63cda63703f7aabae850bde83a0827324a2f57292d56b0fb9297993b844ffe9f"
+    },
+    {
+      "path": "source-bindings.json",
+      "bytes": 6678,
+      "sha256": "a4e59a459c92c9fadf93455be1669d8cdd0a7be9028d397fd902766b49885e6d"
+    }
+  ]
+}
