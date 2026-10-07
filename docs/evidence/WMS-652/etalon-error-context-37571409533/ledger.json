@@ -1,0 +1,480 @@
+{
+  "run_id": 37571409533,
+  "attempt": 1,
+  "diagnostic_sha": "8e6c2f6a28b64009b7f896420d3ef95808759b07",
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "strict_status": "FAIL",
+  "cases": [
+    {
+      "id": "WMS652.realQr[supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQr[supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[single-create]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[seller-warehouse-group-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.selection[add-existing-refusal-retry]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:\n\n1 !== 0\n"
+    },
+    {
+      "id": "WMS652.geometry[wb-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[wb-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-single;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-one;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[ozon-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[mixed-group-many;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-expired;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[orders-cancelled;1600x1000-long]",
+      "status": "PASS"
+    },
+    {
+      "id": "WMS652.geometry[selection;1600x1000-long]",
+      "status": "PASS"
+    }
+  ],
+  "case_counts": {
+    "PASS": 41,
+    "FAIL": 2
+  },
+  "exit_results": {
+    "original_browser_command_exit": 1,
+    "exact43_complete": true,
+    "strict43_pass": false,
+    "source_bytes_unchanged": true,
+    "actual_run": true
+  },
+  "environment": "Linux runnervm8df0l 6.17.0-1022-azure #22-Ubuntu SMP Mon Jul 27 17:24:03 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux\nPRETTY_NAME=\"Ubuntu 24.04.5 LTS\"\nNAME=\"Ubuntu\"\nVERSION_ID=\"24.04\"\nVERSION=\"24.04.5 LTS (Noble Numbat)\"\nVERSION_CODENAME=noble\nID=ubuntu\nID_LIKE=debian\nHOME_URL=\"https://www.ubuntu.com/\"\nSUPPORT_URL=\"https://help.ubuntu.com/\"\nBUG_REPORT_URL=\"https://bugs.launchpad.net/ubuntu/\"\nPRIVACY_POLICY_URL=\"https://www.ubuntu.com/legal/terms-and-policies/privacy-policy\"\nUBUNTU_CODENAME=noble\nLOGO=ubuntu-logo\nv24.21.0\nChromium 141.0.7390.37 \n1.56.1\n8e6c2f6a28b64009b7f896420d3ef95808759b07\n",
+  "source_bindings": 2546,
+  "source_hashes": 2546,
+  "source_unchanged": true,
+  "focused_summary": {
+    "mode": "focused-error-context",
+    "limits": {
+      "maxEvents": 100000,
+      "maxBytes": 67108864
+    },
+    "accounting": "conservative upper bound; exact final file validation",
+    "seen": 30582,
+    "estimatedRetainedBytes": 44315611,
+    "nativeErrorsObserved": 2,
+    "dropped": {
+      "events": 0,
+      "bytes": 0,
+      "finalSize": 0,
+      "observerErrors": 0,
+      "nativeErrors": 0
+    },
+    "pendingCommandIds": []
+  },
+  "focused_records": 30582,
+  "original_transport_records": 43690,
+  "original_pending_command_ids": [],
+  "native_send_count": 11665,
+  "native_reply_count": 11665,
+  "native_timeout_count": 0,
+  "native_reply_ids_unique": true,
+  "native_pair_ids_equal": true,
+  "native_error_count": 2,
+  "original_native_error_count": 2,
+  "errors": [
+    {
+      "error": {
+        "utcMs": 1791347276931,
+        "currentGeneration": 95,
+        "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "kind": "native-error-context",
+        "commandId": 5931,
+        "method": "Fetch.fulfillRequest",
+        "pendingIdentity": {
+          "requestId": "interception-job-5216.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 95,
+          "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]"
+        },
+        "send": {
+          "utcMs": 1791347276930,
+          "commandId": 5931,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-5216.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 95,
+          "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "attempt": 1
+        },
+        "nativeError": {
+          "code": -32602,
+          "message": "Invalid InterceptionId."
+        },
+        "pausedRecordIndices": [
+          15735
+        ],
+        "networkRecordIndices": [],
+        "frameBoundaryIndices": [
+          15039,
+          15730
+        ],
+        "contextBoundaryIndices": [
+          15728,
+          15729
+        ]
+      },
+      "paused_records": [
+        {
+          "utcMs": 1791347276930,
+          "currentGeneration": 95,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Fetch.requestPaused",
+          "requestId": "interception-job-5216.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+          "requestMethod": "GET",
+          "resourceType": "XHR"
+        }
+      ],
+      "network_records": [],
+      "frame_boundaries": [
+        {
+          "utcMs": 1791347274055,
+          "currentGeneration": 90,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+          "kind": "protocol-context",
+          "method": "Page.frameNavigated",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "loaderId": "674D09C731627716238AF0FB850191AF",
+          "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a&flag=qr%2Bpool",
+          "type": "Navigation"
+        },
+        {
+          "utcMs": 1791347276916,
+          "currentGeneration": 94,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Page.frameNavigated",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "loaderId": "D723943E3EC952F1EF20A28D144454A4",
+          "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a,wb-b&flag=qr%2Bpool",
+          "type": "Navigation"
+        }
+      ],
+      "context_boundaries": [
+        {
+          "utcMs": 1791347276912,
+          "currentGeneration": 92,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Runtime.executionContextsCleared"
+        },
+        {
+          "utcMs": 1791347276916,
+          "currentGeneration": 93,
+          "currentCaseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Runtime.executionContextsCleared"
+        }
+      ],
+      "original_send": {
+        "utcMs": 1791347276930,
+        "kind": "command-send",
+        "commandId": 5931,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-5216.0",
+        "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+        "generation": 95,
+        "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+        "attempt": 1
+      },
+      "original_replies": [
+        {
+          "utcMs": 1791347276931,
+          "kind": "command-result",
+          "commandId": 5931,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-5216.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 95,
+          "caseId": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "nativeError": {
+            "code": -32602,
+            "message": "Invalid InterceptionId."
+          }
+        }
+      ],
+      "boundary_selection": "Only last two prior frame/context records; complete arrays and all raw records preserved in error-context.json.gz."
+    },
+    {
+      "error": {
+        "utcMs": 1791347310470,
+        "currentGeneration": 139,
+        "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+        "kind": "native-error-context",
+        "commandId": 8720,
+        "method": "Fetch.fulfillRequest",
+        "pendingIdentity": {
+          "requestId": "interception-job-7713.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 139,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]"
+        },
+        "send": {
+          "utcMs": 1791347310466,
+          "commandId": 8720,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-7713.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 139,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "attempt": 1
+        },
+        "nativeError": {
+          "code": -32602,
+          "message": "Invalid InterceptionId."
+        },
+        "pausedRecordIndices": [
+          23257
+        ],
+        "networkRecordIndices": [],
+        "frameBoundaryIndices": [
+          22578,
+          23251
+        ],
+        "contextBoundaryIndices": [
+          23249,
+          23250
+        ]
+      },
+      "paused_records": [
+        {
+          "utcMs": 1791347310466,
+          "currentGeneration": 139,
+          "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Fetch.requestPaused",
+          "requestId": "interception-job-7713.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+          "requestMethod": "GET",
+          "resourceType": "XHR"
+        }
+      ],
+      "network_records": [],
+      "frame_boundaries": [
+        {
+          "utcMs": 1791347307915,
+          "currentGeneration": 134,
+          "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+          "kind": "protocol-context",
+          "method": "Page.frameNavigated",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "loaderId": "ABFF73E809049D8B6C4BE07B5411C3BF",
+          "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a&flag=qr&preserve=1",
+          "type": "Navigation"
+        },
+        {
+          "utcMs": 1791347310455,
+          "currentGeneration": 138,
+          "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Page.frameNavigated",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "loaderId": "7D005C0A18A2F0FFE01BF7AA1B244F8B",
+          "url": "http://127.0.0.1:16686/app/ff/fbs?supply_ids=wb-a,wb-b&flag=qr",
+          "type": "Navigation"
+        }
+      ],
+      "context_boundaries": [
+        {
+          "utcMs": 1791347310452,
+          "currentGeneration": 136,
+          "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Runtime.executionContextsCleared"
+        },
+        {
+          "utcMs": 1791347310455,
+          "currentGeneration": 137,
+          "currentCaseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "kind": "protocol-context",
+          "method": "Runtime.executionContextsCleared"
+        }
+      ],
+      "original_send": {
+        "utcMs": 1791347310466,
+        "kind": "command-send",
+        "commandId": 8720,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-7713.0",
+        "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+        "generation": 139,
+        "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+        "attempt": 1
+      },
+      "original_replies": [
+        {
+          "utcMs": 1791347310470,
+          "kind": "command-result",
+          "commandId": 8720,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-7713.0",
+          "frameId": "0C0F145253B3864BA3A239A23AF668F0",
+          "generation": 139,
+          "caseId": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "nativeError": {
+            "code": -32602,
+            "message": "Invalid InterceptionId."
+          }
+        }
+      ],
+      "boundary_selection": "Only last two prior frame/context records; complete arrays and all raw records preserved in error-context.json.gz."
+    }
+  ],
+  "historical_etalon_cause": "UNKNOWN: actual new failing request identity is captured; its absent network mapping does not prove cancellation or identify historical unrecorded origin."
+}

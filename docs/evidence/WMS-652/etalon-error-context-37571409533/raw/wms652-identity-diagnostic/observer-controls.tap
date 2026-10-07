@@ -1,0 +1,40 @@
+TAP version 13
+# Subtest: paused identity and initiator allowlist are observed without mutating ingress
+ok 1 - paused identity and initiator allowlist are observed without mutating ingress
+  ---
+  duration_ms: 3.206354
+  type: 'test'
+  ...
+# Subtest: native success/error identity captured before pending removal; no arbitrary results
+ok 2 - native success/error identity captured before pending removal; no arbitrary results
+  ---
+  duration_ms: 1.037721
+  type: 'test'
+  ...
+# Subtest: event/byte caps count drops while completion and pending state survive
+ok 3 - event/byte caps count drops while completion and pending state survive
+  ---
+  duration_ms: 0.575255
+  type: 'test'
+  ...
+# Subtest: non-synthetic/auth URLs and unobserved data never enter telemetry
+ok 4 - non-synthetic/auth URLs and unobserved data never enter telemetry
+  ---
+  duration_ms: 0.366605
+  type: 'test'
+  ...
+# Subtest: native reply preserves send identity and distinct current reply generation and case
+ok 5 - native reply preserves send identity and distinct current reply generation and case
+  ---
+  duration_ms: 0.410939
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 71.10839
