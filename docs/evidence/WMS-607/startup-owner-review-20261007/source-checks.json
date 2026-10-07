@@ -1,0 +1,452 @@
+{
+  "verdict": "PASS bounded startup source review; independent3 and saved developer3+old33 verified",
+  "product": "7bbcdd8a8aba9fd44dd4ee4ce2dbdee5af26b880",
+  "before": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "freeze": "7b94a8dd0f1d6a772272930df3894d3ccd299686",
+  "delta": "one updater file, 7 insertions/3 deletions",
+  "whole_updater_other_bytes_exact_after_reversing_authorized_delta": true,
+  "before_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+  "after_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946",
+  "source_gap_paths": [
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/contract.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/manifest.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-control.py",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected.log",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected.xml",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-result.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected.log",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected.xml",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected/test_no_owner_yet_can_warm_until_owned_ready.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode.log",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode.xml",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_no_owner_yet_can_warm_until_owned_ready.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/result.md",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/source-checks.json",
+    "docs/evidence/WMS-607/startup-owner-test-contract-20261007/source-probe.py",
+    "tools/print-agent/test_macos_direct_updater_start_owner_contract.py",
+    "tools/print-agent/update_macos_direct.sh"
+  ],
+  "frozen_contract_paths": [
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/contract.json",
+      "sha256": "6004046bd806dff8a61e2ef0f5265ca1930560fcec110342f763ab264ac6181a"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/manifest.json",
+      "sha256": "7db3d703d765896a10d7a51f8251fe81a3693a7c24103f4212c7f9992aafa359"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-control.py",
+      "sha256": "927e9c57c268a8ea1b9d4eb143926888b5c1adc885faecd334659f79c97f7670"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected.log",
+      "sha256": "d50a1112ebf1f47d2909c450fbb140b78be1e59928a8b2ce9fff0f9ba87b69c8"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected.xml",
+      "sha256": "6fc88a7a2c9f35f775ecfac6fcfd1777015fd5ff6678f72d8beacc29ce236ced"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-healthy-rejected/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "sha256": "22f4b765678164a571fb5bfe11abc2ec5bf2fac7e350695acb475a9a0d01c68c"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-result.json",
+      "sha256": "b68b745b1a70171865609b5b5cbe54f0beac5dd5a641b90ab79bdea67fb9cfb9"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected.log",
+      "sha256": "d16594d67ecc9e78e003451ecc3b34d82132fb486e87df0da2235426a3cfe670"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected.xml",
+      "sha256": "5290dfcb10199aea18f34724b9e1c6f8b0875dec71fd45b0404f7f82ce7cf84c"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-warming-rejected/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "sha256": "eb5339081787f28f5705af71b8a8747d639f621216ba3d00e61fba667b034ac4"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode.log",
+      "sha256": "f78255993d6ab7476e58413647eed6916837ed7beeb22ba951692436f83d6baf"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode.xml",
+      "sha256": "786f948b3fd56deacfa8eca07007cff057653d1cdf2e8f4c12da61d96add9390"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+      "sha256": "55a88cb8ae08bc2b6742045b823a18ad37e0f27052901fff4d31d9e49d984a82"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_no_owner_yet_can_warm_until_owned_ready.json",
+      "sha256": "b31d86f0cd4640b71603415a44b169ef25e0d76c3b3745a4f5feed082f03dbc8"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+      "sha256": "f17f3df8f1508cb5d75d65e3a2a83847b2aba9241c6d9269dd7df1a7a1a8e3ac"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/result.md",
+      "sha256": "51ebaf703d9f042db205ead51a5b4242407069b8f6b85f5f3f529a579092bed3"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/source-checks.json",
+      "sha256": "0ca85d9edd31868f0bbf88516d946f9634cb3eec48c44f676822b8d17599880d"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/source-probe.py",
+      "sha256": "ac52bd913ae6b60faad605d07f8bfe31d63340cdee5cc19148be0b6e69a8bf72"
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_start_owner_contract.py",
+      "sha256": "b262fb579e4a5c082ed1faff53172707ff2eedb0a93e880ca0df68cf65d436fc"
+    }
+  ],
+  "old14_plus19_modules_builder_Swift_requirements_preserved": [
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee"
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+      "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_contract.py",
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+    },
+    {
+      "path": "tools/print-agent/test_macos_default_printer.py",
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a"
+    },
+    {
+      "path": "tools/print-agent/test_macos_native.py",
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704"
+    },
+    {
+      "path": "tools/print-agent/build_console.py",
+      "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e"
+    },
+    {
+      "path": "tools/print-agent/wms_print_direct_macos.swift",
+      "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+    },
+    {
+      "path": "docs/requirements/WMS-607.md",
+      "sha256": "2f1f249822f3b7dc56f9b4eda824d065b766528b94d0e1975d9d7c3033bfefdc"
+    }
+  ],
+  "15_second_test_deadline_unchanged": true,
+  "bash_syntax": "PASS",
+  "precode": {
+    "name": "WMS607.startupOwner",
+    "tests": "3",
+    "failures": "1",
+    "errors": "0",
+    "skipped": "0"
+  },
+  "independent_new3": {
+    "counts": {
+      "name": "WMS607.startupOwner",
+      "tests": "3",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "cases": [
+      {
+        "case": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+        "mode": "foreign",
+        "native_exit": 1,
+        "raw_sha256": "d45fd687716873a073dfa6df2974d28bf8304c19948b6e1fa6f56fed910533a0",
+        "events": [
+          "lsof",
+          "nohup|$CASE/app/wms-print --updater-start $CASE/state",
+          "lsof",
+          "ps|foreign|42424242",
+          "launcher-released"
+        ]
+      },
+      {
+        "case": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+        "mode": "warming",
+        "native_exit": 0,
+        "raw_sha256": "c65dc96467601b1cbbbeb4d0a41060527ef181842bf7dfe0bc81b4bdffd62f4b",
+        "events": [
+          "lsof",
+          "nohup|$CASE/app/wms-print --updater-start $CASE/state",
+          "lsof",
+          "no-owner-yet",
+          "startup-sleep",
+          "lsof",
+          "ps|owned|42424242",
+          "lsof",
+          "curl|health200",
+          "ps|owned|42424242",
+          "readiness",
+          "launcher-released"
+        ]
+      },
+      {
+        "case": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation",
+        "mode": "owned",
+        "native_exit": 0,
+        "raw_sha256": "fc58cade98e652bc1c808f137bded96890f844c2c4bfe9866dd625aeb38bf45f",
+        "events": [
+          "lsof",
+          "nohup|$CASE/app/wms-print --updater-start $CASE/state",
+          "lsof",
+          "ps|owned|42424242",
+          "lsof",
+          "curl|health200",
+          "ps|owned|42424242",
+          "readiness",
+          "launcher-released"
+        ]
+      }
+    ]
+  },
+  "broad_native_old_tests_build_CI_or_messages_run": false,
+  "fresh_etalon": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "developer_receipts": {
+    "commit": "7cf184f80846eb500753998b27d8b04d04c0a536",
+    "verified_remote": "7cf184f80846eb500753998b27d8b04d04c0a536\trefs/heads/codex/wms607-startup-owner-fix-20261007",
+    "reports_not_rerun": {
+      "precode": {
+        "sha256": "afe8b6d352f090b407343937fef1b1d545b38ab78d62d12b74df66a98c18f286",
+        "counts": {
+          "name": "WMS607.startupOwner",
+          "tests": "3",
+          "failures": "1",
+          "errors": "0",
+          "skipped": "0"
+        },
+        "IDs": [
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+        ]
+      },
+      "green": {
+        "sha256": "e929241e23a8a24c5ca3379618cfef2f5d589fa2484ce33f44b35076afef9374",
+        "counts": {
+          "name": "WMS607.startupOwner",
+          "tests": "3",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        },
+        "IDs": [
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+          "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+        ]
+      },
+      "rollback": {
+        "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+        "counts": {
+          "name": "WMS607.updaterRollbackStop",
+          "tests": "4",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        },
+        "IDs": [
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_foreign_owner_not_signaled_existing_application_recovery_preserved",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_error_retains_target_and_recovery",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_owned_TERM_success_survivor_retains_target_and_recovery",
+          "test_macos_direct_updater_stop_contract.RollbackStopContract::test_successful_owned_stop_restores_previous_and_preserves_journal"
+        ]
+      },
+      "updater": {
+        "sha256": "9a8c2abc401f2ebd8bb022e21051c1f614c6de7bd3040f9638b570e82d837c26",
+        "counts": {
+          "name": "WMS607.directMacUpdater",
+          "tests": "10",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        },
+        "IDs": [
+          "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_direct_build_metadata",
+          "test_macos_direct_updater_contract.UpdaterContract::test_preservation_actual_public_and_current_journal_replay",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc3_lossless_backup_and_archive_or_space_failure",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc4_foreign_port_owner_and_health200_wrong_process",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc5_replace_and_start_rollback_preserve_current_journal",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc6_repeat_concurrent_and_interrupted_update_recover",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc7_actual_journal_replay_after_update_and_failed_restart",
+          "test_macos_direct_updater_contract.UpdaterContract::test_uc8_no_security_printer_or_dependencies_change_permission_recovery"
+        ]
+      },
+      "existing": {
+        "sha256": "73efffce6d071d6149981e9fda56cdca400e2cbb5025d543e66d23c9ec626724",
+        "counts": {
+          "name": "WMS607.existingMacContracts",
+          "tests": "19",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        },
+        "IDs": [
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_default_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_installed_size_aware_receipt_replays_after_upgrade_and_restart",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_new_label_passes_58x40_to_actual_lp",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_printer_list_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_queue_validation_timeout_is_distinct_and_retryable",
+          "test_macos_artmaks_contract.ArtMaksMacContract::test_same_png_with_changed_size_is_rejected",
+          "test_macos_default_printer.DefaultPrinterTests::test_cups_unreachable_is_not_missing_default",
+          "test_macos_default_printer.DefaultPrinterTests::test_error_text_is_not_a_queue_or_uncertain_job",
+          "test_macos_default_printer.DefaultPrinterTests::test_localized_default_and_replay",
+          "test_macos_default_printer.DefaultPrinterTests::test_stale_default_keeps_same_key_recoverable",
+          "test_macos_default_printer.DefaultPrinterTests::test_valid_default_with_warning_still_prints",
+          "test_macos_native.NativeRuntimeTest::test_compiled_store_crash_faults_and_retry_self_test",
+          "test_macos_native.NativeRuntimeTest::test_cups_unique_title_receipt_state_and_reasons",
+          "test_macos_native.NativeRuntimeTest::test_http_async_legacy_recovery_and_restart",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_accepted_receipt_same_key_never_resubmits",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_error_preserves_specific_pre_submit_reason",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_submitting_same_key_has_one_live_external_submission",
+          "test_macos_artmaks_http_contract.ArtMaksHTTPContract::test_unknown_same_key_never_resubmits_after_queue_recovery"
+        ]
+      }
+    },
+    "raw_identity_records": [
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/precode/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+        "sha256": "a06d6fee32ff7d0df4a070a6db25256d8d92cff628e4381f075aa31bf3cbff9f",
+        "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/precode/test_no_owner_yet_can_warm_until_owned_ready.json",
+        "sha256": "a9da49ac00a18138aedc8b89652c12e4c35c113eabba02ab29ef64d8c2279e14",
+        "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/precode/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+        "sha256": "bae804b336a914f13b5836009bcf2a5f7ec54a480681bcd266af55d9c9424895",
+        "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll.json",
+        "sha256": "f08dbd2468a491a0e99523c4cc0aa966703b723a6762239ed77f4cc4e9f3b579",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_no_owner_yet_can_warm_until_owned_ready.json",
+        "sha256": "0b3e779b92ce2591627add6f03577d7b5d89d540d6237ad49617eaf4792addf6",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/green/test_owned_healthy_start_succeeds_with_real_health_validation.json",
+        "sha256": "c47875e6ecbb5560f9391e8dd810a3a0e49034bb8e0e4fd62b8fb106badddbd7",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/rollback/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json",
+        "sha256": "db3901416f9b7589d852deec20a4ed60e77dc5895a6af5a7044c9de5695a54aa",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/rollback/test_owned_TERM_error_retains_target_and_recovery.json",
+        "sha256": "349027b4229e24ade347612402f81c2265c4dd88bcf06ea7a3b45f925d4cfeba",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/rollback/test_owned_TERM_success_survivor_retains_target_and_recovery.json",
+        "sha256": "0ae24d4047145a1b77d76509f2ac865db438c5c950273aa57258d50b69a9e5d2",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/rollback/test_successful_owned_stop_restores_previous_and_preserves_journal.json",
+        "sha256": "e0a67855da28a50ddcf926e5f36e7e0992984a4a53ce891220d226bc4584e51d",
+        "source_sha256": "a8f91951b2fab957840b0c4861001d8aaa1ff69db794b446717dbc5be9d8a946"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_preservation_actual_direct_build_metadata.json",
+        "sha256": "8865cb2019443680f0d4576e8f4d352c6304e0537ed20e497bf5ce3783621f8a",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_preservation_actual_public_and_current_journal_replay.json",
+        "sha256": "f10d097452a2234cefca92536103fe380d6c9ca85f7e5746a49d4a61ee93cf0f",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+        "sha256": "e9e65657bc4f0b4ca263584c3f118af86f5598c334f4c61e6915b304ba9144d8",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+        "sha256": "663100e488549fadadf57de531e82c7df44dba6c73680d77a3ee0597496ac9f5",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+        "sha256": "e3efc97f0d28714a2501670b2ed49f10ded27788da67c2c2d46539403edce2c5",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+        "sha256": "57c0ec3d6e4a8bf2164d1e55fbd5bf094f9f05bc7b5622ec6905f9ca0e28c551",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+        "sha256": "5e1557cb309c048c3c32f330ce6a1bdb9a1dfeecb587e1d6f601875e1f8d2059",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+        "sha256": "047568868cea882f70e6b73724534d3ef2ef996f4dbb3679d197662a2e59663f",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+        "sha256": "9f1101ec13579816073fd158b690011196a70354ea0123feb3a10078d6f46ddd",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/updater/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+        "sha256": "5a286da1fb2df05aa7bd84b1a0840fdc62c97075ee8f6b662545478ad2b76660",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/http/test_accepted_receipt_same_key_never_resubmits.json",
+        "sha256": "cf0311616a96b6f7f8fbc957d462497771eaeab1b24bcdb224cfbca257ea0fe5",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/http/test_legacy_error_preserves_specific_pre_submit_reason.json",
+        "sha256": "1a99b579ed7896d67445e057fd8e7b38b74709a37dd833354aebff065aa4cef4",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/http/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json",
+        "sha256": "f7f4d601035ccefbd9b94638748b41cca9d0a72b611cc25d67df417a6299a054",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/http/test_submitting_same_key_has_one_live_external_submission.json",
+        "sha256": "89f1711e59d15a3b2cb759ca4bd7548b662cc5343454ee1e670b82af31c6fbc4",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "docs/evidence/WMS-607/startup-owner-fix-20261007/http/test_unknown_same_key_never_resubmits_after_queue_recovery.json",
+        "sha256": "5d0cf22288205f79fe289bfe2e8a1f8001d57757e69af06fb742204f22b49764",
+        "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      }
+    ]
+  }
+}
