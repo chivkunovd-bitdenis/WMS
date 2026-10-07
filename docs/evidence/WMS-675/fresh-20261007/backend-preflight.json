@@ -1,0 +1,10 @@
+{
+  "transport": "normal SSH/default identities to production host from configured ProdSql; separate from forced SQL gateway",
+  "operation": "read production checkout/api identity/observed handoff source SHA256",
+  "exit_code": 0,
+  "result_lines": [
+    "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "a99f71e8711f35517867f223dab53826b776f6018fb2421df94bc97b0ac5c79a sha256:f9dd6b915e3ef830c2941db97f11b2982eda0d08b5f969bb9324e7f15c529374",
+    "137e9f7484cd5b4122c43f6ae56a40018dc5b755edc7144aaf48a744a1bafb07  /app/app/services/fbs_observed_handoff_service.py"
+  ]
+}

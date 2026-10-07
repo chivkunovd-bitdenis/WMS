@@ -1,0 +1,13 @@
+{
+  "reader": "docs/evidence/WMS-675/recovery-20261007/collect_current_accounting.py",
+  "reader_sha256": "8db2a2341f20a6cd562b1d1884bb878d37722f56d6d7312816152ebb1df7bcf4",
+  "source_receipt": "1c8810bff603b63ea1e12e07df1b5fc76828df52",
+  "normal_config_load": true,
+  "no_runtime_override": true,
+  "started_at": "2026-10-07T06:26:39.203883+00:00",
+  "finished_at": "2026-10-07T06:26:58.710147+00:00",
+  "exit_code": 0,
+  "output_directory": "docs/evidence/WMS-675/fresh-20261007/accounting-20261007T062639Z",
+  "stdout_sha256": "a6676ca2a05af4c8b2d7ea5edcf4c3e24a1ee82a078b85be76b1b2a3dedc7d31",
+  "stderr_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

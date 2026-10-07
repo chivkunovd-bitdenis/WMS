@@ -1,0 +1,385 @@
+{
+  "source_proof": "1c8810bff603b63ea1e12e07df1b5fc76828df52",
+  "production_source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "writes_by_collector": 0,
+  "members": [
+    {
+      "path": "accounting-20261007T062639Z/balances_locations.csv",
+      "bytes": 1548,
+      "sha256": "12f7b02d75f29605f736015a84707682a20daed6ded4f88466ee22541d23587d",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/balances_locations.sql",
+      "bytes": 706,
+      "sha256": "5f15e48433139306c7f11f3d1409817d6a1529636ad7d7fe9c286f61a97e0150",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/balances_vs_all_movements.csv",
+      "bytes": 705,
+      "sha256": "b51fcf4ce2925fcc6bd8cd4dba012745fa59a07f55677282de6cead83027a55f",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/balances_vs_all_movements.sql",
+      "bytes": 1056,
+      "sha256": "f0a3f45bbea547b43a7ffff9fd73693d5d9feebe9046f689766ba923236c9e5c",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/billing_entries.csv",
+      "bytes": 11553,
+      "sha256": "eb4ee354b677d05a2c16736c46337b56e5f378c2483033587e1f20a6ff816839",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/billing_entries.sql",
+      "bytes": 892,
+      "sha256": "65da36492b3a5ebc4c6ec1b7667ddd9c165b490b5636344d121aa45277d1f9b9",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/identity.csv",
+      "bytes": 471,
+      "sha256": "9bd231a1fd0c71f80c3cf9e573cde422de50ce89e868949cff77b9f25f6a1f62",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/identity.sql",
+      "bytes": 388,
+      "sha256": "b2a7c9119e4600225725d0d9559c891dce90d64bf438196b1cc2107fa8c92401",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/ledger.csv",
+      "bytes": 20767,
+      "sha256": "1bb605a3c3b5ada970f2ab2b3075a4452a66eb1455d9b0a40b82319a363dc612",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/ledger.sql",
+      "bytes": 661,
+      "sha256": "fe3eae4ea8b9bb5df40e40e3ad028a2661ab1922c32598371d25c0ced42b1134",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/manifest.json",
+      "bytes": 3246,
+      "sha256": "9147079690602d201214e42f74e438d97f9b210349a6c1b76319649f45ee74e4",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/new_history_attribution.csv",
+      "bytes": 551,
+      "sha256": "8f9fb37157d4fb6074dcd8a8da911ccb62e2162a661dc3158817218086acbbae",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/new_history_attribution.sql",
+      "bytes": 1372,
+      "sha256": "f03771d564677ae257ba6c7ed13e090121d4fb5cf990bbc83623db229647a492",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/operation_facts.csv",
+      "bytes": 6342,
+      "sha256": "18719c19142fe7d8475d0201e91e4bd89469545cd6d16e3fa2933ec094dd4dcc",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/operation_facts.sql",
+      "bytes": 842,
+      "sha256": "4392c6d9b7d5460b3ce305edfaaad164590ebc8b4f79c010d9f772180b39deb5",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/orders_positions_reserves.csv",
+      "bytes": 11355,
+      "sha256": "4a385ff7c9450bc6f986ff5c57f4fba7d305fc064473e8183609354ab324860e",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/orders_positions_reserves.sql",
+      "bytes": 845,
+      "sha256": "a9c989b6a3b4e2bcb984cb30f907309e3e678bc2f1465a29dc9d367a66b4d77e",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/other_negative_since_audit.csv",
+      "bytes": 146,
+      "sha256": "499a55f8e23b2ce4c32bab656e701ffb686e6491a3d8335842e1841ad341c592",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/other_negative_since_audit.sql",
+      "bytes": 1239,
+      "sha256": "d7eef4c3b1fbbf7dfdfad17576aa55c39776a3d145db2ff45c4871aebac4a9a8",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/supply_operations.csv",
+      "bytes": 912,
+      "sha256": "a5d9de1971fee928238ad0469baaf0519c248f9a210c6e26e3ab60104c30820e",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/supply_operations.sql",
+      "bytes": 738,
+      "sha256": "96c41636c52086dda4d77032f24def80c086eb1255d0bd0be43a0e8f51d99ba5",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/unlinked_fbs_movements.csv",
+      "bytes": 147,
+      "sha256": "5dd344d4192b2b16662607b2315dcc8b9d56f3ee0826aa1f73739f0e3964d4dd",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-20261007T062639Z/unlinked_fbs_movements.sql",
+      "bytes": 1069,
+      "sha256": "937bd9a92cd79e3ca4a7f1e121247c0a9840f9ebd0f6fe952fc4289a2f8ced2b",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-execution.json",
+      "bytes": 687,
+      "sha256": "96a7277ccac075d5e6fe3395d286f613c1381a6247bc70119def349545312175",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-reader.stderr",
+      "bytes": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "encoding": "identity"
+    },
+    {
+      "path": "accounting-reader.stdout",
+      "bytes": 2404,
+      "sha256": "a6676ca2a05af4c8b2d7ea5edcf4c3e24a1ee82a078b85be76b1b2a3dedc7d31",
+      "encoding": "identity"
+    },
+    {
+      "path": "backend-preflight.json",
+      "bytes": 572,
+      "sha256": "fe7b3d9a9ea6faa684db6ffd2eb7c5bccb8387ae91e150bfdf8f51fbd23d9acf",
+      "encoding": "identity"
+    },
+    {
+      "path": "missing-recalculation.json",
+      "bytes": 51813,
+      "sha256": "48876fb7e2bc4172964ddfaa176d81bdd3e9c62711a560fb6f2cd9e3db72e934",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/manifest.json",
+      "bytes": 7132,
+      "sha256": "6c4ca0fa16632f31d9f16b926a9335431930577febb3b8060e56aca8d7c0e925",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0113371235-0054-3.json",
+      "bytes": 1196,
+      "sha256": "e89ba5cdd1cc1bc09b03c18088ac7d98d43cfbf8a3f7aabf479bd74e75761367",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0144953533-0124-1.json",
+      "bytes": 1196,
+      "sha256": "89645788ed9fc4ef661ac65947c2c8bc9477c2fe5da91480b0de758e378bb379",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0148656673-0134-1.json",
+      "bytes": 1157,
+      "sha256": "a23615b624d51fab34e8c048d01fec125ae8309dc46c02a1ea38cbc0811434f2",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0153677007-0258-1.json",
+      "bytes": 1195,
+      "sha256": "b9fde8934f0102f7fbc68eddb7347b576a069fc96fde43d58c4678eda70497d7",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0164033835-0039-1.json",
+      "bytes": 1195,
+      "sha256": "8a3ada5172493442c0a2621d49cec9cf77998762dba3ff75f734ca0b921bc0b4",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0172663629-0081-1.json",
+      "bytes": 1195,
+      "sha256": "09bae4185d8f871a14d359b03eac420406454ad73c74daa95a50adb634dc9dce",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0181745532-0045-3.json",
+      "bytes": 1153,
+      "sha256": "54c923413c29e0d85ec3a9a9282787c29efb18ee37fe817af0fbabcc1b6eafd7",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0187441457-0073-1.json",
+      "bytes": 1188,
+      "sha256": "f886cf7644bebfbd7fb9222abdb0e2ce66eab019b210eda9fcce65f684bb99fb",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0190055173-0461-1.json",
+      "bytes": 1198,
+      "sha256": "b95a187f7d0c4a19edd186fba200f1ade1708850022c5a5a4759757dd1de4bcb",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0236443586-0012-1.json",
+      "bytes": 1198,
+      "sha256": "bd4da66f467d2a4fa7f51609cf487ff54cd48fe07fc78ee963537044a7256a98",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0249035122-0351-1.json",
+      "bytes": 1188,
+      "sha256": "d9c446c0f1c0175ecf5d3e13c8a239f7d3f8230ebd56de9c86b71a5e404cd268",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-0282817049-0013-1.json",
+      "bytes": 1153,
+      "sha256": "0956387eac7586b3f7da00c7998e9545208bc784b976ff416574a1e7b1e6431e",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-06383353-1897-1.json",
+      "bytes": 1182,
+      "sha256": "ed87e5e28c98fced842cc0ee60641ea3f144a8c5ef7d57af4d6051f8f18840dc",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-21052558-0445-1.json",
+      "bytes": 1182,
+      "sha256": "f87af3a72870a6ab1f3af5622ed8a834304ad35174fb622af71f4ed606ac9540",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-23388119-0163-1.json",
+      "bytes": 1192,
+      "sha256": "4dff30c34c31930b33c37884dd2d593609eb2fb1eb794e289d76db5c3ce15853",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-28508065-0594-1.json",
+      "bytes": 1185,
+      "sha256": "e7b853cacad85a6b74e6d6e87b8fdb7b0b382468b5de2d2548d56653b9353d44",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-31853470-0198-1.json",
+      "bytes": 1184,
+      "sha256": "69e6a8ca26a0c40bbfb3f858722f4c0103da2ffe9b941a7db3c04601593ed4b5",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-45035035-0211-1.json",
+      "bytes": 1182,
+      "sha256": "b7730866ce8534284f52bd02da7a1e7fe5af25ef60c01254e880a85f627b282c",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-50261136-0017-1.json",
+      "bytes": 1190,
+      "sha256": "a100fa1094b48eaa98c364a7baa67dff82f77784b44d8f7738dd90e0ee1b1b2c",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-55322493-0272-1.json",
+      "bytes": 1190,
+      "sha256": "ef696c8140212151bbc30c2ad1ab86a55544fafe2685c6c70c87cf323f158298",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-56845110-0045-1.json",
+      "bytes": 1182,
+      "sha256": "930ac9f9f8be2bff90dc31c1e7d38b368759270315d0756554378e0d20088b90",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-56907807-0024-1.json",
+      "bytes": 1185,
+      "sha256": "05f3a2ef92a85fcd9da33bb03c6f1f0376cfb329796f3756286b3856148cc4d6",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-59814512-0364-3.json",
+      "bytes": 1182,
+      "sha256": "0fc56debc661996fa68b949b4a6c69d6080aa0a73c96463427e9707c471e86a5",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-62035277-0532-1.json",
+      "bytes": 1184,
+      "sha256": "97ccebf089ef3ef96aa2e88d4f5bbf2a4ea56f58c0c7a77d7b9c00996b9f2086",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-66144885-0156-18.json",
+      "bytes": 1188,
+      "sha256": "405cd49f894c4f7dcd1a4d5509389ccf517588f0c03e0be5cbec014ac7a7b4c4",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-80034639-0273-1.json",
+      "bytes": 1192,
+      "sha256": "6af01bbd447a095786efa2b6cd55c7c07ee01dab437f28c5d24a9fd9b4e6fd70",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-81035721-0742-1.json",
+      "bytes": 1184,
+      "sha256": "a393d89b346dbc1428b4739c06a3f118e1c2784fecb3c339ed4bfeaeb479f847",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-83893932-0680-2.json",
+      "bytes": 1182,
+      "sha256": "39f9d67fa43fc5b5a23233298f7d93c7f7b88710d58f39c4be8b28b9e02fc175",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-85257535-0274-1.json",
+      "bytes": 1192,
+      "sha256": "d4035620c09cff378b849b7a952db829abc360c0a91714a30ee01e2f9e3ffd87",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-99185584-1963-5.json",
+      "bytes": 1188,
+      "sha256": "518c1cc36eee9a67947afdff28d9fc406f9a366cf94234154ce177a6d6c47218",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/posting-99630148-0017-1.json",
+      "bytes": 1194,
+      "sha256": "26b1786f010c0ba47938c9a6ea8c45c4b32846484ae5bfd96d0034d3f609a054",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-20261007T062857Z/scope_snapshot.json",
+      "bytes": 16499,
+      "sha256": "33d4f272de819e5c765d182ced8d926ac7b2111144ac6cb619b52e404f736640",
+      "encoding": "identity"
+    },
+    {
+      "path": "ozon-execution.json",
+      "bytes": 2801,
+      "sha256": "e7628f6d467b1a82d700ab54489bd74bc1be1e4cc00a94d87b581f04e37d27bf",
+      "encoding": "identity"
+    },
+    {
+      "path": "result.md",
+      "bytes": 5609,
+      "sha256": "48b09e0a7fb6d0cbbdd2aaa9aa2d86f0a8c335e062a81f68220fdd3d83d09cb1",
+      "encoding": "identity"
+    }
+  ]
+}
