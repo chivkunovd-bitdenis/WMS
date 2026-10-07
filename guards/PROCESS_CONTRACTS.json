@@ -236,7 +236,7 @@
     "scripts/ci/test_check_task_documents.py": "a09cab8829cd79eb4fcb96a4c993ad92388b4c6df35ad4112c349e66ee081111",
     "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "7e3aceda13671e056a510159bd74d96dcfc0bf1c1c66086a2bd9d555fb6940d8",
     "frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx": "3fbd20b458e1f1752b515880f760cf7513df8c0b9eeda7d4f9baf34793cb8a7f",
-    "frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx": "d9b4e3ff5801c9979e34cae492e603acb1ba640f06f4e5d3ae2a4e9962b10eac",
+    "frontend/src/screens/ff/FfInboundRequestView.wms684.dom.test.tsx": "946a70d53055cea17c8038a04d4299f6a49ee971b134e492f7d47db3d2c272d5",
     "frontend/src/screens/ff/FfInboundRequestView.wms586.dom.test.tsx": "efd4433cf6c010db36d4fbda5b81e5b97a4c01dc00c5f19859acb232e16d48fb",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.regression.dom.test.tsx": "9080aa4f3009c3bfc80619dc0479920f97dd9e2a988e02c07b1bc262a29a15f2",
     "frontend/src/screens/ff/FfInboundRequestView.wms687.dom.test.tsx": "90a5f72a618d4d41f1f77674c2946f9edeffd2d9dc1c255cca7b4a0880f530d2",
@@ -260,7 +260,7 @@
     "frontend/src/screens/v2/fbsPickingListPrint.wms657.test.ts": "e409e97054934846973de6c7a0d6418f0cef3316bcb83d283ad05e3d3188bcd4",
     "frontend/src/utils/printInboundReceivingSheet.test.ts": "842f219638f379de60635d76dc1d326cf06a4bd3a1d22ce0907636efbd107086",
     "frontend/src/utils/printShipmentPackagingSheet.test.ts": "79268fd951523f9ed82d90a33823089faf83377457cb54976099891442bb9df7",
-    "frontend/src/test-contracts/inbound684586Harness.tsx": "b4e5a14d030f409d67a4589be107c0dd9c270a91459f42e363e8bf44c4310390",
+    "frontend/src/test-contracts/inbound684586Harness.tsx": "6fff1f7e1b70f8ff9cbd880af0dac586f21fa0139404ddb3faa987036f811133",
     "backend/tests/test_wms681_postgres_recovery.py": "0cce6ab605f902238f497e4b780fcde24987ba46d6ef91767b0ada52aa891189",
     "backend/tests/test_fbs_packing_box.py": "e2af8bd642ea0136236f9b8a5190a52438e27de37d83169f0d9633b024af8e7d"
   },

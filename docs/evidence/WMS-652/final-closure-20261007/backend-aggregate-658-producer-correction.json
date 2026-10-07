@@ -34,5 +34,13 @@
     "sha256": "c82c30cf57d2ca7b2c689daa06e9d1cc2b606f688bcfb7b4b322e59d8a63c649",
     "database": "wms_test_658_ci_producer_20261007",
     "remote_new_producer_status": "PENDING_NEW_FULL_CI"
-  }
+  },
+  "original_artifact_replay_with_corrected_report_binding": {
+    "tests": 4777,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 210,
+    "success": true
+  },
+  "replay_limit": "Genuine run37547687095 original policy cases, moving only9PG cases to separate mandatory report. New cases introduced after f614 cannot be evidenced by older run and remain pending new fullCI."
 }
