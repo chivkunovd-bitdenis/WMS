@@ -142,6 +142,7 @@ import {
   undoFbsPick,
   updateFbsSupplyPlannedShipmentDate,
   validateFbsKiz,
+  validateFbsPrintBindings,
   type FbsKizLookup,
   type FbsOrderPrintTapeRequest,
   type FbsPrintBatch,
@@ -1593,13 +1594,19 @@ export function FfFbsSupplyWorkspace({
                   enabled: true,
                 },
                 async (kiz) => {
+                  const validateCurrentBinding = async () => validateFbsPrintBindings(token, [{
+                    order_id: result.order_id,
+                    supply_id: printed.supply_id,
+                    marking_id: printed.marking_id,
+                    cis_code: kiz,
+                  }])
                   const printResult = await startClaimedAutomaticPrint(
                     printAttemptKey,
                     async () => printMarkingCodeTape(
                       [{ cis: kiz, codeId: printed.id, hasLabelArtifact: printed.has_label_artifact }],
                       { units: [{ block: 'cz', copies: 1 }] },
                       undefined,
-                      { authToken: token },
+                      { authToken: token, beforeDispatch: validateCurrentBinding },
                     ),
                     {
                       claim: (attemptKey) => claimFbsScanAutoPrintTarget(
