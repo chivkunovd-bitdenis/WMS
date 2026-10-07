@@ -3105,7 +3105,7 @@ export function FfFbsSupplyWorkspace({
       marketplace: workspace.supply.marketplace,
       sellerName: workspace.supply.seller.name,
       wmsWarehouseName: workspace.supply.wms_warehouse.name,
-      routeLabel: workspace.supply.delivery_type === 'pvz' ? 'ПВЗ' : 'Склад / СЦ',
+      routeLabel: workspaceRouteLabel,
       deadlineLabel: new Date(workspace.supply.nearest_deadline_at).toLocaleString('ru-RU'),
       printedAtLabel: new Date().toLocaleString('ru-RU'),
       rows,
