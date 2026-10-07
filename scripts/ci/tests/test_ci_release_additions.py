@@ -9,7 +9,7 @@ class ReleaseCommandContracts(unittest.TestCase):
     def test_actual_candidate_product_scope_uses_fixed_independently_reviewed_reference(self):
         raw = (ROOT/'.github/workflows/ci.yml').read_text()
         guard = raw.split('\n  guards:\n', 1)[1].split('\n  printer-windows:', 1)[0]
-        self.assertIn('python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d', guard)
+        self.assertIn('python scripts/ci/product_scope.py --root . --trusted-ref 1cf85fc500bc6ee7a5f4ef283b250c4bf59c5333', guard)
         self.assertIn('pytest -q scripts/ci/tests/test_product_scope.py --junitxml=', guard)
 
     def test_existing_517_pg_run_produces_report_without_duplicate_run(self):
