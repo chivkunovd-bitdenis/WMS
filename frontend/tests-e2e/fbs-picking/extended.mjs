@@ -151,11 +151,22 @@ export async function registerExtended(h) {
     }finally{await other.close()}
   })
   await run('group-partial-set',async(page,f)=>{
-    await page.route(`**/fbs-supplies/${f.supplies[1]}/pick/set`,r=>r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:{code:'injected_partial',message:'Test second supply failed'}})}),{times:1})
+    const requests=[]
+    await page.route('**/pick/set',async r=>{
+      const supply=new URL(r.request().url()).pathname.split('/').at(-3)
+      if(r.request().method()!=='POST'||!f.supplies.includes(supply)){await r.continue();return}
+      requests.push({supply,body:r.request().postDataJSON()})
+      if(requests.length===2)await r.fulfill({status:503,contentType:'application/json',body:JSON.stringify({detail:{code:'injected_partial',message:'Test second supply failed'}})})
+      else await r.continue()
+    })
     await qty(page,f).fill('4');await qty(page,f).press('Tab')
     await expect(error(page)).toBeVisible()
     await state('group-partial-real-first-transaction',f,3);await expect(qty(page,f)).toHaveValue('3')
-    assert(!snapshot().picks.some(p=>p.active&&p.supply===f.supplies[1]))
+    assert.equal(requests.length,2);assert.deepEqual(requests.map(r=>r.body.quantity),[3,1])
+    assert.notEqual(requests[0].supply,requests[1].supply)
+    const picks=snapshot().picks.filter(p=>p.active&&f.supplies.includes(p.supply))
+    assert.equal(picks.filter(p=>p.supply===requests[0].supply).length,3)
+    assert.equal(picks.filter(p=>p.supply===requests[1].supply).length,0)
   })
   await run('group-lost-set',async(page,f)=>{
     let first
