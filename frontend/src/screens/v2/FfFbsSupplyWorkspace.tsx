@@ -1201,40 +1201,61 @@ export function FfFbsSupplyWorkspace({
     if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
+    const supplyIdAtStart = workspace.supply.id
+    let retryErrorMessage = ''
+    const retryOperation = async () => {
+      retryErrorMessage = ''
+      const current = await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)
+      const stillMissing = current.orders
+        .filter((order) => !order.sticker.code)
+        .map((order) => order.id)
+      const retryBatch = stillMissing.length
+        ? await fetchFbsPrintBatch(token, authHeaders, supplyIdAtStart, {
+          kind: 'order_sticker', order_ids: stillMissing, retry_missing: true,
+        })
+        : null
+      const refreshed = retryBatch
+        ? await fetchFbsWorkspace(token, authHeaders, supplyIdAtStart)
+        : current
+      if (retryBatch?.order_errors.length) {
+        retryErrorMessage = retryBatch.order_errors.map((item) => item.message).join(' ')
+      }
+      return prepare && !refreshed.supply.packaging_task_id
+        ? startFbsSupplyWork(token, authHeaders, supplyIdAtStart)
+        : refreshed
+    }
+    const onRetrySuccess = () => {
+      if (!retryErrorMessage) return
+      setError(retryErrorMessage)
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
+      })
+    }
+    const retryAfterOrderErrors = (message: string) => {
+      if (!write.isCurrent()) return
+      setError(message)
+      setRetryAction(() => () => {
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
+      })
+    }
     const requested = missing.length ? fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
       kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
     }) : Promise.resolve(null)
     void requested.then(async (batch) => {
       if (!write.isCurrent()) return
-      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
+      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, supplyIdAtStart), '')
       else void load(true)
-      if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
+      if (write.isCurrent() && batch?.order_errors.length) {
+        retryAfterOrderErrors(batch.order_errors.map((item) => item.message).join(' '))
+      }
     }).catch((cause: unknown) => {
       if (!write.isCurrent()) return
       setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
       // The failed background request is deliberately not retried automatically.
       // Keep it attached to this supply and retry the same finite prepare sequence
       // only after the operator presses the existing Alert action.
-      const operation = async () => {
-        const retryBatch = missing.length
-          ? await fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
-            kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
-          })
-          : null
-        const refreshed = await fetchFbsWorkspace(token, authHeaders, workspace.supply.id)
-        const next = prepare && !refreshed.supply.packaging_task_id
-          ? await startFbsSupplyWork(token, authHeaders, workspace.supply.id)
-          : refreshed
-        if (retryBatch?.order_errors.length) {
-          setError(retryBatch.order_errors.map((item) => item.message).join(' '))
-        }
-        return next
-      }
-      const success = ''
-      const onError = undefined
-      const onSuccess = undefined
       setRetryAction(() => () => {
-        if (write.isCurrent()) void run(operation, success, onError, onSuccess)
+        if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
       })
     })
   }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
