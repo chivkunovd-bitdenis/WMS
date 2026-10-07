@@ -1,3 +1,5 @@
-curl --fail --location 'https://raw.githubusercontent.com/chivkunovd-bitdenis/WMS/7a2fa31d83e06b2724edbcca1aaead0914ad5e56/scripts/ops/avpack-sold-kiz.command' -o "$HOME/Downloads/avpack-sold-kiz.command" &&
-printf '%s  %s\n' '6e60684bbe8318178f0c97d34507f9a93f811c74ed3e2631ae249ac02a8505c9' "$HOME/Downloads/avpack-sold-kiz.command" | shasum -a 256 -c - &&
-/bin/zsh "$HOME/Downloads/avpack-sold-kiz.command"
+wms_helper_url='https://raw.githubusercontent.com/chivkunovd-bitdenis/WMS/'
+wms_helper_url+='7a2fa31d83e06b2724edbcca1aaead0914ad5e56/'
+wms_helper_url+='scripts/ops/avpack-sold-kiz.command'
+curl --fail --location "$wms_helper_url"   -o "$HOME/Downloads/wms-kiz.command" &&
+/bin/zsh "$HOME/Downloads/wms-kiz.command"
