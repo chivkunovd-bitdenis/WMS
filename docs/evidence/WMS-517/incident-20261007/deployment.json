@@ -1,0 +1,40 @@
+{
+  "deployed_sha": "212f19d548496fef7baf75c83204b771e304281b",
+  "previous_checkout_sha": "af965706d6e7d7bfe77d92d064d2982fa89f4cf7",
+  "date": "2026-10-07",
+  "release_authorization": "Owner explicitly requested direct deployment of the completed changes without further workflow stages.",
+  "services": {
+    "api": "running; image revision matches deployed_sha",
+    "web": "running; image revision matches deployed_sha",
+    "celery_worker": "running; image revision matches deployed_sha; ready at 17:25:18 UTC",
+    "celery_beat": "running; image revision matches deployed_sha"
+  },
+  "health": "https://wms.sellerfocus.pro/api/health returned status=ok",
+  "public_build_metadata": "https://wms.sellerfocus.pro/wms-build.json returned deployed_sha",
+  "runtime_sales_reader_sha256": "2010d666ec21b9035b0f487d5310666f81b0bd1cde9d538cc3b4c31c2969cf5a",
+  "runtime_repository_sha256": "9e1b259c3c6734b871a396ea1afa073f78ea37d7c334aa905114de836464c8cd",
+  "runtime_hashes_match_git_sources": true,
+  "live_read": {
+    "scope": "AVpack / ИП Горячкина Т.И.",
+    "method": "Two concurrent read-only calls to the installed registry and products handler, with separate database sessions; followed by the unbounded-date registry read.",
+    "period": "2026-10-01 through 2026-10-07",
+    "period_rows": 29,
+    "product_options": 13,
+    "all_dates_rows": 110,
+    "upstream_requests_for_concurrent_readers": 2,
+    "upstream_statuses": [200, 200],
+    "elapsed_seconds": 63.0,
+    "authenticated_operator_browser": "not observed"
+  },
+  "seller_access_allowed": true,
+  "withdrawal_production_submit_enabled": true,
+  "command_artifact_sha": "00fc369c774abd5428e178284d1a838345e8a4f8",
+  "command_artifact_sha256": "419ac3b5f8cba1eb367d7b1882b26f4ecbd2fc94c4c008af13ceff70c481f3a8",
+  "terminal_delivery_sha": "c83111f722977fab29c62ba36ce899001067767c",
+  "public_command_bytes_verified": true,
+  "personal_certificate_signing": "not performed; the owner confirms the signature in the existing CryptoPro flow",
+  "database_migrations_changed_or_run": false,
+  "main_changed": false,
+  "full_ci_for_deployed_sha": "not run; direct deployment requested by owner",
+  "rollback_images": "wms_prod-{api,web,celery_worker,celery_beat}:rollback-wms517-af965706d"
+}
