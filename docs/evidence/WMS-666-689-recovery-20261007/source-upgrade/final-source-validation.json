@@ -1,0 +1,24 @@
+{
+  "source_commit": "39d1afdc8f37cdfda3c7768804ccccc3c9ad4e6e",
+  "product_commit": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+  "independent_review": "154cdb1ff3e84ed4e592d883688c7df560579015",
+  "protected_files": 282,
+  "protected_hash_mismatches": [],
+  "previous_files_removed": [],
+  "suites_unchanged_from_reviewed_e77": true,
+  "suites": 29,
+  "policy_tests_passed": 26,
+  "policy_subtests_passed": 18,
+  "history_scope_tests_passed": 12,
+  "task_documents": "PASS",
+  "unapproved_product_paths": [],
+  "bootstrap_draft_pr": "https://github.com/chivkunovd-bitdenis/WMS/pull/406",
+  "main_merged": false,
+  "deployed": false,
+  "logs": {
+    "final-policy.log": "165b06808c52105fa73bc7a6d11880ebb2e60d6535a635237bde124518dde01d",
+    "final-history-scope.log": "33b93ba6339462d03f65e0be8c929bb55ab63aebdef59b12973eac349aff42c6",
+    "final-documents.log": "43afcc3873193d1a36386affcc7bb78a0e1d833b880beb1560dd549dd4469c59",
+    "final-product-scope.log": "eab1e9260172818aa5910e02abda069cdfbcb41f55f4a399151144cfcc352b5e"
+  }
+}
