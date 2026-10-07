@@ -1,0 +1,1 @@
+{"id": "release-pg-2", "exit_code": 0, "command": ["pytest", "-n", "0", "-q", "tests/test_wms662_cancellation_lock_order.py", "--junitxml=/home/runner/work/_temp/release-postgres/662-f6.xml"], "sha": "b568bfdddd8b106799428ce81451b406ffe9860b", "run_id": "37563300572", "run_attempt": "1"}

@@ -1,0 +1,13 @@
+{
+  "id": "command04",
+  "name": "PostgreSQL locks and immutable migration guards",
+  "command": "pytest -n 0 tests/test_wms659_bulk_inbound_boxes.py::test_wms659_c7_same_mutation_is_concurrent_safe",
+  "working_directory": "backend",
+  "command_sha256": "3cd504270e8d0e68438021db15cdb375d4fee9e37a14a0b2a32257868eb37f52",
+  "exit_code": 0,
+  "started_epoch": 1791341108.928308,
+  "completed_epoch": 1791341116.8688264,
+  "sha": "b568bfdddd8b106799428ce81451b406ffe9860b",
+  "run_id": "37563300572",
+  "run_attempt": "1"
+}

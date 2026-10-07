@@ -1,0 +1,17 @@
+============================= test session starts ==============================
+platform linux -- Python 3.11.16, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/runner/work/WMS/WMS/backend
+configfile: pyproject.toml
+plugins: asyncio-1.4.0, xdist-3.8.0, anyio-4.15.1
+asyncio: mode=Mode.AUTO, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collected 1 item
+
+tests/test_wms659_bulk_inbound_boxes.py .                                [100%]
+
+=============================== warnings summary ===============================
+app/main.py:19
+  /home/runner/work/WMS/WMS/backend/app/main.py:19: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+========================= 1 passed, 1 warning in 2.65s =========================

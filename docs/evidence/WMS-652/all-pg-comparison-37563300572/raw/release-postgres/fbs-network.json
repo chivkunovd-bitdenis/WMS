@@ -1,0 +1,15 @@
+{
+  "allowed_endpoint": [
+    "127.0.0.1",
+    5432
+  ],
+  "allowed_connections": 4,
+  "blocked_attempts": [
+    {
+      "event": "socket.getaddrinfo",
+      "host": "b'common-api.wildberries.ru'",
+      "port": "443"
+    }
+  ],
+  "pytest_exit_code": 0
+}
