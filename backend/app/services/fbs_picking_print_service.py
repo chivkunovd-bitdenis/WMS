@@ -19,7 +19,7 @@ async def get_picking_context(
     product_ids = list(_planned_qty_by_product(supply))
     if not product_ids:
         return []
-    result = {
+    result: dict[uuid.UUID, dict[str, Any]] = {
         pid: {"product_id": str(pid), "inbound_supplies": [], "locations": []}
         for pid in product_ids
     }
