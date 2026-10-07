@@ -1,18 +1,14 @@
 {
-  "product_reference_P": "d420f8db1e7d69212ad2ea4529a02044689363b0",
-  "independent_product_review": "154cdb1ff3e84ed4e592d883688c7df560579015",
-  "review_path": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
-  "fixture_commit": "b9b1a83ee943523cec795de021862fa10ce8f04b",
+  "product_reference_P": "8ba63eadd9a4ce65d92f31c18a7276e049548eac",
+  "independent_product_review": "e351b201f314e6bfe3af142fa43bb650fefe8c02",
+  "review_path": "docs/reviews/WMS-666-689-independent-correction-review-20261008.md",
   "policy_source_identity": "Exact immutable SOURCE commit must be selected by a separately approved trusted-main process_bootstrap pin; this file does not self-select HEAD.",
   "strict_product_scope_result": {
     "unapproved_product_paths": []
   },
   "strict_product_scope_includes_worktree_index_and_ignored_sources": true,
-  "full_picking_run": 37679880338,
-  "picking_cases": 69,
-  "database_checkpoints": 125,
   "further_product_changes_require_new_independent_review": true,
-  "release_status": "NOT_DEPLOYED; full CI and trusted SOURCE activation remain required",
+  "release_status": "NOT_DEPLOYED at this source freeze; trusted SOURCE activation, exact full CI and production source readback remain required.",
   "previous_accepted_reference": {
     "product_reference_P": "ef154664e365644f4ba002c6e8affc5607fae725",
     "policy_source_S": "pending-final-closure-commit-and-independent-review",
@@ -44,5 +40,17 @@
       "physical printer/marketplace outcomes only where actually verified"
     ],
     "main_and_etalon_not_modified": true
+  },
+  "independent_product_acceptance": "c2cbd700fbf7f03fb00465b27ee8214428f9386e",
+  "acceptance_path": "docs/requirements/WMS-666.md",
+  "review_scope": "This reference carries forward the separately accepted P2 package and adds only the two corrections listed in the analytical acceptance. The new review record is limited to those corrections; physical operator acceptance, full CI and production remain open.",
+  "previous_product_reference": {
+    "product_reference_P": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+    "independent_product_review": "154cdb1ff3e84ed4e592d883688c7df560579015",
+    "review_path": "docs/reviews/2026-10-07-day-audit/recovery-p2-source-review.md",
+    "fixture_commit": "b9b1a83ee943523cec795de021862fa10ce8f04b",
+    "full_picking_run": 37679880338,
+    "picking_cases": 69,
+    "database_checkpoints": 125
   }
 }
