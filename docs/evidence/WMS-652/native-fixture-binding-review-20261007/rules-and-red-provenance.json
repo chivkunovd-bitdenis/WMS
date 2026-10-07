@@ -1,0 +1,10 @@
+{
+  "origin_etalon": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "AGENTS_sha256": "829e975ebcdfd2574c5e215985f9cf3a5c621b3f35b6686351daae01c1f82ee1",
+  "libraries": "owner/failure libraries unchanged against reviewer HEAD; retained full reading",
+  "original_CI_TAP_path": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/print-ca064-evidence/672-native-errors.tap",
+  "original_CI_TAP_sha256": "b88c9500579bc1354c7d4c12c0aa370d2d6ca7a35c1f4efd4826d988948b5c36",
+  "original_CI_cases": 7,
+  "original_CI_passed": 0,
+  "original_CI_failed": 7
+}

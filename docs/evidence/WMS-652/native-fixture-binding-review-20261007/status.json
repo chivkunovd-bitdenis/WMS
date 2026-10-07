@@ -1,0 +1,15 @@
+{
+  "status": "PENDING_INDEPENDENT_REVIEW_DO_NOT_SELECT_AS_FINAL_SOURCE",
+  "pure_fixture_commit": "e2b9880d77ba2a073b325770d3e879833b02943e",
+  "actual_red": "ca064CI7/7failbeforeiframe; diagnosticformatHumanDocumentNumberisnotdefined",
+  "change": "ONLYtwoVMfixtures bindrealactualDocumentDisplaymoduleandactualinboundReceiptDatefunctionfromscreenAST, realisticdocumentdate/sellerdetail; no product or expectationchanges. Rasterfixtureunchanged.",
+  "actual_target": "12PASS0skip/3.63sec, rawTAPsaved",
+  "policy_hash_activation": "DELIBERATELYNOTAPPLIEDpendingindependentreview",
+  "remaining": [
+    "Genuineindependentreviewbeforefixtureadmission",
+    "F6canonical200617→e249 existingreviewedcorrectionledgerbinding",
+    "ForeignCDPacceptedfix/wholeexactCI/finalSOURCE/mainpin/etalon/deploy"
+  ],
+  "production_changed": false,
+  "raw_sha256": "6c0047337edb2eebc0a774e0fc7ab55ff27d74a09251c0b1357044b77f2aa7db"
+}
