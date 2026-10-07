@@ -1,0 +1,39 @@
+)]}'
+{
+  "commit": "9f043f63b0e5b728c8d09f3e3ddfc1681a4bd58e",
+  "tree": "d37510899d4306c472f63531619b600d9588f19e",
+  "parents": [
+    "b9d31417d76ef16f95ebf66017beccecf3b9b026"
+  ],
+  "author": {
+    "name": "Nihar Majmudar",
+    "email": "niharm@google.com",
+    "time": "Tue Sep 23 20:21:14 2025"
+  },
+  "committer": {
+    "name": "Chromium LUCI CQ",
+    "email": "chromium-scoped@luci-project-accounts.iam.gserviceaccount.com",
+    "time": "Tue Sep 23 20:21:14 2025"
+  },
+  "message": "[M141] [composebox] Hide suggestions when an image is uploaded.\n\nOriginal change\u0027s description:\n\u003e [composebox] Hide suggestions when an image is uploaded.\n\u003e \n\u003e Dropdown should be hidden when image is present. Another option was\n\u003e clearing the autocomplete matches but this doesn\u0027t make sense if the\n\u003e user arrowed down to a suggestion and then uploaded an image, the text\n\u003e should still be present in this case.\n\u003e \n\u003e Also doesn\u0027t query autocomplete when user types text with file present.\n\u003e \n\u003e Change-Id: I8f5cc3a39d7504a125fa5eb0f0252660e377677f\n\u003e Bug: 446764195\n\u003e Reviewed-on: https://chromium-review.googlesource.com/c/chromium/src/+/6975504\n\u003e Reviewed-by: Jason Hu \u003chujasonx@google.com\u003e\n\u003e Reviewed-by: Moe Ahmadi \u003cmahmadi@chromium.org\u003e\n\u003e Commit-Queue: Nihar Majmudar \u003cniharm@google.com\u003e\n\u003e Cr-Commit-Position: refs/heads/main@{#1519406}\n\n(cherry picked from commit 6ed8e363cb928c2ee06343873eab072da9cc6143)\n\nBug: 446907686,446764195\nChange-Id: I8f5cc3a39d7504a125fa5eb0f0252660e377677f\nReviewed-on: https://chromium-review.googlesource.com/c/chromium/src/+/6974001\nCommit-Queue: Rubber Stamper \u003crubber-stamper@appspot.gserviceaccount.com\u003e\nAuto-Submit: Chrome Cherry Picker \u003cchrome-cherry-picker@chops-service-accounts.iam.gserviceaccount.com\u003e\nBot-Commit: Rubber Stamper \u003crubber-stamper@appspot.gserviceaccount.com\u003e\nCr-Commit-Position: refs/branch-heads/7390@{#1620}\nCr-Branched-From: d481efce5eb300acbb896686676ebd0352a6f1db-refs/heads/main@{#1509326}\n",
+  "tree_diff": [
+    {
+      "type": "modify",
+      "old_id": "14de44647fb091e996e6fc0baa717ed511ca1c89",
+      "old_mode": 33188,
+      "old_path": "chrome/test/data/webui/new_tab_page/composebox/composebox_test.ts",
+      "new_id": "07d5736ecb5a54e96c28415ec443c013a901103b",
+      "new_mode": 33188,
+      "new_path": "chrome/test/data/webui/new_tab_page/composebox/composebox_test.ts"
+    },
+    {
+      "type": "modify",
+      "old_id": "88d000f1e786bfbf18e5c55abf7d6b31d75b86f8",
+      "old_mode": 33188,
+      "old_path": "ui/webui/resources/cr_components/composebox/composebox.ts",
+      "new_id": "e0a9f82741f97006e3812d227a392317eb2e663b",
+      "new_mode": 33188,
+      "new_path": "ui/webui/resources/cr_components/composebox/composebox.ts"
+    }
+  ]
+}

@@ -5,7 +5,7 @@ on:
 permissions:
   contents: read
 jobs:
-  etalon-low-overhead-error-context-browser43:
+  chrome141-job-lifecycle-browser43:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -19,7 +19,7 @@ jobs:
           DISPATCH_SHA: ${{ github.sha }}
           DISPATCH_ATTEMPT: ${{ github.run_attempt }}
         run: |
-          test "$DISPATCH_REF" = 'refs/heads/codex/wms652-etalon-low-overhead-error-context'
+          test "$DISPATCH_REF" = 'refs/heads/codex/wms652-chrome141-job-lifecycle-diagnostic'
           test "$DISPATCH_SHA" = "$(git rev-parse HEAD)"
           test "$DISPATCH_ATTEMPT" = '1'
       - uses: actions/setup-node@v4
@@ -37,7 +37,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: wms652-etalon-error-context-browser43-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: wms652-chrome141-job-lifecycle-browser43-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             ${{ runner.temp }}/wms652-identity-diagnostic
             ${{ runner.temp }}/release-print/critical-fbs/result.json

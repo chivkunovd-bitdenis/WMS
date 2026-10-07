@@ -1,0 +1,94 @@
+TAP version 13
+# Subtest: focused ingress preserves input and skips successes/Runtime without event serialization or ISO clocks
+ok 1 - focused ingress preserves input and skips successes/Runtime without event serialization or ISO clocks
+  ---
+  duration_ms: 1.295041
+  type: 'test'
+  ...
+# Subtest: native error retains exact pending/send/paused/lifecycle and current reply context
+ok 2 - native error retains exact pending/send/paused/lifecycle and current reply context
+  ---
+  duration_ms: 0.90675
+  type: 'test'
+  ...
+# Subtest: actual original CDP forwarding keeps unknown native refusal strict and success exact
+ok 3 - actual original CDP forwarding keeps unknown native refusal strict and success exact
+  ---
+  duration_ms: 1.723542
+  type: 'test'
+  ...
+# Subtest: focused bounds count drops, validate final size and keep privacy allowlist
+ok 4 - focused bounds count drops, validate final size and keep privacy allowlist
+  ---
+  duration_ms: 0.312292
+  type: 'test'
+  ...
+# Subtest: exact owned class queries once on same wire without original state/input mutation; rejects all other classes
+ok 5 - exact owned class queries once on same wire without original state/input mutation; rejects all other classes
+  ---
+  duration_ms: 2.186625
+  type: 'test'
+  ...
+# Subtest: exact alive/absent/unexpected/unowned replies remain separate and preserve send/current identities
+ok 6 - exact alive/absent/unexpected/unowned replies remain separate and preserve send/current identities
+  ---
+  duration_ms: 0.451375
+  type: 'test'
+  ...
+# Subtest: original driver still forwards exact success and rejects unknown first fulfill; observer throw cannot consume native reply
+ok 7 - original driver still forwards exact success and rejects unknown first fulfill; observer throw cannot consume native reply
+  ---
+  duration_ms: 2.200917
+  type: 'test'
+  ...
+# Subtest: existing document events and navigate reply retain only allowlisted identities, no duplicate runtime/success logging
+ok 8 - existing document events and navigate reply retain only allowlisted identities, no duplicate runtime/success logging
+  ---
+  duration_ms: 0.879292
+  type: 'test'
+  ...
+# Subtest: combined event/byte caps have honest drops and pending queries; observer errors preserve ingress
+ok 9 - combined event/byte caps have honest drops and pending queries; observer errors preserve ingress
+  ---
+  duration_ms: 0.977916
+  type: 'test'
+  ...
+# Subtest: paused identity and initiator allowlist are observed without mutating ingress
+ok 10 - paused identity and initiator allowlist are observed without mutating ingress
+  ---
+  duration_ms: 2.611792
+  type: 'test'
+  ...
+# Subtest: native success/error identity captured before pending removal; no arbitrary results
+ok 11 - native success/error identity captured before pending removal; no arbitrary results
+  ---
+  duration_ms: 0.709583
+  type: 'test'
+  ...
+# Subtest: event/byte caps count drops while completion and pending state survive
+ok 12 - event/byte caps count drops while completion and pending state survive
+  ---
+  duration_ms: 0.23025
+  type: 'test'
+  ...
+# Subtest: non-synthetic/auth URLs and unobserved data never enter telemetry
+ok 13 - non-synthetic/auth URLs and unobserved data never enter telemetry
+  ---
+  duration_ms: 0.192417
+  type: 'test'
+  ...
+# Subtest: native reply preserves send identity and distinct current reply generation and case
+ok 14 - native reply preserves send identity and distinct current reply generation and case
+  ---
+  duration_ms: 0.150834
+  type: 'test'
+  ...
+1..14
+# tests 14
+# suites 0
+# pass 14
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 53.74325
