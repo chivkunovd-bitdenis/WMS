@@ -1,0 +1,37 @@
+{
+  "chat_id": -5189992444,
+  "chat_title": "Короб ВМС - Руслан",
+  "message_id": "358",
+  "status": "sent",
+  "attempts": 1,
+  "outbox_key": "owner-ruslan-ozon-access-321-20261007-verified-roles-v2",
+  "text": "Руслан, уточняю конкретные галочки — проверили права рабочего ключа на проде.\n\nНужен ключ Seller API и его Client-Id.\n\nДля WMS отметьте:\n• Product read-only — товары;\n• Stocks — передача остатков;\n• Warehouse — склады;\n• Posting FBS — работа с заказами FBS;\n• Returns — возвраты.\n\nЕсли работаете с FBO, добавьте Supply order и Posting FBO.\n\nУ Posting FBS и Returns выбирайте обычные роли, без read-only. Для товаров Product read-only достаточно: остатки разрешает отдельная роль Stocks. Все перечисленные роли есть у проверенного рабочего ключа.\n\nВ WMS вводятся Client-Id и Api-Key из одного кабинета Ozon. Раздел подключения — Seller API, не рекламный Performance API.",
+  "sent_at": "2026-10-07T11:59:27.311096+00:00",
+  "evidence": {
+    "endpoint": "POST https://api-seller.ozon.ru/v1/roles",
+    "http_status": 200,
+    "account_id": "04c1fc5e-7e58-4853-9c34-8d003bde769a",
+    "roles": [
+      "Posting FBS",
+      "Supply order",
+      "FBP",
+      "Supply order ReadOnly",
+      "Posting FBS read-only",
+      "Warehouse",
+      "Product read-only",
+      "Returns",
+      "Stocks",
+      "Barcode",
+      "Returns read-only",
+      "Posting FBO",
+      "FBP read-only",
+      "FBP order",
+      "FBP draft"
+    ],
+    "expires_at": "2026-12-29T12:41:55.971866Z",
+    "credentials_exposed": false,
+    "credentials_changed": false,
+    "key_type_field_returned": false
+  },
+  "interpretation": "Recommendations are applicable roles from the working production key; no claim that the entire returned role list is necessary. Seller API transport verified; provider does not return general/personal key classification."
+}
