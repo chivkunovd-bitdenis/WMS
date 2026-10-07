@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "b1b9cafd17b9a23e6ffb43eeeee4754a0eeb2a16d1e530f9eaf4e4b790356fc1",
+    ".github/workflows/ci.yml": "9b745631c634a725d081dcfe454f2d58789c81f1597516dc8f5667d5863ffc39",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
