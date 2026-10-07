@@ -1,0 +1,11 @@
+{
+  "command": [
+    "python3",
+    "-B",
+    "scripts/ci/check_task_documents.py",
+    "49da13fd2a0d22f207818248f274cf5ff400e39f"
+  ],
+  "native_exit_code": 0,
+  "stdout_log": "document-gate.log",
+  "aggregate_shell_exit_not_used": true
+}

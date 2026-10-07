@@ -1,0 +1,94 @@
+{
+  "base": "2f7294b215db273210952475817f8c48fc0cf761",
+  "correction": "only literal test reference suffixes in existing Test cells",
+  "references_changed": 12,
+  "HTTP_references": 2,
+  "updater_references": 10,
+  "references": [
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "before": "ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+      "after": "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+      "before": "ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason",
+      "after": "test_legacy_error_preserves_specific_pre_submit_reason",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+      "after": "test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+      "after": "test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_preservation_actual_direct_build_metadata",
+      "after": "test_preservation_actual_direct_build_metadata",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc3_lossless_backup_and_archive_or_space_failure",
+      "after": "test_uc3_lossless_backup_and_archive_or_space_failure",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc4_foreign_port_owner_and_health200_wrong_process",
+      "after": "test_uc4_foreign_port_owner_and_health200_wrong_process",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc5_replace_and_start_rollback_preserve_current_journal",
+      "after": "test_uc5_replace_and_start_rollback_preserve_current_journal",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc6_repeat_concurrent_and_interrupted_update_recover",
+      "after": "test_uc6_repeat_concurrent_and_interrupted_update_recover",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc7_actual_journal_replay_after_update_and_failed_restart",
+      "after": "test_uc7_actual_journal_replay_after_update_and_failed_restart",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_preservation_actual_public_and_current_journal_replay",
+      "after": "test_preservation_actual_public_and_current_journal_replay",
+      "actual_definition": true
+    },
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+      "before": "UpdaterContract.test_uc8_no_security_printer_or_dependencies_change_permission_recovery",
+      "after": "test_uc8_no_security_printer_or_dependencies_change_permission_recovery",
+      "actual_definition": true
+    }
+  ],
+  "requirements_scenarios_verdicts_unchanged": true,
+  "backlog_checker_product_test_bytes_unchanged_sha256": {
+    "tools/print-agent/update_macos_direct.sh": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+    "tools/print-agent/build_console.py": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e",
+    "tools/print-agent/wms_print_direct_macos.swift": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "tools/print-agent/test_macos_artmaks_http_contract.py": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+    "tools/print-agent/test_macos_direct_updater_contract.py": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee",
+    "tools/print-agent/test_macos_direct_updater_stop_contract.py": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed",
+    "scripts/ci/check_task_documents.py": "92b0e08f4efffac32ae84eb49cd5afbd1bc3280524b616831b7988ac9b135bf4",
+    "docs/KANONICHESKIY_BACKLOG.md": "a304b9e57d4408dcd8c9192991af9e16defdc0f364c71adc7e0b3d7c10aa6d05"
+  },
+  "frozen_classname_method_XML_IDs_unchanged": true,
+  "runtime_tests_or_build_executed": false
+}
