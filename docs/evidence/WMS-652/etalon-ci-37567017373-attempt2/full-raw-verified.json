@@ -1,0 +1,43 @@
+{
+  "counts": {
+    "tests": 4643,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 198,
+    "success": true
+  },
+  "suites": {
+    "backend-fbs": 627,
+    "pg-663-retry": 5,
+    "pg-662-f6": 4,
+    "pg-663-669-670-683": 6,
+    "pg-662": 10,
+    "pg-fbs-concurrency": 6,
+    "frontend-fbs": 204,
+    "print-672": 11,
+    "print-672-remaining": 6,
+    "print-673": 5,
+    "native-linux": 30,
+    "native-windows": 29,
+    "real-fbs-browser": 43,
+    "pg-675": 1,
+    "pg-517-withdrawal": 5,
+    "ci-shards": 20,
+    "product-scope": 51,
+    "mac-517-helper": 110,
+    "print-672-native-errors": 7,
+    "print-672-peer-drain": 2,
+    "print-672-raster-resource": 3,
+    "fbs-cdp-cancellation": 7
+  },
+  "required_cases": 1192,
+  "execution": {
+    "version": 1,
+    "sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "head_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+    "base_sha": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+    "run_id": 37567017373,
+    "run_attempt": 2,
+    "policy_sha256": "58a95dc526e15dff10999925d33f8ed935c2100b6231f0bfb70ab2b7985ed6e8"
+  }
+}
