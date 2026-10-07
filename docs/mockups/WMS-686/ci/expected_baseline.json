@@ -1,0 +1,15 @@
+{
+  "comment": "WMS-686: тесты, зелёные на базе без продуктовой реализации (существующее поведение). Остальные тесты контракта до реализации обязаны падать только на assertion по ожидаемой причине.",
+  "green": [
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c03_each_product_scan_takes_one_unit_from_selected_box_to_sorting",
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c06_product_without_honest_sign_ships_without_any_kiz",
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c11_whole_mixed_warehouse_box_attaches_once_without_opening",
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c13_one_box_is_split_between_two_shipments_and_overdraw_is_refused",
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c32_seller_downloads_wb_xlsx_of_own_shipment",
+    "backend/tests/test_wms686_fbo_kiz_contract.py::test_c51_last_unit_of_source_taken_at_once_by_two_shipments_goes_to_one",
+    "backend/tests/test_wms632_fbo_reserve_model.py::test_pick_and_box_only_move_location_and_keep_reserve",
+    "backend/tests/test_wms632_fbo_reserve_model.py::test_complete_writes_off_fact_once_and_releases_reserve",
+    "backend/tests/test_wms679_wb_fbw_export_contract.py::test_c1_c2_c3_c4_c6_wb_export_is_exact_string_xlsx_from_existing_boxes",
+    "frontend/src/screens/ff/unload-pick/FfUnloadPickPage.wms686.dom.test.tsx::c01 C1/R1"
+  ]
+}
