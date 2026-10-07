@@ -4,7 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider, CssBaseline } from "@mui/material";
 import { muiTheme } from "../../../frontend/src/mui/theme";
 import { FfSuppliesShipmentsPage } from "../../../frontend/src/screens/ff/FfSuppliesShipmentsPage";
-import { installMockApi, detail } from "./mockApi";
+import { installMockApi, detail, secondaryDetail, getDemo } from "./mockApi";
 installMockApi();
 createRoot(document.getElementById("root")!).render(
   <ThemeProvider theme={muiTheme}>
@@ -28,13 +28,14 @@ createRoot(document.getElementById("root")!).render(
         outboundSummaries={[]}
         marketplaceUnloadSummaries={[
           { ...detail, line_count: detail.lines.length },
+          { ...secondaryDetail, line_count: secondaryDetail.lines.length },
         ]}
         discrepancyActSummaries={[]}
         onOpenInbound={() => {}}
         onOpenOutbound={() => {}}
         onCreateMpShipment={async () => null}
         onCreateDiverge={async () => null}
-        initialMarketplaceUnloadId={detail.id}
+        initialMarketplaceUnloadId={getDemo().activeShipmentId}
         addressStorageEnabled
       />
     </BrowserRouter>

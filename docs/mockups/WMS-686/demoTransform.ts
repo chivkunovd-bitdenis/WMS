@@ -1,78 +1,48 @@
-import type { Plugin } from "vite";
-import { fileURLToPath } from "node:url";
-const controls = fileURLToPath(new URL("./Controls.tsx", import.meta.url));
-function replaceOnce(
-  code: string,
-  target: string,
-  replacement: string,
-  id: string,
-) {
-  if (code.split(target).length !== 2)
-    throw new Error("WMS686: исходный фрагмент изменился: " + id);
+import type { Plugin } from 'vite';
+import { fileURLToPath } from 'node:url';
+const controls = fileURLToPath(new URL('./Controls.tsx', import.meta.url));
+const api = fileURLToPath(new URL('./mockApi.ts', import.meta.url));
+function replaceOnce(code: string, target: string, replacement: string, id: string) {
+  if (code.split(target).length !== 2) throw new Error('WMS686: исходный фрагмент изменился: ' + id);
   return code.replace(target, replacement);
 }
 export function demoTransform(): Plugin {
   return {
-    name: "wms686-isolated-extensions",
-    enforce: "pre",
+    name: 'wms686-isolated-design', enforce: 'pre',
     transform(code, id) {
-      // Existing print controls keep their markup; only native print calls are
-      // replaced in this demo bundle, including calls on iframe windows.
       if (/\/frontend\/src\/utils\/print[^/]+\.ts$/.test(id)) {
-        const nativePrint = /\b[A-Za-z_$][\w$]*\.print\(\)/g;
-        if (nativePrint.test(code)) {
-          const guarded = code.replace(
-            nativePrint,
-            "window.dispatchEvent(new Event('wms686-print-blocked'))",
-          );
-          if (/\.\s*print\s*\(/.test(guarded))
-            throw new Error(
-              "WMS686: новый неперехваченный вызов печати: " + id,
-            );
-          return guarded;
-        }
+        return code.replace(/\b[A-Za-z_$][\w$]*\.print\(\)/g, "window.dispatchEvent(new Event('wms686-print-blocked'))");
       }
-      if (id.endsWith("/unload-pick/UnloadPickScreen.tsx")) {
-        code =
-          `import {FboPickActions} from ${JSON.stringify(controls)};\n` + code;
-        code = replaceOnce(
-          code,
-          'testId="pick-scan"\n            listening={scannerListening}\n          />',
-          'testId="pick-scan"\n            listening={scannerListening}\n          />\n          <FboPickActions source={source} />',
-          id,
-        );
+      if (id.endsWith('/UnloadPickScreen.tsx')) {
+        code = `import {useKizPicking,PickScanMode} from ${JSON.stringify(controls)};\n` + code;
+        code = replaceOnce(code, "  const [scanValue, setScanValue] = useState('')", "  const kizPicking = useKizPicking()\n  useEffect(() => {setPicked({...initialPicked})},[initialPicked])\n  const [scanValue, setScanValue] = useState('')", id);
+        code = replaceOnce(code, "    setScanValue('')\n    if (await handleServerScan(code)) return", `    setScanValue('')
+    const step = kizPicking.receive(code,source)
+    if (step.handled) {
+      if (step.productCode) {
+        await handleServerScan(step.productCode)
+      } else {
+        setScanError(step.error ?? null)
+        setScanNotice(step.notice ?? null)
+      }
+      return
+    }
+    if (await handleServerScan(code)) return`, id);
+        code = replaceOnce(code, '        <Stack spacing={1.5}>\n          <ScannerField', '        <Stack spacing={1.5}>\n          <PickScanMode picking={kizPicking} />\n          <ScannerField', id);
+        code = replaceOnce(code, "expects={source ? 'товар, который снимаете' : 'место или товар'}", "expects={kizPicking.mode === 'kiz' ? 'ячейка / короб / товар / КИЗ' : kizPicking.mode === 'box' ? 'ячейка / целый короб' : source ? 'товар, который снимаете' : 'место или товар'}", id);
+        code = replaceOnce(code, "setScanNotice(`${result.sku}: снято ${added || 1} шт — ${place.label}`)", "setScanNotice(`${result.sku}: снято ${added || 1} шт — ${place.label}${result.kiz ? ` · ${result.kiz}` : ''}`)", id);
         return code;
       }
-      if (id.endsWith("/FfPackagingPage.tsx")) {
-        code =
-          `import {FboPackingActions} from ${JSON.stringify(controls)};\n` +
-          code;
-        code = replaceOnce(
-          code,
-          "sx={{ maxWidth: '100%', overflowX: 'hidden' }}>",
-          "sx={{ maxWidth: '100%', overflowX: 'hidden' }}>\n      {isMpUnloadTask ? <FboPackingActions /> : null}",
-          id,
-        );
+      if (id.endsWith('/FfUnloadPickPage.tsx')) {
+        code = replaceOnce(code, "  // WMS-575: места подбора перечитываются", "  useEffect(() => { const refresh=()=>{void updateOption()}; window.addEventListener('wms686-change',refresh); return ()=>window.removeEventListener('wms686-change',refresh) },[requestId])\n\n  // WMS-575: места подбора перечитываются", id);
+        code = replaceOnce(code, '          allocationQuantity: result.allocation_quantity,', '          allocationQuantity: result.allocation_quantity,\n          kiz: result.kiz,', id);
         return code;
       }
-      if (id.endsWith("/FfSuppliesShipmentsPage.tsx")) {
-        code = replaceOnce(
-          code,
-          "  useEffect(() => {\n    void loadPackagingTask()\n  }, [loadPackagingTask])",
-          `  useEffect(() => {\n    void loadPackagingTask()\n  }, [loadPackagingTask])\n  useEffect(() => { const refresh = () => { void loadDocDetail(); void loadPackagingTask() }; window.addEventListener('wms686-change', refresh); return () => window.removeEventListener('wms686-change', refresh) }, [loadDocDetail, loadPackagingTask])`,
-          id,
-        );
-        return code;
-      }
-      if (id.endsWith("/unload-pick/FfUnloadPickPage.tsx")) {
-        code = replaceOnce(
-          code,
-          "  useEffect(() => {\n    void load()\n  }, [load])",
-          `  useEffect(() => {\n    void load()\n  }, [load])\n  useEffect(() => {const refresh=()=>void load(); window.addEventListener('wms686-change',refresh); return ()=>window.removeEventListener('wms686-change',refresh)},[load])`,
-          id,
-        );
-        return code;
-      }
+      if (!id.endsWith('/FfSuppliesShipmentsPage.tsx')) return;
+      code = `import {isBaseline} from ${JSON.stringify(api)};\n` + code;
+      code = replaceOnce(code, '  useEffect(() => {\n    void loadPackagingTask()\n  }, [loadPackagingTask])', `  useEffect(() => {\n    void loadPackagingTask()\n  }, [loadPackagingTask])\n  useEffect(() => {const refresh=()=>{void loadDocDetail();void loadPackagingTask()};window.addEventListener('wms686-change',refresh);return ()=>window.removeEventListener('wms686-change',refresh)},[loadDocDetail,loadPackagingTask])`, id);
+      code = replaceOnce(code, '  const [unloadDetail, setUnloadDetail] = useState<MarketplaceUnloadDetail | null>(null)', `  const [unloadDetail, setUnloadDetail] = useState<MarketplaceUnloadDetail | null>(null)\n  useEffect(() => {if(!unloadDetail) return;const tab=new URLSearchParams(location.search).get('tab');if(tab==='pick'||tab==='packaging')setMpUnloadTab(tab)},[unloadDetail?.id])`, id);
+      return code;
     },
   };
 }
