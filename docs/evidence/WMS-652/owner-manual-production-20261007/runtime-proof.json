@@ -1,0 +1,98 @@
+{
+  "checkedAt": "2026-10-07T08:10:39.613677+00:00",
+  "checkoutSha": "a5df04f1560de0eaaf855199065936cb22a222b1",
+  "services": [
+    {
+      "Service": "api",
+      "State": "running",
+      "Health": "",
+      "ID": "7b68e6abd279",
+      "Name": "wms_prod-api-1"
+    },
+    {
+      "Service": "celery_beat",
+      "State": "running",
+      "Health": "",
+      "ID": "2d9520b529e4",
+      "Name": "wms_prod-celery_beat-1"
+    },
+    {
+      "Service": "celery_worker",
+      "State": "running",
+      "Health": "",
+      "ID": "8313f5752ef5",
+      "Name": "wms_prod-celery_worker-1"
+    },
+    {
+      "Service": "db",
+      "State": "running",
+      "Health": "healthy",
+      "ID": "c4a840b26aa9",
+      "Name": "wms_prod-db-1"
+    },
+    {
+      "Service": "redis",
+      "State": "running",
+      "Health": "healthy",
+      "ID": "39d6438d8de1",
+      "Name": "wms_prod-redis-1"
+    },
+    {
+      "Service": "web",
+      "State": "running",
+      "Health": "",
+      "ID": "88907895251e",
+      "Name": "wms_prod-web-1"
+    }
+  ],
+  "backendTrackedPythonFiles": 351,
+  "runtimeImages": [
+    {
+      "service": "api",
+      "containerId": "7b68e6abd27957441da8723362e68391c47ee797be2876d5d367be9cffdb92df",
+      "imageId": "sha256:cba6b80e3acaf7743102dc227ff12db0c4aa8a77765da5ea186c8ddc77ecc998",
+      "sourceFilesCompared": 351,
+      "sourceHashesMatch": true
+    },
+    {
+      "service": "celery_worker",
+      "containerId": "8313f5752ef5857457e07d3883f5e2b880733f8e8b4a80d2e874f75dcd3024a4",
+      "imageId": "sha256:64843ca0e7c6688c3d405f78f8decd704f2f6c7f4b2155f97baaeccbfe21e324",
+      "sourceFilesCompared": 351,
+      "sourceHashesMatch": true
+    },
+    {
+      "service": "celery_beat",
+      "containerId": "2d9520b529e40c8469ee8b03821e0ff3d5e3880ec0322cd78a514031d0a2271f",
+      "imageId": "sha256:f080eb01b17b173674e818411ec04979d0c0603da18c8c958f4a2942eb91c163",
+      "sourceFilesCompared": 351,
+      "sourceHashesMatch": true
+    },
+    {
+      "service": "web",
+      "containerId": "88907895251e56252c814f05dd13069549901d7b611a6901d1a843a0c1029129",
+      "imageId": "sha256:7c9e010475466760446cb5b60859a6dbfec86da7aa17b2d52ee25ba5f6f60feb"
+    }
+  ],
+  "http": [
+    {
+      "path": "/",
+      "status": 200,
+      "sha256": "2e9b26181c86bab02c12c1c7870743a6b9ee7904995ee9d1687bb606d9e520bc",
+      "matchesLiveContainer": true
+    },
+    {
+      "path": "/seller/",
+      "status": 200,
+      "sha256": "f468eb5f4d3597aea52d490f403eccf5e187963b5b7ac20faf5fb136ed88cf8c",
+      "matchesLiveContainer": true
+    },
+    {
+      "path": "/api/health",
+      "status": 200,
+      "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288"
+    }
+  ],
+  "storedDeployScriptSHA256": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6",
+  "status": "RUNTIME_VERIFIED"
+}

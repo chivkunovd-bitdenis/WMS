@@ -1,0 +1,7 @@
+# WMS-652: фактический выпуск основного пакета 07.10.2026
+
+Production SHA: a5df04f1560de0eaaf855199065936cb22a222b1. Операционный скрипт успешно завершился08:07:52UTC; runtime подтверждён08:10:39UTC. Все4 app services running, db/redishealthy. Все351 Pythonfile в API/worker/beat совпали с точным GitSHA. /,/seller/,/api/health200; оба публичныхHTML совпали с новымwebcontainer. Образы и полные хеши сохранены в runtime-proof.json.
+
+По прямому указанию владельца выполнен one-time manual release без ожидания дополнительных полных CI. Полное дерево a5df идентично прошедшему PR CI2bba (run37582661190 SUCCESS). Исходный Gitprod-update.sh SHA256fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6 в памяти изменён только удалением одной строки verify_server_process_ci.py; сохранённый скрипт, branchprotections, secrets и GitHubstatuses НЕменялись. Trunk/SHAguard, private networkcheck, build, остановка writers, private validatedbackup, migrations, start и settingscheck выполнены. Это явное исключение CIproofwaiting, а не заявление успешного exactpushCI. Actualreceipt и execution.log фиксируют точную команду/почему/before4c/aftera5df.
+
+CI-only transport corrections a5da223d704fc533decf02c8943aeb060b7063b1 сохраняются отдельно вPR400; они не выдаются за установленную productionversion и не вызывают второй продуктовый deploy. Бамбук повторно не восстанавливался. Ограничения бизнес-приёмки по историческому658PDF, физической бумаге и внешней WBacceptance остаются в исходных requirements.

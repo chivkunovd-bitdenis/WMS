@@ -1,0 +1,643 @@
+From https://github.com/chivkunovd-bitdenis/WMS
+ * branch                etalon     -> FETCH_HEAD
+   4c532f0cc..a5df04f15  etalon     -> origin/etalon
+OWNER-DIRECTED MANUAL RELEASE {"target_sha": "a5df04f1560de0eaaf855199065936cb22a222b1", "owner_exception": "One-time manual production release; only exact full push CI proof waiting waived by explicit owner instruction; no fake status or persistent guard changes.", "started_at": "2026-10-07T08:04:01.672225+00:00", "phase": "exact_script_operational_execution", "before_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f", "original_script_sha256": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6", "in_memory_script_sha256": "0b220b6dbfa4651dd3411591bff6c5b24f9159a339bfeb800b1d9ace80c81603", "removed_line": "python3 scripts/ci/verify_server_process_ci.py --sha \"$DEPLOY_SHA\"", "removed_line_count": 1, "stored_script_changed": false, "branch_protections_changed": false, "ci_statuses_forged": false}
+==> git fetch
+From https://github.com/chivkunovd-bitdenis/WMS
+   d0fac3f28..f0411289b  codex/night1007-675-release -> origin/codex/night1007-675-release
+   ca6d86bd9..2bba49207  codex/night1007-integration -> origin/codex/night1007-integration
+ * [new branch]          codex/night1007-main-reviewed-upgrade -> origin/codex/night1007-main-reviewed-upgrade
+ * [new branch]          codex/night1007-reviewed-source-20261007 -> origin/codex/night1007-reviewed-source-20261007
+   d0a0be566..1c2bddd84  codex/wms607-direct-updater-mac-package-20261007 -> origin/codex/wms607-direct-updater-mac-package-20261007
+ * [new branch]          codex/wms607-final-mac-package-receipts-20261007 -> origin/codex/wms607-final-mac-package-receipts-20261007
+ * [new branch]          codex/wms607-mac-package-receipts-20261007 -> origin/codex/wms607-mac-package-receipts-20261007
+ * [new branch]          codex/wms607-operator-instructions-20261007 -> origin/codex/wms607-operator-instructions-20261007
+ * [new branch]          codex/wms607-startup-owner-fix-20261007 -> origin/codex/wms607-startup-owner-fix-20261007
+ * [new branch]          codex/wms607-startup-owner-review-20261007 -> origin/codex/wms607-startup-owner-review-20261007
+ * [new branch]          codex/wms607-startup-owner-software-acceptance-20261007 -> origin/codex/wms607-startup-owner-software-acceptance-20261007
+ * [new branch]          codex/wms607-startup-owner-test-contract-20261007 -> origin/codex/wms607-startup-owner-test-contract-20261007
+ * [new branch]          codex/wms607-verified-artmaks-delivery-20261007 -> origin/codex/wms607-verified-artmaks-delivery-20261007
+ * [new branch]          codex/wms652-browser-transport-source -> origin/codex/wms652-browser-transport-source
+ * [new branch]          codex/wms652-browser-transport-source-pin -> origin/codex/wms652-browser-transport-source-pin
+ * [new branch]          codex/wms652-ci-resource-scheduling -> origin/codex/wms652-ci-resource-scheduling
+ * [new branch]          codex/wms652-ci-resource-source-pin -> origin/codex/wms652-ci-resource-source-pin
+   bf31f0169..033a5bced  codex/wms652-process-fixes-review-20261007 -> origin/codex/wms652-process-fixes-review-20261007
+   38aa5c985..e8480d412  codex/wms652-process-gates -> origin/codex/wms652-process-gates
+ * [new branch]          codex/wms675-adapter-independent-review-20261007 -> origin/codex/wms675-adapter-independent-review-20261007
+ * [new branch]          codex/wms675-fresh-readonly-20261007 -> origin/codex/wms675-fresh-readonly-20261007
+ * [new branch]          codex/wms675-native-recovery-adapter-20261007 -> origin/codex/wms675-native-recovery-adapter-20261007
+ * [new branch]          codex/wms675-reserve-reconcile -> origin/codex/wms675-reserve-reconcile
+   6474ac59f..50d778450  main       -> origin/main
+ * [new tag]             wms-print-direct-v2026.10.07.1 -> wms-print-direct-v2026.10.07.1
+==> checkout deploy branch
+Reset branch 'etalon'
+Your branch is up to date with 'origin/etalon'.
+==> deploy guard
+    target: etalon @ a5df04f1560d
+    trunk:  origin/etalon @ a5df04f1560d
+==> verify exact server process CI
+==> verify existing private proxy topology
+WMS proxy topology verified; no network or container was changed.
+==> docker compose prod build (sequential)
+ Image wms_prod-migrations Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 502B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 439B 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 0.7s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 1.54MB 0.1s done
+#5 DONE 0.2s
+
+#6 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#6 resolve docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce 0.1s done
+#6 DONE 0.1s
+
+#7 [2/9] WORKDIR /app
+#7 CACHED
+
+#8 [3/9] RUN pip install --no-cache-dir -U pip
+#8 CACHED
+
+#9 [4/9] COPY pyproject.toml /app/pyproject.toml
+#9 CACHED
+
+#10 [5/9] RUN pip install --no-cache-dir -e ".[dev]"
+#10 CACHED
+
+#11 [6/9] COPY app /app/app
+#11 DONE 0.5s
+
+#12 [7/9] COPY tests /app/tests
+#12 DONE 0.5s
+
+#13 [8/9] COPY alembic.ini /app/alembic.ini
+#13 DONE 0.1s
+
+#14 [9/9] COPY alembic /app/alembic
+#14 DONE 0.3s
+
+#15 exporting to image
+#15 exporting layers
+#15 exporting layers 0.7s done
+#15 exporting manifest sha256:e47b7df8a95d348ea430c25358884140140941b01764deec9bee292003216e1c 0.0s done
+#15 exporting config sha256:3e26aa56a76ec17183b30982e69f4ebc47a3ab1b6102b45ab9ba70fbdd93fe00 0.0s done
+#15 exporting attestation manifest sha256:7a9bc02ebbdda2931cd8f79c7cc16f86b4a367c79f093a7c531402ae04482b51 0.1s done
+#15 exporting manifest list sha256:1098f476509803c4f7da4a6c2cc1a881e810214129df66900612da617b21931d 0.0s done
+#15 naming to docker.io/library/wms_prod-migrations:latest done
+#15 unpacking to docker.io/library/wms_prod-migrations:latest
+#15 unpacking to docker.io/library/wms_prod-migrations:latest 0.5s done
+#15 DONE 1.4s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image wms_prod-migrations Built 
+ Image wms_prod-api Building 
+ Image wms_prod-migrations Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 867B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 30B
+#2 transferring dockerfile: 439B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 0.2s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 resolve docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce 0.1s done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 transferring context: 66.15kB 0.1s done
+#6 DONE 0.1s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 DONE 0.1s
+
+#7 [3/9] RUN pip install --no-cache-dir -U pip
+#7 CACHED
+
+#8 [6/9] COPY app /app/app
+#8 CACHED
+
+#9 [5/9] RUN pip install --no-cache-dir -e ".[dev]"
+#9 CACHED
+
+#10 [8/9] COPY alembic.ini /app/alembic.ini
+#10 CACHED
+
+#11 [2/9] WORKDIR /app
+#11 CACHED
+
+#12 [4/9] COPY pyproject.toml /app/pyproject.toml
+#12 CACHED
+
+#13 [7/9] COPY tests /app/tests
+#13 CACHED
+
+#14 [9/9] COPY alembic /app/alembic
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 exporting manifest sha256:98c4cbc5124c689758c5459cdc1b56aa209f545a2c8784b4804f385e9152c2bf 0.0s done
+#15 exporting config sha256:48b69e4b80c656bdf10338e0d64ef6903567bb65943be6b6d2a7f748d084e5f1 0.1s done
+#15 exporting attestation manifest sha256:3aac9636736aaf2845d8e1cd26c24b1df13143cd816ccfb5aa8a9e6b65ff5870 0.0s done
+#15 exporting manifest list sha256:cba6b80e3acaf7743102dc227ff12db0c4aa8a77765da5ea186c8ddc77ecc998 0.0s done
+#15 naming to docker.io/library/wms_prod-api:latest done
+#15 unpacking to docker.io/library/wms_prod-api:latest
+#15 unpacking to docker.io/library/wms_prod-api:latest 0.0s done
+#15 DONE 0.3s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image wms_prod-api Built 
+ Image wms_prod-migrations Building 
+ Image wms_prod-celery_worker Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 907B done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 439B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 0.2s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 resolve docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce 0.1s done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 transferring context: 66.15kB 0.1s done
+#6 DONE 0.1s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 DONE 0.1s
+
+#7 [8/9] COPY alembic.ini /app/alembic.ini
+#7 CACHED
+
+#8 [7/9] COPY tests /app/tests
+#8 CACHED
+
+#9 [4/9] COPY pyproject.toml /app/pyproject.toml
+#9 CACHED
+
+#10 [5/9] RUN pip install --no-cache-dir -e ".[dev]"
+#10 CACHED
+
+#11 [6/9] COPY app /app/app
+#11 CACHED
+
+#12 [2/9] WORKDIR /app
+#12 CACHED
+
+#13 [3/9] RUN pip install --no-cache-dir -U pip
+#13 CACHED
+
+#14 [9/9] COPY alembic /app/alembic
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 exporting manifest sha256:ed803bac6e1ab8ea9f731180b6fad48fdac72b08799182e466585d046bcf98a2 0.0s done
+#15 exporting config sha256:4050cb49dde9a99f35bfd62fa7f17d7d288de2db51b1a3203ac26551584dc533 0.0s done
+#15 exporting attestation manifest sha256:8f7ebf3437b1320e53ada7293d239a9758f01dbe40c441928f5d58276c0c12f5 0.0s done
+#15 exporting manifest list sha256:64843ca0e7c6688c3d405f78f8decd704f2f6c7f4b2155f97baaeccbfe21e324 0.0s done
+#15 naming to docker.io/library/wms_prod-celery_worker:latest done
+#15 unpacking to docker.io/library/wms_prod-celery_worker:latest 0.0s done
+#15 DONE 0.2s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image wms_prod-celery_worker Built 
+ Image wms_prod-migrations Building 
+ Image wms_prod-celery_worker Building 
+ Image wms_prod-celery_beat Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.30kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile
+#2 transferring dockerfile: 439B 0.0s done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/python:3.11-slim
+#3 DONE 0.2s
+
+#4 [internal] load .dockerignore
+#4 transferring context: 2B done
+#4 DONE 0.0s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 resolve docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce 0.1s done
+#5 DONE 0.1s
+
+#6 [internal] load build context
+#6 transferring context: 66.15kB 0.1s done
+#6 DONE 0.1s
+
+#5 [1/9] FROM docker.io/library/python:3.11-slim@sha256:0dd364ba7e10242f07755449e3a3d0e35f9efd987952737b90def6709ab0c5ce
+#5 DONE 0.1s
+
+#7 [5/9] RUN pip install --no-cache-dir -e ".[dev]"
+#7 CACHED
+
+#8 [4/9] COPY pyproject.toml /app/pyproject.toml
+#8 CACHED
+
+#9 [6/9] COPY app /app/app
+#9 CACHED
+
+#10 [7/9] COPY tests /app/tests
+#10 CACHED
+
+#11 [8/9] COPY alembic.ini /app/alembic.ini
+#11 CACHED
+
+#12 [3/9] RUN pip install --no-cache-dir -U pip
+#12 CACHED
+
+#13 [2/9] WORKDIR /app
+#13 CACHED
+
+#14 [9/9] COPY alembic /app/alembic
+#14 CACHED
+
+#15 exporting to image
+#15 exporting layers done
+#15 exporting manifest sha256:f4665f974e7046279306dbad7b145af4a8335540a26daa617d209dc3685ad1cb 0.0s done
+#15 exporting config sha256:a1b69821aabc3853c3c8d8ebae84c53ca5cb068b3b10248230843d71bfa865f6 0.0s done
+#15 exporting attestation manifest sha256:9986f2360a9679d68f4b41543b2481f298642824e51397c05ec005729d898115
+#15 exporting attestation manifest sha256:9986f2360a9679d68f4b41543b2481f298642824e51397c05ec005729d898115 0.0s done
+#15 exporting manifest list sha256:f080eb01b17b173674e818411ec04979d0c0603da18c8c958f4a2942eb91c163 0.0s done
+#15 naming to docker.io/library/wms_prod-celery_beat:latest done
+#15 unpacking to docker.io/library/wms_prod-celery_beat:latest 0.0s done
+#15 DONE 0.2s
+
+#16 resolving provenance for metadata file
+#16 DONE 0.0s
+ Image wms_prod-celery_beat Built 
+ Image wms_prod-web Building 
+ Image wms_prod-api Building 
+ Image wms_prod-migrations Building 
+#1 [internal] load local bake definitions
+#1 reading from stdin 1.24kB done
+#1 DONE 0.0s
+
+#2 [internal] load build definition from Dockerfile.prod
+#2 transferring dockerfile: 508B done
+#2 DONE 0.0s
+
+#3 [internal] load metadata for docker.io/library/caddy:2-alpine
+#3 DONE 0.0s
+
+#4 [internal] load metadata for docker.io/library/node:20-slim
+#4 DONE 0.7s
+
+#5 [internal] load .dockerignore
+#5 transferring context: 460B done
+#5 DONE 0.0s
+
+#6 [build 1/6] FROM docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0
+#6 resolve docker.io/library/node:20-slim@sha256:2cf067cfed83d5ea958367df9f966191a942351a2df77d6f0193e162b5febfc0 0.1s done
+#6 DONE 0.1s
+
+#7 [internal] load build context
+#7 transferring context: 1.49MB 0.1s done
+#7 DONE 0.1s
+
+#8 [stage-1 1/4] FROM docker.io/library/caddy:2-alpine@sha256:fce4f15aad23222c0ac78a1220adf63bae7b94355d5ea28eee53910624acedfa
+#8 resolve docker.io/library/caddy:2-alpine@sha256:fce4f15aad23222c0ac78a1220adf63bae7b94355d5ea28eee53910624acedfa 0.1s done
+#8 DONE 0.1s
+
+#9 [build 2/6] WORKDIR /app/frontend
+#9 CACHED
+
+#10 [build 3/6] COPY frontend/package.json frontend/package-lock.json /app/frontend/
+#10 CACHED
+
+#11 [build 4/6] RUN npm ci
+#11 CACHED
+
+#12 [build 5/6] COPY frontend /app/frontend
+#12 DONE 1.0s
+
+#13 [build 6/6] RUN npm run build
+#13 1.394 
+#13 1.394 > frontend@0.0.0 build
+#13 1.394 > node scripts/verify-cryptopro-vendor.mjs && tsc -b && vite build && node scripts/verify-cryptopro-vendor.mjs --dist
+#13 1.394 
+#13 1.465 public/vendor/cryptopro/cadesplugin_api.js: verified 3f9e438a166336220eed1d292e8b5f07e9a7f617260e98b2aa695fe6a97d4bbb
+#13 67.04 vite v8.0.8 building client environment for production...
+#13 67.07 [2Ktransforming...✓ 12443 modules transformed.
+#13 71.92 rendering chunks...
+#13 73.24 computing gzip size...
+#13 73.30 dist/schet.html                                            0.70 kB │ gzip:   0.39 kB
+#13 73.30 dist/kb-scenes.html                                        0.89 kB │ gzip:   0.42 kB
+#13 73.30 dist/fbs-speed.html                                        1.14 kB │ gzip:   0.48 kB
+#13 73.30 dist/move-lab.html                                         1.23 kB │ gzip:   0.51 kB
+#13 73.30 dist/ui-kit.html                                           1.28 kB │ gzip:   0.49 kB
+#13 73.30 dist/raschety.html                                         1.35 kB │ gzip:   0.51 kB
+#13 73.30 dist/products.html                                         1.53 kB │ gzip:   0.54 kB
+#13 73.30 dist/knowledge.html                                        1.58 kB │ gzip:   0.57 kB
+#13 73.30 dist/unload-pick-2.html                                    1.58 kB │ gzip:   0.59 kB
+#13 73.30 dist/unload-pick.html                                      2.07 kB │ gzip:   0.67 kB
+#13 73.30 dist/fbs-pick.html                                         2.28 kB │ gzip:   0.70 kB
+#13 73.30 dist/kiz-withdrawal-demo.html                              2.43 kB │ gzip:   0.79 kB
+#13 73.30 dist/raschety-razdely.html                                 2.47 kB │ gzip:   0.76 kB
+#13 73.30 dist/sorting-objects.html                                  2.78 kB │ gzip:   0.83 kB
+#13 73.30 dist/warehouse-map.html                                    3.04 kB │ gzip:   0.86 kB
+#13 73.30 dist/packaging.html                                        3.57 kB │ gzip:   0.97 kB
+#13 73.30 dist/honest-sign.html                                      3.69 kB │ gzip:   0.99 kB
+#13 73.30 dist/inventory.html                                        3.81 kB │ gzip:   1.02 kB
+#13 73.30 dist/fbs-orders.html                                       5.60 kB │ gzip:   1.35 kB
+#13 73.30 dist/seller/index.html                                     5.80 kB │ gzip:   1.41 kB
+#13 73.30 dist/reception.html                                        5.85 kB │ gzip:   1.41 kB
+#13 73.30 dist/index.html                                            9.53 kB │ gzip:   2.11 kB
+#13 73.30 dist/assets/fbs-04-koroba-DH3MmVXy.png                   297.76 kB
+#13 73.30 dist/assets/chz-02-pechat-UOoW35w9.png                   389.73 kB
+#13 73.30 dist/assets/priemka-05-zavershenie-CwdXLLh1.png          422.19 kB
+#13 73.30 dist/assets/priemka-02-chernovik-BQUeDjKa.png            423.02 kB
+#13 73.30 dist/assets/priemka-04-napolnenie-LxNHQ3aV.png           461.79 kB
+#13 73.30 dist/assets/fbs-02-podbor-Cos3fcOe.png                   484.51 kB
+#13 73.30 dist/assets/inventarizaciya-01-spisok-fLsVe43P.png       519.58 kB
+#13 73.30 dist/assets/chz-01-puly-Db6btvEm.png                     529.73 kB
+#13 73.30 dist/assets/priemka-01-ochered-DMFBw_bV.png              540.16 kB
+#13 73.30 dist/assets/fbs-03-upakovka-B_IWwvGv.png                 599.24 kB
+#13 73.30 dist/assets/priemka-03-koroba-D7TsDOnY.png               640.25 kB
+#13 73.30 dist/assets/raschety-01-nachisleniya-DysuQgo0.png        653.51 kB
+#13 73.30 dist/assets/raschety-02-tarify-Bo8poojq.png              673.41 kB
+#13 73.30 dist/assets/razmeshchenie-02-karta-CNryfzT9.png          710.07 kB
+#13 73.30 dist/assets/razmeshchenie-01-sortirovka-BWCJq1jl.png     717.76 kB
+#13 73.30 dist/assets/katalog-02-sozdanie-D7CNwe_A.png             745.11 kB
+#13 73.30 dist/assets/fbs-01-zakazy-BBNalne4.png                   782.45 kB
+#13 73.30 dist/assets/otgruzka-01-podbor-DmJTNCNO.png              831.77 kB
+#13 73.30 dist/assets/katalog-01-spisok-n_lGrqnW.png               969.74 kB
+#13 73.30 dist/assets/inventarizaciya-02-pereschet-DAahuHSX.png  1,052.41 kB
+#13 73.30 dist/assets/src-CWU4KsJC.css                               2.05 kB │ gzip:   0.90 kB
+#13 73.30 dist/assets/WmsDatePickersProvider-BaEsOhw8.css            4.02 kB │ gzip:   1.12 kB
+#13 73.30 dist/assets/ff-C8Lao7a-.css                                5.91 kB │ gzip:   1.45 kB
+#13 73.30 dist/assets/urlSellerFilter-BXrj_5r2.js                    0.06 kB │ gzip:   0.08 kB
+#13 73.30 dist/assets/confirmDiscardChanges-BthAyEwG.js              0.10 kB │ gzip:   0.12 kB
+#13 73.30 dist/assets/plural-BFNRfZjt.js                             0.11 kB │ gzip:   0.12 kB
+#13 73.30 dist/assets/usePreviousProps-CrUHmHaK.js                   0.16 kB │ gzip:   0.15 kB
+#13 73.30 dist/assets/Add-COu4U7mg.js                                0.17 kB │ gzip:   0.16 kB
+#13 73.30 dist/assets/ChevronRight-BZOfCEw1.js                       0.19 kB │ gzip:   0.18 kB
+#13 73.30 dist/assets/listItemTextClasses-BKJqLuaW.js                0.19 kB │ gzip:   0.17 kB
+#13 73.30 dist/assets/ExpandMoreOutlined-B9YoG8nJ.js                 0.20 kB │ gzip:   0.18 kB
+#13 73.30 dist/assets/ArrowBackOutlined-BINwraiR.js                  0.21 kB │ gzip:   0.19 kB
+#13 73.30 dist/assets/inboundOperationType-BmwKzg3_.js               0.21 kB │ gzip:   0.14 kB
+#13 73.30 dist/assets/DownloadOutlined-5eVfob_W.js                   0.22 kB │ gzip:   0.20 kB
+#13 73.30 dist/assets/useDebouncedValue-CTTVPGE1.js                  0.23 kB │ gzip:   0.18 kB
+#13 73.30 dist/assets/GridViewOutlined-4sL8tSzJ.js                   0.25 kB │ gzip:   0.20 kB
+#13 73.30 dist/assets/CloseOutlined-n84Evh37.js                      0.25 kB │ gzip:   0.19 kB
+#13 73.30 dist/assets/ReplayOutlined-IXbzGtCI.js                     0.25 kB │ gzip:   0.21 kB
+#13 73.30 dist/assets/documentDisplay-CSJyINVW.js                    0.25 kB │ gzip:   0.19 kB
+#13 73.30 dist/assets/TuneOutlined-CJtRncGO.js                       0.25 kB │ gzip:   0.22 kB
+#13 73.30 dist/assets/dividerClasses-0iILqmMg.js                     0.27 kB │ gzip:   0.21 kB
+#13 73.30 dist/assets/UndoOutlined-DTFj_ang.js                       0.29 kB │ gzip:   0.24 kB
+#13 73.30 dist/assets/InfoOutlined-C-V9d7sl.js                       0.29 kB │ gzip:   0.23 kB
+#13 73.30 dist/assets/PageHeader-C6IV6LPY.js                         0.32 kB │ gzip:   0.24 kB
+#13 73.30 dist/assets/MoveDownOutlined-ClBy9-L_.js                   0.34 kB │ gzip:   0.28 kB
+#13 73.30 dist/assets/HistoryOutlined-DTpwUVUr.js                    0.37 kB │ gzip:   0.29 kB
+#13 73.30 dist/assets/SearchOutlined-DCi2fICN.js                     0.38 kB │ gzip:   0.27 kB
+#13 73.30 dist/assets/FfHonestSignPage-D8CkWCAV.js                   0.47 kB │ gzip:   0.34 kB
+#13 73.30 dist/assets/randomId-BRPv4t9x.js                           0.49 kB │ gzip:   0.31 kB
+#13 73.30 dist/assets/printTableColumns-BFUrs0Wi.js                  0.49 kB │ gzip:   0.33 kB
+#13 73.30 dist/assets/CloudUploadOutlined-D8R2N7u5.js                0.51 kB │ gzip:   0.36 kB
+#13 73.30 dist/assets/scanFeedback-CtsWPeGe.js                       0.51 kB │ gzip:   0.34 kB
+#13 73.30 dist/assets/stubFetch-DObY7Jrk.js                          0.55 kB │ gzip:   0.35 kB
+#13 73.30 dist/assets/UnloadScenes-Bn1reTuJ.js                       0.66 kB │ gzip:   0.38 kB
+#13 73.30 dist/assets/SceneShell-xpo7dlKH.js                         0.72 kB │ gzip:   0.48 kB
+#13 73.30 dist/assets/WidgetsOutlined-nkTm7UAb.js                    0.74 kB │ gzip:   0.46 kB
+#13 73.30 dist/assets/kizReprintPrint-OjSpd-po.js                    0.78 kB │ gzip:   0.51 kB
+#13 73.30 dist/assets/InventoryScenes-5jODPT5n.js                    0.88 kB │ gzip:   0.51 kB
+#13 73.30 dist/assets/data-3RgObXie.js                               0.97 kB │ gzip:   0.41 kB
+#13 73.30 dist/assets/BoxLabelPrintDialog-D-9OVglL.js                1.11 kB │ gzip:   0.66 kB
+#13 73.30 dist/assets/useWbProductCatalog-D2Z3ssKq.js                1.16 kB │ gzip:   0.73 kB
+#13 73.30 dist/assets/WarehouseScenes-BN5xy5IO.js                    1.25 kB │ gzip:   0.75 kB
+#13 73.30 dist/assets/ProductBarcodeCell-DmsrNbEO.js                 1.26 kB │ gzip:   0.69 kB
+#13 73.30 dist/assets/knowledge-D-da2I9d.js                          1.29 kB │ gzip:   0.78 kB
+#13 73.30 dist/assets/raschety-B6BX__c_.js                           1.29 kB │ gzip:   0.76 kB
+#13 73.30 dist/assets/sortingObjects-DhYh8fEF.js                     1.30 kB │ gzip:   0.73 kB
+#13 73.30 dist/assets/unloadPick-7hoTefbr.js                         1.33 kB │ gzip:   0.77 kB
+#13 73.30 dist/assets/LabelSizeSelect-Dt-N9OtG.js                    1.58 kB │ gzip:   0.81 kB
+#13 73.30 dist/assets/schet-CrlJMG1Y.js                              1.62 kB │ gzip:   0.98 kB
+#13 73.30 dist/assets/ListItemText-w8QsAvGF.js                       1.91 kB │ gzip:   0.94 kB
+#13 73.30 dist/assets/InputAdornment-C1SzS3QY.js                     1.93 kB │ gzip:   0.98 kB
+#13 73.30 dist/assets/wbProductCatalog-Df8chm1F.js                   1.95 kB │ gzip:   0.69 kB
+#13 73.30 dist/assets/PriemkaQueueScene-b3xogLip.js                  2.10 kB │ gzip:   0.72 kB
+#13 73.30 dist/assets/honestSign-BMXkJ2HZ.js                         2.74 kB │ gzip:   1.37 kB
+#13 73.30 dist/assets/InventoryCreateDialog-DFBuWc5J.js              2.90 kB │ gzip:   1.46 kB
+#13 73.30 dist/assets/useBarcodeScanner-XqAZZ1lm.js                  3.03 kB │ gzip:   1.51 kB
+#13 73.30 dist/assets/FbsMetricPanel-N7nRhPkd.js                     3.07 kB │ gzip:   1.29 kB
+#13 73.30 dist/assets/BillingScenes-BSm-5GoB.js                      3.15 kB │ gzip:   1.52 kB
+#13 73.30 dist/assets/Link-B011ukkm.js                               3.26 kB │ gzip:   1.34 kB
+#13 73.30 dist/assets/ListItemButton-BBqLz88X.js                     3.31 kB │ gzip:   1.32 kB
+#13 73.30 dist/assets/Divider-_8doVw5h.js                            3.48 kB │ gzip:   1.22 kB
+#13 73.30 dist/assets/react-dom-583lpf0g.js                          3.54 kB │ gzip:   1.34 kB
+#13 73.30 dist/assets/inventory-4dMnNaBl.js                          3.56 kB │ gzip:   1.83 kB
+#13 73.30 dist/assets/objectsStub-Utpwpq83.js                        3.58 kB │ gzip:   1.55 kB
+#13 73.30 dist/assets/FbsSupplyHistoryDialog-BQmFs5UL.js             3.64 kB │ gzip:   1.75 kB
+#13 73.30 dist/assets/MenuItem-CUcGgVit.js                           3.77 kB │ gzip:   1.59 kB
+#13 73.30 dist/assets/Collapse-CizShwQO.js                           3.98 kB │ gzip:   1.57 kB
+#13 73.30 dist/assets/ProductsScreen-yvC-Vvau.js                     4.25 kB │ gzip:   2.10 kB
+#13 73.30 dist/assets/stub-DPQsIzJD.js                               4.47 kB │ gzip:   1.77 kB
+#13 73.30 dist/assets/stub-D8XRVqD_.js                               4.58 kB │ gzip:   1.87 kB
+#13 73.30 dist/assets/warehouseMap-DP3D_XzT.js                       4.59 kB │ gzip:   2.24 kB
+#13 73.30 dist/assets/printPackagingInstructions-ph8dEZ8G.js         4.62 kB │ gzip:   2.25 kB
+#13 73.30 dist/assets/ProductPhotoThumb-0hFTQoci.js                  4.62 kB │ gzip:   2.25 kB
+#13 73.30 dist/assets/ScenarioPlayer-C4uYubc6.js                     5.00 kB │ gzip:   2.29 kB
+#13 73.30 dist/assets/HonestSignScenes-BC37olrj.js                   5.33 kB │ gzip:   2.14 kB
+#13 73.30 dist/assets/packaging-CuJHQ8PZ.js                          5.38 kB │ gzip:   2.09 kB
+#13 73.30 dist/assets/LinearProgress-BN7s1FPD.js                     5.52 kB │ gzip:   1.74 kB
+#13 73.30 dist/assets/FfWarehouseMapScreen-DD8sOmQS.js               5.53 kB │ gzip:   2.54 kB
+#13 73.30 dist/assets/RefreshOutlined-CeI2oxbP.js                    5.67 kB │ gzip:   2.36 kB
+#13 73.30 dist/assets/PriemkaDocScene-DiGgWxbn.js                    5.69 kB │ gzip:   2.39 kB
+#13 73.30 dist/assets/WarehouseMapWarehouseSwitch-DCsE4etj.js        5.82 kB │ gzip:   2.11 kB
+#13 73.30 dist/assets/stub-Bs9IqlXk.js                               5.84 kB │ gzip:   2.25 kB
+#13 73.30 dist/assets/fbsOrders-BJIrX5FQ.js                          6.03 kB │ gzip:   2.50 kB
+#13 73.30 dist/assets/ToggleButtonGroup-DCFXNDtg.js                  6.07 kB │ gzip:   1.98 kB
+#13 73.30 dist/assets/KizReprintDialog-Bz8XyN7D.js                   6.10 kB │ gzip:   2.51 kB
+#13 73.30 dist/assets/AccordionSummary-ONt9g2dk.js                   6.28 kB │ gzip:   2.17 kB
+#13 73.30 dist/assets/printBarcodeLabel-CwIYWETq.js                  6.37 kB │ gzip:   2.44 kB
+#13 73.30 dist/assets/TablePagination-B6ycVHyB.js                    6.50 kB │ gzip:   2.51 kB
+#13 73.30 dist/assets/invoicePrint-DJvoPkqJ.js                       6.91 kB │ gzip:   2.55 kB
+#13 73.30 dist/assets/reception-DYDakxYn.js                          6.96 kB │ gzip:   2.65 kB
+#13 73.30 dist/assets/WarehouseMapToolbar-CGhbGqDr.js                7.01 kB │ gzip:   2.89 kB
+#13 73.30 dist/assets/inboundReceivingHelpers-OVqQQbJk.js            7.09 kB │ gzip:   3.16 kB
+#13 73.30 dist/assets/CatalogScenes-BrLgCYie.js                      7.31 kB │ gzip:   2.90 kB
+#13 73.30 dist/assets/pickRows-oRPOQnSw.js                           7.39 kB │ gzip:   3.18 kB
+#13 73.30 dist/assets/products-D6CoDaAZ.js                           7.49 kB │ gzip:   2.91 kB
+#13 73.30 dist/assets/AuthedAppLayout-D2DfaEDc.js                    7.61 kB │ gzip:   2.11 kB
+#13 73.30 dist/assets/raschetyRazdely-DRNCn0B5.js                    7.70 kB │ gzip:   3.09 kB
+#13 73.30 dist/assets/fbsSpeed-BIqo-SNF.js                           7.91 kB │ gzip:   3.15 kB
+#13 73.30 dist/assets/fbsPick-Bc7lZOOD.js                            7.97 kB │ gzip:   3.37 kB
+#13 73.30 dist/assets/fromWarehouseMap-BfJTo13O.js                   7.97 kB │ gzip:   3.44 kB
+#13 73.30 dist/assets/stub-FSH0ngmt.js                               8.01 kB │ gzip:   2.83 kB
+#13 73.30 dist/assets/jsx-runtime-ATtabA9G.js                        8.39 kB │ gzip:   3.20 kB
+#13 73.30 dist/assets/kizWithdrawalDemo-BVg4Tc9h.js                  9.15 kB │ gzip:   3.85 kB
+#13 73.30 dist/assets/ProductBarcodePrintButton-Bd-v3VRb.js         10.04 kB │ gzip:   4.00 kB
+#13 73.30 dist/assets/readApiErrorMessage-KL62ek90.js               11.01 kB │ gzip:   3.65 kB
+#13 73.30 dist/assets/FbsScenes-Dvj7KmzG.js                         11.95 kB │ gzip:   4.59 kB
+#13 73.30 dist/assets/WbProductPickerDialog-BMINUya4.js             11.99 kB │ gzip:   4.50 kB
+#13 73.30 dist/assets/fbsApi-COaAtxow.js                            12.35 kB │ gzip:   2.84 kB
+#13 73.30 dist/assets/moveLab-PJmjathN.js                           13.17 kB │ gzip:   5.18 kB
+#13 73.30 dist/assets/warehouseMapState-DSuF6xyg.js                 13.29 kB │ gzip:   4.81 kB
+#13 73.30 dist/assets/FfInboundQueuePage-CIQmDRW-.js                13.62 kB │ gzip:   4.82 kB
+#13 73.30 dist/assets/FfBillingTariffMatrixPanel-DCrhczAK.js        13.88 kB │ gzip:   5.13 kB
+#13 73.30 dist/assets/kbScenes-wzFpmDnZ.js                          13.95 kB │ gzip:   4.77 kB
+#13 73.30 dist/assets/theme-CbobMjxk.js                             15.03 kB │ gzip:   5.72 kB
+#13 73.30 dist/assets/FfInventoryListScreen-BGOK29KC.js             15.32 kB │ gzip:   5.72 kB
+#13 73.30 dist/assets/unloadPick2-DBQkYnXy.js                       17.95 kB │ gzip:   6.35 kB
+#13 73.30 dist/assets/Tabs-DM0KIUk5.js                              18.99 kB │ gzip:   6.19 kB
+#13 73.30 dist/assets/fbsUx-CIYIElF2.js                             20.46 kB │ gzip:   7.62 kB
+#13 73.30 dist/assets/UnloadPickScreen-Niy25sIE.js                  20.56 kB │ gzip:   7.04 kB
+#13 73.30 dist/assets/Autocomplete-DZgyfVFA.js                      23.71 kB │ gzip:   8.31 kB
+#13 73.30 dist/assets/uiKit-djN5CT1q.js                             23.89 kB │ gzip:   6.41 kB
+#13 73.30 dist/assets/InventoryTree-B8DTOLxx.js                     28.40 kB │ gzip:  10.23 kB
+#13 73.30 dist/assets/ffPermissions-CsjbWrDQ.js                     30.82 kB │ gzip:  10.97 kB
+#13 73.30 dist/assets/Button-BTxtmNAJ.js                            32.70 kB │ gzip:   9.88 kB
+#13 73.30 dist/assets/SortingObjectsScreen-C3eQQdm7.js              35.09 kB │ gzip:  12.31 kB
+#13 73.30 dist/assets/HonestSignScreen-D3Qx54vc.js                  36.50 kB │ gzip:  10.94 kB
+#13 73.30 dist/assets/SellerKizWithdrawalScreen-BwkntKzn.js         38.34 kB │ gzip:  12.69 kB
+#13 73.30 dist/assets/ui-kit-B6u47qFe.js                            38.65 kB │ gzip:  14.34 kB
+#13 73.30 dist/assets/FbsStockDialogContainer-CsyUBdkP.js           41.50 kB │ gzip:  14.30 kB
+#13 73.30 dist/assets/FfPackagingPage-B7t5Co7z.js                   46.89 kB │ gzip:  13.35 kB
+#13 73.30 dist/assets/FfBillingScreen-BF44laPr.js                   48.01 kB │ gzip:  13.62 kB
+#13 73.30 dist/assets/api-S4YWLRK7.js                               50.99 kB │ gzip:  16.42 kB
+#13 73.30 dist/assets/WmsDatePickersProvider-DWkTWrxY.js            54.90 kB │ gzip:  17.43 kB
+#13 73.30 dist/assets/useMarkingCodePrint-iWzSaphN.js               61.73 kB │ gzip:  18.91 kB
+#13 73.30 dist/assets/renderBarcodeDataUrl-BAFzg3QL.js              64.98 kB │ gzip:  11.64 kB
+#13 73.30 dist/assets/Stack-BYQY1VmA.js                             84.98 kB │ gzip:  29.83 kB
+#13 73.30 dist/assets/FfProductsCatalogScreen-CZCNVm4O.js           85.83 kB │ gzip:  23.75 kB
+#13 73.30 dist/assets/FfInboundRequestView-1KUTVL8x.js             118.94 kB │ gzip:  33.30 kB
+#13 73.30 dist/assets/seller-CHV1xdfX.js                           141.24 kB │ gzip:  35.23 kB
+#13 73.30 dist/assets/WmsDateField-QrcXhKcN.js                     142.26 kB │ gzip:  41.62 kB
+#13 73.30 dist/assets/client-D7sNrb_R.js                           179.01 kB │ gzip:  56.61 kB
+#13 73.30 dist/assets/chunk-OE4NN4TA-BYB--HLj.js                   192.56 kB │ gzip:  59.72 kB
+#13 73.30 dist/assets/FfKnowledgeBaseScreen-CajNRq90.js            207.99 kB │ gzip:  54.42 kB
+#13 73.30 dist/assets/ff-DdzODx9q.js                               323.38 kB │ gzip:  79.00 kB
+#13 73.30 dist/assets/FfFbsOrdersScreen-60dZma25.js                685.99 kB │ gzip: 253.59 kB
+#13 73.30 dist/assets/bwip-js-C8TyeRgy.js                          932.62 kB │ gzip: 255.75 kB
+#13 73.30 
+#13 73.32 ✓ built in 6.28s
+#13 73.33 [plugin builtin:vite-reporter] 
+#13 73.33 (!) Some chunks are larger than 500 kB after minification. Consider:
+#13 73.33 - Using dynamic import() to code-split the application
+#13 73.33 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+#13 73.33 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#13 73.49 dist/vendor/cryptopro/cadesplugin_api.js: verified 3f9e438a166336220eed1d292e8b5f07e9a7f617260e98b2aa695fe6a97d4bbb
+#13 DONE 73.6s
+
+#14 [stage-1 2/4] WORKDIR /srv
+#14 CACHED
+
+#15 [stage-1 3/4] COPY --from=build /app/frontend/dist /srv
+#15 DONE 0.1s
+
+#16 [stage-1 4/4] COPY frontend/deploy/Caddyfile /etc/caddy/Caddyfile
+#16 DONE 0.1s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 1.2s done
+#17 exporting manifest sha256:1e9be90c4ee54937ed33a61d886f78aaa2d3e1f219315dd00a3b52a70e2336ca
+#17 exporting manifest sha256:1e9be90c4ee54937ed33a61d886f78aaa2d3e1f219315dd00a3b52a70e2336ca 0.0s done
+#17 exporting config sha256:db6992979dd43b4d7a98daef47ffef29bd014baa2494700dcbaff786e6733d75 0.0s done
+#17 exporting attestation manifest sha256:071154e0bbfec2f14db6e6df4cbb69611100d0038b98992888fbf4468daadd1c 0.0s done
+#17 exporting manifest list sha256:7c9e010475466760446cb5b60859a6dbfec86da7aa17b2d52ee25ba5f6f60feb
+#17 exporting manifest list sha256:7c9e010475466760446cb5b60859a6dbfec86da7aa17b2d52ee25ba5f6f60feb 0.0s done
+#17 naming to docker.io/library/wms_prod-web:latest done
+#17 unpacking to docker.io/library/wms_prod-web:latest
+#17 unpacking to docker.io/library/wms_prod-web:latest 0.3s done
+#17 DONE 1.7s
+
+#18 resolving provenance for metadata file
+#18 DONE 0.2s
+ Image wms_prod-web Built 
+==> start infrastructure
+time="2026-10-07T08:05:39Z" level=warning msg="Found orphan containers ([wms_prod-web_seller-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container wms_prod-redis-1 Running 
+ Container wms_prod-db-1 Running 
+ Container wms_prod-db-1 Waiting 
+ Container wms_prod-redis-1 Waiting 
+ Container wms_prod-redis-1 Healthy 
+ Container wms_prod-db-1 Healthy 
+==> stop application writers before schema migration
+ Container wms_prod-api-1 Stopping 
+ Container wms_prod-celery_beat-1 Stopping 
+ Container wms_prod-celery_beat-1 Stopped 
+ Container wms_prod-celery_worker-1 Stopping 
+ Container wms_prod-api-1 Stopped 
+ Container wms_prod-celery_worker-1 Stopped 
+==> save private pre-migration PostgreSQL backup
+    backup archive saved and validated (contents are private).
+==> run database migrations
+time="2026-10-07T08:07:09Z" level=warning msg="Found orphan containers ([wms_prod-web_seller-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container wms_prod-db-1 Running 
+ Container wms_prod-db-1 Waiting 
+ Container wms_prod-db-1 Healthy 
+ Container wms_prod-migrations-run-443df3d021c8 Creating 
+ Container wms_prod-migrations-run-443df3d021c8 Created 
+INFO  [alembic.runtime.migration] Context impl PostgresqlImpl.
+INFO  [alembic.runtime.migration] Will assume transactional DDL.
+INFO  [alembic.runtime.migration] Running upgrade 20261001_2301 -> 20261007_2302, WMS-654: persist an optional tier in a storage location address.
+INFO  [alembic.runtime.migration] Running upgrade 20261001_2301 -> 20261005_0658, WMS-658: retain whether an imported code requires its original PDF label.
+INFO  [alembic.runtime.migration] Running upgrade 20261005_0658 -> 20261005_0658b, WMS-658: distinguish complete per-code label provenance from legacy imports.
+INFO  [alembic.runtime.migration] Running upgrade 20261003_0001, 20261005_0658b, 20261007_2302 -> 20261007_2303, WMS-652: merge the independently applied night migration heads.
+==> start application services
+time="2026-10-07T08:07:46Z" level=warning msg="Found orphan containers ([wms_prod-web_seller-1]) for this project. If you removed or renamed this service in your compose file, you can run this command with the --remove-orphans flag to clean it up."
+ Container wms_prod-celery_worker-1 Recreate 
+ Container wms_prod-api-1 Recreate 
+ Container wms_prod-api-1 Recreated 
+ Container wms_prod-web-1 Recreate 
+ Container wms_prod-celery_worker-1 Recreated 
+ Container wms_prod-celery_beat-1 Recreate 
+ Container wms_prod-celery_beat-1 Recreated 
+ Container wms_prod-web-1 Recreated 
+ Container wms_prod-celery_worker-1 Starting 
+ Container wms_prod-api-1 Starting 
+ Container wms_prod-api-1 Started 
+ Container wms_prod-web-1 Starting 
+ Container wms_prod-celery_worker-1 Started 
+ Container wms_prod-celery_beat-1 Starting 
+ Container wms_prod-web-1 Started 
+ Container wms_prod-celery_beat-1 Started 
+==> verify public access settings
+production mode; public registration disabled; access token TTL 1440 minutes
+==> verify seller route before closing legacy listener
+==> status
+NAME                       IMAGE                    COMMAND                  SERVICE         CREATED         STATUS                 PORTS
+wms_prod-api-1             wms_prod-api             "uvicorn app.main:ap…"   api             5 seconds ago   Up 4 seconds           8000/tcp
+wms_prod-celery_beat-1     wms_prod-celery_beat     "celery -A app.celer…"   celery_beat     5 seconds ago   Up 4 seconds           8000/tcp
+wms_prod-celery_worker-1   wms_prod-celery_worker   "celery -A app.celer…"   celery_worker   5 seconds ago   Up 4 seconds           8000/tcp
+wms_prod-db-1              postgres:16              "docker-entrypoint.s…"   db              8 weeks ago     Up 10 days (healthy)   5432/tcp
+wms_prod-redis-1           redis:7-alpine           "docker-entrypoint.s…"   redis           8 weeks ago     Up 10 days (healthy)   6379/tcp
+wms_prod-web-1             wms_prod-web             "caddy run --config …"   web             5 seconds ago   Up 4 seconds           443/tcp, 2019/tcp, 443/udp, 172.18.0.1:8088->80/tcp
+Done. Check https://your-domain
+OPERATIONAL RELEASE SUCCESS a5df04f1560de0eaaf855199065936cb22a222b1

@@ -1,0 +1,16 @@
+{
+  "target_sha": "a5df04f1560de0eaaf855199065936cb22a222b1",
+  "owner_exception": "One-time manual production release; only exact full push CI proof waiting waived by explicit owner instruction; no fake status or persistent guard changes.",
+  "started_at": "2026-10-07T08:04:01.672225+00:00",
+  "phase": "operational_script_success",
+  "before_sha": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "original_script_sha256": "fa72bbfd356b15cf074f13052845e902e7c6d5fed5361c22b564d977c66420f6",
+  "in_memory_script_sha256": "0b220b6dbfa4651dd3411591bff6c5b24f9159a339bfeb800b1d9ace80c81603",
+  "removed_line": "python3 scripts/ci/verify_server_process_ci.py --sha \"$DEPLOY_SHA\"",
+  "removed_line_count": 1,
+  "stored_script_changed": false,
+  "branch_protections_changed": false,
+  "ci_statuses_forged": false,
+  "after_sha": "a5df04f1560de0eaaf855199065936cb22a222b1",
+  "finished_at": "2026-10-07T08:07:52.891035+00:00"
+}
