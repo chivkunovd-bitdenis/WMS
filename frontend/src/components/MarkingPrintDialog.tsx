@@ -118,6 +118,8 @@ type FbsTapePrintResult = {
 }
 
 type FbsTapeContext = {
+  /** Called only after the entire tape launched and every QR acknowledgement succeeded. */
+  onCompleted?: () => void
   orders: FbsTapeOrderContext[]
   /** The selected barcode belongs to this one Ozon position, never the whole posting. */
   selectedBarcodeOrderId?: string
@@ -1132,6 +1134,7 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         setFbsTapeBuildProgress(null)
       }
     }
+    ctx.fbsTape.onCompleted?.()
     if (closeAfter) {
       onClose()
     }
