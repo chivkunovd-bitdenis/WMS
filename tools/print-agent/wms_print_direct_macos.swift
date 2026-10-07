@@ -212,7 +212,7 @@ private final class Printer {
     private var autoWork:Bool
     var diagnostics:[String]=[]
 
-    init(directory:URL,autoWork:Bool=true,
+    init(directory:URL,autoWork:Bool=true,resumeSaved:Bool=true,
          submit:@escaping (StoredJob,URL) throws -> String=submitToDefaultPrinter,
          queue:@escaping () throws -> String=defaultPrinter,
          write:@escaping (Data,URL) throws -> Void=durableWrite,
@@ -274,7 +274,7 @@ private final class Printer {
             }
         }
         // Saved means no irreversible call began. Only this state resumes automatically.
-        if autoWork { for job in jobs.values where job.status == "saved" { schedule(job.idempotencyKey) } }
+        if autoWork && resumeSaved { for job in jobs.values where job.status == "saved" { schedule(job.idempotencyKey) } }
     }
     deinit { if lockFD>=0 { flock(lockFD,LOCK_UN);Darwin.close(lockFD) } }
     private func imageURL(_ key:String) -> URL { records.appendingPathComponent(digest(Data(key.utf8))+".png") }
@@ -804,7 +804,7 @@ private func runSelfTest() throws {
     try check(try stale.detail("source")?["reprintIntentKeys"] as? [String] == ["stale-child"],"stale observer cannot erase link even within same timestamp second")
     print("WMS Print Direct macOS: package OK; durable 350 jobs, abrupt process exits, disk faults, lost receipt, reconciliation, explicit copies, retry race, dimensions, process timeout")
 }
-private func runServer(testDirectory:URL?=nil) throws {
+private func runServer(testDirectory:URL?=nil,updateDirectory:URL?=nil) throws {
     signal(SIGPIPE, SIG_IGN)
     let descriptor = socket(AF_INET, SOCK_STREAM, 0)
     guard descriptor >= 0 else { throw PrintError.message("Не удалось открыть локальный порт") }
@@ -835,7 +835,7 @@ private func runServer(testDirectory:URL?=nil) throws {
             if FileManager.default.fileExists(atPath:file.path) { return try JSONSerialization.jsonObject(with:Data(contentsOf:file)) as! [String:Any] }
             return ["matches":1,"receipt":job.receipt ?? "test-printer-1","jobState":5]
         })
-    } else { printer=try Printer(directory:appSupport.appendingPathComponent("WMS Print/direct")) }
+    } else { printer=try Printer(directory:updateDirectory ?? appSupport.appendingPathComponent("WMS Print/direct"),resumeSaved:updateDirectory == nil) }
     printer.poll()
     print("WMS Print запущена. История и восстановление: \(localOrigin). Оставьте это окно открытым.")
     fflush(stdout)
@@ -852,6 +852,13 @@ do {
         try runCrashFixture(CommandLine.arguments[2],CommandLine.arguments[3])
     } else if CommandLine.arguments.count == 5 && CommandLine.arguments[1] == "--observe" {
         _ = cupsObserve(CommandLine.arguments[2],CommandLine.arguments[3],CommandLine.arguments[4])
+    } else if CommandLine.arguments.count == 3 && CommandLine.arguments[1] == "--updater-start" {
+        // An update never resumes unsent labels. New explicit /print requests keep
+        // the normal worker and the existing receipt/unknown protections.
+        try runServer(updateDirectory:URL(fileURLWithPath:CommandLine.arguments[2]))
+    } else if CommandLine.arguments.count == 2 && CommandLine.arguments[1] == "--readiness" {
+        _ = try defaultPrinter() // Read-only queue resolution, no journal or submission.
+        print("WMS Print Direct: default queue available; no label submitted")
     } else if CommandLine.arguments.contains("--self-test") { try runSelfTest() } else { try runServer() }
 } catch {
     fputs("\(String(describing: error))\n", stderr)

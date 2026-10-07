@@ -40,6 +40,10 @@ def main():
             "-o", str(package / "wms-print"),
         ], check=True)
         shutil.copyfile(ROOT / "history.html", package / "history.html")
+        updater = ROOT / "update_macos_direct.sh"
+        if updater.is_file():
+            shutil.copyfile(updater, package / updater.name)
+            (package / updater.name).chmod(0o755)
         subprocess.run(["codesign", "--force", "--sign", "-", str(package / "wms-print")], check=True)
         subprocess.run(["codesign", "--verify", "--strict", str(package / "wms-print")], check=True)
     else:
