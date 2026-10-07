@@ -163,3 +163,21 @@ describe('WMS-517 incident registry recovery on the real screen', () => {
     expect(host.textContent).not.toContain('Не удалось выполнить операцию. Обновите данные и повторите.')
   })
 })
+
+describe('WMS-517 IC15: initial report count is truthful while reading', () => {
+  it.each(['rows', 'empty'] as const)('IC15 pending initial read shows loading until complete %s response', async (kind) => {
+    const api = makeApi(); const delayed = deferred<WithdrawalPage>()
+    api.list.mockReturnValueOnce(delayed.promise)
+    await mount(api, 'seller-a', async () => { throw new Error('fixture signing readiness warning') })
+    expect(host.querySelector('[role="progressbar"]')).not.toBeNull()
+    expect(host.textContent).toContain('fixture signing readiness warning')
+    expect(host.textContent).not.toContain('Найдено: 0')
+    expect(host.textContent).toMatch(/загруз/i)
+    await settle(delayed, kind === 'rows' ? page('loaded') : { rows: [], total: 0 })
+    expect(host.querySelector('[role="progressbar"]')).toBeNull()
+    expect(refresh().disabled).toBe(false)
+    if (kind === 'rows') expectFresh('loaded')
+    else expect(host.textContent).toContain('Найдено: 0')
+    expect(host.textContent).toContain('fixture signing readiness warning')
+  })
+})
