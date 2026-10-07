@@ -1,0 +1,112 @@
+{
+  "tested_head": "447ae9216cfb874bd66136a90d68d404ce3ea307",
+  "run": 37558149550,
+  "attempt": 1,
+  "members": [
+    {
+      "path": "README.md",
+      "bytes": 3192,
+      "sha256": "fba521a5488f3e799edc72b671af6478629ac65dd43f7e26d2fc68a5b980f69a"
+    },
+    {
+      "path": "actual-ledger.json",
+      "bytes": 11872,
+      "sha256": "4d5756edc70a728aa00f855f2e0b07e847cb3e1d2faba2b3aa9725513cd91cd8"
+    },
+    {
+      "path": "preparation.json",
+      "bytes": 1670,
+      "sha256": "78221f4ae222a0e34a25cfc6c324470e417d62bd20a13cb1e46834196eb78603"
+    },
+    {
+      "path": "raw/artifacts.json",
+      "bytes": 785,
+      "sha256": "582839fc0a29df752e477664f1c3f1ce4ce37bbb1a6cf08838760063c19232c6"
+    },
+    {
+      "path": "raw/completion-gw0.json",
+      "bytes": 104,
+      "sha256": "565755f7fede56616f1de147882e4f2a87f86d9ab65a5a76b8624f512e20e66c"
+    },
+    {
+      "path": "raw/dependencies.txt",
+      "bytes": 1602,
+      "sha256": "582b3add15a6c221a13fe5fcdcf31428a82b453bf47b198ee2d654b4e0a085d9"
+    },
+    {
+      "path": "raw/diagnostic-workflow.yml",
+      "bytes": 1536,
+      "sha256": "3620221968bf3ffb2c191c2aa8922f19d05dcf37e1d84583ecad5da1b6f4b4aa"
+    },
+    {
+      "path": "raw/environment.txt",
+      "bytes": 528,
+      "sha256": "0f01b57bd274e3e157c5205fe2763521734dd80a47d76e86f310d0cacc39c7dd"
+    },
+    {
+      "path": "raw/exit-results.json",
+      "bytes": 20,
+      "sha256": "b587eb4687aded612d458cc26c1431ae12d6e0e64b42af33fc1d60cc6000c59d"
+    },
+    {
+      "path": "raw/job.log",
+      "bytes": 137007,
+      "sha256": "907529225f566404a064ee325095382c233e027e9c56e25522c4c5057237e3c9"
+    },
+    {
+      "path": "raw/jobs.json",
+      "bytes": 3190,
+      "sha256": "7dfe9609561c4426460f82aeebcfe5542715e8fceaedeeb2430a3035e909f1de"
+    },
+    {
+      "path": "raw/protected-after.sha256",
+      "bytes": 125908,
+      "sha256": "39534f8cbf0577941cc9cdb9f49b99506f97c1748f8fb75f95e5b8cff5ccb5dd"
+    },
+    {
+      "path": "raw/protected-before.sha256",
+      "bytes": 125908,
+      "sha256": "39534f8cbf0577941cc9cdb9f49b99506f97c1748f8fb75f95e5b8cff5ccb5dd"
+    },
+    {
+      "path": "raw/run.json",
+      "bytes": 12915,
+      "sha256": "c1e7369870496637598986ff49783589eeb5e9914a15c978e52a06ad3a940c6a"
+    },
+    {
+      "path": "raw/run.sh",
+      "bytes": 1617,
+      "sha256": "b0dc911b9e22d88929a2f7eeea34e16c032a88bb2d7caf25c695a8cd564a2205"
+    },
+    {
+      "path": "raw/selected.log",
+      "bytes": 630,
+      "sha256": "e7c0b0a70ba1c92fd20803a8d9e0ac1ec469e4a738d7c63793899e2fbe72228c"
+    },
+    {
+      "path": "raw/selected.xml",
+      "bytes": 368,
+      "sha256": "4202c31648182615b1c026b70748f891727048782f78a9507bb860fe89b728e6"
+    },
+    {
+      "path": "raw/source-sha.txt",
+      "bytes": 41,
+      "sha256": "dbb6136a796b714c24ff89c85482787732d3867023e309c9f6aedaf9ef7247d4"
+    },
+    {
+      "path": "raw/transactions-gw0.jsonl",
+      "bytes": 1805572,
+      "sha256": "664704c97088dcadb1b51e157841f827ac48e45f137ebb30a018ebe69a74717c"
+    },
+    {
+      "path": "raw/wms652_sqlite_observer.py",
+      "bytes": 9870,
+      "sha256": "b8be554780bd6e12aa7945f312545a1f10f4e61679ee3e6b60b7b6833a0a292b"
+    },
+    {
+      "path": "result.md",
+      "bytes": 3252,
+      "sha256": "c6d476f1abf7809faee8ac73f27f8a15dcd9fb158e6e516de4c96d35f009b11f"
+    }
+  ]
+}
