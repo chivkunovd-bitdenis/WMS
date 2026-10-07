@@ -286,6 +286,7 @@ export type PrintMarkingTapeOptions = {
   authToken?: string | null
   labelSize?: LabelSize
   signal?: AbortSignal
+  beforeDispatch?: () => Promise<void>
 }
 
 export type PrintMarkingCodeLabelsOptions = {
@@ -713,7 +714,7 @@ export async function printMarkingCodeTape(
   options?: PrintMarkingTapeOptions,
 ): Promise<void> {
   const sections = await buildMarkingTapeSections(units, layout, defaultProductLabel, options)
-  await printTapeSections(sections, options?.labelSize)
+  await printTapeSections(sections, options?.labelSize, options?.beforeDispatch)
 }
 
 export async function printMarkingCodeLabels(
