@@ -10,17 +10,17 @@ from httpx import AsyncClient
 from sqlalchemy import select
 
 from app.db.session import SessionLocal
-from app.models.fbs_order import FbsOrder
+from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import STATUS_AVAILABLE, MarkingCode
 from app.models.product import Product
+from tests.test_fbs_order_tape_concurrency import stock_snapshot
 from tests.test_fbs_picking import (
     _create_product,
     _create_seller_and_warehouse,
     _register_ff_admin,
     _seed_pick_supply,
 )
-from tests.test_fbs_order_tape_concurrency import stock_snapshot
 
 
 async def _bare_supply_with_pool(
@@ -174,6 +174,16 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
         pool_count=2,
     )
     before_stock = await stock_snapshot()
+    async with SessionLocal() as session:
+        initial_pool = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            )
+        )).all())
+    assert len(initial_pool) == 2
 
     response = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/order-print-tape",
@@ -195,6 +205,43 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
     printed = body["orders"][0]["printed_codes"]
     assert len(printed) == 1
     assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
+    binding = {
+        "order_id": str(order_ids[0]),
+        "supply_id": str(supply_id),
+        "marking_id": printed[0]["marking_id"],
+        "cis_code": printed[0]["cis_code"],
+    }
+    assert binding["marking_id"]
+    assert binding["supply_id"] == str(supply_id)
+    assert binding["cis_code"] in {code.cis_code for code in initial_pool}
+    validated = await async_client.post(
+        "/operations/fbs-orders/print-bindings/validate",
+        headers=headers,
+        json={"bindings": [binding]},
+    )
+    assert validated.status_code == 204, validated.text
+    async with SessionLocal() as session:
+        assigned_code = await session.get(MarkingCode, uuid.UUID(printed[0]["id"]))
+        assigned_marking = await session.get(
+            FbsOrderMarking, uuid.UUID(printed[0]["marking_id"]),
+        )
+        remaining_pool = list((await session.scalars(
+            select(MarkingCode).where(
+                MarkingCode.tenant_id == tenant_id,
+                MarkingCode.seller_id == seller_id,
+                MarkingCode.product_id == product_id,
+                MarkingCode.status == STATUS_AVAILABLE,
+            )
+        )).all())
+        assert assigned_code is not None
+        assert assigned_marking is not None
+        assert assigned_code.cis_code == binding["cis_code"]
+        assert assigned_code.status == "printed"
+        assert assigned_marking.order_id == order_ids[0]
+        assert assigned_marking.marking_code_id == assigned_code.id
+        assert len(remaining_pool) == 1
+        assert remaining_pool[0].id in {code.id for code in initial_pool}
+        assert remaining_pool[0].id != assigned_code.id
     after_stock = await stock_snapshot()
     assert after_stock == before_stock, "manual KIZ allocation is not a stock movement"
     workspace = await async_client.get(
