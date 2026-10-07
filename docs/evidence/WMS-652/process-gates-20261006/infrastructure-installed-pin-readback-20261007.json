@@ -1,5 +1,4 @@
 {
-  "recorded_at_utc": "2026-10-07T01:15:56Z",
   "main_pr": 395,
   "main_pr_url": "https://github.com/chivkunovd-bitdenis/WMS/pull/395",
   "main_merge_sha": "ddb28a5530456f2be6f7772001f72095e53be1e6",
@@ -121,5 +120,8 @@
   "limits": [
     "Configuration identity/protection readback only. Exact full CI and stage/production release still pending.",
     "No secret metadata or values, configuration/key management, production mutation or arbitrary direct-SSH enforcement inspection."
-  ]
+  ],
+  "query_clock_lower_bound_utc": "2026-10-07T01:15:56Z",
+  "query_clock_upper_bound_utc": "2026-10-07T01:17:20Z",
+  "query_time_basis": "UTC clock reads before and after metadata calls; exact request timestamps were not captured."
 }
