@@ -158,7 +158,6 @@ async def test_ozon_equal_timestamp_cutoff_keeps_every_current_binding(
     position = next(row for row in order.product_positions if row.id == position_id)
     assert position.quantity == 3
 
-    markings[0].meta_status = "replacement_required"
     replacement = FbsOrderMarking(
         id=uuid.UUID(int=40),
         tenant_id=order.tenant_id,
