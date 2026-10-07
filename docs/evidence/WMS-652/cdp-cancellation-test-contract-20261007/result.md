@@ -39,3 +39,25 @@ cancellation. The original unlogged common-CI command remains UNKNOWN. No C5,
 browser43, old suites, fullCI, install/build/provider/print/deploy or product,
 policy/workflow/requirements action occurred. Separate developer implementation,
 independent review, analyst acceptance and SOURCE approval remain later stages.
+
+## Final additive single-consumption boundary
+
+Before any developer edits, independent boundaryreview5c6fbc5298f1f62575b7b445f602542cf7b74d70
+requires a request lifecycle to retire only once. CDP5 is appended; the entire
+provisional130130 test prefix (helpers/CDP1–4 and12 negatives) remains byte-identical.
+Its first exact known cancellation must produce retired:true with native payload;
+the same token attempted again with the identical native error must reject,
+remain unretired, enter the strict callback collector and make no hidden retry.
+
+before-five.tap records5 cases:3 targetFAIL/2PASS/0skip, exit1. CDP5 fails at
+the first-retirement prerequisite on the unchanged actual class. A separate
+temporary COPY uses exactly the previous broad-retirement mutation and runs
+only CDP5: mutation-duplicate.tap records1FAIL/0PASS/0skip specifically at
+strictFailure, after the first retirement/native diagnostic prerequisites pass.
+The diagnostic records firstRetired:true, duplicateRetired:true and2 commands;
+there is no setup failure. duplicate-proof.json retains mutation/input hashes;
+the copy was removed and browser bytes unchanged. contract.json now freezes
+the five exact names/current closure hash/counts; the old4 report remains intact.
+
+No developer implementation, other suites, browser/product/workflow/policy
+changes or SOURCE approval occurred. Original historical CI cause stays UNKNOWN.

@@ -7,7 +7,8 @@
     "CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry",
     "CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error",
     "CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures",
-    "CDP4 native fulfillment success after navigation preserves the exact valid response and one command"
+    "CDP4 native fulfillment success after navigation preserves the exact valid response and one command",
+    "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry"
   ],
   "command": "node --test --test-reporter=tap frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
   "format": "node-tap",
@@ -19,7 +20,7 @@
     "frontend/package-lock.json"
   ],
   "closure_sha256": {
-    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "2d5e968016dfd116f3187aa654beefde2126119fe0fd459cad86361f6fe1ce00",
     "frontend/tests-e2e/wms652-critical/browser.mjs": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
     "frontend/package.json": "8882d45b7b7eab18efaa35fa1d9e80dd10e884b5bf64f354dd940b2f2d6f8dc2",
     "frontend/package-lock.json": "4ec9fd6b9291d52f2c3534bc3fb4ebbfd24a9d029f3d3d01127e43404c01984c"
@@ -31,7 +32,8 @@
     "Exact observed Fetch.requestPaused requestId with networkId mapping.",
     "Matching Network.loadingFailed canceled:true and net::ERR_ABORTED.",
     "No earlier successful response for that token.",
-    "Exact Fetch.fulfillRequest native -32602 Invalid InterceptionId refusal."
+    "Exact Fetch.fulfillRequest native -32602 Invalid InterceptionId refusal.",
+    "First owned attempt; request lifecycle retirement is consumed once. An already retired token duplicate is a strict failure."
   ],
   "negative_matrix": [
     "never observed FetchID",
@@ -48,20 +50,21 @@
     "matching abort does not explain timeout"
   ],
   "before": {
-    "total": 4,
+    "total": 5,
     "pass": 2,
-    "fail": 2,
+    "fail": 3,
     "skipped": 0,
     "exit_code": 1,
     "red": [
       "CDP1",
-      "CDP2"
+      "CDP2",
+      "CDP5"
     ],
     "green": [
       "CDP3",
       "CDP4"
     ],
-    "raw": "before.tap"
+    "raw": "before-five.tap"
   },
   "green_preservation_proof": {
     "copy_only": true,
@@ -79,5 +82,35 @@
     "No browser/business43/C5/old7+2+3/scope51/fullCI rerun.",
     "No business assertions, product, original transport, workflow, policy, requirements or secrets changed.",
     "No independent review, acceptance, implementation or SOURCE approval; developer must wait for this published frozen contract."
-  ]
+  ],
+  "provisional_contract_sha": "130130b337958b2a442f2961520b634df77750de",
+  "boundary_review_commit": "5c6fbc5298f1f62575b7b445f602542cf7b74d70",
+  "provisional_before": {
+    "total": 4,
+    "pass": 2,
+    "fail": 2,
+    "skipped": 0,
+    "exit_code": 1,
+    "red": [
+      "CDP1",
+      "CDP2"
+    ],
+    "green": [
+      "CDP3",
+      "CDP4"
+    ],
+    "raw": "before.tap"
+  },
+  "single_consumption_proof": {
+    "case_id": "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry",
+    "actual_class_raw": "before-five.tap",
+    "mutation_copy_raw": "mutation-duplicate.tap",
+    "mutation_result": "duplicate-proof.json",
+    "first_retirement_prerequisite_passed": true,
+    "duplicate_specific_failure": "strictFailure rejects second resolved retirement",
+    "pass": 0,
+    "fail": 1,
+    "skipped": 0,
+    "copy_only": true
+  }
 }

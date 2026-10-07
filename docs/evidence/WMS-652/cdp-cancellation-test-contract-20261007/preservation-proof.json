@@ -77,5 +77,15 @@
     "records": 44,
     "dropped": 0
   },
-  "original_ci_cause": "UNKNOWN; no retrospective classification of the unlogged common-CI command."
+  "original_ci_cause": "UNKNOWN; no retrospective classification of the unlogged common-CI command.",
+  "additive_cdp5": {
+    "provisional_commit": "130130b337958b2a442f2961520b634df77750de",
+    "old_full_test_sha256": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "preserved_prefix_bytes": 10592,
+    "preserved_prefix_sha256": "6c901c797e3553292cb621838b866946b1e05d3e343249cfb96da9d4357adff7",
+    "old_helpers_and_cases_1_to_4_byte_identical": true,
+    "negative12_expectations_unchanged": true,
+    "only_one_new_test_appended": true,
+    "new_case_id": "CDP5 proven canceled retirement is consumed once; the same token duplicate stays a strict callback failure without retry"
+  }
 }
