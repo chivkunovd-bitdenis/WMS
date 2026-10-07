@@ -28,7 +28,7 @@
   function createDomAdapter(root) {
     const document = root?.document;
     const waitFor = async (predicate, message) => {
-      for (let attempt = 0; attempt < 80; attempt += 1) {
+      for (let attempt = 0; attempt < 3000; attempt += 1) {
         const value = predicate();
         if (value) return value;
         await new Promise((resolve) => root.setTimeout(resolve, 100));
@@ -105,13 +105,17 @@
         assertCurrentSession();
         refresh.click();
         await waitFor(
-          () => [...container.querySelectorAll('*')].some(
+          () => {
+            assertCurrentSession();
+            return [...container.querySelectorAll('*')].some(
             (node) => normalizedText(node) === `Найдено: ${expectedCount}`,
-          ),
+            );
+          },
           `Штатный экран не показал ровно ${expectedCount} проверенных КИЗ.`,
         );
         assertCurrentSession();
         const selectAll = await waitFor(() => {
+          assertCurrentSession();
           const inputs = [...container.querySelectorAll('input[aria-label="Выбрать все доступные КИЗ по фильтрам"]')];
           return inputs.length === 1 && !inputs[0].disabled ? inputs[0] : null;
         }, 'Штатный выбор всех КИЗ недоступен.');
@@ -120,15 +124,19 @@
         selectAll.click();
         assertCurrentSession();
         const action = await waitFor(() => {
+          assertCurrentSession();
           const button = actionButton(container, expectedCount);
           return button && !button.disabled ? button : null;
         }, `Штатный экран не подтвердил выбор ровно ${expectedCount} КИЗ.`);
         assertCurrentSession();
         action.click();
         await waitFor(
-          () => [...document.querySelectorAll('[role="dialog"]')].some(
+          () => {
+            assertCurrentSession();
+            return [...document.querySelectorAll('[role="dialog"]')].some(
             (dialog) => normalizedText(dialog).includes('Выберите сертификат'),
-          ),
+            );
+          },
           'Штатный диалог выбора сертификата не открылся.',
         );
         assertCurrentSession();
@@ -205,6 +213,7 @@
       }
     };
     const assertCurrentToken = (token) => {
+      dependencies.assertActive?.();
       assertLocation();
       if (readToken() !== token) throw new SoldKizFilterError('Seller-сессия изменилась во время подготовки.');
     };
