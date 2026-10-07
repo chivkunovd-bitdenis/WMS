@@ -580,3 +580,12 @@ Owner reaffirmed release and explicitly authorized one ordinary full retry of un
 Sole ordinary gh run rerun37567017373 (ALLjobs, not failed-only) executed05:48:38UTC: APIattempt2/eventpush/etalon/head4c532f0cccfb8f99b34d68d9630a3763038fbc5f queued; remoteetalon exact4c verified. Source/tests/expectations/policy unchanged. Next complete result estimate06:02–06:05UTC2026-10-07, then exactattempt raw1192/PG/full4643/integrity proof and ordinary stage/prod only on actualPASS. If repeatedFAIL, bounded scenario-isolation fixture contract/review of concrete delta, no new Chromium investigation. Stagecc8e/prod8f11 unchanged.
 
 607 product-onlyP1fixbdd5a8eee8606d667a90a3b61da299b4097dc877/receipt2022d0de2321fca352789a496d11413a7a816b06 publishedclean. New4PASS/old10PASS103.310s/old19PASS50.669s, all0skip/error, frozencontracts preserved. Same reviewer01a11370 actually resumed boundedP1closure; distinctanalyst and exactMacARM+Intel packageCI/publicimmutablecommand/owner delivery next, separate from652. Do not delay on primarydiagnosis.
+
+
+## Checkpoint 06:07 UTC: strict etalon proof saved; staging actually deploying
+
+Exact37567017373 attempt2 completedSUCCESS/all11jobs. Actual22suite1192requiredPASS/full4643=4445PASS198ordinaryskips0FAIL/error, two-shardexactunion and currentattemptidentity verified; normal verify_process_ci exact4c exit0 confirms independentlatestgenuineproof/checkrun. Raw/deploymentproof saved89d61802d and pushed. Priorattempt1 transportFAIL remainsOPEN/NOTFIXED; no diagnosticreplacement or assertion/policy changes.
+
+Cleanexact4c namedbranch codex/wms652-exact-etalon-staging-20261007 ran existingrailway-staging-deploy.sh successfully: actualorigin/staging fast-forwardcc8e→4c532f0cccfb8f99b34d68d9630a3763038fbc5f. No force/mainchange. Railway builds in progress, metadataALL4exactSHA+health next; then normalDeployProduction dispatch without waitingheartbeat. Productionstill8f11 untilactualnormaldeploy. Coordinationcheckout returnedcodex/wms652-process-gates clean; source4c frozen.
+
+607 P1rereview49da PASS and distinctsoftwareacceptancea04a7b35f1e866c1283bdc46fff2d41eaf68b4d6 published;12literaltestlinks corrected/documentgateactualexit0, no test/product/verdictchanges. IsolatedMacARM/Intelharness d0a0be566e2fd6ea10c64c650875d72319f9a103 fixes shallowhistory/emptyXMLnode detection andmechanicallypermitsONLYa04source; sameindependentreviewer boundedrereview nowfinalizing. ImmediatelyoneMacpackageCIafterPASS; nativearchive/publicmanifest/command/owner delivery pending, separatefrom652.
