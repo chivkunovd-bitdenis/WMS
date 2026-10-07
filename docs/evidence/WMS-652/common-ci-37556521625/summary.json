@@ -19,5 +19,8 @@
     "SQLite database locked during inventory movement autoflush in test_full_flow_warehouse_sc_emulator"
   ],
   "process_proof": "SKIPPED",
-  "release": "BLOCKED; no deployment"
+  "release": "BLOCKED; no deployment",
+  "old_required_backend_fbs_passed": 615,
+  "old_required_backend_fbs_skipped": 0,
+  "new_native_stock_cases": "not present in this historical run; new source full CI pending"
 }
