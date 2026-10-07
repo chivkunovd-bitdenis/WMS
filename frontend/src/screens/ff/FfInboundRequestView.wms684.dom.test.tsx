@@ -111,11 +111,14 @@ describe('WMS-684 acceptance box labels', () => {
       expect(JSON.stringify(h.current.lines)).toBe(lines)
       h.markMode = 'ok'
       await h.print(false, 1)
-      expect(h.markCalls).toHaveLength(2)
+      // A lost response can still mean that the server committed the mark.
+      // The durable attempt is reconciled on the next explicit action, without
+      // sending a second tape or a second mark for that already printed box.
+      expect(h.markCalls).toHaveLength(mode === 'http' ? 2 : 1)
       h.current = makeDetail('B')
       await h.render()
       await h.print(false, 1)
-      expect(h.markCalls).toHaveLength(3)
+      expect(h.markCalls).toHaveLength(mode === 'http' ? 3 : 2)
     })
   }
   it('keeps cargo, default and storageCell printing free of receipt metadata', async () => {

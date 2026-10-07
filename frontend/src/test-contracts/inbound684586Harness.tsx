@@ -32,6 +32,29 @@ export const json = (body: unknown, status = 200) => new Response(JSON.stringify
 export async function flush() {
   await act(async () => { await Promise.resolve(); await Promise.resolve() })
 }
+
+/**
+ * Await a state that the existing screen exposes after an asynchronous action.
+ * This waits for the actual durable print handoff and its terminal UI/network
+ * effect, instead of assuming that two microtasks have crossed the print
+ * iframe's decode and timer boundary.
+ */
+async function waitForInboundState(assertion: () => void) {
+  let lastError: unknown
+  for (let attempt = 0; attempt < 200; attempt++) {
+    try {
+      assertion()
+      return
+    } catch (error) {
+      lastError = error
+    }
+    // Give React one real event-loop turn to process the iframe/load/timer
+    // callback. This is bounded polling of the asserted state, not a delay.
+    await act(async () => { await new Promise(resolve => setTimeout(resolve, 10)) })
+  }
+  throw lastError
+}
+
 export function byId(id: string): HTMLElement {
   const element = document.querySelector(`[data-testid="${id}"]`)
   expect(element, id).toBeTruthy()
@@ -85,6 +108,7 @@ export function installCanvas() {
 
 export function harness() {
   ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
+  const token = `contract.${btoa(JSON.stringify({ tenant_id: 'contract-tenant', sub: 'contract-user' }))}.signature`
   const host = document.createElement('div')
   document.body.append(host)
   let root: Root = createRoot(host)
@@ -95,6 +119,10 @@ export function harness() {
   let blob: Blob
   const markCalls: string[] = []
   const fileCalls: string[] = []
+  const detailLoads = () => fetcher.mock.calls.filter(([input, init]) =>
+    String(input).endsWith(`/operations/inbound-intake-requests/${current.id}`)
+      && (init?.method ?? 'GET') === 'GET',
+  ).length
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input), method = init?.method ?? 'GET'
     if (url.endsWith(`/operations/inbound-intake-requests/${current.id}`) && method === 'GET') return json(current)
@@ -129,6 +157,7 @@ export function harness() {
   vi.stubGlobal('fetch', fetcher)
   window.__WMS_CAPTURE_PRINT_HTML__ = true
   window.__WMS_LAST_PRINT_HTML__ = undefined
+  window.__WMS_PRINT_JOB_COUNT__ = 0
   const oldScroll = Element.prototype.scrollIntoView
   Element.prototype.scrollIntoView = () => undefined
   vi.stubGlobal('URL', class extends URL {
@@ -139,14 +168,44 @@ export function harness() {
     downloads.push({ name: this.download, blob })
   })
   installCanvas()
+  const frames: HTMLIFrameElement[] = []
+  const append = document.body.appendChild.bind(document.body)
+  vi.spyOn(document.body, 'appendChild').mockImplementation(((node: Node) => {
+    const result = append(node)
+    if (node instanceof HTMLIFrameElement) frames.push(node)
+    return result
+  }) as typeof document.body.appendChild)
+  const loadPrintFrames = () => {
+    for (const frame of frames.filter(node => !node.dataset.wms684Loaded)) {
+      frame.dataset.wms684Loaded = 'yes'
+      // jsdom does not navigate iframe.srcdoc. This is the same platform
+      // adapter used by the durable WMS-672 print test: the production utility
+      // still owns onload, image.decode(), its delayed print handoff and Promise.
+      frame.contentDocument!.open()
+      frame.contentDocument!.write(frame.srcdoc)
+      frame.contentDocument!.close()
+      const printWindow = frame.contentWindow!
+      Object.defineProperty(printWindow.HTMLImageElement.prototype, 'decode', {
+        configurable: true,
+        value: async () => undefined,
+      })
+      printWindow.focus = () => undefined
+      printWindow.print = () => undefined
+      frame.onload!(new Event('load') as Event)
+    }
+  }
   return {
     get current() { return current }, set current(value: Detail) { current = value },
     set markMode(value: typeof markMode) { markMode = value }, set fileMode(value: typeof fileMode) { fileMode = value },
     fetcher, downloads, markCalls, fileCalls,
     async render(numbered = true) {
-      await act(async () => root.render(<FfInboundRequestView token="contract" requestId={current.id}
+      const loadsBefore = detailLoads()
+      await act(async () => root.render(<FfInboundRequestView token={token} requestId={current.id}
         isFulfillmentAdmin workspace="reception" numberedInboundBoxLabels={numbered} onClose={() => undefined} />))
-      await flush()
+      await waitForInboundState(() => {
+        expect(detailLoads()).toBeGreaterThan(loadsBefore)
+        expect(document.querySelector('[data-testid="ff-inbound-packages-toggle"]')).toBeTruthy()
+      })
     },
     async remount(numbered = true) {
       await act(async () => root.unmount())
@@ -156,8 +215,37 @@ export function harness() {
     async print(all = false, index = 2, size = '58x40', cargo = false) {
       window.localStorage.setItem('wms.print.labelSizeId', size)
       if (!document.querySelector('[data-testid="ff-inbound-boxes-panel"]')) await click(byId('ff-inbound-packages-toggle'))
-      await click(byId(cargo ? 'ff-inbound-cargo-place-print-cargo-A' : all ? 'ff-inbound-boxes-print-all' : `ff-inbound-box-print-${current.id}-box-${index}`))
+      const jobsBefore = window.__WMS_PRINT_JOB_COUNT__ ?? 0
+      const loadsBefore = detailLoads()
+      const framesBefore = frames.length
+      const printButtonId = cargo ? 'ff-inbound-cargo-place-print-cargo-A' : all ? 'ff-inbound-boxes-print-all' : `ff-inbound-box-print-${current.id}-box-${index}`
+      const marksBefore = markCalls.length
+      const expectedMarks = cargo || !all ? 1 : current.boxes.length
+      let sawBusy = false
+      const actionButton = () => byId(printButtonId) as HTMLButtonElement
+      await click(actionButton())
+      await waitForInboundState(() => expect(document.querySelector('[data-testid="ff-inbound-box-print-dialog-confirm"]')).toBeTruthy())
       await click(byId('ff-inbound-box-print-dialog-confirm'))
+      await waitForInboundState(() => {
+        sawBusy ||= actionButton().disabled
+        const framePrepared = frames.length > framesBefore
+        const recoveryRead = detailLoads() > loadsBefore
+        const failed = document.querySelector('[data-testid="ff-inbound-doc-error"]') !== null
+        expect(framePrepared || recoveryRead || failed).toBe(true)
+      })
+      const framePrepared = frames.length > framesBefore
+      if (framePrepared) loadPrintFrames()
+      await waitForInboundState(() => {
+        const handedOff = (window.__WMS_PRINT_JOB_COUNT__ ?? 0) > jobsBefore
+        sawBusy ||= actionButton().disabled
+        const recovered = detailLoads() > loadsBefore
+        const failed = document.querySelector('[data-testid="ff-inbound-doc-error"]') !== null
+        const terminal = !actionButton().disabled && (recovered || failed)
+        const marksSettled = markMode === 'ok'
+          ? markCalls.length === marksBefore + expectedMarks
+          : markCalls.length === marksBefore + 1
+        expect(framePrepared ? handedOff && marksSettled && terminal && sawBusy : !handedOff && terminal).toBe(true)
+      })
       const html = window.__WMS_LAST_PRINT_HTML__
       expect(html, 'production printBarcodeLabels must produce HTML').toBeTruthy()
       return new DOMParser().parseFromString(html!, 'text/html')
