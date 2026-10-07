@@ -1,0 +1,166 @@
+{
+  "case": "test_macos_artmaks_http_contract.ArtMaksHTTPContract.test_unknown_same_key_never_resubmits_after_queue_recovery",
+  "provenance": {
+    "source_sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387",
+    "transformed_source_sha256": "8fefadd25a553f1df92cd9409574cae49ae326f06f63fc0db9389d97084e1a42",
+    "swift": "Apple Swift version 5.8.1 (swiftlang-5.8.0.124.5 clang-1403.0.22.11.100)\nTarget: arm64-apple-darwin25.3.0",
+    "patches": [
+      "lpstat path",
+      "lp path",
+      "isolated app-support root",
+      "unused CUPS symbol"
+    ],
+    "server": "normal entrypoint; entire HTTP and Printer retained"
+  },
+  "responses": [
+    {
+      "path": "/health",
+      "protocolVersion": null,
+      "http": 200,
+      "body": {
+        "app": "WMS Print Direct",
+        "protocolVersion": 2,
+        "historyUrl": "http://127.0.0.1:59053",
+        "physicalConfirmationSupported": false
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "observations": [
+          "2026-10-07T05:40:25Z saved",
+          "2026-10-07T05:40:25Z submitting: Начата передача в системную очередь",
+          "2026-10-07T05:40:25Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "reprints": [],
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:59053",
+        "context": {},
+        "heightMm": 40,
+        "widthMm": 58,
+        "legacy": false,
+        "queueObservation": {},
+        "createdAt": "2026-10-07T05:40:25Z",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "updatedAt": "2026-10-07T05:40:25Z",
+        "idempotencyKey": "unknown-scan",
+        "paperStatus": "unconfirmed",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "status": "unknown",
+        "imageAvailable": true,
+        "queue": "Label_Printer",
+        "physicalConfirmationSupported": false
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "queue": "Label_Printer",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "context": {},
+        "imageAvailable": true,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:59053",
+        "heightMm": 40,
+        "status": "unknown",
+        "createdAt": "2026-10-07T05:40:25Z",
+        "queueObservation": {},
+        "legacy": false,
+        "updatedAt": "2026-10-07T05:40:25Z",
+        "paperStatus": "unconfirmed",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "reprints": [],
+        "idempotencyKey": "unknown-scan",
+        "observations": [
+          "2026-10-07T05:40:25Z saved",
+          "2026-10-07T05:40:25Z submitting: Начата передача в системную очередь",
+          "2026-10-07T05:40:25Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "widthMm": 58,
+        "physicalConfirmationSupported": false
+      }
+    },
+    {
+      "path": "/print",
+      "protocolVersion": null,
+      "http": 409,
+      "body": {
+        "queue": "Label_Printer",
+        "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+        "context": {},
+        "imageAvailable": true,
+        "error": "Задание сохранено, приём очередью не подтверждён. История: http://127.0.0.1:59053",
+        "heightMm": 40,
+        "status": "unknown",
+        "createdAt": "2026-10-07T05:40:25Z",
+        "queueObservation": {},
+        "legacy": false,
+        "updatedAt": "2026-10-07T05:40:25Z",
+        "paperStatus": "unconfirmed",
+        "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+        "reprints": [],
+        "idempotencyKey": "unknown-scan",
+        "observations": [
+          "2026-10-07T05:40:25Z saved",
+          "2026-10-07T05:40:25Z submitting: Начата передача в системную очередь",
+          "2026-10-07T05:40:25Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+        ],
+        "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+        "widthMm": 58,
+        "physicalConfirmationSupported": false
+      }
+    }
+  ],
+  "commands": [
+    [
+      "lpstat",
+      "-d"
+    ],
+    [
+      "lpstat",
+      "-p",
+      "Label_Printer"
+    ],
+    [
+      "lp",
+      "-d",
+      "Label_Printer",
+      "-t",
+      "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190",
+      "-o",
+      "media=Custom.58x40mm",
+      "-o",
+      "fit-to-page",
+      "-o",
+      "copies=1",
+      "--",
+      "$CASE/WMS Print/direct/jobs-v2/662993751d85b5dec6cd6d890495fbc9d50e6a6d55d1da99bda350f489e86314.png"
+    ]
+  ],
+  "jobs": [
+    {
+      "widthMm": 58,
+      "createdAt": "2026-10-07T05:40:25Z",
+      "observations": [
+        "2026-10-07T05:40:25Z saved",
+        "2026-10-07T05:40:25Z submitting: Начата передача в системную очередь",
+        "2026-10-07T05:40:25Z unknown: Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n"
+      ],
+      "updatedAt": "2026-10-07T05:40:25Z",
+      "idempotencyKey": "unknown-scan",
+      "context": {},
+      "queue": "Label_Printer",
+      "hash": "f6ba80079285ae640804d14caa0dc6e2b5ae06d994d811367f4d0b234b970def",
+      "heightMm": 40,
+      "legacy": false,
+      "queueObservation": {},
+      "reason": "Исход передачи неизвестен; код 1. External receipt lost; submission outcome unknown\n",
+      "status": "unknown",
+      "title": "WMS-41fb18938dc856888b593313d75d7fd3d5f9980972a812d3ce93d0c5c4870190"
+    }
+  ]
+}

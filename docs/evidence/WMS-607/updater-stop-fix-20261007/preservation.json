@@ -1,0 +1,344 @@
+{
+  "source_commit": "bdd5a8eee8606d667a90a3b61da299b4097dc877",
+  "base": "6232cf29765f1b25466e96919ee7840bf5874c62",
+  "review": "30ffc6bce9fffcdc1b4e0b95b9c8782bfb41896c",
+  "source_sha256_before": "2b0eba04a230ca5d0b09043f716505617ddea7bb6bf715f7eb5e09cf39a5432a",
+  "source_sha256_after": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+  "reports": {
+    "precode": {
+      "name": "WMS607.updaterRollbackStop",
+      "tests": "4",
+      "failures": "2",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "green": {
+      "name": "WMS607.updaterRollbackStop",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "updater": {
+      "name": "WMS607.directMacUpdater",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "existing": {
+      "name": "WMS607.existingMacContracts",
+      "tests": "19",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  },
+  "byte_exact_preservation": {
+    "new_frozen_contract": [
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/README.md",
+        "sha256": "307511c9049f9944906aaa5080b5e5eb97468993dc05cf508b2a23b3c77a22fb"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/contract.json",
+        "sha256": "d59e7e8b83b0d670c2c28543c13d6867e1cb7956d7368b656a6e35d1c511bc91"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/manifest.json",
+        "sha256": "2b18386764f8f8663add44d54add3707055796d1dd851a8497df844a8353a914"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent.log",
+        "sha256": "43b70e8a67aed42e900f23a779375ff3b3d38d84a326fac6099432d1aa35f963"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent.xml",
+        "sha256": "66fbc20c8e015f2b56fbe3935353fe0e9f24d3647f3778cd7b3c5c635a247ff1"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-clear-intent/test_successful_owned_stop_restores_previous_and_preserves_journal.json",
+        "sha256": "45fc2f5731cdb81e9b94f51b0b7c7ecab581fbd70c25d7b7e4ffc8d973b5f0fa"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-control.py",
+        "sha256": "28b4ea1a2b3a3b1afce37b5edb3e9431fe6bfc55dac8c94541ed7d8c447db22b"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership.log",
+        "sha256": "278348552d0897cc778c4a04a74d414c1ce11ccec17b9ebb09d09dd016703bf0"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership.xml",
+        "sha256": "18fef05660f3911e8d3e330f7309bcd03645cf3248f23ad1390cf3f810b884fb"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-foreign-ownership/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json",
+        "sha256": "2d27df1a6dec77cd1ece9fcca4da2617d233acbc54b9c6db9175a7e4e3b84b97"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/mutation-result.json",
+        "sha256": "bb66dd30fc03dc8c89bdeead2867f77ee33c1b4a152448849d8ce5f7aa0353de"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode.log",
+        "sha256": "ffcc5e2b333c93d333d86919459f26952af89b810230c09b84f27a21eb152617"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode.xml",
+        "sha256": "33ec045b75097b0d9772d2b5abefe29359103a78b784146ebfb218c291100ca6"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_foreign_owner_not_signaled_existing_application_recovery_preserved.json",
+        "sha256": "ad49e18c42625f2cea12270240a3c525ddb7eebeaec35e681bb8f0a3b56fcdde"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_owned_TERM_error_retains_target_and_recovery.json",
+        "sha256": "2738a160a2fd80ae9bf3f79c76bbf2626274b6fff36e460762690abfe0a533c7"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_owned_TERM_success_survivor_retains_target_and_recovery.json",
+        "sha256": "685cb5f51250daab1708c4287335a09874102f78e772eaec49668ac80c08a839"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/precode/test_successful_owned_stop_restores_previous_and_preserves_journal.json",
+        "sha256": "22617495b724ac4aae0f54416a774c286357bb506c03a7da05ec2a0d556a85aa"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/source-checks.json",
+        "sha256": "698eabd3f9ce31d2f98d82fc97782565501bcbb86e41c1b8b2b8472f2472d586"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/source-probe.py",
+        "sha256": "1df817a524be721bbe8039dcb6615bee4ef600922bb7169d72b2dabb8c6a60bf"
+      },
+      {
+        "path": "tools/print-agent/test_macos_direct_updater_stop_contract.py",
+        "sha256": "efde53885375e3c331d2028a7b325c4d91ac657cdd87d96739c117b07f0a53ed"
+      }
+    ],
+    "new_handoff": [
+      {
+        "path": "docs/evidence/WMS-607/updater-stop-test-contract-20261007/result.md",
+        "sha256": "e9ca51fe540124bb1e77f48d667465c092f644aa30104d0d173a729801b308e8"
+      }
+    ],
+    "old_frozen_contract": [
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/README.md",
+        "sha256": "f0e26a813566aa57ae4718d703efea1bc531c6e391ace2c8c01071fe55058e89"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/contract.json",
+        "sha256": "18550049b6892de66e25bb3e8b86e3ed5e5ae48d5ab89fd191a1cbd923470750"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/harness-development-error.log",
+        "sha256": "1e7f44120e68deb6c3b6ae97e88ac86cf2bb4ad87324c3f2e0b24d3c80d6ef89"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/manifest.json",
+        "sha256": "4eb9227fb8e02072615a7e317ab4b2a627ac7272d44540b0bc06f5e90886c32f"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutant-journal/test_preservation_actual_public_and_current_journal_replay.json",
+        "sha256": "e6b2dac729a9a04ce58d9cd2617dc08fa734eda8125f24d69e68e39f1451ee58"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutant-metadata/test_preservation_actual_direct_build_metadata.json",
+        "sha256": "8e20e67e6fb81cdea67b45522c183c98bfbabf3461f47e349712a28a1474c4e9"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-control.py",
+        "sha256": "eeffec8a2877679f478086769248b84b6b4e93d8ee8ce960db8e425f7b37916a"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-journal.log",
+        "sha256": "b651dd1245f174f1b654f3804ea8d1dc87282783eee0a2db2f2ae450f01bc701"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-journal.xml",
+        "sha256": "62d420b098e11b1f76d83d690834cd6804036ef1ebe4a2dd5218ad451ad1ffea"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-metadata.log",
+        "sha256": "6a3beff78a8553acdd950f1b1f51dd8a49b4e35f28ef06ad7e87bd3c64141c8b"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-metadata.xml",
+        "sha256": "13aaf876bfd7d85f1f30b6442d44806ecac442c74f136dab8dd8e13113d5db17"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/mutation-result.json",
+        "sha256": "bf035b62cef9460cb1d709cb0a8f15544b600e8e37ea718a8356876dd05c165b"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode.log",
+        "sha256": "1d3f34c4f70066dac069b7dabded19ea0c0cee18d195917f348da4a7f216570d"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode.xml",
+        "sha256": "59aea03f2893d60d087cb15c39c9c25a1f97dc1d69c68f310946a111296cc268"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_preservation_actual_direct_build_metadata.json",
+        "sha256": "2dbcabf4fef65149973ea5bfc2565bf29ee23175ede8ec802a715b4ad96bd5be"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_preservation_actual_public_and_current_journal_replay.json",
+        "sha256": "e2003c593b880e911eba4f81271f169f775eac2effb77a215ec669046cc43bba"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc1_hardware_selection_arm_intel_rosetta_and_unsupported.json",
+        "sha256": "53f60f2961f6d1cebcee1b7f88811ab5d3b12ffecb301e0d60fe441351b421ae"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc2_pins_invalid_archive_metadata_and_selftest_fail_closed.json",
+        "sha256": "5622da072737e7a5c921105bcb40f904bcb2245314c0a7e95214036997b8ccbe"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc3_lossless_backup_and_archive_or_space_failure.json",
+        "sha256": "2b0ad8a5c72c650aa1ba5ae458615173267e9a8b75f5119e39e046280ccbe0fd"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc4_foreign_port_owner_and_health200_wrong_process.json",
+        "sha256": "3f25b7eaa5eb2af24ba5a8c54d58fc96cfa84d047e5e356d118de66d09ce2865"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc5_replace_and_start_rollback_preserve_current_journal.json",
+        "sha256": "6c9346a4a9c08193c138aeae996903bb700868e55e30625c874fc630bca19dab"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc6_repeat_concurrent_and_interrupted_update_recover.json",
+        "sha256": "3769107b86e3ac3676698560084f182bce3b797be1527708fe9c43e263060af9"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc7_actual_journal_replay_after_update_and_failed_restart.json",
+        "sha256": "f9b401db0f0abda61b0b11f5992fe8de7ae7e9a49ec8401bf02bbb74ec5ffb1b"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/precode/test_uc8_no_security_printer_or_dependencies_change_permission_recovery.json",
+        "sha256": "e763707a81348c0461f53d8af82b525ca371c02cb0b2ff6e860937ad5429ff7a"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/run-contract.py",
+        "sha256": "518c52e6f00ffe53371a6d030c0a906dcc09a03f2bf77e5b79fde7c201901fc3"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/source-checks.json",
+        "sha256": "52995ebbbbdfc2322b1d1c9c0816462a875c11a3c86b316704d31633d960e424"
+      },
+      {
+        "path": "docs/evidence/WMS-607/updater-test-contract-20261007/source-probe.py",
+        "sha256": "a3e9ff94b9e79cac6090d708d0b91d7c3acf9153d3df94fb58a5b1e421fb0a8c"
+      },
+      {
+        "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+        "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee"
+      }
+    ],
+    "prior_print_sources_and_tests": [
+      {
+        "path": "docs/requirements/WMS-607.md",
+        "sha256": "706159108016721c5e39e2d2c3e6726c5ee67b65f142ac37ae8d969d2f60eb31"
+      },
+      {
+        "path": "tools/print-agent/.gitignore",
+        "sha256": "2ee183ff4491eabfd7f77d12d9dd123e3fbec1ed3f731fa267d97be8c524b64e"
+      },
+      {
+        "path": "tools/print-agent/README-direct.md",
+        "sha256": "c61ef50ddacd79511e4b02bb3eb5e5fe11b8731aab33640b9c5f1b64773e0e9d"
+      },
+      {
+        "path": "tools/print-agent/README.md",
+        "sha256": "f490d2f569c72ace1ecb6182962275e22921cc02ef2f86b91f30c1c45e907347"
+      },
+      {
+        "path": "tools/print-agent/build_console.py",
+        "sha256": "da6299b4ee0b2a5a1ad0036267ecd7603d04ac2de2619b053a2694531837db4e"
+      },
+      {
+        "path": "tools/print-agent/build_package.py",
+        "sha256": "56f2d8b81c28eb27fd2e5c16fd00b84fe10e0ca0c141c6a564522ea47873ed61"
+      },
+      {
+        "path": "tools/print-agent/history.html",
+        "sha256": "817e8fee12e08fae76950a4c5a2dc364dab87307e797ec106818f27e6d437fd6"
+      },
+      {
+        "path": "tools/print-agent/publish_release.py",
+        "sha256": "0846099de2e042fa92f9ab5acd9eabfde8de84b1cec2e29625cbb2a6af197eb9"
+      },
+      {
+        "path": "tools/print-agent/test_macos_artmaks_contract.py",
+        "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+      },
+      {
+        "path": "tools/print-agent/test_macos_artmaks_http_contract.py",
+        "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704"
+      },
+      {
+        "path": "tools/print-agent/test_macos_default_printer.py",
+        "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a"
+      },
+      {
+        "path": "tools/print-agent/test_macos_direct_updater_contract.py",
+        "sha256": "134be439ac30ddc80b6bfc375dbc12b2034548f65bedc85c4cbadd8f26a49dee"
+      },
+      {
+        "path": "tools/print-agent/test_macos_native.py",
+        "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+      },
+      {
+        "path": "tools/print-agent/test_publish_release.py",
+        "sha256": "f3a868008d4b78cbc9fc3af55d25bf1b5c956b49071ea0a99e5c24b08aa4dfef"
+      },
+      {
+        "path": "tools/print-agent/test_wms_cups_observe.c",
+        "sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+      },
+      {
+        "path": "tools/print-agent/test_wms_print_agent.py",
+        "sha256": "636e51c942cee2138b2f87e4dbe848d4f8d5cf3b0ae759d48a478ff73de95c80"
+      },
+      {
+        "path": "tools/print-agent/test_wms_print_direct.py",
+        "sha256": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653"
+      },
+      {
+        "path": "tools/print-agent/test_wms_print_runtime.py",
+        "sha256": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747"
+      },
+      {
+        "path": "tools/print-agent/windows-installer.nsi",
+        "sha256": "55b860373e0fe345cfb99a3486fc232a58f09cac08f8d40882a48a4cf55a6e0a"
+      },
+      {
+        "path": "tools/print-agent/wms_cups_observe.c",
+        "sha256": "7275dfc9d5f0b4b591044e43d0aefc60f5b7418b8dbf102b792e408066e8483a"
+      },
+      {
+        "path": "tools/print-agent/wms_print_agent.py",
+        "sha256": "6538cb17cb7f9c90d8911c81d7af40765dd8fd2b5c432bb5b7ace2006927559a"
+      },
+      {
+        "path": "tools/print-agent/wms_print_direct.py",
+        "sha256": "ee7d1fb1ef1d603231e428e445c03e9dde95fd745f454b58c8aeea02faff35b2"
+      },
+      {
+        "path": "tools/print-agent/wms_print_direct_macos.swift",
+        "sha256": "5b055e323da4850b9f0c25fb5c9ba496650d7ebc4df1c96089f12c6c57bd4387"
+      },
+      {
+        "path": "tools/print-agent/wms_print_runtime.py",
+        "sha256": "6227669f9772c7bb90ed64366dd11467e79be5f4f7c246cecb13f95046c865b4"
+      }
+    ]
+  },
+  "new_packages_built": false,
+  "prior_ARM_artifact_source": "32c3212406eaf57b904c207bfb45d7acfd25a0b0",
+  "prior_ARM_artifact_is_final": false,
+  "independent_rereview": false,
+  "analytical_acceptance": false
+}

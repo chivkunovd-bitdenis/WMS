@@ -1,0 +1,18 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.updaterRollbackStop" tests="4" failures="2" errors="0" skipped="0"><testcase classname="test_macos_direct_updater_stop_contract.RollbackStopContract" name="test_foreign_owner_not_signaled_existing_application_recovery_preserved" /><testcase classname="test_macos_direct_updater_stop_contract.RollbackStopContract" name="test_owned_TERM_error_retains_target_and_recovery"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 149, in test_owned_TERM_error_retains_target_and_recovery
+    self.assert_owned_stop_failure('term_error')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 143, in assert_owned_stop_failure
+    self.assertTrue(all(checks.values()), json.dumps(checks, sort_keys=True))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : {"app_unchanged": false, "backup_unchanged": true, "intent_unchanged": false, "no_target_rename": true, "not_misreported_foreign": false, "state_unchanged": true, "transaction_retained": false, "truthful_owned_stop_failure": false, "work/previous_unchanged": false}
+</failure></testcase><testcase classname="test_macos_direct_updater_stop_contract.RollbackStopContract" name="test_owned_TERM_success_survivor_retains_target_and_recovery"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 146, in test_owned_TERM_success_survivor_retains_target_and_recovery
+    self.assert_owned_stop_failure('survives')
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms607-artmaks-test-contract/tools/print-agent/test_macos_direct_updater_stop_contract.py", line 143, in assert_owned_stop_failure
+    self.assertTrue(all(checks.values()), json.dumps(checks, sort_keys=True))
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: False is not true : {"app_unchanged": false, "backup_unchanged": true, "intent_unchanged": false, "no_target_rename": true, "not_misreported_foreign": false, "state_unchanged": true, "transaction_retained": false, "truthful_owned_stop_failure": true, "work/previous_unchanged": false}
+</failure></testcase><testcase classname="test_macos_direct_updater_stop_contract.RollbackStopContract" name="test_successful_owned_stop_restores_previous_and_preserves_journal" /></testsuite>

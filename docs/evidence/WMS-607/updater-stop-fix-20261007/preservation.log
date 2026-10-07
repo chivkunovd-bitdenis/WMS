@@ -1,0 +1,40 @@
+{
+  "source_commit": "bdd5a8eee8606d667a90a3b61da299b4097dc877",
+  "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+  "reports": {
+    "precode": {
+      "name": "WMS607.updaterRollbackStop",
+      "tests": "4",
+      "failures": "2",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "green": {
+      "name": "WMS607.updaterRollbackStop",
+      "tests": "4",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "updater": {
+      "name": "WMS607.directMacUpdater",
+      "tests": "10",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    },
+    "existing": {
+      "name": "WMS607.existingMacContracts",
+      "tests": "19",
+      "failures": "0",
+      "errors": "0",
+      "skipped": "0"
+    }
+  },
+  "unchanged_counts": {
+    "new_frozen_contract": 20,
+    "new_handoff": 1,
+    "old_frozen_contract": 28,
+    "prior_print_sources_and_tests": 24
+  }
+}
