@@ -96,7 +96,11 @@
 
 <a id="wms-675"></a>
 
-**Статус:** `В РАБОТЕ · LIVE OZON/SCOPED УЧЁТ ПРОВЕРЕНЫ · MISSING DELTA26 · ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО` · [требования и проверки](requirements/WMS-675.md) · [адресный план](reviews/wms675-evidence-20261006/RECOVERY_PLAN.md).
+**Статус07.10.2026:** `АДРЕСНЫЙ PRODUCTION УЧЁТ ПРИНЯТ · ПРОВЕДЕНО26 · MISSING0 · ПОВТОРНАЯ МУТАЦИЯ НЕ ТРЕБУЕТСЯ` · [заключение](requirements/WMS-675.md#ограниченная-операционная-приёмка--07102026) · [evidence](evidence/WMS-675/final-operational-acceptance-20261007/README.md).
+
+Отдельный replacement analyst01a11390 вместо недоступного исходного675аналитика принял bounded stock/accounting/billing records после independent73f806eb PASS на proof277e8.31 fresh Ozon cards, два SQL-readback07:53/08:03 и SELECT26 actual movements подтверждают26 conducted/0missing,5 отмен без расхода;52 billing IDs/qty/amount и26 fact IDs/qty сохранены, reserve3channels0,6 balances=история, duplicate/orphan/unattributed negative в scope0. Старые12+remaining14 были проведены до integrator attempt: adapter STOPPED/external_status_changed до checkpoint/stock, writes0, успешный ремонт им не заявляется; actor неизвестен. Provider stock publication не проверена; amount=null/тарифы не исправлены. Другие cards/provider/chat в приёмку не включены. История прежнего плана ниже сохранена.
+
+**Исторический статус06.10:** `В РАБОТЕ · LIVE OZON/SCOPED УЧЁТ ПРОВЕРЕНЫ · MISSING DELTA26 · ВОССТАНОВЛЕНИЕ НЕ ВЫПОЛНЕНО` · [требования и проверки](requirements/WMS-675.md) · [адресный план](reviews/wms675-evidence-20261006/RECOVERY_PLAN.md).
 
 Исходное обращение source236 / Telegram65: после физической отгрузки остался черновик31 шт и отменённый заказ. Владелец адресовал draft `b82d1e9a-30d2-4d7b-b52d-9775c3d266e3` Bambook. Live Ozon11:31UTC подтвердил26 единиц; четыре отмены и одно ожидание исключены. Свежий gateway11:36UTC: расход0, резерв16, у11 delivered уже11 фактов/22 начисления. Вычислен план только недостающих26, резерв после него1; старого блокера reader/роли нет. Ведущий подтвердил исправление подстатусов662 (product b4043c0d, test c466/12 PASS, независимое review17e50faa). После единого проверенного выпуска и команды — штатный662 на exact scope со свежим external proof/current ledger и пересчётом missing, без повторных начислений. Обычная публикация stock по активным bindings seller/затронутых товаров сохраняется, лимиты оператора не меняются; подавление/новый runtime не вводятся. Product код662/663 не дублируется, остатки/внешние системы не изменены, приёмка восстановления не заявлена.
 
