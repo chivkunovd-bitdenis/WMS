@@ -1,0 +1,293 @@
+{
+  "at": "2026-10-07T11:32:47.487161+00:00",
+  "rows": [
+    {
+      "article": "1MAZUB01",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "2.1video.nanny",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "5MAZUB01",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "aqua.skreb",
+      "wms_on_hand": 369,
+      "wms_reserved": 2,
+      "wms_free": 367,
+      "ozon_present": 369,
+      "ozon_reserved": 2,
+      "ozon_free": 367
+    },
+    {
+      "article": "AUTOZGR.BLCK",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "doc1",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "doc2",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "doorBell",
+      "wms_on_hand": 271,
+      "wms_reserved": 5,
+      "wms_free": 266,
+      "ozon_present": 272,
+      "ozon_reserved": 6,
+      "ozon_free": 266
+    },
+    {
+      "article": "fishing.kruk1",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "green.pled",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "hub01",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "molot",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "org.08",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "org.10",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "org.10.1",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "org.20",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "org.40",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "par.mint",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "pilka.blue",
+      "wms_on_hand": 341,
+      "wms_reserved": 0,
+      "wms_free": 341,
+      "ozon_present": 341,
+      "ozon_reserved": 0,
+      "ozon_free": 341
+    },
+    {
+      "article": "pilka.mlk",
+      "wms_on_hand": 807,
+      "wms_reserved": 0,
+      "wms_free": 807,
+      "ozon_present": 807,
+      "ozon_reserved": 0,
+      "ozon_free": 807
+    },
+    {
+      "article": "pled.red",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "polkaX2",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "RADIONYANYA001",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "red.pled",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "sausage2",
+      "wms_on_hand": 187,
+      "wms_reserved": 6,
+      "wms_free": 181,
+      "ozon_present": 187,
+      "ozon_reserved": 6,
+      "ozon_free": 181
+    },
+    {
+      "article": "sausage3",
+      "wms_on_hand": 430,
+      "wms_reserved": 0,
+      "wms_free": 430,
+      "ozon_present": 430,
+      "ozon_reserved": 0,
+      "ozon_free": 430
+    },
+    {
+      "article": "such2",
+      "wms_on_hand": -2,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "tyal.boom",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    },
+    {
+      "article": "video.nanny",
+      "wms_on_hand": 452,
+      "wms_reserved": 2,
+      "wms_free": 450,
+      "ozon_present": 452,
+      "ozon_reserved": 2,
+      "ozon_free": 450
+    },
+    {
+      "article": "video.nanny2",
+      "wms_on_hand": 530,
+      "wms_reserved": 0,
+      "wms_free": 530,
+      "ozon_present": 530,
+      "ozon_reserved": 0,
+      "ozon_free": 530
+    },
+    {
+      "article": "video.nanny3",
+      "wms_on_hand": 234,
+      "wms_reserved": 2,
+      "wms_free": 232,
+      "ozon_present": 234,
+      "ozon_reserved": 2,
+      "ozon_free": 232
+    },
+    {
+      "article": "zar.01",
+      "wms_on_hand": 0,
+      "wms_reserved": 0,
+      "wms_free": 0,
+      "ozon_present": 0,
+      "ozon_reserved": 0,
+      "ozon_free": 0
+    }
+  ]
+}
