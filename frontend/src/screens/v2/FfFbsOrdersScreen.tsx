@@ -504,16 +504,31 @@ function downloadOrdersExcel(rows: FbsWorklistOrder[]): void {
     'ШК/SKU',
     'Количество',
   ]
-  const bodyRows = rows.map((order) => [
-    order.product.name,
-    order.product.seller_article,
-    order.product.color,
-    order.product.size,
-    order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`,
-    order.wb_order_id,
-    [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
-    1,
-  ])
+  const bodyRows = rows.flatMap((order) => {
+    const warehouse = order.wb_warehouse.name || `WB ${order.wb_warehouse.id}`
+    if (order.marketplace === 'ozon' && order.positions.length > 0) {
+      return order.positions.map((position) => [
+        position.name,
+        position.seller_article ?? order.product.seller_article,
+        position.color ?? order.product.color,
+        position.size ?? order.product.size,
+        warehouse,
+        order.wb_order_id,
+        [position.barcode ?? order.product.barcode, position.sku ?? order.product.sku].filter(Boolean).join(' / '),
+        position.quantity,
+      ])
+    }
+    return [[
+      order.product.name,
+      order.product.seller_article,
+      order.product.color,
+      order.product.size,
+      warehouse,
+      order.wb_order_id,
+      [order.product.barcode, order.product.sku].filter(Boolean).join(' / '),
+      1,
+    ]]
+  })
   const html = [
     '<html><head><meta charset="utf-8" /></head><body><table>',
     `<thead><tr>${headers.map((header) => `<th>${excelCell(header)}</th>`).join('')}</tr></thead>`,
