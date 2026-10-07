@@ -124,6 +124,7 @@ import {
   fetchFbsWorklist,
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   lookupFbsOrderBySticker,
   markFbsDirectKizPrintStarted,
   markFbsScanAutoPrintTargetStarted,
@@ -831,7 +832,11 @@ export function FfFbsSupplyWorkspace({
   const shownKizTarget = kizScanActive ?? (unifiedView?.needsKiz ? unifiedView.target ?? null : null)
   const registerSequentialScanner = assemblyFrame?.registerScanner
   const unifiedStickerAttempts = useRef(new Set<string>())
-  useEffect(() => { unifiedStickerAttempts.current.clear() }, [open, supplyId])
+  const ordinaryPreparationAttempt = useRef(false)
+  useEffect(() => {
+    unifiedStickerAttempts.current.clear()
+    ordinaryPreparationAttempt.current = false
+  }, [open, supplyId])
   useEffect(() => {
     if (!supplyId || !registerSequentialScanner || !sequentialScanner) return
     registerSequentialScanner(supplyId, sequentialScanner)
@@ -1180,20 +1185,28 @@ export function FfFbsSupplyWorkspace({
     }
   }
 
-  // The unified list has no per-supply Start button. Prepare the missing
-  // marketplace stickers on entry, without waiting for the first product scan.
+  // Both packing entry points have no per-supply Start button. Fetch missing
+  // WB stickers on entry, without waiting for a scan or sending them to print.
   useEffect(() => {
-    if (!open || stage !== 'packing' || !assemblyFrame?.visible || !registerSequentialScanner || !workspace || isOzonSupply) return
+    if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
+    if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
-    if (!missing.length) return
+    // Manual printing needs the task formerly created by the removed Start button.
+    const prepare = !assemblyFrame && !workspace.supply.packaging_task_id
+      && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
+      && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
+    if (!missing.length && !prepare) return
+    if (prepare) ordinaryPreparationAttempt.current = true
     for (const order of missing) unifiedStickerAttempts.current.add(order.id)
     const write = beginWorkspaceWrite()
-    void fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
+    const requested = missing.length ? fetchFbsPrintBatch(token, authHeaders, workspace.supply.id, {
       kind: 'order_sticker', order_ids: missing.map((order) => order.id), retry_missing: true,
-    }).then((batch) => {
+    }) : Promise.resolve(null)
+    void requested.then(async (batch) => {
       if (!write.isCurrent()) return
-      if (batch.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
-      void load(true)
+      if (prepare) await run(() => startFbsSupplyWork(token, authHeaders, workspace.supply.id), '')
+      else void load(true)
+      if (write.isCurrent() && batch?.order_errors.length) setError(batch.order_errors.map((item) => item.message).join(' '))
     }).catch((cause: unknown) => {
       if (write.isCurrent()) setError(cause instanceof Error ? fbsErrorText(cause.message) : 'Стикеры не получены.')
     })
@@ -3096,6 +3109,18 @@ export function FfFbsSupplyWorkspace({
     } catch {
       rows = pickingRows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const context = new Map((await getFbsPickingContext(token, authHeaders, workspace.supply.id))
+        .map((item) => [item.product_id, item]))
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     printWindow.document.open()
@@ -5133,13 +5158,12 @@ export function FfFbsSupplyWorkspace({
     >
       {workspace?.supply.source === 'wb' ? (
         <Alert
-          severity="error"
-          variant="filled"
-          sx={{ borderRadius: 0, fontWeight: 700 }}
+          severity="info"
+          sx={{ borderRadius: 0 }}
           data-testid="fbs-supply-from-seller-cabinet"
         >
-          Поставка собрана в кабинете продавца. Работать с ней можно как с обычной,
-          но её состав меняет продавец, а не мы — перед передачей сверьте заказы.
+          Поставка создана в кабинете WB.
+          {packagingEditable ? ' В WMS можно добавлять и переносить заказы, собирать и упаковывать товар.' : ''}
         </Alert>
       ) : null}
       <Box sx={{ px: 2.5, py: 2, borderBottom: 1, borderColor: 'divider', bgcolor: '#fff' }}>

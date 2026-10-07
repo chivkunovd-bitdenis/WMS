@@ -34,6 +34,7 @@ import { FfFbsSupplyWorkspace } from './FfFbsSupplyWorkspace'
 import {
   fetchFbsWorkspace,
   getFbsPickOptions,
+  getFbsPickingContext,
   type FbsPickOptionProduct,
   type FbsWorkspace,
 } from './fbsApi'
@@ -252,6 +253,31 @@ export function FfFbsSupplyAssembly({ token, authHeaders, supplyIds, open, onClo
     } catch {
       rows = rows.map((row) => (row.locations.length ? row : { ...row, locations: ['—'] }))
       setError('Не удалось получить ячейки и тару — лист подбора напечатан без них.')
+    }
+    try {
+      const lists = await Promise.all(ordered.map((one) => getFbsPickingContext(token, authHeaders, one.supply.id)))
+      const context = new Map<string, { locations: string[]; inbound_supplies: string[]; source_groups: Array<{ key: string; title: string; lines: string[] }> }>()
+      for (const list of lists) for (const item of list) {
+        const previous = context.get(item.product_id)
+        const mergedGroups = new Map((previous?.source_groups ?? []).map((group) => [group.key, group]))
+        for (const group of item.source_groups) {
+          const earlier = mergedGroups.get(group.key)
+          mergedGroups.set(group.key, { ...group, lines: [...new Set([...(earlier?.lines ?? []), ...group.lines])] })
+        }
+        context.set(item.product_id, {
+          locations: [...new Set([...(previous?.locations ?? []), ...item.locations])],
+          inbound_supplies: [...new Set([...(previous?.inbound_supplies ?? []), ...item.inbound_supplies])],
+          source_groups: [...mergedGroups.values()],
+        })
+      }
+      rows = rows.map((row) => {
+        const item = context.get(row.key)
+        return item ? { ...row, locations: item.locations, inboundSupplies: item.inbound_supplies, sourceGroups: item.source_groups } : row
+      })
+    } catch {
+      setError('Не удалось получить приёмки и все места хранения — обновите лист подбора.')
+      printWindow.close()
+      return
     }
     if (printWindow.closed) return
     const distinct = (values: string[]) => [...new Set(values)].join(', ')
