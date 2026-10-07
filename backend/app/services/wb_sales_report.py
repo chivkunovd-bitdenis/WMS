@@ -30,6 +30,9 @@ from app.services.wildberries_credentials_service import get_decrypted_marketpla
 
 SALES_SOURCE = "/api/v1/supplier/sales"
 SALES_URL = "https://statistics-api.wildberries.ru" + SALES_SOURCE
+FINANCE_SOURCE = "/api/finance/v1/sales-reports/detailed"
+FINANCE_URL = "https://finance-api.wildberries.ru" + FINANCE_SOURCE
+FINANCE_HISTORY_START = datetime(2024, 1, 29, tzinfo=ZoneInfo("Europe/Moscow"))
 MOSCOW = ZoneInfo("Europe/Moscow")
 PAUSE_SECONDS = 61
 _local_next: dict[uuid.UUID, float] = {}
@@ -140,14 +143,17 @@ class SalesReport:
         assert order.wb_rid is not None
         row = self.by_rid[order.wb_rid]
         return {
-            "source": SALES_SOURCE,
+            "source": row.get("_source", SALES_SOURCE),
             "order_id": str(order.id),
             "srid": order.wb_rid,
             "saleID": row["saleID"],
             "date": row["date"],
             "lastChangeDate": row["lastChangeDate"],
             "finishedPrice": str(row.get("finishedPrice")),
-            "raw_sale": copy.deepcopy(row),
+            "raw_sale": copy.deepcopy(row.get("_financial_row", row)),
+            "price_field": "retailAmount"
+            if row.get("_source") == FINANCE_SOURCE
+            else "finishedPrice",
             "received_at": self.received_at.isoformat(),
             "complete": True,
             "dateFrom": self.date_from,
@@ -285,6 +291,118 @@ def _select_sales(rows: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     }
 
 
+def _finance_events(rows: list[dict[str, Any]], rids: set[str]) -> list[dict[str, Any]]:
+    """Finance fees are not sales; retain exact one-unit sale/return evidence."""
+    events: list[dict[str, Any]] = []
+    for row in rows:
+        rid = row.get("srid")
+        operation = str(row.get("sellerOperName", "")).strip()
+        if rid not in rids:
+            continue
+        correction = "сторно" in operation.lower() or (
+            "корректиров" in operation.lower()
+            and any(word in operation.lower() for word in ("продаж", "возврат"))
+        )
+        if operation not in {"Продажа", "Возврат"} and not correction:
+            continue
+        identifier = row.get("rrdId")
+        if not isinstance(identifier, int) or isinstance(identifier, bool) or identifier <= 0:
+            raise WbSalesError("wb_finance_history_incomplete_identity")
+        sale = operation == "Продажа" and row.get("docTypeName") == "Продажа"
+        price = (
+            row.get("retailAmount")
+            if (
+                row.get("quantity") == 1
+                and not isinstance(row.get("quantity"), bool)
+                and row.get("currency") == "RUB"
+            )
+            else None
+        )
+        events.append(
+            {
+                "srid": rid,
+                "saleID": ("SF" if sale else "RF") + str(identifier),
+                "date": row.get("saleDt"),
+                "lastChangeDate": row.get("saleDt"),
+                "finishedPrice": price,
+                "nmId": row.get("nmId"),
+                "barcode": row.get("sku"),
+                "_source": FINANCE_SOURCE,
+                "_financial_row": copy.deepcopy(row),
+            }
+        )
+    return events
+
+
+async def _read_finance_history(
+    http: httpx.AsyncClient,
+    token: str,
+    seller_id: uuid.UUID,
+    redis: Redis | None,
+    since: datetime,
+    until: datetime,
+    progress: Callable[[], Awaitable[None]] | None,
+) -> tuple[list[dict[str, Any]], int]:
+    # This POST only reads a report; it neither submits a document nor mutates WB.
+    cursor = 0
+    pages = 0
+    rows: list[dict[str, Any]] = []
+    while True:
+        await _wait_slot(seller_id, redis, progress)
+        response = await http.post(
+            FINANCE_URL,
+            headers={"Authorization": token},
+            json={
+                "dateFrom": max(since, FINANCE_HISTORY_START).astimezone(MOSCOW).date().isoformat(),
+                "dateTo": until.astimezone(MOSCOW).date().isoformat(),
+                "limit": 100000,
+                "rrdId": cursor,
+                "period": "weekly",
+                "fields": [
+                    "rrdId",
+                    "srid",
+                    "sellerOperName",
+                    "docTypeName",
+                    "quantity",
+                    "retailAmount",
+                    "currency",
+                    "nmId",
+                    "sku",
+                    "saleDt",
+                    "reportId",
+                    "rrDate",
+                ],
+            },
+        )
+        pages += 1
+        if response.status_code == 204:
+            return rows, pages
+        if response.status_code != 200:
+            if response.status_code == 429:
+                await _defer(seller_id, redis, response.headers.get("Retry-After"))
+            raise WbSalesError(f"wb_finance_history_incomplete_http_{response.status_code}")
+        try:
+            page = json.loads(
+                response.content, parse_float=str, parse_int=_json_integer, parse_constant=str
+            )
+        except (ValueError, UnicodeDecodeError):
+            raise WbSalesError("wb_finance_history_incomplete_json") from None
+        if not isinstance(page, list) or any(not isinstance(row, dict) for row in page):
+            raise WbSalesError("wb_finance_history_incomplete_response")
+        if not page:
+            # WB documents 204 as the complete terminal response for this API.
+            raise WbSalesError("wb_finance_history_incomplete_empty_page")
+        next_cursor = page[-1].get("rrdId")
+        if (
+            not isinstance(next_cursor, int)
+            or isinstance(next_cursor, bool)
+            or next_cursor <= cursor
+        ):
+            raise WbSalesError("wb_finance_history_incomplete_stalled_cursor")
+        rows.extend(page)
+        cursor = next_cursor
+
+
 async def read_sales_report(
     session: AsyncSession,
     *,
@@ -313,7 +431,7 @@ async def read_sales_report(
         sorted(f"{order.id}:{order.wb_rid}:{order.created_at_wb.isoformat()}" for order in orders)
     )
     digest = hashlib.sha256(identity.encode()).hexdigest()
-    cache_key = f"wb:sales:complete:{tenant_id}:{seller_id}:{digest}"
+    cache_key = f"wb:sales:complete:history-v2:{tenant_id}:{seller_id}:{digest}"
     rows: list[dict[str, Any]] = []
     pages = 0
     try:
@@ -374,10 +492,38 @@ async def read_sales_report(
                 # Numeric lexemes stay exact and JSON evidence remains serializable.
                 rows.extend(json.loads(json.dumps(page, default=str)))
         by_rid = _select_sales(rows)
+        old_orders = [
+            order for order in orders if _aware(order.created_at_wb) < now - timedelta(days=90)
+        ]
+        archive_row_count = 0
+        if old_orders:
+            async with httpx.AsyncClient(timeout=60) as finance_http:
+                archive, archive_pages = await _read_finance_history(
+                    finance_http,
+                    token,
+                    seller_id,
+                    redis,
+                    earliest,
+                    now,
+                    progress,
+                )
+            archive_row_count = len(archive)
+            pages += archive_pages
+            events = _finance_events(archive, {order.wb_rid for order in old_orders})
+            archived_sales = _select_sales(events)
+            blocked = {event["srid"] for event in events} - archived_sales.keys()
+            # A recent operational return still excludes a historical sale.
+            operational_excluded = {row["srid"] for row in rows} - by_rid.keys()
+            for rid, row in archived_sales.items():
+                if rid not in operational_excluded:
+                    by_rid.setdefault(rid, row)
+            for rid in blocked:
+                by_rid.pop(rid, None)
+            rows.extend(events)
         coverage_missing = frozenset(
             order.id
-            for order in orders
-            if _aware(order.created_at_wb) < now - timedelta(days=90) and order.wb_rid not in by_rid
+            for order in old_orders
+            if _aware(order.created_at_wb) < FINANCE_HISTORY_START and order.wb_rid not in by_rid
         )
         # A report unit cannot authorize multiple local orders with the same rid.
         rid_orders: dict[str, set[uuid.UUID]] = {}
@@ -397,9 +543,11 @@ async def read_sales_report(
         report = SalesReport(
             by_rid,
             datetime.now(UTC),
-            initial_cursor,
+            max(earliest, FINANCE_HISTORY_START).astimezone(MOSCOW).isoformat()
+            if old_orders
+            else initial_cursor,
             pages,
-            len(rows),
+            len(rows) + archive_row_count - (len(events) if old_orders else 0),
             coverage_missing,
             excluded_rows,
         )
