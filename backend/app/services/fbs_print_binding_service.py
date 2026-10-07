@@ -118,8 +118,56 @@ async def print_bindings_current(
                     .with_for_update()
                     .execution_options(populate_existing=True)
                 )).all()
-                selected = current_rows[:quantity]
-                current_ids = {row.id for row in selected}
+                # Ozon's posting position can have one current CIS per exemplar.
+                # A timestamp/UUID slice can discard a different live exemplar
+                # when rows share a timestamp, or retain an older CIS after its
+                # same-exemplar replacement. Keep the newest active generation
+                # per exemplar instead of imposing an order on unrelated codes.
+                latest_by_exemplar: dict[int, FbsOrderMarking | None] = {}
+                for candidate in current_rows:
+                    details = (
+                        candidate.meta_details_json
+                        if isinstance(candidate.meta_details_json, dict)
+                        else {}
+                    )
+                    exemplar_id = details.get("exemplar_id")
+                    if type(exemplar_id) is not int:
+                        continue
+                    if exemplar_id not in latest_by_exemplar:
+                        latest_by_exemplar[exemplar_id] = candidate
+                        continue
+                    previous = latest_by_exemplar[exemplar_id]
+                    if previous is None:
+                        continue
+                    if previous.created_at == candidate.created_at:
+                        # Equal-time generations for the same exemplar have no
+                        # reliable ordering. Do not bless either binding.
+                        latest_by_exemplar[exemplar_id] = None
+                current_ids = {
+                    candidate.id
+                    for candidate in latest_by_exemplar.values()
+                    if candidate is not None
+                }
+                # Older Ozon rows can predate exemplar IDs. Preserve their
+                # existing quantity/cutoff semantics rather than making that
+                # historical data newly unprintable.
+                without_exemplar = [
+                    candidate
+                    for candidate in current_rows
+                    if not isinstance(candidate.meta_details_json, dict)
+                    or type(candidate.meta_details_json.get("exemplar_id")) is not int
+                ]
+                if without_exemplar:
+                    if len(without_exemplar) <= quantity:
+                        current_ids.update(candidate.id for candidate in without_exemplar)
+                    else:
+                        cutoff = without_exemplar[quantity - 1].created_at
+                        current_ids.update(
+                            candidate.id
+                            for candidate in without_exemplar
+                            if cutoff is not None and candidate.created_at is not None
+                            and candidate.created_at >= cutoff
+                        )
                 ozon_position_current_ids[position_key] = current_ids
             if marking.id not in current_ids:
                 return False
