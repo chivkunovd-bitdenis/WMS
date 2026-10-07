@@ -1,0 +1,39 @@
+{
+  "base": "1f335239da04abf6919feef1d8850b0b425c032f",
+  "frozen_contract": "937babc754f1e719ef7d69c48316a50960c02dce",
+  "added_exact_tuples": {
+    "wms662-live-delivery-test-format": [
+      "WMS-662",
+      "backend/tests/test_wms662_live_delivery_substatuses.py",
+      "a6fc67e70364b0c84e9d2d41d734cd5af1cd61b4",
+      "cefb7d8ac635c3da443a6f623c2fef4a1ff75850"
+    ],
+    "wms662-batch-first-wait-pid-snapshot": [
+      "WMS-662",
+      "backend/tests/test_wms662_batch_handoff_lock_order.py",
+      "eb2255ca93ac453af1117339aa6cc9aba07ee2a0",
+      "03d744d54222dc6ee13014d1f378bf07e6eb4e8a"
+    ]
+  },
+  "whole_checker_AST_identical_after_removing_only_two_new_entries": true,
+  "old_dict_entries_unchanged": true,
+  "owner_supersessions_and_legacy_algorithm_unchanged": true,
+  "fixture_and_product_sources_byte_identical": true,
+  "review_or_ledger_bindings_written": false,
+  "precode": {
+    "pass": 3,
+    "fail": 3,
+    "skip": 0,
+    "error": 0
+  },
+  "after": {
+    "pass": 6,
+    "fail": 0,
+    "skip": 0,
+    "error": 0
+  },
+  "target_ruff_exit": 0,
+  "syntax_exit": 0,
+  "PG_or_fullbackend_or_browser_or_CI_run": false,
+  "implementation_sha": "a4324e5524fb2b8b88fa8a7ffc5f5ce11fb34928"
+}
