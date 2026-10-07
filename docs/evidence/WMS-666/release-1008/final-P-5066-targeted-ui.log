@@ -1,0 +1,38 @@
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > keeps HTTP-200 missing-QR recovery available and retries only the failed order 491ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > does not apply a late failed QR retry to another supply mounted in the same workspace 619ms
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: фокус на «Печатать QR» — стикер A, ЧЗ A, стикер B без единого клика
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C6/R6: стикер A и ЧЗ A подряд, пока сервер отвечает, — оба обработаны по порядку, ЧЗ у заказа A
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C7/R7: хвост ЧЗ в строке сразу по ответу commit, до ответа перечитывания; следующий скан не ждёт его
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · «Упаковка и маркировка» принимает скан в любой точке > C5/R5: курсор в поле скана — код обработан один раз и не остаётся в поле
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > сервер отдал id кода оператора — стрелка в строке этого заказа
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · R11 стрелка «Перепечатать ЧЗ» у кода оператора > без id — как отвечал сервер до правки — стрелки нет
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P1: русская раскладка — ЧЗ с «/», «?», «&» уходит на validate и commit сырым, как из поля скана
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P1: латинская раскладка — тот же ЧЗ уходит без изменений
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P2: сканер дважды прочитал стикер, пока шёл поиск, — второй не уходит как ЧЗ (механизм сборки, R4)
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-575 · исправления по ревью ночного кандидата > P2: стикер и ЧЗ подряд во время поиска — как раньше, ЧЗ привязывается к заказу
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > выбирает второй заказ того же товара и сразу, без окна, заменяет только его (R18)
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > при смене поля и ручном вводе с Enter берёт последнюю выбранную строку
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > ошибка валидации сохраняет старый КИЗ; Escape освобождает выбор
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > R18: ни окна подтверждения, ни window.confirm при замене КИЗ строкой
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=false
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > крестик сохраняет отдельное удаление, отказ WB=true
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > не добавляет поля Ozon
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=false
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-630 · КИЗ в строке точного заказа > unified registerScanner: точный confirmed commit, быстрый следующий скан при delayed commit=true
+ ↓ src/screens/v2/FfFbsSupplyWorkspace.scan.dom.test.tsx > WMS-604 unified packing presentation > prepares missing stickers without a supply Start button and keeps rows and scanner registered
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > submits despite a stale empty pool and shows the current server shortage
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > prints the screenshot case: 12 orders, ЧЗ=0, ШК=1, QR, empty pool
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > builds QR plus barcode for every marked WB product when ЧЗ=0
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > retries only the unconfirmed QR after a successful tape dispatch
+ ✓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch 212ms
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > allows an assigned-code batch even when no free codes remain
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > preserves busy and empty-selection protection
+ ↓ src/components/MarkingPrintDialog.availability.dom.test.tsx > WMS-611 FBS print availability > preserves pool validation outside FBS
+
+ Test Files  2 passed (2)
+      Tests  3 passed | 27 skipped (30)
+   Start at  02:50:47
+   Duration  93.56s (transform 512ms, setup 0ms, collect 91.22s, tests 1.32s, environment 769ms, prepare 82ms)
