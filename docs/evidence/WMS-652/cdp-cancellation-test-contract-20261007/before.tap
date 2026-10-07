@@ -1,0 +1,85 @@
+TAP version 13
+# Subtest: CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry
+not ok 1 - CDP1 exact observed Fetch-to-Network abort returns a distinct retired disposition with native diagnostic and no retry
+  ---
+  duration_ms: 3.730084
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:111:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    independently proven canceled token has a clear retired disposition
+    + actual - expected
+    
+    + undefined
+    - true
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  operator: 'strictEqual'
+  stack: |-
+    retired (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:104:10)
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:115:3)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:358:3)
+  ...
+# Subtest: CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error
+not ok 2 - CDP2 actual callback collector excludes only proven canceled retirement and retains an identical unknown-ID error
+  ---
+  duration_ms: 2.702625
+  type: 'test'
+  location: '/Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:118:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    proven transport retirement alone does not fail the business callback collector
+    + actual - expected
+    
+    + [
+    +   'Error: {"code":-32602,"message":"Invalid InterceptionId."}'
+    + ]
+    - []
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'Error: {"code":-32602,"message":"Invalid InterceptionId."}'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///Users/deniscivkunov/Projects/WMS/.worktrees/wms672-raster-resource-test-contract/frontend/tests-e2e/wms652-cdp-cancellation.test.mjs:126:10)
+    async Test.run (node:internal/test_runner/test:1110:7)
+    async Test.processPendingSubtests (node:internal/test_runner/test:785:7)
+  ...
+# Subtest: CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+ok 3 - CDP3 unknown identity, incomplete evidence, completed tokens, other protocol errors and timeouts remain strict failures
+  ---
+  duration_ms: 10.194375
+  type: 'test'
+  ...
+# never observed FetchID: strict refusal preserved
+# missing network mapping: strict refusal preserved
+# different network cancellation: strict refusal preserved
+# navigation and context clear alone: strict refusal preserved
+# canceled false even ERR_ABORTED: strict refusal preserved
+# different canceled failure text: strict refusal preserved
+# deliberate ConnectionClosed lost acknowledgment: strict refusal preserved
+# successful completed token cannot retire a duplicate: strict refusal preserved
+# matching abort with other error code: strict refusal preserved
+# matching abort with other error message: strict refusal preserved
+# matching abort for a different terminal method: strict refusal preserved
+# matching abort does not explain timeout: strict refusal preserved
+# Subtest: CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+ok 4 - CDP4 native fulfillment success after navigation preserves the exact valid response and one command
+  ---
+  duration_ms: 1.4485
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 2
+# fail 2
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 196.281125

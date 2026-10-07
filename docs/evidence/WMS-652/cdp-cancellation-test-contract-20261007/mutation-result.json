@@ -1,0 +1,12 @@
+{
+  "mutation": "Real CDP source-copy native reply branch resolves both errors and valid results as retired.",
+  "original_sha256": "3552a662e9ec96e79bb645310aaeca55c07a3bad968f93b83d6725536c50b04c",
+  "mutated_copy_sha256": "9d3fe943b4ac0f955a2a36b1a7351f8e7a26dae6e752084282b6eb531ac6f94a",
+  "reproduce": "python3 -B docs/evidence/WMS-652/cdp-cancellation-test-contract-20261007/mutation-proof.py",
+  "pass": 0,
+  "fail": 2,
+  "skipped": 0,
+  "exit_code": 1,
+  "tracked_browser_unchanged": true,
+  "temporary_copy_removed": true
+}
