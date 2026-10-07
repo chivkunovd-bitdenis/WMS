@@ -3698,6 +3698,63 @@ def test_gs_restore_does_not_reparse_a_code_that_already_parses() -> None:
     assert hints == []
 
 
+@pytest.mark.asyncio
+async def test_operator_commit_preserves_valid_gs1_with_91_like_serial_tail(
+    async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # WMS-666: a valid AI 21 serial ending in "91ZZQQ" must remain opaque.
+    # The following GS and AI 92 already make the input unambiguous; operator
+    # KIZ commit must send and persist the exact scanned CIS bytes.
+    headers, suffix = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, tenant_id = await _setup_seller_warehouse(
+        async_client, headers, suffix
+    )
+    supply_id = await _create_supply(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        suffix=suffix,
+    )
+    order = await _create_order(
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        supply_id=supply_id,
+        suffix=suffix,
+        wb_order_id=934004,
+        sticker_code="GS-OPAQUE-SERIAL",
+        wb_barcode="GS-OPAQUE-SERIAL-BAR",
+        with_packaging=True,
+    )
+    sent = _patch_wb_acceptance(monkeypatch)
+    victim = f"01{_GTIN14}21AB91ZZQQ{_GS}92{_SIGNATURE_44}"
+
+    response = await async_client.post(
+        "/operations/fbs-orders/kiz/commit",
+        headers=headers,
+        json={
+            "idempotency_key": "kiz-gs-opaque-serial",
+            "pairs": [
+                {"order_id": str(order.order_id), "value": victim, "confirmed": False}
+            ],
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()[0]["status"] == "ok", response.text
+    assert sent[934004] == victim
+    async with SessionLocal() as session:
+        marking = (
+            await session.execute(
+                select(FbsOrderMarking).where(
+                    FbsOrderMarking.order_id == order.order_id
+                )
+            )
+        ).scalar_one()
+        assert marking.value == victim
+
+
 def test_gs_restore_leaves_alternative_crypto_tag_93_alone_when_separated() -> None:
     # TC-NEW-FBS-KIZ-I3-014: по документации WB (wb-docs/04-labeling/
     # verify-product-identifiers.md) криптохвост стоит «после тега 92 ИЛИ 93»,
