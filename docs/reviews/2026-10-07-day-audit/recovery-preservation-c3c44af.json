@@ -1,0 +1,70 @@
+{
+  "base": "212f19d548496fef7baf75c83204b771e304281b",
+  "candidate": "c3c44af2db0aa1514e374a06446c444fa129aa8b",
+  "unchanged_kiz_paths": [
+    {
+      "path": "backend/app/services/wb_sales_report.py",
+      "sha256": "2010d666ec21b9035b0f487d5310666f81b0bd1cde9d538cc3b4c31c2969cf5a"
+    },
+    {
+      "path": "frontend/src/integrations/loadCryptoProBrowserPlugin.incident07Oct.test.ts",
+      "sha256": "cff990f53678334ea24a00de50f119769c89cfcf322eb50ef2032b68a6333af4"
+    },
+    {
+      "path": "frontend/src/integrations/loadCryptoProBrowserPlugin.ts",
+      "sha256": "4253977fe8dec42f6b352d2a2a16f03f2ccccb947f9c85d39b43fa1da59d1d9e"
+    },
+    {
+      "path": "frontend/src/screens/v2/SellerKizWithdrawalScreen.incident07Oct.dom.test.tsx",
+      "sha256": "f9440c416b62e66b5f93d85fc8f5064b8ea20a72cb2a02d024a8f4b2369ce0a3"
+    },
+    {
+      "path": "frontend/src/screens/v2/SellerKizWithdrawalScreen.tsx",
+      "sha256": "311781322e3d7dab749109970a2e7df495bc39eb5282bd4268e4a9824a80544f"
+    },
+    {
+      "path": "frontend/src/screens/v2/sellerKizWithdrawalApi.incident07Oct.test.ts",
+      "sha256": "acff557e49924a9c2f4265dd324091f4b5cb0d328e2ef1c76db0f2d12f7d82b2"
+    },
+    {
+      "path": "frontend/src/screens/v2/sellerKizWithdrawalApi.ts",
+      "sha256": "7bed688cda1e4da6832129e081391bce0595a55ad9b1d4426a5811ea231555b0"
+    },
+    {
+      "path": "scripts/ops/avpack-macos-launcher.js",
+      "sha256": "8ff38b74427a5c694c39d1e3bc9f4fe6edb473a40b2de743c04c52b15a030bd6"
+    },
+    {
+      "path": "scripts/ops/avpack-sold-kiz-filter.js",
+      "sha256": "e6f23c77f8ae00f07896673794c9aa7992229c097c4ea8fe83f48594e807626c"
+    },
+    {
+      "path": "scripts/ops/avpack-sold-kiz-terminal.txt",
+      "sha256": "845284f072486641dbd1854e6f9feccf0fb4d0a038bda30a2dee988732967266"
+    },
+    {
+      "path": "scripts/ops/avpack-sold-kiz.command",
+      "sha256": "419ac3b5f8cba1eb367d7b1882b26f4ecbd2fc94c4c008af13ceff70c481f3a8"
+    },
+    {
+      "path": "scripts/ops/build-avpack-macos-command.cjs",
+      "sha256": "7557fbb92f9693291c704c6411324da36f6c330d876d47708683839219b863e3"
+    },
+    {
+      "path": "scripts/ops/tests/wms517-mac-cold.test.cjs",
+      "sha256": "2dbaa0e87083533624ab6f3c441163dc25ebcf26c0f5174e470c4789281d20c0"
+    },
+    {
+      "path": "scripts/ops/tests/wms517-terminal-command.test.cjs",
+      "sha256": "3a61dd61182c12162cc586bf5d0f500992517dec3a1d641b35b9d8346fda72b6"
+    }
+  ],
+  "grouped_print_unchanged": true,
+  "seed_ast_unchanged": true,
+  "browser_contract_sources_unchanged": [
+    "backend/tests/fbs_picking_browser_seed.py",
+    "backend/tests/fbs_picking_browser_verify.py",
+    "frontend/tests-e2e/fbs-picking/browser.mjs",
+    "frontend/tests-e2e/fbs-picking/extended.mjs"
+  ]
+}
