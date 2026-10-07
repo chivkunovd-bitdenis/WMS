@@ -1,6 +1,9 @@
 name: WMS-666 current-candidate print renderer
 
 on:
+  push:
+    branches:
+      - codex/wms666-print-renderer-ci
   workflow_dispatch:
     inputs:
       application_ref:
@@ -23,7 +26,7 @@ jobs:
     steps:
       - name: Validate the requested immutable application SHA
         env:
-          APPLICATION_REF: ${{ inputs.application_ref }}
+          APPLICATION_REF: ${{ inputs.application_ref || '0c44ed45bf6b687899750ada2af2ac81d1e6b03e' }}
         run: |
           [[ "$APPLICATION_REF" =~ ^[0-9a-f]{40}$ ]]
           mkdir -p "$RUNNER_TEMP/release-print"
@@ -31,7 +34,7 @@ jobs:
       - name: Check out the exact product candidate
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.application_ref }}
+          ref: ${{ inputs.application_ref || '0c44ed45bf6b687899750ada2af2ac81d1e6b03e' }}
           path: application
           fetch-depth: 1
           persist-credentials: false
@@ -56,7 +59,7 @@ jobs:
 
       - name: Record exact workflow, product, source, and renderer identities
         env:
-          APPLICATION_REF: ${{ inputs.application_ref }}
+          APPLICATION_REF: ${{ inputs.application_ref || '0c44ed45bf6b687899750ada2af2ac81d1e6b03e' }}
           WORKFLOW_SHA: ${{ github.sha }}
           WORKFLOW_REF: ${{ github.ref }}
         run: |
@@ -135,7 +138,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: wms666-print-renderer-${{ inputs.application_ref }}-${{ github.run_id }}-${{ github.run_attempt }}
+          name: wms666-print-renderer-${{ inputs.application_ref || '0c44ed45bf6b687899750ada2af2ac81d1e6b03e' }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/release-print
           if-no-files-found: error
           retention-days: 14
