@@ -3,8 +3,11 @@
   "message_id": 358,
   "action": "editMessageText",
   "text": "Руслан, для подключения WMS нужен ключ Seller API.\n\nВ списке «Типы токена» отметьте:\n• Product — товары и изменение остатков;\n• Warehouse — склады;\n• Posting FBS — работа с заказами FBS;\n• Returns — возвраты.\n\nДля работы с FBO дополнительно: Supply order и Posting FBO.\n\nВыбирайте эти пункты без приписки read-only. Отдельную галочку Stocks искать не нужно — в предыдущем тексте было название права из API, а не пункта вашей формы.\n\nВ WMS укажите Client-Id и Api-Key из одного кабинета Ozon.",
-  "status": "prepared",
+  "status": "edited",
   "ui_source": "https://aspro.ru/docs/course/course69/chapter04569/",
   "ui_image": "https://aspro.ru/docs/course/course69/assets/images/14287/485b6aac-7b61-11f1-8fe4-fa163e2ff576.png",
-  "note": "Product and Product read-only are distinct visible UI options. Integration publisher documents Product for stock/price updates. Corrects API role name versus UI selection; no key changes."
+  "note": "Product and Product read-only are distinct visible UI options. Integration publisher documents Product for stock/price updates. Corrects API role name versus UI selection; no key changes.",
+  "verification": "Telegram confirmed exact content already present",
+  "verified_at": "2026-10-07T12:02:39.804378+00:00",
+  "local_outbox_updated": true
 }
