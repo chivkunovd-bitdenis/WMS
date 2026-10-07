@@ -1,32 +1,48 @@
 {
-  "product_reference_P": "ef154664e365644f4ba002c6e8affc5607fae725",
-  "policy_source_S": "pending-final-closure-commit-and-independent-review",
-  "independent_product_and_process_review": "eefd980e43d4e01639f7cb0fba4c08299844cb65",
-  "imported_review_publication": "d1092c075",
-  "review_path": "docs/reviews/WMS-652-cumulative-process-review-20261007.md",
+  "product_reference_P": "7dbce79566246f7467bf1b7c84efa8cbe8f1cd9b",
+  "independent_product_review": "982eaea9a3a05e20ee34d48350fded31a7bd19a5",
+  "review_path": "docs/reviews/2026-10-07-day-audit/recovery-fixtures-acceptance-52caa65e.md",
+  "fixture_commit": "52caa65e17cf3e19a9040c7439840823b0d622f2",
+  "policy_source_identity": "Exact immutable SOURCE commit must be selected by a separately approved trusted-main process_bootstrap pin; this file does not self-select HEAD.",
   "strict_product_scope_result": {
     "unapproved_product_paths": []
   },
   "strict_product_scope_includes_worktree_index_and_ignored_sources": true,
-  "retained_temporary_fixture": "ROOT ignored .agent-runs/night-20261006-01a112a8/integration/retained-wms687-browser",
-  "source_binding_changes_are_process_only": true,
+  "full_picking_run": 37675744539,
+  "picking_cases": 69,
+  "database_checkpoints": 125,
   "further_product_changes_require_new_independent_review": true,
-  "task_acceptance_documents": [
-    "docs/requirements/WMS-658.md",
-    "docs/requirements/WMS-654.md",
-    "docs/requirements/WMS-681.md",
-    "docs/requirements/WMS-671.md",
-    "docs/requirements/WMS-687.md",
-    "docs/requirements/WMS-679.md",
-    "docs/requirements/WMS-680.md",
-    "docs/requirements/WMS-684.md",
-    "docs/requirements/WMS-586.md",
-    "docs/requirements/WMS-675.md"
-  ],
-  "limits": [
-    "WMS-658 accepted import/print fix; historical investigation remains open; no live raw backfill",
-    "WMS-675 actual data repair remains after verified deploy",
-    "physical printer/marketplace outcomes only where actually verified"
-  ],
-  "main_and_etalon_not_modified": true
+  "release_status": "NOT_DEPLOYED; full CI and trusted SOURCE activation remain required",
+  "previous_accepted_reference": {
+    "product_reference_P": "ef154664e365644f4ba002c6e8affc5607fae725",
+    "policy_source_S": "pending-final-closure-commit-and-independent-review",
+    "independent_product_and_process_review": "eefd980e43d4e01639f7cb0fba4c08299844cb65",
+    "imported_review_publication": "d1092c075",
+    "review_path": "docs/reviews/WMS-652-cumulative-process-review-20261007.md",
+    "strict_product_scope_result": {
+      "unapproved_product_paths": []
+    },
+    "strict_product_scope_includes_worktree_index_and_ignored_sources": true,
+    "retained_temporary_fixture": "ROOT ignored .agent-runs/night-20261006-01a112a8/integration/retained-wms687-browser",
+    "source_binding_changes_are_process_only": true,
+    "further_product_changes_require_new_independent_review": true,
+    "task_acceptance_documents": [
+      "docs/requirements/WMS-658.md",
+      "docs/requirements/WMS-654.md",
+      "docs/requirements/WMS-681.md",
+      "docs/requirements/WMS-671.md",
+      "docs/requirements/WMS-687.md",
+      "docs/requirements/WMS-679.md",
+      "docs/requirements/WMS-680.md",
+      "docs/requirements/WMS-684.md",
+      "docs/requirements/WMS-586.md",
+      "docs/requirements/WMS-675.md"
+    ],
+    "limits": [
+      "WMS-658 accepted import/print fix; historical investigation remains open; no live raw backfill",
+      "WMS-675 actual data repair remains after verified deploy",
+      "physical printer/marketplace outcomes only where actually verified"
+    ],
+    "main_and_etalon_not_modified": true
+  }
 }

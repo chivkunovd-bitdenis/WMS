@@ -1,0 +1,12 @@
+{
+  "observed_utc": "2026-10-07T20:03:00Z",
+  "production_commit": "212f19d548496fef7baf75c83204b771e304281b",
+  "new_image_assets": 382,
+  "retained_synthetic_assets": 1,
+  "sha256_union_verified": true,
+  "running_web_image_and_started_at_unchanged": true,
+  "staging_containers_started": false,
+  "production_image_tags_changed": false,
+  "cleanup": "EXIT trap removed staging containers, untagged probe image and temporary directory",
+  "helper_sha256": "e2828dd9bdf508cd0bc91ea2eef703ef879d74aab21e3b4d6a821b1882aca5d5"
+}

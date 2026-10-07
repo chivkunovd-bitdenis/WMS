@@ -1,0 +1,8 @@
+..............................                                                        [100%]
+=============================== warnings summary ===============================
+scripts/ci/tests/test_process_deploy_gate.py::ProcessDeployGateTests::test_archive_duplicate_members_and_traversal_refuse
+  /Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/zipfile/__init__.py:1721: UserWarning: Duplicate name: 'packing.xml'
+    return self._open_to_write(zinfo, force_zip64=force_zip64)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+30 passed, 1 warning, 59 subtests passed in 3.66s
