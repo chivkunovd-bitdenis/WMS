@@ -20,6 +20,7 @@ from tests.test_fbs_picking import (
     _register_ff_admin,
     _seed_pick_supply,
 )
+from tests.test_fbs_order_tape_concurrency import stock_snapshot
 
 
 async def _bare_supply_with_pool(
@@ -146,3 +147,58 @@ async def test_bare_workspace_reports_current_pool_per_product_and_seller(
     assert set(by_id_b) == {str(order_id) for order_id in order_ids_b}
     assert [by_id_a[str(order_id)]["marking_available_count"] for order_id in order_ids_a] == [2, 2]
     assert by_id_b[str(order_ids_b[0])]["marking_available_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task(
+    async_client: AsyncClient,
+) -> None:
+    headers, suffix, tenant_id = await _register_ff_admin(async_client)
+    seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
+        async_client, headers, suffix,
+    )
+    product_id = await _create_product(
+        async_client, headers, seller_id, sku=f"wms666-bare-tape-{suffix[-8:]}",
+        barcode=f"2302{suffix[-9:]}",
+    )
+    supply_id, order_ids = await _bare_supply_with_pool(
+        async_client,
+        headers=headers,
+        tenant_id=tenant_id,
+        seller_id=seller_id,
+        warehouse_id=warehouse_id,
+        location_id=location_id,
+        product_id=product_id,
+        suffix=f"t{suffix}",
+        order_count=1,
+        pool_count=2,
+    )
+    before_stock = await stock_snapshot()
+
+    response = await async_client.post(
+        f"/operations/fbs-supplies/{supply_id}/order-print-tape",
+        headers=headers,
+        json={
+            "order_ids": [str(order_ids[0])],
+            "layout_json": {"units": [{"block": "cz", "copies": 1}]},
+            "allow_partial": False,
+            "include_order_qr": False,
+            "reprint": False,
+        },
+    )
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["order_errors"] == []
+    assert body["ready"] == 1
+    assert body["missing"] == 0
+    printed = body["orders"][0]["printed_codes"]
+    assert len(printed) == 1
+    assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
+    after_stock = await stock_snapshot()
+    assert after_stock == before_stock, "manual KIZ allocation is not a stock movement"
+    workspace = await async_client.get(
+        f"/operations/fbs-supplies/{supply_id}/workspace", headers=headers,
+    )
+    assert workspace.status_code == 200, workspace.text
+    assert workspace.json()["supply"]["packaging_task_id"] is None
