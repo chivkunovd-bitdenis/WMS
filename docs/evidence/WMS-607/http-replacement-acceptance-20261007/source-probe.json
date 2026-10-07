@@ -1,0 +1,221 @@
+{
+  "analyst_session": "01a11390-1014-76a0-9302-fbe0fd46ed1f",
+  "replacement_for_unavailable_original_artmaks_test_contract_analyst": "original session unavailable due to agent thread limit; explicitly assigned replacement; analyst did not author607 product/tests/review",
+  "BASE": "77443e92dba2872993ee358cfb7c4c88279b47c8",
+  "accepted_software_PRODUCT": "dc652472d75812dbebc68ef4353a718b0f629cbe",
+  "independent_technical_review": "12c7826257c495c78edf1ede7a37587403fbb942",
+  "review_SOURCE": "dc652472d75812dbebc68ef4353a718b0f629cbe",
+  "frozen_HTTP_contract_actual_full_SHA": "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609",
+  "supplied_443bcb2_was_not_a_Git_revision": true,
+  "candidate_swift_sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600",
+  "candidate_swift_git_blob": "9407a52ca88da01a094c2f4d2884f64211f145e0",
+  "test_and_observer_sha256": {
+    "tools/print-agent/test_macos_artmaks_http_contract.py": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704",
+    "tools/print-agent/test_macos_artmaks_contract.py": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1",
+    "tools/print-agent/test_macos_default_printer.py": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a",
+    "tools/print-agent/test_macos_native.py": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69",
+    "tools/print-agent/test_wms_cups_observe.c": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+  },
+  "P_A5_test": "tools/print-agent/test_macos_artmaks_http_contract.py::ArtMaksHTTPContract.test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+  "P_A6_test": "tools/print-agent/test_macos_artmaks_http_contract.py::ArtMaksHTTPContract.test_legacy_error_preserves_specific_pre_submit_reason",
+  "software_verdicts": {
+    "P-A5": "PASS saved actual legacy HTTP recovery and replay",
+    "P-A6": "PASS saved specific reason present in error"
+  },
+  "saved_HTTP_cases": {
+    "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure": {
+      "raw_sha256": "4bbdc735f828de00483038635959a97eb0abbbca9eea357a37432926d17ba934",
+      "responses": [
+        {
+          "path": "/print",
+          "http": 409,
+          "key": "same-scan",
+          "status": "failed_before_submit",
+          "receipt": null
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "recovery-control",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "same-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "same-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        }
+      ],
+      "external_lp_count": 2
+    },
+    "test_legacy_error_preserves_specific_pre_submit_reason": {
+      "raw_sha256": "d2ae8756079e1c863bdefb49e002612056666515811cfafa81bfc7d5b9ef5b4f",
+      "responses": [
+        {
+          "path": "/print",
+          "http": 409,
+          "key": "reason-scan",
+          "status": "failed_before_submit",
+          "receipt": null
+        }
+      ],
+      "external_lp_count": 0
+    },
+    "test_unknown_same_key_never_resubmits_after_queue_recovery": {
+      "raw_sha256": "36eedfbd268cdd2812b6c7ee82a69bec67fcb1766c4cb9f49572212e7ad30af5",
+      "responses": [
+        {
+          "path": "/print",
+          "http": 409,
+          "key": "unknown-scan",
+          "status": "unknown",
+          "receipt": null
+        },
+        {
+          "path": "/print",
+          "http": 409,
+          "key": "unknown-scan",
+          "status": "unknown",
+          "receipt": null
+        },
+        {
+          "path": "/print",
+          "http": 409,
+          "key": "unknown-scan",
+          "status": "unknown",
+          "receipt": null
+        }
+      ],
+      "external_lp_count": 1
+    },
+    "test_submitting_same_key_has_one_live_external_submission": {
+      "raw_sha256": "89422ccbc083de1590607623a2df840d6d79e911ece938c0748d32a4da1d04b1",
+      "responses": [
+        {
+          "path": "/print",
+          "http": 202,
+          "key": "live-scan",
+          "status": "saved",
+          "receipt": null
+        },
+        {
+          "path": "/print",
+          "http": 202,
+          "key": "live-scan",
+          "status": "submitting",
+          "receipt": null
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "live-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        }
+      ],
+      "external_lp_count": 1
+    },
+    "test_accepted_receipt_same_key_never_resubmits": {
+      "raw_sha256": "8c9e8b53fdf8efb00c034681668481eb70e8f53b237c1e83215b6b465e7e3376",
+      "responses": [
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "receipt-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "receipt-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        },
+        {
+          "path": "/print",
+          "http": 200,
+          "key": "receipt-scan",
+          "status": "accepted",
+          "receipt": "Label_Printer-41"
+        }
+      ],
+      "external_lp_count": 1
+    }
+  },
+  "saved_suite_counts": {
+    "http-five-green.log": {
+      "PASS": 5,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "frozen-six-green.log": {
+      "PASS": 6,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "resolver-five-green.log": {
+      "PASS": 5,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "native-three-green.log": {
+      "PASS": 3,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    }
+  },
+  "precode": {
+    "targetFAIL": 2,
+    "preservationPASS": 3,
+    "skip": 0,
+    "error": 0
+  },
+  "concurrent_recovery": {
+    "identical_legacy_requests": 8,
+    "accepted_responses": 8,
+    "external_lp_boundary": 1
+  },
+  "P_A6_reason": "Недоступна служба печати macOS или список её принтеров. Этикетка не отправлена; проверьте печать в macOS и повторите скан.",
+  "physical_print_confirmed": false,
+  "distribution_or_install_accepted": false,
+  "R_U1_to_R_U8_and_U_C1_to_U_C10_accepted": false,
+  "whole_WMS607_or_production_accepted": false,
+  "new_runtime_runs": [],
+  "source_inputs": {
+    "77443e92dba2872993ee358cfb7c4c88279b47c8:tools/print-agent/wms_print_direct_macos.swift": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7",
+    "12c7826257c495c78edf1ede7a37587403fbb942:docs/evidence/WMS-607/artmaks-http-recovery-review-20261007/review.md": "5496a630fa0c4ae9e72c2b5185bd3749b946ec3ae9f832f33017b0b30d5f2a59",
+    "12c7826257c495c78edf1ede7a37587403fbb942:docs/evidence/WMS-607/artmaks-http-recovery-review-20261007/source-checks.json": "600b6c7a68382393215837bb1c2cdabf0cc4edca5b9b58f879e705b3695c1414",
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/source-provenance.json": "640e3e942fcb56292d29fcfb583143115f6d46bdd0aa34eac5ca026793b7ea9b",
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/concurrent-http-recovery.json": "0bce3c3b3c0bdea546525571626be60bc4b80e24b47d2d8420ac5d3a9e849b2c"
+  },
+  "preservation": {
+    "requirements_before_sha256": "82f3f69b7b6a147bc5ee723b780141d3f6d363604ba7a431093f3237607c021b",
+    "only_P_A5_P_A6_verdict_cells_and_new_conclusion_changed": true,
+    "reverse_only_updates_restores_all_original_requirement_bytes": true,
+    "updater_section_verbatim_sha256": "208aef1f7ff857138d221ee82669854905e492d9db9ed13ca35ccc44949cc911",
+    "R_U_and_U_C_pending_section_byte_preserved": true,
+    "backlog_before_sha256": "9d720c0e24313ef80384061cef238815a58eb2c87f0257fcaa00ff035d80291a",
+    "backlog_after_sha256": "35b91290fb1c1a067d578059ff9a40ca32aba6f77abb1049b97dd873587de288",
+    "remove_WMS607_addition_restores_all_original_backlog_bytes": true
+  },
+  "bounded_document_check": {
+    "checker_source": "77443e92dba2872993ee358cfb7c4c88279b47c8:scripts/ci/check_task_documents.py",
+    "only_P_A5_P_A6_filled_rows_and_conclusion": "PASS",
+    "actual_class_and_method_refs": "PASS Git AST",
+    "whole_pending_updater_document_or_652_CI_run": false
+  }
+}

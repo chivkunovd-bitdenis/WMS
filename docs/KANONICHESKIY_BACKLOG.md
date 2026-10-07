@@ -15067,6 +15067,8 @@ repair ИП Фадина сделан раньше отдельно и живы�
 
 ## WMS-607 · Прямая QR-печать в объединённой упаковке
 
+**Дополнение07.10.2026: P-A5/P-A6 ПРОГРАММНО ПРИНЯТЫ · ОБНОВЛЯТОР/ПАКЕТ/УСТАНОВКА/БУМАГА ОЖИДАЮТСЯ.** Отдельный replacement analyst01a11390 вместо недоступной artmaks_test_contract (agent thread limit) принял exact `dc652472d75812dbebc68ef4353a718b0f629cbe` после independent12c782 TECHNICAL PASS. Frozen actualHTTP5:2 targetRED/3 preservationPASS→5PASS; old6/resolver5/native3 PASS0skip. Тот же legacy POST безопасно восстанавливается только после proven failed_before_submit; конкретная reason доступна в error, unknown/submitting/accepted не повторяются.8 concurrent same-key POST дают1 внешний lp fixture вызов.58×40/stable.4 receipt сохранены. Negative77443/ed053 остаются историей; R-U1–R-U8/U-C1–U-C10 отдельно pending, P-A7 вручную не подтверждён. Whole607/production не объявлены готовыми;652/main/etalon не изменены. [Последнее ограниченное заключение](requirements/WMS-607.md#ограниченная-повторная-приёмка-p-a5p-a6--07102026) · [доказательства](evidence/WMS-607/http-replacement-acceptance-20261007/README.md). История ниже сохранена.
+
 **Статус:** выложено в production a059a5a9; CI и чтение двух старых сборок ArtMaks пройдены. Физическая печать оператора не подтверждена.
 [Требования и проверки](requirements/WMS-607.md). Основа — актуальный etalon;
 обычный FBS, исправления подбора и ручной печати сохранены.
