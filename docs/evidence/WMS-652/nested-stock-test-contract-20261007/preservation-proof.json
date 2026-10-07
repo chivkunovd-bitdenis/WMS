@@ -1,0 +1,89 @@
+{
+  "base": "31cd68fd70791a7433562dc2495a7d67e969d840",
+  "requirements_commit": "476d206dc791799f88714012093c1ec315885fba",
+  "requirements_sha256": "1970b47ec58a8592fb3f8bb61a6e40a54c2ea04e9e8206f7724e18fc9d1d8cb3",
+  "actual_hook_sha256": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+  "native_observation": "All three target failures show actual dispatch at phase=nested-commit with native Session.in_nested_transaction() True; ordinary positive shows outer-commit/False. Spy replaces only actual module _dispatch, never Session, event or schedule.",
+  "raw_sha256": {
+    "before.xml": "038f6083280215611c32b2dd65150a4afe493f40058b9b5882c974cb6b0ed93d",
+    "before.log": "cf1c9ea0f031865dfdd400dfe6c4a172c4c50206f1d4f98882d8669e44803aec",
+    "ordinary-mutation.xml": "9c4e89400e05740acabe4b6ba9a77586dc49706279d4bf5e9fc83101a6a852c3",
+    "ordinary-mutation.log": "d2bf0d899a1474f36ce7f3ac2ca1f77d68b3ab84225df9038d710d75e161ac59"
+  },
+  "frozen_sources": [
+    {
+      "path": "backend/tests/test_prod_deploy_backup.py",
+      "sha256": "ee13f17fb2a21b0296f1a3e4c0e385f2db2d101f2899d773a95d48946fbadf2f",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+      "sha256": "092a798ffa11db86ea3fca9c7194d6a8727a079301c41690d5c9860314afa13c",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "backend/tests/conftest.py",
+      "sha256": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/browser.mjs",
+      "sha256": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-critical/cases.json",
+      "sha256": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs",
+      "sha256": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-native-errors.test.mjs",
+      "sha256": "ed395f30af69334b8ac922facd23e16fc55d1ea560027225100c0dc69951b29f",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-peer-drain.test.mjs",
+      "sha256": "892f81db7bc4293ceb4b6e81417f6ed05bf2b8dc8d4d25a6e16a8752cb46563d",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "frontend/tests-e2e/wms672-raster-resource.test.mjs",
+      "sha256": "6796b1579438d6915c8a63a8a2c1a985a0ae2f737872dd25197c903b51e42a79",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "scripts/ci/tests/test_product_scope.py",
+      "sha256": "e09b775e9f9e60c591ec0c00d4d30acae19ac1e39a6f90636f3be02b0b3046ba",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "scripts/ci/product_scope.py",
+      "sha256": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
+      "byte_identical_to_base": true
+    },
+    {
+      "path": "backend/app/services/fbs_stock_publish_service.py",
+      "sha256": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+      "byte_identical_to_base": true
+    }
+  ],
+  "original_backup_assertions": 23,
+  "original_backup_variants": [
+    "",
+    "dump",
+    "archive",
+    "listing",
+    "empty",
+    "network",
+    "retry"
+  ],
+  "no_tracked_product_diff": [],
+  "source_copy_cleanup": "TemporaryDirectory removed exact source and mutation copies after each run. Only existing root backend .venv runtime used.",
+  "ruff": "Targeted new test PASS with project app package classified first-party.",
+  "independent_review_acceptance_source_approval": false
+}

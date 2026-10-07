@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="4" time="0.073" timestamp="2026-10-07T05:49:54.367334+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_stock_publish_nested_commit_contract" name="test_c66_native_savepoint_commit_keeps_intent_without_dispatch" time="0.010"><failure message="AssertionError: SAVEPOINT commit must not dispatch while the outer document is open&#10;assert [{'tenant': U...commit', ...}] == []&#10;  &#10;  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}&#10;  Use -v to get more diff">publication_boundary = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x1118546e0&gt;, [{'tenant': UUID('11111111-1111-4111-8111-111111... UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}], ['nested-commit'])
+
+    @pytest.mark.asyncio
+    async def test_c66_native_savepoint_commit_keeps_intent_without_dispatch(
+        publication_boundary: Any,
+    ) -&gt; None:
+        session, calls, phase = publication_boundary
+        outer = await session.begin()
+        queue_twice(session)
+        await commit_savepoint(session, phase)
+        print(f"C66 native dispatch trace: {calls!r}")
+&gt;       assert calls == [], "SAVEPOINT commit must not dispatch while the outer document is open"
+E       AssertionError: SAVEPOINT commit must not dispatch while the outer document is open
+E       assert [{'tenant': U...commit', ...}] == []
+E         
+E         Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}
+E         Use -v to get more diff
+
+tests/test_stock_publish_nested_commit_contract.py:68: AssertionError</failure></testcase><testcase classname="tests.test_stock_publish_nested_commit_contract" name="test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit" time="0.005"><failure message="AssertionError: the original coalesced intent must dispatch once at the true outer commit&#10;assert [{'tenant': U...commit', ...}] == [{'tenant': U...commit', ...}]&#10;  &#10;  At index 0 diff: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', 'nested': True} != {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', 'nested': False}&#10;  Use -v to get more diff">publication_boundary = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x11189ce10&gt;, [{'tenant': UUID('11111111-1111-4111-8111-111111...: UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}], ['outer-commit'])
+
+    @pytest.mark.asyncio
+    async def test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit(
+        publication_boundary: Any,
+    ) -&gt; None:
+        session, calls, phase = publication_boundary
+        outer = await session.begin()
+        queue_twice(session)
+        await commit_savepoint(session, phase)
+        await session.execute(text("INSERT INTO movement VALUES (3)"))
+        phase[0] = "outer-commit"
+        await outer.commit()
+        print(f"C67 nested-to-root native dispatch trace: {calls!r}")
+&gt;       assert calls == [{
+            "tenant": TENANT, "seller": SELLER, "marketplace": MARKETPLACE,
+            "phase": "outer-commit", "nested": False,
+        }], "the original coalesced intent must dispatch once at the true outer commit"
+E       AssertionError: the original coalesced intent must dispatch once at the true outer commit
+E       assert [{'tenant': U...commit', ...}] == [{'tenant': U...commit', ...}]
+E         
+E         At index 0 diff: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', 'nested': True} != {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', 'nested': False}
+E         Use -v to get more diff
+
+tests/test_stock_publish_nested_commit_contract.py:85: AssertionError</failure></testcase><testcase classname="tests.test_stock_publish_nested_commit_contract" name="test_c67_ordinary_native_outer_commit_coalesces_duplicates_once" time="0.003" /><testcase classname="tests.test_stock_publish_nested_commit_contract" name="test_c68_native_outer_rollback_after_savepoint_never_dispatches" time="0.004"><failure message="AssertionError: a rolled-back outer document must never have dispatched publication&#10;assert [{'tenant': U...commit', ...}] == []&#10;  &#10;  Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}&#10;  Use -v to get more diff">publication_boundary = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x1117eb230&gt;, [{'tenant': UUID('11111111-1111-4111-8111-111111...UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}], ['outer-rollback'])
+
+    @pytest.mark.asyncio
+    async def test_c68_native_outer_rollback_after_savepoint_never_dispatches(
+        publication_boundary: Any,
+    ) -&gt; None:
+        session, calls, phase = publication_boundary
+        outer = await session.begin()
+        queue_twice(session)
+        await commit_savepoint(session, phase)
+        phase[0] = "outer-rollback"
+        await outer.rollback()
+        print(f"C68 native dispatch trace: {calls!r}")
+&gt;       assert calls == [], "a rolled-back outer document must never have dispatched publication"
+E       AssertionError: a rolled-back outer document must never have dispatched publication
+E       assert [{'tenant': U...commit', ...}] == []
+E         
+E         Left contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'nested-commit', ...}
+E         Use -v to get more diff
+
+tests/test_stock_publish_nested_commit_contract.py:122: AssertionError</failure></testcase></testsuite></testsuites>

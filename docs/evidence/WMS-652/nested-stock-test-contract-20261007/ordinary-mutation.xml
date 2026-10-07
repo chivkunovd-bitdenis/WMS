@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="1" skipped="0" tests="1" time="0.056" timestamp="2026-10-07T05:50:04.000058+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_stock_publish_nested_commit_contract" name="test_c67_ordinary_native_outer_commit_coalesces_duplicates_once" time="0.008"><failure message="AssertionError: assert [] == [{'tenant': U...commit', ...}]&#10;  &#10;  Right contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', ...}&#10;  Use -v to get more diff">publication_boundary = (&lt;sqlalchemy.ext.asyncio.session.AsyncSession object at 0x111614440&gt;, [], ['outer-commit'])
+
+    @pytest.mark.asyncio
+    async def test_c67_ordinary_native_outer_commit_coalesces_duplicates_once(
+        publication_boundary: Any,
+    ) -&gt; None:
+        session, calls, phase = publication_boundary
+        outer = await session.begin()
+        await session.execute(text("INSERT INTO movement VALUES (1)"))
+        queue_twice(session)
+        assert calls == [], "scheduling alone does not publish"
+        phase[0] = "outer-commit"
+        await outer.commit()
+        print(f"C67 ordinary native dispatch trace: {calls!r}")
+&gt;       assert calls == [{
+            "tenant": TENANT, "seller": SELLER, "marketplace": MARKETPLACE,
+            "phase": "outer-commit", "nested": False,
+        }]
+E       AssertionError: assert [] == [{'tenant': U...commit', ...}]
+E         
+E         Right contains one more item: {'tenant': UUID('11111111-1111-4111-8111-111111111111'), 'seller': UUID('22222222-2222-4222-8222-222222222222'), 'marketplace': 'wb', 'phase': 'outer-commit', ...}
+E         Use -v to get more diff
+
+tests/test_stock_publish_nested_commit_contract.py:104: AssertionError</failure></testcase></testsuite></testsuites>
