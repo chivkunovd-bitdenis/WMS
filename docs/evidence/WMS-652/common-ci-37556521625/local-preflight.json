@@ -1,0 +1,31 @@
+{
+  "source": "ad22b070e1ad267b2e03e1de7e5592d370f1ef7f",
+  "baseline": "4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "previous_approved_source": "321f69385a8783bbf0c2fa65e80829e4c9c32373",
+  "protected_files": 230,
+  "suites": 22,
+  "required_case_ids": 1180,
+  "old_suite_definitions_exactly_preserved": true,
+  "protected_digest_changes": [
+    "backend/tests/test_prod_deploy_backup_gate_boundary.py"
+  ],
+  "all_actual_hashes_match": true,
+  "ruff_workflow_command": "ruff check .",
+  "ruff_workflow_cwd": "backend",
+  "ruff_exit": 0,
+  "mypy_workflow_command": "mypy .",
+  "mypy_exit": 0,
+  "mypy_output": "Success: no issues found in 563 source files",
+  "scope": "PASS accepted product scope; explicit installed interpreter used locally",
+  "new_independent_SOURCE_pin": "NOT APPROVED; diagnostic SQLite owner investigation pending",
+  "backlog_command": "./scripts/ci/check-backlog-ref.sh 4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "backlog_exit": 0,
+  "document_command": "python3 scripts/ci/check_task_documents.py 4b298efc95be7b4b6b7fe5665be9f3671f1fe747",
+  "document_exit": 0,
+  "document_output": "\u0414\u043e\u043a\u0443\u043c\u0435\u043d\u0442\u044b \u0437\u0430\u0434\u0430\u0447 \u0437\u0430\u043f\u043e\u043b\u043d\u0435\u043d\u044b; AGENTS.md \u0438 CLAUDE.md \u0441\u043e\u0432\u043f\u0430\u0434\u0430\u044e\u0442.",
+  "scope_command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python scripts/ci/product_scope.py --root . --trusted-ref 25ebc6fe13384a55cf1f2b7e5e4054bb862d002d",
+  "scope_exit": 0,
+  "scope_output": {
+    "unapproved_product_paths": []
+  }
+}
