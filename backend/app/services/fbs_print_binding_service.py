@@ -14,8 +14,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fbs_order import (
     MARKING_KIND_SGTIN,
     META_STATUS_REJECTED,
+    META_STATUS_REPLACEMENT_REQUIRED,
     FbsOrder,
     FbsOrderMarking,
+    FbsOrderProduct,
 )
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import MarkingCode
@@ -60,6 +62,7 @@ async def print_bindings_current(
         .execution_options(populate_existing=True)
     )).all()
     marking_by_id = {marking.id: (marking, code) for marking, code in rows}
+    ozon_position_current_ids: dict[tuple[uuid.UUID, uuid.UUID], set[uuid.UUID]] = {}
     for binding in sorted(bindings, key=lambda item: (item.order_id, item.marking_id)):
         order = order_by_id.get(binding.order_id)
         supply = supply_by_id.get(binding.supply_id)
@@ -83,30 +86,58 @@ async def print_bindings_current(
         # WB may store normalized value; the catalog row preserves the full CIS.
         if binding.cis_code not in {marking.value, code.cis_code if code else None}:
             return False
-        # A response can become stale even when its old marking row survives:
-        # replacements keep history on the order, and Ozon keeps one active
-        # marking per posting position. Check the current generation in the
-        # same position before allowing the prepared label to leave the browser.
-        current_stmt = (
-            select(FbsOrderMarking.id)
-            .where(
-                FbsOrderMarking.order_id == order.id,
-                FbsOrderMarking.kind == MARKING_KIND_SGTIN,
-                FbsOrderMarking.meta_status != META_STATUS_REJECTED,
-            )
-            .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
-            .limit(1)
-            .with_for_update()
-        )
         if order.marketplace == "ozon":
-            if marking.order_product_id is None:
+            if (
+                marking.order_product_id is None
+                or marking.meta_status == META_STATUS_REPLACEMENT_REQUIRED
+            ):
                 return False
-            current_stmt = current_stmt.where(
-                FbsOrderMarking.order_product_id == marking.order_product_id
-            )
+            position_key = (order.id, marking.order_product_id)
+            current_ids = ozon_position_current_ids.get(position_key)
+            if current_ids is None:
+                quantity = await session.scalar(
+                    select(FbsOrderProduct.quantity).where(
+                        FbsOrderProduct.id == marking.order_product_id,
+                        FbsOrderProduct.order_id == order.id,
+                    )
+                )
+                if quantity is None or quantity <= 0:
+                    return False
+                current_rows = (await session.scalars(
+                    select(FbsOrderMarking)
+                    .where(
+                        FbsOrderMarking.order_id == order.id,
+                        FbsOrderMarking.order_product_id == marking.order_product_id,
+                        FbsOrderMarking.tenant_id == tenant_id,
+                        FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+                        FbsOrderMarking.meta_status.notin_({
+                            META_STATUS_REJECTED, META_STATUS_REPLACEMENT_REQUIRED,
+                        }),
+                    )
+                    .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
+                    .with_for_update()
+                    .execution_options(populate_existing=True)
+                )).all()
+                selected = current_rows[:quantity]
+                current_ids = {row.id for row in selected}
+                ozon_position_current_ids[position_key] = current_ids
+            if marking.id not in current_ids:
+                return False
         elif marking.order_product_id is not None:
             return False
-        current_id = await session.scalar(current_stmt)
-        if current_id != marking.id:
-            return False
+        else:
+            # WB orders have one current marking row at order scope.
+            current_id = await session.scalar(
+                select(FbsOrderMarking.id)
+                .where(
+                    FbsOrderMarking.order_id == order.id,
+                    FbsOrderMarking.kind == MARKING_KIND_SGTIN,
+                    FbsOrderMarking.meta_status != META_STATUS_REJECTED,
+                )
+                .order_by(FbsOrderMarking.created_at.desc(), FbsOrderMarking.id.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            if current_id != marking.id:
+                return False
     return True
