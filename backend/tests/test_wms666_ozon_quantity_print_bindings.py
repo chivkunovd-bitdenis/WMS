@@ -47,6 +47,7 @@ async def test_ozon_quantity_three_accepts_all_current_bindings_and_rejects_repl
     db_session.add(supply)
     await db_session.flush()
     order.supply_id = supply.id
+    first_created_at = datetime.now(UTC) - timedelta(seconds=2)
     markings = [
         FbsOrderMarking(
             tenant_id=order.tenant_id,
@@ -55,6 +56,7 @@ async def test_ozon_quantity_three_accepts_all_current_bindings_and_rejects_repl
             kind="sgtin",
             value=f"010460123456789021{index:04d}",
             meta_details_json={"exemplar_id": 80 + index},
+            created_at=first_created_at + timedelta(microseconds=index),
         )
         for index in range(1, 4)
     ]
