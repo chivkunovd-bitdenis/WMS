@@ -1,0 +1,3 @@
+2026-10-07T20:23:54.2234062Z error: PR description must include '## Product gate'. Every WMS task needs BA feature cards, Product before dev, Code Review, and Product Browser Review after dev. See AGENTS.md.
+2026-10-07T20:24:09.2270997Z Found 166 errors.
+2026-10-07T20:24:09.2282649Z ##[error]Process completed with exit code 1.

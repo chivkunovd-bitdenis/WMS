@@ -1,0 +1,84 @@
+{
+  "observed_at_utc": "2026-10-07T20:28:00.678271+00:00",
+  "pr": 406,
+  "pr_head": "feebfb95fe4af5f7a3329b5399162912ad927f44",
+  "main_base": "50d778450eb1a2f89aa3375ba549688223b483e1",
+  "changed_paths": [
+    "scripts/ci/process_bootstrap.json"
+  ],
+  "backend_tree_base": "b58403f3058d733426ab834b3873f61d036d3027",
+  "backend_tree_pr": "b58403f3058d733426ab834b3873f61d036d3027",
+  "legacy_ci_run": 37681649938,
+  "backend_failure": {
+    "job": 112998930019,
+    "stage": "ruff check .",
+    "ci_ruff_version": "0.16.10",
+    "local_ruff_version": "0.16.1",
+    "ci_errors": 166,
+    "local_errors": 166,
+    "ci_error_codes": {
+      "I001": 6,
+      "RUF003": 65,
+      "F401": 8,
+      "RUF001": 7,
+      "RUF002": 38,
+      "E501": 4,
+      "B007": 1,
+      "F841": 1,
+      "RUF046": 1,
+      "E402": 12,
+      "UP045": 2,
+      "RUF010": 5,
+      "F541": 13,
+      "RUF059": 1,
+      "E712": 1,
+      "SIM300": 1
+    },
+    "local_error_codes": {
+      "I001": 6,
+      "RUF003": 65,
+      "F401": 8,
+      "RUF001": 7,
+      "RUF002": 38,
+      "E501": 4,
+      "B007": 1,
+      "F841": 1,
+      "RUF046": 1,
+      "E402": 12,
+      "UP045": 2,
+      "RUF010": 5,
+      "F541": 13,
+      "RUF059": 1,
+      "E712": 1,
+      "SIM300": 1
+    },
+    "error_code_counts_identical": true
+  },
+  "quality_failure": {
+    "job": 112998930381,
+    "message": "PR description must include '## Product gate'. Every WMS task needs BA feature cards, Product before dev, Code Review, and Product Browser Review after dev. See AGENTS.md.",
+    "legacy_requirements": "six checked boxes, four historical role-verdict markers, isolated-agent and real-visible-browser statements",
+    "actual_process": "Owner directly requested no skills/role chain; independent review and actual isolated browser tests are recorded separately. Historical role verdicts are not fabricated.",
+    "emergency_label_applied": false
+  },
+  "main_protection": {
+    "required_status_checks": [],
+    "strict": false,
+    "enforce_admins": true,
+    "required_approving_review_count": 0
+  },
+  "active_ruleset": {
+    "id": 24431521,
+    "name": "WMS-652 etalon: только PR с зелёным CI",
+    "included_refs": [
+      "refs/heads/etalon"
+    ],
+    "applies_to_main": false
+  },
+  "main_merge_authorized_at_readback": false,
+  "main_merged": false,
+  "source_logs_sha256": {
+    "backend": "ebe81b5e426ce4d7e24deec239c12b6ef27198f1ef0b3a295db07ac9ddaace11",
+    "quality": "1c7f9cbbf75eae3eee9b29e75581d7bad225aefe55d8abe34fd2564501898ab8"
+  }
+}
