@@ -1,0 +1,16 @@
+{
+  "base_sha": "555fa77cb6c4b072ba50ac57a7e9e27ce98621bb",
+  "prior_run": 37550768806,
+  "observer_from_tested_raw": "docs/evidence/WMS-652/realqr-cdp-lifecycle-linux-20261007/raw/transport-observer.mjs",
+  "observer_sha256": "e84a39e63d4541945cc5e0744efb2d7b882a5cf71355825c092fe65eeffa89f1",
+  "observer_byte_identical": true,
+  "selected_case_not_rerun": true,
+  "app_not_executed": true,
+  "navigation_after_paused_request": false,
+  "source_basis": {
+    "frontend/src/utils/printDirectQr.ts": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc",
+    "frontend/src/screens/v2/fbsSequentialPacking.ts": "175d7f65562a0b1076195e999ccbb8e6ba7cd1a55edfc3de0299ca11878166fc"
+  },
+  "controls": "one real observed paused GET/AbortController.signal, explicit abort in live page; matching canceled event and exact native outcome; one never-observed ID preserves native error",
+  "original_failed_ci_cause": "UNKNOWN"
+}
