@@ -20,7 +20,6 @@ from zoneinfo import ZoneInfo
 
 from .agent_authorization import SemanticAuthorization
 from .agent_dispatcher import AgentDispatcher
-from .case_journal import CaseJournal
 from .llm import WMS_MODEL, WMS_PROVIDER, LlmUnavailable
 
 log = logging.getLogger(__name__)
@@ -68,8 +67,6 @@ class AgentCoordinator:
         self.clock = pipe.clock
         self.repo = (Path(self.cfg.repo).expanduser().resolve() if self.cfg.repo
                      else Path(__file__).resolve().parents[3])
-        self.journal = CaseJournal(self.store, getattr(self.cfg.agent, "history_dir", "")
-                                   or self.repo / "var/support-conversations")
         self.system = INSTRUCTIONS.read_text(encoding="utf-8")
         # Project commands can run for many minutes without occupying chat workers.
         self.jobs = ThreadPoolExecutor(max_workers=max(1, self.cfg.limits.max_parallel),
@@ -79,28 +76,6 @@ class AgentCoordinator:
         self.semantic_verifier = SemanticAuthorization(self)
         self.tools.semantic_verifier = self.semantic_verifier
         self.dispatcher = AgentDispatcher(self)
-
-    def case_update(self, topic_id: str, text: str, *, event_key: str, kind: str,
-                    statuses: dict[str, Any] | None = None) -> None:
-        topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
-        if not topic:
-            return
-        chat_id = int(topic["chat_id"])
-        self.journal.record(chat_id, kind, text, event_key, topic_id=topic_id)
-        if not getattr(self.cfg.agent, "visible_moderator", False):
-            return
-        status = {"working": topic.get("status") in ("queued", "running"),
-                  "analysis_done": kind == "worker_done",
-                  "task_created": bool(topic.get("task_ids"))}
-        status.update(statuses or {})
-        # A failure to update Telegram never loses the completed worker result.
-        try:
-            self.journal.update_card(self.pipe.bots.owner, self.cfg.telegram.owner_chat_id,
-                topic_id, chat_id, title=str(topic.get("summary") or text or "Разбор обращения")[:160],
-                summary=topic.get("summary") or None, statuses=status,
-                event=text[:1800], event_key=event_key)
-        except Exception:
-            log.exception("case card %s update deferred", topic_id)
 
     def _owner(self, m: Any) -> bool:
         return (str(m["role"]) == "owner"
@@ -120,7 +95,7 @@ class AgentCoordinator:
     def _snapshot(self, chat_id: int, owner: bool) -> dict[str, Any]:
         # Give a bounded current slice; deeper source history is fetched by read_context.
         rows = self.store.rows("SELECT id,msg_id,author_id,author_name,role,kind,text,reply_to,ts "
-                               "FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 100", (chat_id,))
+                               "FROM messages WHERE chat_id=? ORDER BY id DESC LIMIT 18", (chat_id,))
         memory = self.store.kv_get(f"agent_memory:{chat_id}", {})
         result: dict[str, Any] = {"chat_id": chat_id, "memory": memory,
                                   "recent_messages": [dict(x) for x in reversed(rows)]}
@@ -194,66 +169,28 @@ class AgentCoordinator:
             "source": "internal", "message_id": "", "topic_id": topic["id"],
         }
         context["topic_id"] = topic["id"]
+        starting_generation = int(topic.get("generation", 0))
         model, provider = WMS_MODEL, WMS_PROVIDER
         prompt = json.dumps({
             "event": event, "source_message": dict(source) if source is not None else None,
             "topic": {k: v for k, v in topic.items() if k != "pending"},
             "current_time": self._local_now(), "timezone": self.cfg.agent.timezone,
             "current_context": self._snapshot(int(topic["chat_id"]), owner),
-            "trusted_scope": scope, "history_root": str(self.journal.root),
+            "trusted_scope": scope,
             "instructions": "Continue this topic from its durable memory and source history. "
             "Use tools for facts/actions. Do not infer consent from silence or from another "
             "person. A recheck timer can continue reading or ask a process question; it "
-            "never grants a new development job or release. Ordinary factual replies are owner-authorized. "
-            "If a deeper "
+            "never grants a new approval, send, development job or release. If a deeper "
             "history is needed, read it through tools. For internal "
             "completion events, do not call owner-privileged tools. Send substantive owner "
-            "updates through the single case card, and return a short answer only when appropriate. "
-            "First inspect screenshots, long chat history, code and data yourself. Ask only a precise "
-            "question whose essential answer cannot be established from those sources. "
+            "progress while working, and return a short owner answer only when appropriate. "
             "At the end include a JSON object with summary, next_action, optional wake_at "
             "(Unix timestamp), task_ids and affected_areas when known. Do not invent "
             "dependencies or approvals.",
         }, ensure_ascii=False, default=str)
-        specs = [{**spec, "type": "function"} for spec in self.tools.specs(scope="owner")] + OWNER_TOOLS
-        delivered_ids: list[str] = []
-        offered: dict[str, Any] = {}
-        current_context = dict(context)
-        current_source = source
-
-        def live_inputs() -> list[dict[str, Any]]:
-            fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
-            ids = [eid for eid in fresh.get("pending", [])
-                   if eid != event["id"] and eid not in delivered_ids]
-            entries: list[dict[str, Any]] = []
-            offered.clear()
-            for eid in ids:
-                incoming = self.store.kv_get(f"agent_event:{eid}", {})
-                if incoming.get("kind") != "input":
-                    continue
-                row = self.store.row("SELECT * FROM messages WHERE id=?", (incoming.get("source_id"),))
-                if row is None or int(row["revision"]) != int(incoming.get("revision", 1)):
-                    continue
-                offered[eid] = row
-                entries.append({"type": "text", "text": json.dumps({"followup_event": incoming,
-                    "source_message": dict(row), "trusted_owner_event": self._owner(row),
-                    "instruction": "Add this to the SAME current investigation. Permission belongs only "
-                                   "to this source event. Read its attached images before asking."},
-                    ensure_ascii=False, default=str)})
-                if hasattr(self.pipe, "message_image_paths"):
-                    entries.extend({"type": "localImage", "path": path}
-                                   for path in self.pipe.message_image_paths(row))
-            return entries
-
-        def inputs_delivered(_entries: list[dict[str, Any]]) -> None:
-            nonlocal current_source, current_context, owner
-            for eid, row in offered.items():
-                delivered_ids.append(eid)
-                current_source = row
-                owner = self._owner(row)
-                current_context = self._context(row, owner=owner)
-                current_context["topic_id"] = topic["id"]
-            offered.clear()
+        specs = [{**spec, "type": "function"} for spec in self.tools.specs(scope=scope)]
+        if owner:
+            specs += OWNER_TOOLS
 
         def dispatch(name: str, args: dict[str, Any]) -> dict[str, Any]:
             if event["kind"] != "input":
@@ -267,22 +204,20 @@ class AgentCoordinator:
             fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
             if fresh.get("cancel_requested"):
                 return {"error": "topic_cancelled_outcome_requires_inspection"}
-            pending_unseen = [eid for eid in fresh.get("pending", [])
-                              if eid != event["id"] and eid not in delivered_ids]
             if name not in ("read_context", "read_history", "read_data", "read_trello_card",
-                            "job_status") and pending_unseen:
+                            "job_status") and int(fresh.get("generation", 0)) != starting_generation:
                 return {"error": "new_followup_pending_reconsider_action"}
-            if current_source is not None:
-                current = self.store.row("SELECT revision FROM messages WHERE id=?", (current_source["id"],))
-                if current is None or int(current["revision"]) != int(current_source["revision"]):
+            if source is not None:
+                current = self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
+                if current is None or int(current["revision"]) != int(source["revision"]):
                     return {"error": "source_message_edited_reconsider_action"}
             if name in {s["name"] for s in OWNER_TOOLS}:
-                return self._owner_tool(name, args, current_context) if owner else {"error": "owner_only"}
-            if current_source is None:
+                return self._owner_tool(name, args, context) if owner else {"error": "owner_only"}
+            if source is None:
                 return {"error": "internal_event_has_no_source"}
             if name == "read_history":
-                return self._read_history(args, current_context)
-            return self.tools.dispatch(name, args, current_context)
+                return self._read_history(args, context)
+            return self.tools.dispatch(name, args, context)
 
         specs.append(_tool("read_history", "Search or page stored inbound and outbound chat history, "
                            "including edits and delivery state.",
@@ -299,7 +234,7 @@ class AgentCoordinator:
                 return
             gate_key = f"agent_progress_gate:{event['id']}"
             last_sent = float(self.store.kv_get(gate_key, 0) or 0)
-            if last_sent and self.clock() - last_sent < 30:
+            if last_sent and self.clock() - last_sent < 300:
                 return
             self.store.kv_set(gate_key, self.clock())
             # Commentary is an event for the single moderator, never a direct
@@ -315,11 +250,6 @@ class AgentCoordinator:
             system=self.system, tool_handler=dispatch, tools=specs, mode="readonly",
             cwd=str(self.repo), timeout=900, progress_callback=progress,
             effort="high", include_project_tools=True,
-            session_id=topic.get("worker_session_id"),
-            session_name=f"Обращение {topic['id']} · {topic['chat_id']}",
-            live_inputs=live_inputs, inputs_delivered=inputs_delivered,
-            image_paths=(self.pipe.message_image_paths(source) if source is not None
-                         and hasattr(self.pipe, "message_image_paths") else None),
             cancelled=lambda: bool(self.store.kv_get(f"agent_topic:{topic['id']}", {})
                                    .get("cancel_requested")),
         )
@@ -332,20 +262,18 @@ class AgentCoordinator:
             parsed = {}
         answer = str(parsed.get("answer") or "") if isinstance(parsed, dict) else ""
         fresh = self.store.kv_get(f"agent_topic:{topic['id']}", {})
-        answer_source = current_source
-        current_revision = (self.store.row("SELECT revision FROM messages WHERE id=?", (answer_source["id"],))
-                            if answer_source is not None else None)
-        answer_queued = bool(owner and answer_source is not None and answer
+        current_source = (self.store.row("SELECT revision FROM messages WHERE id=?", (source["id"],))
+                          if source is not None else None)
+        answer_queued = bool(owner and source is not None and answer
                              and not event.get("parent_event_id")
                              and not fresh.get("cancel_requested")
-                             and not [eid for eid in fresh.get("pending", [])
-                                      if eid != event["id"] and eid not in delivered_ids]
-                             and current_revision is not None
-                             and int(current_revision["revision"]) == int(answer_source["revision"]))
-        if answer_queued and answer_source is not None:
+                             and int(fresh.get("generation", 0)) == starting_generation
+                             and current_source is not None
+                             and int(current_source["revision"]) == int(source["revision"]))
+        if answer_queued and source is not None:
             self.store.queue_message(key=f"agent_answer:{event['id']}",
-                                     chat_id=int(answer_source["chat_id"]), text=answer[:4000],
-                                     reply_to=str(answer_source["msg_id"]), purpose="agent_owner_answer",
+                                     chat_id=int(source["chat_id"]), text=answer[:4000],
+                                     reply_to=str(source["msg_id"]), purpose="agent_owner_answer",
                                      repeat_ok=False)
         output = {"summary": str(parsed.get("summary") or topic.get("summary") or "")[:3000],
                 "next_action": str(parsed.get("next_action") or "")[:1000],
@@ -354,8 +282,7 @@ class AgentCoordinator:
                 else topic.get("task_ids", []),
                 "affected_areas": parsed.get("affected_areas")
                 if isinstance(parsed.get("affected_areas"), list) else topic.get("affected_areas", []),
-                "result": body[:12000], "answer_queued": answer_queued,
-                "worker_session_id": getattr(result, "session_id", None), "consumed_event_ids": delivered_ids}
+                "result": body[:4000], "answer_queued": answer_queued}
         return output
 
     def _read_history(self, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
@@ -879,8 +806,6 @@ class AgentCoordinator:
 
     def _hourly(self) -> None:
         """A scheduled read of the live board does not impersonate an owner message."""
-        if getattr(self.cfg.agent, "visible_moderator", False):
-            return
         try:
             cards = self.tools.ready_cards()
         except Exception:

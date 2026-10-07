@@ -10,7 +10,6 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from .llm import extract_json
-from .moderator_continuity import ModeratorContinuity
 
 log = logging.getLogger(__name__)
 
@@ -65,14 +64,12 @@ class AgentDispatcher:
         self.worker_limit = max(1, coordinator.cfg.limits.max_parallel)
         self.routing = False
         self.active: set[str] = set()
-        self.continuity = ModeratorContinuity(coordinator)
 
     def accept(self, m: Any) -> None:
         """Persist event and its queue membership before releasing the source row."""
         if m["role"] == "owner" and not self.agent._owner(m):
             self.store.set_message(int(m["id"]), status="handled")
             return
-        self.agent.journal.sync_chat(int(m["chat_id"]))
         event_id = f"in:{m['id']}:{m['revision'] if 'revision' in m.keys() else 1}"
         with self.store.transaction():
             if not self.store.kv_get(f"agent_event:{event_id}"):
@@ -81,8 +78,6 @@ class AgentDispatcher:
                     "revision": int(m["revision"] if "revision" in m.keys() else 1),
                     "chat_id": int(m["chat_id"]), "owner": self.agent._owner(m),
                     "text": str(m["text"]), "ts": float(m["ts"]),
-                    "linked_topic_id": (self.agent.journal.find_topic(m["reply_to"])
-                                        if self.agent._owner(m) else None),
                 })
                 queue = list(self.store.kv_get("agent_dispatch_queue", []))
                 queue.append(event_id)
@@ -113,8 +108,6 @@ class AgentDispatcher:
         for m in self.store.messages_with_status("new", 500):
             if m["role"] in ("owner", "client", "partner"):
                 self.accept(m)
-        if getattr(self.agent.cfg.agent, "intake_only", False):
-            return
         self._submit_route()
         topic_ids = list(self.store.kv_get("agent_topic_index", []))
         topic_ids.sort(key=lambda tid: -int(self.store.kv_get(f"agent_topic:{tid}", {})
@@ -216,13 +209,13 @@ class AgentDispatcher:
         if not events:
             return
         topics = [self.store.kv_get(f"agent_topic:{tid}", {})
-                  for tid in self.store.kv_get("agent_topic_index", [])]
+                  for tid in self.store.kv_get("agent_topic_index", [])[-80:]]
         compact = [{k: t.get(k) for k in ("id", "chat_id", "summary", "next_action",
                                           "status", "priority", "task_ids", "affected_areas",
-                                          "related_topic_ids", "worker_session_id", "case_number")}
+                                          "related_topic_ids")}
                    for t in topics if t]
         prompt = json.dumps({"current_time": self.agent._local_now(), "events": events,
-                             "topics": compact, "durable_handoff": self.continuity.snapshot(),
+                             "topics": compact,
             "instruction": "Route each event semantically to one or several independent "
                              "topics. Return JSON {routes:[{event_id,topics:[{topic_id,subrequest,"
                              "priority}],owner_reply?}]}. New topic_id is 'topic-' plus source numeric id "
@@ -233,14 +226,9 @@ class AgentDispatcher:
                              "'cancel_job',target,value?}]. Internal events "
                              "retain their topic_id. Owner_reply is a short immediate truthful response "
                              "to an owner message, never an approval or completion claim. Same client chat "
-                             "may have several topics. An owner may attach their "
-                             "message directly into the existing client topic when it concerns that case. "
-                             "Use linked_topic_id for an owner reply to a card unless clearly a new subject. "
-                             "Retain its original client chat_id. Permission is attached only to the "
-                             "specific trusted owner event, not every later client message. Distinguish "
-                             "independent matters organically from history, pictures, replies and current "
-                             "case summaries; reuse the prior worker even after its earlier answer. "
-                             "Read the supplied durable handoff before routing. Do not investigate "
+                             "may have several topics. An owner may reference a client topic in a new "
+                             "owner topic via related_topic_ids, but owner and client never share the "
+                             "same topic/session. Every topic keeps its original chat. Do not investigate "
                              "project code or perform actions. "
                              "For worker_progress, worker_done or job_done, compare related topics and "
                              "provide owner_reply only for a meaningful new update; no further worker "
@@ -248,13 +236,11 @@ class AgentDispatcher:
                              "do not repeat the worker answer. Keep this turn short."},
                              ensure_ascii=False)
         result = self.agent.llm.agent_turn(
-            prompt, session_key=self.continuity.session_key, session_id=self.continuity.thread_id,
-            session_name=self.continuity.name, model=self.agent.cfg.agent.owner_model,
+            prompt, session_key="agent:dispatcher", model=self.agent.cfg.agent.owner_model,
             provider=self.agent.cfg.agent.owner_provider, system=self.agent.system,
             mode="readonly", cwd=str(self.agent.repo), timeout=60,
             effort="medium", include_project_tools=False,
         )
-        self.continuity.observe(result)
         parsed = extract_json(result.text)
         routes = parsed.get("routes") if isinstance(parsed, dict) else None
         if not isinstance(routes, list):
@@ -282,11 +268,14 @@ class AgentDispatcher:
                 if event["kind"] in ("worker_progress", "worker_done", "job_done"):
                     # Completion is consumed by the one moderator; feeding it
                     # back into the same worker would create a completion loop.
-                    self.agent.case_update(str(event.get("topic_id") or ""),
-                                           str(route.get("owner_reply") or
-                                               event.get("payload", {}).get("summary") or
-                                               event.get("payload", {}).get("text") or ""),
-                                           event_key=event["id"], kind=event["kind"])
+                    immediate = str(route.get("owner_reply") or "").strip()
+                    if immediate:
+                        self.store.queue_message(
+                            key=f"agent_moderator:{event['id']}",
+                            chat_id=self.agent.cfg.telegram.owner_chat_id,
+                            text=immediate[:2500], purpose="agent_moderator",
+                            repeat_ok=False,
+                        )
                     continue
                 parts = route.get("topics")
                 if not isinstance(parts, list) or len(parts) > 8:
@@ -318,14 +307,13 @@ class AgentDispatcher:
                         )
                     topic = self.store.kv_get(f"agent_topic:{topic_id}", {})
                     if topic and event["kind"] == "input" \
-                            and int(topic.get("chat_id", 0)) != int(event["chat_id"]) \
-                            and not event.get("owner"):
+                            and int(topic.get("chat_id", 0)) != int(event["chat_id"]):
                         raise ValueError("event crossed chat boundary")
                     if not topic:
                         topic = {"id": topic_id, "chat_id": event["chat_id"], "summary": "",
                                  "next_action": "", "status": "queued", "priority": 0,
                                  "pending": [], "generation": 0, "task_ids": [],
-                                 "affected_areas": [], "created_at": self.agent.clock()}
+                                 "affected_areas": []}
                         index.append(topic_id)
                     routed_id = f"{event['id']}:part{position + 1}" if len(parts) > 1 else event["id"]
                     if routed_id != event["id"] and not self.store.kv_get(f"agent_event:{routed_id}"):
@@ -338,17 +326,12 @@ class AgentDispatcher:
                         topic["generation"] += 1
                     if event["kind"] == "input":
                         topic["last_source_id"] = event["source_id"]
-                        if not event.get("owner"):
-                            topic["last_client_source_id"] = event["source_id"]
                     topic["priority"] = _priority(part.get("priority"))
                     related = part.get("related_topic_ids") or []
                     if isinstance(related, list):
                         topic["related_topic_ids"] = [str(x) for x in related if str(x) in index][:20]
-                    topic["status"] = "running" if topic_id in self.active else "queued"
+                    topic["status"] = "queued"
                     self.store.kv_set(f"agent_topic:{topic_id}", topic)
-                    self.agent.case_update(topic_id, str(part.get("subrequest") or
-                                           event.get("text") or "Дополнена информация"),
-                                           event_key=f"routed:{routed_id}", kind="input")
                 if (event.get("owner") and event["kind"] == "input") or event["kind"] == "job_done":
                     immediate = str(route.get("owner_reply") or "").strip()
                     if immediate:
@@ -431,12 +414,6 @@ class AgentDispatcher:
                                     (topic["last_source_id"],))
         else:
             source = None
-        with self.store.transaction():
-            current = self.store.kv_get(f"agent_topic:{topic_id}", {})
-            current["status"] = "running"
-            self.store.kv_set(f"agent_topic:{topic_id}", current)
-        self.agent.case_update(topic_id, "Начат разбор истории и данных",
-                               event_key=f"start:{event_id}", kind="started")
         result = self.agent.run_topic_turn(topic, event, source)
         self._finish_event(topic_id, event_id, result)
 
@@ -448,23 +425,12 @@ class AgentDispatcher:
                 topic["last_result"] = "Interrupted; external outcome unknown until inspected"
                 self.store.kv_set(f"agent_topic:{topic_id}", topic)
                 return
-            consumed = {event_id, *result.get("consumed_event_ids", [])}
-            topic["pending"] = [x for x in topic.get("pending", []) if x not in consumed]
-            for consumed_id in consumed:
-                self.store.kv_set(f"agent_event_done:{consumed_id}", True)
-                delivered = self.store.kv_get(f"agent_event:{consumed_id}", {})
-                if delivered.get("source_id"):
-                    row = self.store.row("SELECT revision FROM messages WHERE id=?",
-                                         (delivered["source_id"],))
-                    if row and int(row["revision"]) == int(delivered.get("revision", 1)):
-                        self.store.set_message(delivered["source_id"], status="handled")
+            topic["pending"] = [x for x in topic.get("pending", []) if x != event_id]
             for field in ("summary", "next_action", "wake_at", "task_ids", "affected_areas"):
                 if field in result:
                     topic[field] = result[field]
             topic["last_result"] = result.get("result", "")
             topic["status"] = "queued" if topic["pending"] else "waiting"
-            if result.get("worker_session_id"):
-                topic["worker_session_id"] = result["worker_session_id"]
             self.store.kv_set(f"agent_topic:{topic_id}", topic)
             self.store.kv_set(f"agent_event_done:{event_id}", True)
             event = self.store.kv_get(f"agent_event:{event_id}", {})

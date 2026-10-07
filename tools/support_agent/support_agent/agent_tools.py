@@ -9,13 +9,10 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-import threading
-from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
 from .canonical_tasks import CanonicalTaskError, persist_task
-from .case_journal import CaseJournal
 from .prod_sql import ProdSqlSettings, SqlRefused, role_for_scope, run_query
 from .trello import TrelloError, ensure_card
 
@@ -32,19 +29,9 @@ class AgentTools:
     def __init__(self, pipe: Any) -> None:
         self.p = pipe
         self.store = pipe.store
-        self._context = threading.local()
-        self.journal = CaseJournal(self.store, getattr(pipe.cfg.agent, "history_dir", "")
-                                   or Path(pipe.cfg.repo) / "var/support-conversations")
 
     def specs(self, scope: str) -> list[dict[str, Any]]:
         common = [
-            self._spec("update_case", "Update this case card with substantive findings and current statuses.",
-                       {"title": "string", "summary": "string", "event": "string", "statuses": "object",
-                        "task_url": "string", "slot": "string"}),
-            self._spec("answer_client", "Send a factual investigated answer, or one necessary question "
-                       "after examining history, attachments, code and available data. "
-                       "Does not authorize development or deployment.",
-                       {"text": "string", "reply_to": "string", "slot": "string", "kind": "string"}),
             self._spec(
                 "read_context",
                 "Read source messages, linked tasks and memory. Paginate with before_id.",
@@ -88,9 +75,6 @@ class AgentTools:
             ),
         ]
         if scope == "owner":
-            common.append(self._spec(
-                "owner_response", "Answer the owner's current Telegram message directly, "
-                "without creating a client case card.", {"text": "string", "slot": "string"}))
             common.extend(
                 [
                     self._spec(
@@ -187,7 +171,6 @@ class AgentTools:
         }
 
     def dispatch(self, name: str, args: dict[str, Any], context: dict[str, Any]) -> dict[str, Any]:
-        self._context.value = context
         event = self._event(context)
         owner = self._owner(event)
         allowed = {s["name"] for s in self.specs("owner" if owner else "client")}
@@ -298,72 +281,12 @@ class AgentTools:
             "updated_by_event": event["id"],
         }
         self.store.kv_set(f"agent_memory:{chat_id}", memory)
-        self.journal.record(chat_id, "findings", memory["summary"],
-                            f"memory:{event['id']}:{_digest(memory['summary'])}", data=memory)
-        self.journal.sync_chat(chat_id)
         return {"saved": True, "source_message_ids": sources}
-
-    def _case_topic(self, event: Any) -> str:
-        context = getattr(self._context, "value", {})
-        topic = context.get("topic_id") or context.get("topic_key")
-        if not topic:
-            raise ToolDenied("semantic_topic_required")
-        return str(topic)
-
-    def _tool_update_case(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
-        topic = self._case_topic(event)
-        card = self.journal.update_card(
-            self.p.bots.owner, self.p.cfg.telegram.owner_chat_id, topic, int(event['chat_id']),
-            title=str(args.get('title') or ''), summary=args.get('summary'),
-            statuses=args.get('statuses') or {}, event=str(args.get('event') or '') or None,
-            event_key=(f"tool:{event['id']}:{self._slot(args.get('slot'))}:"
-                       f"{_digest(str(args.get('event') or ''))}"),
-            task_url=str(args.get('task_url') or ''),
-        )
-        return {"number": card['number'], "delivery": card['delivery'],
-                "message_id": card.get('message_id')}
-
-    def _tool_owner_response(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
-        if not owner:
-            raise ToolDenied("owner_only")
-        body = str(args.get("text") or "").strip()
-        if not body or len(body.encode("utf-16-le")) // 2 > 4096:
-            raise ToolDenied("invalid_reply")
-        key = f"native_owner_reply:{event['id']}:{self._slot(args.get('slot'))}"
-        self.store.queue_message(key=key, chat_id=self.p.cfg.telegram.owner_chat_id,
-                                 text=body, reply_to=event["msg_id"],
-                                 purpose="native_owner_response", repeat_ok=False)
-        row = self.store.outbox_by_key(key)
-        return {"key": key, "status": row["status"], "frozen_text": row["text"]}
-
-    def _tool_answer_client(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
-        if owner:
-            raise ToolDenied("use_owner_authorized_reply_for_selected_recipient")
-        if not getattr(self.p.cfg.agent, 'visible_moderator', False):
-            raise ToolDenied("visible_moderator_required")
-        body = str(args.get('text') or '').strip()
-        if not body or len(body.encode('utf-16-le')) // 2 > 4096:
-            raise ToolDenied("invalid_reply")
-        kind = str(args.get('kind') or 'answer')
-        if kind not in {'answer', 'necessary_question'}:
-            raise ToolDenied("factual_answer_or_necessary_question_only")
-        topic = self._case_topic(event)
-        key = f"investigated_reply:{event['id']}:{self._slot(args.get('slot'))}"
-        self.store.queue_message(key=key, chat_id=event['chat_id'], text=body,
-                                 reply_to=args.get('reply_to') or event['msg_id'],
-                                 purpose=kind, repeat_ok=False)
-        row = self.store.outbox_by_key(key)
-        self.store.kv_set(f"reply_case:{key}", {'topic_id': topic,
-                          'chat_id': int(event['chat_id']), 'kind': kind})
-        self.journal.sync_chat(int(event['chat_id']))
-        return {"key": key, "status": row['status'], "frozen_text": row['text']}
 
     def _tool_owner_digest(self, args: dict[str, Any], event: Any, owner: bool) -> dict[str, Any]:
         body = str(args.get("text") or "").strip()
         if not body or len(body) > 3000:
             raise ToolDenied("invalid_digest")
-        if getattr(self.p.cfg.agent, 'visible_moderator', False):
-            return self._tool_update_case({'event': body, 'slot': args.get('slot')}, event, owner)
         tid = args.get("ticket_id")
         if tid:
             self._ticket(tid, event, owner)

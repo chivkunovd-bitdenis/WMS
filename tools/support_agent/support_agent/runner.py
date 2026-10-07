@@ -93,7 +93,7 @@ class Agent:
 
     # ---- запуск ----------------------------------------------------------------------
     def startup(self) -> None:
-        if self.cfg.agent.intake_only:
+        if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
             self.store.kv_set("heartbeat", self.clock())
             return
         recover_after_restart(self.store, self.cfg)
@@ -181,7 +181,7 @@ class Agent:
             except TelegramError as exc:
                 log.warning("telegram poll failed: %s", exc.code)
                 time.sleep(min(5, tg_timeout))
-        if self.cfg.agent.intake_only:
+        if self.cfg.agent.intake_only or self.cfg.agent.visible_moderator:
             if self.cfg.agent.visible_moderator:
                 from .case_journal import CaseJournal
                 from .media import archive_pending, archive_root
@@ -258,7 +258,7 @@ def build_agent(cfg: Config) -> Agent:
     pipe.mockups = MockupRunner(pipe, hotfix)
     from .media import message_image_paths
     pipe.message_image_paths = lambda message: message_image_paths(pipe, message)
-    if cfg.agent.enabled and not cfg.agent.intake_only:
+    if cfg.agent.enabled and not (cfg.agent.intake_only or cfg.agent.visible_moderator):
         from .agent_tools import AgentTools
         pipe.agent = AgentCoordinator(pipe, AgentTools(pipe))
     return Agent(cfg, store, tg, pipe)

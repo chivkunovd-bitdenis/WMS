@@ -104,7 +104,6 @@ class LlmResult:
     cli: str
     model: str
     session_id: str | None = None
-    context_tokens: int = 0
 
 
 def check_effort(model: str, effort: str | None) -> str | None:
@@ -212,17 +211,11 @@ class LlmRouter:
         effort: str | None = None,
         include_project_tools: bool = True,
         progress_callback: Callable[[str], None] | None = None,
-        session_id: str | None = None,
-        session_name: str | None = None,
-        image_paths: list[str] | None = None,
-        live_inputs: Callable[[], list[dict[str, Any]]] | None = None,
-        inputs_delivered: Callable[[list[dict[str, Any]]], None] | None = None,
     ) -> LlmResult:
         """Native tool-capable turn for the agent; no provider/model fallback.
 
         Business facts and conversation context remain in Store and local transcripts.
-        Native sessions persist in Codex and resume their actual tool/history context.
-        The coordinator performs handoff only at safe completed-turn boundaries.
+        Native background turns are ephemeral and never create desktop chat history.
         """
         from .app_server import AppServerError, AppServerTurn
 
@@ -281,81 +274,28 @@ class LlmRouter:
         state = saved if isinstance(saved, dict) else {}
         handoff = str(state.get("handoff") or "")
         original_prompt = prompt
-        chosen_session = session_id or state.get("thread_id")
-        if not chosen_session:
-            # One-time migration of old ephemeral transcripts; never replay a
-            # transcript on top of an existing native session.
-            prompt = self._background_prompt(key, prompt, handoff=handoff)
-        elif state.get("capability_signature") not in (None, signature):
-            raise LlmUnavailable("session tools changed; coordinator must perform an explicit handoff")
+        prompt = self._background_prompt(key, prompt, handoff=handoff)
         turn = AppServerTurn(self.cfg.llm.codex_bin, timeout=timeout)
-
-        def save_started(thread_id: str) -> None:
-            self.store.kv_set(key, {**state, "thread_id": thread_id,
-                                   "handoff": handoff, "capability_signature": signature,
-                                   "running": True})
 
         try:
             answer, thread_id, occupied = turn.run(
                 prompt, model=model, provider=provider, effort=chosen_effort,
                 cwd=work_cwd, mode=mode,
                 system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
-                session_id=chosen_session, tools=tools or [], tool_handler=tool_handler,
-                session_started=save_started,
-                session_name=session_name,
-                project_id=getattr(self.cfg.agent, "moderator_project_id", None),
-                image_paths=image_paths, live_inputs=live_inputs,
-                inputs_delivered=inputs_delivered,
+                session_id=None, tools=tools or [], tool_handler=tool_handler,
                 cancelled=cancelled,
                 progress_callback=progress_callback,
                 redact_error=self.cfg.redact,
             )
         except (AppServerError, OSError) as exc:
-            saved_state = self.store.kv_get(key, {})
-            self.store.kv_set(key, {**saved_state, "running": False, "last_error": type(exc).__name__})
-            raise LlmUnavailable(f"native agent turn failed: {self.cfg.redact(str(exc))[:600]}") from exc
+            raise LlmUnavailable(f"native agent turn failed: {type(exc).__name__}") from exc
         self._remember_background(key, original_prompt, answer)
-        self.store.kv_set(key, {"thread_id": thread_id, "handoff": handoff,
-                                "context_tokens": occupied, "running": False,
-                                "rollover": occupied >= self.cfg.agent.context_limit_tokens,
-                                "capability_signature": signature})
+        self.store.kv_set(key, {"thread_id": None, "handoff": handoff,
+                                "legacy_thread_id": state.get("legacy_thread_id") or state.get("thread_id"),
+                                "rollover": False, "capability_signature": signature})
         self.store.log_llm(cli=provider, model=model, effort=chosen_effort,
                            role="review" if role == "review" else "agent", ticket_id=None, ok=True)
-        return LlmResult(answer, provider, model, thread_id, occupied)
-
-    def create_agent_session(
-        self, *, session_key: str, name: str, system: str = "",
-        tools: list[dict[str, Any]] | None = None, cwd: str | None = None,
-        mode: str = "readonly", owner_authorized: bool = False,
-    ) -> str:
-        """Create a durable named successor without starting a model turn.
-
-        Must receive the same tools as its first agent_turn (resume cannot replace
-        dynamic tools). Persist immediately so an interrupted bootstrap is recoverable.
-        """
-        from .app_server import AppServerTurn
-
-        if mode == "owner" and not owner_authorized:
-            raise PermissionError("full project agent mode requires trusted owner authorization")
-        work_cwd = str(Path(cwd or self.cfg.repo).resolve())
-        normalized = normalize_agent_tools(tools or [])
-        key = f"agent_session:{session_key}:shared:{mode}"
-        saved = self.store.kv_get(key, {})
-        if isinstance(saved, dict) and saved.get("thread_id"):
-            return str(saved["thread_id"])
-        signature = agent_capability_signature(normalized, work_cwd)
-        def started(thread_id: str) -> None:
-            self.store.kv_set(key, {"thread_id": thread_id, "context_tokens": 0,
-                                   "running": False, "capability_signature": signature})
-        _, thread_id, _ = AppServerTurn(self.cfg.llm.codex_bin, timeout=60).run(
-            "", model=WMS_MODEL, provider=WMS_PROVIDER,
-            effort=self.cfg.llm.codex_effort, cwd=work_cwd, mode=mode,
-            system=prompts.WMS_SYSTEM_POLICY + (f"\n\n{system}" if system else ""),
-            session_id=None, tools=normalized, tool_handler=(lambda name, args: {}),
-            session_started=started, session_name=name, create_only=True,
-            project_id=getattr(self.cfg.agent, "moderator_project_id", None),
-        )
-        return thread_id
+        return LlmResult(answer, provider, model, thread_id)
 
     def _claude_agent_turn(
         self, prompt: str, *, session_key: str, model: str, system: str,
