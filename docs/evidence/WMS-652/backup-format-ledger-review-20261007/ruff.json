@@ -1,0 +1,8 @@
+{
+  "source": "d40bc41995cb2ad434187734419dd2bfe507b8da",
+  "file": "backend/tests/test_prod_deploy_backup_gate_boundary.py",
+  "command": "existing backend/.venv/bin/ruff check --no-cache --config immutable backend/pyproject.toml --stdin-filename backend/tests/test_prod_deploy_backup_gate_boundary.py -",
+  "exit_code": 0,
+  "stdout": "All checks passed!\n",
+  "stderr": ""
+}
