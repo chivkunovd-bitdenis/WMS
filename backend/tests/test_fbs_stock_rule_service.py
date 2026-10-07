@@ -712,6 +712,80 @@ async def test_zero_edit_cancel_and_repeated_events_preserve_reserve(
 
 
 @pytest.mark.asyncio
+async def test_release_reconciles_stale_ozon_position_projection_without_reservation_rows(
+    db_session: AsyncSession,
+) -> None:
+    """A stale UI/CLI projection is not an active reserve, but must not survive release."""
+    from datetime import UTC, datetime
+
+    from app.models.fbs_order import (
+        FbsOrder,
+        FbsOrderProduct,
+        FbsOrderProductReservation,
+        FbsOrderReservation,
+    )
+    from app.services.fbs_stock_availability_service import (
+        organization_stock_totals_by_product,
+    )
+    from app.services.inventory_service import update_fbs_order_reservation
+
+    seed = await _units_seed(db_session, on_hand=4)
+    now = datetime.now(UTC)
+    order = FbsOrder(
+        tenant_id=seed.tenant.id,
+        seller_id=seed.seller.id,
+        product_id=seed.product.id,
+        marketplace="ozon",
+        external_order_id="ozon-stale-release",
+        mapping_status="mapped",
+        reserve_status="reserved",
+        wb_order_id=-675,
+        wb_warehouse_id=501001,
+        warehouse_id=seed.warehouse.id,
+        created_at_wb=now,
+        deadline_at=now,
+        status="done",
+    )
+    db_session.add(order)
+    await db_session.flush()
+    position = FbsOrderProduct(
+        order_id=order.id,
+        product_id=seed.product.id,
+        ozon_sku=675001,
+        position_index=0,
+        quantity=1,
+        reserved_quantity=1,
+    )
+    db_session.add(position)
+    await db_session.flush()
+
+    # Availability already reads reservation rows, so this stale projection
+    # must not change stock math before or after reconciliation.
+    before = await organization_stock_totals_by_product(
+        db_session, seed.tenant.id, [seed.product.id]
+    )
+    assert before[seed.product.id].reserved == 0
+    assert not (await db_session.scalars(select(FbsOrderReservation))).all()
+    assert not (await db_session.scalars(select(FbsOrderProductReservation))).all()
+
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    await db_session.flush()
+    # A retry after the projection is reconciled remains a no-op for stock.
+    await update_fbs_order_reservation(db_session, order, reserve=False)
+    await db_session.flush()
+
+    await db_session.refresh(position)
+    assert position.reserved_quantity == 0
+    assert order.reserve_status == "released"
+    after = await organization_stock_totals_by_product(
+        db_session, seed.tenant.id, [seed.product.id]
+    )
+    assert after[seed.product.id].reserved == 0
+    assert not (await db_session.scalars(select(FbsOrderReservation))).all()
+    assert not (await db_session.scalars(select(FbsOrderProductReservation))).all()
+
+
+@pytest.mark.asyncio
 async def test_inventory_uses_ordinary_stock_then_fbs(db_session: AsyncSession) -> None:
     # WMS-338: инвентаризационные недостачи не расходуют операторский потолок,
     # они уменьшают физический баланс. Публикация уедет min(cap, free) с новым
