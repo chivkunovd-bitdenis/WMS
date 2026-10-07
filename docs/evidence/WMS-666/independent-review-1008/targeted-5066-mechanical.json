@@ -1,0 +1,71 @@
+{
+  "product_p": "5066f1dc3c362935fe31292671ca6fad2a4205bf",
+  "method": "AST-extracted actual pure functions from git show exact P; no DB/API/provider/printer claim",
+  "gs1": {
+    "victim": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821AB91ZZQQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        []
+      ]
+    },
+    "legacy_missing_before_91": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        []
+      ]
+    },
+    "legacy_missing_before_92": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km\u001d91K7pQ92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        []
+      ]
+    },
+    "no_gs_44": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        [
+          "gs_structure_restored"
+        ]
+      ]
+    },
+    "complete": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        []
+      ]
+    },
+    "duplicate_gs": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        [
+          "gs_structure_restored"
+        ]
+      ]
+    },
+    "trailing_gs": {
+      "matches_reviewed_contract": true,
+      "output": [
+        "010460601234567821aXq7Tz9Km\u001d91K7pQ\u001d92MTIzNDU2Nzg5MGFiY2RlZmdoaWprbG1ub3BxcnN0dXY=",
+        [
+          "gs_structure_restored"
+        ]
+      ]
+    }
+  },
+  "ozon": {
+    "tie_cutoff_current_three": [
+      "00000000-0000-0000-0000-00000000000a",
+      "00000000-0000-0000-0000-000000000014",
+      "00000000-0000-0000-0000-000000000028"
+    ],
+    "rejected_newest_never_resurrects_old": true,
+    "replacement_required_newest_never_resurrects_old": true,
+    "equal_time_same_exemplar_ambiguity_not_arbitrary_uuid": true
+  }
+}
