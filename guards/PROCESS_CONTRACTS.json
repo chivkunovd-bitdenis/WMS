@@ -195,7 +195,7 @@
     "frontend/vitest.config.ts": "c5a189e0a84e5bd969515013fb33ecf6c5923f9e551fb9f4c4c5971247b30cda",
     "scripts/ci/backend_shards.py": "5309a03576d017839fb50b51b31867febfc0fe2307494d0ad904122ca0c7e36b",
     "scripts/ci/build_process_proof.py": "f2e787d41cfdd10b3ca7a2120a65583d28514eb1449c47fd54998274a3daa64d",
-    "scripts/ci/check_task_documents.py": "144dc11f87c97128d5fef773687fa053d4e26d71c42ba81c690a272e7cdeefc6",
+    "scripts/ci/check_task_documents.py": "8772eb79a50f2246e23fbc6bc56a9ff3c124d3a69145747dd8131c1cdfa294d4",
     "scripts/ci/process_contracts.py": "a2143f35d99719b55d9a7e82ba4c3dcbba977d1996810e9905707b3d5df764f3",
     "scripts/ci/product_scope.py": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
     "scripts/ci/resolve_ci_base.py": "3063a56042f3d196aa6fa0bf6ddc2cdb8d9bdeb33be7883205f3dec259a4e122",
