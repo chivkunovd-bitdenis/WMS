@@ -1,0 +1,28 @@
+{
+  "status": "pending",
+  "known_candidate": "5781b563765b2ba6806ffe983339b3af9643b919",
+  "policy_predecessor": "0df92673934df8768efabe470baeca6f2f4568af",
+  "pending": [
+    "684 harness platform-only async correction awaits actual DOM/PDF GREEN and pure Git commit; included product-scope requires new proposed P",
+    "658 producer: actual aggregate RED9skipped; isolated PG backend-checks step + exact release-postgres/658.xml/9mandatory cases being verified",
+    "680 exact Linux fixture template + final actual report publication SHA activation; no fake PASS"
+  ],
+  "immutable_template": "docs/evidence/WMS-652/final-closure-20261007/wms680-reviewed-activation-template.json",
+  "workflow_delta": "only isolated PG658 producer; merge algorithm unchanged",
+  "final_candidate": null,
+  "proposed_P": null,
+  "producer_commit": "5781b563765b2ba6806ffe983339b3af9643b919",
+  "required_review_path": "docs/reviews/WMS-652-final-night-release-review-20261007.md",
+  "required_reviewed_commit": "4ed0c391135c95b67879c954195034b9c43d4980",
+  "required_review_scope": [
+    "whole final candidate after684 pure commit (pending)",
+    "680 exact closed-chain activation template; full4ed must be explicitly confirmed PASS",
+    "new PG658 isolated producer+9exactcases+actual9PASS0skip JUnit",
+    "proposed P exact product scope and mechanical postPASS metadata activation"
+  ],
+  "pg658_actual_local": "9PASS0SKIP; docs/evidence/WMS-652/final-closure-20261007/658-ci-producer-local.xml",
+  "metadata_template_paths": [
+    "docs/evidence/WMS-652/final-closure-20261007/wms680-reviewed-activation-template.json",
+    "docs/evidence/WMS-652/final-closure-20261007/proposed-final-P-S.json"
+  ]
+}

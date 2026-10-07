@@ -1,0 +1,12 @@
+{
+  "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/print-diag-receipts/673.json",
+  "sha256": "4398d09bf4713495e08212ff0114dde6c7378dacdd57ed0f3b713119316bc77b",
+  "named_cases": 5,
+  "all_passed_no_skips": true,
+  "not_own_execution": true,
+  "sha_run_attempt_not_embedded_in_vitest_receipt": true,
+  "companion_metadata": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/print-diag.json",
+  "companion_metadata_sha256": "fdbc7690f77995023890d775e57fad31bd4a1afe0d64431aeac00895ddc4bcab",
+  "diagnostic_source_sha": "9f96c0c53fa82c5343d4640eac59c1b886f640ab",
+  "pdf_test_bytes_equal_reviewed_candidate": false
+}

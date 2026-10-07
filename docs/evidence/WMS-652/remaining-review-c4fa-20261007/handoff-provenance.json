@@ -1,0 +1,7 @@
+{
+  "source": "/Users/deniscivkunov/Projects/WMS/.agent-runs/night-20261006-01a112a8/integration/final-review-handoff.json",
+  "sha256": "c58b18f970976e670e72485087e191fa37075f12f5d775fa02200118f6e45212",
+  "status": "pending",
+  "final_candidate": null,
+  "not_reviewed_as_code": true
+}

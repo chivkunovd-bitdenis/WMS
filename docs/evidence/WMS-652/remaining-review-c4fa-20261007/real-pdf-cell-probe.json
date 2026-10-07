@@ -1,0 +1,24 @@
+{
+  "source": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+  "actual_pdf": "cross-row.pdf",
+  "expected": "PACKAGING-LONG-NAME-01-680",
+  "fragments": [
+    {
+      "left": 37.499998,
+      "top": 55.744627,
+      "right": 135.901606,
+      "bottom": 67.475095,
+      "text": "PACKAGING-LONG-"
+    },
+    {
+      "left": 37.499998,
+      "top": 189.244621,
+      "right": 104.027339,
+      "bottom": 200.975089,
+      "text": "NAME-01-680"
+    }
+  ],
+  "accepted_by_full_geometry_check": true,
+  "row_gap_points": 121.769526,
+  "verdict": "FAIL: no table cell contains the full name"
+}

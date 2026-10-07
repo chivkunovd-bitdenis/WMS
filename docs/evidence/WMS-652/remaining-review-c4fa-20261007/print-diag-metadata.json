@@ -1,0 +1,13 @@
+{
+  "at": "2026-10-06T21:15:31.072610+00:00",
+  "branch": "codex/night1007-print-regressions-646cb4",
+  "head": "9f96c0c53fa82c5343d4640eac59c1b886f640ab",
+  "product_parent": "646cb4b0cfd2ef465149e92ddb061ccf19fa43c0",
+  "changed_paths": [
+    ".github/workflows/ci.yml"
+  ],
+  "print_job_bytes_equal_source": true,
+  "workflow": "CI onlyworkflow_dispatch isolated fullprintjob",
+  "merge": false,
+  "full_ci": false
+}

@@ -1,0 +1,180 @@
+{
+  "target": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+  "prior": "6da0eb63b143d71d789c25a20ee04e3c49cbf14b",
+  "paths": 262,
+  "reports": 23,
+  "cases": 1644,
+  "retained_original_bindings": [
+    {
+      "suite": "backend-fbs",
+      "cases": 600,
+      "report": "backend-all.xml",
+      "format": "junit",
+      "exact": false
+    },
+    {
+      "suite": "pg-663-retry",
+      "cases": 5,
+      "report": "release-postgres/663-release-retry.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662-f6",
+      "cases": 4,
+      "report": "release-postgres/662-f6.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-663-669-670-683",
+      "cases": 6,
+      "report": "release-postgres/663-669-670-683.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-662",
+      "cases": 10,
+      "report": "release-postgres/662.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-fbs-concurrency",
+      "cases": 6,
+      "report": "release-postgres/fbs-concurrency.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "frontend-fbs",
+      "cases": 204,
+      "report": "frontend-all.json",
+      "format": "vitest",
+      "exact": false
+    },
+    {
+      "suite": "print-672",
+      "cases": 11,
+      "report": "print/672.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-672-remaining",
+      "cases": 6,
+      "report": "print/672-remaining.tap",
+      "format": "node-tap",
+      "exact": true
+    },
+    {
+      "suite": "print-673",
+      "cases": 5,
+      "report": "print/673.json",
+      "format": "vitest",
+      "exact": true
+    },
+    {
+      "suite": "native-linux",
+      "cases": 30,
+      "report": "native-print.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "native-windows",
+      "cases": 29,
+      "report": "native-print-windows.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "real-fbs-browser",
+      "cases": 43,
+      "report": "print/critical-fbs/result.json",
+      "format": "browser-json",
+      "exact": true
+    },
+    {
+      "suite": "pg-675",
+      "cases": 1,
+      "report": "release-postgres/675.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "pg-517-withdrawal",
+      "cases": 5,
+      "report": "release-postgres/517-withdrawal.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "ci-shards",
+      "cases": 20,
+      "report": "ci-shards.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "product-scope",
+      "cases": 51,
+      "report": "product-scope.xml",
+      "format": "junit",
+      "exact": true
+    },
+    {
+      "suite": "mac-517-helper",
+      "cases": 110,
+      "report": "wms517-mac.tap",
+      "format": "node-tap",
+      "exact": true
+    }
+  ],
+  "new_ids": {
+    "backend-fbs": [
+      "tests.test_wms684_586_scope_contract::test_feature_branch_merged_with_foreign_integration_paths_passes",
+      "tests.test_wms684_586_scope_contract::test_task_commit_with_forbidden_product_path_fails",
+      "tests.test_wms684_586_scope_contract::test_task_id_anywhere_or_without_colon_rejects_forbidden_path[WMS-652 WMS-684 WMS-586: forbidden model]",
+      "tests.test_wms684_586_scope_contract::test_task_id_anywhere_or_without_colon_rejects_forbidden_path[WMS-684 WMS-586 forbidden model]",
+      "tests.test_wms684_586_scope_contract::test_task_id_prefix_collision_is_not_attributed_to_wms684_586"
+    ],
+    "ci-shards": [
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_changed_source_hash",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_generated_module_case",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_rejects_wrong_postgres_report",
+      "scripts.ci.tests.test_promote_guards.PromoteGuardsTests::test_protected_wms663_c10_copy_uses_only_the_real_generated_module_and_report"
+    ]
+  },
+  "pending_hash_mismatches": [
+    {
+      "path": "frontend/src/utils/wms680PrintGeometry.test.ts",
+      "expected": "5bab36fcf8e04e3aad08cfedb8264f0948b0e08c61f324ebf76490bb8f729eb1",
+      "actual": "797428aefa56438ab4534a58675bd87118054420db92d62615978fc6b6312ff3"
+    }
+  ],
+  "pending_pdf_canary_registration": "C680-18: канарейка не принимает обрезанное название, даже если остальные слова PDF сохранены",
+  "scope_old_tests_unchanged": 4,
+  "scope_local_pass": 7,
+  "seller_changed_test": [
+    "test_c4_wb_self_service_creates_requisites_with_single_call_and_journal_event"
+  ],
+  "seller_unchanged_test_definitions": 8,
+  "old_673_registered_pdf_case_ids": [
+    "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 PDF input contract without browser execution C7 print input preserves A4 landscape, 10mm margins, fixed size657 widths/font",
+    "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 PDF input contract without browser execution C7/C11 long color survives the real API-to-print builder, next to size; size wrapping remains required",
+    "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 business RED PDF contract C7/C11: multipage PDF repeats headers, preserves every row/color/size and page boundary",
+    "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 business RED PDF contract C7: real renderer keeps size657 fixed geometry and complete color within eleven columns",
+    "src/screens/v2/fbsPickingColor.wms673.pdf.test.ts::WMS-673 digital print controls C7 control: externally rendered actual PDF is as A4 landscape before color implementation"
+  ],
+  "old_673_source_case_counts": {
+    "dom.test.tsx": 19,
+    "pdf.test.ts": 5
+  },
+  "old_673_test_titles_preserved": true,
+  "renderer_only_change": "11 → 12 column count and corresponding error message",
+  "proposed_P": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+  "immutable_product_delta_from_P": [],
+  "template_status": "proposal only; final handoff/exact activation files not available"
+}

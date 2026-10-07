@@ -1,0 +1,22 @@
+{
+  "status": "PROPOSED_ONLY_PENDING_INDEPENDENT_REVIEW",
+  "product_reference_P": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+  "strict_product_scope_result": {
+    "unapproved_product_paths": []
+  },
+  "latest_product_changes": [
+    "no-op Alembic merge2303",
+    "WMS673 test-only print renderer alignment"
+  ],
+  "source_S": "The post-review binding publication commit, selected by coordinator after actual PASS; never self-embedded",
+  "live_current_binding": "ef154 remains the previously accepted reference; new product is deliberately rejected until actual independent PASS",
+  "reviewed_activation_template": {
+    "workflow_product_scope_trusted_ref": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+    "fixture_status": "independently-accepted-final-freeze",
+    "fixture_final_reviewed_source": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+    "fixture_frozen_source": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+    "fixture_accepted_sources_addition": "5868c3b1300d0969bf4283b5df18635eec9481f2",
+    "fixture_independent_acceptance_record": "FULL_SHA_OF_GENUINE_NEW_PRODUCT_PASS_REPORT_PUBLICATION; not an invented value"
+  },
+  "after_review_changes": "Only the exact declared activation fields, actual immutable review SHA and resulting protected file hashes; no product or checker behavior changes. New source SHA selected afterward by root."
+}

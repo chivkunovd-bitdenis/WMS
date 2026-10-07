@@ -1,0 +1,34 @@
+[
+  {
+    "source": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+    "scenario": "complete wrapped text, adjacent lines",
+    "mustReject": false,
+    "accepted": true,
+    "rejection": null,
+    "xml": "<page width=\"600\" height=\"800\"><word xMin=\"10\" yMin=\"50\" xMax=\"100\" yMax=\"60\">PACKAGING-LONG-</word><word xMin=\"10\" yMin=\"62\" xMax=\"100\" yMax=\"72\">NAME-01-680</word><word xMin=\"350\" yMin=\"20\" xMax=\"440\" yMax=\"30\">АРТИКУЛ</word><word xMin=\"450\" yMin=\"20\" xMax=\"540\" yMax=\"30\">ЦВЕТ</word><word xMin=\"500\" yMin=\"20\" xMax=\"590\" yMax=\"30\">РАЗМЕР</word></page>"
+  },
+  {
+    "source": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+    "scenario": "truncated name",
+    "mustReject": true,
+    "accepted": false,
+    "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+    "xml": "<page width=\"600\" height=\"800\"><word xMin=\"10\" yMin=\"50\" xMax=\"100\" yMax=\"60\">PACKAGING-LONG-</word><word xMin=\"350\" yMin=\"20\" xMax=\"440\" yMax=\"30\">АРТИКУЛ</word><word xMin=\"450\" yMin=\"20\" xMax=\"540\" yMax=\"30\">ЦВЕТ</word><word xMin=\"500\" yMin=\"20\" xMax=\"590\" yMax=\"30\">РАЗМЕР</word></page>"
+  },
+  {
+    "source": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+    "scenario": "truncated row A plus suffix in distinct row B",
+    "mustReject": true,
+    "accepted": true,
+    "rejection": null,
+    "xml": "<page width=\"600\" height=\"800\"><word xMin=\"10\" yMin=\"50\" xMax=\"100\" yMax=\"60\">PACKAGING-LONG-</word><word xMin=\"10\" yMin=\"400\" xMax=\"100\" yMax=\"410\">NAME-01-680</word><word xMin=\"350\" yMin=\"20\" xMax=\"440\" yMax=\"30\">АРТИКУЛ</word><word xMin=\"450\" yMin=\"20\" xMax=\"540\" yMax=\"30\">ЦВЕТ</word><word xMin=\"500\" yMin=\"20\" xMax=\"590\" yMax=\"30\">РАЗМЕР</word></page>"
+  },
+  {
+    "source": "c4faeb3a58c42e2d2e04bff790230532e8970b90",
+    "scenario": "suffix in another column",
+    "mustReject": true,
+    "accepted": false,
+    "rejection": "реальный PDF должен содержать полный текст «PACKAGING-LONG-NAME-01-680» в одной ячейке, а не только его обрезок",
+    "xml": "<page width=\"600\" height=\"800\"><word xMin=\"10\" yMin=\"50\" xMax=\"100\" yMax=\"60\">PACKAGING-LONG-</word><word xMin=\"120\" yMin=\"62\" xMax=\"210\" yMax=\"72\">NAME-01-680</word><word xMin=\"350\" yMin=\"20\" xMax=\"440\" yMax=\"30\">АРТИКУЛ</word><word xMin=\"450\" yMin=\"20\" xMax=\"540\" yMax=\"30\">ЦВЕТ</word><word xMin=\"500\" yMin=\"20\" xMax=\"590\" yMax=\"30\">РАЗМЕР</word></page>"
+  }
+]
