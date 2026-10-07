@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="3" skipped="0" tests="6" time="10.524" timestamp="2026-10-07T06:48:46.262241+04:00" hostname="MacBook-Air-Denis.local"><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_exact_historical_fixture_pair_is_accepted[legacy-format]" time="0.584"><failure message="AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']&#10;assert ['WMS-662: fi...expectations'] == []&#10;  &#10;  Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'&#10;  Use -v to get more diff">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_exact_historical_fixture_0')
+transform = 'wms662-live-delivery-test-format'
+
+    @pytest.mark.parametrize("transform", tuple(PAIRS), ids=("legacy-format", "batch-pid"))
+    def test_exact_historical_fixture_pair_is_accepted(tmp_path, transform):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger([transform])
+        baselines, errors = replay.validate(ledger)
+&gt;       assert errors == [], f"the exact reviewed full-file pair must be supported: {errors}"
+E       AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E       assert ['WMS-662: fi...expectations'] == []
+E         
+E         Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E         Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:114: AssertionError</failure></testcase><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_exact_historical_fixture_pair_is_accepted[batch-pid]" time="0.969"><failure message="AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']&#10;assert ['WMS-662: fi...expectations'] == []&#10;  &#10;  Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'&#10;  Use -v to get more diff">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_exact_historical_fixture_1')
+transform = 'wms662-batch-first-wait-pid-snapshot'
+
+    @pytest.mark.parametrize("transform", tuple(PAIRS), ids=("legacy-format", "batch-pid"))
+    def test_exact_historical_fixture_pair_is_accepted(tmp_path, transform):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger([transform])
+        baselines, errors = replay.validate(ledger)
+&gt;       assert errors == [], f"the exact reviewed full-file pair must be supported: {errors}"
+E       AssertionError: the exact reviewed full-file pair must be supported: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E       assert ['WMS-662: fi...expectations'] == []
+E         
+E         Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E         Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:114: AssertionError</failure></testcase><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver" time="1.097"><failure message="AssertionError: both exact frontiers must coexist: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']&#10;assert ['WMS-662: fi...expectations'] == []&#10;  &#10;  Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'&#10;  Use -v to get more diff">tmp_path = PosixPath('/private/var/folders/v2/zf9pcbpd4d50jvs85vz5jxhm0000gn/T/pytest-of-deniscivkunov/pytest-112/test_two_exact_original_contra0')
+
+    def test_two_exact_original_contracts_share_ledger_without_legacy_array_waiver(tmp_path):
+        replay = Replay(tmp_path)
+        ledger = replay.ledger(PAIRS)
+        owner_before = copy.deepcopy(ledger["owner_supersessions"])
+        for entry in ledger["fixture_corrections"]:
+            baselines, errors = replay.validate(ledger, entry["contract_commit"])
+&gt;           assert errors == [], f"both exact frontiers must coexist: {errors}"
+E           AssertionError: both exact frontiers must coexist: ['WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations']
+E           assert ['WMS-662: fi...expectations'] == []
+E             
+E             Left contains one more item: 'WMS-662: fixture-only: неподдерживаемое преобразование или изменены frozen expectations'
+E             Use -v to get more diff
+
+tests/test_wms662_exact_fixture_pairs_contract.py:125: AssertionError</failure></testcase><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_wrong_task_path_transform_and_blob_pairs_remain_rejected" time="2.384" /><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_mutated_assertion_or_later_candidate_cannot_self_update_allowed_blob" time="1.879" /><testcase classname="tests.test_wms662_exact_fixture_pairs_contract" name="test_missing_changed_review_or_rebound_source_remains_rejected" time="3.520" /></testsuite></testsuites>
