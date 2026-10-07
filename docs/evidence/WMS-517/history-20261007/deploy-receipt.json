@@ -1,0 +1,47 @@
+{
+  "target": "d686e19678f7714f4d552ce281453327efbf3ade",
+  "base": "4e7fb438aff4a82d8a332b1e1ae82b1d1aeb9240",
+  "started_at": "2026-10-07T10:44:40.501456+00:00",
+  "mode": "owner-requested direct backend-only release; no CI or new agents; no migrations or business writes",
+  "previous_images": {
+    "api": "sha256:36c98c25858db0b7fcc00875f6e75dec495f1119ff6e22c9c6eedb10642c3083",
+    "celery_worker": "sha256:64843ca0e7c6688c3d405f78f8decd704f2f6c7f4b2155f97baaeccbfe21e324",
+    "celery_beat": "sha256:f080eb01b17b173674e818411ec04979d0c0603da18c8c958f4a2942eb91c163"
+  },
+  "compose_files": {
+    "api": [
+      "/opt/wms/docker-compose.prod.yml",
+      "/opt/wms/docker-compose.wms-host-8088.yml"
+    ],
+    "celery_worker": [
+      "/opt/wms/docker-compose.prod.yml",
+      "/opt/wms/docker-compose.wms-host-8088.yml"
+    ],
+    "celery_beat": [
+      "/opt/wms/docker-compose.prod.yml",
+      "/opt/wms/docker-compose.wms-host-8088.yml",
+      "/opt/wms-maintenance/wms689/wb-catalog-disabled.compose.yml"
+    ]
+  },
+  "source_hashes": {
+    "backend/app/services/wb_sales_report.py": "1c12407df0181817afa51c91e38db7be035b2d4a568a9a5b794a794ebfdf8af7",
+    "backend/app/db/withdrawal_repository.py": "9e1b259c3c6734b871a396ea1afa073f78ea37d7c334aa905114de836464c8cd"
+  },
+  "services": {
+    "api": {
+      "image": "sha256:9eb9025728b6f968deacd3ae7bd5a7bcb8525d11bd2d1b01200dd2164c6d6c47",
+      "running": true
+    },
+    "celery_worker": {
+      "image": "sha256:50b00e0a71e5581afb0b33fc58c5d9c27504db9dd5792e0fa9651debb8a550d4",
+      "running": true
+    },
+    "celery_beat": {
+      "image": "sha256:de8812432c1a89d7868a7575502c7626946ec62ab51c97b8042d53fc450ca030",
+      "running": true
+    }
+  },
+  "source_hashes_match_all_three": true,
+  "finished_at": "2026-10-07T10:45:08.576241+00:00",
+  "status": "deployed_runtime_sources_verified"
+}
