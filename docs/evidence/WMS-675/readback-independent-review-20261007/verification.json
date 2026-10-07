@@ -1,0 +1,83 @@
+{
+  "reviewed_commit": "277e8f0f7c9172a8c76664a6657942ecf71284a1",
+  "manifest_members_verified": 92,
+  "total_files_including_manifest": 93,
+  "file_manifest_sha256": "e056cc5e21bb2167ef2893044604f11da23cf7a60e47a87cedd40571d9032ad3",
+  "actual_offline_verifier_exit": 0,
+  "saved_result_byte_identical_after_run": true,
+  "verifier_sha256": "fb730741fbe7f6ed462000cb58a63df10153b3bb914c3e6a3baef7d7bad9a473",
+  "saved_result_sha256": "7db203dff62aa49091e4ca10d15523f54c93bc4c63675abfac3cdb77cf77efab",
+  "native_source_hashes_verified": 17,
+  "raw_card_status_substatus_counts": {
+    "('delivering', 'posting_in_pickup_point')": 6,
+    "('delivered', 'posting_received')": 15,
+    "('cancelled', 'posting_canceled')": 5,
+    "('delivering', 'posting_on_way_to_city')": 5
+  },
+  "snapshot_windows": [
+    {
+      "start": "2026-10-07T07:53:12.150398+00:00",
+      "end": "2026-10-07T07:53:32.256524+00:00",
+      "remaining": 0,
+      "conducted": 26,
+      "new_since_0626": 14,
+      "new_since_0626_by_sku": {
+        "1697770458": 5,
+        "1589998415": 3,
+        "1586484429": 2,
+        "1586466682": 3,
+        "1695128938": 1
+      }
+    },
+    {
+      "start": "2026-10-07T08:03:19.145939+00:00",
+      "end": "2026-10-07T08:03:36.697431+00:00",
+      "remaining": 0,
+      "conducted": 26,
+      "new_since_0626": 14,
+      "new_since_0626_by_sku": {
+        "1697770458": 5,
+        "1589998415": 3,
+        "1586484429": 2,
+        "1586466682": 3,
+        "1695128938": 1
+      }
+    }
+  ],
+  "production_access_by_reviewer": false,
+  "additional_raw_review": {
+    "new14_created_from": "2026-10-07 06:27:22.537767+00",
+    "new14_created_to": "2026-10-07 06:27:22.537767+00",
+    "new14_ledger_written_off_same_0627_window": true,
+    "all_new14_precede_adapter_attempt": true,
+    "duplicate_billing_fact_ids": 0,
+    "snapshots": [
+      {
+        "snapshot": "accounting-after-20261007T080200Z",
+        "identity_read_only_RLS": true,
+        "exact_31_position_compositions": true,
+        "six_sorting_balances": {
+          "1a99998b-1576-4e7f-9f9a-cf9eaf14907e": "452",
+          "2ccde129-ed49-44fd-8dcc-4dd092581e26": "271",
+          "4d7e4a3d-954e-48f6-94a3-45729f2654d0": "369",
+          "605bdc71-baae-43dd-9ed4-fb37e07906c0": "234",
+          "7e159b28-72f7-4f3c-8f92-ebca10e054db": "530",
+          "80fa2a1e-1974-4e6e-8497-2defd0176bd5": "187"
+        }
+      },
+      {
+        "snapshot": "accounting-before-20261007T075312Z",
+        "identity_read_only_RLS": true,
+        "exact_31_position_compositions": true,
+        "six_sorting_balances": {
+          "1a99998b-1576-4e7f-9f9a-cf9eaf14907e": "452",
+          "2ccde129-ed49-44fd-8dcc-4dd092581e26": "271",
+          "4d7e4a3d-954e-48f6-94a3-45729f2654d0": "369",
+          "605bdc71-baae-43dd-9ed4-fb37e07906c0": "234",
+          "7e159b28-72f7-4f3c-8f92-ebca10e054db": "530",
+          "80fa2a1e-1974-4e6e-8497-2defd0176bd5": "187"
+        }
+      }
+    ]
+  }
+}
