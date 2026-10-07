@@ -1,0 +1,38 @@
+[3272:3286:1007/040103.628001:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.851847:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+
+DevTools listening on ws://127.0.0.1:16687/devtools/browser/4beebcb8-c7cd-472a-adf8-50caa6cfe313
+[3272:3286:1007/040103.891459:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.942320:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.942390:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.942403:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.942411:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.942417:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.942430:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3286:1007/040103.942436:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.946831:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3272:1007/040103.950452:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.952314:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.961008:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3272:1007/040103.961041:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3272:1007/040103.961054:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.961713:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.964107:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.964810:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.966634:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3272:1007/040103.967034:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.Properties.GetAll: object_path= /org/freedesktop/UPower/devices/DisplayDevice: org.freedesktop.DBus.Error.ServiceUnknown: The name org.freedesktop.UPower was not provided by any .service files
+[3272:3272:1007/040103.971308:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.971430:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.976943:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3272:3286:1007/040103.978700:ERROR:dbus/bus.cc:408] Failed to connect to the bus: Could not parse server address: Unknown address type (examples of valid types are "tcp" and on UNIX "unix")
+[3272:3272:1007/040103.988308:ERROR:dbus/object_proxy.cc:573] Failed to call method: org.freedesktop.DBus.NameHasOwner: object_path= /org/freedesktop/DBus: unknown error type: 
+[3301:3307:1007/040247.500965:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040247.501099:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040247.501143:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040247.501239:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040247.501286:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040251.401154:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040251.401265:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040251.401309:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040251.401395:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
+[3301:3307:1007/040251.401450:ERROR:gpu/command_buffer/service/shared_image/shared_image_manager.cc:521] SharedImageManager::ProduceMemory: Trying to Produce a Memory representation from a non-existent mailbox.
