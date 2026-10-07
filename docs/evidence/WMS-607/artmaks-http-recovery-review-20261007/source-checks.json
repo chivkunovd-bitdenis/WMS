@@ -1,0 +1,625 @@
+{
+  "verdict": "TECHNICAL PASS bounded legacy HTTP P-A5/P-A6 delta",
+  "SOURCE": "dc652472d75812dbebc68ef4353a718b0f629cbe",
+  "previous_acceptance_BASE": "77443e92dba2872993ee358cfb7c4c88279b47c8",
+  "frozen_HTTP_contract": "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609",
+  "product_delta": "ONLY Swift 11 insertions/3 deletions; four exact textual replacements restore BASE bytes",
+  "all_other_source_bytes_and_frozen_tests_preserved": true,
+  "HTTP_test_cases": [
+    "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure",
+    "test_legacy_error_preserves_specific_pre_submit_reason",
+    "test_unknown_same_key_never_resubmits_after_queue_recovery",
+    "test_submitting_same_key_has_one_live_external_submission",
+    "test_accepted_receipt_same_key_never_resubmits"
+  ],
+  "contract_manifest_members_verified": 14,
+  "saved_receipts": {
+    "before": {
+      "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ]
+        ],
+        "external_lp_count": 1
+      },
+      "test_legacy_error_preserves_specific_pre_submit_reason": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ]
+        ],
+        "external_lp_count": 0
+      },
+      "test_unknown_same_key_never_resubmits_after_queue_recovery": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ]
+        ],
+        "external_lp_count": 1
+      },
+      "test_submitting_same_key_has_one_live_external_submission": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            202,
+            "saved",
+            null
+          ],
+          [
+            "/jobs/live-scan",
+            200,
+            "submitting",
+            null
+          ],
+          [
+            "/print",
+            202,
+            "submitting",
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ]
+        ],
+        "external_lp_count": 1
+      },
+      "test_accepted_receipt_same_key_never_resubmits": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ]
+        ],
+        "external_lp_count": 1
+      }
+    },
+    "after": {
+      "test_legacy_same_key_recovers_only_after_proven_pre_submit_failure": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ]
+        ],
+        "external_lp_count": 2
+      },
+      "test_legacy_error_preserves_specific_pre_submit_reason": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "failed_before_submit",
+            null
+          ]
+        ],
+        "external_lp_count": 0
+      },
+      "test_unknown_same_key_never_resubmits_after_queue_recovery": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ],
+          [
+            "/print",
+            409,
+            "unknown",
+            null
+          ]
+        ],
+        "external_lp_count": 1
+      },
+      "test_submitting_same_key_has_one_live_external_submission": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            202,
+            "saved",
+            null
+          ],
+          [
+            "/jobs/live-scan",
+            200,
+            "submitting",
+            null
+          ],
+          [
+            "/print",
+            202,
+            "submitting",
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ]
+        ],
+        "external_lp_count": 1
+      },
+      "test_accepted_receipt_same_key_never_resubmits": {
+        "responses": [
+          [
+            "/health",
+            200,
+            null,
+            null
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ],
+          [
+            "/print",
+            200,
+            "accepted",
+            "Label_Printer-41"
+          ]
+        ],
+        "external_lp_count": 1
+      }
+    }
+  },
+  "saved_green_logs": {
+    "http-five-green.log": {
+      "PASS": 5,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "frozen-six-green.log": {
+      "PASS": 6,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "resolver-five-green.log": {
+      "PASS": 5,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    },
+    "native-three-green.log": {
+      "PASS": 3,
+      "SKIP": 0,
+      "FAIL": 0,
+      "ERROR": 0
+    }
+  },
+  "meaningful_precode": {
+    "targetFAIL": 2,
+    "preservationPASS": 3,
+    "skip": 0,
+    "error": 0
+  },
+  "purposeful_copy_mutation": {
+    "exit": 1,
+    "expected_failures": 3,
+    "all_rejected": true,
+    "change": "Known-key branch protects only failed_before_submit; other states overwritten",
+    "cases": [
+      "test_unknown_same_key_never_resubmits_after_queue_recovery",
+      "test_submitting_same_key_has_one_live_external_submission",
+      "test_accepted_receipt_same_key_never_resubmits"
+    ],
+    "tracked_source_unchanged": true
+  },
+  "concurrent_recovery": {
+    "identical_legacy_requests": 8,
+    "accepted_responses": 8,
+    "external_lp_boundary": 1
+  },
+  "input_hashes": {
+    "77443e92dba2872993ee358cfb7c4c88279b47c8:tools/print-agent/wms_print_direct_macos.swift": {
+      "bytes": 66872,
+      "sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/wms_print_direct_macos.swift": {
+      "bytes": 67511,
+      "sha256": "42b9f0dc0865fab15b5f0eef5e00953827f9e11caec4c1ceba8dee7935c3d600"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/wms_print_direct_macos.swift": {
+      "bytes": 66872,
+      "sha256": "8a71852053435ac81d43e308e47ec4687bd59cd30a90735e0402c9e42f76b7b7"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/contract.json": {
+      "bytes": 2748,
+      "sha256": "f941bbaec62f5b45902abf71372132696198f83505388b986ecc060efb0a0187"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/source-provenance.json": {
+      "bytes": 946,
+      "sha256": "640e3e942fcb56292d29fcfb583143115f6d46bdd0aa34eac5ca026793b7ea9b"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/test_macos_artmaks_http_contract.py": {
+      "bytes": 11965,
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/test_macos_artmaks_http_contract.py": {
+      "bytes": 11965,
+      "sha256": "379ac68340a7800155e89b33738bac5aff5a08ab30582b4dc913a41768085704"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/test_macos_artmaks_contract.py": {
+      "bytes": 8619,
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/test_macos_artmaks_contract.py": {
+      "bytes": 8619,
+      "sha256": "3ea4e88772fe7e30fdd6b6aff20c2a28cbb2dbe3dd3022de2619d82320df01d1"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/test_macos_default_printer.py": {
+      "bytes": 5141,
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/test_macos_default_printer.py": {
+      "bytes": 5141,
+      "sha256": "75a691c547d4a08c25e031b2f019303498fbd33dc93ab7c3cb248b7bed30432a"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/test_macos_native.py": {
+      "bytes": 10276,
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/test_macos_native.py": {
+      "bytes": 10276,
+      "sha256": "1db999f9ba9bd7869cc497ad5f40a58c0ddc8cded01acc63443829ecc73efc69"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:tools/print-agent/test_wms_cups_observe.c": {
+      "bytes": 2053,
+      "sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:tools/print-agent/test_wms_cups_observe.c": {
+      "bytes": 2053,
+      "sha256": "54b79fefd2cbf1570bed24eef0be8348308a31d7a6992acc805e06a4025eae26"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:frontend/src/utils/printDirectQr.ts": {
+      "bytes": 1250,
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:frontend/src/utils/printDirectQr.ts": {
+      "bytes": 1250,
+      "sha256": "72d31c23b2dafe92478b7436d09055ef20aa5ba4a9169b8279721680a2dcd2cc"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/manifest.json": {
+      "bytes": 3031,
+      "sha256": "34890417c8327ede2c2f083c700146256742bcf41bb3c84297b8cdea574a05d8"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/README.md": {
+      "bytes": 5419,
+      "sha256": "a41e28a643580d8f8b398857cf6d95133767af84686f294148093856b12a09a6"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/README.md": {
+      "bytes": 5419,
+      "sha256": "a41e28a643580d8f8b398857cf6d95133767af84686f294148093856b12a09a6"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/contract.json": {
+      "bytes": 2748,
+      "sha256": "f941bbaec62f5b45902abf71372132696198f83505388b986ecc060efb0a0187"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 5397,
+      "sha256": "86c1b8156920e2bbec446e6094a40a0180a04862a337001d0a84a81d2d22e1c8"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 5397,
+      "sha256": "86c1b8156920e2bbec446e6094a40a0180a04862a337001d0a84a81d2d22e1c8"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 4945,
+      "sha256": "97350399e8ec1d915ebd946481034bfbd8e7abaf651c6cdee42067c66ed6611b"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 4945,
+      "sha256": "97350399e8ec1d915ebd946481034bfbd8e7abaf651c6cdee42067c66ed6611b"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 5527,
+      "sha256": "6275d617f4063d28a86e9272d95e00f784817a5821e3c0148496e05b8e015809"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutant/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 5527,
+      "sha256": "6275d617f4063d28a86e9272d95e00f784817a5821e3c0148496e05b8e015809"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-control.py": {
+      "bytes": 2051,
+      "sha256": "a0c0604f34239cb78a59df3a1f46e95f3b935a59cdc159d6c999cde52f971295"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-control.py": {
+      "bytes": 2051,
+      "sha256": "a0c0604f34239cb78a59df3a1f46e95f3b935a59cdc159d6c999cde52f971295"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-red.log": {
+      "bytes": 3107,
+      "sha256": "63f5b4685ca579398a812ad59ce38c6923e5f2f26157d5e55d4b4df548722305"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-red.log": {
+      "bytes": 3107,
+      "sha256": "63f5b4685ca579398a812ad59ce38c6923e5f2f26157d5e55d4b4df548722305"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-result.json": {
+      "bytes": 397,
+      "sha256": "f2e37dc578eca50dc1bfeac566e4b7f82fe3347d7cf520369c79e5ca00e9317f"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/mutation-result.json": {
+      "bytes": 397,
+      "sha256": "f2e37dc578eca50dc1bfeac566e4b7f82fe3347d7cf520369c79e5ca00e9317f"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 6176,
+      "sha256": "9d08faa7cc7d7c7d446d8b32b4e659544da3d89b802c45e42e832291fbe08a76"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 6176,
+      "sha256": "9d08faa7cc7d7c7d446d8b32b4e659544da3d89b802c45e42e832291fbe08a76"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_error_preserves_specific_pre_submit_reason.json": {
+      "bytes": 3531,
+      "sha256": "6010c92b7e0fdc7a4a39970f4d857f72cc733322fa2f78ae3de999852629810a"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_error_preserves_specific_pre_submit_reason.json": {
+      "bytes": 3531,
+      "sha256": "6010c92b7e0fdc7a4a39970f4d857f72cc733322fa2f78ae3de999852629810a"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json": {
+      "bytes": 9175,
+      "sha256": "7f42512cba69015e821805b982838a8c12fc84226361f7b5a720ab47f6afc8c8"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json": {
+      "bytes": 9175,
+      "sha256": "7f42512cba69015e821805b982838a8c12fc84226361f7b5a720ab47f6afc8c8"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 6635,
+      "sha256": "3c2f4dc12938b5cc7f6fbf2e83599c6749668b65e7918fb6b0e287b3ade9fc3b"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 6635,
+      "sha256": "3c2f4dc12938b5cc7f6fbf2e83599c6749668b65e7918fb6b0e287b3ade9fc3b"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 6511,
+      "sha256": "95a01c0bb69ac6c8c9e2c76bb4ccf4a1d39e68be8f98f149a080d6a8c88daa7c"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 6511,
+      "sha256": "95a01c0bb69ac6c8c9e2c76bb4ccf4a1d39e68be8f98f149a080d6a8c88daa7c"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode-red.log": {
+      "bytes": 2880,
+      "sha256": "456154ba767e4a2407ca1761f34c62e8fe90732794d94d2004e6daa8c9d21c98"
+    },
+    "443bcbdf19ec3c81c1fc04dbc53a5a9a45ead609:docs/evidence/WMS-607/artmaks-http-test-contract-20261007/precode-red.log": {
+      "bytes": 2880,
+      "sha256": "456154ba767e4a2407ca1761f34c62e8fe90732794d94d2004e6daa8c9d21c98"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/before/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json": {
+      "bytes": 9175,
+      "sha256": "77a87a0f80b547ac7dcbf44c50c0ae1c30c3604746a4ec26f9f92ba2fddd5793"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/before/test_legacy_error_preserves_specific_pre_submit_reason.json": {
+      "bytes": 3531,
+      "sha256": "23be8ec4e861c71d44d638682d184bc1cb475fa08e41bd25be17ae53224573e7"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/before/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 6511,
+      "sha256": "5ad39aa72ae80ee06cadb81d651d4233b64e838996f927cc6c0d35715e4f78d5"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/before/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 6635,
+      "sha256": "90eefdc47849bbdef69606d91e0ff43d8f4025d090547ff7a1acb97bda952017"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/before/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 6176,
+      "sha256": "267ed5381f53b76a4a4cc45f517b686783f9a87d26bd33d320c4255dab17eceb"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/after/test_legacy_same_key_recovers_only_after_proven_pre_submit_failure.json": {
+      "bytes": 10535,
+      "sha256": "4bbdc735f828de00483038635959a97eb0abbbca9eea357a37432926d17ba934"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/after/test_legacy_error_preserves_specific_pre_submit_reason.json": {
+      "bytes": 3654,
+      "sha256": "d2ae8756079e1c863bdefb49e002612056666515811cfafa81bfc7d5b9ef5b4f"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/after/test_unknown_same_key_never_resubmits_after_queue_recovery.json": {
+      "bytes": 6511,
+      "sha256": "36eedfbd268cdd2812b6c7ee82a69bec67fcb1766c4cb9f49572212e7ad30af5"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/after/test_submitting_same_key_has_one_live_external_submission.json": {
+      "bytes": 6635,
+      "sha256": "89422ccbc083de1590607623a2df840d6d79e911ece938c0748d32a4da1d04b1"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/after/test_accepted_receipt_same_key_never_resubmits.json": {
+      "bytes": 6176,
+      "sha256": "8c9e8b53fdf8efb00c034681668481eb70e8f53b237c1e83215b6b465e7e3376"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/http-five-green.log": {
+      "bytes": 860,
+      "sha256": "6300c4a1d7465010dce8295e6b264233f4fc108e767d81deb72ab3619b6bd3be"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/frozen-six-green.log": {
+      "bytes": 1051,
+      "sha256": "ca2a2b21a1a207d87226aa987ab76390dd313bc21fb73b93a29bb322e86a4449"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/resolver-five-green.log": {
+      "bytes": 814,
+      "sha256": "fd4256052372d2065eca548bca13024906aa432dd41852b0010055801d2766e4"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/native-three-green.log": {
+      "bytes": 526,
+      "sha256": "5fe278ee57a7e9e4eda975eda28d9ea08de878c198ccae13e6d4ee4b53181697"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/developer-precode-red.log": {
+      "bytes": 2880,
+      "sha256": "60b06fc790592a00ef1adb0cc8938c7efc01ae22f0fe6356e32c9af0c1f79e6a"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/evidence/WMS-607/artmaks-http-repair-20261007/concurrent-http-recovery.json": {
+      "bytes": 16448,
+      "sha256": "0bce3c3b3c0bdea546525571626be60bc4b80e24b47d2d8420ac5d3a9e849b2c"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/reviews/2026-09-11-analyst-draft/owner-cases.md": {
+      "bytes": 10840,
+      "sha256": "54aa3a4f79b0e97eb0e397c03ef37410cd3bb86b7516bb49e188511910525c3e"
+    },
+    "4c532f0cccfb8f99b34d68d9630a3763038fbc5f:docs/reviews/2026-09-11-analyst-draft/owner-cases.md": {
+      "bytes": 10840,
+      "sha256": "54aa3a4f79b0e97eb0e397c03ef37410cd3bb86b7516bb49e188511910525c3e"
+    },
+    "dc652472d75812dbebc68ef4353a718b0f629cbe:docs/reviews/2026-09-11-analyst-draft/failure-cases.md": {
+      "bytes": 34888,
+      "sha256": "9d8ed7208873340f3b039de322bb009a4159e1c6eec2f2b2a7c5f53fd9d86dc4"
+    },
+    "4c532f0cccfb8f99b34d68d9630a3763038fbc5f:docs/reviews/2026-09-11-analyst-draft/failure-cases.md": {
+      "bytes": 34888,
+      "sha256": "9d8ed7208873340f3b039de322bb009a4159e1c6eec2f2b2a7c5f53fd9d86dc4"
+    }
+  },
+  "new_test_compile_browser_print_CI_runs": [],
+  "updater_R_U1_to_8_packages_install_physical_print_and_analyst_acceptance": "NOT approved by this review"
+}
