@@ -22,6 +22,7 @@ import {
   Typography,
 } from '@mui/material'
 import { apiUrl } from '../api'
+import { validateFbsPrintBindings } from '../screens/v2/fbsApi'
 import { resolveProductBarcodeSelection, type ProductBarcodeOption } from '../types/wbProductCatalog'
 import { plural } from '../utils/plural'
 import {
@@ -103,6 +104,8 @@ type FbsTapePrintOrder = {
   requires_honest_sign: boolean
   qr_asset: FbsTapeAsset | null
   printed_codes: Array<{
+    marking_id?: string | null
+    supply_id?: string | null
     id: string
     cis_code: string
     has_label_artifact: boolean
@@ -1098,7 +1101,13 @@ function MarkingPrintDialogContent({ open, reprint, ctx, busy, onBusyChange, onC
         fbsTapeBuildAbortRef.current = null
         setFbsTapeBuildProgress(null)
       }
-      await printTapeSections(sections, size)
+      const bindings = printsMarkingCodes ? result.orders.flatMap((order, index) =>
+        builtOrders[index]?.error ? [] : order.printed_codes.map((code) => ({
+          order_id: order.order_id, supply_id: code.supply_id,
+          marking_id: code.marking_id, cis_code: code.cis_code,
+        })),
+      ) : []
+      await printTapeSections(sections, size, () => validateFbsPrintBindings(ctx.token, bindings))
       for (const asset of builtOrders.flatMap((order) =>
         order.qrAssetToConfirm ? [order.qrAssetToConfirm] : [],
       )) {

@@ -64,6 +64,7 @@ class FbsScanAutoPrintTargetClaim:
     claimed: bool
     started: bool
     kiz: str | None = None
+    marking_id: uuid.UUID | None = None
 
 
 @dataclass(frozen=True)
@@ -103,6 +104,8 @@ def _selection_payload(
     reprint_chz: bool,
     await_honest_sign: bool,
 ) -> dict[str, object]:
+    from app.services.fbs_order_tape_print_service import order_requires_sgtin
+
     return {
         "kind": _EVENT_KIND,
         "barcode": barcode,
@@ -113,6 +116,7 @@ def _selection_payload(
         "print_chz": print_chz,
         "reprint_chz": reprint_chz,
         "await_honest_sign": await_honest_sign,
+        "requires_honest_sign": order_requires_sgtin(order),
     }
 
 
@@ -810,7 +814,9 @@ async def claim_reprint_kiz_recovery(
         # transport reconciles the job by the same key and never prints twice.
         own = state.active_claim == _target_attempt_digest(scan_id, "chz", key)
         if own and current is not None and current.id == state.active_marking_id:
-            return FbsScanAutoPrintTargetClaim(claimed=True, started=False, kiz=current.value)
+            return FbsScanAutoPrintTargetClaim(
+                claimed=True, started=False, kiz=current.value, marking_id=current.id,
+            )
         return FbsScanAutoPrintTargetClaim(claimed=False, started=False)
     candidate_marking_id = _candidate_reprint_marking_id(state)
     if (
@@ -849,6 +855,7 @@ async def claim_reprint_kiz_recovery(
         claimed=True,
         started=False,
         kiz=current.value,
+        marking_id=current.id,
     )
 
 
@@ -872,6 +879,28 @@ def _validate_attempt_key(attempt_key: str) -> str:
     if len(key) > 128:
         raise FbsScanAutoPrintError("print_claim_key_too_long")
     return key
+
+
+async def record_pool_print_target(
+    session: AsyncSession,
+    tenant_id: uuid.UUID,
+    supply_id: uuid.UUID,
+    scan_id: uuid.UUID,
+    marking_id: uuid.UUID,
+    *,
+    actor_user_id: uuid.UUID,
+) -> None:
+    # Existing event stream, one immutable prepared binding per scan. A new
+    # binding of the same CIS is a different generation, even on the same order.
+    await record_document_event(
+        session, tenant_id=tenant_id, document_type=DOCUMENT_TYPE_FBS_SUPPLY,
+        document_id=supply_id, event_type=EVENT_DATA_CHANGED, source=SOURCE_USER,
+        actor_user_id=actor_user_id,
+        payload_json={"kind": _BOUND_TARGET_EVENT_KIND, "scan_id": str(scan_id),
+                      "target": "chz",
+                      "marking_id": str(marking_id)},
+        idempotency_key=f"wms666-pool-print:{scan_id}",
+    )
 
 
 async def claim_scan_print_target(
@@ -899,6 +928,27 @@ async def claim_scan_print_target(
     )
     if state.started:
         return FbsScanAutoPrintTargetClaim(claimed=False, started=True)
+    current = None
+    if target == "chz":
+        current = await _current_reprint_marking(
+            session, tenant_id, supply_id, selection_event, for_update=True,
+        )
+        prepared = await session.scalar(select(DocumentEvent).where(
+            DocumentEvent.tenant_id == tenant_id,
+            DocumentEvent.document_id == supply_id,
+            DocumentEvent.idempotency_key == f"wms666-pool-print:{scan_id}",
+        ))
+        # An original no-marking response has no printable label: preserve its
+        # historical receipt lifecycle. Absence of a snapshot is never permission.
+        current_id = str(current.id) if current is not None else None
+        empty_original = (
+            prepared is None and current is None
+            and (selection_event.payload_json or {}).get("requires_honest_sign") is False
+        )
+        if not empty_original and (
+            prepared is None or current_id != (prepared.payload_json or {}).get("marking_id")
+        ):
+            raise FbsScanAutoPrintError("print_binding_changed")
     attempt_digest = _target_attempt_digest(scan_id, target, key)
     if state.active_claim is not None:
         return FbsScanAutoPrintTargetClaim(
@@ -920,7 +970,7 @@ async def claim_scan_print_target(
             "target": target,
             "action": "claim",
             "attempt_digest": attempt_digest,
-            "marking_id": None,
+            "marking_id": str(current.id) if current is not None else None,
         },
         idempotency_key=_target_event_key(
             scan_id, target, "claim", attempt_digest
