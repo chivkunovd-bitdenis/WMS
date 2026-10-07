@@ -11,9 +11,16 @@ await mkdir(evidence,{recursive:true})
 const seed = JSON.parse(await readFile(process.env.FBS_PICK_SEED || `${evidence}/seed.json`,'utf8'))
 const project = process.env.FBS_PICK_PROJECT
 assert(project?.startsWith('fbs-picking-'),'Require the runner-owned disposable compose project')
+assert(seed.picking && Object.keys(seed.picking).length>0,'Seed must contain at least one browser case')
+const requestedCases=process.env.FBS_PICK_CASES || ''
+const selected=requestedCases ? requestedCases.split(',').map(name=>name.trim()).filter(Boolean) : null
+if(selected) {
+  assert(selected.length>0,'Case selection must not be empty')
+  assert.equal(new Set(selected).size,selected.length,'Case selection must not contain duplicates')
+  for(const name of selected) assert(Object.hasOwn(seed.picking,name),`Unknown selected case: ${name}`)
+}
 const browser = await chromium.launch({headless:true})
 const results = []
-const selected = process.env.FBS_PICK_CASES?.split(',').filter(Boolean)
 let dbSequence = 0
 function snapshot() {
   const result = spawnSync('docker',['compose','--project-name',project,'-f','docker-compose.yml','-f','docker-compose.emulator.yml','-f','frontend/tests-e2e/fbs-picking/compose.yml','exec','-T','-e','FBS_PICK_DISPOSABLE=1','api','python','-m','tests.fbs_picking_browser_verify'],{input:JSON.stringify(seed),encoding:'utf8',timeout:30000,maxBuffer:8*1024*1024})
@@ -308,8 +315,10 @@ await run('get-failure',async(page,f)=>{
   await page.route('**/pick-options',r=>r.abort('failed'),{times:1})
   await scan(page,f.products[0].sku)
   await state('get-failure-committed',f,1)
-  await expect(screen(page)).toContainText(/сохранено.*не обновлён|Обновите страницу/i)
+  await expect(page.getByTestId('unload-pick-error')).toBeVisible()
+  await expect(page.getByTestId('unload-pick-error')).toHaveText('Снятие сохранено, список не обновлён. Обновите страницу.')
   await page.reload();await expect(qty(page,f)).toHaveValue('1')
+  await state('get-failure-reloaded-no-duplicate',f,1)
 })
 await run('network',async(page,f)=>{
   await source(page,f)
@@ -439,5 +448,6 @@ await run('focus',async(page,f)=>{
   await expect(qty(page,f)).toHaveValue('2')
 })
 await browser.close()
+assert.equal(results.length,selected ? selected.length : Object.keys(seed.picking).length,'Every selected/seeded case must produce a result')
 console.log(JSON.stringify({cases:results.length,passed:results.filter(r=>r.status==='passed').length,failed:results.filter(r=>r.status==='failed').length,preparefailure:results.filter(r=>r.status==='preparefailure').length}))
 process.exitCode=results.some(r=>r.status!=='passed')?1:0
