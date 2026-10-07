@@ -1,0 +1,32 @@
+
+> frontend@0.0.0 test:unit
+> vitest run src/utils/wms702ProductLabelGeometry.test.ts
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms702-wb-label-hotfix/frontend
+
+ ❯ src/utils/wms702ProductLabelGeometry.test.ts (1 test | 1 failed) 2400ms
+   × WMS-702 real ordinary WB label geometry > keeps every selected field visible, separated and readable in every stock size and both print documents 2399ms
+     → 58x40/seven-fields/ordinary: Бренд: ASVOYA must fit inside body: expected 149.671875 to be less than or equal to 135.44375
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  01:23:07
+   Duration  3.57s (transform 111ms, setup 0ms, collect 821ms, tests 2.40s, environment 0ms, prepare 72ms)
+
+
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  src/utils/wms702ProductLabelGeometry.test.ts > WMS-702 real ordinary WB label geometry > keeps every selected field visible, separated and readable in every stock size and both print documents
+AssertionError: 58x40/seven-fields/ordinary: Бренд: ASVOYA must fit inside body: expected 149.671875 to be less than or equal to 135.44375
+ ❯ src/utils/wms702ProductLabelGeometry.test.ts:148:80
+    146|           if (sample.data.wb_composition) expect(label.rows.map(row =>…
+    147|           for (const [index, row] of label.rows.entries()) {
+    148|             expect(row.bottom, `${context}: ${row.text} must fit insid…
+       |                                                                                ^
+    149|             expect(row.bottom, `${context}: ${row.text} must not touch…
+    150|             expect(row.font, `${context}: readable compact text`).toBe…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
