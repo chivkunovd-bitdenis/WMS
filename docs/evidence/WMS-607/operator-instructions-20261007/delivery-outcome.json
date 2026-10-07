@@ -1,0 +1,22 @@
+{
+  "chat_id": -5414355172,
+  "title": "Короб ВМС - ArtMaks",
+  "reply_to": "261",
+  "file_path": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-dom-ci/docs/WMS Print установка и сканирование.docx",
+  "file_name": "WMS Print установка и сканирование.docx",
+  "docx_sha256": "e0a83cc1ca39dcdf3aa273f0edc58fec0f2127a757b591a5aa60634517c2abe2",
+  "file_source_commit": "f3ade450f91d15025d1179996e0ecdb2b2d78459",
+  "verified_remote_commit": "f3ade450f91d15025d1179996e0ecdb2b2d78459",
+  "outbox_key": "WMS607-ArtMaks-DOCX-20261007-e0a83cc1ca39dcdf3aa273f0edc58fec0f2127a757b591a5aa60634517c2abe2",
+  "caption": "Обновлённая пошаговая инструкция для Mac и Windows. Используйте этот файл вместо предыдущего сообщения об обновлении",
+  "free_bytes": 322748416,
+  "prepared_at": "2026-10-07T07:30:36.163957+00:00",
+  "send_policy": "one exact durable row; root authorized final document; unknown outcome never automatically retried",
+  "status": "sent",
+  "telegram_message_id": "264",
+  "telegram_send_attempts": 1,
+  "durable_outbox_id": 731,
+  "sent_at": "2026-10-07T07:30:36.577303+00:00",
+  "durable_file_path": "/Users/deniscivkunov/Projects/WMS/.worktrees/night1007-684-dom-ci/docs/WMS Print установка и сканирование.docx",
+  "recipient_read_or_install_verified": false
+}
