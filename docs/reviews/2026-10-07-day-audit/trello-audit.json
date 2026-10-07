@@ -1,0 +1,132 @@
+{
+  "cards_total": 158,
+  "cards_active": 63,
+  "descriptions_verified": 11,
+  "moves_verified": 6,
+  "unexpected_changes": [],
+  "missing_cards": [],
+  "renames": 0,
+  "archives": 0,
+  "final_read_at_utc": "2026-10-07T18:56:27.558859+00:00",
+  "mutations": [
+    {
+      "url": "https://trello.com/c/mwiFNqio",
+      "name": "Единая упаковка FBS во всех входах, включая Ozon [WMS-666]",
+      "before_list": "6a1474262b8b5ac5177743e6",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "386fde16434664fdcc5b9037b8f51947085d00e5e4d75a11628ce9c128d20dc3",
+      "after_description_sha256": "286fbf7e898255e1c54a00e1d4eb9398165ca41f4ab24777dd00a1b3302f344c",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/7lxyaEEj",
+      "name": "WMS: задержки мешают подбору и инвентаризации [WMS-689]",
+      "before_list": "6a1474262b8b5ac5177743e6",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "fddbcd9cb5bb60bf132bf74647f53ee71c4baf8f998e6f72407d60129d304b9d",
+      "after_description_sha256": "912d00ea74da805b0ada7a30158f9c08fc5153c69f04f14299727abfd7f5603a",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/6ssA68L2",
+      "name": "Провести поставки, переданные через кабинет WB/Ozon, и списать точный состав [WMS-662]",
+      "before_list": "6a1474262b8b5ac5177743e6",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "1d7824eb4fb21d1df142b1123a370fdc7a9c06eac1529c6b7668f7706138f1c3",
+      "after_description_sha256": "091fddde46fbf4a66b7881e016c1e8844e58208e67f2c2692a0d92edb531b775",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/oyfKy6f1",
+      "name": "Все проданные КИЗ по отчёту продаж WB и подпись на Mac [WMS-517]",
+      "before_list": "6a1474262b8b5ac5177743e6",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "2a70e5750cc7a564f3c5eca85c24c0dd295af29f6e09978810cd9e5f1e52a43e",
+      "after_description_sha256": "fa0c555cb7f5b086652e151f2183516473cc090e716c21103ff730a8dc66aeb0",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/E46U7Ou9",
+      "name": "AVpack: вывести сегодня из оборота все проданные на WB КИЗ [WMS-665]",
+      "before_list": "6a1474262b8b5ac5177743e6",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "986b06f6ebe323bad71ee3b84be1a153106cf66cbb3f95961d5a518f9c3e5eb3",
+      "after_description_sha256": "168212c9c5548cddf1e6ea47f4c2a0b9f374b416faa5bbeb292c8ed5ed828218",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/NjAfu0XM",
+      "name": "Подбор FBS: сохранять ручное количество при быстром закрытии [WMS-693]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "dac31c2c91235082eaab5ae966e63f2091336b3f3e1bbbbd3e0dd3b3a60cf658",
+      "after_description_sha256": "17afba432f74d9a74a537fa6a932faf7a1aef2a5663f508bfdbf65714f8475d6",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/JDSwarFp",
+      "name": "Подбор FBS: не перезаписывать результат другого оператора [WMS-694]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "3f9db956c36a42e14abddfd8c531f767734af1432bacfd679776019e9d7dc1f1",
+      "after_description_sha256": "f328fc1e411a186ee5702d830f89cdf1c3f0a9287f0d02a3c1ee795abd810911",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/d0p8vfZE",
+      "name": "Общая сборка Ozon: показывать правильные артикулы и штрихкоды [WMS-695]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "071a3fe52884cee98050a71e6a073afbc1996a97eb687f15163263de312dd512",
+      "after_description_sha256": "b57912a9640881336a9789ff24aa8851f80b8affea9fa2bc68ab2ade1c639b61",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/KxsTN0X4",
+      "name": "Подбор FBS: читать штрихкоды со знаками в русской раскладке [WMS-696]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "ef49e9686843dfc5e721e9ee2ab110977070d68a5649422c185dd21549c19447",
+      "after_description_sha256": "3bebb767cf9ffe7c7edacf0421a058dea79fa85c82c4958ce423484a2d51ec5c",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/EZLCoCXL",
+      "name": "Общая сборка FBS: обновлять число после конфликта подбора [WMS-697]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "9feb416960f025b6848d17b5d8d7cf00f16cd1a5a98a764a31bab21b0f4e6849",
+      "after_description_sha256": "5bb67199f693384ddf13e52a8341a15c3b56879bd55658836d0d2ec0121c2a3f",
+      "exact_readback": true
+    },
+    {
+      "url": "https://trello.com/c/JM6WDF0E",
+      "name": "Лист подбора Ozon: печатать настоящий маршрут сдачи [WMS-698]",
+      "before_list": "6a14741a0fee7b427b6698e9",
+      "after_list": "6a1474262b8b5ac5177743e6",
+      "before_description_sha256": "69a3b7c1fa9f2c44d3cc4bf48b6c133acfa5e434324fab4f64d1b975b0cab6a8",
+      "after_description_sha256": "fff3a25398359b926f3d9a0b10f0020fabc46c97d8e362615e6b66842a3f795d",
+      "exact_readback": true
+    }
+  ],
+  "final_cards_total": 158,
+  "final_cards_active": 63,
+  "other_final_changes": [],
+  "preserved_cards": [
+    {
+      "url": "https://trello.com/c/jniiyB7y",
+      "unchanged": true,
+      "closed": true
+    },
+    {
+      "url": "https://trello.com/c/vvhKasVe",
+      "unchanged": true,
+      "closed": true
+    },
+    {
+      "url": "https://trello.com/c/0B4g5bcI",
+      "unchanged": true,
+      "closed": false
+    }
+  ]
+}

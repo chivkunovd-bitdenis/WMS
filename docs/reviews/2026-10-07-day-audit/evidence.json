@@ -1,0 +1,439 @@
+{
+  "scope": {
+    "day": "2026-10-07",
+    "timezone": "Asia/Tbilisi",
+    "production_mutations_during_audit": false,
+    "chat_messages": 418,
+    "chat_count": 6,
+    "artmaks_history_complete": false
+  },
+  "runtime": {
+    "checked_at_utc": "2026-10-07T18:44:44.025917+00:00",
+    "checkout_sha": "212f19d548496fef7baf75c83204b771e304281b",
+    "services": {
+      "celery_beat": {
+        "state": "running",
+        "started": "2026-10-07T17:25:13.098678056Z",
+        "revision": "212f19d548496fef7baf75c83204b771e304281b",
+        "compose_files": "/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml",
+        "command": [
+          "celery",
+          "-A",
+          "app.celery_app",
+          "beat",
+          "--loglevel=info"
+        ],
+        "catalog_schedule_logs": [
+          "[2026-10-07 18:17:00,000: INFO/MainProcess] Scheduler: Sending due task wb-catalog-hourly (wms.wb_catalog_hourly_sync)"
+        ]
+      },
+      "celery_worker": {
+        "state": "running",
+        "started": "2026-10-07T17:25:12.85138018Z",
+        "revision": "212f19d548496fef7baf75c83204b771e304281b",
+        "compose_files": "/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml"
+      },
+      "web": {
+        "state": "running",
+        "started": "2026-10-07T17:19:28.602153308Z",
+        "revision": "212f19d548496fef7baf75c83204b771e304281b",
+        "compose_files": "/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml"
+      },
+      "api": {
+        "state": "running",
+        "started": "2026-10-07T17:19:28.187903871Z",
+        "revision": "212f19d548496fef7baf75c83204b771e304281b",
+        "compose_files": "/opt/wms/docker-compose.prod.yml,/opt/wms/docker-compose.wms-host-8088.yml",
+        "files": {
+          "fbs_supply_service_sha256": "121bf60a2015c8a87fe80341178526d7d9c3d6b5c443f8c0398d58623fb65256",
+          "create_prefetch_wrapper": false,
+          "fbs_picking_print_sha256": "9f5e7e8bfc3db91fd4bc34a17dd45f85fb381e9f4e3d2669a7826c798c1a7fa0"
+        }
+      }
+    }
+  },
+  "github_prs": [
+    {
+      "checks": [
+        {
+          "conclusion": "SUCCESS",
+          "name": "baseline",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-checks",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-0",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-1",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "print-regressions",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "frontend-build",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "printer-windows",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backlog",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "охрана",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-proof",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        }
+      ],
+      "headRefOid": "1e14876e35f0f7202a4e3875082e95201af56b5b",
+      "mergeCommit": {
+        "oid": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f"
+      },
+      "mergedAt": "2026-10-07T03:29:46Z",
+      "number": 387,
+      "state": "MERGED",
+      "title": "WMS-652: обязательный CI и сохранённая защита выпуска",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/pull/387"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": "SUCCESS",
+          "name": "baseline",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-checks",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-0",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-1",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "print-regressions",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "frontend-build",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "wms686-mockup",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "printer-windows",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backlog",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "охрана",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-proof",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        }
+      ],
+      "headRefOid": "2bba49207b0606e76603dd42fd914ed606b69244",
+      "mergeCommit": {
+        "oid": "a5df04f1560de0eaaf855199065936cb22a222b1"
+      },
+      "mergedAt": "2026-10-07T07:06:12Z",
+      "number": 393,
+      "state": "MERGED",
+      "title": "WMS-652: ночной выпуск склада и постоянной CI-защиты",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/pull/393"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": "FAILURE",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "baseline",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "packing-stickers",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-checks",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-0",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-shard-1",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "print-regressions",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "frontend-build",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "wms686-mockup",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "printer-windows",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backlog",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "охрана",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SKIPPED",
+          "name": "process-proof",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        }
+      ],
+      "headRefOid": "ce21139142a855ecb9c73cf85e55f5bbfb5b9051",
+      "mergeCommit": null,
+      "mergedAt": null,
+      "number": 402,
+      "state": "OPEN",
+      "title": "WMS-666: получать стикеры WB при открытии обычной упаковки",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/pull/402"
+    },
+    {
+      "checks": [
+        {
+          "conclusion": "FAILURE",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "baseline",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "packing-stickers",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backend-checks",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "backend-shard-0",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "backend-shard-1",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "print-regressions",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "frontend-build",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "wms686-mockup",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "printer-windows",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SUCCESS",
+          "name": "backlog",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "охрана",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "backend",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "SKIPPED",
+          "name": "process-proof",
+          "status": "COMPLETED"
+        },
+        {
+          "conclusion": "FAILURE",
+          "name": "process-integrity",
+          "status": "COMPLETED"
+        }
+      ],
+      "headRefOid": "48eb1d0c2f283abab47980e8c6c36d6369d40aaf",
+      "number": 403,
+      "state": "OPEN",
+      "title": "WMS-666: получать стикеры WB до листа подбора",
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/pull/403"
+    }
+  ],
+  "runtime_commit_actions_runs": [],
+  "hash_comparison": {
+    "fbs_supply_service": {
+      "runtime_212f19d": "121bf60a2015c8a87fe80341178526d7d9c3d6b5c443f8c0398d58623fb65256",
+      "released_1ea27a43_and_48eb1d0c": "5b726c31fc3833891e1cd803e9134966a976a0841b67efa17f903d84b9f1472f"
+    },
+    "fbs_picking_print_service": {
+      "runtime_212f19d_and_released_1ea27a43": "9f5e7e8bfc3db91fd4bc34a17dd45f85fb381e9f4e3d2669a7826c798c1a7fa0"
+    }
+  },
+  "financial_reconciliation": {
+    "seller": "ИП Горячкина / AVpack",
+    "handed_codes": 300,
+    "eligible_after_five_defects": 295,
+    "current_registry": 110,
+    "registry_oct_1_7_handover": 29,
+    "weekly_finance_rows": 2448,
+    "daily_finance_rows": 2837,
+    "daily_finance_sale_rows": 225,
+    "daily_finance_return_rows": 15,
+    "daily_finance_latest_rr_date": "2026-10-06",
+    "financial_field_kiz_present": false,
+    "full_response_without_field_selection_checked": true,
+    "joined_by": "order srid, not KIZ",
+    "current_registry_orders_matched_financial_sale": 104,
+    "operative_only_oct7_sales": 6,
+    "financial_net_sale_orders_in_handed_set": 105,
+    "financial_sale_order_excluded_by_operative_return_oct7": 1,
+    "real_signature_verified": false,
+    "crpt_acceptance_verified": false
+  },
+  "picking_fixes": {
+    "tasks": [
+      "WMS-693",
+      "WMS-694",
+      "WMS-695",
+      "WMS-696",
+      "WMS-697",
+      "WMS-698"
+    ],
+    "implementation_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+    "ci_url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37658991662",
+    "ci_conclusion": "success",
+    "browser_cases": 69,
+    "production_deployed": false
+  }
+}
