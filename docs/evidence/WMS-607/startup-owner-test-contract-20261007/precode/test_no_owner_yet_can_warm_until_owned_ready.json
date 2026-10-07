@@ -1,0 +1,40 @@
+{
+  "case": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+  "base": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "mode": "warming",
+  "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+  "functions_sha256": "97d6d581a395bae92026c4b51a44de25b4fc6bc4efb990c982fd07f2f3af6376",
+  "json_helper_sha256": "1af5ae761c1dd97c76fb7914d44d693c02edb1aba7593ead9e6902f22fd41ac5",
+  "test_sha256": "b262fb579e4a5c082ed1faff53172707ff2eedb0a93e880ca0df68cf65d436fc",
+  "native_exit": 0,
+  "stdout": "startup_returned=0\n",
+  "stderr": "",
+  "events": [
+    "lsof",
+    "nohup|$CASE/app/wms-print --updater-start $CASE/state",
+    "lsof",
+    "no-owner-yet",
+    "startup-sleep",
+    "lsof",
+    "ps|owned|42424242",
+    "lsof",
+    "curl|health200",
+    "ps|owned|42424242",
+    "readiness",
+    "launcher-released"
+  ],
+  "app_unchanged": true,
+  "state_unchanged": true,
+  "intent_unchanged": true,
+  "before": {
+    "app": {
+      "wms-print": "de7a666799d76b518d605b0a6044eb978580efd8269a91918648c84c45e4d280"
+    },
+    "state": {
+      "jobs-v2/accepted.json": "0063a3ff0245da7077788212eeecc558419afc8311c75531d689a77857aff01d",
+      "jobs-v2/unknown.json": "9d315587c2e912af817c27ab02024c75c7398c1081e5f6095efb761d386bfeb8"
+    }
+  },
+  "health200_available": true,
+  "fixture_launcher_released": true
+}

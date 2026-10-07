@@ -1,0 +1,15 @@
+test_no_owner_yet_can_warm_until_owned_ready (__main__.StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready) ... FAIL
+
+======================================================================
+FAIL: test_no_owner_yet_can_warm_until_owned_ready (__main__.StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_start_owner_contract.py", line 161, in test_no_owner_yet_can_warm_until_owned_ready
+    self.assertEqual(actual['native_exit'],0,actual['stderr'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : 
+
+----------------------------------------------------------------------
+Ran 1 test in 0.029s
+
+FAILED (failures=1)

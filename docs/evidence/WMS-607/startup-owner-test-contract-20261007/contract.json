@@ -1,0 +1,229 @@
+{
+  "task": "WMS-607",
+  "role": "separate testwriter",
+  "model": "gpt-6.1-sol",
+  "effort": "high",
+  "session": "01a11389-3a47-7ec0-b74c-b8d920bfcca8",
+  "base": "a04a7b35f1e866c1283bdc46fff2d41eaf68b4d6",
+  "requirements": [
+    "R-U4",
+    "R-U5"
+  ],
+  "check": "U-C4",
+  "classification": "\u043d\u0430\u0432\u0441\u0435\u0433\u0434\u0430",
+  "additive_only": true,
+  "immutable_for_developer": true,
+  "suite": {
+    "format": "junit",
+    "name": "WMS607.startupOwner",
+    "exact": true,
+    "count": 3,
+    "xml_ids": [
+      "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+      "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+      "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation"
+    ],
+    "skip_or_error_is_not_acceptance": true
+  },
+  "raw_report_command": "WMS607_START_OWNER_RAW=<owned-raw-dir> python3 -B tools/print-agent/test_macos_direct_updater_start_owner_contract.py --report <owned-report-dir>/startup-owner.xml",
+  "precode_command": "WMS607_START_OWNER_RAW=docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode python3 -B tools/print-agent/test_macos_direct_updater_start_owner_contract.py --report docs/evidence/WMS-607/startup-owner-test-contract-20261007/precode.xml",
+  "source": {
+    "path": "tools/print-agent/update_macos_direct.sh",
+    "git_blob": "b1274bf3f01d07e30209a2b9d40c2315a03d6b0c",
+    "sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed"
+  },
+  "test": {
+    "path": "tools/print-agent/test_macos_direct_updater_start_owner_contract.py",
+    "sha256": "b262fb579e4a5c082ed1faff53172707ff2eedb0a93e880ca0df68cf65d436fc"
+  },
+  "precode": {
+    "total": 3,
+    "PASS": 2,
+    "target_behavior_FAIL": 1,
+    "ERROR": 0,
+    "SKIP": 0,
+    "runner_exit": 1,
+    "cases": [
+      {
+        "id": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_confirmed_foreign_owner_aborts_without_later_startup_wait_or_poll",
+        "assertion": "FAIL",
+        "startup_exit": 1,
+        "event_counts": {
+          "lsof": 51,
+          "ps|foreign|42424242": 50,
+          "ps|owned|42424242": 0,
+          "startup-sleep": 50,
+          "curl|health200": 0,
+          "readiness": 0
+        }
+      },
+      {
+        "id": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_no_owner_yet_can_warm_until_owned_ready",
+        "assertion": "PASS",
+        "startup_exit": 0,
+        "event_counts": {
+          "lsof": 4,
+          "ps|foreign|42424242": 0,
+          "ps|owned|42424242": 2,
+          "startup-sleep": 1,
+          "curl|health200": 1,
+          "readiness": 1
+        }
+      },
+      {
+        "id": "test_macos_direct_updater_start_owner_contract.StartupOwnerContract::test_owned_healthy_start_succeeds_with_real_health_validation",
+        "assertion": "PASS",
+        "startup_exit": 0,
+        "event_counts": {
+          "lsof": 3,
+          "ps|foreign|42424242": 0,
+          "ps|owned|42424242": 2,
+          "startup-sleep": 0,
+          "curl|health200": 1,
+          "readiness": 1
+        }
+      }
+    ]
+  },
+  "closure": [
+    {
+      "path": "tools/print-agent/test_macos_direct_updater_start_owner_contract.py",
+      "bytes": 10150,
+      "sha256": "b262fb579e4a5c082ed1faff53172707ff2eedb0a93e880ca0df68cf65d436fc"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/source-probe.py",
+      "bytes": 5068,
+      "sha256": "ac52bd913ae6b60faad605d07f8bfe31d63340cdee5cc19148be0b6e69a8bf72"
+    },
+    {
+      "path": "docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-control.py",
+      "bytes": 2574,
+      "sha256": "927e9c57c268a8ea1b9d4eb143926888b5c1adc885faecd334659f79c97f7670"
+    }
+  ],
+  "actual_boundary": "unchanged source block port_pid() through start_owned() plus exact json() helper; actual shell classification/control flow and temporary work/state files",
+  "controlled_external": [
+    "lsof",
+    "ps",
+    "curl",
+    "nohup launcher FIFO fixture",
+    "sleep",
+    "readiness executable fixture",
+    "kill signals forbidden/logged"
+  ],
+  "not_substituted": [
+    "owned_pid/process_matches/health_ok/start_owned decisions",
+    "native macOS plutil",
+    "builtin kill-0 for harmless external launcher child",
+    "source wait/loop code"
+  ],
+  "target_expectations": [
+    "confirmed foreign owner: immediate truthful nonzero",
+    "no later startup wait/poll after foreign identity confirmed",
+    "no accepted foreign health200",
+    "no signal to foreign owner",
+    "current files/journal/intent preserved"
+  ],
+  "preservation": [
+    "owned healthy succeeds with actual health and readiness checks",
+    "no owner yet may warm until owned ready without numeric window requirement"
+  ],
+  "copy_controls": {
+    "controls": [
+      {
+        "case": "StartupOwnerContract.test_owned_healthy_start_succeeds_with_real_health_validation",
+        "name": "healthy-rejected",
+        "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+        "copy_sha256": "25d3f01ced49ff68dfe559a168ef757fb9c8a558e36a6a91fadb49515ed13234",
+        "replacement": [
+          "        if health_ok \"${1:-target}\"; then return 0; fi\n",
+          "        if health_ok \"${1:-target}\"; then return 1; fi # COPY: reject actual healthy result\n"
+        ],
+        "native_test_exit": 1,
+        "meaningful_assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      },
+      {
+        "case": "StartupOwnerContract.test_no_owner_yet_can_warm_until_owned_ready",
+        "name": "warming-rejected",
+        "source_sha256": "89b3f02b4ef80a3ad1703aff4a1c4f3e89b76c4040b41c2b5595e7fc745e31ed",
+        "copy_sha256": "8c6ae8d7623e73fa5ed3c69416e9ac3eacc4fd723be76afb53ba2488be7f2f47",
+        "replacement": [
+          "        sleep 0.05\n    done\n    printf '%s\\n' 'Start/readiness failed.",
+          "        return 1 # COPY: refuse no-owner warmup\n    done\n    printf '%s\\n' 'Start/readiness failed."
+        ],
+        "native_test_exit": 1,
+        "meaningful_assertion_FAIL": true,
+        "ERROR": 0,
+        "SKIP": 0
+      }
+    ],
+    "copies_removed": true,
+    "tracked_source_unchanged": true
+  },
+  "mutation_control_command": "python3 -B docs/evidence/WMS-607/startup-owner-test-contract-20261007/mutation-control.py",
+  "old10_rollback4_existing19_unchanged": true,
+  "old15second_deadline_unchanged": true,
+  "product_requirements_CI_untouched": true,
+  "historical_receipts": {
+    "commit": "71640d0c1160049f085bc6b524581ff25a804b1c",
+    "manifest_sha256": "ee23c3cee1b1334531367f9c46f6eed75af27b289a7b69329f565bdb1be7b20c",
+    "run_id": 37579919987,
+    "attempt": 1,
+    "xml_members": [
+      {
+        "architecture": "arm64",
+        "path": "docs/evidence/WMS-607/mac-package-37579919987/raw/arm64/_temp/wms607-package/existing.xml",
+        "sha256": "b6029f695e3948668ff62d586d3cc3e6887ece97f2a62c30c050d35ac88a9eee",
+        "suite": {
+          "name": "WMS607.existingMacContracts",
+          "tests": "19",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        }
+      },
+      {
+        "architecture": "arm64",
+        "path": "docs/evidence/WMS-607/mac-package-37579919987/raw/arm64/_temp/wms607-package/stop.xml",
+        "sha256": "ed56bad50f9ba15af090d5ca615e81fb908ce79b2c89ec4a4121a93a991b93e1",
+        "suite": {
+          "name": "WMS607.updaterRollbackStop",
+          "tests": "4",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        }
+      },
+      {
+        "architecture": "arm64",
+        "path": "docs/evidence/WMS-607/mac-package-37579919987/raw/arm64/_temp/wms607-package/updater.xml",
+        "sha256": "d4e52cc079874ff7256be6130e647668dd0d1b897a620b1b56c580db3e011d6b",
+        "suite": {
+          "name": "WMS607.directMacUpdater",
+          "tests": "10",
+          "failures": "0",
+          "errors": "0",
+          "skipped": "0"
+        }
+      },
+      {
+        "architecture": "x86_64",
+        "path": "docs/evidence/WMS-607/mac-package-37579919987/raw/x86_64/_temp/wms607-package/updater.xml",
+        "sha256": "cf1c1c1fc8b8057d83615f5f44baf15d3836e7c746ed2cbd47e9261a3c928f9b",
+        "suite": {
+          "name": "WMS607.directMacUpdater",
+          "tests": "10",
+          "failures": "0",
+          "errors": "1",
+          "skipped": "0"
+        }
+      }
+    ],
+    "historical_Intel_CPU_timing_cause_proven": false
+  },
+  "historical_Intel_timing_cause_proven": false,
+  "implementation_or_acceptance_claimed": false
+}

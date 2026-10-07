@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="WMS607.startupOwner" tests="1" failures="1" errors="0" skipped="0"><testcase classname="test_macos_direct_updater_start_owner_contract.StartupOwnerContract" name="test_no_owner_yet_can_warm_until_owned_ready"><failure>Traceback (most recent call last):
+  File "/Users/deniscivkunov/Projects/WMS/.worktrees/wms652-final-source-pin-review/tools/print-agent/test_macos_direct_updater_start_owner_contract.py", line 161, in test_no_owner_yet_can_warm_until_owned_ready
+    self.assertEqual(actual['native_exit'],0,actual['stderr'])
+    ~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+AssertionError: 1 != 0 : 
+</failure></testcase></testsuite>
