@@ -1,0 +1,10 @@
+{
+  "source": "e77eeba5890dadb7f201dcb76b9bf71e52d916ca",
+  "protected_files": 282,
+  "suites": 29,
+  "all_hashes_match": true,
+  "all_previous_cases_and_suite_semantics_preserved": true,
+  "P_to_P2_runtime_paths": [
+    "frontend/src/screens/v2/fbsUx.ts"
+  ]
+}
