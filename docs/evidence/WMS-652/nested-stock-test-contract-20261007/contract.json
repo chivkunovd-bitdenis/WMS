@@ -1,0 +1,98 @@
+{
+  "task": "WMS-652",
+  "role": "separate Sol6.1/high TESTWRITER",
+  "base": "31cd68fd70791a7433562dc2495a7d67e969d840",
+  "requirements_commit": "476d206dc791799f88714012093c1ec315885fba",
+  "requirements": "R52/C66-C68, published before this contract; separate analyst session01a11390",
+  "case_ids": [
+    "tests/test_stock_publish_nested_commit_contract.py::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+    "tests/test_stock_publish_nested_commit_contract.py::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+    "tests/test_stock_publish_nested_commit_contract.py::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+    "tests/test_stock_publish_nested_commit_contract.py::test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+  ],
+  "xml_ids": [
+    "tests.test_stock_publish_nested_commit_contract::test_c66_native_savepoint_commit_keeps_intent_without_dispatch",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+    "tests.test_stock_publish_nested_commit_contract::test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+    "tests.test_stock_publish_nested_commit_contract::test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+  ],
+  "check_mapping": {
+    "C66": [
+      "test_c66_native_savepoint_commit_keeps_intent_without_dispatch"
+    ],
+    "C67": [
+      "test_c67_saved_nested_intent_dispatches_once_at_native_outer_commit",
+      "test_c67_ordinary_native_outer_commit_coalesces_duplicates_once"
+    ],
+    "C68": [
+      "test_c68_native_outer_rollback_after_savepoint_never_dispatches"
+    ]
+  },
+  "local_sparse_command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B docs/evidence/WMS-652/nested-stock-test-contract-20261007/run-target.py",
+  "ordinary_preservation_mutation_command": "/Users/deniscivkunov/Projects/WMS/backend/.venv/bin/python -B docs/evidence/WMS-652/nested-stock-test-contract-20261007/run-target.py --ordinary-dispatch-mutation",
+  "ci_integration": {
+    "suite": "backend-fbs",
+    "existing_report": "backend-all.xml",
+    "format": "junit",
+    "exact": false,
+    "additive_cases": 4,
+    "workflow_command_change": false
+  },
+  "source_closure": [
+    "backend/tests/test_stock_publish_nested_commit_contract.py",
+    "backend/app/services/fbs_stock_publish_service.py",
+    "backend/tests/conftest.py",
+    "backend/pyproject.toml",
+    "backend/uv.lock"
+  ],
+  "source_closure_sha256": {
+    "backend/tests/test_stock_publish_nested_commit_contract.py": "c079c0a9ee7c1f904e9db83632c59814e3e5ae74f7a3e91f5ab8394c0325711a",
+    "backend/app/services/fbs_stock_publish_service.py": "f9ba73fde595329875c8f8be80ba7b4f63eb9ddd0837c47e0a90f9dd3033b996",
+    "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
+    "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
+    "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e"
+  },
+  "transitive_import_source_tree": {
+    "path": "backend/app",
+    "git_tree": "366c000e6fb485bf62061739eea0e63c6cbe4ef7",
+    "note": "Entire actual app import tree archived without modifications into temporary local source copy; no dependencies copied or installed."
+  },
+  "local_runner": "docs/evidence/WMS-652/nested-stock-test-contract-20261007/run-target.py",
+  "local_runner_sha256": "65bc8ec69b7f6ae23d0b184fe959f584e6b6c2f641e512c6c84cc7204dfcec17",
+  "before": {
+    "raw_xml": "before.xml",
+    "raw_log": "before.log",
+    "executed": 4,
+    "pass": 1,
+    "fail": 3,
+    "skip": 0,
+    "error": 0,
+    "exit_code": 1
+  },
+  "green_case_proof": {
+    "case": "test_c67_ordinary_native_outer_commit_coalesces_duplicates_once",
+    "raw_xml": "ordinary-mutation.xml",
+    "raw_log": "ordinary-mutation.log",
+    "mutation": "Early return added only in copied production after_commit callback; ordinary native outer commit no longer dispatches.",
+    "executed": 1,
+    "pass": 0,
+    "fail": 1,
+    "skip": 0,
+    "error": 0,
+    "deselected": 3,
+    "exit_code": 1,
+    "copy_removed": true
+  },
+  "stash": {
+    "name": "WMS-652 interrupted backup-portability ledger contract draft 20261007",
+    "sha": "b396ded869bc8932ad25dc448b5f7163aa62a2f7",
+    "retained": true,
+    "integrated": false
+  },
+  "limits": [
+    "No nested rollback requirement or test added. Existing rollback callback unchanged.",
+    "No provider, worker, actual application DB, product edit, fixture disabling, sleep or retry.",
+    "Historical SQLite lock owner remains UNKNOWN. Local contract does not claim full CI, acceptance or SOURCE approval.",
+    "Requirements test-column wiring and additive backend suite registration remain integrator-owned."
+  ]
+}
