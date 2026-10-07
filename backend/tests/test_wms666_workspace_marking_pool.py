@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import timedelta
+from unittest.mock import AsyncMock
 
 import pytest
 from httpx import AsyncClient
@@ -14,6 +15,8 @@ from app.models.fbs_order import FbsOrder, FbsOrderMarking
 from app.models.fbs_supply import FbsSupply
 from app.models.marking_code import STATUS_AVAILABLE, MarkingCode
 from app.models.product import Product
+from app.services import fbs_order_tape_print_service as tape
+from tests.test_fbs_kiz import _patch_wb_acceptance
 from tests.test_fbs_order_tape_concurrency import stock_snapshot
 from tests.test_fbs_picking import (
     _create_product,
@@ -152,6 +155,7 @@ async def test_bare_workspace_reports_current_pool_per_product_and_seller(
 @pytest.mark.asyncio
 async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task(
     async_client: AsyncClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     headers, suffix, tenant_id = await _register_ff_admin(async_client)
     seller_id, warehouse_id, location_id = await _create_seller_and_warehouse(
@@ -172,6 +176,10 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
         suffix=f"t{suffix}",
         order_count=1,
         pool_count=2,
+    )
+    sent_values = _patch_wb_acceptance(monkeypatch)
+    monkeypatch.setattr(
+        tape.marking_svc, "require_marketplace_token", AsyncMock(return_value="test"),
     )
     before_stock = await stock_snapshot()
     async with SessionLocal() as session:
@@ -205,6 +213,7 @@ async def test_bare_supply_manual_tape_allocates_pool_cis_without_packaging_task
     printed = body["orders"][0]["printed_codes"]
     assert len(printed) == 1
     assert printed[0]["cis_code"] == body["orders"][0]["codes"][0]
+    assert sent_values == {700001: printed[0]["cis_code"]}
     binding = {
         "order_id": str(order_ids[0]),
         "supply_id": str(supply_id),
