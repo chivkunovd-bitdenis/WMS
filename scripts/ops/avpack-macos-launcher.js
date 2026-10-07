@@ -7,7 +7,7 @@
 })(typeof globalThis === 'undefined' ? this : globalThis, function buildMacLauncher() {
   const TARGET_URL = 'https://wms.sellerfocus.pro/seller/honest-sign/withdrawals';
   const RUN_MARKER = '__WMS665_MAC_RUN__';
-  const DEFAULT_MAX_POLLS = 120;
+  const DEFAULT_MAX_POLLS = 2400;
 
   class MacLauncherError extends Error {
     constructor(message) {
@@ -94,9 +94,12 @@
 ${helperSource}
         const helperApi = globalThis.AvpackSoldKizFilter;
         if (!helperApi || typeof helperApi.createHelper !== 'function') throw new Error('helper unavailable');
-        const browserHelper = helperApi.createHelper();
+        const browserHelper = helperApi.createHelper({ assertActive: () => {
+          if (globalThis[marker]?.status !== 'running') throw new Error('run cancelled');
+        } });
         if (!browserHelper || typeof browserHelper.run !== 'function') throw new Error('runner unavailable');
         Promise.resolve(browserHelper.run({ mode: 'execute' })).then((result) => {
+          if (globalThis[marker]?.status !== 'running') return;
           if (result && result.status === 'certificate_dialog_open' && Number.isSafeInteger(result.targetCount) && result.targetCount > 0 && result.noSend === true && result.signed === false && result.sent === false) {
             globalThis[marker] = { status: 'certificate_dialog_open', targetCount: result.targetCount, noSend: true, signed: false, sent: false };
           } else {
@@ -133,7 +136,7 @@ ${helperSource}
     if (typeof helperSource !== 'string' || helperSource.length === 0 || typeof wait !== 'function') {
       throw fail('Встроенный помощник повреждён. Запуск не выполнялся.');
     }
-    if (!Number.isInteger(maxPolls) || maxPolls < 1 || maxPolls > 600) {
+    if (!Number.isInteger(maxPolls) || maxPolls < 1 || maxPolls > 2400) {
       throw fail('Некорректный предел ожидания. Запуск не выполнялся.');
     }
 
@@ -174,7 +177,13 @@ ${helperSource}
       if (state?.status === 'certificate_dialog_open') return state;
       if (state?.status === 'error') throw fail('Помощник безопасно остановился. Подпись и отправка не выполнялись.');
     }
-    throw fail('Время ожидания истекло. Автоматический повтор отключён; текущий запуск в этой вкладке не запускайте повторно.');
+    evaluateSafely(chrome, tabId, `(() => {
+      /* WMS517_CANCEL */
+      const state = globalThis.${RUN_MARKER};
+      if (state?.status === 'running') globalThis.${RUN_MARKER} = { status: 'error', signed: false, sent: false };
+      return JSON.stringify({ status: 'error', signed: false, sent: false });
+    })()`);
+    throw fail('Время ожидания истекло. Подготовка отменена, подпись и отправка не выполнялись. Автоматический повтор отключён; перезагрузите вкладку перед новой попыткой.');
   }
 
   return Object.freeze({ launch });
