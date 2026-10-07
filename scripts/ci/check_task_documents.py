@@ -15,6 +15,11 @@ CONTRACT_CORRECTIONS_DIR = "docs/reviews/contract-corrections"
 # decorators, imports and control flow. Changing even one other byte is denied.
 # New pairs require a process change with RED regressions and independent review.
 FIXTURE_BLOB_PAIRS = {
+    "wms662-confirmed-wait-pid-pair": (
+        "WMS-662", "backend/tests/test_wms662_cancellation_lock_order.py",
+        "596edfbd0a4b47c61556ffedf38e8c2488fc43f0",
+        "bf7c850d9c7948ffd3b7cef5cbea9b3c1404923e",
+    ),
     "wms517-uuid-before-rollback": (
         "WMS-517", "backend/tests/test_wms517_sales_contract.py",
         "a36ab064c9a70b8c3df472f176e4e5ba9d567fcb",

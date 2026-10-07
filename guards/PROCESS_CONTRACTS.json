@@ -232,7 +232,7 @@
     "frontend/src/sections/CatalogSection.wms654.test.tsx": "1dea22b72f6b8f8528d32ecf7835fcb1ad3b60ed95a82f4e3af7f19cf37b1ab6",
     "frontend/src/screens/ff/warehouse-map/CreateCellDialog.wms654-legacy.test.tsx": "66fba7e96a7e11c87a5ea1b7950c43ca7a97f8b2c76d152c068cd2e492dbd51a",
     "frontend/src/screens/ff/warehouse-map/FfWarehouseMapPage.wms654-suggestion.test.tsx": "b867cbaa669772a2d5b035265b802926f55c02e24e32b4c6a1a81be5cf372bfc",
-    "scripts/ci/check_task_documents.py": "c8693fce22b6631f917d8c00879154eec58130514a7db58e56572a6adc75aa1b",
+    "scripts/ci/check_task_documents.py": "97cbb82efa207565b1375b8d0c3d81ff9803fbd3296f77c1f93c6c084a0c1cbc",
     "scripts/ci/test_check_task_documents.py": "a09cab8829cd79eb4fcb96a4c993ad92388b4c6df35ad4112c349e66ee081111",
     "scripts/ci/tests/fixtures/wms652_exact_reviewed_correction_chains.json": "0c5880a3cb800d50582c42eede5b73a690a95f54538ef057a50940d40f97cdeb",
     "frontend/src/screens/ff/FfInboundRequestView.wms684.pdf.test.tsx": "3fbd20b458e1f1752b515880f760cf7513df8c0b9eeda7d4f9baf34793cb8a7f",
