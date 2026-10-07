@@ -145,7 +145,7 @@ metadata_ok() {
 }
 health_ok() {
     local pid value queue
-    pid=$(owned_pid) || return 1
+    pid=$(owned_pid) || return $?
     [ "$pid" = "$(port_pid)" ] || return 1
     value=$(curl --fail --silent --show-error --max-time 2 http://127.0.0.1:17843/health) || return 1
     printf '%s' "$value" > "$work/health.json"
@@ -163,12 +163,16 @@ health_ok() {
     fi
 }
 start_owned() {
-    local i child child_status=0
+    local i child child_status=0 health_status=0
     [ -z "$(port_pid)" ] || return 1
     nohup "$app_dir/wms-print" --updater-start "$state_dir" > "$work/start.log" 2>&1 < /dev/null &
     child=$!
     for ((i=0; i<50; i++)); do
-        if health_ok "${1:-target}"; then return 0; fi
+        if health_ok "${1:-target}"; then return 0; else health_status=$?; fi
+        if [ "$health_status" = 2 ]; then
+            printf '%s\n' 'Port 17843 belongs to a foreign executable; startup aborted without further waiting or signaling it.' >&2
+            return 1
+        fi
         if ! builtin kill -0 "$child" 2>/dev/null; then
             wait "$child" || child_status=$?
             [ "$child_status" = 0 ] || break
