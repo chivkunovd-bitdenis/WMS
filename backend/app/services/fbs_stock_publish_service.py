@@ -344,6 +344,8 @@ def schedule_seller_stock_publish(
 
     @event.listens_for(sync_session, "after_commit")
     def _after_commit(_session: object) -> None:
+        if sync_session.in_nested_transaction():
+            return
         queued = session.info.get(_PENDING_KEY)
         if not queued:
             return
