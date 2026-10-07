@@ -6,6 +6,7 @@ job the external printer already accepted, nor make HTTP and OS dispatch atomic.
 from __future__ import annotations
 
 import uuid
+from collections.abc import Sequence
 from dataclasses import dataclass
 
 from sqlalchemy import select
@@ -32,7 +33,7 @@ class PrintBinding:
 
 
 def current_ozon_print_marking_ids(
-    markings: list[FbsOrderMarking], quantity: int,
+    markings: Sequence[FbsOrderMarking], quantity: int,
 ) -> set[uuid.UUID]:
     """Choose the newest printable generation per Ozon exemplar.
 
