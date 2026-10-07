@@ -614,7 +614,7 @@ Owner explicitly resumed printing work and authorized delivery of verified instr
 Separate675 read-only collection17053 has31HTTP200 cards/11SELECTs and current26positive/12conducted/missing14; fivecancelled excluded, old22billingIDs/11facts preserved. Reservation cache14 vs native rows0 must be checked under normal locks before any native recovery. Collector has no mutation authority, no repair yet. This lane does not delay607.
 
 
-## Checkpoint 06:51 UTC: startup correction reviewed; final accepted package source being filled
+## Checkpoint 06:44 UTC: startup correction reviewed; final accepted package source being filled
 
 607 product7bbcdd8a8aba9fd44dd4ee4ce2dbdee5af26b880/receipts7cf184f80846eb500753998b27d8b04d04c0a536: new3+old14+19=36PASS, no failures/errors/skips, old15s/tests unchanged. Independentreview74000fb4aa9faa1e30ed4a376436054d7d0de6c4 PASS/new3independentPASS. Same distinctreplacementanalyst01a11390 active45036 fills boundedU-C4/doccells; final acceptedSHA pending, isolatedharness updatedadditive3/rawstrictIDs, dispatch immediately afteractualacceptedpin. No Inteltimeoutwaiver/broad diagnostic. Exact ArtMaks group-5414355172 verifiedowner689889703 message161 andnormalgetChat title Короб ВМС - ArtMaks, identityproof saved; sent0, delivery after bothfinalpackages/publichashverifiedcommand.
 
