@@ -298,12 +298,18 @@ export function SellerKizWithdrawalScreen({
   // every optimistic post-signature update bumps it, so any response that started
   // before the bump is discarded on write instead of overwriting fresher rows.
   const requestVersionRef = useRef(0)
+  const foregroundLoadingRef = useRef(false)
   const refreshRegistry = useCallback(async (signal?: AbortSignal, reportFailure = true) => {
+    // Background polling cannot supersede an explicit load or hide its failure.
+    if (!reportFailure && foregroundLoadingRef.current) return
     requestVersionRef.current += 1
     const version = requestVersionRef.current
     const isCurrent = () => !signal?.aborted && version === requestVersionRef.current
-    if (reportFailure) setLoading(true)
-    if (reportFailure) setRegistryError('')
+    if (reportFailure) {
+      foregroundLoadingRef.current = true
+      setLoading(true)
+      setRegistryError('')
+    }
     try {
       const response = await api.list(
         {
@@ -325,7 +331,10 @@ export function SellerKizWithdrawalScreen({
       if (!isCurrent() || (error instanceof DOMException && error.name === 'AbortError')) return
       if (reportFailure) setRegistryError(withdrawalApiErrorMessage(error))
     } finally {
-      if (isCurrent()) setLoading(false)
+      if (isCurrent() && reportFailure) {
+        foregroundLoadingRef.current = false
+        setLoading(false)
+      }
     }
   }, [api, sellerId, dateFrom, dateTo, debouncedQuery, onlyNotWithdrawn, page, productId, rowsPerPage])
 
