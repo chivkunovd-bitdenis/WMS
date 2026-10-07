@@ -1,0 +1,498 @@
+{
+  "source": "4c532f0cccfb8f99b34d68d9630a3763038fbc5f",
+  "diagnostic_head": "a6bbb5863f9365a45eb6bc11d510a5455b555229",
+  "case_count": 43,
+  "case_outcomes": {
+    "PASS": 43
+  },
+  "strict_status": "PASS",
+  "exit_results": {
+    "original_browser_command_exit": 0,
+    "exact43_complete": true,
+    "strict43_pass": true,
+    "source_bytes_unchanged": true,
+    "actual_run": true
+  },
+  "source_after_equals_before": true,
+  "telemetry": {
+    "limits": {
+      "maxEvents": 100000,
+      "maxBytes": 67108864,
+      "eventByteBudget": 67043328
+    },
+    "seen": 53957,
+    "retained": 53957,
+    "retainedJsonlBytes": 27604887,
+    "dropped": {
+      "events": 0,
+      "bytes": 0,
+      "observerErrors": 0
+    },
+    "pendingCommandIds": [],
+    "completion": {
+      "status": "PASS",
+      "cases": [
+        {
+          "id": "WMS652.realQr[supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQr[supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQr[supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.selection[single-create]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.selection[seller-warehouse-group-retry]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.selection[add-existing-refusal-retry]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[alloff;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[alloff;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[alloff;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[reprint;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[reprint;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[reprint;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+reprint;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[pool;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[pool;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[pool;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+pool;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+pool;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[qr+pool;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[held-receipt;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[held-receipt;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[held-receipt;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_id=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.realQrFlags[remount-after-lost-ack;supply_ids=A,B]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[wb-single;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[wb-group-one;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[wb-group-many;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[ozon-single;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[ozon-group-one;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[ozon-group-many;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[mixed-group-many;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[orders-expired;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[orders-cancelled;1600x1000-long]",
+          "status": "PASS"
+        },
+        {
+          "id": "WMS652.geometry[selection;1600x1000-long]",
+          "status": "PASS"
+        }
+      ]
+    }
+  },
+  "record_kind_counts": {
+    "native-send": 11663,
+    "native-result": 11663,
+    "protocol-event": 30631
+  },
+  "send_method_counts": {
+    "Page.enable": 1,
+    "Runtime.enable": 1,
+    "Network.enable": 1,
+    "Fetch.enable": 1,
+    "Page.addScriptToEvaluateOnNewDocument": 1,
+    "Emulation.setDeviceMetricsOverride": 1,
+    "Page.navigate": 46,
+    "Fetch.continueRequest": 8526,
+    "Runtime.evaluate": 903,
+    "Fetch.fulfillRequest": 1504,
+    "Input.insertText": 126,
+    "Input.dispatchKeyEvent": 254,
+    "Input.dispatchMouseEvent": 282,
+    "Fetch.failRequest": 6,
+    "Page.captureScreenshot": 10
+  },
+  "native_error_count": 0,
+  "native_errors": [],
+  "missing_network_id_count": 3,
+  "missing_network_types": [
+    {
+      "requestMethod": "GET",
+      "resourceType": "XHR",
+      "urlPath": "/api/operations/packaging-tasks/task-wb-a",
+      "count": 2
+    },
+    {
+      "requestMethod": "GET",
+      "resourceType": "XHR",
+      "urlPath": "/api/operations/fbs-supplies/wb-b/workspace",
+      "count": 1
+    }
+  ],
+  "original_transport_records": 43722,
+  "original_pending_command_ids": [],
+  "all_native_sends_have_exactly_one_reply": true,
+  "missing_network_requests": [
+    {
+      "paused": {
+        "nodeUtcMs": 1791345690531,
+        "nodeUtc": "2026-10-07T04:01:30.531Z",
+        "nodeMonoMs": 27193.864741,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 45,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "kind": "protocol-event",
+        "method": "Fetch.requestPaused",
+        "requestId": "interception-job-2438.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "url": "http://127.0.0.1:16686/api/operations/packaging-tasks/task-wb-a",
+        "requestMethod": "GET",
+        "resourceType": "XHR",
+        "currentGeneration": 45,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A,B]"
+      },
+      "sole_native_send": {
+        "nodeUtcMs": 1791345690532,
+        "nodeUtc": "2026-10-07T04:01:30.532Z",
+        "nodeMonoMs": 27193.994091,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 45,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "kind": "native-send",
+        "commandId": 2814,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-2438.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "responseCode": 200,
+        "currentGeneration": 45,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A,B]"
+      },
+      "sole_native_reply": {
+        "nodeUtcMs": 1791345690532,
+        "nodeUtc": "2026-10-07T04:01:30.532Z",
+        "nodeMonoMs": 27194.584379,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 45,
+        "caseId": "WMS652.realQrFlags[qr;supply_ids=A,B]",
+        "kind": "native-result",
+        "commandId": 2814,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-2438.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "outcome": "success",
+        "nativeResult": {},
+        "currentGeneration": 45,
+        "currentCaseId": "WMS652.realQrFlags[qr;supply_ids=A,B]"
+      },
+      "send_to_reply_node_mono_ms": 0.5902879999994184,
+      "redirectedRequestId_present": false,
+      "exact_network_join": "UNAVAILABLE: paused event has no networkId; URL/time coincidence is not identity proof"
+    },
+    {
+      "paused": {
+        "nodeUtcMs": 1791345704388,
+        "nodeUtc": "2026-10-07T04:01:44.388Z",
+        "nodeMonoMs": 41049.950947,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 69,
+        "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+        "kind": "protocol-event",
+        "method": "Fetch.requestPaused",
+        "requestId": "interception-job-3852.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "url": "http://127.0.0.1:16686/api/operations/packaging-tasks/task-wb-a",
+        "requestMethod": "GET",
+        "resourceType": "XHR",
+        "currentGeneration": 69,
+        "currentCaseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]"
+      },
+      "sole_native_send": {
+        "nodeUtcMs": 1791345704388,
+        "nodeUtc": "2026-10-07T04:01:44.388Z",
+        "nodeMonoMs": 41050.128308,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 69,
+        "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+        "kind": "native-send",
+        "commandId": 4392,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-3852.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "responseCode": 200,
+        "currentGeneration": 69,
+        "currentCaseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]"
+      },
+      "sole_native_reply": {
+        "nodeUtcMs": 1791345704389,
+        "nodeUtc": "2026-10-07T04:01:44.389Z",
+        "nodeMonoMs": 41051.320802,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 69,
+        "caseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]",
+        "kind": "native-result",
+        "commandId": 4392,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-3852.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "outcome": "success",
+        "nativeResult": {},
+        "currentGeneration": 69,
+        "currentCaseId": "WMS652.realQrFlags[qr+reprint;supply_ids=A,B]"
+      },
+      "send_to_reply_node_mono_ms": 1.1924940000026254,
+      "redirectedRequestId_present": false,
+      "exact_network_join": "UNAVAILABLE: paused event has no networkId; URL/time coincidence is not identity proof"
+    },
+    {
+      "paused": {
+        "nodeUtcMs": 1791345729073,
+        "nodeUtc": "2026-10-07T04:02:09.073Z",
+        "nodeMonoMs": 65735.585313,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 111,
+        "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+        "kind": "protocol-event",
+        "method": "Fetch.requestPaused",
+        "requestId": "interception-job-6155.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-b/workspace",
+        "requestMethod": "GET",
+        "resourceType": "XHR",
+        "currentGeneration": 111,
+        "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]"
+      },
+      "sole_native_send": {
+        "nodeUtcMs": 1791345729073,
+        "nodeUtc": "2026-10-07T04:02:09.073Z",
+        "nodeMonoMs": 65735.76696,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 111,
+        "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+        "kind": "native-send",
+        "commandId": 6980,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-6155.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "responseCode": 200,
+        "currentGeneration": 111,
+        "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]"
+      },
+      "sole_native_reply": {
+        "nodeUtcMs": 1791345729077,
+        "nodeUtc": "2026-10-07T04:02:09.077Z",
+        "nodeMonoMs": 65739.855601,
+        "nodeTimeOriginMs": 1791345663338.14,
+        "generation": 111,
+        "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]",
+        "kind": "native-result",
+        "commandId": 6980,
+        "method": "Fetch.fulfillRequest",
+        "requestId": "interception-job-6155.0",
+        "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+        "outcome": "success",
+        "nativeResult": {},
+        "currentGeneration": 111,
+        "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_id=A]"
+      },
+      "send_to_reply_node_mono_ms": 4.088641000009375,
+      "redirectedRequestId_present": false,
+      "exact_network_join": "UNAVAILABLE: paused event has no networkId; URL/time coincidence is not identity proof"
+    }
+  ],
+  "changed_reply_context": {
+    "count": 47,
+    "by_method": {
+      "Runtime.evaluate": 46,
+      "Fetch.fulfillRequest": 1
+    },
+    "fetch_fulfill_records": [
+      {
+        "paused": {
+          "nodeUtcMs": 1791345731648,
+          "nodeUtc": "2026-10-07T04:02:11.648Z",
+          "nodeMonoMs": 68310.8145,
+          "nodeTimeOriginMs": 1791345663338.14,
+          "generation": 112,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+          "kind": "protocol-event",
+          "method": "Fetch.requestPaused",
+          "requestId": "interception-job-6387.0",
+          "networkId": "3333.6507",
+          "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+          "url": "http://127.0.0.1:16686/api/operations/fbs-supplies/wb-a/workspace",
+          "requestMethod": "GET",
+          "resourceType": "XHR",
+          "currentGeneration": 112,
+          "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]"
+        },
+        "send": {
+          "nodeUtcMs": 1791345731649,
+          "nodeUtc": "2026-10-07T04:02:11.649Z",
+          "nodeMonoMs": 68310.914427,
+          "nodeTimeOriginMs": 1791345663338.14,
+          "generation": 112,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+          "kind": "native-send",
+          "commandId": 7244,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6387.0",
+          "networkId": "3333.6507",
+          "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+          "responseCode": 200,
+          "currentGeneration": 112,
+          "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]"
+        },
+        "reply": {
+          "nodeUtcMs": 1791345731649,
+          "nodeUtc": "2026-10-07T04:02:11.649Z",
+          "nodeMonoMs": 68311.421923,
+          "nodeTimeOriginMs": 1791345663338.14,
+          "generation": 112,
+          "caseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]",
+          "kind": "native-result",
+          "commandId": 7244,
+          "method": "Fetch.fulfillRequest",
+          "requestId": "interception-job-6387.0",
+          "networkId": "3333.6507",
+          "frameId": "39A5F9AD3A2202EA347330A2736B7A46",
+          "outcome": "success",
+          "nativeResult": {},
+          "currentGeneration": 113,
+          "currentCaseId": "WMS652.realQrFlags[lost-accepted-ack;supply_ids=A]"
+        },
+        "send_to_reply_node_mono_ms": 0.5074960000056308
+      }
+    ]
+  },
+  "loading_failed": {
+    "count": 6,
+    "kinds": [
+      {
+        "canceled": false,
+        "errorText": "net::ERR_CONNECTION_CLOSED",
+        "type": "Fetch",
+        "count": 6
+      }
+    ]
+  },
+  "redirected_paused_request_count": 0,
+  "historical_failed_identity_mapping": "NOT_PROVEN; this run reproduced no native error",
+  "remaining_discriminator": "The historical failed FetchID lacks URL/method/resourceType and a same-ID terminal/invalidation identity. New successful requests cannot supply those missing historical facts."
+}

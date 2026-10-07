@@ -12,7 +12,6 @@ source proof, drop/pending/command counts are preserved. Large JSON is losslessl
 gzipped; raw-manifest.json gives original byte lengths/SHA256 and stored SHA256
 for every member. Every saved member was recovered and byte-compared.
 
-This is preservation and result verification only. Causal/missing-network-ID
-analysis follows separately. PASS does not retrospectively identify the two
-prior etalon errors or authorize release. No dispatch/retry/browser/product/
+Causal and missing-network-ID observations are in analysis.json and result.md.
+PASS does not retrospectively identify the two prior etalon errors or authorize release. No dispatch/retry/browser/product/
 fixture/test/CI/policy/migration or secret change was performed by this collector.
