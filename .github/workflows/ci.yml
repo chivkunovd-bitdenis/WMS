@@ -379,7 +379,7 @@ jobs:
           test -n "$WMS_PRINT_CHROMIUM"
           test -x "$WMS_PRINT_CHROMIUM"
           command -v pdfimages
-          npx vitest run --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
+          npx vitest run --maxWorkers=2 --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/frontend-all.json"
       - name: WMS-672 frozen cross-realm C5a decode contract
         run: npx vitest run --config tests-e2e/wms672-dom.config.ts -t 'C5a 33 labels' --reporter=default --reporter=json --outputFile.json="$RUNNER_TEMP/wms672-c5a.json"
       - name: Build

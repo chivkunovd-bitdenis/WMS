@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "6b465bbd662860e693b1927295287445ec9bdbbb4b3538131409f9304e311b26",
+    ".github/workflows/ci.yml": "de629c0c842b5960eabbd8053fea596bc04441c0152eb85d04cb94f0b411ad66",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -282,7 +282,7 @@
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
     "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
-    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "9f5dd562ebaa361cb4b2a36fa536a6884b2383ac222b5a2c125d4deb5f29c31f"
+    "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "3d94878d026bee9b4d19c6ba517d6c936893d0a155f2741c9fb79af040a02d00"
   },
   "suites": {
     "backend-fbs": {

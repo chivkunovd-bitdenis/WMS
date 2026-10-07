@@ -394,6 +394,19 @@
           "afterEntry": "100644 blob 9b2f1d6c54ddfdf82843b1f516566d4f2b735d87\tdocs/requirements/WMS-695.md"
         }
       ]
+    },
+    {
+      "commit": "d420f8db1e7d69212ad2ea4529a02044689363b0",
+      "changedPaths": [
+        "frontend/src/screens/v2/fbsUx.ts"
+      ],
+      "files": [
+        {
+          "path": "frontend/src/screens/v2/fbsUx.ts",
+          "beforeEntry": "100644 blob c69063f0d05b73b127cf26bf0ba529527d38ad3c\tfrontend/src/screens/v2/fbsUx.ts",
+          "afterEntry": "100644 blob 972323b1138a29c37fd32c07219f96f03e04c1fd\tfrontend/src/screens/v2/fbsUx.ts"
+        }
+      ]
     }
   ]
 }
