@@ -1,0 +1,21 @@
+{
+  "date": "2026-10-07",
+  "production_code_sha": "ce21139142a855ecb9c73cf85e55f5bbfb5b9051",
+  "seller": "ИП Горячкина Т.И.",
+  "wb_supply_id": "WB-GI-288973611",
+  "local_supply_id": "32b55275-7d6f-42ed-99de-4104d60cbbe2",
+  "status": "assembling",
+  "linked_wb_order_id": 5966484291,
+  "orders_count": 1,
+  "can_add_orders": true,
+  "wb_warehouse_id": 1690194,
+  "preflight_order_id": 5974658774,
+  "preflight_ui_compatible": true,
+  "preflight_issues": [],
+  "wb_after": {"done": false, "order_ids": [5966484291]},
+  "new_order_moved": false,
+  "browser_observed": false,
+  "tests_run": false,
+  "external_writes": false,
+  "stock_writes": false
+}
