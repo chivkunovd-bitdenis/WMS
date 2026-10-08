@@ -26,9 +26,14 @@
         "required_status_checks": [
           {"context": "baseline", "integration_id": 15368},
           {"context": "backlog", "integration_id": 15368},
+          {"context": "scope", "integration_id": 15368},
           {"context": "backend", "integration_id": 15368},
           {"context": "frontend-build", "integration_id": 15368},
-          {"context": "охрана", "integration_id": 15368}
+          {"context": "охрана", "integration_id": 15368},
+          {"context": "print-regressions", "integration_id": 15368},
+          {"context": "printer-windows", "integration_id": 15368},
+          {"context": "wms686-mockup", "integration_id": 15368},
+          {"context": "process-proof", "integration_id": 15368}
         ]
       }
     }

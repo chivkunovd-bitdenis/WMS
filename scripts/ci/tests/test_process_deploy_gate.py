@@ -14,15 +14,13 @@ from scripts.ci.verify_ci import GateError
 class EvidenceFixture(Fixture):
     def __init__(self):
         super().__init__()
-        self.jobs.append(dict(id=80, name='process-proof', head_sha=SHA, run_id=10,
-                              status='completed', conclusion='success'))
         self.policy = {'version': 1, 'files': {}, 'suites': {'packing': {
             'report': 'packing.xml', 'format': 'junit', 'exact': True,
             'cases': ['tests.scan::QR', 'tests.scan::nextQR']}}}
         self.policy_bytes = json.dumps(self.policy, sort_keys=True).encode()
         self.metadata = dict(version=1, sha=SHA, head_sha=SHA, base_sha='c'*40,
                              run_id=10, run_attempt=1,
-                             policy_sha256=hashlib.sha256(self.policy_bytes).hexdigest())
+                             policy_sha256=hashlib.sha256(self.policy_bytes).hexdigest(), docs_only=False)
         self.xml = (b'<testsuite><testcase classname="tests.scan" name="QR"/>'
                     b'<testcase classname="tests.scan" name="nextQR"/></testsuite>')
         self.artifacts = [dict(id=90, name=f'process-proof-{SHA}-10-1', expired=False,
@@ -107,11 +105,11 @@ class ProcessDeployGateTests(unittest.TestCase):
             with self.subTest(state=state):
                 self.f = EvidenceFixture()
                 if state == 'missing':
-                    self.f.jobs.pop()
+                    self.f.jobs = [job for job in self.f.jobs if job['name'] != 'process-proof']
                 elif state == 'queued':
-                    self.f.jobs[-1]['status'] = state
+                    next(job for job in self.f.jobs if job['name'] == 'process-proof')['status'] = state
                 else:
-                    self.f.jobs[-1]['conclusion'] = state
+                    next(job for job in self.f.jobs if job['name'] == 'process-proof')['conclusion'] = state
                 self.reject()
 
     def test_inaccessible_archive_never_deploy(self):

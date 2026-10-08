@@ -14,7 +14,7 @@ class ArtifactFixture(AnchorFixture):
     def __init__(self):
         super().__init__()
         self.metadata = {'version': 1, 'sha': M, 'head_sha': H, 'base_sha': B, 'run_id': 10,
-                         'run_attempt': 1, 'policy_sha256': self.digest()}
+                         'run_attempt': 1, 'policy_sha256': self.digest(), 'docs_only': False}
         self.artifacts = [{'id': 90, 'name': f'process-proof-{M}-10-1', 'expired': False,
                            'size_in_bytes': 2000, 'workflow_run': {'id': 10, 'head_sha': H}}]
         self.entries = [('execution.json', None)]

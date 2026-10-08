@@ -12,7 +12,8 @@ REPO = 'owner/repo'
 
 class AnchorFixture:
     def __init__(self):
-        self.pr = {'number': 7, 'state': 'open', 'head': {'sha': H, 'repo': {'full_name': REPO}},
+        self.pr = {'number': 7, 'state': 'open', 'changed_files': 1,
+                   'head': {'sha': H, 'repo': {'full_name': REPO}},
                    'base': {'sha': B, 'ref': 'etalon', 'repo': {'full_name': REPO}}, 'merge_commit_sha': M}
         self.base_policy = {'version': 1, 'files': {'.github/workflows/ci.yml': '0'*64,
             '.github/workflows/deploy.yml': '1'*64, 'tests/scan.py': '2'*64},
@@ -20,6 +21,8 @@ class AnchorFixture:
         self.policy = copy.deepcopy(self.base_policy)
         self.base_tree = [{'path': path, 'sha': str(i)*40, 'mode': '100644', 'type': 'blob'}
                           for i, path in enumerate(self.policy['files'], 1)]
+        self.base_tree.append({'path': 'guards/PROCESS_CONTRACTS.json', 'sha': 'f'*40,
+                               'mode': '100644', 'type': 'blob'})
         self.tree = copy.deepcopy(self.base_tree)
         self.run = {'id': 10, 'run_number': 5, 'run_attempt': 1, 'head_sha': H,
                     'event': 'pull_request', 'workflow_id': 6, 'path': '.github/workflows/ci.yml',
@@ -29,8 +32,8 @@ class AnchorFixture:
         self.runs = [self.run]
         self.jobs = [{'id': i, 'name': name, 'status': 'completed', 'conclusion': 'success',
                      'run_id': 10, 'head_sha': H} for i, name in enumerate([
-            'baseline', 'backlog', 'backend', 'frontend-build', 'охрана',
-            'print-regressions', 'printer-windows', 'process-proof'], 1)]
+            'baseline', 'backlog', 'scope', 'backend', 'frontend-build', 'охрана',
+            'print-regressions', 'printer-windows', 'wms686-mockup', 'process-proof'], 1)]
         self.pr_reads = 0
         self.change_head_after = False
         self.truncated = False
@@ -45,6 +48,8 @@ class AnchorFixture:
             if self.change_head_after and self.pr_reads > 1:
                 self.pr['head']['sha'] = 'd'*40
             return copy.deepcopy(self.pr)
+        if '/pulls/7/files' in route:
+            return [{'filename': 'frontend/src/app.ts'}]
         if '/contents/guards/PROCESS_CONTRACTS.json' in route:
             ref = parse_qs(urlparse(path).query)['ref'][0]
             if self.bootstrap and ref == B: raise ValueError('no trusted baseline policy')
@@ -78,20 +83,28 @@ class TrustedProcessCheckTests(unittest.TestCase):
         self.assertEqual(self.verify()['head_sha'], H)
         self.assertGreaterEqual(self.f.pr_reads, 2)
 
-    def test_disable_workflow_or_weaken_test_even_with_self_updated_hash_rejected(self):
+    def test_source_digest_metadata_can_change_under_ordinary_review(self):
         for path in self.f.policy['files']:
             with self.subTest(path=path):
                 self.f = AnchorFixture()
                 self.f.policy['files'][path] = '9'*64
                 next(row for row in self.f.tree if row['path'] == path)['sha'] = 'e'*40
-                with self.assertRaises(ValueError): self.verify()
+                self.assertEqual(self.verify()['head_sha'], H)
 
-    def test_changed_blob_with_unchanged_policy_hash_rejected(self):
+    def test_source_bytes_can_change_without_pin_when_path_and_coverage_remain(self):
         self.f.tree[-1]['sha'] = 'e'*40
+        self.assertEqual(self.verify()['head_sha'], H)
+
+    def test_case_rename_with_same_coverage_count_uses_normal_review(self):
+        self.f.policy['suites']['qr']['cases'][1] = 'unrelated'
+        self.assertEqual(self.verify()['head_sha'], H)
+
+    def test_case_count_decrease_still_fails(self):
+        self.f.policy['suites']['qr']['cases'].pop()
         with self.assertRaises(ValueError): self.verify()
 
-    def test_missing_case_cannot_be_replaced_with_same_count(self):
-        self.f.policy['suites']['qr']['cases'][1] = 'unrelated'
+    def test_missing_candidate_source_still_fails(self):
+        self.f.tree = [row for row in self.f.tree if row['path'] != 'tests/scan.py']
         with self.assertRaises(ValueError): self.verify()
 
     def test_missing_skipped_or_neutral_required_job_refuses(self):

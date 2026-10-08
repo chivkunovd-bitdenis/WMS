@@ -7,7 +7,9 @@ import subprocess
 import sys
 from urllib.parse import urlencode
 
-REQUIRED_JOBS = {"baseline", "backlog", "backend", "frontend-build", "охрана"}
+REQUIRED_JOBS = {"baseline", "backlog", "scope", "backend", "frontend-build", "охрана",
+                 "print-regressions", "printer-windows", "wms686-mockup", "process-proof"}
+HEAVY_JOBS = REQUIRED_JOBS - {"baseline", "backlog", "scope", "охрана", "process-proof"}
 WORKFLOW_PATH = ".github/workflows/ci.yml"
 ACTIONS_APP_ID = 15368
 
@@ -90,19 +92,56 @@ def verify(get, repository, sha):
         raise GateError("CI не принадлежит GitHub Actions или проверял другой SHA")
     attempt = run["run_attempt"]
     jobs = pages(get, f"{root}/actions/runs/{run['id']}/attempts/{attempt}/jobs", "jobs")
+    by_name = {}
     for name in sorted(REQUIRED_JOBS):
         matches = [job for job in jobs if job["name"] == name]
         if len(matches) != 1:
             raise GateError(f"Обязательная задача {name}: отсутствует либо имя неоднозначно")
         job = matches[0]
-        if (job["head_sha"] != sha or job["run_id"] != run["id"]
-                or job["status"] != "completed" or job["conclusion"] != "success"):
+        if job["head_sha"] != sha or job["run_id"] != run["id"] or job["status"] != "completed":
+            raise GateError(f"Обязательная задача {name} не подтверждает успех этого SHA")
+        by_name[name] = job
+    docs_only = any(by_name[name]["conclusion"] == "skipped" for name in HEAVY_JOBS)
+    if docs_only and not prose_only_commit(get, root, sha):
+        raise GateError("Тяжёлые проверки пропущены для изменения исполняемых файлов")
+    for name, job in by_name.items():
+        allowed = {"success", "skipped"} if docs_only and name in HEAVY_JOBS else {"success"}
+        if job["conclusion"] not in allowed:
             raise GateError(f"Обязательная задача {name} не подтверждает успех этого SHA")
     # Detect a rerun/new run that appeared while reading jobs. Never reuse old green.
     current = latest()
     if any(current[k] != run[k] for k in ("id", "run_attempt", "status", "conclusion")):
         raise GateError("CI изменился во время проверки; повторите проверку", 4)
-    return {"sha": sha, "run_id": run["id"], "run_attempt": attempt, "conclusion": "success"}
+    return {"sha": sha, "run_id": run["id"], "run_attempt": attempt,
+            "conclusion": "success", "docs_only": docs_only}
+
+
+def prose_path(path):
+    if path in {"AGENTS.md", "CLAUDE.md"} or path.startswith("docs/"):
+        return path.endswith((".md", ".rst"))
+    return path in {"README.md", "CONTRIBUTING.md"}
+
+
+def prose_only_commit(get, root, sha):
+    commit = get(f"{root}/git/commits/{sha}")
+    parents = commit.get("parents")
+    if not isinstance(parents, list) or not parents:
+        return False
+    refs = [parents[0]["sha"], sha]
+    trees = []
+    for ref in refs:
+        commit_info = get(f"{root}/git/commits/{ref}")
+        tree_sha = commit_info["tree"]["sha"]
+        data = get(f"{root}/git/trees/{tree_sha}?recursive=1")
+        if data.get("truncated") is not False:
+            raise GateError("Нельзя проверить полный список изменённых файлов")
+        rows = {row["path"]: (row["sha"], row["mode"], row["type"]) for row in data["tree"]}
+        if len(rows) != len(data["tree"]):
+            raise GateError("Повтор пути в дереве Git")
+        trees.append(rows)
+    old, new = trees
+    changed = [path for path in old.keys() | new.keys() if old.get(path) != new.get(path)]
+    return bool(changed) and all(prose_path(path) for path in changed)
 
 
 def main():

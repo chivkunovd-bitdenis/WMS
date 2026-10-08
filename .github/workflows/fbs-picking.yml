@@ -2,6 +2,21 @@ name: FBS picking real stack
 on:
   push:
     branches: [codex/fbs-picking-ci, codex/wms666-packing-release-1008, etalon]
+    paths:
+      - 'backend/app/**'
+      - 'backend/alembic/**'
+      - 'backend/tests/fbs_picking_browser*.py'
+      - 'backend/pyproject.toml'
+      - 'frontend/src/**'
+      - '!frontend/src/**/*.test.ts'
+      - '!frontend/src/**/*.test.tsx'
+      - 'frontend/tests-e2e/fbs-picking/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'scripts/ci/run_fbs_picking_browser.sh'
+      - '.github/workflows/fbs-picking.yml'
+# For target-only diagnostics, dispatch from a branch outside the push list above;
+# a push to an automatically watched branch runs the matrix when its runtime inputs change.
   workflow_dispatch:
     inputs:
       cases:
