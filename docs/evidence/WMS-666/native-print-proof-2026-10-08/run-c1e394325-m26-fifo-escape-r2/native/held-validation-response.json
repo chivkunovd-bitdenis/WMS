@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-08T02:45:27.696Z",
+  "status": 200,
+  "request": {
+    "order_id": "c8be93bb-81f9-4fd2-b051-98093e4d2bfb",
+    "value": "010460043993125321KIZTAPE0000000000"
+  },
+  "response": {
+    "ok": true,
+    "hints": []
+  }
+}
