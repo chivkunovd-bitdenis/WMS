@@ -54,7 +54,7 @@ export function buildProductRows(detail: FboPackingDetail): FboProductRow[] {
 }
 
 /**
- * N для «ШК + ЧЗ» и «Допечатать»: подобрано S, а если ничего не подобрано — план P.
+ * N для «ШК + ЧЗ»: подобрано S, а если ничего не подобрано — план P.
  * Сервер не выдаёт кодов больше P − K.
  */
 export function printTargetOf(row: Pick<FboProductRow, 'picked' | 'need'>): number {

@@ -38,7 +38,7 @@ describe('WMS-686 FBO упаковка · числа общей таблицы',
     ])
   })
 
-  it('N для «ШК + ЧЗ» и «Допечатать»: подобрано, а при S = 0 — план', () => {
+  it('N для «ШК + ЧЗ»: подобрано, а при S = 0 — план', () => {
     expect(printTargetOf({ picked: 7, need: 10 })).toBe(7)
     expect(printTargetOf({ picked: 0, need: 10 })).toBe(10)
   })
