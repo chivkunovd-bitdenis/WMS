@@ -38,6 +38,9 @@ beforeEach(() => {
     if (method !== 'GET') throw new Error(`WMS-673 print must not mutate: ${method} ${path}`)
     const one = fixtures.find((f) => path.startsWith(`/operations/fbs-supplies/${f.supply.id}/`))
     if (one && path.endsWith('/workspace')) return json(one)
+    // Production WMS-689 reads full storage provenance after pick-options.
+    // These color fixtures have no extra provenance; keep the option rows.
+    if (one && path.endsWith('/picking-context')) return json([])
     if (one && path.endsWith('/pick-options')) {
       if (waitPick) await waitPick
       return pickFailure ? json({ detail: 'synthetic failure' }, 503) : json(options[one.supply.id] ?? [])
@@ -76,7 +79,7 @@ function colorCells(document: Document, marketplaceLabel: 'WB' | 'Ozon' | 'ма�
   const index = headers.indexOf('Цвет')
   expect(index, 'missing business column Цвет').toBe(4)
   expect(headers).toEqual([
-    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+    '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
     `Заказы ${marketplaceLabel}`, 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
   ])
   return [...document.querySelectorAll('tbody tr')].map((tr) => tr.children[index].textContent)
@@ -151,7 +154,7 @@ describe('WMS-673 business RED contract through real buttons and API fixtures', 
   it('C6 empty print colspan agrees with all eleven headers', async () => {
     fixtures = [wms673Workspace('empty', [])]; await open('group'); await print(); const document = doc()
     expect([...document.querySelectorAll('thead th')].map((th) => th.textContent)).toEqual([
-      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара',
+      '№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб',
       'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка',
     ])
     expect(document.querySelector('tbody td')?.getAttribute('colspan')).toBe('12')
@@ -177,7 +180,7 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       locations: [{ storage_location_id: 'loc-b', location_code: 'A-02', available: 7,
         sources: [{ available: 7, is_loose: false, source_label: 'Короб B-02', container_path: [{ kind: 'box', id: 'b2', code: 'B-02', label: 'Короб B-02' }] }] }] }]
     await open(kind); const beforeClick = requests.length; expect(printed).toHaveLength(0); await print()
-    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([['GET', '/operations/fbs-supplies/supply-a/pick-options']])
+    expect(requests.slice(beforeClick).map(({ path, method }) => [method, path])).toEqual([['GET', '/operations/fbs-supplies/supply-a/pick-options'], ['GET', '/operations/fbs-supplies/supply-a/picking-context']])
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
     expect(cellsWithoutColor(doc())).toEqual([
@@ -200,7 +203,10 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     await act(async () => release()); expect(printed).toHaveLength(0)
     waitPick = null; closed = false; await print(); expect(printed).toHaveLength(1)
   })
-  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, old screen quantity headers', async () => {
+  it('C11 WMS610: common print stays available on composition/picking/packing/boxes, WMS-709 plan/remaining screen quantity headers', async () => {
+    // An already prepared supply keeps this print-only scenario read-only when
+    // entering packing; production otherwise creates the missing task on entry.
+    fixtures[0].supply.packaging_task_id = 'task-wms673'
     await open('group')
     for (const stage of ['Состав', 'Подбор', 'Упаковка и маркировка', 'Короба']) {
       const tab = [...document.querySelectorAll<HTMLElement>('[role="tab"]')].find((node) => node.textContent === stage)
@@ -209,7 +215,9 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
       expect(button?.disabled, stage).toBe(false)
       if (stage === 'Подбор') {
         const headers = [...document.querySelectorAll('thead th')].map((th) => th.textContent?.trim())
-        expect(headers.slice(-3).map(value => value?.replace(/\s+/g, ''))).toEqual(['Остатоквкоробе', 'Собрать', 'Собрано'])
+        expect(headers.slice(-3).map(value => value?.replace(/\s+/g, ''))).toEqual(['Осталось', 'Остатоквкоробе', 'Собрано'])
+        expect(headers).toContain('План')
+        expect(headers).not.toContain('Собрать')
         expect(headers).not.toContain('Цвет')
       }
       await print()

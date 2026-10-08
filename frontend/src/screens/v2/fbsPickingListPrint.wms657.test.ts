@@ -386,7 +386,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const generalCellRule = cssRule(css, 'th, td')
     expect(`${sizeRule};${sizeCellRule}`).not.toMatch(/white-space\s*:\s*nowrap/)
     expect(`${sizeCellRule};${generalCellRule}`).toMatch(/(?:overflow-wrap\s*:\s*(?:anywhere|break-word)|word-break\s*:\s*(?:break-all|break-word)|white-space\s*:\s*(?:normal|pre-wrap|break-spaces))/)
-    expect(tableHeaders(html)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(html)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
   })
 
   it('C2: двенадцать колонок, контрольные данные и вход не меняются при повторной генерации', () => {
@@ -402,7 +402,7 @@ describe('WMS-657 · перенос размера в листе подбора 
     const second = buildFbsPickingListPrintHtml(input)
     expect(second).toBe(first)
     expect(JSON.stringify(input)).toBe(before)
-    expect(tableHeaders(first)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Ячейка / тара', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
+    expect(tableHeaders(first)).toEqual(['№', 'Фото', 'Товар', 'Артикул', 'Цвет', 'Размер', 'Поставка / ячейка / короб', 'Заказы WB', 'Стикер', 'Взять', 'Подобрано', 'Маркировка'])
     const bodyRow = onlyTableBodyRow(first)
     expect(tableCells(bodyRow)).toHaveLength(12)
     for (const value of ['PRODUCT-CONTROL', 'SIZE-CONTROL', 'COLOR-CONTROL', 'IDENTIFIER-A', 'IDENTIFIER-B', 'LOCATION-CONTROL', '3', '2', 'ORDER-CONTROL', 'S-1', 'MARKING-CONTROL']) {
@@ -464,7 +464,7 @@ describe('WMS-657 · перенос размера в листе подбора 
       name: 'PDF-PRODUCT-LONG-WMS-657',
       color: 'PDF-COLOR-WMS-657', identifiers: ['PDF-ARTICLE-WMS-657', 'PDF-IDENTIFIER-WMS-657'],
       locations: ['PDF-LOCATION-LONG-WMS-657'],
-      wbOrders: ['PDF-ORDER-657'],
+      wbOrders: [657000001],
       stickerCodes: ['S657'],
       marking: 'PDF-MARKING-WMS-657',
     })])
@@ -491,7 +491,7 @@ describe('WMS-657 · перенос размера в листе подбора 
       { label: 'цвет', match: color },
       { label: 'размер', match: size },
       { label: 'ячейка / тара', match: pdfText(table, 6, 'PDF-LOCATION-LONG-WMS-657') },
-      { label: 'заказ', match: pdfText(table, 7, '№PDF-ORDER-657') },
+      { label: 'заказ', match: pdfText(table, 7, '№657000001') },
       { label: 'стикер', match: pdfText(table, 8, 'S657') },
       { label: 'взять', match: pdfText(table, 9, '1') },
       { label: 'подобрано', match: pdfText(table, 10, '0/1') },

@@ -11,7 +11,9 @@ import { fbsMarkingVerdictsSummary } from './fbsUx'
 import { readFbsWorkspaceStage } from './fbsWorkspaceStage'
 
 const source = readFileSync(new URL('./FfFbsSupplyWorkspace.tsx', import.meta.url), 'utf8')
+const toolbarSource = readFileSync(new URL('./FbsPackingActionsToolbar.tsx', import.meta.url), 'utf8')
 const file = ts.createSourceFile('workspace.tsx', source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
+const toolbarFile = ts.createSourceFile('toolbar.tsx', toolbarSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX)
 
 let effect = ''
 let deps = ''
@@ -41,15 +43,19 @@ function visit(node: ts.Node) {
       helpers[name] = node.initializer.arguments[0].getText(file)
     }
   }
-  if (ts.isJsxElement(node) && attributeOf(node, 'data-testid').includes('fbs-packing-check-wb')) button = node
   ts.forEachChild(node, visit)
 }
-function attributeOf(element: ts.JsxElement, name: string) {
+function attributeOf(element: ts.JsxElement, name: string, sourceFile = toolbarFile) {
   const found = element.openingElement.attributes.properties
-    .find((property) => ts.isJsxAttribute(property) && property.name.getText(file) === name)
-  return found && ts.isJsxAttribute(found) ? found.initializer?.getText(file) ?? '' : ''
+    .find((property) => ts.isJsxAttribute(property) && property.name.getText(sourceFile) === name)
+  return found && ts.isJsxAttribute(found) ? found.initializer?.getText(sourceFile) ?? '' : ''
 }
 visit(file)
+function findCheckButton(node: ts.Node) {
+  if (ts.isJsxElement(node) && attributeOf(node, 'data-testid').includes('fbs-packing-check-wb')) button = node
+  ts.forEachChild(node, findCheckButton)
+}
+findCheckButton(toolbarFile)
 if (!effect) throw new Error('Silent refresh effect not found')
 if (!resetEffect) throw new Error('Supply opening reset effect not found')
 if (!runSource) throw new Error('Production run() helper not found')
@@ -76,12 +82,11 @@ function compileDeliveryErrorFromCause(FbsApiError: unknown) {
   ) as (...args: unknown[]) => (cause: unknown) => unknown)(FbsApiError, normalizeDeliveryError)
 }
 
-const attribute = (name: string) => attributeOf(button!, name)
 const flush = () => new Promise((resolve) => { setTimeout(resolve, 0) })
 
 /** Условие, под которым кнопка вообще попадает на экран. */
 function renderCondition(node: ts.Node): string {
-  if (ts.isConditionalExpression(node)) return node.condition.getText(file)
+  if (ts.isConditionalExpression(node)) return node.condition.getText(toolbarFile)
   if (!node.parent) throw new Error('«Проверить в WB» button is rendered unconditionally')
   return renderCondition(node.parent)
 }
@@ -632,6 +637,8 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
   function screen() {
     const generation = { current: 1 }
     const writeSeq = { current: 0 }
+    const freshWorkspaceGeneration = { current: null as number | null }
+    const pendingInitialWorkspace = { current: null as { generation: number; snapshot: unknown } | null }
     const shownSupplyId = { current: 'supply-1' as string | null }
     const onScreen = snapshot('pending', 'initial')
     const seen = {
@@ -659,7 +666,9 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       'setError', 'setBusy', 'normalizeDeliveryError', 'setDeliveryError',
       'setDeliveryErrorsOpen', 'setExpandedDeliveryErrorGroups', 'fbsErrorText',
       'fbsStageAfterWorkspaceRefresh', 'visualStage',
-      'open', 'supplyId', 'token', 'authHeaders', `${asJs('load', helpers.load)}; return load`) as (
+      'open', 'supplyId', 'token', 'authHeaders', 'freshWorkspaceGeneration',
+      'workspaceOpenGeneration', 'pendingInitialWorkspace',
+      `${asJs('load', helpers.load)}; return load`) as (
       ...args: unknown[]) => (silent?: boolean, onApplied?: (fresh: unknown) => void) => Promise<unknown>)(
       () => {
         journal.push('GET')
@@ -668,6 +677,7 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
       beginWorkspaceWrite, setWorkspace, setStage, setError, setBusy, normalizeDeliveryError,
       () => undefined, () => undefined, () => undefined, same, keepStage, same,
       true, 'supply-1', 'synthetic', () => ({}),
+      freshWorkspaceGeneration, generation, pendingInitialWorkspace,
     )
     const refreshAfterLostRace = (new Function('load',
       `${asJs('refreshAfterLostRace', helpers.refreshAfterLostRace)}; return refreshAfterLostRace`) as (
@@ -783,17 +793,18 @@ describe('WMS-477 «Проверено в WB» after the manual check crossed a 
 
 describe('WMS-477 «Проверить в WB» button', () => {
   it('asks Wildberries only where such a request exists and packing is still editable', () => {
-    // На Ozon этой операции нет, а у закрытой для правки упаковки кнопка стала бы
-    // действием без последствий.
-    expect(renderCondition(button!)).toBe('!isOzonSupply && packagingEditable')
+    // Кнопка живёт в общей панели; Ozon отсекается составом wbEntries.
+    expect(renderCondition(button!)).toBe('wbEntries.some(entry => entry.editable)')
   })
 
   it('stays out of reach while another operation runs or nothing has a code yet', () => {
-    expect(attribute('disabled')).toBe('{busy || packingOrdersWithCode === 0}')
+    expect(attributeOf(button!, 'disabled')).toBe('{!verifiable.length || wbEntries.some(entry => entry.busy)}')
+    expect(toolbarSource).toContain("const verifiable = wbEntries.filter(entry => entry.editable && !entry.busy && entry.codes > 0)")
   })
 
   it('sends one request for the whole supply', () => {
-    expect(attribute('onClick')).toBe('{checkMarkingsInWb}')
+    expect(attributeOf(button!, 'onClick')).toBe('{() => verifiable.forEach(entry => entry.verify())}')
+    expect(toolbarSource).toContain("const wbEntries = entries.filter(entry => entry.marketplace === 'wb')")
     expect(source).toContain('syncFbsSupplyMarkings(token, authHeaders, workspace.supply.id)')
   })
 })

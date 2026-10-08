@@ -26,6 +26,8 @@ const authHeaders = () => ({ Authorization: 'Bearer c19-fixture' })
 const originalFetch = globalThis.fetch
 let current: FbsWorkspace
 let requests: string[]
+let stickerPrepareBodies: unknown[]
+let workspaceResponses: Array<{ status: number; body: FbsWorkspace }>
 let host: HTMLDivElement
 let root: Root
 
@@ -36,6 +38,8 @@ beforeAll(() => {
 beforeEach(() => {
   current = partial
   requests = []
+  stickerPrepareBodies = []
+  workspaceResponses = []
   window.sessionStorage.clear()
   window.localStorage.clear()
   // The operator chose packing; an assembling parent must not force picking.
@@ -46,11 +50,20 @@ beforeEach(() => {
     const url = new URL(typeof input === 'string' ? input : input instanceof URL ? input.href : input.url, 'http://wms.test')
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
     requests.push(`${method} ${url.pathname}`)
-    // Fail closed: no real network, stock writes, shipment or print requests.
+    // Opening the historical assembling fixture may request missing stickers.
+    // Stop that external operation at a synthetic 503 so this test remains
+    // read-only; all other non-read operations remain fail-closed.
+    if (method === 'POST' && url.pathname.endsWith('/print-assets')) {
+      stickerPrepareBodies.push(typeof init?.body === 'string' ? JSON.parse(init.body) as unknown : undefined)
+      return new Response(JSON.stringify({ detail: 'synthetic stop before sticker or task mutation' }), {
+        status: 503, headers: { 'Content-Type': 'application/json' },
+      })
+    }
     if (method !== 'GET') throw new Error(`Unexpected mutation: ${method} ${url.pathname}`)
     const saved = proof.http.find((entry) => new URL(entry.url).pathname === url.pathname)
     if (!saved) throw new Error(`Unexpected read: ${url.pathname}`)
     const body = url.pathname.endsWith('/workspace') ? current : saved.body
+    if (url.pathname.endsWith('/workspace')) workspaceResponses.push({ status: saved.status, body: body as FbsWorkspace })
     return new Response(JSON.stringify(body), { status: saved.status, headers: { 'Content-Type': 'application/json' } })
   }) as typeof fetch
   host = document.createElement('div')
@@ -82,7 +95,30 @@ function tab(label: string) {
 }
 
 
-async function checkComposition(phase: 'partial' | 'full', checkpoint: string) {
+async function checkComposition(
+  phase: 'partial' | 'full', checkpoint: string, requestStart: number, prepareStart: number, responseStart: number,
+) {
+  const readiness = () => ({
+    requests: requests.slice(requestStart),
+    workspaceResponses: workspaceResponses.slice(responseStart).map(({ status, body }) => ({
+      status, supplyStatus: body.supply.status, taskId: body.supply.packaging_task_id,
+      stickerCodes: body.orders.map((order) => order.sticker.code),
+    })),
+    activeProgress: document.querySelector('[role="progressbar"]:not([aria-valuenow])') !== null,
+    orderRows: partial.orders.map((order) => Boolean(document.querySelector(`[data-order-id="${order.id}"]`))),
+    savedStage: window.sessionStorage.getItem(`wms:fbs:${supplyId}:stage`),
+  })
+  await vi.waitFor(() => {
+    expect(requests.slice(requestStart).some((request) => request === `GET /api/operations/fbs-supplies/${supplyId}/workspace`),
+      JSON.stringify(readiness())).toBe(true)
+    expect(document.querySelector('[role="progressbar"]:not([aria-valuenow])'), JSON.stringify(readiness())).toBeNull()
+    for (const order of partial.orders) {
+      expect(document.querySelector(`[data-order-id="${order.id}"]`), JSON.stringify(readiness())).not.toBeNull()
+    }
+  }, { timeout: 3_000 })
+  const appliedResponse = workspaceResponses.slice(responseStart).at(-1)
+  expect(appliedResponse?.status, `${checkpoint}: fresh workspace GET response`).toBe(200)
+  expect(appliedResponse?.body.supply.status, `${checkpoint}: workspace response status`).toBe(phase === 'partial' ? 'assembling' : 'in_delivery')
   expect(tab('Упаковка и маркировка').getAttribute('aria-selected'), `${checkpoint}: no return to picking`).toBe('true')
   // This existing message describes the WHOLE supply, not preparation or picking.
   expect(document.body.textContent?.includes('Поставка уже передана в WB'), `${checkpoint}: parent completion`)
@@ -115,8 +151,18 @@ async function checkComposition(phase: 'partial' | 'full', checkpoint: string) {
   await click([...history.querySelectorAll<HTMLElement>('button')].find((element) => element.textContent === 'Закрыть')!)
   await act(async () => { await new Promise((resolve) => setTimeout(resolve, 250)) })
   await click(tab('Упаковка и маркировка'))
-  expect(requests.every((request) => request.startsWith('GET '))).toBe(true)
-  expect(requests.some((request) => /deliver|ship|print|stock|inventory|start-work|pick-commit/.test(request))).toBe(false)
+  const writes = requests.slice(requestStart).filter((request) => !request.startsWith('GET '))
+  if (phase === 'partial') {
+    expect(writes).toEqual([
+      `POST /api/operations/fbs-supplies/${supplyId}/print-assets`,
+    ])
+    expect(stickerPrepareBodies.slice(prepareStart)).toEqual([{
+      kind: 'order_sticker', order_ids: partial.orders.map((order) => order.id), retry_missing: true,
+    }])
+  } else {
+    expect(writes).toEqual([])
+  }
+  expect(requests.slice(requestStart).some((request) => /deliver|ship|order-print-tape|print-direct|stock|inventory|pick-commit/.test(request))).toBe(false)
   expect(window.open).not.toHaveBeenCalled()
   expect(window.print).not.toHaveBeenCalled()
   expect(printTape).not.toHaveBeenCalled()
@@ -129,22 +175,31 @@ it('C19: partial → full remains order-specific after reopen/page refresh; pick
     // Both states come from the same real document; no fixture state is inferred from picking.
     expect(current.supply.id).toBe(supplyId)
     expect(current.orders.map((order) => order.pick.status)).toEqual(['pending', 'pending'])
+    const openRequestStart = requests.length
+    const openPrepareStart = stickerPrepareBodies.length
+    const openResponseStart = workspaceResponses.length
     await render(false)
     await render()
-    await checkComposition(phase, `${phase}: open`)
+    await checkComposition(phase, `${phase}: open`, openRequestStart, openPrepareStart, openResponseStart)
     const beforeReopen = requests.filter((request) => request.endsWith('/workspace')).length
+    const reopenRequestStart = requests.length
+    const reopenPrepareStart = stickerPrepareBodies.length
+    const reopenResponseStart = workspaceResponses.length
     await render(false)
     await render()
     expect(requests.filter((request) => request.endsWith('/workspace')).length).toBeGreaterThan(beforeReopen)
-    await checkComposition(phase, `${phase}: reopen`)
+    await checkComposition(phase, `${phase}: reopen`, reopenRequestStart, reopenPrepareStart, reopenResponseStart)
     // Page refresh: discard all React state, retain the existing browser session storage,
     // and GET the saved server result again. No Mac browser or local API is used.
     act(() => root.unmount())
     root = createRoot(host)
     const beforeRefresh = requests.filter((request) => request.endsWith('/workspace')).length
+    const refreshRequestStart = requests.length
+    const refreshPrepareStart = stickerPrepareBodies.length
+    const refreshResponseStart = workspaceResponses.length
     await render()
     expect(requests.filter((request) => request.endsWith('/workspace')).length).toBeGreaterThan(beforeRefresh)
-    await checkComposition(phase, `${phase}: page refresh`)
+    await checkComposition(phase, `${phase}: page refresh`, refreshRequestStart, refreshPrepareStart, refreshResponseStart)
   }
   expect(JSON.stringify(proof)).toBe(immutableProof)
 })

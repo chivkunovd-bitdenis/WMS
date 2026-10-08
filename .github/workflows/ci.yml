@@ -537,6 +537,11 @@ jobs:
       - name: Install nightly controller test dependencies
         run: python -m pip install -r tools/support_agent/requirements.txt
       - name: Execute named nightly controller contracts
+        env:
+          GIT_AUTHOR_NAME: WMS CI Fixture
+          GIT_AUTHOR_EMAIL: wms-ci-fixture@example.invalid
+          GIT_COMMITTER_NAME: WMS CI Fixture
+          GIT_COMMITTER_EMAIL: wms-ci-fixture@example.invalid
         run: >-
           PYTHONPATH=tools/support_agent python -m pytest -q
           tools/support_agent/tests/test_night.py
