@@ -52,7 +52,7 @@ def relative_path(value):
     return value
 
 
-def json_object(raw):
+def json_value(raw):
     def pairs(items):
         result = {}
         for key, value in items:
@@ -61,6 +61,13 @@ def json_object(raw):
             result[key] = value
         return result
     data = json.loads(raw, object_pairs_hook=pairs)
+    if not isinstance(data, (dict, list)):
+        raise ValueError('JSON object or array required')  # noqa: TRY004 - fail-closed contract
+    return data
+
+
+def json_object(raw):
+    data = json_value(raw)
     if not isinstance(data, dict):
         raise ValueError('JSON object required')  # noqa: TRY004 - fail-closed contract
     return data
@@ -346,7 +353,7 @@ def api_get(path):
     try:
         response = subprocess.run(['gh', 'api', '--method', 'GET', '--hostname', 'github.com', path],
                                   capture_output=True, text=True, check=True, timeout=45)
-        return json_object(response.stdout)
+        return json_value(response.stdout)
     except (OSError, subprocess.SubprocessError) as exc:
         raise ValueError('GitHub metadata unavailable') from exc
 
