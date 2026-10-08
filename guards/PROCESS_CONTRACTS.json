@@ -290,7 +290,8 @@
     "frontend/src/screens/v2/wms666ChangeScope.test.ts": "f1a0ab3e20f484ed4b901daeae00d899ce6bfd84b4d8efa920dad7fbfb76cf34",
     "scripts/ci/tests/test_backend_shard_progress.py": "d7083629e4efd4026da8dc5e2693f04b7191127352325661b30132738921c8a8",
     "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx": "1e5663e2fd7e646905e6c65652e7c2081e52d16a9fc6cbca477de49f5ec8c57e",
-    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx": "c5f389f7436e2c4b34727d4d38fce202fa7361e10bb1acb2acd8432976def84b"
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx": "c5f389f7436e2c4b34727d4d38fce202fa7361e10bb1acb2acd8432976def84b",
+    "scripts/ci/tests/test_ci_scope.py": "2460d5cd9ca38277a3019dae3bd668174061660480fb773a3415bf11be7a488a"
   },
   "suites": {
     "backend-fbs": {
@@ -1768,7 +1769,7 @@
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_browser_report_is_exact_named_actual_sha_not_old_green",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_duplicate_cannot_replace_missing_case",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_every_nonpass_and_collection_error_refuse",
-        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_freeze_rejects_source_helper_runner_and_self_updated_hash",
+        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_source_fixture_addition_and_rename_pass_without_external_pin",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_no_external_paths_or_empty_policy",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_real_named_cases_green",
         "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_same_count_other_case_cannot_replace_required_case",
@@ -1844,7 +1845,13 @@
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images0]",
         "scripts.ci.tests.test_retain_web_assets::test_image_selection_refuses_missing_or_ambiguous_build_target[images1]",
         "scripts.ci.tests.test_backend_shard_progress.BackendShardProgressContracts::test_progress_records_identity_start_phases_and_failure_detail_as_jsonl",
-        "scripts.ci.tests.test_backend_shard_progress.BackendShardProgressContracts::test_actual_xdist_run_writes_controller_progress_without_receipt_changes"
+        "scripts.ci.tests.test_backend_shard_progress.BackendShardProgressContracts::test_actual_xdist_run_writes_controller_progress_without_receipt_changes",
+        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_removing_mandatory_case_is_still_rejected",
+        "scripts.ci.tests.test_process_contracts.ProcessContractTests::test_renamed_case_with_same_coverage_count_passes_and_runs",
+        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_docs_prose_skips_full_wave",
+        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_fbs_workflows_filter_prose_and_source_test_only_changes",
+        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_manual_dispatch_always_runs_full_wave",
+        "scripts.ci.tests.test_ci_scope.CIScopeTests::test_runtime_fixtures_and_ci_sources_run_full_wave"
       ]
     },
     "product-scope": {
