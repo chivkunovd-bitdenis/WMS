@@ -37,6 +37,7 @@ let printed: string[], closed: boolean
 const originalFetch = globalThis.fetch
 const printWindow = () => ({
   opener: {}, get closed() { return closed },
+  close: () => { closed = true },
   document: { open: vi.fn(), close: vi.fn(), write: (html: string) => { if (html.startsWith('<!doctype')) printed.push(html) } },
 })
 const json = (body: unknown, status = 200) => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } })

@@ -424,8 +424,8 @@ describe('WMS-680 · контракт печатных накладных до �
     expect(files.packaging).toContain('quantity: ln.qty_need_pack')
     expect(files.outbound).toContain('storage_location_code: addressStorageEnabled')
     expect(files.outbound).toContain('shipped_qty: ln.shipped_qty')
-    expect(files.workspace).toContain('let rows: typeof pickingRows = pickingRows')
-    expect(files.assembly).toContain('let rows = fbsAssemblyPickingRows(ordered)')
+    expect(files.workspace).toMatch(/let rows = fbsBuildPickingRows\(\s*printWorkspace\.orders,\s*printWorkspace\.supply\.marketplace === 'ozon',\s*\)\.rows/)
+    expect(files.assembly).toContain('let rows = fbsAssemblyPickingRows(printable)')
 
     const html = buildShipmentPackagingSheetHtml({ ...packaging, items: fourPackagingRows() } as ShipmentPackagingSheetData)
     for (const value of ['100000000001', 'INSTRUCTION-1-680', '1', 'data-testid="shipment-sheet-fact"></td>', 'size: A4']) {

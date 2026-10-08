@@ -156,9 +156,9 @@ async def test_prefetch_is_identical_across_editable_supply_statuses(
     assert b_row["sticker"]["code"]
     a_row = next(row for row in workspace["orders"] if row["wb_order_id"] == 537101)
     if target_status == "draft":
-        # A was never requested by this action — it has no code either way,
-        # since it wasn't touched by "start work" in this scenario.
-        assert a_row["sticker"]["code"] is None
+        # C15 prefetches the original order after successful supply creation.
+        # Adding B still requests only B, independent of this earlier sticker.
+        assert a_row["sticker"]["code"]
     # The status this action started with must be exactly what it ends with;
     # adding orders and prefetching stickers is not allowed to move the
     # supply along the WB FBS pipeline on its own (R2).
@@ -533,12 +533,13 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
     assert created.status_code == 201, created.text
     supply_id = created.json()["supply"]["id"]
 
-    # A itself never got a code (created straight from-orders, no start-work
-    # yet), matching C1's "A has no code" setup.
+    # C15 fetches A after successful creation without starting work or creating
+    # a packaging task; subsequent add/start calls must continue requesting
+    # only the orders that remain missing.
     async with SessionLocal() as session:
         a_row = await session.get(FbsOrder, order_a)
         assert a_row is not None
-        assert a_row.sticker_code is None
+        assert a_row.sticker_code
 
     batch_order_ids: list[list[uuid.UUID]] = []
     real_batch = print_assets.request_supply_print_batch
@@ -571,13 +572,13 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
     assert repeated.status_code == 409, repeated.text
     assert batch_order_ids == [[order_b]]
 
-    # "Start work" only asks for A (still missing), not B (already has a code).
+    # A was fetched at creation and B at addition, so "Start work" must not
+    # repeat either provider request.
     started = await async_client.post(
         f"/operations/fbs-supplies/{supply_id}/start-work", headers=headers
     )
     assert started.status_code == 200, started.text
-    assert len(batch_order_ids) == 2
-    assert batch_order_ids[1] == [order_a]
+    assert batch_order_ids == [[order_b]]
     b_after_start = next(
         row for row in started.json()["orders"] if row["wb_order_id"] == 537502
     )
@@ -590,8 +591,8 @@ async def test_repeat_add_then_start_work_then_more_orders_only_request_missing(
         json={"order_ids": [str(order_d)], "idempotency_key": str(uuid.uuid4())},
     )
     assert added_d.status_code == 200, added_d.text
-    assert len(batch_order_ids) == 3
-    assert batch_order_ids[2] == [order_d]
+    assert len(batch_order_ids) == 2
+    assert batch_order_ids[1] == [order_d]
     workspace = added_d.json()
     b_final = next(row for row in workspace["orders"] if row["wb_order_id"] == 537502)
     assert b_final["sticker"]["code"] == b_code
@@ -847,12 +848,25 @@ async def test_cancelled_order_already_in_draft_is_not_requested_when_adding_ano
     assert created.status_code == 201, created.text
     supply_id = created.json()["supply"]["id"]
 
-    # A is already in the draft, cancelled, without a sticker code — a stray
-    # order the operator has not detached yet.
+    # The creation prefetch now succeeds for A. Restore the missing-code
+    # fixture explicitly so this case still proves that a cancelled stray
+    # order is never retried while another order is added.
     async with SessionLocal() as session:
         a_row = await session.get(FbsOrder, order_a)
         assert a_row is not None
         a_row.status = FBS_ORDER_STATUS_CANCELLED
+        a_row.sticker_code = None
+        a_row.sticker_file = None
+        assets = (
+            await session.execute(
+                select(FbsPrintAsset).where(
+                    FbsPrintAsset.fbs_order_id == order_a,
+                    FbsPrintAsset.kind == PRINT_ASSET_KIND_ORDER_STICKER,
+                )
+            )
+        ).scalars().all()
+        for asset in assets:
+            await session.delete(asset)
         await session.commit()
 
     batch_order_ids: list[list[uuid.UUID]] = []

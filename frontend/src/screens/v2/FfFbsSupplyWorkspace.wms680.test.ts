@@ -13,7 +13,7 @@ describe('WMS-680 · одиночная печать FBS Ozon', () => {
     const printCall = workspaceSource.slice(callStart, callEnd)
 
     // This is the single-supply caller, not the already-correct assembly caller.
-    const callerPassesMarketplace = printCall.includes('marketplace: workspace.supply.marketplace')
+    const callerPassesMarketplace = printCall.includes('marketplace: printWorkspace.supply.marketplace')
     const html = buildFbsPickingListPrintHtml({
       supplyName: 'Ozon supply',
       wbSupplyId: 'OZ-680',
