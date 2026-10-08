@@ -134,6 +134,90 @@ LEGACY_SALES_COMPANION = {
     "after_blob": "a7ba000fd763b978784d0a5b6f4120df188c3084",
 }
 
+# One historical fixture anchor predates the standard contract subject. These
+# pins admit only the reviewed 30de transition, never other edits from 3c3.
+WMS517_FIXTURE_TRANSFORM = "wms517-withdrawal-ledger-30de-exact-fixture"
+WMS517_FIXTURE_ANCHOR = {
+    "task": "WMS-517",
+    "commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+    "subject": "WMS-517: align recovery tests with finance archive",
+    "changed_paths": sorted([
+        "backend/tests/test_withdrawal_ledger.py",
+        "backend/tests/test_wms517_raw_integer_price.py",
+        "backend/tests/test_wms517_raw_numeric_price.py",
+        "backend/tests/test_wms517_sales_contract.py",
+        "backend/tests/test_wms517_sales_partial_decimal_regressions.py",
+        "backend/tests/test_wms537_draft_supply_stickers.py",
+        "docs/requirements/WMS-517.md", "docs/requirements/WMS-537.md",
+        "guards/PROCESS_CONTRACTS.json",
+    ]),
+    "frozen_paths": ["backend/tests/test_withdrawal_ledger.py"],
+}
+WMS517_FIXTURE_PARENT = "f2f9b9b835e7e11cabcce1c693e283072417bac2"
+WMS517_FIXTURE_COMMIT = "30de00e5f70c3fde354036702aa921ebaab7fd65"
+WMS517_FIXTURE_REPORT = {
+    "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+    "commit": "86df6d2a8122c7e43ad14e6aa40d8303f3eb4fa3",
+    "path": "docs/evidence/WMS-517/incident-20261008/review-fixture-correction.md",
+    "blob": "a07eb01b2907b04828d4caa31f144ba78bd4da3f",
+}
+FIXTURE_BLOB_PAIRS[WMS517_FIXTURE_TRANSFORM] = (
+    "WMS-517", "backend/tests/test_withdrawal_ledger.py",
+    "ac14733de2530eb4e0f4ae285cab806d5eec3755",
+    "f20342fe34f3c7d05b96960028087dd2968d0960",
+)
+WMS517_FIXTURE_COMPANIONS = [
+    {"path": path, "before_blob": before, "after_blob": after,
+     "source_mode": "100644", "correction_mode": "100644"}
+    for path, before, after in [
+        ("guards/PROCESS_CONTRACTS.json",
+         "4f80f9ea11d7e51c1bd6a64e7e99a4d362472125", "6daab1ccf12d79d2e462bcb651c55692fbd06151"),
+        ("backend/tests/test_wb_catalog_schedule.py",
+         "b22007910e910a102105982e3531d36a2930c344", "cce26bacce70ae86c65c1febfd23f915df58958a"),
+        ("backend/tests/test_wms666_packing_sticker_request.py",
+         "fa797ead6126fa239cdfa39a306a08a02287b222", "7b7bd5bfc36050cc697dd84500255a7dc04a26b7"),
+        ("docs/requirements/WMS-666.md",
+         "57577022c980e9efbee01d06cf9e14330eb2a871", "4a79c1858e870f0e497a17a2a100fc828e23cc63"),
+        ("docs/requirements/WMS-689.md",
+         "6a4243254c80844602b57170f8ed716f4f22f2f2", "0a0a9a8744f1892e9cb330324f8f88674c691592"),
+    ]
+]
+WMS517_FIXTURE_FILES = [{
+    "path": FIXTURE_BLOB_PAIRS[WMS517_FIXTURE_TRANSFORM][1],
+    "transform": WMS517_FIXTURE_TRANSFORM,
+    "before_blob": FIXTURE_BLOB_PAIRS[WMS517_FIXTURE_TRANSFORM][2],
+    "after_blob": FIXTURE_BLOB_PAIRS[WMS517_FIXTURE_TRANSFORM][3],
+    "source_mode": "100644", "correction_mode": "100644",
+}]
+WMS517_FIXTURE_ENTRY = {
+    "contract_commit": WMS517_FIXTURE_ANCHOR["commit"],
+    "source_commit": WMS517_FIXTURE_ANCHOR["commit"],
+    "correction_commit": WMS517_FIXTURE_COMMIT,
+    "legacy_fixture_anchor": WMS517_FIXTURE_ANCHOR,
+    "files": WMS517_FIXTURE_FILES,
+    "companion_files": WMS517_FIXTURE_COMPANIONS,
+    "historical_fixture_source": {
+        "source_commit": WMS517_FIXTURE_ANCHOR["commit"],
+        "correction_parent": WMS517_FIXTURE_PARENT,
+        "correction_commit": WMS517_FIXTURE_COMMIT,
+        "files": [
+            {"path": item["path"], "source_mode": "100644",
+             "source_blob": item["before_blob"], "correction_mode": "100644",
+             "correction_blob": item["after_blob"]}
+            for item in WMS517_FIXTURE_FILES + WMS517_FIXTURE_COMPANIONS
+        ],
+        "review": WMS517_FIXTURE_REPORT,
+    },
+    "review": {
+        "model": "gpt-6.1-sol", "effort": "high", "verdict": "PASS",
+        "source_commit": WMS517_FIXTURE_ANCHOR["commit"],
+        "correction_commit": WMS517_FIXTURE_COMMIT,
+        "evidence": WMS517_FIXTURE_REPORT["path"],
+        "evidence_commit": WMS517_FIXTURE_REPORT["commit"],
+        "evidence_blob": WMS517_FIXTURE_REPORT["blob"],
+    },
+}
+
 # Owner-authorized semantic changes are NOT fixture corrections. Immutable pins
 # name the entire historical UI file and every allowed published transition.
 OWNER_UI_SUPERSESSIONS = {
@@ -526,7 +610,19 @@ def exact_fixture_corrections(
         if any(not isinstance(sha, str) or not re.fullmatch(r"[0-9a-f]{40}", sha)
                for sha in (original, source, correction)):
             return fail("нужны полные SHA исходного контракта, источника и коррекции")
-        if not is_task_contract_commit(root, original, task_id):
+        historical = original == WMS517_FIXTURE_ANCHOR["commit"]
+        if historical:
+            # Closed metadata binds every mode/blob/path and review identity.
+            # Generic Git checks below still prove the actual historical facts.
+            if (task_id != "WMS-517" or entry != WMS517_FIXTURE_ENTRY
+                    or not ancestor(root, original, head)
+                    or git(root, "show", "-s", "--format=%s", original)
+                    != WMS517_FIXTURE_ANCHOR["subject"]
+                    or commit_changed_paths(root, original)
+                    != set(WMS517_FIXTURE_ANCHOR["changed_paths"])):
+                return fail("подменён точный исторический fixture anchor или его дельта")
+        elif ("legacy_fixture_anchor" in entry or "historical_fixture_source" in entry
+              or not is_task_contract_commit(root, original, task_id)):
             return fail("неизвестный исходный контракт")
         if (source == correction or not ancestor(root, original, source)
                 or not ancestor(root, source, correction)
@@ -536,8 +632,19 @@ def exact_fixture_corrections(
         if len(parents) != 2:
             return fail("коррекция должна быть обычным коммитом с одним родителем")
         parent = parents[1]
-        frozen = {path for path in commit_changed_paths(root, original)
-                  if not path.startswith("docs/requirements/")}
+        if historical:
+            if parent != WMS517_FIXTURE_PARENT:
+                return fail("подменён родитель исторической коррекции")
+            for item in WMS517_FIXTURE_ENTRY["historical_fixture_source"]["files"]:
+                # git_blob also proves ordinary mode-100644 files. Companions
+                # bind this historical delta without freezing their later HEAD.
+                if (git_blob(root, source, item["path"]) != item["source_blob"]
+                        or git_blob(root, parent, item["path"]) != item["source_blob"]
+                        or git_blob(root, correction, item["path"]) != item["correction_blob"]):
+                    return fail("подменён исторический source/parent/correction blob")
+        frozen = (set(WMS517_FIXTURE_ANCHOR["frozen_paths"]) if historical else
+                  {path for path in commit_changed_paths(root, original)
+                   if not path.startswith("docs/requirements/")})
         if original not in frontier:
             originals = {path: git_blob(root, original, path) for path in frozen}
             if any(blob is None for blob in originals.values()):
@@ -560,6 +667,8 @@ def exact_fixture_corrections(
                 task_id, item.get("path"), item.get("before_blob"), item.get("after_blob"),
             ):
                 return fail("неподдерживаемое преобразование или изменены frozen expectations")
+            if transform == WMS517_FIXTURE_TRANSFORM and not historical:
+                return fail("историческое преобразование требует точный legacy anchor")
             _, path, before, after = allowed
             if path not in frozen or path in expected:
                 return fail("повторный или незамороженный файл")
@@ -588,6 +697,8 @@ def exact_fixture_corrections(
                 for companion in NIGHT_REVIEWED_COMPANIONS.get(transform, []):
                     if companion not in required_companions:
                         required_companions.append(companion)
+        if historical:
+            required_companions = WMS517_FIXTURE_COMPANIONS
         if companions != required_companions:
             return fail("неподдерживаемые дополнительные файлы")
         for companion in required_companions:
@@ -620,7 +731,8 @@ def exact_fixture_corrections(
                 or not isinstance(evidence_blob, str)
                 or not re.fullmatch(r"[0-9a-f]{40}", evidence_blob)
                 or not isinstance(evidence, str)
-                or not evidence.startswith("docs/reviews/")
+                or not (evidence.startswith("docs/reviews/") or
+                        (historical and evidence == WMS517_FIXTURE_REPORT["path"]))
                 or not evidence.endswith(".md")
                 or str(PurePosixPath(evidence)) != evidence
                 or ".." in PurePosixPath(evidence).parts
@@ -960,9 +1072,24 @@ def reviewed_contract_correction(
             baselines = {sha: files - paths for sha, files in baselines.items() if files - paths}
             baselines[final] = paths
         return baselines
+    fixture_baselines: dict[str, set[str]] = {}
     if "fixture_corrections" in ledger:
-        baselines, errors = exact_fixture_corrections(root, task_id, contract_commit, ledger, owner_frontier)
-        return (include_owner(baselines), []) if not errors else ({}, errors)
+        fixture_ledger = ledger
+        if "corrections" in ledger:
+            # Only WMS-517's fixed historical record coexists with its existing
+            # array schema. Both validators must pass; neither can hide errors.
+            if (task_id != "WMS-517"
+                    or ledger["fixture_corrections"] != [WMS517_FIXTURE_ENTRY]):
+                return {}, [f"{task_id}: неподдерживаемый смешанный формат коррекций"]
+            fixture_ledger = {key: value for key, value in ledger.items() if key != "corrections"}
+        fixture_baselines, errors = exact_fixture_corrections(
+            root, task_id, contract_commit, fixture_ledger, owner_frontier,
+        )
+        if errors:
+            return {}, errors
+        if "corrections" not in ledger:
+            return include_owner(fixture_baselines), []
+        ledger = {key: value for key, value in ledger.items() if key != "fixture_corrections"}
     incomplete = [
         f"{task_id}: реестр коррекции контракта заполнен не полностью"
     ]
@@ -979,7 +1106,7 @@ def reviewed_contract_correction(
     else:
         entries = [ledger]
 
-    baselines: dict[str, set[str]] = {}
+    baselines: dict[str, set[str]] = dict(fixture_baselines)
     corrected_by_contract: dict[str, set[str]] = {}
     for entry in entries:
         if not isinstance(entry, dict):

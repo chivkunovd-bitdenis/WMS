@@ -16,5 +16,145 @@
       },
       "note": "Existing published test-first additions for IC15 and manual refresh versus polling; the complete original test file is preserved as an exact prefix. No test or product file changed during release reconciliation."
     }
+  ],
+  "fixture_corrections": [
+    {
+      "contract_commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+      "source_commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+      "correction_commit": "30de00e5f70c3fde354036702aa921ebaab7fd65",
+      "legacy_fixture_anchor": {
+        "task": "WMS-517",
+        "commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+        "subject": "WMS-517: align recovery tests with finance archive",
+        "changed_paths": [
+          "backend/tests/test_withdrawal_ledger.py",
+          "backend/tests/test_wms517_raw_integer_price.py",
+          "backend/tests/test_wms517_raw_numeric_price.py",
+          "backend/tests/test_wms517_sales_contract.py",
+          "backend/tests/test_wms517_sales_partial_decimal_regressions.py",
+          "backend/tests/test_wms537_draft_supply_stickers.py",
+          "docs/requirements/WMS-517.md",
+          "docs/requirements/WMS-537.md",
+          "guards/PROCESS_CONTRACTS.json"
+        ],
+        "frozen_paths": [
+          "backend/tests/test_withdrawal_ledger.py"
+        ]
+      },
+      "files": [
+        {
+          "path": "backend/tests/test_withdrawal_ledger.py",
+          "transform": "wms517-withdrawal-ledger-30de-exact-fixture",
+          "before_blob": "ac14733de2530eb4e0f4ae285cab806d5eec3755",
+          "after_blob": "f20342fe34f3c7d05b96960028087dd2968d0960",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        }
+      ],
+      "companion_files": [
+        {
+          "path": "guards/PROCESS_CONTRACTS.json",
+          "before_blob": "4f80f9ea11d7e51c1bd6a64e7e99a4d362472125",
+          "after_blob": "6daab1ccf12d79d2e462bcb651c55692fbd06151",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        },
+        {
+          "path": "backend/tests/test_wb_catalog_schedule.py",
+          "before_blob": "b22007910e910a102105982e3531d36a2930c344",
+          "after_blob": "cce26bacce70ae86c65c1febfd23f915df58958a",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        },
+        {
+          "path": "backend/tests/test_wms666_packing_sticker_request.py",
+          "before_blob": "fa797ead6126fa239cdfa39a306a08a02287b222",
+          "after_blob": "7b7bd5bfc36050cc697dd84500255a7dc04a26b7",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        },
+        {
+          "path": "docs/requirements/WMS-666.md",
+          "before_blob": "57577022c980e9efbee01d06cf9e14330eb2a871",
+          "after_blob": "4a79c1858e870f0e497a17a2a100fc828e23cc63",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        },
+        {
+          "path": "docs/requirements/WMS-689.md",
+          "before_blob": "6a4243254c80844602b57170f8ed716f4f22f2f2",
+          "after_blob": "0a0a9a8744f1892e9cb330324f8f88674c691592",
+          "source_mode": "100644",
+          "correction_mode": "100644"
+        }
+      ],
+      "historical_fixture_source": {
+        "source_commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+        "correction_parent": "f2f9b9b835e7e11cabcce1c693e283072417bac2",
+        "correction_commit": "30de00e5f70c3fde354036702aa921ebaab7fd65",
+        "files": [
+          {
+            "path": "backend/tests/test_withdrawal_ledger.py",
+            "source_mode": "100644",
+            "source_blob": "ac14733de2530eb4e0f4ae285cab806d5eec3755",
+            "correction_mode": "100644",
+            "correction_blob": "f20342fe34f3c7d05b96960028087dd2968d0960"
+          },
+          {
+            "path": "guards/PROCESS_CONTRACTS.json",
+            "source_mode": "100644",
+            "source_blob": "4f80f9ea11d7e51c1bd6a64e7e99a4d362472125",
+            "correction_mode": "100644",
+            "correction_blob": "6daab1ccf12d79d2e462bcb651c55692fbd06151"
+          },
+          {
+            "path": "backend/tests/test_wb_catalog_schedule.py",
+            "source_mode": "100644",
+            "source_blob": "b22007910e910a102105982e3531d36a2930c344",
+            "correction_mode": "100644",
+            "correction_blob": "cce26bacce70ae86c65c1febfd23f915df58958a"
+          },
+          {
+            "path": "backend/tests/test_wms666_packing_sticker_request.py",
+            "source_mode": "100644",
+            "source_blob": "fa797ead6126fa239cdfa39a306a08a02287b222",
+            "correction_mode": "100644",
+            "correction_blob": "7b7bd5bfc36050cc697dd84500255a7dc04a26b7"
+          },
+          {
+            "path": "docs/requirements/WMS-666.md",
+            "source_mode": "100644",
+            "source_blob": "57577022c980e9efbee01d06cf9e14330eb2a871",
+            "correction_mode": "100644",
+            "correction_blob": "4a79c1858e870f0e497a17a2a100fc828e23cc63"
+          },
+          {
+            "path": "docs/requirements/WMS-689.md",
+            "source_mode": "100644",
+            "source_blob": "6a4243254c80844602b57170f8ed716f4f22f2f2",
+            "correction_mode": "100644",
+            "correction_blob": "0a0a9a8744f1892e9cb330324f8f88674c691592"
+          }
+        ],
+        "review": {
+          "model": "gpt-6.1-sol",
+          "effort": "high",
+          "verdict": "PASS",
+          "commit": "86df6d2a8122c7e43ad14e6aa40d8303f3eb4fa3",
+          "path": "docs/evidence/WMS-517/incident-20261008/review-fixture-correction.md",
+          "blob": "a07eb01b2907b04828d4caa31f144ba78bd4da3f"
+        }
+      },
+      "review": {
+        "model": "gpt-6.1-sol",
+        "effort": "high",
+        "verdict": "PASS",
+        "source_commit": "3c3c1b69c15cb611c7d256971f9c85ebb9d1ae60",
+        "correction_commit": "30de00e5f70c3fde354036702aa921ebaab7fd65",
+        "evidence": "docs/evidence/WMS-517/incident-20261008/review-fixture-correction.md",
+        "evidence_commit": "86df6d2a8122c7e43ad14e6aa40d8303f3eb4fa3",
+        "evidence_blob": "a07eb01b2907b04828d4caa31f144ba78bd4da3f"
+      }
+    }
   ]
 }
