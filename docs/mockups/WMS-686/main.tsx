@@ -7,7 +7,8 @@ import { detailFor, installMockApi, products, shipments } from './mockApi'
 import { DemoScanCodes } from './Controls'
 
 // WMS-686 · настоящий экран «Отгрузки на МП» с вымышленными данными и локальным API.
-installMockApi()
+// Печать включена только для ручного демо и идёт в WMS Print на компьютере оператора.
+installMockApi({ allowWmsPrint: true })
 
 const params = new URLSearchParams(location.search)
 const opened = shipments.find((shipment) => shipment.id === params.get('open_mp'))?.id ?? shipments[0].id

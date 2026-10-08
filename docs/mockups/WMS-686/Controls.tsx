@@ -1,7 +1,7 @@
 // WMS-686 · элементы макета, которые сборка (demoTransform.ts) встраивает в
 // настоящие экраны WMS. Это демонстрация поведения R1–R27, не продуктовый код:
 // данные — вымышленные (fboModel.ts), запросы — в локальный mockApi.ts,
-// печать — только предпросмотр, на принтер и в WMS Print ничего не уходит.
+// включённые галки отправляют только изображения этикеток в WMS Print.
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react'
 import {
   Alert, Box, Button, Chip, Collapse, Dialog, DialogActions, DialogContent, DialogTitle, IconButton, Menu, MenuItem,
@@ -15,10 +15,12 @@ import { normalizeFbsChzCopies, type FbsScanPrintPreferences } from '../../../fr
 import { LabelSizeSelect } from '../../../frontend/src/components/LabelSizeSelect'
 import { useScanIntake } from '../../../frontend/src/hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../../frontend/src/utils/scanFeedback'
-import { loadLabelSizeId, resolveLabelSize, type LabelSize } from '../../../frontend/src/utils/labelSize'
-import { buildProductThermalLabelDocument } from '../../../frontend/src/utils/printProductThermalLabel'
+import { loadLabelSizeId, resolveLabelSize, type LabelSize, type LabelSizeId } from '../../../frontend/src/utils/labelSize'
+import { buildProductLabelSectionHtml, buildProductThermalLabelDocument } from '../../../frontend/src/utils/printProductThermalLabel'
 import { renderBarcodeDataUrl } from '../../../frontend/src/utils/renderBarcodeDataUrl'
 import { buildCzLabelHtml, buildTapePageCss, renderDataMatrixDataUrl } from '../../../frontend/src/utils/printMarkingCodeLabel'
+import { renderCzLabelPng, renderLabelSectionPng } from '../../../frontend/src/utils/czLabelPng'
+import { dispatchPreparedQrInKiosk } from '../../../frontend/src/utils/printPreparedQr'
 import {
   activeShipmentId, getFbo, isBaseline, products, resetFbo, subscribeFbo,
 } from './mockApi'
@@ -26,7 +28,7 @@ import { boxedQty, cells, isKizScan, pickSourcesOf, productByBarcode, productByI
 
 // ─── состояние экрана макета (что подсвечено, что раскрыто, журнал демо-печати) ───
 
-type PrintJob = { key: string; kind: 'barcode' | 'kiz'; title: string; productId: string; cis?: string; copy: number }
+type PrintJob = { key: string; kind: 'barcode' | 'kiz'; title: string; productId: string; cis?: string; copy: number; labelSizeId: LabelSizeId }
 type Ui = {
   newKiz: string | null
   packLastProduct: string | null
@@ -232,20 +234,47 @@ export function currentBoxOf(shipmentId: string, boxes = getFbo().boxes): FboBox
   return open.sort((a, b) => b.createdAt - a.createdAt)[0] ?? null
 }
 
-/** Демо WMS Print: ключ на единицу и экземпляр; повтор того же ключа не печатает второй раз. */
-function demoPrint(jobs: PrintJob[]): void {
+/** Отправляет подготовленные этикетки в WMS Print; одинаковый ключ не дублирует задание. */
+const activePrintKeys = new Set<string>()
+async function sendToWmsPrint(jobs: PrintJob[]): Promise<void> {
   if (ui.printDown) {
     setUi({ printError: { text: 'Нет ответа WMS Print. Запустите программу. Если Chrome запросил доступ к этому компьютеру — разрешите его. Перед повтором проверьте очередь принтера.', jobs } })
     throw new Error('wms-print-down')
   }
   const known = new Set(ui.printLog.map((job) => job.key))
-  const fresh = jobs.filter((job) => !known.has(job.key))
+  const fresh = jobs.filter((job) => !known.has(job.key) && !activePrintKeys.has(job.key))
   if (!fresh.length) return
-  setUi((current) => ({
-    printLog: [...current.printLog, ...fresh],
-    printError: null,
-    printNotice: { text: `Макет: ${fresh.length > 1 ? `${fresh.length} этикетки` : 'этикетка'} «${fresh[0].title}» подготовлена для WMS Print (ключ ${fresh[0].key.slice(-12)}). На принтер ничего не отправлено.`, job: fresh[0] },
-  }))
+  try {
+    for (const job of fresh) {
+      activePrintKeys.add(job.key)
+      try {
+        const size = resolveLabelSize(job.labelSizeId)
+        const product = productById(job.productId)
+        if (!product) throw new Error('Не найден товар для этикетки.')
+        const imageDataUrl = job.kind === 'barcode'
+          ? await renderLabelSectionPng(buildProductLabelSectionHtml({
+            product_name: product.name, sku_code: product.sku, wb_vendor_code: product.vendorCode,
+            wb_size: product.size, wb_color: product.color, seller_name: 'Демо селлер', barcode: product.barcode,
+          }, renderBarcodeDataUrl(product.barcode, { variant: 'thermal58' }), undefined, size), size)
+          : await renderCzLabelPng({ cis: job.cis ?? '' }, size)
+        await dispatchPreparedQrInKiosk({
+          imageDataUrl, idempotencyKey: job.key, widthMm: size.widthMm, heightMm: size.heightMm,
+        })
+        setUi((current) => ({
+          printLog: current.printLog.some((logged) => logged.key === job.key) ? current.printLog : [...current.printLog, job],
+          printError: null,
+          printNotice: { text: `WMS Print принял этикетку «${job.title}» (${job.copy}${fresh.length > 1 ? ` из ${fresh.length}` : ''}). Это подтверждение очереди, а не выхода бумаги.`, job },
+        }))
+      } finally {
+        activePrintKeys.delete(job.key)
+      }
+    }
+  } catch (error) {
+    const pending = fresh.filter((job) => !ui.printLog.some((logged) => logged.key === job.key))
+    const message = error instanceof Error ? error.message : 'Не удалось отправить этикетку в WMS Print.'
+    setUi({ printError: { text: message, jobs: pending } })
+    throw error
+  }
 }
 
 function copiesJobs(kind: PrintJob['kind'], key: string, count: number, base: Omit<PrintJob, 'key' | 'copy' | 'kind'>): PrintJob[] {
@@ -338,7 +367,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
       playScanSuccess()
       if (prefsNow.reprintChz && !result.data.already_linked) {
         try {
-          demoPrint(copiesJobs('kiz', `fbo:${mutationId}:copy`, normalizeFbsChzCopies(prefsNow.reprintChzCopies), { title: `КИЗ ${shortCis(code)}`, productId: linkedProduct, cis: code }))
+          await sendToWmsPrint(copiesJobs('kiz', `fbo:${mutationId}:copy`, normalizeFbsChzCopies(prefsNow.reprintChzCopies), { title: `КИЗ ${shortCis(code)}`, productId: linkedProduct, cis: code, labelSizeId }))
         } catch { /* ошибка показана в панели */ }
       }
       changed()
@@ -370,7 +399,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
     changed()
     try {
       if (prefsNow.printQr) {
-        demoPrint([{ key: `fbo:${mutationId}:barcode`, kind: 'barcode', title: `ШК ${product.barcode}`, productId: product.id, copy: 1 }])
+        await sendToWmsPrint([{ key: `fbo:${mutationId}:barcode`, kind: 'barcode', title: `ШК ${product.barcode}`, productId: product.id, copy: 1, labelSizeId }])
       }
       if (prefsNow.printChz && product.honestSign) {
         const issued = await api(`${base(shipmentId)}/boxes/${current.id}/print-marking`, { method: 'POST', body: JSON.stringify({ product_id: product.id, mutation_id: `${mutationId}:chz` }) })
@@ -380,7 +409,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
           const cis = String(issued.data.cis_code)
           setUi((currentUi) => ({ newKiz: cis, packUndo: [...currentUi.packUndo, { kind: 'kiz', shipmentId, cis }] }))
           changed()
-          demoPrint(copiesJobs('kiz', `fbo:${mutationId}:chz`, normalizeFbsChzCopies(prefsNow.printChzCopies), { title: `КИЗ ${shortCis(cis)}`, productId: product.id, cis }))
+          await sendToWmsPrint(copiesJobs('kiz', `fbo:${mutationId}:chz`, normalizeFbsChzCopies(prefsNow.printChzCopies), { title: `КИЗ ${shortCis(cis)}`, productId: product.id, cis, labelSizeId }))
         }
       }
     } catch { /* ошибка печати показана; единица остаётся упакованной */ }
@@ -415,7 +444,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
     // WMS-643: снятая после сбоя галка больше не печатает.
     const allowed = pending.filter((job) => (job.kind === 'barcode' ? prefsNow.printQr : (prefsNow.printChz || prefsNow.reprintChz)))
     setUi({ printError: null })
-    try { demoPrint(allowed) } catch { /* снова недоступен */ }
+    void sendToWmsPrint(allowed).catch(() => { /* ошибка остаётся в панели */ })
   }
   if (isBaseline()) return null
   return (
@@ -436,7 +465,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
         {!current ? <Button size="small" variant="outlined" onClick={() => void createBox()}>Создать короб</Button> : null}
       </Stack>
       <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.75 }}>
-        {intake.listening ? 'Сканер активен: ШК товара — +1 в текущий короб; следующий ЧЗ — к этой единице (необязательно); ШК короба — сменить текущий.' : 'Сканер на паузе: открыто окно.'}
+        {intake.listening ? 'Сканер активен: ШК товара — +1 в текущий короб; следующий ЧЗ — к этой единице (необязательно); ШК короба — сменить текущий. Отмеченные этикетки печатаются сразу через WMS Print.' : 'Сканер на паузе: открыто окно.'}
       </Typography>
       {notice ? <Alert severity="success" sx={{ mt: 1 }} data-testid="fbo-pack-scan-notice">{notice}</Alert> : null}
       {error ? <Alert severity="error" sx={{ mt: 1 }} data-testid="fbo-pack-scan-error">{error}</Alert> : null}
@@ -448,7 +477,7 @@ export function FboPackScanBar({ shipmentId, onBoxBarcodeScan }: { shipmentId: s
       ) : null}
       {state.printNotice ? (
         <Alert severity="info" icon={<PrintOutlined fontSize="inherit" />} sx={{ mt: 1 }} data-testid="fbo-pack-print-notice"
-          action={<LabelPreviewButton job={state.printNotice.job} size={resolveLabelSize(labelSizeId)} />}>
+          action={<LabelPreviewButton job={state.printNotice.job} size={resolveLabelSize(state.printNotice.job.labelSizeId)} />}>
           {state.printNotice.text}
         </Alert>
       ) : null}
@@ -477,7 +506,7 @@ function LabelPreviewButton({ job, size }: { job: PrintJob; size: LabelSize }) {
         <DialogTitle>Предпросмотр этикетки · макет</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            Та же разметка, что печатает WMS. В макете задание в WMS Print не создаётся.
+            Предпросмотр уже отправленной этикетки. Печать запускается сразу после скана, если отмечена соответствующая галка.
           </Typography>
           {html ? <iframe title="Этикетка" srcDoc={html} style={{ width: `${size.widthMm * 4}px`, height: `${size.heightMm * 4 + 20}px`, border: '1px solid #ccc', background: '#fff' }} /> : null}
         </DialogContent>
@@ -520,7 +549,7 @@ export function FboPackNested({ line, colSpan }: { line: TaskLineLike; colSpan: 
   const boxCode = (boxId: string | null) => fbo.boxes.find((box) => box.id === boxId)?.code
   const reprint = (cis: string) => {
     try {
-      demoPrint(copiesJobs('kiz', `fbo:reprint:${cis}:${newKey()}`, normalizeFbsChzCopies(loadPrefs().reprintChzCopies ?? prefs.reprintChzCopies), { title: `КИЗ ${shortCis(cis)}`, productId: line.product_id, cis }))
+      void sendToWmsPrint(copiesJobs('kiz', `fbo:reprint:${cis}:${newKey()}`, normalizeFbsChzCopies(loadPrefs().reprintChzCopies ?? prefs.reprintChzCopies), { title: `КИЗ ${shortCis(cis)}`, productId: line.product_id, cis, labelSizeId: loadLabelSizeId() })).catch(() => { /* ошибка остаётся в панели */ })
     } catch { /* показано в панели */ }
   }
   return (

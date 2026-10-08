@@ -199,13 +199,20 @@ function replay(mutationId: unknown, compute: () => Response): Promise<Response>
   })
 }
 
-export function createMockFetch(): typeof fetch {
+export function createMockFetch(options: { allowWmsPrint?: boolean } = {}): typeof fetch {
+  // Preserve the browser fetch before the mock API replaces it. Only the public,
+  // manually operated mockup opts into forwarding the local WMS Print endpoint.
+  const nativeFetch = globalThis.fetch.bind(globalThis)
   return async (input, init) => {
     const raw = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url
     const url = new URL(raw, 'http://wms686.local')
     const path = url.pathname
     const method = (init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase()
-    if (url.host === '127.0.0.1:17843') return refuse('Макет: WMS Print не вызывается, задания на принтер не отправляются.', 400)
+    if (url.host === '127.0.0.1:17843') {
+      return options.allowWmsPrint
+        ? nativeFetch(input, init)
+        : refuse('Макет: WMS Print не вызывается, задания на принтер не отправляются.', 400)
+    }
     let body: Body = {}
     if (init?.body && !(init.body instanceof FormData)) {
       try { body = JSON.parse(String(init.body)) as Body } catch { return refuse('Некорректный JSON в запросе макета', 400) }
@@ -381,7 +388,7 @@ export function createMockFetch(): typeof fetch {
   }
 }
 
-export function installMockApi() {
+export function installMockApi(options: { allowWmsPrint?: boolean } = {}) {
   if (typeof localStorage !== 'undefined' && !isBaseline()) {
     const params = new URLSearchParams(location.search)
     if (params.has('reset')) {
@@ -391,5 +398,5 @@ export function installMockApi() {
     }
     state = loadFboState(localStorage)
   }
-  globalThis.fetch = createMockFetch()
+  globalThis.fetch = createMockFetch(options)
 }
