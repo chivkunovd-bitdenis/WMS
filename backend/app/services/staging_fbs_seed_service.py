@@ -128,20 +128,27 @@ async def _seed_tenant(
         .having(func.sum(InventoryBalance.quantity) > 0)
         .order_by(Product.id, StorageLocation.warehouse_id)
     )
-    # Use the same lock order and available-stock calculation as normal FBS
-    # reservations. Locks prevent concurrent operators reserving these units.
+    product_ids = {product.id for product in products}
+    stock_rows = (await session.execute(stock_stmt.where(Product.id.in_(product_ids)))).all()
+    # The full catalog can exceed PostgreSQL's 65,535 bind parameter limit in
+    # organization_stock_totals_by_product. Only products with pickable stock
+    # need an availability calculation; every other candidate is no_stock.
+    stock_product_ids = {product.id for product, _, _ in stock_rows}
     await session.execute(
         select(Product.id).where(
             Product.tenant_id == tenant.id,
-            Product.id.in_({product.id for product in products}),
+            Product.id.in_(stock_product_ids),
         )
         .order_by(Product.id).with_for_update()
     )
-    # Re-read quantities after obtaining the locks, as picking/shipment may
-    # have committed while this run was waiting for another stock operation.
-    product_ids = {product.id for product in products}
-    stock_rows = (await session.execute(stock_stmt.where(Product.id.in_(product_ids)))).all()
-    totals = await organization_stock_totals_by_product(session, tenant.id, list(product_ids))
+    # Re-read quantities after obtaining locks, as picking/shipment may have
+    # committed while this run was waiting for another stock operation.
+    stock_rows = (
+        await session.execute(stock_stmt.where(Product.id.in_(stock_product_ids)))
+    ).all()
+    totals = await organization_stock_totals_by_product(
+        session, tenant.id, sorted(stock_product_ids)
+    )
     remaining = {pid: total.available_for_checks for pid, total in totals.items()}
     physical = {
         (product.id, warehouse_id): int(quantity)
@@ -239,7 +246,10 @@ async def seed_staging_fbs_orders(slot_key: str | None = None) -> dict[str, int]
                 results[slug] = await _seed_tenant(session, tenant, slot)
             logger.info("staging FBS seed: tenant=%s slot=%s created=%s", slug, key, results[slug])
         except Exception as exc:
-            logger.exception("staging FBS seed failed: tenant=%s slot=%s", slug, key)
+            logger.error(
+                "staging FBS seed failed: tenant=%s slot=%s error_type=%s",
+                slug, key, type(exc).__name__,
+            )
             errors.append(exc)
     if errors:
         raise errors[0]
