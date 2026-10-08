@@ -128,8 +128,7 @@ async def _seed_tenant(
         .having(func.sum(InventoryBalance.quantity) > 0)
         .order_by(Product.id, StorageLocation.warehouse_id)
     )
-    product_ids = {product.id for product in products}
-    stock_rows = (await session.execute(stock_stmt.where(Product.id.in_(product_ids)))).all()
+    stock_rows = (await session.execute(stock_stmt)).all()
     # The full catalog can exceed PostgreSQL's 65,535 bind parameter limit in
     # organization_stock_totals_by_product. Only products with pickable stock
     # need an availability calculation; every other candidate is no_stock.

@@ -68,25 +68,21 @@ async def _get_product(
     product_id: uuid.UUID,
     *,
     seller_scope: uuid.UUID | None = None,
+    for_update: bool = False,
 ) -> Product:
-    product = await session.get(Product, product_id)
+    if for_update:
+        product = await session.scalar(
+            select(Product)
+            .where(Product.id == product_id, Product.tenant_id == tenant_id)
+            .with_for_update()
+        )
+    else:
+        product = await session.get(Product, product_id)
     if product is None or product.tenant_id != tenant_id:
         raise StockDirectionError("product_not_found")
     if seller_scope is not None and product.seller_id != seller_scope:
         raise StockDirectionError("forbidden")
     return product
-
-
-async def product_on_hand_total(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    product_id: uuid.UUID,
-) -> int:
-    stmt = select(func.coalesce(func.sum(InventoryBalance.quantity), 0)).where(
-        InventoryBalance.tenant_id == tenant_id,
-        InventoryBalance.product_id == product_id,
-    )
-    return int(await session.scalar(stmt) or 0)
 
 
 async def _direction_quantity_total(
@@ -115,14 +111,19 @@ async def _assert_directions_fit_stock(
 ) -> None:
     if next_quantity < 0:
         raise StockDirectionError("invalid_quantity")
-    on_hand = await product_on_hand_total(session, tenant_id, product_id)
+    from app.services.fbs_stock_availability_service import organization_stock_totals_by_product
+
+    totals = await organization_stock_totals_by_product(session, tenant_id, [product_id])
+    stock = totals[product_id]
+    direction_total = await _direction_quantity_total(session, tenant_id, product_id)
     already = await _direction_quantity_total(
         session,
         tenant_id,
         product_id,
         exclude_direction_id=exclude_direction_id,
     )
-    if already + next_quantity > on_hand:
+    reserved_without_directions = stock.reserved - direction_total
+    if reserved_without_directions + already + next_quantity > stock.on_hand:
         raise StockDirectionError("directions_exceed_stock")
 
 
@@ -164,7 +165,9 @@ async def create_stock_direction(
     comment: str | None = None,
     seller_scope: uuid.UUID | None = None,
 ) -> StockDirection:
-    product = await _get_product(session, tenant_id, product_id, seller_scope=seller_scope)
+    product = await _get_product(
+        session, tenant_id, product_id, seller_scope=seller_scope, for_update=True
+    )
     clean_name = _clean_name(name)
     clean_comment = _clean_comment(comment)
     await _assert_directions_fit_stock(
@@ -207,6 +210,7 @@ async def update_stock_direction(
         tenant_id,
         direction.product_id,
         seller_scope=seller_scope,
+        for_update=True,
     )
     if quantity is not None:
         await _assert_directions_fit_stock(
@@ -243,6 +247,7 @@ async def delete_stock_direction(
         tenant_id,
         direction.product_id,
         seller_scope=seller_scope,
+        for_update=True,
     )
     await session.delete(direction)
     schedule_seller_stock_publish(session, tenant_id, product.seller_id)
