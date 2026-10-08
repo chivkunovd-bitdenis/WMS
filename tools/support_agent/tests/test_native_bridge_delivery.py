@@ -272,6 +272,180 @@ def test_sent_native_answer_is_reconciled_to_card_after_crash(tmp_path, monkeypa
     assert tg.edits[-1][1] == original_card["message_id"]
 
 
+def test_visible_startup_resolves_interrupted_native_sends_on_linked_card(tmp_path):
+    from types import SimpleNamespace
+
+    from support_agent.runner import Agent
+
+    class ProcessStopped(BaseException):
+        pass
+
+    class CardsTelegram:
+        def __init__(self):
+            self.sent = []
+            self.edits = []
+            self.next_id = 1000
+
+        def send_message(self, chat_id, text, reply_to=None):
+            self.sent.append((chat_id, text, reply_to))
+            if chat_id == CLIENT_CHAT:
+                raise ProcessStopped
+            self.next_id += 1
+            return str(self.next_id)
+
+        def edit_message(self, chat_id, message_id, text):
+            self.edits.append((chat_id, message_id, text))
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    first = NativeBridge(cfg)
+    first.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    tg = CardsTelegram()
+    topic_id = "native:startup-unknown-deliveries"
+    original_card = first.journal.update_card(
+        tg, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Проверка поставки", statuses={"working": True},
+        event="Получено обращение", event_key="incoming:startup-unknown",
+    )
+    bots = Bots(tg, tg, cfg.telegram.owner_chat_id)
+    first._delivery = lambda: SimpleNamespace(store=first.store, bots=bots)
+
+    stable_keys = ["native-send:startup-unknown-a", "native-send:startup-unknown-b"]
+    for key, answer in zip(stable_keys, ("Проверенный ответ А", "Проверенный ответ Б")):
+        with pytest.raises(ProcessStopped):
+            first.send(CLIENT_CHAT, answer, key=key.removeprefix("native-send:"),
+                       topic_id=topic_id)
+        interrupted = first.store.outbox_by_key(key)
+        assert interrupted["status"] == "sending"
+        assert interrupted["attempts"] == 1
+    assert len([item for item in tg.sent if item[0] == CLIENT_CHAT]) == 2
+    first.store.db.close()
+
+    restarted = NativeBridge(cfg)
+    sends_before_startup = len(tg.sent)
+    Agent(cfg, restarted.store, tg, None, lambda: 1.0).startup()
+
+    resolved = [restarted.store.outbox_by_key(key) for key in stable_keys]
+    assert [item["status"] for item in resolved] == ["unknown", "unknown"]
+    assert [item["attempts"] for item in resolved] == [1, 1]
+    assert len(tg.sent) == sends_before_startup
+
+    saved_card = restarted.store.kv_get(f"case_card:{topic_id}")
+    unconfirmed = [event for event in saved_card["events"]
+                   if "не подтвержд" in event["text"].lower()]
+    assert len(unconfirmed) == 2
+    for event in unconfirmed:
+        text = event["text"].lower()
+        assert "повтор" in text
+        assert "провер" in text or "чат" in text
+    assert saved_card["number"] == original_card["number"]
+    assert saved_card["message_id"] == original_card["message_id"]
+    assert tg.edits
+    assert all(edit[1] == original_card["message_id"] for edit in tg.edits)
+    assert "не подтвержд" in tg.edits[-1][2].lower()
+    assert tg.edits[-1][2].lower().count("не подтвержд") >= 2
+
+
+def test_replayed_confirmed_native_send_retries_failed_card_projection(tmp_path):
+    import json
+    from itertools import count
+
+    from support_agent.telegram import TelegramError, reconcile_case_delivery
+
+    class CardsTelegram:
+        def __init__(self):
+            self.ids = count(2000)
+            self.sent = []
+            self.edit_attempts = []
+
+        def send_message(self, chat_id, text, reply_to=None):
+            message_id = str(next(self.ids))
+            self.sent.append((chat_id, text, reply_to, message_id))
+            return message_id
+
+        def edit_message(self, chat_id, message_id, text):
+            self.edit_attempts.append((chat_id, message_id, text))
+            if len(self.edit_attempts) == 1:
+                raise TelegramError("unknown", "simulated_owner_card_edit_failure")
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    first = NativeBridge(cfg)
+    first.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    tg = CardsTelegram()
+    topic_id = "native:retry-card-projection"
+    original_card = first.journal.update_card(
+        tg, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Проверка поставки", statuses={"working": True},
+        event="Получено обращение", event_key="incoming:projection-retry",
+    )
+    answer = "Проверенный ответ после сбоя карточки"
+    stable_key = "native-send:projection-retry"
+    first.store.queue_message(
+        key=stable_key, chat_id=CLIENT_CHAT, text=answer,
+        purpose="native_reply", repeat_ok=False,
+    )
+    queued = first.store.outbox_by_key(stable_key)
+    assert first.store.claim_outbox(queued["id"])
+    client_message_id = tg.send_message(CLIENT_CHAT, answer)
+    first.store.finish_outbox(queued["id"], "sent", client_message_id)
+    first.store.kv_set(
+        f"reply_case:{stable_key}",
+        {"topic_id": topic_id, "chat_id": CLIENT_CHAT,
+         "destination_chat_id": CLIENT_CHAT, "kind": "answer"},
+    )
+    sent_outbox = first.store.outbox_by_key(stable_key)
+    delivered_key = f"delivered:{sent_outbox['id']}"
+    assert sent_outbox["status"] == "sent"
+    assert len(tg.edit_attempts) == 0
+
+    reconcile_case_delivery(
+        first.journal, first.store, tg, cfg.telegram.owner_chat_id, sent_outbox,
+    )
+    assert len(tg.edit_attempts) == 1
+    assert sent_outbox["tg_message_id"] is not None
+    failed_projection = first.store.kv_get(f"case_card:{topic_id}")
+    assert failed_projection["message_id"] == original_card["message_id"]
+    assert failed_projection["delivery"] == "unknown"
+    assert answer not in failed_projection.get("last_text", "")
+    assert any(event["key"] == delivered_key for event in failed_projection["events"])
+    journal_rows = first.store.rows("SELECT value FROM kv WHERE key LIKE 'journal_event:%'")
+    assert any(
+        json.loads(row["value"])["key"] == delivered_key
+        for row in journal_rows
+    )
+    assert len([item for item in tg.sent if item[0] == CLIENT_CHAT]) == 1
+    first.store.db.close()
+
+    restarted = NativeBridge(cfg)
+    reconcile_case_delivery(
+        restarted.journal, restarted.store, tg, cfg.telegram.owner_chat_id,
+        restarted.store.outbox_by_key(stable_key),
+    )
+
+    saved_card = restarted.store.kv_get(f"case_card:{topic_id}")
+    answer_events = [event for event in saved_card["events"] if event["key"] == delivered_key]
+    client_sends = [item for item in tg.sent if item[0] == CLIENT_CHAT]
+    assert restarted.store.outbox_by_key(stable_key)["status"] == "sent"
+    assert len(client_sends) == 1
+    assert len(answer_events) == 1
+    assert len(tg.edit_attempts) == 2
+    assert tg.edit_attempts[-1][0] == cfg.telegram.owner_chat_id
+    assert tg.edit_attempts[-1][1] == original_card["message_id"]
+    assert answer in tg.edit_attempts[-1][2]
+    assert answer in saved_card["last_text"]
+    assert saved_card["number"] == original_card["number"]
+    assert saved_card["message_id"] == original_card["message_id"]
+
+
 def test_visible_service_only_collects_and_does_not_drain_old_outbox(env):
     from support_agent.runner import Agent
 
