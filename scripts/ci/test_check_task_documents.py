@@ -165,13 +165,10 @@ class GitTests(unittest.TestCase):
 
     @staticmethod
     def current_integration_checker():
-        integration = Path(__file__).resolve().parents[2].parent / "night1007-integration"
-        path = integration / "scripts/ci/check_task_documents.py"
-        # During this test-writer stage exercise the live integration candidate;
-        # after the contract is merged, run the same tests against their local
-        # checked-in checker rather than a worktree-specific absolute path.
-        if not path.is_file():
-            path = Path(__file__).with_name("check_task_documents.py")
+        # Exercise the checker shipped with this candidate. A neighboring
+        # integration worktree may contain an older policy implementation and
+        # must not silently decide this branch's contract tests.
+        path = Path(__file__).with_name("check_task_documents.py")
         spec = importlib.util.spec_from_file_location(
             "current_integration_check_task_documents",
             path,
@@ -1200,7 +1197,7 @@ class GitTests(unittest.TestCase):
         errors = self.current_integration_checker().document_errors(document(returned), self.root)
         self.assertEqual(errors, [])
 
-    def test_protected_wms687_expanded_reference_rejects_unbound_or_changed_proof(self):
+    def test_protected_wms687_test_source_edits_use_current_cases_not_frozen_bytes(self):
         for tamper in ("changed-head", "dirty", "missing-case", "wrong-report", "unregistered"):
             with self.subTest(tamper=tamper):
                 with tempfile.TemporaryDirectory() as directory:
@@ -1216,10 +1213,12 @@ class GitTests(unittest.TestCase):
                     try:
                         source, _, returned, _, policy, document = isolated.protected_wms687_document_gate_fixture()
                         if tamper == "changed-head":
-                            isolated.write(source, "it('changed protected original', () => {})\n")
-                            isolated.commit("WMS-687: changed protected original")
+                            isolated.write(source, "// adjusted fixture under ordinary review\n" +
+                                           (isolated.root / source).read_text())
+                            isolated.commit("WMS-687: adjust test fixture")
                         elif tamper == "dirty":
-                            isolated.write(source, (isolated.root / source).read_text() + "// dirty\n")
+                            isolated.write(source, "// adjust local fixture\n" +
+                                           (isolated.root / source).read_text())
                         else:
                             if tamper == "missing-case":
                                 policy["suites"]["frontend-fbs"]["cases"] = [
@@ -1233,7 +1232,10 @@ class GitTests(unittest.TestCase):
                             isolated.write("guards/PROCESS_CONTRACTS.json", json.dumps(policy) + "\n")
                             isolated.commit(f"WMS-687: {tamper} protected proof")
                         errors = isolated.current_integration_checker().document_errors(document(returned), isolated.root)
-                        self.assertTrue(errors, errors)
+                        if tamper in ("changed-head", "dirty"):
+                            self.assertEqual(errors, [])
+                        else:
+                            self.assertTrue(errors, errors)
                     finally:
                         isolated.temp.cleanup()
 

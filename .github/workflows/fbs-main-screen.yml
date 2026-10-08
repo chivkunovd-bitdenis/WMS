@@ -2,6 +2,21 @@ name: FBS main screen real stack
 on:
   push:
     branches: [codex/fbs-main-screen-ci, codex/wms666-packing-release-1008, etalon]
+    paths:
+      - 'backend/app/**'
+      - 'backend/alembic/**'
+      - 'backend/tests/fbs_main_screen*.py'
+      - 'backend/pyproject.toml'
+      - 'frontend/src/**'
+      - '!frontend/src/**/*.test.ts'
+      - '!frontend/src/**/*.test.tsx'
+      - 'frontend/tests-e2e/fbs-main-screen/**'
+      - 'frontend/package.json'
+      - 'frontend/package-lock.json'
+      - 'scripts/ci/run_fbs_main_screen.sh'
+      - '.github/workflows/fbs-main-screen.yml'
+# For target-only diagnostics, dispatch from a branch outside the push list above;
+# a push to an automatically watched branch runs the suite when its runtime inputs change.
   workflow_dispatch:
 permissions:
   contents: read
