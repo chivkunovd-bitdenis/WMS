@@ -16,7 +16,7 @@ const selectedCases = process.env.FBS_MAIN_CASES?.split(',').filter(Boolean)
 const wbDynamic = Object.values(seed.orders).flat().map(order => order.wms_order_id)
 const orderId = key => fixture.orders[key].id
 const sellerBIds = [orderId('wb_other_seller'), fixture.second_warehouse_order.id]
-const newIds = [...wbDynamic, ...['wb_new', 'wb_other_seller', 'ozon_new', 'wb_unpublished'].map(orderId), fixture.second_warehouse_order.id]
+const newIds = [...wbDynamic, ...['wb_new', 'wb_expired', 'wb_other_seller', 'ozon_new', 'wb_unpublished'].map(orderId), fixture.second_warehouse_order.id]
 let createdWbSupplyId = null
 
 async function run(name, test, role = 'admin') {
@@ -75,13 +75,14 @@ async function search(page, value) {
 const row = (page, key) => page.getByTestId(`fbs-order-${orderId(key)}`)
 const bar = page => page.getByTestId('fbs-selection-bar')
 
-await run('S1-six-tabs-and-exact-membership', async page => {
-  for (const tab of ['Новые', 'В работе', 'В доставке', 'Просрочены', 'Завершённые', 'Отменённые']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible()
+await run('S1-five-tabs-and-exact-membership', async page => {
+  for (const tab of ['Новые', 'В работе', 'В доставке', 'Завершённые', 'Отменённые']) await expect(page.getByRole('tab', { name: tab, exact: true })).toBeVisible()
+  // WMS-692: вкладки «Просрочены» нет; просроченный WB-заказ остаётся в «Новых» (см. newIds).
+  await expect(page.getByRole('tab', { name: 'Просрочены', exact: true })).toHaveCount(0)
   for (const [tab, keys, type] of [
     ['В работе', ['draft', 'assembling', 'packed'], 'supply'],
     ['В доставке', ['in_delivery'], 'supply'],
     ['Завершённые', ['done'], 'supply'],
-    ['Просрочены', ['wb_expired'], 'order'],
     ['Отменённые', ['wb_cancelled', 'wb_defect', 'ozon_cancelled'], 'order'],
   ]) {
     await page.getByRole('tab', { name: tab, exact: true }).click()

@@ -535,20 +535,42 @@ async def test_tsd_working_worklist_keeps_tenant_and_served_warehouse_scope(
 
 
 @pytest.mark.asyncio
-async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(
+async def test_fbs_worklist_keeps_overdue_wb_order_in_new(
     async_client: AsyncClient,
 ) -> None:
-    """BL-3/FBS-03: заказ с истёкшим сроком сборки уходит из "new" в "expired",
-    статус в БД (FBS_ORDER_STATUS_NEW) не меняется."""
+    """WMS-692 R1, R5: WB-заказ с истёкшим сроком остаётся в «Новых» со статусом NEW.
+
+    Заменяет прежнюю проверку BL-3/FBS-03: та выносила такой заказ в группу "expired"
+    и вешала на него блокер deadline_passed. Теперь срок только виден в плашке,
+    группы expired нет (её отсутствие проверяет test_wms692_overdue_new.py).
+    """
     headers, seller_id, _, _, _, order_ids = await _setup_ff_admin_with_stock(
         async_client, order_count=2
     )
-    fresh_id, expired_id = order_ids[0], order_ids[1]
+    fresh_id, overdue_id = order_ids[0], order_ids[1]
 
+    # Пока срок не вышел, заказ в «Новых» есть (контрольная точка перед истечением).
     async with SessionLocal() as session:
-        expired_order = await session.get(FbsOrder, expired_id)
-        assert expired_order is not None
-        expired_order.deadline_at = datetime.now(tz=UTC) - timedelta(hours=1)
+        overdue_order = await session.get(FbsOrder, overdue_id)
+        assert overdue_order is not None
+        overdue_order.deadline_at = datetime.now(tz=UTC) + timedelta(hours=1)
+        await session.commit()
+    before_resp = await async_client.get(
+        "/operations/fbs-orders/worklist",
+        headers=headers,
+        params={"seller_id": str(seller_id), "status_group": "new"},
+    )
+    assert before_resp.status_code == 200, before_resp.text
+    assert {item["id"] for item in before_resp.json()["items"]} == {
+        str(fresh_id),
+        str(overdue_id),
+    }
+
+    # Срок вышел, пока экран был открыт: повторная загрузка заказ не прячет.
+    async with SessionLocal() as session:
+        overdue_order = await session.get(FbsOrder, overdue_id)
+        assert overdue_order is not None
+        overdue_order.deadline_at = datetime.now(tz=UTC) - timedelta(hours=1)
         await session.commit()
 
     new_resp = await async_client.get(
@@ -557,24 +579,24 @@ async def test_fbs_worklist_new_and_expired_groups_split_by_deadline(
         params={"seller_id": str(seller_id), "status_group": "new"},
     )
     assert new_resp.status_code == 200, new_resp.text
-    assert {item["id"] for item in new_resp.json()["items"]} == {str(fresh_id)}
+    items = new_resp.json()["items"]
+    # Просроченный заказ идёт выше: «Новые» сортируются по сроку, как и раньше.
+    assert [item["id"] for item in items] == [str(overdue_id), str(fresh_id)]
+    assert items[0]["status"] == FBS_ORDER_STATUS_NEW
 
-    expired_resp = await async_client.get(
-        "/operations/fbs-orders/worklist",
-        headers=headers,
-        params={"seller_id": str(seller_id), "status_group": "expired"},
-    )
-    assert expired_resp.status_code == 200, expired_resp.text
-    expired_items = expired_resp.json()["items"]
-    assert {item["id"] for item in expired_items} == {str(expired_id)}
-    assert any(
-        blocker["code"] == "deadline_passed" for blocker in expired_items[0]["selection_blockers"]
-    )
+    for group in ("active", "delivery", "done", "cancelled"):
+        group_resp = await async_client.get(
+            "/operations/fbs-orders/worklist",
+            headers=headers,
+            params={"seller_id": str(seller_id), "status_group": group},
+        )
+        assert group_resp.status_code == 200, group_resp.text
+        assert str(overdue_id) not in {item["id"] for item in group_resp.json()["items"]}, group
 
     async with SessionLocal() as session:
-        expired_order_check = await session.get(FbsOrder, expired_id)
-        assert expired_order_check is not None
-        assert expired_order_check.status == FBS_ORDER_STATUS_NEW
+        overdue_order_check = await session.get(FbsOrder, overdue_id)
+        assert overdue_order_check is not None
+        assert overdue_order_check.status == FBS_ORDER_STATUS_NEW
 
 
 @pytest.mark.asyncio

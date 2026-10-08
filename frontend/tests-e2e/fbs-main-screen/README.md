@@ -34,7 +34,7 @@ only after its browser/API run succeeds on the recorded SHA.
 
 | Scenario | Case | Actual boundary and expectation |
 | --- | --- | --- |
-| S1 | `S1-six-tabs-and-exact-membership` | Browser table IDs against explicitly inserted database records; six tabs; orders versus supplies; WB past/future deadline and Ozon past deadline membership. Does not endorse a deadline prohibition. |
+| S1 | `S1-five-tabs-and-exact-membership` | Browser table IDs against explicitly inserted database records; five tabs without Просрочены; orders versus supplies; WB past/future deadline and Ozon past deadline membership. Does not endorse a deadline prohibition. |
 | S1 / S12 | `S1-S12-arriving-order-refresh-and-no-sync-duplicate` | Open browser, create a new external WB order, run actual WMS/Celery synchronization, refresh the existing screen, repeat sync, assert one record/one row. The test API sync represents a background event, not an admin button scope decision. |
 | S2 | `S2-marketplace-seller-search-empty` | Real worklist requests and exact visible IDs after marketplace/seller/search changes; an independently absent identifier produces an empty result. |
 | S2 | `S2-two-wb-warehouses-exact-membership` | Real WB seller B order on warehouse 501002 and WB orders on 501001; exact distinct sets; changing to Ozon resets warehouse. Ozon has its own external warehouse identifier. |

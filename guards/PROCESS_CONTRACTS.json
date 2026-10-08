@@ -1672,7 +1672,7 @@
       "cases": [
         "WMS652.geometry[mixed-group-many;1600x1000-long]",
         "WMS652.geometry[orders-cancelled;1600x1000-long]",
-        "WMS652.geometry[orders-expired;1600x1000-long]",
+        "WMS652.geometry[orders-overdue-new;1600x1000-long]",
         "WMS652.geometry[ozon-group-many;1600x1000-long]",
         "WMS652.geometry[ozon-group-one;1600x1000-long]",
         "WMS652.geometry[ozon-single;1600x1000-long]",

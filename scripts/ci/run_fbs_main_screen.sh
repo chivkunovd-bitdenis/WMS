@@ -33,7 +33,7 @@ curl --fail --silent "$FBS_MAIN_URL/app/ff/fbs" >/dev/null
 export FBS_MAIN_SEED="$FBS_MAIN_EVIDENCE/seed.json"
 mkdir -p "$FBS_MAIN_EVIDENCE/baseline"
 # Baseline and mutant run before arrival/create/add, on the same unchanged DB.
-if FBS_MAIN_EVIDENCE="$FBS_MAIN_EVIDENCE/baseline" FBS_MAIN_CASES=S1-six-tabs-and-exact-membership node frontend/tests-e2e/fbs-main-screen/browser.mjs > "$FBS_MAIN_EVIDENCE/baseline/browser.log" 2>&1; then
+if FBS_MAIN_EVIDENCE="$FBS_MAIN_EVIDENCE/baseline" FBS_MAIN_CASES=S1-five-tabs-and-exact-membership node frontend/tests-e2e/fbs-main-screen/browser.mjs > "$FBS_MAIN_EVIDENCE/baseline/browser.log" 2>&1; then
   mutation_source="$PWD/frontend/src/screens/v2/FfFbsOrdersScreen.tsx"
   mutation_backup="$FBS_MAIN_EVIDENCE/original-FfFbsOrdersScreen.tsx"
   cp "$mutation_source" "$mutation_backup"
@@ -42,7 +42,7 @@ if FBS_MAIN_EVIDENCE="$FBS_MAIN_EVIDENCE/baseline" FBS_MAIN_CASES=S1-six-tabs-an
   sha256sum "$mutation_source" > "$FBS_MAIN_EVIDENCE/mutation/source.sha256"
   (cd frontend && node node_modules/vite/bin/vite.js build) > "$FBS_MAIN_EVIDENCE/mutation/build.log" 2>&1
   mutation_status=0
-  FBS_MAIN_EVIDENCE="$FBS_MAIN_EVIDENCE/mutation" FBS_MAIN_CASES=S1-six-tabs-and-exact-membership node frontend/tests-e2e/fbs-main-screen/browser.mjs > "$FBS_MAIN_EVIDENCE/mutation/browser.log" 2>&1 || mutation_status=$?
+  FBS_MAIN_EVIDENCE="$FBS_MAIN_EVIDENCE/mutation" FBS_MAIN_CASES=S1-five-tabs-and-exact-membership node frontend/tests-e2e/fbs-main-screen/browser.mjs > "$FBS_MAIN_EVIDENCE/mutation/browser.log" 2>&1 || mutation_status=$?
   cp "$mutation_backup" "$mutation_source"
   mutation_backup=""
   node -e 'const fs=require("fs"); const r=JSON.parse(fs.readFileSync(process.argv[1])); const c=r[0]; const proved=r.length===1&&c.status==="failed"&&c.phase==="setup"&&c.expectedOrderIds.length>0&&Array.isArray(c.actualOrderIds)&&c.actualOrderIds.length===0&&c.browserErrors.length===0&&c.worklistSnapshots.some(s=>s.status===200&&s.ids.length>0)&&process.argv[3]==="1"; fs.writeFileSync(process.argv[2], JSON.stringify({proved, mutation:"setOrders(page.items) -> setOrders([])", baseline:"S1 passed", observed:c},null,2)); if(!proved)process.exit(1)' "$FBS_MAIN_EVIDENCE/mutation/results.json" "$FBS_MAIN_EVIDENCE/mutation/proof.json" "$mutation_status"

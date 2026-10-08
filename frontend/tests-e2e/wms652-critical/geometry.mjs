@@ -14,7 +14,7 @@ export const packingEntries=[
  ['mixed-group-many','supply_ids=wb-a,ozon-a',['wb-a','ozon-a']],
 ];
 export const geometryIds=packingEntries.map(([id])=>`WMS652.geometry[${id};1600x1000-long]`)
- .concat(['WMS652.geometry[orders-expired;1600x1000-long]','WMS652.geometry[orders-cancelled;1600x1000-long]','WMS652.geometry[selection;1600x1000-long]']);
+ .concat(['WMS652.geometry[orders-overdue-new;1600x1000-long]','WMS652.geometry[orders-cancelled;1600x1000-long]','WMS652.geometry[selection;1600x1000-long]']);
 function longOrder(o){o.product.name+=longName;o.product.size=longSize;o.seller.name=longSeller;
  o.delivery_route=longRoute;o.deadline_at='2026-10-31T23:59:00Z';
  for(const p of o.positions){p.name+=longName;p.size=longSize;}return o;}
@@ -106,7 +106,19 @@ export async function geometryContracts(ctx){
   await until(`document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]')&&!document.querySelector('[data-testid="fbs-unified-scan"] [data-packing-scan]').disabled`);
   assert.equal(logs().printLog.length,0,'synthetic no-asset print must not dispatch native jobs');return m;
  });
- for(const [group,label] of [['expired','Просрочены'],['cancelled','Отменённые']])await run(`WMS652.geometry[orders-${group};1600x1000-long]`,async()=>{
+ await run(`WMS652.geometry[orders-overdue-new;1600x1000-long]`,async()=>{
+  const d=selectionData();d.orders=d.orders.slice(0,2);d.orders.forEach(o=>{o.status='new';o.supply_id=null;});
+  d.orders.find(o=>o.id==='order-a').deadline_at=new Date(Date.now()-3600e3).toISOString();
+  startSelection(d,true);await cdp.send('Page.navigate',{url:`${origin}/app/ff/fbs`});
+  await until(`document.querySelector('[data-testid="fbs-worklist-table"]')&&document.querySelector('[data-testid="fbs-order-order-a"]')`);
+  const m=await evaluate(`(()=>{const table=document.querySelector('[data-testid="fbs-worklist-table"]'),b=e=>{const r=e.getBoundingClientRect();return{x:r.x,right:r.right,y:r.y,bottom:r.bottom,width:r.width,height:r.height}};
+   return{headers:[...table.querySelectorAll('thead th')].map(e=>({text:e.innerText,bounds:b(e)})),rows:[...table.querySelectorAll('tbody tr')].map(r=>({id:r.dataset.testid,cells:[...r.children].map(e=>({text:e.innerText,bounds:b(e)}))}))};})()`);
+  lastMeasurement=m;assert.deepEqual(m.headers.map(h=>h.text),['','Товар','Артикул продавца','SKU','ШК','Размер','Селлер','Маршрут сдачи','Отгрузить до']);
+  for(const cells of [m.headers,...m.rows.map(r=>r.cells)])for(let i=1;i<cells.length;i++)assert(cells[i-1].bounds.right<=cells[i].bounds.x+1,'new table columns must not overlap');
+  assert(m.rows.find(r=>r.id==='fbs-order-order-a').cells.at(-1).text.includes('Просрочен'),'overdue WB order keeps its pill in New');
+  return m;
+ });
+ for(const [group,label] of [['cancelled','Отменённые']])await run(`WMS652.geometry[orders-${group};1600x1000-long]`,async()=>{
   const d=selectionData();d.orders=d.orders.slice(0,2);d.orders.forEach(o=>{o.status=group==='cancelled'?'cancelled':'assembling';o.supply_id=null;});
   startSelection(d,true);await cdp.send('Page.navigate',{url:`${origin}/app/ff/fbs`});
   await until(`document.querySelector('[data-testid="fbs-worklist-table"]')`);
