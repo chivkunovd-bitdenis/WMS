@@ -331,7 +331,9 @@ export async function registerExtended(h) {
   await run('print-picked',async(page,f)=>{
     await source(page,f);await scan(page,f.products[0].sku);await state('print-picked-before',f,1)
     const before=snapshot(),p=await popup(page,f)
-    const headers=await p.locator('thead th').allTextContents()
+    const headerCells=p.locator('thead th')
+    await expect(headerCells).toHaveCount(12)
+    const headers=await headerCells.allTextContents()
     assert.deepEqual(headers,['№','Фото','Товар','Артикул','Цвет','Размер','Поставка / ячейка / короб','Заказы WB','Стикер','Взять','Подобрано','Маркировка'])
     await expect(p.locator('tbody')).toContainText(f.products[0].name)
     await expect(p.locator('tbody')).toContainText(/1\s*\/\s*3/)
