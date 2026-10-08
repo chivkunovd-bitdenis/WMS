@@ -1,6 +1,6 @@
 import { PickScanSourceError } from './pickScanSource'
-import { Box, LinearProgress, Paper, Stack, Typography } from '@mui/material'
-import { useEffect, useRef, useState } from 'react'
+import { Box, LinearProgress, Paper, Stack, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
+import { useEffect, useRef, useState, type ReactNode } from 'react'
 import CloseOutlined from '@mui/icons-material/CloseOutlined'
 import UndoOutlined from '@mui/icons-material/UndoOutlined'
 import {
@@ -20,6 +20,10 @@ import { useScanIntake } from '../../../hooks/useScanIntake'
 import { playScanError, playScanSuccess } from '../../../utils/scanFeedback'
 import { PickPlacesTree } from './PickPlacesTree'
 import { FbsCellPickTable } from './FbsCellPickTable'
+import { isCellRef, refId } from '../sorting-objects/objectsStub'
+import { FboKizCount, FboKizList } from './fboPickKiz'
+import { kizCodesOfProduct, kizCountsByProduct, kizDisplayCode, type FboKizCode } from './fboKizData'
+import { createBoxPairTracker, loadFboPickUi, saveFboPickUi, type FboPickView } from './fboPickState'
 import {
   DOCUMENT,
   OBJECTS,
@@ -104,6 +108,44 @@ export type UnloadPickScanResult =
       pickedQty: number
       allocationQuantity: number
     }
+  | {
+      // WMS-686 · FBO: отсканированный КИЗ привязан к товару отгрузки. Штука не прибавляется —
+      // меняется только число КИЗ.
+      kind: 'kiz'
+      productId: string
+      cisCode: string
+      alreadyLinked: boolean
+      kizCount: number
+      pickedQty: number
+    }
+
+/**
+ * WMS-686: всё, что подбор отгрузки FBO добавляет к экрану. Без этого параметра экран
+ * ведёт себя как прежде — так его используют поставка FBS, групповая сборка FBS и
+ * сцены базы знаний.
+ */
+export type FboPickConfig = {
+  /** Ключ хранения вида, раскрытий и источника: id отгрузки. Без него состояние не сохраняется. */
+  stateKey?: string
+  /** КИЗ, привязанные к строкам отгрузки. */
+  kizCodes?: FboKizCode[]
+  /** Товары с включённым Честным знаком: у них число КИЗ видно и при нуле. */
+  markingProducts?: Set<string>
+  onKizRemove?: (code: FboKizCode) => Promise<void>
+  onKizReprint?: (code: FboKizCode) => Promise<void>
+  /**
+   * Забрать короб целиком по его ШК; при отказе сервера бросает ошибку с его текстом.
+   * Вернул строку — отказ спокойный (повтор уже перенесённого короба): без красного и звука.
+   * Не передан — ни двойного скана, ни кнопки «Забрать короб целиком».
+   */
+  onTakeWholeBox?: (barcode: string) => Promise<string | void>
+}
+
+const NO_KIZ: FboKizCode[] = []
+const NO_PRODUCTS = new Set<string>()
+
+/** Что вернёт сохранение подбора: отвязанные из-за уменьшения подбора КИЗ (R19). */
+export type PickSaveResult = { unlinkedKiz?: string[] }
 
 type UnloadPickScreenProps = {
   onNote: (note: string) => void
@@ -122,7 +164,7 @@ type UnloadPickScreenProps = {
     productId: string
     place: PickPlace
     quantity: number
-  }) => void | Promise<void>
+  }) => void | Promise<void | PickSaveResult>
   onScan?: (payload: {
     barcode: string
     sourceKey: string | null
@@ -141,6 +183,13 @@ type UnloadPickScreenProps = {
   hideFooterActions?: boolean
   /** В сборке FBS обход начинается с ячейки, а не с товара. */
   groupByCell?: boolean
+  /**
+   * Только отгрузка FBO (WMS-686): вид «По ячейкам / По товарам», сворачивание, столбец «КИЗ»,
+   * двойной скан короба, серые подобранные строки. Без него экран прежний.
+   */
+  fboMode?: boolean
+  /** Данные и действия FBO; нужны вместе с fboMode, без них видны только вид и сворачивание. */
+  fbo?: FboPickConfig
 }
 
 /** «В 3 местах», «В 1 месте», «Нет на складе» — колонка «Где лежит» (§2). */
@@ -167,7 +216,19 @@ export function UnloadPickScreen({
   onComplete,
   hideFooterActions = false,
   groupByCell = false,
+  fboMode = false,
+  fbo: fboProp,
 }: UnloadPickScreenProps) {
+  const fbo = fboMode
+    ? {
+        stateKey: fboProp?.stateKey ?? null,
+        kizCodes: fboProp?.kizCodes ?? NO_KIZ,
+        markingProducts: fboProp?.markingProducts ?? NO_PRODUCTS,
+        onKizRemove: fboProp?.onKizRemove ?? (async () => undefined),
+        onKizReprint: fboProp?.onKizReprint ?? (async () => undefined),
+        onTakeWholeBox: fboProp?.onTakeWholeBox ?? null,
+      }
+    : null
   const document = documentProp ?? DOCUMENT
   const seller = sellerProp ?? SELLER
   const products = productsProp ?? PRODUCTS
@@ -177,12 +238,23 @@ export function UnloadPickScreen({
   const cells = cellsProp ?? PICK_CELLS
   const [picked, setPicked] = useState<PickedMap>(() => ({ ...(initialPicked ?? {}) }))
   const [history, setHistory] = useState<PickOp[]>([])
-  const [source, setSource] = useState<string | null>(null)
-  const [sourceLabel, setSourceLabel] = useState<string | null>(null)
+  // FBO: вид, раскрытия и источник переживают ошибку, перечитывание и смену вкладок документа.
+  const [storedUi] = useState(() => (fbo?.stateKey ? loadFboPickUi(fbo.stateKey) : null))
+  const [view, setView] = useState<FboPickView>(storedUi?.view ?? 'cells')
+  const [source, setSource] = useState<string | null>(storedUi?.source ?? null)
+  const [sourceLabel, setSourceLabel] = useState<string | null>(storedUi?.sourceLabel ?? null)
+  const [sourceBarcode, setSourceBarcode] = useState<string | null>(storedUi?.sourceBarcode ?? null)
   const [scanValue, setScanValue] = useState('')
   const [scanError, setScanError] = useState<string | null>(null)
   const [scanNotice, setScanNotice] = useState<string | null>(null)
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set())
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set(storedUi?.expanded ?? []))
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set(storedUi?.collapsed ?? []))
+  const [kizOpen, setKizOpen] = useState<Set<string>>(() => new Set(storedUi?.kizOpen ?? []))
+  const [wholeBoxBusy, setWholeBoxBusy] = useState(false)
+  // Момент прихода каждого кода (WMS-686): двойной скан считается от прихода кода,
+  // а не от конца его обработки. Очередь сканов идёт по порядку, поэтому список — очередь.
+  const scanArrivals = useRef<number[]>([])
+  const [boxPair] = useState(() => createBoxPairTracker())
   // Ручной ввод в поле места копится здесь, ключ — товар+место (§Ж-01, §Е-06).
   // Списывается всё равно сразу и без «Провести»: значение видно в поле и в
   // счётчике мгновенно, а на сервер уходит после паузы в наборе, а не на
@@ -240,6 +312,14 @@ export function UnloadPickScreen({
     const seq = ++saveSeq.current
     savingEdits.current.set(key, seq)
     void Promise.resolve(onSetPicked?.({ productId, place, quantity }))
+      .then((result) => {
+        // FBO (R19): подбор стал меньше числа КИЗ — сервер отвязал последние коды; сообщаем без блокировки.
+        const unlinked = fbo && result ? result.unlinkedKiz : undefined
+        if (unlinked && unlinked.length > 0) {
+          setScanError(null)
+          setScanNotice(`Отвязаны КИЗ: ${unlinked.map(kizDisplayCode).join('; ')}`)
+        }
+      })
       .catch(() => undefined)
       .finally(() => {
         if (savingEdits.current.get(key) !== seq) return
@@ -255,6 +335,20 @@ export function UnloadPickScreen({
     window.document.addEventListener('keydown', onKey, true)
     return () => window.document.removeEventListener('keydown', onKey, true)
   }, [])
+
+  const stateKey = fbo?.stateKey ?? null
+  useEffect(() => {
+    if (!stateKey) return
+    saveFboPickUi(stateKey, {
+      view,
+      source,
+      sourceLabel,
+      sourceBarcode,
+      expanded: [...expandedIds],
+      collapsed: [...collapsedIds],
+      kizOpen: [...kizOpen],
+    })
+  }, [stateKey, view, source, sourceLabel, sourceBarcode, expandedIds, collapsedIds, kizOpen])
 
   const rows = rowsOf(plan, stock, objects, cells, picked, products)
   const planQty = rows.reduce((sum, row) => sum + row.plan, 0)
@@ -274,13 +368,117 @@ export function UnloadPickScreen({
     })
   }
 
-  function toggleRow(rowKey: string) {
+  function toggleRow(rowKey: string, productId: string) {
+    // FBO: строка раскрыта и тогда, когда под ней открыт список КИЗ; стрелка закрывает всё.
+    const open = expandedIds.has(rowKey) || (fbo !== null && kizOpen.has(productId))
     setExpandedIds((current) => {
       const next = new Set(current)
-      if (next.has(rowKey)) next.delete(rowKey)
+      if (open) next.delete(rowKey)
       else next.add(rowKey)
       return next
     })
+    if (open && fbo) {
+      setKizOpen((current) => {
+        if (!current.has(productId)) return current
+        const next = new Set(current)
+        next.delete(productId)
+        return next
+      })
+    }
+  }
+
+  /** FBO: клик по числу КИЗ раскрывает и скрывает список кодов под товаром (один список на товар). */
+  function toggleKiz(productId: string) {
+    setKizOpen((current) => {
+      const next = new Set(current)
+      if (next.has(productId)) next.delete(productId)
+      else next.add(productId)
+      return next
+    })
+  }
+
+  /** FBO, «По ячейкам»: свернуть или раскрыть ячейку/короб. Выбор источника не трогает. */
+  function toggleCollapsed(key: string) {
+    setCollapsedIds((current) => {
+      const next = new Set(current)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
+  /** Отсканировали ячейку или тару — они и их родители должны быть на виду, а не свёрнуты. */
+  function revealSource(reference: string) {
+    if (!fbo) return
+    const keys: string[] = []
+    let cursor: string | null = reference
+    while (cursor) {
+      keys.push(cursor)
+      if (isCellRef(cursor)) break
+      const id: string = refId(cursor)
+      cursor = objects.find((one) => one.id === id)?.holder ?? null
+    }
+    setCollapsedIds((current) => {
+      if (!keys.some((key) => current.has(key))) return current
+      const next = new Set(current)
+      keys.forEach((key) => next.delete(key))
+      return next
+    })
+  }
+
+  /** FBO: забрать короб-источник целиком. Успех сбрасывает источник; отказ ничего не меняет. */
+  async function takeWholeBox(barcode: string) {
+    if (!fbo?.onTakeWholeBox) return
+    const label = sourceText ?? 'Короб'
+    setWholeBoxBusy(true)
+    try {
+      const calm = await fbo.onTakeWholeBox(barcode)
+      if (typeof calm === 'string') {
+        // Повтор уже перенесённого короба: спокойное сообщение, источник и звук не трогаем.
+        setScanError(null)
+        setScanNotice(calm)
+        return
+      }
+      setSource(null)
+      setSourceLabel(null)
+      setSourceBarcode(null)
+      setScanError(null)
+      setScanNotice(`${label} забран целиком`)
+      onNote(`${label} забран целиком`)
+      playScanSuccess()
+    } catch (err) {
+      setScanNotice(null)
+      setScanError(err instanceof Error ? err.message : 'Не удалось забрать короб целиком')
+      playScanError()
+    } finally {
+      setWholeBoxBusy(false)
+    }
+  }
+
+  async function removeKiz(code: FboKizCode) {
+    if (!fbo) return
+    try {
+      await fbo.onKizRemove(code)
+      setScanError(null)
+      setScanNotice('Код отвязан от товара')
+    } catch (err) {
+      setScanNotice(null)
+      setScanError(err instanceof Error ? err.message : 'Не удалось отвязать код')
+      playScanError()
+    }
+  }
+
+  async function reprintKiz(code: FboKizCode) {
+    if (!fbo) return
+    try {
+      await fbo.onKizReprint(code)
+      setScanError(null)
+      setScanNotice('Этикетка ЧЗ отправлена на печать')
+    } catch (err) {
+      setScanNotice(null)
+      setScanError(err instanceof Error ? err.message : 'Не удалось напечатать этикетку ЧЗ')
+      playScanError()
+    }
   }
 
   /**
@@ -410,17 +608,42 @@ export function UnloadPickScreen({
     setHistory((current) => current.filter((operation) => operation.edit === undefined || !revertedEdits.has(operation.edit)))
   }
 
-  async function handleServerScan(code: string) {
+  async function handleServerScan(code: string, arrivedAt: number) {
     if (!onScan) return false
+    if (fbo?.onTakeWholeBox) {
+      // WMS-686: тот же ШК короба второй раз в окне 2 с — забрать короб целиком;
+      // быстрый третий скан и любые коды между сканами решает правило пары.
+      const verdict = boxPair.arrive(code, arrivedAt, source)
+      if (verdict === 'ignore') return true
+      if (verdict === 'take') {
+        await takeWholeBox(code)
+        return true
+      }
+    }
     try {
       const result = await onScan({ barcode: code, sourceKey: source })
       if (result.kind === 'location') {
         const reference = cellRef(result.storageLocationId)
         setSource(reference)
         setSourceLabel(result.locationCode)
+        setSourceBarcode(code)
         setScanError(null)
         setScanNotice(`Ячейка ${result.locationCode} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        revealSource(reference)
+        playScanSuccess()
+        return true
+      }
+
+      if (result.kind === 'kiz') {
+        const kizRow = rows.find((one) => one.product.id === result.productId)
+        const label = kizRow?.product.sku ?? 'Товар'
+        setScanError(null)
+        setScanNotice(
+          result.alreadyLinked
+            ? `${label}: этот КИЗ уже привязан к товару`
+            : `${label}: КИЗ привязан (${result.kizCount} из ${result.pickedQty} шт)`,
+        )
         playScanSuccess()
         return true
       }
@@ -433,9 +656,12 @@ export function UnloadPickScreen({
         const label = result.containerCode ?? result.locationCode ?? 'тара'
         setSource(reference)
         setSourceLabel(label)
+        setSourceBarcode(code)
         setScanError(null)
         setScanNotice(`${label} — пикните товар, который снимаете`)
         expandRows(rowsWithin(rows, reference, objects).map((one) => one.key))
+        revealSource(reference)
+        if (fbo?.onTakeWholeBox && result.containerKind === 'box') boxPair.selected(code, arrivedAt, reference)
         playScanSuccess()
         return true
       }
@@ -500,14 +726,18 @@ export function UnloadPickScreen({
   // набранный руками, идёт в ту же очередь.
   const { bindRoot: bindScanRoot, listening: scannerListening, submit: submitScan } = useScanIntake({
     enabled: true,
-    onReceived: revertScannerDigitsInPlaceQty,
+    onReceived: () => {
+      if (fbo) scanArrivals.current.push(performance.now())
+      revertScannerDigitsInPlaceQty()
+    },
     normalizeLayoutPunctuation: true,
     onScan: handleScan,
   })
 
   async function handleScan(code: string) {
+    const arrivedAt = fbo ? (scanArrivals.current.shift() ?? performance.now()) : 0
     setScanValue('')
-    if (await handleServerScan(code)) return
+    if (await handleServerScan(code, arrivedAt)) return
 
     const cell = cells.find(
       (one) => one.barcode === code || one.code.toLowerCase() === code.toLowerCase(),
@@ -578,7 +808,7 @@ export function UnloadPickScreen({
     )
   }
 
-  const columns: Column<PickRow>[] = [
+  const baseColumns: Column<PickRow>[] = [
     {
       key: 'product',
       header: 'Товар',
@@ -689,6 +919,42 @@ export function UnloadPickScreen({
     },
   ]
 
+  // FBO: подобранный полностью товар — приглушённый серый текст вместо зелёной заливки,
+  // а после «Осталось» стоит столбец «КИЗ» с крупным числом (WMS-686, D1.3, D1.8).
+  const kizCounts = fbo ? kizCountsByProduct(fbo.kizCodes) : null
+  const dim = (row: PickRow, node: ReactNode): ReactNode =>
+    fbo && row.plan > 0 && row.left === 0 ? <Box sx={{ opacity: 0.55 }}>{node}</Box> : node
+  const kizColumn: Column<PickRow> = {
+    key: 'kiz',
+    header: 'КИЗ',
+    align: 'right',
+    width: 88,
+    render: (row) => {
+      const count = kizCounts?.get(row.product.id) ?? 0
+      // Число видно, если у товара включён ЧЗ или КИЗ уже есть; иначе ячейка пуста (R3).
+      if (count === 0 && !fbo?.markingProducts.has(row.product.id)) return null
+      return (
+        <FboKizCount
+          count={count}
+          open={kizOpen.has(row.product.id)}
+          onToggle={() => toggleKiz(row.product.id)}
+          productName={row.product.name}
+          testId={`pick-kiz-count-${row.product.id}`}
+        />
+      )
+    },
+  }
+  const columns: Column<PickRow>[] = fbo
+    ? baseColumns.flatMap((column) => {
+        const shown: Column<PickRow> =
+          column.key === 'actions' ? column : { ...column, render: (row) => dim(row, column.render(row)) }
+        return column.key === 'left' ? [shown, kizColumn] : [shown]
+      })
+    : baseColumns
+  const cellsView = fbo ? view === 'cells' : groupByCell
+  const sourceObject = source && !isCellRef(source) ? objects.find((one) => one.id === refId(source)) : undefined
+  const sourceIsBox = Boolean(fbo?.onTakeWholeBox) && sourceObject?.kind === 'box'
+
   return (
     <Box data-testid="unload-pick-screen" ref={bindScanRoot}>
       {!hideHeader ? (
@@ -722,11 +988,25 @@ export function UnloadPickScreen({
               <Typography variant="body2" sx={{ fontWeight: 700 }} data-testid="pick-source">
                 {sourceText}
               </Typography>
+              {sourceIsBox ? (
+                <SecondaryAction
+                  disabled={busy || wholeBoxBusy}
+                  onClick={() => {
+                    // Кнопка и двойной скан делают одно и то же; пара сканов после неё не нужна.
+                    boxPair.reset()
+                    void takeWholeBox(sourceBarcode ?? sourceObject?.barcode ?? '')
+                  }}
+                  data-testid="pick-take-whole-box"
+                >
+                  Забрать короб целиком
+                </SecondaryAction>
+              ) : null}
               <IconAction
                 title="Забыть место — искать товар по всему складу"
                 onClick={() => {
                   setSource(null)
                   setSourceLabel(null)
+                  setSourceBarcode(null)
                   setScanNotice(null)
                 }}
                 testId="pick-source-clear"
@@ -759,7 +1039,37 @@ export function UnloadPickScreen({
         />
       </Stack>
 
-      {groupByCell ? <FbsCellPickTable
+      {fbo ? (
+        // WMS-686: два вида над одними данными; переключение не меняет ни данные, ни источник.
+        <ToggleButtonGroup
+          exclusive
+          size="small"
+          value={view}
+          onChange={(_event, next: FboPickView | null) => {
+            if (next) setView(next)
+          }}
+          aria-label="Вид подбора"
+          data-testid="pick-view-switch"
+          sx={{ mb: 1.5 }}
+        >
+          <ToggleButton
+            value="cells"
+            sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
+            data-testid="pick-view-cells"
+          >
+            По ячейкам
+          </ToggleButton>
+          <ToggleButton
+            value="products"
+            sx={{ textTransform: 'none', fontWeight: 600, px: 1.75 }}
+            data-testid="pick-view-products"
+          >
+            По товарам
+          </ToggleButton>
+        </ToggleButtonGroup>
+      ) : null}
+
+      {cellsView ? <FbsCellPickTable
         rows={rows}
         objects={objects}
         cells={cells}
@@ -771,30 +1081,53 @@ export function UnloadPickScreen({
           return lastIndex >= 0 && history[lastIndex]?.placeKey === place.key
         }}
         onUndo={undoLast}
+        fbo={fbo ? {
+          collapsed: collapsedIds,
+          onToggleCollapsed: toggleCollapsed,
+          kizCodes: fbo.kizCodes,
+          markingProducts: fbo.markingProducts,
+          kizOpen,
+          onToggleKiz: toggleKiz,
+          onKizReprint: reprintKiz,
+          onKizRemove: removeKiz,
+        } : undefined}
       /> : <DataTable
         columns={columns}
         rows={rows}
         getRowKey={(row) => row.key}
         // Собранная строка гаснет зелёным: оператор ведёт глазом по столбцу и
         // видит, где ещё работа. Скорректировал вниз — подсветка уходит сама.
-        isComplete={(row) => row.plan > 0 && row.left === 0}
+        // У отгрузки FBO вместо заливки подобранные строки приглушены серым текстом.
+        isComplete={fbo ? undefined : (row) => row.plan > 0 && row.left === 0}
         testId="pick-table"
         empty={{
           title: 'В отгрузке нет товаров',
           hint: 'Добавьте товары в план отгрузки — снимать пока нечего.',
         }}
         expand={{
-          isExpanded: (row) => expandedIds.has(row.key),
-          onToggle: (row) => toggleRow(row.key),
+          isExpanded: (row) => expandedIds.has(row.key) || (fbo !== null && kizOpen.has(row.product.id)),
+          onToggle: (row) => toggleRow(row.key, row.product.id),
           label: (row) => `Показать места товара ${row.product.sku}`,
           render: (row) => (
-            <PickPlacesTree
-              row={row}
-              highlightedKey={source}
-              onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
-              objects={objects}
-              cells={cells}
-            />
+            <>
+              {fbo && kizOpen.has(row.product.id) ? (
+                <Box sx={{ px: 2, py: 0.5 }}>
+                  <FboKizList
+                    codes={kizCodesOfProduct(fbo.kizCodes, row.product.id)}
+                    onReprint={reprintKiz}
+                    onRemove={removeKiz}
+                    testId={`pick-kiz-list-${row.product.id}`}
+                  />
+                </Box>
+              ) : null}
+              <PickPlacesTree
+                row={row}
+                highlightedKey={source}
+                onQtyChange={(place, next) => handlePlaceQtyChange(row, place, next)}
+                objects={objects}
+                cells={cells}
+              />
+            </>
           ),
         }}
       />}
