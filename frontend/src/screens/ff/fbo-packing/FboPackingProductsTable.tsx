@@ -116,7 +116,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
       return next
     })
 
-  const renderChz = (row: FboProductRow, k: number, busy: boolean) => {
+  const renderChz = (row: FboProductRow, k: number) => {
     const showCounter = controller.requiresChz(row.productId) || k > 0
     const incomplete = showCounter && k < row.need
     if (!showCounter) {
@@ -148,16 +148,6 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
             </Box>
           </Tooltip>
         ) : null}
-        <Button
-          size="small"
-          variant="outlined"
-          disabled={disabled || busy}
-          onClick={() => void controller.reissueMissing(row.productId)}
-          data-testid={`fbo-packing-reissue-${row.productId}`}
-          sx={{ whiteSpace: 'nowrap' }}
-        >
-          Допечатать
-        </Button>
       </Stack>
     )
   }
@@ -171,7 +161,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
         <Table size="small" sx={{ tableLayout: 'fixed', width: '100%', minWidth: 1100 }}>
           <TableHead>
             <TableRow>
-              <TableCell sx={{ width: '17%' }}>Товар</TableCell>
+              <TableCell sx={{ width: '22%' }}>Товар</TableCell>
               <TableCell sx={{ width: '9%' }}>Артикул продавца</TableCell>
               <TableCell sx={{ width: '8%' }}>Артикул WB</TableCell>
               <TableCell sx={{ width: '6%' }}>Размер</TableCell>
@@ -179,7 +169,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
               <TableCell align="center" sx={{ width: '4%' }}>ТЗ</TableCell>
               <TableCell align="right" sx={{ width: '6%' }}>Нужно</TableCell>
               <TableCell align="right" sx={{ width: '7%' }}>В коробах</TableCell>
-              <TableCell sx={{ width: '18%' }}>ЧЗ</TableCell>
+              <TableCell sx={{ width: '12%' }}>ЧЗ</TableCell>
               <TableCell align="right" sx={{ width: '12%' }}>Действия</TableCell>
             </TableRow>
           </TableHead>
@@ -256,7 +246,7 @@ export function FboPackingProductsTable({ controller, disabled = false }: {
                       <Typography variant="body2" data-testid={`fbo-packing-boxed-${row.productId}`}>{row.inBoxes}</Typography>
                     </TableCell>
                     <TableCell>
-                      {renderChz(row, k, busy)}
+                      {renderChz(row, k)}
                       {message ? (
                         <Typography
                           variant="caption"

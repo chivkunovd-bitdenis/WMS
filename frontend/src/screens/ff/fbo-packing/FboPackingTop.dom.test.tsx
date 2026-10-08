@@ -233,7 +233,8 @@ describe('WMS-686 FBO упаковка · общая таблица (R26, R27)',
     await mount()
     expect(q('fbo-packing-chz-p1')?.textContent).toBe('0 из 30')
     expect((q('fbo-packing-scan-input') as HTMLInputElement).disabled).toBe(false)
-    expect((q('fbo-packing-reissue-p1') as HTMLButtonElement).disabled).toBe(false)
+    expect((q('ff-packaging-line-print-L1') as HTMLButtonElement).disabled).toBe(false)
+    expect(host.textContent).not.toContain('Допечатать')
   })
 })
 
@@ -358,115 +359,130 @@ describe('WMS-686 FBO упаковка · галки печати (R25)', () => 
   })
 })
 
-describe('WMS-686 FBO упаковка · «Допечатать» и «ШК + ЧЗ» (R32, R51)', () => {
-  it('«Допечатать» без quantity выдаёт недостающие и печатает только выданные', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 10, picked_qty: 10, requires_honest_sign: true }],
+describe('WMS-686 FBO упаковка · «ШК + ЧЗ» (R51); «Допечатать» убрана', () => {
+  const lineOf = (quantity: number, picked: number, requires = true) =>
+    baseDetail({
+      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity, picked_qty: picked, requires_honest_sign: requires }],
     })
-    serverCodes = [code('c1'), code('c2')]
+  const printKeys = () => mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
+  const barcodeKeys = () => printKeys().filter((key) => key.startsWith('fbo-bc:R1:'))
+  const chzKeys = () => printKeys().filter((key) => key.startsWith('fbo-chz'))
+
+  it('кнопки «Допечатать» нигде нет', async () => {
+    serverCodes = [code('c1')]
+    await mount()
+    expect(host.textContent).not.toContain('Допечатать')
+    expect(host.querySelector('[data-testid^="fbo-packing-reissue"]')).toBeNull()
+  })
+
+  it('S = 0: кнопка активна, ШК × P, выдаются только недостающие N − K, печатаются только выданные', async () => {
+    serverCodes = [code('c1')]
     handlers.set('POST /marking-codes/issue', () => {
       const added = [code('n1'), code('n2')]
       serverCodes = [...serverCodes, ...added]
       return { body: { items: added, shortage: 0 } }
     })
-    await mount(detail)
-    await click('fbo-packing-reissue-p1')
+    await mount(lineOf(3, 0))
+    expect((q('ff-packaging-line-print-L1') as HTMLButtonElement).disabled).toBe(false)
+    await click('ff-packaging-line-print-L1')
     const [issue] = posts('/marking-codes/issue')
-    expect(Object.keys(issue?.body ?? {}).sort()).toEqual(['mutation_id', 'product_id'])
-    expect(mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)).toEqual(['fbo-chz:n1', 'fbo-chz:n2'])
-    expect(q('fbo-packing-chz-p1')?.textContent).toBe('4 из 10')
+    expect(issue?.body).toMatchObject({ product_id: 'p1', quantity: 2 })
+    expect(typeof issue?.body?.mutation_id).toBe('string')
+    expect(barcodeKeys()).toHaveLength(3)
+    expect(chzKeys()).toEqual(['fbo-chz:n1', 'fbo-chz:n2'])
+    expect(q('fbo-packing-chz-p1')?.textContent).toBe('3 из 3')
   })
 
-  it('нехватка в пуле: «Выдано N из M: в пуле не хватает КИЗ»', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 10, picked_qty: 10, requires_honest_sign: true }],
-    })
+  it('S > 0: N = подобрано, quantity = N − K', async () => {
+    serverCodes = [code('c1'), code('c2')]
+    handlers.set('POST /marking-codes/issue', () => ({ body: { items: [], shortage: 0 } }))
+    await mount(lineOf(30, 10))
+    await click('ff-packaging-line-print-L1')
+    expect(posts('/marking-codes/issue')[0]?.body).toMatchObject({ product_id: 'p1', quantity: 8 })
+    expect(barcodeKeys()).toHaveLength(10)
+  })
+
+  it('нехватка в пуле: «Выдано N из M: в пуле не хватает КИЗ», ШК напечатаны', async () => {
     handlers.set('POST /marking-codes/issue', () => ({ body: { items: [code('n1'), code('n2'), code('n3')], shortage: 2 } }))
-    await mount(detail)
-    await click('fbo-packing-reissue-p1')
+    await mount(lineOf(10, 10))
+    await click('ff-packaging-line-print-L1')
     expect(q('fbo-packing-row-message-p1')?.textContent).toBe('Выдано 3 из 5: в пуле не хватает КИЗ')
+    expect(barcodeKeys()).toHaveLength(10)
+    expect(chzKeys()).toHaveLength(3)
   })
 
-  it('сбой печати: коды остаются привязанными, повтор печатает те же коды тем же ключом и не выдаёт новых', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 4, picked_qty: 4, requires_honest_sign: true }],
+  it('выдавать нечего (K ≥ N): печатаются одни ШК, выдача не вызывается, ошибки нет', async () => {
+    serverCodes = [code('c1'), code('c2'), code('c3'), code('c4')]
+    await mount(lineOf(10, 4))
+    await click('ff-packaging-line-print-L1')
+    expect(posts('/marking-codes/issue')).toHaveLength(0)
+    expect(barcodeKeys()).toHaveLength(4)
+    expect(chzKeys()).toHaveLength(0)
+    expect(q('fbo-packing-row-message-p1')).toBeNull()
+  })
+
+  it('сервер ответил nothing_to_issue: не ошибка, ШК напечатаны', async () => {
+    handlers.set('POST /marking-codes/issue', () => ({ status: 422, body: { detail: 'nothing_to_issue' } }))
+    await mount(lineOf(3, 3))
+    await click('ff-packaging-line-print-L1')
+    expect(barcodeKeys()).toHaveLength(3)
+    expect(q('fbo-packing-row-message-p1')).toBeNull()
+  })
+
+  it('пустой пул: ШК печатаются, понятное сообщение, привязанные коды не перепечатываются', async () => {
+    serverCodes = [code('c1')]
+    handlers.set('POST /marking-codes/issue', () => ({ status: 422, body: { detail: 'marking_pool_empty' } }))
+    await mount(lineOf(3, 2))
+    await click('ff-packaging-line-print-L1')
+    expect(barcodeKeys()).toHaveLength(2)
+    expect(chzKeys()).toHaveLength(0)
+    expect(q('fbo-packing-row-message-p1')?.textContent).toBe('В пуле нет свободных КИЗ этого товара.')
+  })
+
+  it('товар без ЧЗ: печатается только ШК', async () => {
+    await mount()
+    await click('ff-packaging-line-print-L2')
+    expect(barcodeKeys()).toHaveLength(5)
+    expect(chzKeys()).toHaveLength(0)
+    expect(posts('/marking-codes/issue')).toHaveLength(0)
+  })
+
+  it('сбой печати выданного кода: код остаётся привязанным, повтор печатает тот же код тем же ключом и новых не выдаёт', async () => {
+    let failed = false
+    mocks.printPrepared.mockImplementation(async (input: { idempotencyKey: string }) => {
+      if (input.idempotencyKey === 'fbo-chz:n1' && !failed) {
+        failed = true
+        throw new Error('Нет ответа WMS Print.')
+      }
     })
     handlers.set('POST /marking-codes/issue', () => {
       serverCodes = [code('n1')]
       return { body: { items: [code('n1')], shortage: 0 } }
     })
-    mocks.printPrepared.mockRejectedValueOnce(new Error('Нет ответа WMS Print.'))
-    await mount(detail)
-    await click('fbo-packing-reissue-p1')
+    await mount(lineOf(1, 1))
+    await click('ff-packaging-line-print-L1')
     expect(q('fbo-packing-row-message-p1')?.textContent).toContain('Нет ответа WMS Print.')
-    await click('fbo-packing-reissue-p1')
+    await click('ff-packaging-line-print-L1')
     expect(posts('/marking-codes/issue')).toHaveLength(1)
-    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
-    expect(keys).toEqual(['fbo-chz:n1', 'fbo-chz:n1'])
+    expect(chzKeys()).toEqual(['fbo-chz:n1', 'fbo-chz:n1'])
     expect(q('fbo-packing-row-message-p1')).toBeNull()
   })
 
   it('потеря ответа на выдачу: повтор идёт с тем же mutation_id', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 4, picked_qty: 4, requires_honest_sign: true }],
-    })
     let attempts = 0
     handlers.set('POST /marking-codes/issue', () => {
       attempts += 1
       if (attempts === 1) return { status: 503, body: { detail: 'unavailable' } }
       return { body: { items: [code('n1')], shortage: 0 } }
     })
-    await mount(detail)
-    await click('fbo-packing-reissue-p1')
-    await click('fbo-packing-reissue-p1')
+    await mount(lineOf(4, 4))
+    await click('ff-packaging-line-print-L1')
+    expect(q('fbo-packing-row-message-p1')).not.toBeNull()
+    await click('ff-packaging-line-print-L1')
     const issues = posts('/marking-codes/issue')
     expect(issues).toHaveLength(2)
     expect(issues[0]?.body?.mutation_id).toBe(issues[1]?.body?.mutation_id)
-  })
-
-  it('«ШК + ЧЗ» активна при S = 0: печатает ШК × P и все коды ЧЗ товара, недостающие выдаёт', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 3, picked_qty: 0, requires_honest_sign: true }],
-    })
-    serverCodes = [code('c1')]
-    handlers.set('POST /marking-codes/issue', () => {
-      const added = [code('n1'), code('n2')]
-      serverCodes = [...serverCodes, ...added]
-      return { body: { items: added, shortage: 0 } }
-    })
-    await mount(detail)
-    const button = q('ff-packaging-line-print-L1') as HTMLButtonElement
-    expect(button.disabled).toBe(false)
-    await click('ff-packaging-line-print-L1')
-    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
-    expect(keys.filter((key) => key.startsWith('fbo-bc:R1:'))).toHaveLength(3)
-    expect(keys.filter((key) => key.startsWith('fbo-chz'))).toHaveLength(3)
-    expect(keys).toContain('fbo-chz:n1')
-    expect(keys).toContain('fbo-chz:n2')
-    expect(Object.keys(posts('/marking-codes/issue')[0]?.body ?? {}).sort()).toEqual(['mutation_id', 'product_id'])
-  })
-
-  it('«ШК + ЧЗ» при пустом пуле печатает ШК и привязанные коды, а сообщение говорит о пуле', async () => {
-    const detail = baseDetail({
-      lines: [{ id: 'L1', product_id: 'p1', sku_code: 'SKU1', product_name: 'Футболка', quantity: 3, picked_qty: 2, requires_honest_sign: true }],
-    })
-    serverCodes = [code('c1')]
-    handlers.set('POST /marking-codes/issue', () => ({ status: 422, body: { detail: 'marking_pool_empty' } }))
-    await mount(detail)
-    await click('ff-packaging-line-print-L1')
-    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
-    expect(keys.filter((key) => key.startsWith('fbo-bc:R1:'))).toHaveLength(2)
-    expect(keys.filter((key) => key.startsWith('fbo-chz-re:c1:'))).toHaveLength(1)
-    expect(q('fbo-packing-row-message-p1')?.textContent).toBe('В пуле нет свободных КИЗ этого товара.')
-  })
-
-  it('«ШК + ЧЗ» у товара без ЧЗ печатает только ШК', async () => {
-    await mount()
-    await click('ff-packaging-line-print-L2')
-    const keys = mocks.printPrepared.mock.calls.map((call) => call[0].idempotencyKey)
-    expect(keys.filter((key) => key.startsWith('fbo-bc:R1:'))).toHaveLength(5)
-    expect(keys.filter((key) => key.startsWith('fbo-chz'))).toHaveLength(0)
-    expect(posts('/marking-codes/issue')).toHaveLength(0)
+    expect(issues[0]?.body?.quantity).toBe(4)
   })
 
   it('«Печать накладной» передаёт план товаров отгрузки', async () => {

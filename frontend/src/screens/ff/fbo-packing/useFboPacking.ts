@@ -43,7 +43,6 @@ type CatalogMarkingFlag = { requires_honest_sign?: boolean }
 
 export const NO_CURRENT_BOX_MESSAGE = 'Сначала отсканируйте или создайте короб'
 export const KIZ_ALREADY_LINKED_MESSAGE = 'Этот КИЗ уже привязан к товару'
-export const NOTHING_TO_ISSUE_MESSAGE = 'КИЗ на все нужные штуки уже есть'
 
 function errorText(cause: unknown, fallback: string): string {
   return cause instanceof Error && cause.message ? cause.message : fallback
@@ -126,6 +125,7 @@ export function useFboPacking(input: UseFboPackingInput) {
   const lastProductRef = useRef<string | null>(null)
   const issueMutationRef = useRef(new Map<string, string>())
   const loadSequenceRef = useRef(0)
+  const lineBarcodeKeyRef = useRef(new Map<string, string>())
 
   const apiContext = useCallback(
     (): FboPackingApiContext => ({ requestId: latest.current.detail.id, headers: latest.current.authHeaders }),
@@ -185,32 +185,22 @@ export function useFboPacking(input: UseFboPackingInput) {
   }, [])
 
   /**
-   * Печать кодов по очереди. Новые (только что выданные или ещё не напечатанные) идут стабильным
-   * ключом первой печати, остальные — явной перепечатью с новым ключом. Невышедшие новые коды
-   * запоминаются: повтор печатает ровно их, новые не выдаются.
+   * Печать выданных кодов по очереди стабильным ключом первой печати. Невышедшие коды запоминаются:
+   * повтор печатает ровно их, новые не выдаются.
    */
   const printCodes = useCallback(
-    async (productId: string, list: FboMarkingCode[], newIds?: ReadonlySet<string>): Promise<void> => {
-      const keyOf = (code: FboMarkingCode) =>
-        !newIds || newIds.has(code.marking_code_id) ? firstPrintKey(code) : reprintKey(code)
-      const outcome = await printMarkingCodes(list, latest.current.token, keyOf)
-      const tracked = newIds
-        ? outcome.unprinted.filter((code) => newIds.has(code.marking_code_id))
-        : outcome.unprinted
-      setUnprintedFor(productId, tracked)
+    async (productId: string, list: FboMarkingCode[]): Promise<void> => {
+      const outcome = await printMarkingCodes(list, latest.current.token, firstPrintKey)
+      setUnprintedFor(productId, outcome.unprinted)
       if (outcome.error) {
-        throw new Error(
-          tracked.length > 0
-            ? `Коды выданы и привязаны, но печать не удалась: ${outcome.error.message}`
-            : `Печать не удалась: ${outcome.error.message}`,
-        )
+        throw new Error(`Коды выданы и привязаны, но печать не удалась: ${outcome.error.message}`)
       }
     },
     [setUnprintedFor],
   )
 
   /**
-   * Выдача свободных кодов товара из пула. Кнопки («Допечатать», «ШК + ЧЗ») хранят ключ операции до
+   * Выдача свободных кодов товара из пула. Кнопка «ШК + ЧЗ» хранит ключ операции до
    * успешного ответа: после потери ответа повтор вернёт те же коды. Скан штуки берёт новый ключ каждый раз.
    */
   const issueCodes = useCallback(
@@ -241,7 +231,7 @@ export function useFboPacking(input: UseFboPackingInput) {
     async (productId: string): Promise<boolean> => {
       const pending = latest.current.unprinted[productId]
       if (!pending || pending.length === 0) return false
-      await printCodes(productId, pending, new Set(pending.map((code) => code.marking_code_id)))
+      await printCodes(productId, pending)
       return true
     },
     [printCodes],
@@ -252,7 +242,7 @@ export function useFboPacking(input: UseFboPackingInput) {
     async (productId: string): Promise<void> => {
       await flushUnprinted(productId)
       const issued = await issueCodes(productId, 1, false)
-      await printCodes(productId, issued.items, new Set(issued.items.map((code) => code.marking_code_id)))
+      await printCodes(productId, issued.items)
     },
     [flushUnprinted, issueCodes, printCodes],
   )
@@ -357,31 +347,6 @@ export function useFboPacking(input: UseFboPackingInput) {
     [setRowMessage],
   )
 
-  /**
-   * «Допечатать» (кнопка всегда активна): выдать из пула недостающие коды (количество по умолчанию:
-   * S − K при S > 0, иначе P − K) и напечатать их; если выданные раньше коды не напечатались —
-   * повторить печать ровно их.
-   */
-  const reissueMissing = useCallback(
-    (productId: string) =>
-      runForProduct(productId, async () => {
-        if (await flushUnprinted(productId)) return null
-        const row = latest.current.rows.find((item) => item.productId === productId)
-        if (!row) return null
-        if (printTargetOf(row) - latest.current.kizCountOf(row) <= 0) return NOTHING_TO_ISSUE_MESSAGE
-        let issued: FboMarkingIssueResult
-        try {
-          issued = await issueCodes(productId, undefined)
-        } catch (cause) {
-          if (cause instanceof FboPackingApiError && cause.code === 'nothing_to_issue') return NOTHING_TO_ISSUE_MESSAGE
-          throw cause
-        }
-        await printCodes(productId, issued.items, new Set(issued.items.map((code) => code.marking_code_id)))
-        return shortageNotice(issued)
-      }),
-    [flushUnprinted, issueCodes, printCodes, runForProduct],
-  )
-
   const reprintCode = useCallback(
     (code: FboMarkingCode) =>
       runForProduct(code.product_id, async () => {
@@ -407,9 +372,10 @@ export function useFboPacking(input: UseFboPackingInput) {
   )
 
   /**
-   * Кнопка строки «ШК + ЧЗ» (R51, не блокируется): N этикеток ШК товара (N = S, при S = 0 — план P) и,
-   * если у товара включён ЧЗ, недостающие коды из пула, затем печать всех кодов товара в отгрузке.
-   * Пустой пул и «выдавать нечего» не отменяют печать уже привязанных кодов.
+   * Кнопка строки «ШК + ЧЗ» (не блокируется): N этикеток ШК товара (N = S, при S = 0 — план P) и,
+   * если у товара включён ЧЗ, ТОЛЬКО недостающие коды: выдаёт из пула quantity = N − K и печатает выданные.
+   * Уже привязанные коды не перепечатываются (перепечатка — из списка кодов). Нечего выдавать — печатаются
+   * одни ШК без ошибки. Пустой пул — сообщение, ШК к этому моменту уже напечатаны.
    */
   const printLine = useCallback(
     (productId: string) =>
@@ -417,32 +383,28 @@ export function useFboPacking(input: UseFboPackingInput) {
         const { rows: current, detail: shipment } = latest.current
         const row = current.find((item) => item.productId === productId)
         if (!row) return null
-        await printProductBarcodeLabels(
-          productLabelData(metaOf(row), shipment.marketplace),
-          `fbo-bc:${shipment.id}:${randomId()}`,
-          printTargetOf(row),
-        )
+        const target = printTargetOf(row)
+        // Ключ печати ШК живёт, пока печать ШК не принята: повтор после сбоя не печатает принятые копии.
+        const barcodeKey = lineBarcodeKeyRef.current.get(productId) ?? `fbo-bc:${shipment.id}:${randomId()}`
+        lineBarcodeKeyRef.current.set(productId, barcodeKey)
+        await printProductBarcodeLabels(productLabelData(metaOf(row), shipment.marketplace), barcodeKey, target)
+        lineBarcodeKeyRef.current.delete(productId)
         if (!latest.current.requiresChz(productId)) return null
-        const existing = latest.current.codesByProduct.get(productId) ?? []
-        const newIds = new Set((latest.current.unprinted[productId] ?? []).map((code) => code.marking_code_id))
-        let issued: FboMarkingIssueResult = { items: [], shortage: 0 }
-        let issueFailure: Error | null = null
-        if (printTargetOf(row) - latest.current.kizCountOf(row) > 0) {
-          try {
-            issued = await issueCodes(productId, undefined)
-            for (const code of issued.items) newIds.add(code.marking_code_id)
-          } catch (cause) {
-            const harmless = cause instanceof FboPackingApiError && cause.code === 'nothing_to_issue'
-            if (!harmless) issueFailure = cause instanceof Error ? cause : new Error('Не удалось выдать коды ЧЗ.')
-          }
+        // Выданные раньше, но не напечатанные коды — повтор той же печати, а не перепечатка.
+        await flushUnprinted(productId)
+        const missing = target - latest.current.kizCountOf(row)
+        if (missing <= 0) return null
+        let issued: FboMarkingIssueResult
+        try {
+          issued = await issueCodes(productId, missing)
+        } catch (cause) {
+          if (cause instanceof FboPackingApiError && cause.code === 'nothing_to_issue') return null
+          throw cause
         }
-        const known = new Set(existing.map((code) => code.marking_code_id))
-        const all = [...existing, ...issued.items.filter((code) => !known.has(code.marking_code_id))]
-        await printCodes(productId, all, newIds)
-        if (issueFailure) throw issueFailure
+        await printCodes(productId, issued.items)
         return shortageNotice(issued)
       }),
-    [issueCodes, metaOf, printCodes, runForProduct],
+    [flushUnprinted, issueCodes, metaOf, printCodes, runForProduct],
   )
 
   /** «Печать накладной»: лист отгрузки по плану товаров отгрузки. */
@@ -485,8 +447,6 @@ export function useFboPacking(input: UseFboPackingInput) {
     handleScan,
     busyProductId,
     rowMessages,
-    hasUnprinted: (productId: string) => (unprinted[productId]?.length ?? 0) > 0,
-    reissueMissing,
     reprintCode,
     unbindCode,
     printLine,
