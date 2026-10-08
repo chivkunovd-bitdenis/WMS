@@ -851,9 +851,17 @@ export function FfFbsSupplyWorkspace({
     workspace?.supply.marketplace ?? 'wb',
   )
   const workspaceOpenGeneration = useRef(0)
+  const freshWorkspaceGeneration = useRef<number | null>(null)
+  const pendingInitialWorkspace = useRef<{ generation: number; snapshot: FbsWorkspace } | null>(null)
   useEffect(() => {
     workspaceOpenGeneration.current += 1
-    return () => { workspaceOpenGeneration.current += 1 }
+    freshWorkspaceGeneration.current = null
+    pendingInitialWorkspace.current = null
+    return () => {
+      workspaceOpenGeneration.current += 1
+      freshWorkspaceGeneration.current = null
+      pendingInitialWorkspace.current = null
+    }
   }, [open, supplyId])
   // Поставка, чей состав сейчас на экране. Ответ обязан назвать её сам: иначе
   // сохранённое «Повторить» из прежней поставки занимает номер записи уже в новом
@@ -894,6 +902,8 @@ export function FfFbsSupplyWorkspace({
         const next = await fetchFbsWorkspace(token, authHeaders, supplyId)
         if (!write.isCurrent()) return
         if (!write.isLatest()) return next
+        freshWorkspaceGeneration.current = workspaceOpenGeneration.current
+        pendingInitialWorkspace.current = null
         setWorkspace(next)
         const restoredDeliveryError = normalizeDeliveryError(next.last_delivery_error)
         setDeliveryError(restoredDeliveryError)
@@ -934,6 +944,10 @@ export function FfFbsSupplyWorkspace({
     // отправила бы её из открытой поставки, либо висела бы мёртвой.
     setRetryAction(null)
     setWorkspace(initialWorkspace ?? null)
+    pendingInitialWorkspace.current = initialWorkspace?.supply.id === supplyId
+      ? { generation: workspaceOpenGeneration.current, snapshot: initialWorkspace }
+      : null
+    freshWorkspaceGeneration.current = null
     setStage(readFbsWorkspaceStage(supplyId) ?? (initialWorkspace ? visualStage(initialWorkspace.stage) : 'composition'))
     const restoredDeliveryKey = persistentOperationKey(supplyId, 'delivery')
     deliveryKeyRef.current = restoredDeliveryKey
@@ -982,6 +996,17 @@ export function FfFbsSupplyWorkspace({
     setKizCommittedTails({})
     if (!initialWorkspace) void load()
   }, [open, supplyId, initialWorkspace, load])
+
+  // Grouped entry may hand this child the workspace it just fetched. Treat it
+  // as current only after that exact snapshot has become this open's state;
+  // the previous open's same-supply workspace is not fresh by ID alone.
+  useEffect(() => {
+    const pending = pendingInitialWorkspace.current
+    if (!open || !pending || pending.generation !== workspaceOpenGeneration.current
+      || workspace !== pending.snapshot) return
+    freshWorkspaceGeneration.current = pending.generation
+    pendingInitialWorkspace.current = null
+  }, [open, supplyId, workspace])
 
   useEffect(() => {
     setNotice(null)
@@ -1190,10 +1215,19 @@ export function FfFbsSupplyWorkspace({
   // Both packing entry points have no per-supply Start button. Fetch missing
   // WB stickers on entry, without waiting for a scan or sending them to print.
   useEffect(() => {
-    if (!open || stage !== 'packing' || !workspace || isOzonSupply) return
+    if (!open || stage !== 'packing' || !workspace || isOzonSupply
+      || freshWorkspaceGeneration.current !== workspaceOpenGeneration.current) return
     if (assemblyFrame && (!assemblyFrame.visible || !registerSequentialScanner)) return
+    // Re-entering an already delivered WB supply is read-only. Keep the
+    // historical screen available for explicit label reprints, but do not
+    // automatically create packaging work or request replacement stickers.
+    const historicalReadOnly = deliverySubmitted
+      || workspace.stage === 'tracking'
+      || ['in_delivery', 'done'].includes(workspace.supply.status)
+    if (historicalReadOnly) return
     const missing = workspace.orders.filter((order) => !order.sticker.code && !unifiedStickerAttempts.current.has(order.id))
-    // Manual printing needs the task formerly created by the removed Start button.
+    // Keep accounting preparation opportunistic; manual tape printing does not
+    // depend on a packaging task being present.
     const prepare = !workspace.supply.packaging_task_id
       && !ordinaryPreparationAttempt.current && workspace.orders.length > 0
       && workspace.supply.status !== 'done' && workspace.supply.status !== 'cancelled'
@@ -1258,7 +1292,7 @@ export function FfFbsSupplyWorkspace({
         if (write.isCurrent()) void run(retryOperation, '', undefined, onRetrySuccess)
       })
     })
-  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, token, authHeaders, beginWorkspaceWrite, load])
+  }, [open, stage, assemblyFrame?.visible, registerSequentialScanner, workspace, isOzonSupply, deliverySubmitted, token, authHeaders, beginWorkspaceWrite, load])
 
   const openAddOrders = async () => {
     if (!workspace) return
