@@ -153,6 +153,12 @@ class GateTests(unittest.TestCase):
 
         self.assertTrue(prose_only_commit(tree_get, 'owner/repo', SHA))
 
+    def test_generated_evidence_output_is_docs_only(self):
+        self.f.changed = [
+            'docs/evidence/WMS-666/release-1008/p2-prefix/critical-browser-full/result.json'
+        ]
+        self.assertTrue(prose_only_commit(self.f.get, REPO, SHA))
+
     def test_job_other_sha_or_run_fails(self):
         for field, value in [("head_sha", "b" * 40), ("run_id", 123), ("status", "queued")]:
             with self.subTest(field=field):
