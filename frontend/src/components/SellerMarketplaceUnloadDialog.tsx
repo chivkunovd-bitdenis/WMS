@@ -1,7 +1,8 @@
 import { ErrorBoundary } from './errors/ErrorBoundary'
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   Alert,
+  Box,
   Button,
   Dialog,
   DialogActions,
@@ -10,6 +11,7 @@ import {
   FormControl,
   InputLabel,
   MenuItem,
+  Paper,
   Select,
   Stack,
   Table,
@@ -21,6 +23,8 @@ import {
   TextField,
   Typography,
 } from '@mui/material'
+import ExpandLessOutlined from '@mui/icons-material/ExpandLessOutlined'
+import ExpandMoreOutlined from '@mui/icons-material/ExpandMoreOutlined'
 import { apiUrl } from '../api'
 import { ProductPhotoThumb } from './ProductPhotoThumb'
 import { ProductBarcodeCell } from './ProductBarcodeCell'
@@ -31,6 +35,9 @@ import {
 import { WmsDateField } from './WmsDateField'
 import { insufficientAvailableMessage, readApiErrorMessage } from '../utils/readApiErrorMessage'
 import { createLatestRequestSequence } from '../utils/latestRequestSequence'
+import { downloadAuthorizedFile } from '../utils/downloadAuthorizedFile'
+import { ActionGroup, SecondaryAction } from '../ui-kit'
+import { FboPassDialog } from './FboPassDialog'
 
 type StockRow = {
   product_id: string
@@ -45,6 +52,32 @@ type UnloadLine = {
   sku_code: string
   product_name: string
   quantity: number
+  // WMS-686: сервер отдаёт селлеру подбор и КИЗ отгрузки только для чтения.
+  picked_qty?: number
+  kiz_count?: number
+  requires_honest_sign?: boolean
+}
+
+type MarkingItem = {
+  marking_code_id: string
+  cis_code: string
+  product_id: string
+  line_id: string
+  intake_document_number?: string | null
+}
+
+type UnloadBoxLine = {
+  id: string
+  product_id: string
+  sku_code: string
+  product_name: string
+  quantity: number
+}
+
+type UnloadBox = {
+  id: string
+  internal_barcode: string | null
+  lines: UnloadBoxLine[]
 }
 
 type UnloadDetail = {
@@ -52,9 +85,11 @@ type UnloadDetail = {
   warehouse_id: string
   warehouse_name: string
   status: string
+  marketplace?: string | null
   wb_mp_warehouse_id: number | null
   planned_shipment_date: string | null
   lines: UnloadLine[]
+  boxes?: UnloadBox[]
 }
 
 type WbWarehouse = { wb_warehouse_id: number; name: string }
@@ -71,10 +106,14 @@ type Props = {
   onRefreshList: () => Promise<void>
 }
 
+// Выгрузка состава для WB имеет смысл, когда ФФ уже собирает короба: «Утверждено», «Сборка», «Отгружено».
+const WB_EXPORT_STATUSES = ['confirmed', 'collecting', 'shipped']
+
 function statusRu(status: string): string {
   if (status === 'draft') return 'Черновик'
   if (status === 'submitted') return 'Запланировано'
   if (status === 'confirmed') return 'Подтверждено'
+  if (status === 'collecting') return 'На сборке'
   if (status === 'shipped') return 'Отгружено'
   if (status === 'cancelled') return 'Отменено'
   return status
@@ -107,6 +146,15 @@ function SellerMarketplaceUnloadDialogContent({
   const [pickerOpen, setPickerOpen] = useState(false)
   const [wbWarehouses, setWbWarehouses] = useState<WbWarehouse[]>([])
   const [plannedDate, setPlannedDate] = useState<string | null>(null)
+  const [passOpen, setPassOpen] = useState(false)
+  const [kizOpenLineIds, setKizOpenLineIds] = useState<ReadonlySet<string>>(new Set())
+  const [markingItems, setMarkingItems] = useState<MarkingItem[] | null>(null)
+  const [markingError, setMarkingError] = useState<string | null>(null)
+  const markingRequests = useRef(createLatestRequestSequence())
+  const [wbExportBusy, setWbExportBusy] = useState(false)
+  const [wbExportError, setWbExportError] = useState<string | null>(null)
+  const [wbExportWarning, setWbExportWarning] = useState<string | null>(null)
+  const wbExportRequests = useRef(createLatestRequestSequence())
   const detailRequests = useRef(createLatestRequestSequence())
   const stockRequests = useRef(createLatestRequestSequence())
   const activeRequestId = useRef<string | null>(null)
@@ -259,6 +307,102 @@ function SellerMarketplaceUnloadDialogContent({
   useEffect(() => {
     setCatalog(null)
   }, [catalogScopeKey, token])
+
+  // Закрытие окна или другая отгрузка: устаревший ответ выгрузки не сохраняется,
+  // ошибка и предупреждение прежней отгрузки не переходят в новую.
+  useEffect(() => {
+    wbExportRequests.current.invalidate()
+    markingRequests.current.invalidate()
+    setWbExportBusy(false)
+    setWbExportError(null)
+    setWbExportWarning(null)
+    setPassOpen(false)
+    setKizOpenLineIds(new Set())
+    setMarkingItems(null)
+    setMarkingError(null)
+  }, [open, requestId])
+
+  // Коды отгрузки читаем при каждом раскрытии списка: ФФ мог привязать новые, пока окно открыто.
+  const loadMarkingItems = async () => {
+    if (!token || !requestId) {
+      return
+    }
+    const markingRequestId = markingRequests.current.next()
+    const isCurrentMarking = () => markingRequests.current.isLatest(markingRequestId)
+    setMarkingError(null)
+    try {
+      const res = await fetch(
+        apiUrl(`/operations/marketplace-unload-requests/${requestId}/marking-codes`),
+        { headers: authHeaders(token) },
+      )
+      if (!isCurrentMarking()) {
+        return
+      }
+      if (!res.ok) {
+        const message = await readApiErrorMessage(res)
+        if (isCurrentMarking()) {
+          setMarkingError(message)
+        }
+        return
+      }
+      const body = (await res.json()) as { items?: MarkingItem[] }
+      if (isCurrentMarking()) {
+        setMarkingItems(body.items ?? [])
+      }
+    } catch (e) {
+      if (isCurrentMarking()) {
+        setMarkingError(e instanceof Error ? e.message : 'Не удалось загрузить КИЗ.')
+      }
+    }
+  }
+
+  const toggleKizList = (lineId: string) => {
+    const opening = !kizOpenLineIds.has(lineId)
+    setKizOpenLineIds((current) => {
+      const next = new Set(current)
+      if (next.has(lineId)) {
+        next.delete(lineId)
+      } else {
+        next.add(lineId)
+      }
+      return next
+    })
+    if (opening) {
+      void loadMarkingItems()
+    }
+  }
+
+  const downloadWbExport = async () => {
+    if (!token || !requestId || wbExportBusy) {
+      return
+    }
+    const exportRequestId = wbExportRequests.current.next()
+    const isCurrentExport = () => wbExportRequests.current.isLatest(exportRequestId)
+    setWbExportBusy(true)
+    setWbExportError(null)
+    setWbExportWarning(null)
+    try {
+      const file = await downloadAuthorizedFile(
+        `/operations/marketplace-unload-requests/${requestId}/wb-fbw-packaging.xlsx`,
+        authHeaders(token),
+        'wb-fbw-packaging.xlsx',
+        isCurrentExport,
+      )
+      if (file?.warningCode === 'wb-shelf-life-date-required' && isCurrentExport()) {
+        setWbExportWarning(
+          'Перед загрузкой в WB укажите фактическую дату партии для товаров со сроком годности: WMS не хранит дату окончания партии.',
+        )
+      }
+    } catch (e) {
+      if (isCurrentExport()) {
+        setWbExportError(e instanceof Error ? e.message : 'Не удалось скачать XLSX для WB.')
+      }
+    } finally {
+      if (isCurrentExport()) {
+        setWbExportBusy(false)
+      }
+    }
+  }
 
   useEffect(() => {
     if (!token || !open) {
@@ -707,26 +851,184 @@ function SellerMarketplaceUnloadDialogContent({
     </>
   ) : null
 
+  // Сколько штук товара лежит в коробах отгрузки — считается из состава коробов, отдельного счётчика нет.
+  const inBoxesByProduct = new Map<string, number>()
+  for (const box of detail?.boxes ?? []) {
+    for (const ln of box.lines) {
+      inBoxesByProduct.set(ln.product_id, (inBoxesByProduct.get(ln.product_id) ?? 0) + ln.quantity)
+    }
+  }
+
   const readOnlyLinesTable =
     detail && !isDraft && detail.lines.length > 0 ? (
-      <Table size="small" data-testid="seller-mp-lines-table-readonly">
-        <TableHead>
-          <TableRow>
-            <TableCell>Артикул</TableCell>
-            <TableCell>Товар</TableCell>
-            <TableCell align="right">Кол-во</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {detail.lines.map((ln) => (
-            <TableRow key={ln.id}>
-              <TableCell>{ln.sku_code}</TableCell>
-              <TableCell>{ln.product_name}</TableCell>
-              <TableCell align="right">{ln.quantity}</TableCell>
+      <TableContainer>
+        <Table size="small" data-testid="seller-mp-lines-table-readonly">
+          <TableHead>
+            <TableRow sx={{ '& th': { whiteSpace: 'nowrap' } }}>
+              <TableCell>Артикул</TableCell>
+              <TableCell>Товар</TableCell>
+              <TableCell align="right">Кол-во</TableCell>
+              <TableCell align="right">Подобрано</TableCell>
+              <TableCell align="right">В коробах</TableCell>
+              <TableCell align="right">КИЗ</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
+          </TableHead>
+          <TableBody>
+            {detail.lines.map((ln) => {
+              const kizOpen = kizOpenLineIds.has(ln.id)
+              const lineCodes = (markingItems ?? []).filter((item) => item.line_id === ln.id)
+              return (
+                <Fragment key={ln.id}>
+                  <TableRow data-testid={`seller-mp-line-readonly-${ln.id}`}>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>{ln.sku_code}</TableCell>
+                    <TableCell sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                      {ln.product_name}
+                    </TableCell>
+                    <TableCell align="right">{ln.quantity}</TableCell>
+                    <TableCell align="right" data-testid={`seller-mp-line-picked-${ln.id}`}>
+                      {ln.picked_qty ?? 0}
+                    </TableCell>
+                    <TableCell align="right" data-testid={`seller-mp-line-in-boxes-${ln.id}`}>
+                      {inBoxesByProduct.get(ln.product_id) ?? 0}
+                    </TableCell>
+                    <TableCell align="right">
+                      {ln.requires_honest_sign ? (
+                        <Button
+                          size="small"
+                          color="inherit"
+                          onClick={() => toggleKizList(ln.id)}
+                          endIcon={kizOpen ? <ExpandLessOutlined /> : <ExpandMoreOutlined />}
+                          aria-expanded={kizOpen}
+                          aria-label={`КИЗ: ${ln.kiz_count ?? 0}. ${kizOpen ? 'Скрыть список' : 'Показать список'}`}
+                          sx={{ fontWeight: 700, fontSize: '1.05rem', minWidth: 0 }}
+                          data-testid={`seller-mp-kiz-toggle-${ln.id}`}
+                        >
+                          {ln.kiz_count ?? 0}
+                        </Button>
+                      ) : (
+                        '—'
+                      )}
+                    </TableCell>
+                  </TableRow>
+                  {ln.requires_honest_sign && kizOpen ? (
+                    <TableRow data-testid={`seller-mp-kiz-list-${ln.id}`}>
+                      <TableCell colSpan={6} sx={{ bgcolor: 'action.hover', py: 1 }}>
+                        {markingError ? (
+                          <Typography variant="body2" color="error">
+                            {markingError}
+                          </Typography>
+                        ) : markingItems === null ? (
+                          <Typography variant="body2" color="text.secondary">
+                            Загрузка…
+                          </Typography>
+                        ) : lineCodes.length === 0 ? (
+                          <Typography variant="body2" color="text.secondary">
+                            КИЗ пока не привязаны.
+                          </Typography>
+                        ) : (
+                          <Stack spacing={0.5}>
+                            {lineCodes.map((item) => (
+                              <Typography
+                                key={item.marking_code_id}
+                                variant="body2"
+                                sx={{ wordBreak: 'break-all' }}
+                                data-testid="seller-mp-kiz-code"
+                              >
+                                <Box
+                                  component="span"
+                                  sx={{ fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}
+                                >
+                                  {item.cis_code}
+                                </Box>
+                                {item.intake_document_number
+                                  ? ` · приёмка №${item.intake_document_number}`
+                                  : ''}
+                              </Typography>
+                            ))}
+                          </Stack>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ) : null}
+                </Fragment>
+              )
+            })}
+          </TableBody>
+        </Table>
+      </TableContainer>
+    ) : null
+
+  // Короба селлер видит только на чтение: состав и внутренний ШК, без действий над ними.
+  // Порядок и отбор те же, что в окне ФФ: сначала короба с товаром, затем пустые со ШК.
+  const visibleBoxes = (detail?.boxes ?? []).filter(
+    (box) => box.lines.length > 0 || Boolean(box.internal_barcode?.trim()),
+  )
+  const orderedBoxes = [
+    ...visibleBoxes.filter((box) => box.lines.length > 0),
+    ...visibleBoxes.filter((box) => box.lines.length === 0),
+  ]
+
+  const readOnlyBoxes =
+    orderedBoxes.length > 0 ? (
+      <Box sx={{ mt: 2 }} data-testid="seller-mp-boxes">
+        <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+          Короба
+        </Typography>
+        <Stack spacing={1.5}>
+          {orderedBoxes.map((box, index) => {
+            const barcode = box.internal_barcode?.trim()
+            return (
+              <Paper
+                key={box.id}
+                variant="outlined"
+                sx={{ borderRadius: 1, overflow: 'hidden' }}
+                data-testid={`seller-mp-box-${box.id}`}
+              >
+                <Box sx={{ px: 1.25, py: 1, bgcolor: 'action.hover' }}>
+                  <Typography variant="subtitle2" sx={{ fontWeight: 700, lineHeight: 1.25 }}>
+                    Короб {index + 1}
+                  </Typography>
+                  {barcode ? (
+                    <Typography
+                      variant="caption"
+                      color="text.disabled"
+                      sx={{
+                        display: 'block',
+                        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+                      }}
+                      data-testid={`seller-mp-box-barcode-${box.id}`}
+                    >
+                      {barcode}
+                    </Typography>
+                  ) : null}
+                </Box>
+                {box.lines.length > 0 ? (
+                  <Table size="small" data-testid={`seller-mp-box-lines-${box.id}`}>
+                    <TableHead>
+                      <TableRow>
+                        <TableCell>Артикул</TableCell>
+                        <TableCell>Товар</TableCell>
+                        <TableCell align="right">В коробе</TableCell>
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {box.lines.map((ln) => (
+                        <TableRow key={ln.id}>
+                          <TableCell>{ln.sku_code}</TableCell>
+                          <TableCell sx={{ whiteSpace: 'normal', wordBreak: 'break-word' }}>
+                            {ln.product_name}
+                          </TableCell>
+                          <TableCell align="right">{ln.quantity}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                ) : null}
+              </Paper>
+            )
+          })}
+        </Stack>
+      </Box>
     ) : null
 
   return (
@@ -744,6 +1046,34 @@ function SellerMarketplaceUnloadDialogContent({
               Склад ФФ: {detail.warehouse_name} · {statusRu(detail.status)}
               {detail.planned_shipment_date ? ` · отгрузка ${detail.planned_shipment_date}` : ''}
             </Typography>
+          ) : null}
+          {detail && !isDraft ? (
+            <Box sx={{ mb: 2 }} data-testid="seller-mp-doc-actions">
+              <ActionGroup>
+                {detail.marketplace === 'wb' && WB_EXPORT_STATUSES.includes(detail.status) ? (
+                  <SecondaryAction
+                    onClick={() => void downloadWbExport()}
+                    disabledReason={wbExportBusy ? 'Файл формируется' : undefined}
+                    data-testid="seller-mp-wb-fbw-export"
+                  >
+                    Скачать XLSX для WB
+                  </SecondaryAction>
+                ) : null}
+                <SecondaryAction onClick={() => setPassOpen(true)} data-testid="seller-mp-pass-open">
+                  Пропуск
+                </SecondaryAction>
+              </ActionGroup>
+              {wbExportError ? (
+                <Alert severity="error" sx={{ mt: 1.5 }} data-testid="seller-mp-wb-fbw-export-error">
+                  {wbExportError}
+                </Alert>
+              ) : null}
+              {wbExportWarning ? (
+                <Alert severity="warning" sx={{ mt: 1.5 }} data-testid="seller-mp-wb-fbw-export-warning">
+                  {wbExportWarning}
+                </Alert>
+              ) : null}
+            </Box>
           ) : null}
           {isSubmitted ? (
             <Alert severity="info" sx={{ mb: 2 }} data-testid="seller-mp-ff-handoff-hint">
@@ -791,6 +1121,7 @@ function SellerMarketplaceUnloadDialogContent({
 
           {draftLinesTable}
           {readOnlyLinesTable}
+          {readOnlyBoxes}
         </DialogContent>
         <DialogActions>
           {isDraft ? (
@@ -823,6 +1154,16 @@ function SellerMarketplaceUnloadDialogContent({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <FboPassDialog
+        open={open && passOpen}
+        token={token}
+        authHeaders={authHeaders}
+        requestId={requestId}
+        mode="seller"
+        marketplace={detail?.marketplace ?? null}
+        onClose={() => setPassOpen(false)}
+      />
 
       <SellerWbProductPickerDialog
         open={pickerOpen}

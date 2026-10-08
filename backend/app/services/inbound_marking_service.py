@@ -40,7 +40,7 @@ from app.services.inbound_intake_service import (
     InboundIntakeError,
     effective_actual_qty,
 )
-from app.services.marking_code_service import extract_gtin_from_cis
+from app.services.marking_code_service import extract_gtin_from_cis, is_code_bound
 from app.services.seller_marking_credentials_service import (
     get_cz_token_for_seller,
     get_public_credentials,
@@ -259,10 +259,10 @@ async def attach_code(
         if code.status != "printed":
             raise InboundIntakeError("marking_code_in_pool")
         if (
-            any(
+            is_code_bound(code)
+            or any(
                 value is not None
                 for value in (
-                    code.packaging_task_line_id,
                     code.reserved_at,
                     code.reserved_by_user_id,
                     code.consumed_at,
@@ -359,10 +359,10 @@ async def delete_code(
         len(own) != 1
         or own[0].event_type != EVENT_IMPORTED
         or _meta(own[0]).get("source_process") != "reception"
+        or is_code_bound(code)
         or any(
             value is not None
             for value in (
-                code.packaging_task_line_id,
                 code.reserved_at,
                 code.reserved_by_user_id,
                 code.transferred_at,

@@ -17,6 +17,7 @@ from openpyxl import Workbook  # type: ignore[import-untyped]
 from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.inbound_intake import InboundIntakeBox
 from app.models.marketplace_unload import (
     MarketplaceUnloadBox,
     MarketplaceUnloadBoxLine,
@@ -55,6 +56,8 @@ class _ExportRow:
     box_barcode: str | None
     box_tenant_id: uuid.UUID | None
     box_warehouse_id: uuid.UUID | None
+    inbound_box_barcode: str | None
+    inbound_box_tenant_id: uuid.UUID | None
     request_seller_id: uuid.UUID | None
     line_id: uuid.UUID | None
     line_created_at: datetime | None
@@ -84,7 +87,7 @@ def _normalized(value: str | None) -> str | None:
     return normalized or None
 
 
-def _stable_xlsx(workbook: Workbook) -> bytes:
+def stable_xlsx(workbook: Workbook) -> bytes:
     """Save deterministic bytes so retried downloads of the same snapshot match."""
     raw = BytesIO()
     workbook.save(raw)
@@ -117,7 +120,7 @@ def _workbook(rows: list[tuple[str, int, str]]) -> bytes:
         box_cell.data_type = "s"
         # D is intentionally empty: WMS has shelf-life duration, not a batch expiry.
         # E is intentionally empty: WB has not supplied print data for this box.
-    return _stable_xlsx(workbook)
+    return stable_xlsx(workbook)
 
 
 async def export_wb_fbw_packaging_xlsx(
@@ -136,6 +139,8 @@ async def export_wb_fbw_packaging_xlsx(
             WarehouseBox.internal_barcode,
             WarehouseBox.tenant_id,
             WarehouseBox.warehouse_id,
+            InboundIntakeBox.internal_barcode,
+            InboundIntakeBox.tenant_id,
             MarketplaceUnloadRequest.seller_id,
             MarketplaceUnloadBoxLine.id,
             MarketplaceUnloadBoxLine.created_at,
@@ -154,6 +159,10 @@ async def export_wb_fbw_packaging_xlsx(
             MarketplaceUnloadBox.request_id == MarketplaceUnloadRequest.id,
         )
         .outerjoin(WarehouseBox, WarehouseBox.id == MarketplaceUnloadBox.warehouse_box_id)
+        .outerjoin(
+            InboundIntakeBox,
+            InboundIntakeBox.id == MarketplaceUnloadBox.inbound_intake_box_id,
+        )
         .outerjoin(
             MarketplaceUnloadBoxLine,
             MarketplaceUnloadBoxLine.box_id == MarketplaceUnloadBox.id,
@@ -198,12 +207,18 @@ async def export_wb_fbw_packaging_xlsx(
     for row in raw_rows:
         if row.box_id is None:
             continue
+        # ШК короба — складского (WHB) или перенесённого целиком короба приёмки (INB).
+        # Для WHB сверяются организация и склад, для INB — организация.
         box_barcode = _normalized(row.box_barcode)
-        if (
-            box_barcode is None
-            or row.box_tenant_id != tenant_id
-            or row.box_warehouse_id != row.request_warehouse_id
-        ):
+        box_is_valid = (
+            box_barcode is not None
+            and row.box_tenant_id == tenant_id
+            and row.box_warehouse_id == row.request_warehouse_id
+        )
+        if box_barcode is None:
+            box_barcode = _normalized(row.inbound_box_barcode)
+            box_is_valid = box_barcode is not None and row.inbound_box_tenant_id == tenant_id
+        if box_barcode is None or not box_is_valid:
             raise WbFbwPackagingExportError(
                 f"У короба {row.box_id} неверная связь с WarehouseBox или внутренний ШК."
             )

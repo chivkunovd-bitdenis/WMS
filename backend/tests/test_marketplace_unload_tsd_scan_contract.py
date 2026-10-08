@@ -490,6 +490,8 @@ async def test_box_scan_ready_box_into_open_box_mp018(
         f"{BASE}/{mid}/boxes/attach", headers=h,
         json={"barcode": inb_barcode, "box_preset": "60_40_40"},
     )
-    assert empty.status_code == 422, empty.text
-    assert empty.json()["detail"] == "box_empty"
+    # WMS-686: короб приёмки помнит отгрузку, поэтому повтор — «уже привязан»,
+    # а не «пуст». Остатки при этом не меняются.
+    assert empty.status_code == 409, empty.text
+    assert empty.json()["detail"] == "box_already_attached"
     assert await _balances_by_container(loc_id, pid) == after

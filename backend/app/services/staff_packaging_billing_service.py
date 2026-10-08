@@ -18,9 +18,15 @@ from app.models.document_event import (
 from app.models.fbs_order import FbsOrder
 from app.models.fbs_packaging_fulfillment import FbsPackagingFulfillment
 from app.models.fbs_supply import FbsSupply
+from app.models.marketplace_unload import (
+    MarketplaceUnloadBox,
+    MarketplaceUnloadBoxLine,
+    MarketplaceUnloadRequest,
+)
 from app.models.packaging_task import STATUS_DONE, PackagingTask
 from app.models.user import User
 from app.services.document_event_service import record_document_event_safely
+from app.services.marketplace_unload_status import STATUS_SHIPPED
 
 MSK = ZoneInfo("Europe/Moscow")
 
@@ -138,6 +144,9 @@ async def aggregate_staff_billing(
         )
         .where(
             PackagingTask.tenant_id == tenant_id,
+            # Отгрузки FBO считаются ниже по проведённой отгрузке: их задание
+            # упаковки — рудимент и в выработку не входит (WMS-686).
+            PackagingTask.marketplace_unload_request_id.is_(None),
             PackagingTask.status == STATUS_DONE,
             PackagingTask.completed_by_user_id.in_(staff_user_ids),
             PackagingTask.completed_at >= start_utc,
@@ -169,6 +178,32 @@ async def aggregate_staff_billing(
         )
     )
     fact_rows = (await session.execute(fact_stmt)).all()
+    # FBO: упаковано то, что было в проведённой отгрузке, — засчитывается тому, кто
+    # нажал «Завершить», по его ставке; месяц — месяц проведения. Отменённые
+    # (сторнированные) отгрузки не считаются.
+    unload_stmt = (
+        select(
+            MarketplaceUnloadRequest.completed_by_user_id,
+            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
+            User.packaging_rate_kopecks,
+        )
+        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.request_id == MarketplaceUnloadRequest.id)
+        .join(MarketplaceUnloadBoxLine, MarketplaceUnloadBoxLine.box_id == MarketplaceUnloadBox.id)
+        .join(User, User.id == MarketplaceUnloadRequest.completed_by_user_id)
+        .where(
+            MarketplaceUnloadRequest.tenant_id == tenant_id,
+            MarketplaceUnloadRequest.status == STATUS_SHIPPED,
+            MarketplaceUnloadRequest.cancelled_at.is_(None),
+            MarketplaceUnloadRequest.completed_by_user_id.in_(staff_user_ids),
+            MarketplaceUnloadRequest.shipped_at >= start_utc,
+            MarketplaceUnloadRequest.shipped_at < end_utc,
+        )
+        .group_by(
+            MarketplaceUnloadRequest.completed_by_user_id,
+            User.packaging_rate_kopecks,
+        )
+    )
+    unload_rows = (await session.execute(unload_stmt)).all()
     out: dict[uuid.UUID, StaffPackagingBillingTotals] = {
         uid: StaffPackagingBillingTotals(units_packed=0, earned_kopecks=0)
         for uid in staff_user_ids
@@ -188,6 +223,15 @@ async def aggregate_staff_billing(
         out[user_id] = StaffPackagingBillingTotals(
             units_packed=current.units_packed + fact_units,
             earned_kopecks=current.earned_kopecks + fact_units * int(rate),
+        )
+    for user_id, units, rate in unload_rows:
+        if user_id is None:
+            continue
+        current = out[user_id]
+        unload_units = int(units)
+        out[user_id] = StaffPackagingBillingTotals(
+            units_packed=current.units_packed + unload_units,
+            earned_kopecks=current.earned_kopecks + unload_units * int(rate),
         )
     return out
 

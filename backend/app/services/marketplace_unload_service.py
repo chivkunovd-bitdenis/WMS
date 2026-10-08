@@ -131,19 +131,6 @@ def enter_collecting_if_needed(req: MarketplaceUnloadRequest) -> None:
         req.status = STATUS_COLLECTING
 
 
-async def _sync_packaging_task_for_unload(
-    session: AsyncSession,
-    tenant_id: uuid.UUID,
-    request_id: uuid.UUID,
-) -> None:
-    req = await get_request(session, tenant_id, request_id)
-    if req is None or req.status not in PACKAGING_SYNC_STATUSES:
-        return
-    from app.services import packaging_task_service as pkg_svc
-
-    await pkg_svc.ensure_task_for_unload(session, tenant_id, request_id)
-
-
 def _request_audit_fields(req: MarketplaceUnloadRequest) -> dict[str, object]:
     return {
         "request_id": req.id,
@@ -347,6 +334,9 @@ async def get_request(
             .selectinload(MarketplaceUnloadBoxLine.product),
             selectinload(MarketplaceUnloadRequest.boxes).selectinload(
                 MarketplaceUnloadBox.warehouse_box
+            ),
+            selectinload(MarketplaceUnloadRequest.boxes).selectinload(
+                MarketplaceUnloadBox.inbound_intake_box
             ),
             selectinload(MarketplaceUnloadRequest.pick_allocations).selectinload(
                 MarketplaceUnloadPickAllocation.product
@@ -697,7 +687,6 @@ async def add_line(
         req.ff_modified = True
     await session.commit()
     await session.refresh(line, attribute_names=["product"])
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     return line
 
 
@@ -753,7 +742,6 @@ async def replace_lines(
             )
         )
     await session.commit()
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)
     r2 = await get_request(session, tenant_id, request_id)
     assert r2 is not None
     return r2
@@ -961,12 +949,48 @@ def has_incomplete_distribution(req: MarketplaceUnloadRequest) -> bool:
     return compute_has_discrepancy(req)
 
 
+async def _incomplete_marking_items(
+    session: AsyncSession,
+    req: MarketplaceUnloadRequest,
+    distributed: dict[uuid.UUID, int],
+) -> list[dict[str, object]]:
+    """Товары с «Честным знаком», у которых привязанных КИЗ меньше отгружаемого.
+
+    K — это число кодов, привязанных к строке товара этой отгрузки (считает сервис
+    КИЗ отгрузки; отдельного счётчика нет). Отгружаемое — то, что лежит в коробах.
+    """
+    marked = [
+        ln
+        for ln in req.lines
+        if ln.product.requires_honest_sign and distributed.get(ln.product_id, 0) > 0
+    ]
+    if not marked:
+        return []
+    # Локальный импорт: сервис КИЗ сам импортирует этот модуль.
+    from app.services import marketplace_unload_kiz_service as kiz_svc
+
+    linked_by_product = await kiz_svc.count_linked_by_line(session, req.id)
+    items: list[dict[str, object]] = [
+        {
+            "product_id": str(ln.product_id),
+            "product_name": ln.product.name,
+            "linked": linked_by_product.get(ln.product_id, 0),
+            "quantity": distributed[ln.product_id],
+        }
+        for ln in marked
+        if linked_by_product.get(ln.product_id, 0) < distributed[ln.product_id]
+    ]
+    items.sort(key=lambda item: (str(item["product_name"]), str(item["product_id"])))
+    return items
+
+
 async def complete_unload(
     session: AsyncSession,
     tenant_id: uuid.UUID,
     request_id: uuid.UUID,
     *,
     acknowledge_discrepancy: bool = False,
+    acknowledge_marking: bool = False,
     performer_id: uuid.UUID | None = None,
 ) -> MarketplaceUnloadRequest:
     """Single completion op: ship unload; set has_discrepancy when plan ≠ fact."""
@@ -982,18 +1006,26 @@ async def complete_unload(
     if req.marketplace == "wb" and req.wb_mp_warehouse_id is None:
         raise MarketplaceUnloadError("wb_mp_warehouse_required")
 
-    from app.services import packaging_task_service as pkg_svc
-
-    await pkg_svc.assert_unload_marking_done(session, tenant_id, request_id)
+    # WMS-686: «Завершить» не зависит от задания упаковки FBO вообще — его статус
+    # не читается и не ждётся. Маркировка проверяется по самой отгрузке: КИЗ
+    # хранится на строке товара, поэтому считаем коды этой строки.
 
     distributed = distributed_qty_by_product(req)
     if not distributed or sum(distributed.values()) < 1:
         raise MarketplaceUnloadError("distribution_incomplete")
 
     has_discrepancy = compute_has_discrepancy(req)
+    if has_discrepancy and not acknowledge_discrepancy:
+        raise MarketplaceUnloadError("distribution_incomplete")
+
+    if not acknowledge_marking:
+        incomplete = await _incomplete_marking_items(session, req, distributed)
+        if incomplete:
+            raise MarketplaceUnloadError(
+                "marking_incomplete", {"code": "marking_incomplete", "items": incomplete}
+            )
+
     if has_discrepancy:
-        if not acknowledge_discrepancy:
-            raise MarketplaceUnloadError("distribution_incomplete")
         req.ff_modified = True
 
     # Отгрузка на маркетплейс завершается локально — одинаково для WB и Ozon.
@@ -1279,4 +1311,3 @@ async def delete_line(
         raise MarketplaceUnloadError("line_not_found")
     await session.delete(line)
     await session.commit()
-    await _sync_packaging_task_for_unload(session, tenant_id, request_id)

@@ -17,10 +17,10 @@ from app.models.marketplace_unload import (
     MarketplaceUnloadPickAllocation,
     MarketplaceUnloadRequest,
 )
-from app.models.packaging_task import PackagingTaskLine
 from app.models.product import Product
 from app.models.storage_location import StorageLocation
 from app.services import inventory_service
+from app.services import marketplace_unload_kiz_service as kiz_svc
 from app.services import marketplace_unload_service as mu_svc
 from app.services import sorting_location_service as sort_loc_svc
 from app.services import tenant_settings_service as tenant_settings_svc
@@ -60,6 +60,8 @@ class SetPickAllocationResult:
     location_code: str
     quantity: int
     picked_qty: int
+    #: КИЗ, отвязанные от товара, потому что подобранного стало меньше, чем КИЗ (WMS-686).
+    unlinked_marking_codes: tuple[str, ...] = ()
 
 
 @dataclass
@@ -605,12 +607,6 @@ async def record_pick_allocation(
     res_alloc = await session.execute(stmt_alloc)
     alloc_loaded = res_alloc.scalar_one()
 
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if pkg_task is not None:
-        await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
-
     return PickAllocationResult(
         allocation=alloc_loaded,
         product=prod,
@@ -663,13 +659,6 @@ async def set_pick_allocation(
         .with_for_update()
     )
     await session.execute(lock_stmt)
-
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if pkg_task is not None:
-        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, pkg_task)
-    historical_before = await _unknown_box_quantity(session, request_id, product_id)
 
     # Итог задаётся по конкретному месту снятия: россыпь и каждый короб — своя
     # строка, иначе ввод в короб перетирал бы снятое россыпью.
@@ -724,6 +713,7 @@ async def set_pick_allocation(
 
     # diff < 0: current_qty > quantity >= 0, значит строка подбора существует.
     assert alloc is not None
+    picked_before_reduce = await picked_qty_for_product(session, request_id, product_id)
     alloc_id = alloc.id
     remove_qty = -diff
     unknown_available = int(alloc.quantity) - int(alloc.quantity_source_known or 0)
@@ -741,9 +731,7 @@ async def set_pick_allocation(
                 int(alloc.quantity_source_known) - source_known_removed
             )
 
-    box_reduction = await _trim_box_lines_to_remaining_pick(
-        session, request_id, product_id
-    )
+    await _trim_box_lines_to_remaining_pick(session, request_id, product_id)
 
     await inventory_service.return_marketplace_unload_units(
         session,
@@ -766,23 +754,13 @@ async def set_pick_allocation(
         tenant_id=tenant_id,
         warehouse_id=req.warehouse_id,
     )
-
-    if pkg_task is not None:
-        task_line = next((ln for ln in pkg_task.lines if ln.product_id == product_id), None)
-        if task_line is not None:
-            _reconcile_task_after_box_reduction(
-                task_line,
-                historical_before=historical_before,
-                unknown_removed=box_reduction.unknown_removed,
-                boxed_remaining=box_reduction.boxed_remaining,
-            )
+    # WMS-686 D3.4: КИЗ не может быть больше подобранного — лишние (последние
+    # привязанные) отвязываются в той же транзакции; оператор видит, какие.
+    unlinked = await kiz_svc.unlink_excess_codes(
+        session, tenant_id, request_id, product_id, previous_picked=picked_before_reduce
+    )
 
     await session.commit()
-
-    if pkg_task is not None:
-        synced = await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
-        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, synced.task)
-        await session.commit()
 
     picked_after = await picked_qty_by_product(session, request_id)
     return SetPickAllocationResult(
@@ -792,6 +770,7 @@ async def set_pick_allocation(
         location_code=loc.code,
         quantity=max(0, new_qty),
         picked_qty=picked_after.get(product_id, 0),
+        unlinked_marking_codes=tuple(code.cis_code for code in unlinked),
     )
 
 
@@ -904,38 +883,6 @@ async def _rollback_pick_allocations(
             )
         )
     return result
-
-
-async def _unknown_box_quantity(
-    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
-) -> int:
-    stmt = (
-        select(
-            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0),
-            func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity_source_known), 0),
-        )
-        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
-        .where(
-            MarketplaceUnloadBox.request_id == request_id,
-            MarketplaceUnloadBoxLine.product_id == product_id,
-        )
-    )
-    boxed, known = (await session.execute(stmt)).one()
-    return max(0, int(boxed or 0) - int(known or 0))
-
-
-async def _boxed_quantity(
-    session: AsyncSession, request_id: uuid.UUID, product_id: uuid.UUID
-) -> int:
-    stmt = (
-        select(func.coalesce(func.sum(MarketplaceUnloadBoxLine.quantity), 0))
-        .join(MarketplaceUnloadBox, MarketplaceUnloadBox.id == MarketplaceUnloadBoxLine.box_id)
-        .where(
-            MarketplaceUnloadBox.request_id == request_id,
-            MarketplaceUnloadBoxLine.product_id == product_id,
-        )
-    )
-    return int((await session.execute(stmt)).scalar_one() or 0)
 
 
 async def _trim_box_lines_to_remaining_pick(
@@ -1055,68 +1002,6 @@ async def _trim_box_lines_to_remaining_pick(
     )
 
 
-def _reconcile_task_after_box_reduction(
-    line: PackagingTaskLine,
-    *,
-    historical_before: int,
-    unknown_removed: int,
-    boxed_remaining: int,
-) -> None:
-    if boxed_remaining < 1:
-        line.qty_confirmed_packed = 0
-        line.qty_packed_in_task = 0
-        line.qty_legacy_confirmed_packed = 0
-        line.qty_legacy_packed_in_task = 0
-        return
-    _reduce_historical_baseline(
-        line,
-        historical_before=historical_before,
-        removed_unknown=unknown_removed,
-    )
-    # The box synchronizer deliberately preserves a task fact for a fully
-    # unknown historical box. Reset the fact to its historic baseline first so
-    # source-known units removed by this set do not remain as stale ready/work.
-    if (
-        line.qty_legacy_confirmed_packed is not None
-        and line.qty_legacy_packed_in_task is not None
-    ):
-        line.qty_confirmed_packed = int(line.qty_legacy_confirmed_packed)
-        line.qty_packed_in_task = int(line.qty_legacy_packed_in_task)
-
-
-def _reduce_historical_baseline(
-    line: PackagingTaskLine, *, historical_before: int, removed_unknown: int
-) -> None:
-    """Preserve the historic ready-first result when historic units are removed.
-
-    This corrects the recorded historic calculation; it never claims a source
-    for the removed physical unit or changes provenance fields on the box and
-    allocation.
-    """
-    if removed_unknown < 1:
-        return
-    legacy_ready = line.qty_legacy_confirmed_packed
-    legacy_work = line.qty_legacy_packed_in_task
-    if legacy_ready is None or legacy_work is None:
-        current_ready = int(line.qty_confirmed_packed)
-        current_work = int(line.qty_packed_in_task)
-        if current_ready + current_work != historical_before:
-            return
-        legacy_ready = current_ready
-        legacy_work = current_work
-    ready = int(legacy_ready)
-    work = int(legacy_work)
-    historical_total = ready + work
-    if historical_total != historical_before:
-        return
-    remaining_historical = max(0, historical_total - removed_unknown)
-    remaining_ready = min(ready, remaining_historical)
-    line.qty_legacy_confirmed_packed = remaining_ready
-    line.qty_legacy_packed_in_task = remaining_historical - remaining_ready
-    line.qty_confirmed_packed = remaining_ready
-    line.qty_packed_in_task = remaining_historical - remaining_ready
-
-
 async def remove_from_box(
     session: AsyncSession,
     tenant_id: uuid.UUID,
@@ -1154,18 +1039,9 @@ async def remove_from_box(
     )
     await session.execute(lock_stmt)
 
-    from app.services import packaging_task_service as pkg_svc
-
-    pkg_task = await pkg_svc.get_task_for_unload(session, tenant_id, request_id)
-    if pkg_task is not None:
-        # Capture the historic baseline before changing the box composition.
-        # A direct collect can reach this operation before a progress reread.
-        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, pkg_task)
-
-    historical_before = await _unknown_box_quantity(session, request_id, line.product_id)
+    picked_before_reduce = await picked_qty_for_product(session, request_id, line.product_id)
     unknown_available = line_qty - int(line.quantity_source_known or 0)
     source_known_removed = max(0, remove_qty - unknown_available)
-    unknown_removed = remove_qty - source_known_removed
     packed_removed = min(int(line.quantity_packed or 0), source_known_removed)
     location_chunks = await _rollback_pick_allocations(
         session,
@@ -1199,6 +1075,14 @@ async def remove_from_box(
         tenant_id=tenant_id,
         warehouse_id=req.warehouse_id,
     )
+    # Подобранное уменьшилось — КИЗ сверх подобранного отвязываются (WMS-686 D3.4).
+    await kiz_svc.unlink_excess_codes(
+        session,
+        tenant_id,
+        request_id,
+        line.product_id,
+        previous_picked=picked_before_reduce,
+    )
 
     new_qty = line_qty - remove_qty
     deleted_line_id = line.id
@@ -1211,29 +1095,7 @@ async def remove_from_box(
         if line.quantity_source_known is not None:
             line.quantity_source_known = int(line.quantity_source_known) - source_known_removed
 
-    if pkg_task is not None:
-        task_line = next((ln for ln in pkg_task.lines if ln.product_id == line.product_id), None)
-        if task_line is not None:
-            if await _boxed_quantity(session, request_id, line.product_id) == 0:
-                # The last physical box unit has been returned. Keep the plan
-                # line for recollection, but do not leave stale packed work.
-                task_line.qty_confirmed_packed = 0
-                task_line.qty_packed_in_task = 0
-                task_line.qty_legacy_confirmed_packed = 0
-                task_line.qty_legacy_packed_in_task = 0
-            else:
-                _reduce_historical_baseline(
-                    task_line,
-                    historical_before=historical_before,
-                    removed_unknown=unknown_removed,
-                )
-
     await session.commit()
-
-    if pkg_task is not None:
-        synced = await pkg_svc.sync_lines_from_pick_allocations(session, tenant_id, pkg_task)
-        await pkg_svc.sync_mp_task_packed_from_boxes(session, tenant_id, synced.task)
-        await session.commit()
 
     if new_qty < 1:
         return None
@@ -1310,3 +1172,7 @@ async def rollback_all_collected_for_cancel(
     line_res = await session.execute(box_line_stmt)
     for line in line_res.scalars().all():
         await session.delete(line)
+
+    # WMS-686 D3.5: отмена отгрузки отвязывает её КИЗ (код возвращается к своей судьбе:
+    # непечатанный из пула — в свободные, напечатанный/внешний — остаётся нанесённым).
+    await kiz_svc.unlink_all_codes(session, tenant_id, request_id)
