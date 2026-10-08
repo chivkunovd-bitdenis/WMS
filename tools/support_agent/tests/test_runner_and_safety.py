@@ -83,6 +83,83 @@ def test_first_start_and_short_pause_send_no_downtime_notice(env: Any) -> None:
     assert env.tg.to(OWNER_CHAT) == []
 
 
+def test_run_forever_starts_pollers_before_visible_recovery_card_edit(tmp_path, monkeypatch) -> None:
+    from support_agent.case_journal import CaseJournal
+    from support_agent.telegram import Bots
+    import support_agent.runner as runner
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    store = Store(cfg.db_path)
+    timeline: list[tuple[str, str]] = []
+
+    class Telegram:
+        def __init__(self, name: str):
+            self.name = name
+
+        def send_message(self, chat_id, text, reply_to=None):
+            return "owner-card-91"
+
+        def edit_message(self, chat_id, message_id, text):
+            timeline.append(("owner-card-edit", self.name))
+
+    intake, owner = Telegram("intake"), Telegram("owner")
+    topic_id = "runner:recovery-order"
+    journal = CaseJournal(store, cfg.agent.history_dir)
+    card = journal.update_card(
+        owner, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Проверка запуска", statuses={"working": True},
+        event="Получено обращение", event_key="incoming:runner-order",
+    )
+    key = "native-send:runner-order"
+    store.queue_message(
+        key=key, chat_id=CLIENT_CHAT, text="Подтверждённый ответ",
+        purpose="native_reply", repeat_ok=False,
+    )
+    interrupted = store.outbox_by_key(key)
+    assert store.claim_outbox(interrupted["id"])
+    store.finish_outbox(interrupted["id"], "unknown")
+    store.kv_set(
+        f"reply_case:{key}",
+        {"topic_id": topic_id, "chat_id": CLIENT_CHAT,
+         "destination_chat_id": CLIENT_CHAT, "kind": "answer"},
+    )
+    assert card["message_id"] == "owner-card-91"
+
+    agent = Agent(cfg, store, Bots(intake, owner, cfg.telegram.owner_chat_id), None,
+                  clock=lambda: 1.0)
+
+    class PollThread:
+        def __init__(self, *, target, args, daemon, name):
+            self.name = name
+
+        def start(self):
+            timeline.append(("poller-start", self.name))
+
+    monkeypatch.setattr(runner.threading, "Thread", PollThread)
+    monkeypatch.setattr(runner.signal, "signal", lambda *_args: None)
+    monkeypatch.setattr(runner.time, "sleep", lambda _seconds: None)
+    loop_polls: list[bool] = []
+
+    def stop_after_first_loop(*, poll=True):
+        loop_polls.append(poll)
+        agent.stop = True
+
+    monkeypatch.setattr(agent, "loop_once", stop_after_first_loop)
+    agent.run_forever()
+
+    poller_positions = [i for i, (kind, _name) in enumerate(timeline) if kind == "poller-start"]
+    edit_positions = [i for i, (kind, _name) in enumerate(timeline) if kind == "owner-card-edit"]
+    assert {name for kind, name in timeline if kind == "poller-start"} == {
+        "poll-intake", "poll-owner",
+    }
+    assert edit_positions
+    assert max(poller_positions) < min(edit_positions)
+    assert loop_polls == [False]
+
+
 def test_telegram_offset_is_saved_and_duplicates_are_ignored(env: Any) -> None:
     script(env)
     agent = make_agent(env)

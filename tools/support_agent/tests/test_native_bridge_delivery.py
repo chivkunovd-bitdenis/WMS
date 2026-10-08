@@ -174,7 +174,10 @@ def test_claimed_native_send_is_unknown_after_visible_restart_and_never_retried(
 
     restarted = NativeBridge(cfg)
     Agent(cfg, restarted.store, None, None, lambda: 1.0).startup()
-    assert restarted.store.outbox_by_key(stable_key)["status"] == "sending"
+    settled = restarted.store.outbox_by_key(stable_key)
+    assert settled["status"] == "unknown"
+    assert settled["attempts"] == 1
+    assert restarted.store.kv_get(f"reply_case:{stable_key}") is None
 
     retry_tg = Telegram()
     retry_bots = Bots(retry_tg, retry_tg, cfg.telegram.owner_chat_id)
@@ -186,6 +189,68 @@ def test_claimed_native_send_is_unknown_after_visible_restart_and_never_retried(
     assert resolved["status"] in {"unknown", "unresolved"}
     assert resolved["attempts"] == 1
     assert [item for item in retry_tg.sent if item[0] == CLIENT_CHAT] == []
+
+
+def test_unknown_native_send_outcome_is_recorded_on_linked_card_immediately(tmp_path):
+    from types import SimpleNamespace
+
+    from support_agent.telegram import TelegramError
+
+    class CardsTelegram:
+        def __init__(self):
+            self.sent = []
+            self.edits = []
+
+        def send_message(self, chat_id, text, reply_to=None):
+            self.sent.append((chat_id, text, reply_to))
+            if chat_id == CLIENT_CHAT:
+                raise TelegramError("unknown", "simulated_client_send_timeout")
+            return "owner-card-81"
+
+        def edit_message(self, chat_id, message_id, text):
+            self.edits.append((chat_id, message_id, text))
+
+    cfg = make_config(tmp_path)
+    cfg.agent.visible_moderator = True
+    cfg.agent.client_replies_enabled = True
+    cfg.agent.history_dir = str(tmp_path / "history")
+    bridge = NativeBridge(cfg)
+    bridge.store.set_binding(
+        CLIENT_CHAT, {"tenant_id": "tenant-test", "tenant_name": "Тест"}, bound_by="owner"
+    )
+    tg = CardsTelegram()
+    topic_id = "native:immediate-unknown-send"
+    card = bridge.journal.update_card(
+        tg, cfg.telegram.owner_chat_id, topic_id, CLIENT_CHAT,
+        title="Проверка поставки", statuses={"working": True},
+        event="Получено обращение", event_key="incoming:immediate-unknown",
+    )
+    bots = Bots(tg, tg, cfg.telegram.owner_chat_id)
+    bridge._delivery = lambda: SimpleNamespace(store=bridge.store, bots=bots)
+
+    result = bridge.send(
+        CLIENT_CHAT, "Подтверждённый ответ", key="immediate-unknown",
+        reply_to="client-origin", topic_id=topic_id,
+    )
+
+    stable_key = "native-send:immediate-unknown"
+    outbox = bridge.store.outbox_by_key(stable_key)
+    saved_card = bridge.store.kv_get(f"case_card:{topic_id}")
+    unconfirmed = [event for event in saved_card["events"]
+                   if "не подтвержд" in event["text"].lower()]
+    client_sends = [item for item in tg.sent if item[0] == CLIENT_CHAT]
+    assert result["status"] == outbox["status"] == "unknown"
+    assert outbox["attempts"] == 1
+    assert len(client_sends) == 1
+    assert len(unconfirmed) == 1
+    assert "повтор" in unconfirmed[0]["text"].lower()
+    assert "провер" in unconfirmed[0]["text"].lower() or "чат" in unconfirmed[0]["text"].lower()
+    assert saved_card["current_status"] == "working"
+    assert saved_card["number"] == card["number"]
+    assert saved_card["message_id"] == card["message_id"]
+    assert tg.edits
+    assert tg.edits[-1][1] == card["message_id"]
+    assert "не подтвержд" in tg.edits[-1][2].lower()
 
 
 def test_sent_native_answer_is_reconciled_to_card_after_crash(tmp_path, monkeypatch):
