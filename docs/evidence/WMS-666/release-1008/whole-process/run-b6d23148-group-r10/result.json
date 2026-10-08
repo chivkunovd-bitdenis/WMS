@@ -1,0 +1,14 @@
+{
+  "sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "cases": [
+    {
+      "id": "WMS666.whole-process.bare-group-manual-before-scan",
+      "status": "FAIL",
+      "failure": "AssertionError [ERR_ASSERTION]: group packing can create a box after the same manual/scan workflow\n\n0 !== 1\n"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB_AND_PRINT;REAL_LOCAL_API_POSTGRES",
+  "currentCase": "WMS666.whole-process.bare-group-manual-before-scan",
+  "productSha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc"
+}

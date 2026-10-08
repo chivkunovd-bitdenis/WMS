@@ -1,0 +1,4 @@
+Source: ffb524e2950cfb250993ad4db3b0f394ca55f735
+Runner corrections: balanced exact undo-button selector; expect prior replaced CIS remains void, and current rejected CIS returns available after operator unlink. r1 syntax failure and r2 oracle failure are retained separately.
+Command: WMS666_PRODUCT_SHA=ffb524e2950cfb250993ad4db3b0f394ca55f735 WMS652_EVIDENCE=/Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/docs/evidence/WMS-666/release-1008/whole-process/m25-ui-refusal-unlink-ffb524e-r3 WMS666_ORIGIN=http://127.0.0.1:16706 WMS666_VARIANTS=replace-ui-refusal-unlink WMS666_ENTRIES=supply_id WMS666_CDP_PORT=16707 node frontend/tests-e2e/wms666-whole-process/whole-process.mjs
+{"id":"WMS666.actualPool[supply_id;replace-ui-refusal-unlink]","status":"PASS"}

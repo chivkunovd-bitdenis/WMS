@@ -1,0 +1,24 @@
+source_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+database=sqlite+aiosqlite:///:memory: (isolated SQLAlchemy StaticPool; WMS_TEST_DATABASE_URL)
+command=PYTHONPATH=backend pytest -q -p no:cacheprovider -n 0 backend/tests/test_fbs_kiz.py
+
+...................................................................FF... [ 59%]
+.................................................                        [100%]TENT' instead.
+    from app.api.billing_profile_marketplace import router as billing_profile_marketplace_router
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyPacked has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type SwigPyObject has no __module__ attribute
+
+<frozen importlib._bootstrap>:491
+  <frozen importlib._bootstrap>:491: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED backend/tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch[required-None-missing]
+FAILED backend/tests/test_fbs_kiz.py::test_fbs_marking_orphaned_audit_is_created_once_for_concurrent_and_repeated_mismatch[invalid-other-replacement_required]
+2 failed, 119 passed, 6 warnings in 99.36s (0:01:39)

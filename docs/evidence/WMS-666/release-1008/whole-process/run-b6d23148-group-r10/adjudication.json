@@ -1,0 +1,10 @@
+{
+  "status": "PARTIAL_HARNESS_FAILURE",
+  "case": "WMS666.whole-process.bare-group-manual-before-scan",
+  "product_sha": "b6d23148f1571d08d13d83c6179c385e2f6a1efc",
+  "confirmed": ["start-work 503 before mutation then explicit retry creates one task", "order stickers requested through local WB emulator and persisted", "manual tape on both orders", "scan produces two full-CIS receipts at configured synthetic print sink", "local WB emulator accepts exact CIS for A and rejects exact CIS for B", "A auto-packs through quantity-one request"],
+  "failure": "box create returned 403 missing_marketplace_token because harness patched the asset service token helper but not the cargo-place service token helper; no product defect inferred",
+  "not_proven": ["box creation and assignment", "WB cargo-place QR retrieval/readback"],
+  "raw_result": "result.json",
+  "raw_trace": "WMS666-whole-process-bare-group-manual-before-scan.json"
+}

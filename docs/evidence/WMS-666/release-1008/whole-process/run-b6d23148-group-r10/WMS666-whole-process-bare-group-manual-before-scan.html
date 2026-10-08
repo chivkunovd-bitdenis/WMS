@@ -1,0 +1,503 @@
+<html><head>
+    <meta charset="utf-8">
+    <title>Честный знак</title>
+    <style>
+  @page { size: 60mm 80mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 60mm;
+    height: 78.5mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label--cz {
+    padding: 1.55mm;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .cz-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.03mm;
+  }
+  .cz-matrix {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cz-matrix img {
+    width: 33.6mm;
+    height: 33.6mm;
+    object-fit: contain;
+    display: block;
+  }
+  .cz-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.21mm 0 0;
+  }
+  .cz-brand {
+    margin: 0;
+    font-size: 7.8pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .cz-mark {
+    margin: 0.41mm 0 0.62mm;
+    width: 7.91mm;
+    height: 7.91mm;
+    border: 0.5mm solid #111;
+    border-radius: 0.86mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7.2pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .cz-field {
+    margin: 0;
+    font-size: 7.2pt;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cz-field + .cz-field { margin-top: 0.36mm; }
+  .cz-field-label {
+    font-weight: 700;
+    margin-right: 0.52mm;
+  }
+  .cz-code {
+    margin: auto 0 0;
+    padding-top: 0.52mm;
+    font-size: 6.6pt;
+    line-height: 1.1;
+    word-break: break-all;
+  }
+  .label--cz-artifact {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cz-artifact-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .label--wb-qr {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .wb-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .wb-qr-position {
+    position: absolute;
+    top: 1.03mm;
+    right: 1.03mm;
+    min-width: 7.24mm;
+    padding: 0.62mm 1.03mm;
+    border: 0.31mm solid #111;
+    border-radius: 0.83mm;
+    background: #fff;
+    color: #111;
+    font-size: 11.5pt;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+  }
+  .label:not(.label--cz):not(.label--wb-qr) {
+    /* Take the allowance from whitespace, preserving the barcode/text area. */
+    padding: 0mm 1.86mm 0.98mm;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.83mm;
+  }
+  .barcode-wrap img {
+    width: 53.79mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 14.48mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.31mm 0 0;
+    font-size: 9.3pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.64mm;
+    line-height: 1.35;
+    font-size: 7.9pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.98mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.9pt;
+    line-height: 1.35;
+    min-height: 3.75mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 8.1pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.36mm 0 0;
+    font-size: 7.4pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000000</p>
+      <p class="cz-code">…PE0000000000</p>
+    </div>
+  </div>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000000</p>
+      <p class="cz-code">…PE0000000000</p>
+    </div>
+  </div>
+</section>
+</body></html>
+<!-- WMS666 PRINT SPLIT -->
+<html><head>
+    <meta charset="utf-8">
+    <title>Честный знак</title>
+    <style>
+  @page { size: 60mm 80mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 60mm;
+    height: 78.5mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label--cz {
+    padding: 1.55mm;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .cz-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.03mm;
+  }
+  .cz-matrix {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cz-matrix img {
+    width: 33.6mm;
+    height: 33.6mm;
+    object-fit: contain;
+    display: block;
+  }
+  .cz-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.21mm 0 0;
+  }
+  .cz-brand {
+    margin: 0;
+    font-size: 7.8pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .cz-mark {
+    margin: 0.41mm 0 0.62mm;
+    width: 7.91mm;
+    height: 7.91mm;
+    border: 0.5mm solid #111;
+    border-radius: 0.86mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7.2pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .cz-field {
+    margin: 0;
+    font-size: 7.2pt;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cz-field + .cz-field { margin-top: 0.36mm; }
+  .cz-field-label {
+    font-weight: 700;
+    margin-right: 0.52mm;
+  }
+  .cz-code {
+    margin: auto 0 0;
+    padding-top: 0.52mm;
+    font-size: 6.6pt;
+    line-height: 1.1;
+    word-break: break-all;
+  }
+  .label--cz-artifact {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cz-artifact-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .label--wb-qr {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .wb-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .wb-qr-position {
+    position: absolute;
+    top: 1.03mm;
+    right: 1.03mm;
+    min-width: 7.24mm;
+    padding: 0.62mm 1.03mm;
+    border: 0.31mm solid #111;
+    border-radius: 0.83mm;
+    background: #fff;
+    color: #111;
+    font-size: 11.5pt;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+  }
+  .label:not(.label--cz):not(.label--wb-qr) {
+    /* Take the allowance from whitespace, preserving the barcode/text area. */
+    padding: 0mm 1.86mm 0.98mm;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.83mm;
+  }
+  .barcode-wrap img {
+    width: 53.79mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 14.48mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.31mm 0 0;
+    font-size: 9.3pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.64mm;
+    line-height: 1.35;
+    font-size: 7.9pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.98mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.9pt;
+    line-height: 1.35;
+    min-height: 3.75mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 8.1pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.36mm 0 0;
+    font-size: 7.4pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000002</p>
+      <p class="cz-code">…PE0000000002</p>
+    </div>
+  </div>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000002</p>
+      <p class="cz-code">…PE0000000002</p>
+    </div>
+  </div>
+</section>
+</body></html>

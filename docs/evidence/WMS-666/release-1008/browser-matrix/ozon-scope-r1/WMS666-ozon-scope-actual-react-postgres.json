@@ -1,0 +1,1236 @@
+{
+  "requestLog": [
+    {
+      "method": "GET",
+      "path": "/fbs/assembly-time?from=2026-10-01T01%3A15%3A00.455Z&to=2026-10-08T01%3A15%3A00.455Z",
+      "body": null,
+      "status": 200,
+      "response": {
+        "hours": 0,
+        "orders": 0,
+        "within_12_hours_percent": 0,
+        "within_24_hours_percent": 0
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=new",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [],
+        "next_cursor": null,
+        "server_now": "2026-10-08T01:15:00.466345+00:00",
+        "warehouse_options": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-assembly-tasks",
+      "body": null,
+      "status": 200,
+      "response": {
+        "items": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/worklist?limit=500&status_group=active",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [
+          {
+            "delivery_type": "warehouse_sc",
+            "delivery_route": null,
+            "id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "wb_supply_id": null,
+            "name": "Synthetic Ozon posting set",
+            "status": "assembling",
+            "seller": {
+              "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": null
+            },
+            "wms_warehouse": {
+              "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "name": "Tape race"
+            },
+            "orders_count": 2,
+            "units_count": 4,
+            "picked_units_count": 4,
+            "boxes_count": 0,
+            "planned_shipment_date": null,
+            "can_add_orders": true
+          }
+        ],
+        "server_now": "2026-10-08T01:15:00.518554+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-orders/worklist?limit=500&status_group=active",
+      "body": null,
+      "status": 200,
+      "response": {
+        "total": null,
+        "items": [
+          {
+            "id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-1",
+            "wb_order_id": -666100,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "name": "Synthetic Ozon product 1",
+              "image_url": null,
+              "seller_article": "OZ-PROOF-1-1",
+              "wb_article": null,
+              "barcode": null,
+              "sku": "6661000",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": []
+            },
+            "positions": [
+              {
+                "id": "1db0efb2-cc58-4217-a13e-ecfdef270ff9",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 1",
+                "seller_article": "OZ-PROOF-1-1",
+                "sku": "6661000",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              },
+              {
+                "id": "d2eaec59-0112-4f63-84df-fbcf701b94eb",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 2",
+                "seller_article": "OZ-PROOF-1-2",
+                "sku": "6661001",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              }
+            ],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "e40e2035-8a05-4530-824f-e36c64e0fe8a",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-08T04:14:58.945982+03:00",
+            "deadline_at": "2026-10-09T04:14:58.945982+03:00",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ]
+          },
+          {
+            "id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-2",
+            "wb_order_id": -666101,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "name": "Synthetic Ozon product 1",
+              "image_url": null,
+              "seller_article": "OZ-PROOF-2-1",
+              "wb_article": null,
+              "barcode": null,
+              "sku": "6661010",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": []
+            },
+            "positions": [
+              {
+                "id": "296b2c4f-eec4-4405-b42d-7435aa96442a",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 1",
+                "seller_article": "OZ-PROOF-2-1",
+                "sku": "6661010",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              },
+              {
+                "id": "35afde26-444b-4cdf-a041-87a3b2a96a44",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 2",
+                "seller_article": "OZ-PROOF-2-2",
+                "sku": "6661011",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              }
+            ],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "e40e2035-8a05-4530-824f-e36c64e0fe8a",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-08T04:14:58.952054+03:00",
+            "deadline_at": "2026-10-09T04:14:58.952054+03:00",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ]
+          }
+        ],
+        "next_cursor": null,
+        "server_now": "2026-10-08T01:15:00.503115+00:00",
+        "warehouse_options": [
+          {
+            "id": "99",
+            "name": "WB 99",
+            "wb_warehouse": {
+              "id": 99,
+              "name": "WB 99"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/fbs-supplies/d35a0ed2-313e-4614-82c6-4f4225bbcecb/workspace",
+      "body": null,
+      "status": 200,
+      "response": {
+        "supply": {
+          "delivery_route": null,
+          "id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+          "marketplace": "ozon",
+          "wb_supply_id": null,
+          "source": "wms",
+          "name": "Synthetic Ozon posting set",
+          "status": "assembling",
+          "delivery_type": "warehouse_sc",
+          "seller": {
+            "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+            "name": "Tape race"
+          },
+          "wb_warehouse": {
+            "id": 99,
+            "name": null
+          },
+          "wms_warehouse": {
+            "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+            "name": "Tape race"
+          },
+          "planned_destination": null,
+          "planned_shipment_date": null,
+          "nearest_deadline_at": "2026-10-09T04:14:58.945982+03:00",
+          "packaging_task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+          "barcode_asset": null,
+          "honest_sign_skipped": false,
+          "boxes_without_distribution": false
+        },
+        "stage": "packing",
+        "progress": {
+          "picked": 4,
+          "packed": 0,
+          "metadata_ready": 4,
+          "stickers_ready": 0,
+          "total": 4
+        },
+        "blockers": [],
+        "orders": [
+          {
+            "id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-1",
+            "wb_order_id": -666100,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "name": "Synthetic Ozon product 1",
+              "image_url": null,
+              "seller_article": "OZ-PROOF-1-1",
+              "wb_article": null,
+              "barcode": null,
+              "sku": "6661000",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false,
+              "requires_honest_sign": false
+            },
+            "positions": [
+              {
+                "id": "1db0efb2-cc58-4217-a13e-ecfdef270ff9",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 1",
+                "seller_article": "OZ-PROOF-1-1",
+                "sku": "6661000",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              },
+              {
+                "id": "d2eaec59-0112-4f63-84df-fbcf701b94eb",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 2",
+                "seller_article": "OZ-PROOF-1-2",
+                "sku": "6661001",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              }
+            ],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "e40e2035-8a05-4530-824f-e36c64e0fe8a",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-08T04:14:58.945982+03:00",
+            "deadline_at": "2026-10-09T04:14:58.945982+03:00",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 0,
+            "marking_available_count": 4
+          },
+          {
+            "id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-2",
+            "wb_order_id": -666101,
+            "status": "assembling",
+            "wb_status": null,
+            "supplier_status": null,
+            "seller": {
+              "id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+              "name": "Tape race"
+            },
+            "wb_warehouse": {
+              "id": 99,
+              "name": "Склад WB неизвестен"
+            },
+            "wms_warehouse": {
+              "id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "name": "Tape race"
+            },
+            "product": {
+              "id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "name": "Synthetic Ozon product 1",
+              "image_url": null,
+              "seller_article": "OZ-PROOF-2-1",
+              "wb_article": null,
+              "barcode": null,
+              "sku": "6661010",
+              "chrt_id": null,
+              "category": null,
+              "color": null,
+              "brand": null,
+              "composition": null,
+              "size": null,
+              "marketplace_bindings": [],
+              "packaging_instructions": null,
+              "has_packaging_instructions": false,
+              "requires_honest_sign": false
+            },
+            "positions": [
+              {
+                "id": "296b2c4f-eec4-4405-b42d-7435aa96442a",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 1",
+                "seller_article": "OZ-PROOF-2-1",
+                "sku": "6661010",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              },
+              {
+                "id": "35afde26-444b-4cdf-a041-87a3b2a96a44",
+                "barcode": null,
+                "image_url": null,
+                "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+                "marketplace_bindings": [],
+                "name": "Synthetic Ozon product 2",
+                "seller_article": "OZ-PROOF-2-2",
+                "sku": "6661011",
+                "size": null,
+                "color": null,
+                "brand": null,
+                "composition": null,
+                "quantity": 1,
+                "reserved_quantity": 1,
+                "picked_quantity": 1,
+                "packed_quantity": 0
+              }
+            ],
+            "inventory": {
+              "available_unpacked": 2,
+              "locations": [
+                {
+                  "id": "e40e2035-8a05-4530-824f-e36c64e0fe8a",
+                  "code": "TAPE",
+                  "available_unpacked": 3
+                }
+              ]
+            },
+            "buyer_type": "individual",
+            "cargo_type": "mgt",
+            "can_pvz": false,
+            "delivery_route": null,
+            "metadata": {
+              "required": [],
+              "optional": [],
+              "states": [],
+              "delivery_allowed": false,
+              "last_checked_at": null
+            },
+            "sticker": {
+              "code": null,
+              "status": "not_requested",
+              "asset_url": null,
+              "applied_at": null
+            },
+            "pick": {
+              "status": "pending",
+              "location_code": null,
+              "picked_at": null
+            },
+            "pack": {
+              "status": "pending",
+              "packed_at": null
+            },
+            "created_at_wb": "2026-10-08T04:14:58.952054+03:00",
+            "deadline_at": "2026-10-09T04:14:58.952054+03:00",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "selection_blockers": [
+              {
+                "code": "already_in_supply",
+                "message": "Заказ уже в поставке."
+              }
+            ],
+            "tape_order_index": 1,
+            "marking_available_count": 4
+          }
+        ],
+        "cargo_places": [],
+        "boxes": [],
+        "marking_pool": {
+          "required": 0,
+          "available": 0,
+          "shortage": 0,
+          "orders_without_code": []
+        },
+        "delivery_preflight": null,
+        "last_wb_sync_at": null,
+        "tracking_summary": null,
+        "partial_rejection": null,
+        "picking_auto_passed_reason": null,
+        "wb_sync_stale": false,
+        "last_delivery_error": null,
+        "server_now": "2026-10-08T01:15:00.513907+00:00"
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/packaging-tasks/79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+      "body": null,
+      "status": 200,
+      "response": {
+        "id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+        "document_number": null,
+        "display_number": null,
+        "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+        "warehouse_name": "Tape race",
+        "warehouse_code": "tape-race",
+        "seller_id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+        "seller_name": "Tape race",
+        "status": "in_progress",
+        "marketplace_unload_request_id": null,
+        "inbound_intake_request_id": null,
+        "is_complete": false,
+        "pick_resync_warning": false,
+        "created_at": "2026-10-08T04:14:58.958576+03:00",
+        "updated_at": "2026-10-08T04:14:58.958576+03:00",
+        "completed_at": null,
+        "completed_by_user_id": null,
+        "lines": [
+          {
+            "id": "266b2532-3768-400f-9780-25e38282f04f",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "seller_id": "bc69c4ea-9536-4340-b796-6ddff082e02a",
+            "seller_name": "Tape race",
+            "sku_code": "SKU-KIZ-1791422098657540000-800392",
+            "product_name": "KIZ product 800392",
+            "size": null,
+            "color": null,
+            "storage_location_id": "e40e2035-8a05-4530-824f-e36c64e0fe8a",
+            "storage_location_code": "TAPE",
+            "packaging_instructions": null,
+            "requires_honest_sign": false,
+            "qty_total": 2,
+            "qty_suggested_packed": 0,
+            "qty_confirmed_packed": 0,
+            "qty_need_pack": 2,
+            "qty_packed_in_task": 0,
+            "qty_done": 0,
+            "qty_marking_printed": 0,
+            "qty_marking_external": 0,
+            "qty_product_label_printed": 0,
+            "marking_available_count": 0,
+            "is_complete": false
+          }
+        ],
+        "events": []
+      }
+    },
+    {
+      "method": "GET",
+      "path": "/operations/marking-codes/print-templates/resolve?product_id=c3d44eb2-0aab-4004-ba58-e365d103b15a&seller_id=bc69c4ea-9536-4340-b796-6ddff082e02a",
+      "body": null,
+      "status": 200,
+      "response": {
+        "id": null,
+        "seller_id": null,
+        "product_id": null,
+        "user_id": null,
+        "name": "Парами",
+        "layout": {
+          "units": [
+            {
+              "block": "cz",
+              "copies": 2
+            }
+          ],
+          "label_options": {
+            "include_size": true,
+            "include_color": true,
+            "include_brand": true,
+            "include_composition": true
+          }
+        },
+        "is_default": false,
+        "is_system": true
+      }
+    },
+    {
+      "method": "POST",
+      "path": "/operations/fbs-supplies/d35a0ed2-313e-4614-82c6-4f4225bbcecb/order-print-tape",
+      "body": {
+        "order_ids": [
+          "89f944f4-209d-4fa9-acd3-0f8606e132b6"
+        ],
+        "layout_json": {
+          "units": [
+            {
+              "block": "label",
+              "copies": 1
+            }
+          ],
+          "label_options": {
+            "include_size": true,
+            "include_color": true,
+            "include_brand": true,
+            "include_composition": true
+          }
+        },
+        "allow_partial": false,
+        "include_order_qr": false,
+        "reprint": false
+      },
+      "status": 200,
+      "response": {
+        "orders": [
+          {
+            "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "wb_order_id": -666100,
+            "requires_honest_sign": false,
+            "qr_asset": null,
+            "codes": [],
+            "printed_codes": [],
+            "shortage": null
+          }
+        ],
+        "requested": 1,
+        "ready": 1,
+        "missing": 0,
+        "failed": 0,
+        "order_errors": [],
+        "shortage": 0
+      }
+    }
+  ],
+  "printLog": [],
+  "trace": [
+    {
+      "kind": "selected-ozon-action-label",
+      "label": "Печать выбранного (1)",
+      "selectedOrderId": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+      "allOrderIds": [
+        "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+        "2f7e475b-88df-436b-9ecc-2702eed9ba30"
+      ]
+    },
+    {
+      "kind": "selected-ozon-print-complete",
+      "tape": {
+        "method": "POST",
+        "path": "/operations/fbs-supplies/d35a0ed2-313e-4614-82c6-4f4225bbcecb/order-print-tape",
+        "body": {
+          "order_ids": [
+            "89f944f4-209d-4fa9-acd3-0f8606e132b6"
+          ],
+          "layout_json": {
+            "units": [
+              {
+                "block": "label",
+                "copies": 1
+              }
+            ],
+            "label_options": {
+              "include_size": true,
+              "include_color": true,
+              "include_brand": true,
+              "include_composition": true
+            }
+          },
+          "allow_partial": false,
+          "include_order_qr": false,
+          "reprint": false
+        },
+        "status": 200,
+        "response": {
+          "orders": [
+            {
+              "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+              "wb_order_id": -666100,
+              "requires_honest_sign": false,
+              "qr_asset": null,
+              "codes": [],
+              "printed_codes": [],
+              "shortage": null
+            }
+          ],
+          "requested": 1,
+          "ready": 1,
+          "missing": 0,
+          "failed": 0,
+          "order_errors": [],
+          "shortage": 0
+        }
+      },
+      "htmlCount": 0,
+      "before": {
+        "markings": [],
+        "codes": [
+          {
+            "id": "041ebc9e-b1a1-4333-8957-f7e156496362",
+            "cis": "010460043993125321KIZTAPE0000000000",
+            "status": "available"
+          },
+          {
+            "id": "fae6f3bb-464f-4fc4-8ea5-fe3a74f207d8",
+            "cis": "010460043993125321KIZTAPE0000000001",
+            "status": "available"
+          },
+          {
+            "id": "6319e77f-f0f0-4d13-807b-5499fdc3b845",
+            "cis": "010460043993125321KIZTAPE0000000002",
+            "status": "available"
+          },
+          {
+            "id": "ea1d5ea5-3380-4dc0-b9fa-a631c45cacb7",
+            "cis": "010460043993125321KIZTAPE0000000003",
+            "status": "available"
+          }
+        ],
+        "orders": [
+          {
+            "id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-1",
+            "pack_status": "pending",
+            "packed_at": null,
+            "sticker_code": null,
+            "sticker_barcode": null,
+            "sticker_status": "not_requested"
+          },
+          {
+            "id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-2",
+            "pack_status": "pending",
+            "packed_at": null,
+            "sticker_code": null,
+            "sticker_barcode": null,
+            "sticker_status": "not_requested"
+          }
+        ],
+        "supplies": [
+          {
+            "id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "packaging_task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb"
+          }
+        ],
+        "task_lines": [
+          {
+            "id": "266b2532-3768-400f-9780-25e38282f04f",
+            "task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "qty_marking_printed": 0,
+            "qty_marking_external": 0,
+            "qty_confirmed_packed": 0,
+            "qty_packed_in_task": 0
+          }
+        ],
+        "print_assets": [],
+        "positions": [
+          {
+            "id": "1db0efb2-cc58-4217-a13e-ecfdef270ff9",
+            "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661000,
+            "quantity": 1,
+            "position_index": 0
+          },
+          {
+            "id": "d2eaec59-0112-4f63-84df-fbcf701b94eb",
+            "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661001,
+            "quantity": 1,
+            "position_index": 1
+          },
+          {
+            "id": "296b2c4f-eec4-4405-b42d-7435aa96442a",
+            "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661010,
+            "quantity": 1,
+            "position_index": 0
+          },
+          {
+            "id": "35afde26-444b-4cdf-a041-87a3b2a96a44",
+            "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661011,
+            "quantity": 1,
+            "position_index": 1
+          }
+        ],
+        "stock": {
+          "balances": [
+            {
+              "id": "f38f118d-8cd4-4b6e-b556-a1af62c91674",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "quantity": 3,
+              "quantity_unpacked": 3,
+              "quantity_packed": 0
+            }
+          ],
+          "reservations": [
+            {
+              "id": "217267b9-7d4f-406a-90d4-55284d307068",
+              "fbs_order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "quantity": 1
+            },
+            {
+              "id": "39b8a0b6-b028-4b3a-942b-cb9d23fa33f0",
+              "fbs_order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "quantity": 1
+            }
+          ],
+          "inventory_movement_count": 0
+        }
+      },
+      "after": {
+        "markings": [],
+        "codes": [
+          {
+            "id": "041ebc9e-b1a1-4333-8957-f7e156496362",
+            "cis": "010460043993125321KIZTAPE0000000000",
+            "status": "available"
+          },
+          {
+            "id": "fae6f3bb-464f-4fc4-8ea5-fe3a74f207d8",
+            "cis": "010460043993125321KIZTAPE0000000001",
+            "status": "available"
+          },
+          {
+            "id": "6319e77f-f0f0-4d13-807b-5499fdc3b845",
+            "cis": "010460043993125321KIZTAPE0000000002",
+            "status": "available"
+          },
+          {
+            "id": "ea1d5ea5-3380-4dc0-b9fa-a631c45cacb7",
+            "cis": "010460043993125321KIZTAPE0000000003",
+            "status": "available"
+          }
+        ],
+        "orders": [
+          {
+            "id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-1",
+            "pack_status": "pending",
+            "packed_at": null,
+            "sticker_code": null,
+            "sticker_barcode": null,
+            "sticker_status": "not_requested"
+          },
+          {
+            "id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "external_order_id": "OZON-PROOF-2",
+            "pack_status": "pending",
+            "packed_at": null,
+            "sticker_code": null,
+            "sticker_barcode": null,
+            "sticker_status": "not_requested"
+          }
+        ],
+        "supplies": [
+          {
+            "id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+            "marketplace": "ozon",
+            "packaging_task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb"
+          }
+        ],
+        "task_lines": [
+          {
+            "id": "266b2532-3768-400f-9780-25e38282f04f",
+            "task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "qty_marking_printed": 0,
+            "qty_marking_external": 0,
+            "qty_confirmed_packed": 0,
+            "qty_packed_in_task": 0
+          }
+        ],
+        "print_assets": [],
+        "positions": [
+          {
+            "id": "1db0efb2-cc58-4217-a13e-ecfdef270ff9",
+            "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661000,
+            "quantity": 1,
+            "position_index": 0
+          },
+          {
+            "id": "d2eaec59-0112-4f63-84df-fbcf701b94eb",
+            "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661001,
+            "quantity": 1,
+            "position_index": 1
+          },
+          {
+            "id": "296b2c4f-eec4-4405-b42d-7435aa96442a",
+            "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661010,
+            "quantity": 1,
+            "position_index": 0
+          },
+          {
+            "id": "35afde26-444b-4cdf-a041-87a3b2a96a44",
+            "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+            "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+            "ozon_sku": 6661011,
+            "quantity": 1,
+            "position_index": 1
+          }
+        ],
+        "stock": {
+          "balances": [
+            {
+              "id": "f38f118d-8cd4-4b6e-b556-a1af62c91674",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "quantity": 3,
+              "quantity_unpacked": 3,
+              "quantity_packed": 0
+            }
+          ],
+          "reservations": [
+            {
+              "id": "217267b9-7d4f-406a-90d4-55284d307068",
+              "fbs_order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "quantity": 1
+            },
+            {
+              "id": "39b8a0b6-b028-4b3a-942b-cb9d23fa33f0",
+              "fbs_order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+              "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+              "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+              "quantity": 1
+            }
+          ],
+          "inventory_movement_count": 0
+        }
+      }
+    }
+  ],
+  "blocked": [],
+  "errors": [],
+  "finalDb": {
+    "markings": [],
+    "codes": [
+      {
+        "id": "041ebc9e-b1a1-4333-8957-f7e156496362",
+        "cis": "010460043993125321KIZTAPE0000000000",
+        "status": "available"
+      },
+      {
+        "id": "fae6f3bb-464f-4fc4-8ea5-fe3a74f207d8",
+        "cis": "010460043993125321KIZTAPE0000000001",
+        "status": "available"
+      },
+      {
+        "id": "6319e77f-f0f0-4d13-807b-5499fdc3b845",
+        "cis": "010460043993125321KIZTAPE0000000002",
+        "status": "available"
+      },
+      {
+        "id": "ea1d5ea5-3380-4dc0-b9fa-a631c45cacb7",
+        "cis": "010460043993125321KIZTAPE0000000003",
+        "status": "available"
+      }
+    ],
+    "orders": [
+      {
+        "id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+        "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+        "marketplace": "ozon",
+        "external_order_id": "OZON-PROOF-1",
+        "pack_status": "pending",
+        "packed_at": null,
+        "sticker_code": null,
+        "sticker_barcode": null,
+        "sticker_status": "not_requested"
+      },
+      {
+        "id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+        "supply_id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+        "marketplace": "ozon",
+        "external_order_id": "OZON-PROOF-2",
+        "pack_status": "pending",
+        "packed_at": null,
+        "sticker_code": null,
+        "sticker_barcode": null,
+        "sticker_status": "not_requested"
+      }
+    ],
+    "supplies": [
+      {
+        "id": "d35a0ed2-313e-4614-82c6-4f4225bbcecb",
+        "marketplace": "ozon",
+        "packaging_task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb"
+      }
+    ],
+    "task_lines": [
+      {
+        "id": "266b2532-3768-400f-9780-25e38282f04f",
+        "task_id": "79f63d69-20e7-44ec-a9c7-265f9d2f8ecb",
+        "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+        "qty_marking_printed": 0,
+        "qty_marking_external": 0,
+        "qty_confirmed_packed": 0,
+        "qty_packed_in_task": 0
+      }
+    ],
+    "print_assets": [],
+    "positions": [
+      {
+        "id": "1db0efb2-cc58-4217-a13e-ecfdef270ff9",
+        "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+        "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+        "ozon_sku": 6661000,
+        "quantity": 1,
+        "position_index": 0
+      },
+      {
+        "id": "d2eaec59-0112-4f63-84df-fbcf701b94eb",
+        "order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+        "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+        "ozon_sku": 6661001,
+        "quantity": 1,
+        "position_index": 1
+      },
+      {
+        "id": "296b2c4f-eec4-4405-b42d-7435aa96442a",
+        "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+        "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+        "ozon_sku": 6661010,
+        "quantity": 1,
+        "position_index": 0
+      },
+      {
+        "id": "35afde26-444b-4cdf-a041-87a3b2a96a44",
+        "order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+        "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+        "ozon_sku": 6661011,
+        "quantity": 1,
+        "position_index": 1
+      }
+    ],
+    "stock": {
+      "balances": [
+        {
+          "id": "f38f118d-8cd4-4b6e-b556-a1af62c91674",
+          "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+          "quantity": 3,
+          "quantity_unpacked": 3,
+          "quantity_packed": 0
+        }
+      ],
+      "reservations": [
+        {
+          "id": "217267b9-7d4f-406a-90d4-55284d307068",
+          "fbs_order_id": "89f944f4-209d-4fa9-acd3-0f8606e132b6",
+          "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+          "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+          "quantity": 1
+        },
+        {
+          "id": "39b8a0b6-b028-4b3a-942b-cb9d23fa33f0",
+          "fbs_order_id": "2f7e475b-88df-436b-9ecc-2702eed9ba30",
+          "product_id": "c3d44eb2-0aab-4004-ba58-e365d103b15a",
+          "warehouse_id": "71ff1795-d50c-4766-a714-c79919e2b203",
+          "quantity": 1
+        }
+      ],
+      "inventory_movement_count": 0
+    }
+  }
+}

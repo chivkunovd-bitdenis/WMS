@@ -1,0 +1,4 @@
+product_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+command=(ruff check --no-cache backend/tests/test_fbs_kiz.py backend/tests/test_wms666_workspace_marking_pool.py backend/tests/test_wms666_ozon_quantity_print_bindings.py backend/tests/test_wms666_rejected_exact_reprint_validation.py)
+exit=0
+All checks passed!

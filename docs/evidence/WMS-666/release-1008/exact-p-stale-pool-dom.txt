@@ -1,0 +1,15 @@
+product_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+test_blob_sha=8400d2647da26fb69778cc332e273763189f25a5
+command=(cd frontend && ./node_modules/.bin/vitest run src/screens/v2/FfFbsSupplyWorkspace.wms666.stale-pool.dom.test.tsx -t 'WMS-666 does not let a stale task' --config vitest.config.ts --reporter verbose --testTimeout 10000 --pool=threads --maxWorkers=1 --minWorkers=1)
+result=2 passed in 84.66s
+
+
+ RUN  v3.2.6 /Users/deniscivkunov/Projects/WMS/.worktrees/wms666-packing-release-1008/frontend
+
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.wms666.stale-pool.dom.test.tsx > WMS-666 does not let a stale task shortage hide the refreshed current per-order pool 327ms
+ ✓ src/screens/v2/FfFbsSupplyWorkspace.wms666.stale-pool.dom.test.tsx > WMS-666 does not let a stale task count expose depleted current per-order pool 171ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  05:52:26
+   Duration  84.66s (transform 496ms, setup 0ms, collect 82.67s, tests 499ms, environment 1.01s, prepare 254ms)

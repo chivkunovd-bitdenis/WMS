@@ -1,0 +1,279 @@
+<html><head>
+    <meta charset="utf-8">
+    <title>Честный знак</title>
+    <style>
+  @page { size: 60mm 80mm; margin: 0; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #111; background: #fff; }
+  .label {
+    width: 60mm;
+    height: 78.5mm;
+    overflow: hidden;
+    page-break-inside: avoid;
+    break-inside: avoid;
+    page-break-after: always;
+    break-after: page;
+  }
+  .label:last-child { page-break-after: auto; break-after: auto; }
+  .label--cz {
+    padding: 1.55mm;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+  }
+  .cz-layout {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 1.03mm;
+  }
+  .cz-matrix {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 0;
+  }
+  .cz-matrix img {
+    width: 33.6mm;
+    height: 33.6mm;
+    object-fit: contain;
+    display: block;
+  }
+  .cz-info {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    padding: 0.21mm 0 0;
+  }
+  .cz-brand {
+    margin: 0;
+    font-size: 7.8pt;
+    font-weight: 700;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    text-transform: uppercase;
+  }
+  .cz-mark {
+    margin: 0.41mm 0 0.62mm;
+    width: 7.91mm;
+    height: 7.91mm;
+    border: 0.5mm solid #111;
+    border-radius: 0.86mm;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 7.2pt;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .cz-field {
+    margin: 0;
+    font-size: 7.2pt;
+    line-height: 1.15;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .cz-field + .cz-field { margin-top: 0.36mm; }
+  .cz-field-label {
+    font-weight: 700;
+    margin-right: 0.52mm;
+  }
+  .cz-code {
+    margin: auto 0 0;
+    padding-top: 0.52mm;
+    font-size: 6.6pt;
+    line-height: 1.1;
+    word-break: break-all;
+  }
+  .label--cz-artifact {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .cz-artifact-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .label--wb-qr {
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+  .wb-qr-img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+  .wb-qr-position {
+    position: absolute;
+    top: 1.03mm;
+    right: 1.03mm;
+    min-width: 7.24mm;
+    padding: 0.62mm 1.03mm;
+    border: 0.31mm solid #111;
+    border-radius: 0.83mm;
+    background: #fff;
+    color: #111;
+    font-size: 11.5pt;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+  }
+  .label:not(.label--cz):not(.label--wb-qr) {
+    /* Take the allowance from whitespace, preserving the barcode/text area. */
+    padding: 0mm 1.86mm 0.98mm;
+    display: flex;
+    flex-direction: column;
+  }
+  
+  .barcode-wrap {
+    flex: 0 0 auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    margin-bottom: 0.83mm;
+  }
+  .barcode-wrap img {
+    width: 53.79mm;
+    max-width: 100%;
+    height: auto;
+    max-height: 14.48mm;
+    object-fit: contain;
+    display: block;
+  }
+  .digits {
+    margin: 0.31mm 0 0;
+    font-size: 9.3pt;
+    letter-spacing: 0.04em;
+    text-align: center;
+    font-family: Arial, Helvetica, sans-serif;
+    line-height: 1.2;
+  }
+  .body {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+    margin-top: 0.64mm;
+    line-height: 1.35;
+    font-size: 7.9pt;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  /*
+   * Межстрочный зазор — через margin-bottom, а не flex "gap": рендер термопринтера
+   * (и старые движки печати) часто игнорируют flex gap → строки слипаются и длинное
+   * название наезжает на «Артикул» (как на фото ИП Горячкина). margin работает везде.
+   */
+  .body > p {
+    margin: 0 0 0.98mm;
+    flex: 0 0 auto;
+    flex-shrink: 0;
+  }
+  .body > p:last-child {
+    margin-bottom: 0;
+  }
+  .seller {
+    font-size: 7.9pt;
+    line-height: 1.35;
+    min-height: 3.75mm;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  /*
+   * Без max-height/overflow: название уже обрезано по символам в JS, поэтому строк
+   * ровно столько, сколько влезает, и они идут обычным потоком — «Артикул» всегда
+   * ниже названия и не может напечататься поверх (баг на термопринтере).
+   */
+  .name {
+    font-size: 8.1pt;
+    font-weight: 400;
+    line-height: 1.35;
+    word-break: break-word;
+  }
+  .meta {
+    line-height: 1.35;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .meta-composition {
+    white-space: nowrap;
+  }
+  .footer {
+    flex: 0 0 auto;
+    margin: 0.36mm 0 0;
+    font-size: 7.4pt;
+    text-align: left;
+    line-height: 1.2;
+  }
+
+</style>
+  </head>
+  <body><section class="label label--wb-qr" data-testid="fbs-order-qr-label" data-tape-block="wb_qr">
+  <img class="wb-qr-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAADGklEQVR4nO2XQY7cMBAD/f9PJy8YGO0lxaZdBOYUhSqxnEOu67r+lfx+JdXv5rHvmQZAPOIRj3jEIx7xiEf8AfGpuHlS4lNB/MN+xKdBQ/2IT4OG+hGfBg31Iz4NGupH/E3R9DcGLedZx18DWs6zjr8GtJxnHX8NaDnPOv4a0HKedfw1oOU86/hrQENDT1OzZw1oaOhpavasAQ0NPU3NnjWgoaGnqdmzBjQ09DQ1e9aAhoaepmbPGtBh3vohIv4miL/hqQEdBvE3PDWgwyD+hqcGdBjE3/DUgA6D+Bse1dCqpD4UVWp4akBF592p4akBFZ13p4anBlR03p0anhpQ0Xl3anhqQEXn3anh+fUH237jhy07v+0XB0A84hGP+P0iEY94xCM+v9Nf96yJ6mGvHeitQfxHg/iPBvEfDeI/GsSL0/7fHnfcnO4e2V9APOIRj3j/cIhHPOIHPbK/gPiXi48BiZIS436vrB/xiEe8oAfxalDzu1Q9iFeDmt+l6kG8GtT8LlVPvXhVT2qgFKd7T9m9iEc84hGvA0U84hEv4JTdi3jErxam4p/2qO7d9mEh/qZHdS/ixUE84hHvHA7xz+5FvDiIF4t396QevE1A7B8Y4hGP+GIe2cXunvaht/HILnb3tA+9jUd2sbunfehtPK9NagjVB+Hmf+2HgngtZ00Qr+WsCeK1nDVBvJazJoh/yDkFSv3cg6oEpN4bA0W8dk83Z1wo4hGPeMQj3s0ZF4r4ZeJTcYvfJiC2P+IRj3jE54J4xCPeGcQj/ujQKp5U3Duo7h0XpR6MeO2946LUgxGvvXdclHow4rX3jotSD0a89t5xUerBiNfeOy5KPTj1oXzug0O8tscdxD887+5xB/EPz7t73EH8w/PuHncQ//C8u8cdxD8caFtPbE/EZ3sQf2jobT2IPzT0th7EHxp6Ww/iDw29radGvDupD0XFuW3Pn9kGivhD2QaK+EPZBor4Q9kGivhD2QaK+EOZPiD12/Zed+z/ANJCET/jVJ2PC0X8jFN1Pi4U8TNO1fm4UMTPOFXn40IRP+OUnP8P1C5DYzmKcWsAAAAASUVORK5CYII=" alt="QR WB заказа" data-testid="fbs-order-qr-img">
+  <span class="wb-qr-position" data-testid="fbs-order-qr-position">№1</span>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000000</p>
+      <p class="cz-code">…PE0000000000</p>
+    </div>
+  </div>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000000</p>
+      <p class="cz-code">…PE0000000000</p>
+    </div>
+  </div>
+</section><section class="label label--wb-qr" data-testid="fbs-order-qr-label" data-tape-block="wb_qr">
+  <img class="wb-qr-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAH4AAAB+CAYAAADiI6WIAAAAHnRFWHRTb2Z0d2FyZQBid2lwLWpzLm1ldGFmbG9vci5jb21Tnbi0AAAC3UlEQVR4nO3XwY3DQAxDUfff9G4FgSGFHEqZLyA3Q6L5fMnzPM/fkl913PtVd2N9pgMADzzwwAMPPPDAA38APjXVPCpg9weXGuCBB15x171HNcADD7zirnuPaoAH/jv4atFugNSHksoj62dN0FDR1VnT55qgoaKrs6bPNUFDRVdnTZ9rgoaKrs6aPtcEDRVdnTV9rglaHHdOVX7gm8WlcqryA98sLpVTlR/4ZnGpnKr8wDeLS+VU5Qe+WVwqpyo/8M3i3Hvcd4FvFufe474LfLM49x73XeCbxbn3uO8C3yzOvcd9F/hmce497rtr4N2Tgp/24aoGeOCBrzwPfDqoeQ/wU4Oa9wA/Nah5D/BDf+UXG/b8tF88APDAAw/8fEjggQce+HxP3/a5ftxgzNAB/tIB/tIB/tIB/tIBvjnuvw2pordD2nsDfuYA3xzgxQeAPzPANwd48QHgz4ysN1URKvhUzlQPqZzAAw888Af2AJ/NCTzwwAN/4MWq+1U/93ul8pTvAq99L+CbA3wvD/DAAw888MB/6zWt6FR+913gxQM88MA7X6C6xz3AAw+88wWqe9wD/Mt7qYKmPgj33Wkfiiwn8MADb8xZ3Q98s7jU86r8wDeLSz2vyg98s7jU86r803LGZtoH+rNFTxvgLx3gLx3gLx3gLx3gm+Muzg2geq9pe1T77YGABx54Y8/V/fZAwAMPvLHn6n57IOB/BD417hfe8iHacwIPPPDA5wZ44IEH3v888OHiUkWrJgapCup+MVUeVU7VAA888MADDzzwmjyqnKoB/hC8+0Nx73H3HzsMPPDAG58HHnjgKwM88MArDq8pwpxHdVe1H/hD/ajuAn+oIOCbgYAHHnjBXeAPFQT8oUkVncrpzv9xP/DZnMC/BRU9Py0n8G9BRc9Pywn8W1DR89NyAv8WVPT8tJzj4Kf9ps2WD668aNpv2gAPPPDAL7qbBgU+dDcNCnzg7j8JSIsbzEzHdAAAAABJRU5ErkJggg==" alt="QR WB заказа" data-testid="fbs-order-qr-img">
+  <span class="wb-qr-position" data-testid="fbs-order-qr-position">№2</span>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000001</p>
+      <p class="cz-code">…PE0000000001</p>
+    </div>
+  </div>
+</section><section class="label label--cz" data-testid="marking-thermal-label" data-tape-block="cz">
+  <div class="cz-layout">
+    <div class="matrix cz-matrix"><img src="data:image/png;base64,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" alt="ЧЗ"></div>
+    <div class="cz-info" data-testid="cz-label-info">
+      <p class="cz-brand">Честный<br>знак</p>
+      <div class="cz-mark" aria-hidden="true">ЧЗ</div>
+      <p class="cz-field cz-field--gtin"><span class="cz-field-label">GTIN</span>4600439931253</p>
+      <p class="cz-field cz-field--serial"><span class="cz-field-label">КМ</span>KIZTAPE0000000001</p>
+      <p class="cz-code">…PE0000000001</p>
+    </div>
+  </div>
+</section>
+</body></html>

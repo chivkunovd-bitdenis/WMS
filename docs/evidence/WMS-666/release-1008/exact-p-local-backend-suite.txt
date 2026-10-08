@@ -1,0 +1,33 @@
+source_sha=b6d23148f1571d08d13d83c6179c385e2f6a1efc
+database=isolated per-process SQLite (WMS_TEST_DATABASE_URL unset)
+command=PYTHONPATH=backend /Users/deniscivkunov/Projects/WMS/backend/.venv/bin/pytest -q -n 0 backend/tests/test_wms666_workspace_marking_pool.py backend/tests/test_wms666_ozon_quantity_print_bindings.py backend/tests/test_wms666_rejected_exact_reprint_validation.py backend/tests/test_fbs_kiz.py
+
+.........................................................E...FEEEEEEEEEE [ 52%]
+EEEEEEEEEEEE...................................EEEE..E...EEEEEE          [100%]in run
+    return self._loop.run_until_complete(task)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+/Library/Frameworks/Python.framework/Versions/3.14/lib/python3.14/asyncio/base_events.py:719: in run_until_complete
+    return future.result()
+           ^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/pytest_asyncio/plugin.pyCoreMultiExecuteParams", effective_parameters
+                )
+                if self.dialect._has_events:
+                    for fn in self.dialect.dispatch.do_executemany:
+                        if fn(
+                            cursor,
+                            str_statement,
+                            effective_parameters,
+                            context,
+                        ):
+                            evt_handled = Truee-packages/sqlalchemy/engine/default.py:952: in do_execute
+    cursor.execute(statement, parameters)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py:183: in execute
+    self._adapt_connection._handle_exception(error)
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py:343: in _handle_exception
+    raise error
+../../backend/.venv/lib/python3.14/site-packages/sqlalchemy/dialects/sqlite/aiosqlite.py/python3.14/site-packages/aiosqlite/cursor.py:40: in execute
+    await self._execute(self._cursor.execute, sql, parameters)
+../../backend/.venv/lib/python3.14/site-packages/aiosqlite/cursor.py:32: in _execute
+    return await self._conn._execute(fn, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+../../backend/.venv/lib/python3.14/site-packages/aiosqlite/core.py:160: in _execute<sys>:0: DeprecationWarning: builtin type swigvarlink has no __module__ attribute
