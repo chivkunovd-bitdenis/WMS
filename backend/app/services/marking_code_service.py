@@ -3332,6 +3332,7 @@ async def print_codes_for_product(
     commit: bool = True,
     source_process: str = MARKING_SOURCE_CATALOG,
     document_number: str | None = None,
+    packaging_task_line: PackagingTaskLine | None = None,
 ) -> PrintMarkingCodesResult:
     if quantity < 1:
         raise MarkingCodeServiceError("invalid_print_quantity")
@@ -3408,6 +3409,8 @@ async def print_codes_for_product(
     for code in codes[:print_quantity]:
         code.status = STATUS_PRINTED
         code.product_id = product.id
+        if packaging_task_line is not None:
+            code.packaging_task_line_id = packaging_task_line.id
         code.printed_at = now
         code.printed_by_user_id = acting_user_id
         code.reserved_by_user_id = None
@@ -3418,7 +3421,7 @@ async def print_codes_for_product(
             event_type=EVENT_PRINTED,
             actor=acting_user_id,
             document_number=document_number,
-            packaging_task=None,
+            packaging_task=packaging_task_line,
             copies=event_copies,
             source_process=source_process,
         )

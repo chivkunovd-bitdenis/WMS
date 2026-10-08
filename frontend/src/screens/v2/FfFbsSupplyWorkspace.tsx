@@ -2867,7 +2867,7 @@ export function FfFbsSupplyWorkspace({
 
   const markingAvailableForOrder = (order: FbsWorkspace['orders'][number]) => {
     const line = order.product.id ? packLineByProduct.get(order.product.id) : undefined
-    return line?.marking_available_count ?? order.marking_available_count ?? 0
+    return order.marking_available_count ?? line?.marking_available_count ?? 0
   }
 
   const markingShortageForOrders = (orders: FbsWorkspace['orders']) => {
