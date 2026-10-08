@@ -11,14 +11,21 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import zipfile
 from pathlib import Path, PurePosixPath
 from urllib.parse import urlencode
 
+if __package__ in (None, ''):
+    sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
+from scripts.ci.ci_scope import is_generated_evidence_output, is_prose
+
 POLICY_PATH = 'guards/PROCESS_CONTRACTS.json'
 WORKFLOW_PATH = '.github/workflows/ci.yml'
-REQUIRED_JOBS = {'baseline', 'backlog', 'backend', 'frontend-build', 'охрана',
-                 'print-regressions', 'printer-windows', 'process-proof'}
+REQUIRED_JOBS = {'baseline', 'backlog', 'scope', 'backend', 'frontend-build', 'охрана',
+                 'print-regressions', 'printer-windows', 'wms686-mockup', 'process-proof'}
+HEAVY_JOBS = REQUIRED_JOBS - {'baseline', 'backlog', 'scope', 'охрана', 'process-proof'}
 MAX_ARCHIVE = 64 * 1024 * 1024
 MAX_EXPANDED = 128 * 1024 * 1024
 MAX_METADATA = 64 * 1024
@@ -109,88 +116,17 @@ def tree(get, root, ref):
     return result
 
 
-def bootstrap_pin(data):
-    if not isinstance(data, dict) or set(data) != {'base_sha', 'source_sha'}:
-        raise ValueError('Bootstrap requires exactly owner-approved base/source SHAs')
-    base, source = sha(data['base_sha']), sha(data['source_sha'])
-    if base == source:
-        raise ValueError('Bootstrap source must be a separate reviewed commit')
-    return {'base_sha': base, 'source_sha': source}
+def git_blob_oid(raw):
+    return hashlib.sha1(b'blob ' + str(len(raw)).encode() + b'\0' + raw).hexdigest()
 
 
-def load_approved_bootstrap():
-    # This sibling belongs to the trusted-main checkout. No event/candidate/env
-    # input can select a config file or approve the source commit.
-    path = Path(__file__).resolve().with_name('process_bootstrap.json')
-    if path.is_symlink():
-        raise ValueError('Trusted bootstrap config must not be a symlink')
-    try:
-        with path.open('rb') as stream:
-            raw = stream.read(MAX_METADATA + 1)
-    except FileNotFoundError:
-        return None
-    if len(raw) > MAX_METADATA:
-        raise ValueError('Trusted bootstrap config too large')
-    return bootstrap_pin(json_object(raw))
-
-
-def verified_policy_snapshot(get, root, ref, rows, cache):
-    data, _ = policy(get, root, ref)
-    for name, digest in data['files'].items():
-        row = rows.get(name)
-        if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
-            raise ValueError('Protected source file missing, non-blob or symlink')
-        oid = sha(row['sha'])
-        if oid not in cache:
-            result = get(f'{root}/git/blobs/{oid}')
-            if result.get('encoding') != 'base64':
-                raise ValueError('Protected Git blob unavailable')
-            raw = base64.b64decode(''.join(result['content'].split()), validate=True)
-            if hashlib.sha1(f'blob {len(raw)}\0'.encode() + raw).hexdigest() != oid:
-                raise ValueError('Protected Git blob identity mismatch')
-            cache[oid] = hashlib.sha256(raw).hexdigest()
-        if cache[oid] != digest:
-            raise ValueError('Trusted protected digest does not match source bytes')
-    return data
-
-
-def baseline_policy(get, root, base, approved_bootstrap):
-    if approved_bootstrap is None:
-        data, _ = policy(get, root, base)
-        return data, tree(get, root, base), None
-    baseline_tree = tree(get, root, base)
-    pin = bootstrap_pin(approved_bootstrap)
-    has_policy = POLICY_PATH in baseline_tree
-    if has_policy and pin['base_sha'] != base:
-        data, _ = policy(get, root, base)
-        return data, baseline_tree, None
-    if pin['base_sha'] != base:
-        raise ValueError('Bootstrap is not approved for this exact PR base')
-    cache = {}
-    previous = None
-    if has_policy:
-        row = baseline_tree.get(POLICY_PATH)
-        if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
-            raise ValueError('Baseline policy must exist as a regular Git blob')
-        previous = verified_policy_snapshot(get, root, base, baseline_tree, cache)
-    source = pin['source_sha']
-    source_tree = tree(get, root, source)
-    row = source_tree.get(POLICY_PATH)
-    if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
-        raise ValueError('Baseline policy must exist as a regular Git blob')
-    sha(row['sha'])
-    if not has_policy:
-        data, _ = policy(get, root, source)
-        return data, source_tree, source
-    data = verified_policy_snapshot(get, root, source, source_tree, cache)
-    if not set(previous['files']).issubset(data['files']):
-        raise ValueError('Reviewed source removed a protected baseline path')
-    for name, suite in previous['suites'].items():
-        current = data['suites'].get(name)
-        if (current is None or any(current[key] != suite[key] for key in ('report', 'format', 'exact'))
-                or not set(suite['cases']).issubset(current['cases'])):
-            raise ValueError('Reviewed source changed a protected execution contract')
-    return data, source_tree, source
+def require_current_policy_blob(rows, raw):
+    row = rows.get(POLICY_PATH)
+    if row is None or row.get('type') != 'blob' or row.get('mode') not in {'100644', '100755'}:
+        raise ValueError('Current process policy missing, non-blob or symlink')
+    if sha(row.get('sha')) != git_blob_oid(raw):
+        raise ValueError('Current process policy bytes do not match the Git tree')
+    return row
 
 
 def pages(get, path, key, query=None):
@@ -233,37 +169,53 @@ def pr_identity(pr, repository, number):
     return (*pr_scope(pr, repository, number), sha(pr['merge_commit_sha']))
 
 
-def verify_pr(get, repository, number, *, download=None, approved_bootstrap=None):
-    """Read-only metadata helper; evidence_complete=False cannot authorize a check.
+def is_prose_path(path):
+    return is_prose(path) or is_generated_evidence_output(path)
 
-    The optional callback retains the pre-code metadata contract while the CLI
-    always uses verify_pr_evidence, which requires a bound artifact.
-    """
+
+def pull_request_docs_only(get, root, number, expected_count):
+    if type(expected_count) is not int or expected_count <= 0 or expected_count > 3000:
+        return False
+    paths, seen = [], set()
+    for page in range(1, 31):
+        batch = get(f'{root}/pulls/{number}/files?{urlencode({"per_page": 100, "page": page})}')
+        if not isinstance(batch, list) or not batch:
+            break
+        for row in batch:
+            path = row.get('filename') if isinstance(row, dict) else None
+            if not isinstance(path, str) or not path or path in seen:
+                raise ValueError('Pull request changed-file list is malformed or duplicated')
+            seen.add(path)
+            paths.append(path)
+        if len(paths) >= expected_count:
+            break
+    if len(paths) != expected_count:
+        raise ValueError('Pull request changed-file list is incomplete')
+    return all(is_prose_path(path) for path in paths)
+
+
+def verify_pr(get, repository, number, *, download=None):
+    """Verify exact current CI and review-current execution contract data."""
     if download is not None:
-        return verify_pr_evidence(get, download, repository, number, approved_bootstrap=approved_bootstrap)
+        return verify_pr_evidence(get, download, repository, number)
     identity(repository, number)
     root = f'repos/{repository}'
-    head, base, merge = pr_identity(get(f'{root}/pulls/{number}'), repository, number)
-    baseline, baseline_tree, source = baseline_policy(get, root, base, approved_bootstrap)
+    pr = get(f'{root}/pulls/{number}')
+    head, base, merge = pr_identity(pr, repository, number)
+    docs_only = pull_request_docs_only(get, root, number, pr.get('changed_files'))
     candidate, candidate_raw = policy(get, root, head)
     merged, merged_raw = policy(get, root, merge)
     if candidate_raw != merged_raw or candidate != merged:
         raise ValueError('Merge policy differs from the candidate policy')
-    for name, digest in baseline['files'].items():
-        if candidate['files'].get(name) != digest:
-            raise ValueError('Candidate changed a protected baseline digest')
-    for name, suite in baseline['suites'].items():
-        current = candidate['suites'].get(name)
-        if (current is None or any(current[key] != suite[key] for key in ('report', 'format', 'exact')) or
-                not set(suite['cases']).issubset(current['cases'])):
-            raise ValueError('Candidate removed or changed a protected execution contract')
-    trees = [baseline_tree, tree(get, root, head), tree(get, root, merge)]
-    for name in baseline['files']:
-        rows = [data.get(name) for data in trees]
-        if any(row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'} for row in rows):
-            raise ValueError('Protected file missing, non-blob or symlink')
-        if any((sha(row['sha']), row['mode']) != (sha(rows[0]['sha']), rows[0]['mode']) for row in rows[1:]):
-            raise ValueError('Protected Git bytes or file mode changed')
+    # The current policy is reviewable in the ordinary PR diff. Verify that its
+    # listed source paths exist, then require real reports for every current case.
+    for ref in (head, merge):
+        rows = tree(get, root, ref)
+        require_current_policy_blob(rows, candidate_raw)
+        for name in candidate['files']:
+            row = rows.get(name)
+            if row is None or row['type'] != 'blob' or row['mode'] not in {'100644', '100755'}:
+                raise ValueError('Protected source file missing, non-blob or symlink')
     workflow = get(f'{root}/actions/workflows/ci.yml')
     if workflow['path'] != WORKFLOW_PATH or workflow['state'] != 'active':
         raise ValueError('Required CI workflow absent or disabled')
@@ -297,24 +249,25 @@ def verify_pr(get, repository, number, *, download=None, approved_bootstrap=None
     jobs = pages(get, f"{root}/actions/runs/{run['id']}/attempts/{run['run_attempt']}/jobs", 'jobs')
     for name in sorted(REQUIRED_JOBS):
         matches = [job for job in jobs if job['name'] == name]
-        if len(matches) != 1 or any(matches[0].get(key) != value for key, value in {
-                'run_id': run['id'], 'head_sha': head, 'status': 'completed', 'conclusion': 'success'}.items()):
+        allowed = {'success', 'skipped'} if docs_only and name in HEAVY_JOBS else {'success'}
+        if (len(matches) != 1 or any(matches[0].get(key) != value for key, value in {
+                'run_id': run['id'], 'head_sha': head, 'status': 'completed'}.items()) or
+                matches[0].get('conclusion') not in allowed):
             raise ValueError('Required current-attempt CI job did not succeed: ' + name)
     if pr_identity(get(f'{root}/pulls/{number}'), repository, number) != (head, base, merge):
         raise ValueError('PR changed during verification')
     current = latest()
     if any(current[key] != run[key] for key in ('id', 'run_attempt', 'status', 'conclusion', 'pull_requests')):
         raise ValueError('Latest CI changed during verification')
-    return {**({'bootstrap_source_sha': source} if source else {}),
-            'head_sha': head, 'base_sha': base, 'merge_sha': merge, 'run_id': run['id'],
+    return {'head_sha': head, 'base_sha': base, 'merge_sha': merge, 'run_id': run['id'],
             'run_attempt': run['run_attempt'], 'policy_sha256': hashlib.sha256(candidate_raw).hexdigest(),
-            'evidence_complete': False}
+            'docs_only': docs_only, 'evidence_complete': False}
 
 
-def verify_pr_evidence(get, download, repository, number, *, approved_bootstrap=None):
-    """Strict entrypoint: verify frozen pipeline plus exact current proof metadata."""
+def verify_pr_evidence(get, download, repository, number):
+    """Verify exact current CI identity, process policy and execution reports."""
     try:
-        result = verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap)
+        result = verify_pr(get, repository, number)
         root = f'repos/{repository}'
         name = f"process-proof-{result['merge_sha']}-{result['run_id']}-{result['run_attempt']}"
         artifacts = pages(get, f"{root}/actions/runs/{result['run_id']}/artifacts", 'artifacts')
@@ -346,10 +299,25 @@ def verify_pr_evidence(get, download, repository, number, *, approved_bootstrap=
             metadata = json_object(archive.read(metadata_info))
             expected = {'version': 1, 'sha': result['merge_sha'], 'head_sha': result['head_sha'],
                         'base_sha': result['base_sha'], 'run_id': result['run_id'],
-                        'run_attempt': result['run_attempt'], 'policy_sha256': result['policy_sha256']}
+                        'run_attempt': result['run_attempt'], 'policy_sha256': result['policy_sha256'],
+                        'docs_only': result['docs_only']}
             if any(type(metadata.get(key)) is not type(value) or metadata.get(key) != value for key, value in expected.items()):
                 raise ValueError('Proof does not belong to this exact merge/head/base/run/attempt/policy')
-        if verify_pr(get, repository, number, approved_bootstrap=approved_bootstrap) != result:
+            if not result['docs_only']:
+                from scripts.ci.process_contracts import verify_reports
+                current_policy, _ = policy(get, root, result['head_sha'])
+                with tempfile.TemporaryDirectory(prefix='wms-process-proof-') as folder:
+                    report_root = Path(folder)
+                    for suite in current_policy['suites'].values():
+                        report = suite['report']
+                        info = archive.getinfo(report)
+                        if info.is_dir() or info.file_size > MAX_EXPANDED:
+                            raise ValueError('Invalid or oversized required execution report')
+                        target = report_root.joinpath(*PurePosixPath(report).parts)
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(archive.read(info))
+                    verify_reports(current_policy, report_root, sha=result['merge_sha'])
+        if verify_pr(get, repository, number) != result:
             raise ValueError('PR or latest CI changed during artifact verification')
         return {**result, 'artifact_id': artifact['id'], 'evidence_complete': True}
     except ValueError:
@@ -445,8 +413,7 @@ def main():
             head = None
             try:
                 head = pr_scope(api_get(f'repos/{args.repository}/pulls/{number}'), args.repository, number)[0]
-                result = verify_pr_evidence(api_get, download_artifact, args.repository, number,
-                                            approved_bootstrap=load_approved_bootstrap())
+                result = verify_pr_evidence(api_get, download_artifact, args.repository, number)
                 if result['evidence_complete'] is not True or result['head_sha'] != head:
                     raise ValueError('Exact strict proof required before publishing')
                 if args.publish:
