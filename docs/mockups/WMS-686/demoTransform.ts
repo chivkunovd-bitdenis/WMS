@@ -49,9 +49,41 @@ export function demoTransform(): Plugin {
         ])
       }
 
+      // The cell-first view remains the existing FBS table. Keep the same KIZ
+      // details under each product when the prototype switches its hierarchy.
+      if (id.endsWith('/unload-pick/FbsCellPickTable.tsx')) {
+        return apply(code, id, `import { PickKizRows } from ${controls};\n`, [
+          [
+            `                  {!item.place ? ' · Нет на складе' : ''}\n                </Typography>\n              </Stack>`,
+            `                  {!item.place ? ' · Нет на складе' : ''}\n                </Typography>\n                {item.place ? <PickKizRows productId={item.row.product.id} placeKey={item.place.key} depth={item.depth + 1} /> : null}\n              </Stack>`
+          ],
+        ])
+      }
+
       // «Подбор»: КИЗ после товара, «Забрать целиком», устойчивый источник (R1, R3, R7, R9г).
       if (id.endsWith('/unload-pick/UnloadPickScreen.tsx')) {
-        return apply(code, id, `import { SourceKizInfo, TakeWholeButton, markNewKiz, restorePickSource, savePickSource, unlinkPickKiz } from ${controls};\n`, [
+        return apply(code, id,
+          `import { SourceKizInfo, TakeWholeButton, markNewKiz, restorePickSource, savePickSource, unlinkPickKiz } from ${controls};\n`
+          + `import { FormControlLabel as Wms686FormControlLabel, Switch as Wms686Switch } from '@mui/material';\n`
+          + `import { isBaseline as wms686IsBaseline } from ${api};\n`, [
+          ['  const document = documentProp ?? DOCUMENT',
+            '  const [wms686StructureByCell, setWms686StructureByCell] = useState(true)\n'
+            + '  const wms686ShowCellFirst = wms686IsBaseline() ? groupByCell : wms686StructureByCell\n'
+            + '  const document = documentProp ?? DOCUMENT'],
+          ['      </Paper>\n\n      <Stack spacing={1} sx={{ mb: 1.5 }}>',
+            '      </Paper>\n\n'
+            + '      {!wms686IsBaseline() ? (\n'
+            + '        <Stack direction="row" spacing={1} sx={{ alignItems: \'center\', justifyContent: \'flex-start\', mb: 1.5 }}>\n'
+            + '          <Typography variant="body2" color={wms686StructureByCell ? \'text.primary\' : \'text.secondary\'}>По ячейкам</Typography>\n'
+            + '          <Wms686FormControlLabel\n'
+            + '            sx={{ m: 0 }}\n'
+            + '            label="По товарам"\n'
+            + '            control={<Wms686Switch size="small" checked={!wms686StructureByCell} onChange={(event) => setWms686StructureByCell(!event.target.checked)} inputProps={{ \'aria-label\': \'Структура подбора: по товарам\' }} />}\n'
+            + '          />\n'
+            + '        </Stack>\n'
+            + '      ) : null}\n\n'
+            + '      <Stack spacing={1} sx={{ mb: 1.5 }}>'],
+          ['{groupByCell ? <FbsCellPickTable', '{wms686ShowCellFirst ? <FbsCellPickTable'],
           ['  const [source, setSource] = useState<string | null>(null)\n  const [sourceLabel, setSourceLabel] = useState<string | null>(null)',
             '  const [source, setSource] = useState<string | null>(() => restorePickSource(documentProp).source)\n'
             + '  const [sourceLabel, setSourceLabel] = useState<string | null>(() => restorePickSource(documentProp).label)\n'
