@@ -105,7 +105,13 @@ async function postJson<T>(ctx: FboPackingApiContext, path: string, body: unknow
     body: JSON.stringify(body),
   })
   if (!response.ok) throw await toApiError(response)
-  return (await response.json()) as T
+  // Заголовки 2xx получены, но тело не прочиталось или не разобралось: сервер мог выполнить операцию,
+  // исход неизвестен — как обрыв связи. Повтор идёт с прежним mutation_id.
+  try {
+    return (await response.json()) as T
+  } catch {
+    throw new FboPackingApiError(FBO_NETWORK_ERROR_RU, 'network', 0)
+  }
 }
 
 /** Тот же серверный путь, что «Наполнить»: сначала подобранные, но не уложенные штуки. */

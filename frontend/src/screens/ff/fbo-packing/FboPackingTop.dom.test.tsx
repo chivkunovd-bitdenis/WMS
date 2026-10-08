@@ -20,6 +20,7 @@ vi.mock('../../../utils/printShipmentPackagingSheet', () => ({ printShipmentPack
 vi.mock('../../../utils/scanFeedback', () => ({ playScanSuccess: mocks.soundOk, playScanError: mocks.soundError }))
 
 import { FboPackingTop } from './FboPackingTop'
+import { clearPendingScans } from './fboPendingScans'
 import type { FboMarkingCode, FboPackingDetail } from './fboPackingTypes'
 
 beforeAll(() => {
@@ -65,7 +66,7 @@ function code(id: string, productId = 'p1'): FboMarkingCode {
 }
 
 type Call = { method: string; path: string; body: Record<string, unknown> | null }
-type Handler = (body: Record<string, unknown> | null) => { status?: number; body?: unknown }
+type Handler = (body: Record<string, unknown> | null) => { status?: number; body?: unknown; brokenBody?: boolean }
 
 let host: HTMLDivElement
 let root: Root
@@ -98,6 +99,11 @@ function installFetch() {
     const handler = handlers.get(`${method} ${path}`)
     if (!handler) return new Response(JSON.stringify({ detail: `no handler ${method} ${path}` }), { status: 500 })
     const answer = handler(raw)
+    // Заголовки 2xx пришли, а тело оборвалось при чтении.
+    if (answer.brokenBody) {
+      const stream = new ReadableStream({ start: (controller) => controller.error(new TypeError('terminated')) })
+      return new Response(stream, { status: answer.status ?? 200 })
+    }
     return new Response(answer.status === 204 ? null : JSON.stringify(answer.body ?? {}), { status: answer.status ?? 200 })
   })
 }
@@ -150,6 +156,7 @@ const posts = (path: string) => calls.filter((call) => call.method === 'POST' &&
 
 beforeEach(() => {
   window.localStorage.clear()
+  clearPendingScans()
   calls = []
   handlers = new Map()
   serverCodes = []
@@ -375,6 +382,43 @@ describe('WMS-686 FBO упаковка · скан (R29–R31)', () => {
     expect(requests[3]?.body?.mutation_id).not.toBe(requests[0]?.body?.mutation_id)
   })
 
+  it('обрыв на чтении тела ответа 200: исход неизвестен, ручной повтор уходит с прежним ключом, штука не задваивается', async () => {
+    const applied = new Set<string>()
+    let answers = 0
+    handlers.set('POST /boxes/B1/scan', (body) => {
+      applied.add(String(body?.mutation_id))
+      answers += 1
+      if (answers <= 2) return { brokenBody: true }
+      return { body: { kind: 'product', product_id: 'p1', quantity: 1, picked_qty: 20 } }
+    })
+    await mount()
+    await scan('2000000000011')
+    expect(posts('/boxes/B1/scan')).toHaveLength(2)
+    expect(q('fbo-packing-scan-error')).not.toBeNull()
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(3)
+    expect(requests[2]?.body?.mutation_id).toBe(requests[0]?.body?.mutation_id)
+    expect(applied.size).toBe(1)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+  })
+
+  it('уход на другую вкладку документа и возврат (компонент создан заново): повтор скана уходит с прежним ключом', async () => {
+    const applied = serverApplyingByKey(2)
+    await mount()
+    await scan('2000000000011')
+    expect(posts('/boxes/B1/scan')).toHaveLength(2)
+    act(() => root.unmount())
+    root = createRoot(host)
+    await mount()
+    await scan('2000000000011')
+    const requests = posts('/boxes/B1/scan')
+    expect(requests).toHaveLength(3)
+    expect(requests[2]?.body?.mutation_id).toBe(requests[0]?.body?.mutation_id)
+    expect(applied.size).toBe(1)
+    expect(q('fbo-packing-scan-error')).toBeNull()
+  })
+
   it('другой код или другой короб не подхватывает чужую незавершённую операцию', async () => {
     handlers.set('POST /boxes/B1/scan', () => ({ status: 503, body: { detail: 'unavailable' } }))
     await mount()
@@ -520,6 +564,31 @@ describe('WMS-686 FBO упаковка · галки печати (R25)', () => 
     const nextIssue = posts('/marking-codes/issue')[3]
     expect(nextAdd?.body?.mutation_id).not.toBe(adds[0]?.body?.mutation_id)
     expect(nextIssue?.body?.mutation_id).not.toBe(issues[0]?.body?.mutation_id)
+  })
+
+  it('обрыв на чтении тела ответа 200 при выдаче ЧЗ: ручной повтор уходит с прежними ключами добавления и выдачи', async () => {
+    const issued = code('n1')
+    const issuedKeys = new Set<string>()
+    let answers = 0
+    handlers.set('POST /marking-codes/issue', (body) => {
+      issuedKeys.add(String(body?.mutation_id))
+      answers += 1
+      if (answers <= 2) return { brokenBody: true }
+      serverCodes = [issued]
+      return { body: { items: [issued], shortage: 0 } }
+    })
+    await mount()
+    await act(async () => { toggle('fbo-scan-print-chz-toggle').click() })
+    await scan('2000000000011')
+    expect(posts('/marking-codes/issue')).toHaveLength(2)
+    await scan('2000000000011')
+    const adds = posts('/boxes/B1/scan')
+    const issues = posts('/marking-codes/issue')
+    expect(adds).toHaveLength(2)
+    expect(adds[1]?.body?.mutation_id).toBe(adds[0]?.body?.mutation_id)
+    expect(issues).toHaveLength(3)
+    expect(issues[2]?.body?.mutation_id).toBe(issues[0]?.body?.mutation_id)
+    expect(issuedKeys.size).toBe(1)
   })
 
   it('пустой пул при скане: штука остаётся уложенной, красное сообщение, ложного успеха нет', async () => {
