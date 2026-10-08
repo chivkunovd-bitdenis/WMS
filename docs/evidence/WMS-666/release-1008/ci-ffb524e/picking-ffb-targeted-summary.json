@@ -1,0 +1,170 @@
+{
+  "suite": "targeted",
+  "expected_cases": [
+    "group-lost-set"
+  ],
+  "test_sha": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
+  "app_sha": "ffb524e2950cfb250993ad4db3b0f394ca55f735",
+  "counts": {
+    "executed": 1,
+    "passed": 1,
+    "failed": 0,
+    "blocked": 0
+  },
+  "cases": [
+    {
+      "name": "group-lost-set",
+      "checkpoints": [
+        {
+          "name": "group-lost-real-commit",
+          "expected_count": 1,
+          "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "group-lost-replay-no-double-move",
+          "expected_count": 1,
+          "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+          "status": "verified",
+          "actual_count": 1
+        },
+        {
+          "name": "group-lost-new-confirmed-target",
+          "expected_count": 2,
+          "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+          "status": "verified",
+          "actual_count": 2
+        }
+      ],
+      "status": "passed",
+      "responses": [
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/c63d6f1f-8f78-4f4a-b036-7b4b670cbf2b/pick/set",
+          "method": "POST",
+          "status": "network-failed",
+          "request": "{\"product_id\":\"7b99336a-fdf4-4935-ace4-c8fe5207c180\",\"storage_location_id\":\"abe86e86-5320-4529-a195-741b073d31fe\",\"quantity\":1,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "failure": {
+            "errorText": "net::ERR_FAILED"
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/c63d6f1f-8f78-4f4a-b036-7b4b670cbf2b/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"7b99336a-fdf4-4935-ace4-c8fe5207c180\",\"storage_location_id\":\"abe86e86-5320-4529-a195-741b073d31fe\",\"quantity\":1,\"expected_quantity\":0,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "e8f270c1-1178-58c2-8a01-4e8278d84684",
+            "product_id": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "sku_code": "EXT-113-0",
+            "product_name": "Extended group-lost-set product 0",
+            "storage_location_id": "abe86e86-5320-4529-a195-741b073d31fe",
+            "location_code": "EXT-113-A-2",
+            "quantity": 1
+          },
+          "operator": "operator1"
+        },
+        {
+          "url": "http://127.0.0.1:25174/api/operations/fbs-supplies/c63d6f1f-8f78-4f4a-b036-7b4b670cbf2b/pick/set",
+          "status": 200,
+          "method": "POST",
+          "request": "{\"product_id\":\"7b99336a-fdf4-4935-ace4-c8fe5207c180\",\"storage_location_id\":\"abe86e86-5320-4529-a195-741b073d31fe\",\"quantity\":2,\"expected_quantity\":1,\"container_kind\":null,\"container_id\":null}",
+          "body": {
+            "id": "e8f270c1-1178-58c2-8a01-4e8278d84684",
+            "product_id": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "sku_code": "EXT-113-0",
+            "product_name": "Extended group-lost-set product 0",
+            "storage_location_id": "abe86e86-5320-4529-a195-741b073d31fe",
+            "location_code": "EXT-113-A-2",
+            "quantity": 2
+          },
+          "operator": "operator1"
+        }
+      ],
+      "dbSummary": {
+        "unchanged": true,
+        "balances": [
+          {
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "location": "abe86e86-5320-4529-a195-741b073d31fe",
+            "container": null,
+            "quantity": 28,
+            "unpacked": 28,
+            "packed": 0
+          },
+          {
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "location": "332aa3d5-6c92-4fa8-9b0b-9520588adefe",
+            "container": null,
+            "quantity": 2,
+            "unpacked": 2,
+            "packed": 0
+          }
+        ],
+        "picks": [
+          {
+            "id": "fc0fa225-c72d-418e-8a62-ac0cf4e786d7",
+            "supply": "c63d6f1f-8f78-4f4a-b036-7b4b670cbf2b",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "order": "d05374b0-ff78-4180-bd5a-50eafebd5d2e",
+            "position": null,
+            "location": "abe86e86-5320-4529-a195-741b073d31fe",
+            "container": null,
+            "sorting": "332aa3d5-6c92-4fa8-9b0b-9520588adefe",
+            "key": "3fe60b4f-b551-5438-bb42-c93e1655c93e",
+            "active": true,
+            "movement": "d564ad44-4ea9-4a7c-9c92-0436e8ebad83"
+          },
+          {
+            "id": "e2537798-a7ea-45cb-8a74-0d01dbd99256",
+            "supply": "c63d6f1f-8f78-4f4a-b036-7b4b670cbf2b",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "order": "5df0b040-40d8-43ea-9a6c-c762493b9683",
+            "position": null,
+            "location": "abe86e86-5320-4529-a195-741b073d31fe",
+            "container": null,
+            "sorting": "332aa3d5-6c92-4fa8-9b0b-9520588adefe",
+            "key": "7b6d563c-f01b-59e3-9bfe-143d670d74ae",
+            "active": true,
+            "movement": "7e428ddd-1e24-4c0d-a7c6-f67bccd60fdc"
+          }
+        ],
+        "reserves": [
+          {
+            "order": "d05374b0-ff78-4180-bd5a-50eafebd5d2e",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          },
+          {
+            "order": "5df0b040-40d8-43ea-9a6c-c762493b9683",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          },
+          {
+            "order": "4c87f296-c155-4c8f-8085-ac0783c4b670",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          },
+          {
+            "order": "b68dae62-1095-422a-8d5f-10723b231f81",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          },
+          {
+            "order": "5330a854-6821-494b-a31a-5fbed1c4cce1",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          },
+          {
+            "order": "02bc0f88-362e-4f71-bdaf-5364a8a9a5cd",
+            "product": "7b99336a-fdf4-4935-ace4-c8fe5207c180",
+            "quantity": 1
+          }
+        ],
+        "positions": [],
+        "position_reserves": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+# WMS-666 exact-ffb CI checkpoint
+
+This record keeps the exact-SHA CI outcomes separate. It does not mark WMS-666 accepted or claim the picking suite is green. Product source SHA: `ffb524e2950cfb250993ad4db3b0f394ca55f735`. The permanent frontend guard source is commit `32ef4945aeb2bb3dcdc51f7879c181e63735b207`; the full frontend test file could not complete locally because Vitest hit ENOSPC before collecting tests. The CI workflow that must run on release source metadata including those guards remains a release gate.
+
+## Recorded runs
+
+- Main screen, run [37722109811](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37722109811): completed successfully, 24/24. Artifact ID `11525798058`. Input app/test SHA is the exact product SHA above.
+- Picking, run [37722109782](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37722109782): failed. Base shard passed 29/29; extended shard passed 39/40. The failed case is `group-lost-set`: the first real `/pick/set` POST received HTTP 200 on the server, then the runner aborted the response and observed `net::ERR_FAILED`; the UI error locator timed out after five seconds at `extended.mjs:179`, so later replay checkpoints did not run. Summary artifact ID `11526740316` (extended failure summary `11526153288`). The unchanged source/test relation does not establish that this was merely flaky.
+- Focused picking rerun, run [37723222696](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37723222696): passed 1/1 for the same case at exact ffb. It reproduced the lost HTTP response, showed recovery, replayed the same request without a second stock movement, and verified the next confirmed quantity. Three checkpoints were verified. Artifacts: summary `11526128957`; targeted full artifact `11525829565`. This is a bounded successful rerun, not a replacement for the failed 40-case run.
+- Print renderer, run [37722415370](https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37722415370): successful with explicit `application_ref=ffb524e2950cfb250993ad4db3b0f394ca55f735`; workflow source SHA `e98bd28bbf50aba8824fab853f986b7c7f39a835`, workflow `.github/workflows/wms666-print-renderer.yml`. Recorded counts: WMS-672 11/11 + 6/6; WMS-673 rendered 5/5; WMS-657 C1–C6 6/6; WMS-673 DOM 19/19 (47/47 total). Artifact ID `11526488645`; it remains on GitHub because downloading/unzipping locally failed under ENOSPC.
+
+## Picking provenance and trace
+
+For exact ffb, the extended runner SHA-256 is `a35a474a9a05e29480075330791b851b41ad356eb5d27531189b0f462757d8ae`; picking workflow SHA-256 is `778eb39e0d3e28b3ee747e2e9e20007c1d3cdcaf7703fc6b29003b4200d3eda0`. Both runner and workflow blobs match between the failed full run and the targeted rerun. The adjacent JSON summaries preserve the original 39/40 failure, the 7f 40/40 comparator, and the ffb focused 1/1 result. The focused API JSONL, UI screenshot, and three DB checkpoints preserve the request and recovery path; no seed log or credential-bearing full trace archive is included.
+
+The first full-run timeout remains unexplained from the available artifact. The targeted pass shows recovery works in a controlled rerun, but it does not prove why the first run missed the message or exclude an intermittent UI race. Do not label full picking green until the required full picking CI run passes on the final release source metadata.
