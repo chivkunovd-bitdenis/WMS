@@ -1,0 +1,13 @@
+{
+  "sha": "1a4b0d687392a91a2dbfde6fbcfe9013b9e09075",
+  "cases": [
+    {
+      "id": "WMS666.whole-process.bare-group-manual-before-scan",
+      "status": "PASS"
+    }
+  ],
+  "physicalPaper": "NOT_TESTED",
+  "externalApi": "SYNTHETIC_WB;REAL_LOCAL_API_POSTGRES_AND_NATIVE_HANDLER_EMULATED_PRINTER",
+  "currentCase": "WMS666.whole-process.bare-group-manual-before-scan",
+  "productSha": "1a4b0d687392a91a2dbfde6fbcfe9013b9e09075"
+}
