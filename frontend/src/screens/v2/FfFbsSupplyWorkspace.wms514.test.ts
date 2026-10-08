@@ -158,8 +158,10 @@ describe('WMS-514 · scan classification and silent print wiring', () => {
     expect(print).toContain('fbsBuildPickingRows(\n      printWorkspace.orders')
     expect(print).toContain('historicalReadOnly')
     expect(print).toContain('const write = beginWorkspaceWrite()')
+    expect(print).toContain('const isCurrentPrint = () => isWorkspaceWriteScreenCurrent(write, shownSupplyId.current, targetSupplyId)')
     expect(print).toContain('!isCurrentPrint()')
     expect(print).toContain('write.matchesShownSupply(result.workspace)')
+    expect(print).toContain('if (isCurrentPrint() && write.isLatest()')
   })
 
   it('finishes a cancelled product reprint attempt before clearing the active target', () => {

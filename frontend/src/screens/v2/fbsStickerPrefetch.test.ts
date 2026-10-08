@@ -87,12 +87,12 @@ describe('WMS-666 shared sticker preparation', () => {
     })
   })
 
-  it('requests newly added missing IDs after an earlier subset finishes', async () => {
+  it.each([true, false])('requests newly added missing IDs after an earlier subset finishes (fresh response includes B: %s)', async (freshIncludesB) => {
     const batchA = deferred<{ order_errors: Array<{ message: string }> }>()
     fetchFbsPrintBatch.mockReturnValueOnce(batchA.promise).mockResolvedValueOnce({ order_errors: [] })
     fetchFbsWorkspace.mockResolvedValue(snapshot('wb', [
       { id: 'order-a', status: 'assembling', sticker: { code: null } },
-      { id: 'order-b', status: 'assembling', sticker: { code: null } },
+      ...(freshIncludesB ? [{ id: 'order-b', status: 'assembling', sticker: { code: null } }] : []),
     ]))
     const current = snapshot('wb', [
       { id: 'order-a', status: 'assembling', sticker: { code: null } },

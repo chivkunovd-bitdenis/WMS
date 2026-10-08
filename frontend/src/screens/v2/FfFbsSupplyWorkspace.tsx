@@ -74,6 +74,7 @@ import { fbsAssemblySupplyTitle, fbsCodeBelongsToSupply } from './fbsSupplyAssem
 import { readFbsWorkspaceStage, saveFbsWorkspaceStage } from './fbsWorkspaceStage'
 import { fbsMenuReprintRequest, hasOperatorKiz } from './fbsMenuReprint'
 import { ensureFbsStickers } from './fbsStickerPrefetch'
+import { isWorkspaceWriteScreenCurrent } from './fbsWorkspaceFreshness'
 import {
   buildFbsPickingListPrintHtml,
   fbsBuildPickingRows,
@@ -3176,7 +3177,8 @@ export function FfFbsSupplyWorkspace({
   const printPickingList = async () => {
     if (!workspace) return
     const write = beginWorkspaceWrite()
-    const isCurrentPrint = () => write.isCurrent() && write.isLatest()
+    const targetSupplyId = workspace.supply.id
+    const isCurrentPrint = () => isWorkspaceWriteScreenCurrent(write, shownSupplyId.current, targetSupplyId)
     const printWindow = window.open('', '_blank')
     if (!printWindow) {
       setError('Браузер заблокировал окно печати. Разрешите всплывающие окна и повторите.')
@@ -3199,7 +3201,8 @@ export function FfFbsSupplyWorkspace({
         }
         printWorkspace = result.workspace
         if (result.errorMessage) setError(result.errorMessage)
-        if (freshWorkspaceGeneration.current === workspaceOpenGeneration.current) setWorkspace(printWorkspace)
+        if (isCurrentPrint() && write.isLatest()
+          && freshWorkspaceGeneration.current === workspaceOpenGeneration.current) setWorkspace(printWorkspace)
       } catch (cause) {
         if (!isCurrentPrint()) {
           printWindow.close()

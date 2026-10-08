@@ -35,7 +35,16 @@ export function ensureFbsStickers(
     // A request already in flight for A cannot stand in for a newly added B.
     // Wait for A, then request only the uncovered IDs using its fresh response.
     return active.promise.then(
-      (result) => ensureFbsStickers(token, authHeaders, result.workspace, uncovered),
+      (result) => {
+        const refreshedIds = new Set(result.workspace.orders.map((order) => order.id))
+        const carryForward = snapshot.orders.filter((order) =>
+          uncovered.includes(order.id) && !refreshedIds.has(order.id),
+        )
+        const nextSnapshot = carryForward.length
+          ? { ...result.workspace, orders: [...result.workspace.orders, ...carryForward] }
+          : result.workspace
+        return ensureFbsStickers(token, authHeaders, nextSnapshot, uncovered)
+      },
       () => ensureFbsStickers(token, authHeaders, snapshot, uncovered),
     )
   }
