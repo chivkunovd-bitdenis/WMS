@@ -15,6 +15,7 @@ from app.db.session import SessionLocal
 from app.models.fbs_order import (
     FBS_ORDER_STATUS_NEW,
     MAPPING_STATUS_MAPPED,
+    RESERVE_STATUS_NO_STOCK,
     RESERVE_STATUS_RESERVED,
     FbsOrder,
     FbsOrderReservation,
@@ -91,8 +92,20 @@ async def _seed_tenant(
         .order_by(FbsWarehouseBinding.seller_id, FbsWarehouseBinding.id)
     )).all())
     if not bindings:
-        logger.warning("staging FBS skipped: tenant=%s reason=no_wb_bindings", tenant.slug)
-        return 0
+        raise RuntimeError(f"staging FBS tenant has no active WB bindings: {tenant.slug}")
+
+    products = list((await session.scalars(
+        select(Product)
+        .where(
+            Product.tenant_id == tenant.id,
+            Product.seller_id.in_({binding.seller_id for binding in bindings}),
+            Product.wb_barcode.is_not(None),
+            Product.wb_barcode != "",
+        )
+        .order_by(Product.id)
+    )).all())
+    if not products:
+        raise RuntimeError(f"staging FBS tenant has no WB products: {tenant.slug}")
 
     # Count actual pickable units on the bound warehouses. Sorting and deleted
     # locations cannot provide a fresh operator picking scenario.
@@ -115,21 +128,20 @@ async def _seed_tenant(
         .having(func.sum(InventoryBalance.quantity) > 0)
         .order_by(Product.id, StorageLocation.warehouse_id)
     )
-    stock_rows = (await session.execute(stock_stmt)).all()
-    products = {product.id: product for product, _, _ in stock_rows}
-    if not products:
-        logger.warning("staging FBS skipped: tenant=%s reason=no_pickable_products", tenant.slug)
-        return 0
     # Use the same lock order and available-stock calculation as normal FBS
     # reservations. Locks prevent concurrent operators reserving these units.
     await session.execute(
-        select(Product.id).where(Product.tenant_id == tenant.id, Product.id.in_(products))
+        select(Product.id).where(
+            Product.tenant_id == tenant.id,
+            Product.id.in_({product.id for product in products}),
+        )
         .order_by(Product.id).with_for_update()
     )
     # Re-read quantities after obtaining the locks, as picking/shipment may
     # have committed while this run was waiting for another stock operation.
-    stock_rows = (await session.execute(stock_stmt.where(Product.id.in_(products)))).all()
-    totals = await organization_stock_totals_by_product(session, tenant.id, list(products))
+    product_ids = {product.id for product in products}
+    stock_rows = (await session.execute(stock_stmt.where(Product.id.in_(product_ids)))).all()
+    totals = await organization_stock_totals_by_product(session, tenant.id, list(product_ids))
     remaining = {pid: total.available_for_checks for pid, total in totals.items()}
     physical = {
         (product.id, warehouse_id): int(quantity)
@@ -137,31 +149,37 @@ async def _seed_tenant(
     }
     candidates = [
         (product, binding)
-        for product, warehouse_id, _ in stock_rows
+        for product in products
         for binding in bindings
-        if binding.seller_id == product.seller_id and binding.wms_warehouse_id == warehouse_id
+        if binding.seller_id == product.seller_id
+        and binding.wms_warehouse_id is not None
     ]
-    plan: list[tuple[Product, FbsWarehouseBinding]] = []
-    while len(plan) < needed:
-        added = False
-        for product, binding in candidates:
-            stock_key = (product.id, binding.wms_warehouse_id)
-            if remaining.get(product.id, 0) < 1 or physical.get(stock_key, 0) < 1:
-                continue
-            plan.append((product, binding))
-            remaining[product.id] -= 1
-            physical[stock_key] -= 1
-            added = True
-            if len(plan) == needed:
-                break
-        if not added:
-            logger.warning(
-                "staging FBS skipped: tenant=%s reason=insufficient_free_stock available=%s",
-                tenant.slug, len(plan),
-            )
-            return 0
+    if not candidates:
+        raise RuntimeError(f"staging FBS tenant has no mapped WB products: {tenant.slug}")
 
-    for (index, order_id), (product, binding) in zip(missing, plan, strict=True):
+    plan: list[tuple[Product, FbsWarehouseBinding, bool]] = []
+    for index in range(needed):
+        available = [
+            (product, binding)
+            for product, binding in candidates
+            if remaining.get(product.id, 0) > 0
+            and physical.get((product.id, binding.wms_warehouse_id), 0) > 0
+        ]
+        if available:
+            product, binding = available[index % len(available)]
+            remaining[product.id] -= 1
+            stock_key = (product.id, binding.wms_warehouse_id)
+            physical[stock_key] -= 1
+            plan.append((product, binding, True))
+        else:
+            # Real marketplace imports still create visible orders when local
+            # inventory is short; preserve ten fresh staging examples and let
+            # operators see the existing no_stock state instead of skipping the run.
+            product, binding = candidates[index % len(candidates)]
+            plan.append((product, binding, False))
+
+    reserved_count = sum(1 for _, _, reserved in plan if reserved)
+    for (index, order_id), (product, binding, reserved) in zip(missing, plan, strict=True):
         order = FbsOrder(
             id=order_id, tenant_id=tenant.id, seller_id=binding.seller_id,
             warehouse_id=binding.wms_warehouse_id, product_id=product.id,
@@ -175,23 +193,29 @@ async def _seed_tenant(
             wb_barcode=product.wb_barcode, wb_warehouse_id=binding.wb_warehouse_id,
             status=FBS_ORDER_STATUS_NEW, wb_status="new", supplier_status="new",
             created_at_wb=slot, deadline_at=slot + timedelta(hours=48),
-            mapping_status=MAPPING_STATUS_MAPPED, reserve_status=RESERVE_STATUS_RESERVED,
+            mapping_status=MAPPING_STATUS_MAPPED,
+            reserve_status=RESERVE_STATUS_RESERVED if reserved else RESERVE_STATUS_NO_STOCK,
             required_meta_json=["sgtin"] if product.requires_honest_sign else [],
         )
         session.add(order)
         await session.flush()
-        # update_fbs_order_reservation also schedules marketplace publication.
-        # Write the same reservation model locally without enqueuing HTTP work.
-        session.add(FbsOrderReservation(
-            tenant_id=tenant.id, fbs_order_id=order_id, product_id=product.id,
-            warehouse_id=binding.wms_warehouse_id, quantity=1,
-        ))
+        if reserved:
+            # update_fbs_order_reservation also schedules marketplace publication.
+            # Write the same reservation model locally without enqueuing HTTP work.
+            session.add(FbsOrderReservation(
+                tenant_id=tenant.id, fbs_order_id=order_id, product_id=product.id,
+                warehouse_id=binding.wms_warehouse_id, quantity=1,
+            ))
     await session.flush()
+    logger.info(
+        "staging FBS batch: tenant=%s slot=%s created=%s reserved=%s no_stock=%s",
+        tenant.slug, slot.isoformat(), len(plan), reserved_count, len(plan) - reserved_count,
+    )
     return len(plan)
 
 
 async def seed_staging_fbs_orders(slot_key: str | None = None) -> dict[str, int]:
-    """Create exactly ten orders per eligible tenant, atomically and locally."""
+    """Create ten local orders per prepared tenant and reserve available units."""
     if settings.app_env != "staging":
         return {}
     current = datetime.now(MOSCOW)

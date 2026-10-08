@@ -23,6 +23,8 @@ from pathlib import Path
 from typing import Any
 
 PROJECT_ID = "c28e681d-4535-4c96-ac97-c7b600a7f8e4"
+STAGING_ENVIRONMENT_ID = "58a08b66-1290-45a2-8737-e3d7408389e5"
+STAGING_POSTGRES_HOST = "postgres.railway.internal"
 SOURCES = {
     "82b36645-8662-497f-9631-a0743994632c": ("stage-artmaks", "ArtMaks — тест"),
     "5fbf633c-3ea9-4c29-b5f5-f549b122bcae": ("stage-imperiya-lvova", "Империя Львова — тест"),
@@ -388,10 +390,16 @@ async def apply_snapshot(envelope: dict[str, Any]) -> None:
     from app.services.marking_label_artifact_service import build_datamatrix_label_pdf
     from app.services.passwords import hash_password
 
-    if settings.app_env != "staging" or os.environ.get("RAILWAY_PROJECT_ID") != PROJECT_ID:
+    if (
+        settings.app_env != "staging"
+        or os.environ.get("RAILWAY_PROJECT_ID") != PROJECT_ID
+        or os.environ.get("RAILWAY_ENVIRONMENT_ID") != STAGING_ENVIRONMENT_ID
+    ):
         raise CloneError("Apply requires the known Railway staging project and APP_ENV=staging")
     if engine.dialect.name != "postgresql":
         raise CloneError("PostgreSQL staging is required")
+    if engine.url.host != STAGING_POSTGRES_HOST:
+        raise CloneError("Apply requires the private Postgres service in the staging environment")
     snapshot = envelope.get("snapshot", {})
     if snapshot.get("format") != 1 or set(snapshot.get("tenants", {})) != set(SOURCES):
         raise CloneError("Snapshot must contain exactly the three authorized tenants")
