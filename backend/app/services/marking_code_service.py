@@ -4991,6 +4991,9 @@ async def list_pending_marking_lines(
     base_filters = [
         PackagingTask.tenant_id == tenant_id,
         PackagingTask.status.in_(("draft", "in_progress")),
+        # WMS-686: задание упаковки отгрузки FBO — рудимент; КИЗ FBO ведутся
+        # по строке отгрузки, а не по счётчикам задания.
+        PackagingTask.marketplace_unload_request_id.is_(None),
         Product.requires_honest_sign.is_(True),
         qty_need_expr > 0,
         PackagingTaskLine.qty_marking_printed

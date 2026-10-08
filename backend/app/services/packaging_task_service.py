@@ -1326,7 +1326,13 @@ async def complete_task(
     if not is_task_complete(task):
         raise PackagingTaskServiceError("packaging_incomplete")
 
-    if fbs_supply is None or fbs_supply.marketplace != "wb":
+    # WMS-686: задание упаковки отгрузки FBO — рудимент и ничего не блокирует.
+    # КИЗ FBO хранятся на строке отгрузки, а не в счётчиках задания; проверка
+    # маркировки FBO живёт в «Завершить» отгрузки (красное подтверждение).
+    # Старые сборки ТСД всё ещё завершают упаковку FBO перед «Завершить».
+    if not _is_mp_unload_task(task) and (
+        fbs_supply is None or fbs_supply.marketplace != "wb"
+    ):
         await _assert_marking_done_for_task(session, tenant_id, task)
 
     task.status = STATUS_DONE

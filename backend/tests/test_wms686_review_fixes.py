@@ -189,3 +189,83 @@ async def test_review_attach_over_plan_is_refused_even_with_allow_over_plan_true
     assert await _movements(pid) == movements
     plain = await _attach(async_client, h, mid, box_barcode)
     assert plain.status_code == 422, plain.text
+
+
+# ===================== задание упаковки FBO — рудимент (решение владельца, 2-й круг)
+
+
+async def _fbo_task_id(mid: str) -> uuid.UUID:
+    async with SessionLocal() as session:
+        task_id = await session.scalar(
+            select(PackagingTask.id).where(
+                PackagingTask.marketplace_unload_request_id == uuid.UUID(mid)
+            )
+        )
+    assert task_id is not None, "после утверждения у отгрузки нет задания упаковки"
+    return task_id
+
+
+async def _mark_task_packed(task_id: uuid.UUID) -> None:
+    """Как делает старый ТСД: всё по заданию упаковано, счётчики маркировки нулевые."""
+    async with SessionLocal() as session:
+        lines = (
+            await session.scalars(
+                select(PackagingTaskLine).where(PackagingTaskLine.task_id == task_id)
+            )
+        ).all()
+        assert lines
+        for line in lines:
+            line.qty_packed_in_task = int(line.qty_total)
+            assert int(line.qty_marking_printed) == 0 and int(line.qty_marking_external or 0) == 0
+        await session.commit()
+
+
+@pytest.mark.asyncio
+async def test_review_fbo_packaging_task_completes_without_marking_check(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """№3: старый ТСД завершает упаковку FBO до «Завершить» — маркировку задания не проверяют."""
+    ctx = await _loose(async_client, monkeypatch, qty=3, plan=2)  # товар с ЧЗ, КИЗ не печатались
+    task_id = await _fbo_task_id(ctx.mid)
+    await _mark_task_packed(task_id)
+
+    done = await async_client.post(
+        f"/operations/packaging-tasks/{task_id}/complete",
+        headers=ctx.h,
+        json={"acknowledge_all_packed": True},
+    )
+    assert done.status_code == 200, done.text
+    assert done.json()["status"] == "done"
+    assert (await _detail(async_client, ctx.h, ctx.mid))["status"] != "shipped"
+
+
+@pytest.mark.asyncio
+async def test_review_pending_marking_list_and_total_skip_fbo_unload_tasks(
+    async_client: AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """№4: «Ожидают маркировки» не видит задание отгрузки FBO; ручное задание — как раньше."""
+    ctx = await _loose(async_client, monkeypatch, qty=3, plan=2)
+    fbo_task = str(await _fbo_task_id(ctx.mid))
+    url = "/operations/marking-codes/pending-marking"
+
+    empty = await async_client.get(url, headers=ctx.h)
+    assert empty.status_code == 200, empty.text
+    assert empty.json()["total"] == 0 and empty.json()["rows"] == []
+
+    manual = await async_client.post(
+        "/operations/packaging-tasks",
+        headers=ctx.h,
+        json={
+            "warehouse_id": ctx.wid,
+            "lines": [{"product_id": ctx.pid, "storage_location_id": ctx.loc_id, "quantity": 1}],
+        },
+    )
+    assert manual.status_code == 201, manual.text
+    manual_id = manual.json()["id"]
+
+    pending = await async_client.get(url, headers=ctx.h)
+    assert pending.status_code == 200, pending.text
+    body = pending.json()
+    assert body["total"] == 1, body
+    assert [row["packaging_task_id"] for row in body["rows"]] == [manual_id]
+    assert fbo_task not in {row["packaging_task_id"] for row in body["rows"]}
