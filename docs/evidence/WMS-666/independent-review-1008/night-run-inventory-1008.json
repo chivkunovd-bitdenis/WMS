@@ -1,0 +1,1275 @@
+{
+  "window_start_utc": "2026-10-07T20:29:34.448Z",
+  "window_end_utc": "2026-10-08T05:27:22.798Z",
+  "method": "Command invocations extracted from actual exec tool inputs. Excludes node --check and editing commands. Counts attempted launch commands, including immediate failures; not completed runs, distinct cases, CPU time or full CI runs. Does not exhaust all possible dynamic tool syntax or earlier agents.",
+  "source_session_basenames": {
+    "release": "rollout-2026-10-08T01-09-29-01a11833-2cf8-7e51-b6ac-c37cc5c79d52.jsonl",
+    "native": "rollout-2026-10-08T01-08-12-01a11832-01ce-7102-a2a0-a3741dac7035.jsonl"
+  },
+  "counts": {
+    "release": 84,
+    "native": 96
+  },
+  "launches": [
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:37:02.592Z",
+      "call_id": "call_1168f84b02f84567a823bc55cfcbb754",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:38:34.768Z",
+      "call_id": "call_15a9d344cb04468eb61c7e4c61741c9f",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:39:50.421Z",
+      "call_id": "call_5f129b0499f3408bac977feb8e9ec524",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:39:59.308Z",
+      "call_id": "call_e2619cf499354d7bae8c3db977712c5b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:47:44.695Z",
+      "call_id": "call_40b014ac3d7a482aac387ec2768ec2c7",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:47:52.494Z",
+      "call_id": "call_44299564dc1e4a02a50375a51596207c",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:48:04.203Z",
+      "call_id": "call_81cbe5e15ee1455f9626b4cfc931f2a5",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T21:55:42.805Z",
+      "call_id": "call_553e77028f99455aa698de735234651b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_chz_modes.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:15:23.088Z",
+      "call_id": "call_08d04004f9094cc79de72730f757ab52",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_chz_modes.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:16:45.786Z",
+      "call_id": "call_2b34d6f5d4044c4b8087f1b5c338c07b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_chz_modes.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:17:40.390Z",
+      "call_id": "call_2a98e338f5654752881ce624d9498492",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_chz_modes.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:54:42.568Z",
+      "call_id": "call_fa693bf04dc643b09a6c366661bd8f8b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:56:30.026Z",
+      "call_id": "call_4e5521264e534808a725f1d58d1988ca",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:56:51.055Z",
+      "call_id": "call_9cef4e0b4c954f41a6f47a95fb2a566f",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:57:37.900Z",
+      "call_id": "call_7f17dee8a47f4c1b930aa03abb6f86d9",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T22:58:10.946Z",
+      "call_id": "call_a84360cdd13449b2ae46f69ebe0782a1",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:00:32.846Z",
+      "call_id": "call_90cad15c61fc420bb4738bae559797e2",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_manual_assign_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:02:31.927Z",
+      "call_id": "call_9cd12c755f1f4324b1544f218ca3d12e",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_manual_reprint_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:04:00.169Z",
+      "call_id": "call_6748dde03ef5452a94b22fb372406d07",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_manual_reprint_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:04:02.798Z",
+      "call_id": "call_1f1716990999488ba83a22904a0fc142",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-a629-group"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:05:15.340Z",
+      "call_id": "call_aa3e04c85d9c4e31b413dca4c01a12c1",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-a629-ordinary"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:27:31.156Z",
+      "call_id": "call_9d5997db25b14dfa9b3cfc69bd050a48",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-0c44ed45-bare-group"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:27:54.398Z",
+      "call_id": "call_6eb2b9d3eb3240d3ad01fa2e1a9b60b8",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:28:59.117Z",
+      "call_id": "call_a8adc7f827c3485bb366089d20e35dc9",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-0c44ed45-bare-group-r2"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:29:18.213Z",
+      "call_id": "call_282542ab63f64680803ccf9f4c86d300",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:29:22.413Z",
+      "call_id": "call_3c44e12c92eb4dba95a96404482a57a5",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:30:37.664Z",
+      "call_id": "call_42ac4f8539364b658e78a64be532256f",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-0c44ed45-bare-group-r3"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:30:59.320Z",
+      "call_id": "call_4cdb08e758cb4b619d2ae6242ef2c827",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:31:19.401Z",
+      "call_id": "call_d655d90562cc448a8dd4671095970df4",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-0c44ed45-bare-group-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:31:46.576Z",
+      "call_id": "call_be7f0492589f49929c00533fa1fa1867",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:31:52.967Z",
+      "call_id": "call_9ff5b0ab05884bc4835482b3298fad20",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:44:53.607Z",
+      "call_id": "call_190de78d76454ab7b4267960200b188c",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:45:28.721Z",
+      "call_id": "call_bf8fce7326754270b7c62fdb4c44e359",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:46:08.859Z",
+      "call_id": "call_c965f63acf7a4c3ebddd27688092e9b8",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:46:45.931Z",
+      "call_id": "call_1ac19921a9894dcba62f550bd46c0676",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:47:34.120Z",
+      "call_id": "call_e53eb1edce0a4e3a994b970ffcdc1e0f",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:47:52.980Z",
+      "call_id": "call_573d0dc916a54fabbd4ffcbc2873e8a2",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:48:21.206Z",
+      "call_id": "call_5dedf1b6ad9246be9159061cbd0cf851",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:48:37.998Z",
+      "call_id": "call_b9de5240079b424381db292b06fae166",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:49:27.276Z",
+      "call_id": "call_993c442103aa4308bdc36b8fc53e3289",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r5"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:49:44.495Z",
+      "call_id": "call_b8cbc0099d494a279e2eed37e115a02f",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:50:29.949Z",
+      "call_id": "call_b5800bdd519840fa8e671b09f4d3bfec",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r6"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:51:23.279Z",
+      "call_id": "call_aee60b55d57d4d31a60d6a720287900f",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r7"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:52:56.839Z",
+      "call_id": "call_22d1465202ff4922afb525b0c535125c",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:53:06.819Z",
+      "call_id": "call_7259f823f42b4b31aff449352bbab5c5",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:53:34.452Z",
+      "call_id": "call_d33282687b8846c69fcae4465213547e",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:53:59.963Z",
+      "call_id": "call_7e21ac4dc61e49e2b33b84af8e2f66e2",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:54:35.723Z",
+      "call_id": "call_b2593add85e14e6b9c5989dcbfea1817",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:54:57.794Z",
+      "call_id": "call_9ac5ab3245af4586a47b54565ec84da2",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:56:18.770Z",
+      "call_id": "call_bf587b96ae114a04b77a654d3384c6cd",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:56:20.741Z",
+      "call_id": "call_3a43e08b03ba4055953eadf66a8596d3",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:56:57.135Z",
+      "call_id": "call_e933c4615b07418bb584933de17a33f2",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:57:55.228Z",
+      "call_id": "call_32698b0cf6b549f1aeb9e2099ecb9e9b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-07T23:58:19.117Z",
+      "call_id": "call_67dab74927e6410cbd878d494797ad05",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-07T23:59:40.230Z",
+      "call_id": "call_8259b6d3208f496aad58fc9048cd70e7",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r8"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:00:58.848Z",
+      "call_id": "call_5544188c13cc4dac8eb9f34d3e69d28a",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-cedb-bare-ordinary-r9"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:32:28.829Z",
+      "call_id": "call_c947216458ae4c47a9f441106c24c3e7",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-group"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:34:11.426Z",
+      "call_id": "call_de690de72b7943b1a7091dced78ffd82",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r2"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:34:51.339Z",
+      "call_id": "call_09fb2f2606194a5ea10cc94440a9d3be",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:35:14.688Z",
+      "call_id": "call_abf7237c5ec74aca8e12b55c177bb8a5",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r3"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:35:31.075Z",
+      "call_id": "call_725102d8d95e4a61b52220ff6130494c",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:36:01.231Z",
+      "call_id": "call_3804964e9c5e42f19f56fdcc53d1f593",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r3"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:36:12.804Z",
+      "call_id": "call_0770d6f640ad460fa753377f13e4100a",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:36:26.111Z",
+      "call_id": "call_9307af0449d942b593fe8efc8df55970",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_order_sticker_scan_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:37:16.326Z",
+      "call_id": "call_2b8d9513d2a5463e8ced67873303d80f",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:37:50.820Z",
+      "call_id": "call_5e5440372223454b8d8c088ece1070dd",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r2"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:38:09.042Z",
+      "call_id": "call_54bb3097667f44fd9e6eb99b046cba51",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_flags_rapid_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:39:24.093Z",
+      "call_id": "call_6e7102d0daa040bb915f2b02a28e1981",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:39:25.949Z",
+      "call_id": "call_4b200b95fe554527a7ab73f8aa5731bc",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r3"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:40:13.743Z",
+      "call_id": "call_705ba3208e6e4edaad3273cfc157b00c",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:41:35.334Z",
+      "call_id": "call_f36d1be625344efebf209d491905c0d7",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:43:32.496Z",
+      "call_id": "call_e95f24bb89234316b9c983569fc92133",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:45:38.978Z",
+      "call_id": "call_b0ae94fdc0ec464a82e4f1b588ad703c",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r4"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:45:49.231Z",
+      "call_id": "call_ed64aaa056b9429e85dd7be694fe827a",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r5"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:46:16.975Z",
+      "call_id": "call_1f583fbeb05942299efbefae00b345a1",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r6"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:46:45.464Z",
+      "call_id": "call_724f3edd9e464343bcfa234bdbef6b5a",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r7"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:47:12.497Z",
+      "call_id": "call_24efa14b556241b2a50601653505a658",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r8"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:47:27.975Z",
+      "call_id": "call_e8ec0640fb0f4028befb1b18d0b7a263",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:47:42.827Z",
+      "call_id": "call_61f9f59e740142c99af6d220e324cd93",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_scan_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:48:34.843Z",
+      "call_id": "call_afa6c5f51d494f54be1a827b80704bb9",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r9"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:48:56.085Z",
+      "call_id": "call_0d549567ebc047bdaba8ff59645b4fb1",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_preaccept_claim_recovery_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:49:43.552Z",
+      "call_id": "call_ed1947400a204f469d30b7d0acb95326",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-ordinary-r10"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:49:57.635Z",
+      "call_id": "call_cdbf73c890184c90a8075b8ba3a1466d",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_lost_ack_retry_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:50:03.308Z",
+      "call_id": "call_7efb2015d21144399976d02965b8b6e3",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_lost_ack_retry_p.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:50:09.847Z",
+      "call_id": "call_1540297b437a45e8800f35777fc9007a",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:50:49.345Z",
+      "call_id": "call_3c6f92f21c2043fa975a1d9c58ade697",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_unlink_before_native_validation.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:51:48.571Z",
+      "call_id": "call_7bc94782fe7147afb2b4622ae253848d",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:52:00.330Z",
+      "call_id": "call_5a4f55254fe14f75930aa677b46a5540",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r5"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:52:45.421Z",
+      "call_id": "call_8893cf4284a24b57abe310a082cbde11",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:54:00.641Z",
+      "call_id": "call_60dd1e9660d84993bc981fcac1f54e15",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:54:04.608Z",
+      "call_id": "call_438f2167b6984e0e810ecfd00f48d059",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r6"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:54:42.021Z",
+      "call_id": "call_b6e73e3bfb9741e288f0d01e87a0486a",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r7"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T00:55:32.001Z",
+      "call_id": "call_c52af31f29e94520bd732b023e7232fe",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r8"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:55:44.829Z",
+      "call_id": "call_9ef59a0811c440a4aed6e922341535bf",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:57:16.512Z",
+      "call_id": "call_7af6f75a9e06487abf556bc4dd381b38",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:57:57.321Z",
+      "call_id": "call_1af5c4dc9211456e949caf96059131e0",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T00:59:21.176Z",
+      "call_id": "call_84777975ed134301a9eb4c5e347c22ae",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:00:31.179Z",
+      "call_id": "call_b91f5f160d87418e941943c7f44d6d33",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:02:11.677Z",
+      "call_id": "call_295d5290665443b4814bb4bb45484c17",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:02:26.653Z",
+      "call_id": "call_436830d108144b1a815baab2b448a17e",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r9"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:03:04.777Z",
+      "call_id": "call_2862ca9a4ff24217af2030d97127c3dc",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:03:47.490Z",
+      "call_id": "call_e7f9075825664e05a08efc199f633300",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r10"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:03:56.827Z",
+      "call_id": "call_5c9c775ae176433b87f643b833c32776",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:05:07.851Z",
+      "call_id": "call_2be7dc17aaaf4258bb84462597bde67a",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:05:41.872Z",
+      "call_id": "call_a2a645208f3f48cf9becd6a7e28db335",
+      "runner": "docs/evidence/WMS-666/browser-proof/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:05:48.232Z",
+      "call_id": "call_2691a8c246064369914e9dcbe3289715",
+      "runner": "docs/evidence/WMS-666/browser-proof/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:06:05.142Z",
+      "call_id": "call_656e78562ab844f394aefc3ea458bf1f",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:06:28.603Z",
+      "call_id": "call_307ab04c21804448b29ec6bbd1417b2a",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:07:02.602Z",
+      "call_id": "call_acaf5835fa39450b81440358f94f1319",
+      "runner": "docs/evidence/WMS-666/browser-proof/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-r1"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:07:11.782Z",
+      "call_id": "call_96bf48eee3584f6b9e363ae7ef2b7809",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:10:55.540Z",
+      "call_id": "call_e9a7549611504aca9b8356007aba6936",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-r2"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:11:01.379Z",
+      "call_id": "call_4f7851fc35d64b6f8d23f95df115eddb",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:11:32.033Z",
+      "call_id": "call_747f3f04ffad4307a7eab32c62f2b3a6",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-clear-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:11:41.186Z",
+      "call_id": "call_d59234bd1c6b4aaf9b5dc7e32e31edeb",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-controls-r3"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:11:50.349Z",
+      "call_id": "call_a5d29f1d31b543b782ef006f7997978e",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:12:17.929Z",
+      "call_id": "call_3932a82779bc4ef4b619e53ac73adbbe",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:12:33.341Z",
+      "call_id": "call_d6e353e4d6df4b4ab8c75ef2165422b2",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-controls-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:12:46.862Z",
+      "call_id": "call_b5ac1e5b9e194fdc944f4ee44c4cf7cb",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_reprint_final.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:12:52.974Z",
+      "call_id": "call_4e7be0e50540438ab21dfdd68dc021a3",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-id-controls-r5"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:13:20.833Z",
+      "call_id": "call_e1dc15fa6ae94a5a943d23633946b8be",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "supply-ids-r1"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:14:12.369Z",
+      "call_id": "call_6e5560b4c94144c8a659ca94fff9bc5b",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_native_clear_scan.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:14:56.997Z",
+      "call_id": "call_51415a35aa614750a16e1eb60f6588e5",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "ozon-scope-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:15:18.221Z",
+      "call_id": "call_76df72e2b5d846609c227b16a21152b5",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:16:27.093Z",
+      "call_id": "call_4244862467ec4428b210bb13876fa07c",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-partial-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:19:00.148Z",
+      "call_id": "call_274617076fb648e4a8a7f00bb46b2fe1",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:19:51.258Z",
+      "call_id": "call_667613afb73d4a3abf36fe5470c98ef3",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-partial-r4"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:20:22.619Z",
+      "call_id": "call_0faef025ee9e4179a3eeea073065d90b",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r4"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:22:23.590Z",
+      "call_id": "call_cecd016c88cb4b9893b1cc90f03ca935",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r5-reload"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:22:36.961Z",
+      "call_id": "call_d5b330a858894c02a29aa94d7c5d4683",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r6-reload"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:23:20.143Z",
+      "call_id": "call_c364fc3580d5420e89f70157a918d207",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m41-r7-final"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:34:46.048Z",
+      "call_id": "call_242869c154794ee0abee89cd8d437b7c",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m24-selected-neighbor-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:35:45.992Z",
+      "call_id": "call_a476e211e3b64a19bbc967fd05871a01",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m24-selected-neighbor-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:38:57.413Z",
+      "call_id": "call_db73bb640deb48c3843bc149585cb0fd",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m24-selected-neighbor-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T01:39:22.808Z",
+      "call_id": "call_ff321831e9614bf08924b3c1f8131d4f",
+      "runner": "frontend/tests-e2e/wms666-whole-process/compatibility-browser.proof.mjs",
+      "evidence_leaf": "m24-selected-neighbor-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:44:51.282Z",
+      "call_id": "call_a1e2086a679b49d28f2d8deadc0e1ca5",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_only_continuity_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:46:45.468Z",
+      "call_id": "call_32c2564ff7de4c18877699353a10dcc9",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_only_continuity_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:52:00.302Z",
+      "call_id": "call_501618096f054862b4bb45cd5ec94430",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_only_continuity_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:52:42.977Z",
+      "call_id": "call_8adc57841a8b4d048c4911dd7bf6fd21",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_only_continuity_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:55:57.020Z",
+      "call_id": "call_40d0132385494619b8318a533ba2c40e",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:56:00.060Z",
+      "call_id": "call_54ac03e767ce4af8a5e3d3ea8c289706",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:57:20.214Z",
+      "call_id": "call_ce1c2c5df50944528a6a8d628e35e9de",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T01:59:31.014Z",
+      "call_id": "call_c65a98c4b76743439000285ae1f40edb",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:00:10.836Z",
+      "call_id": "call_fe141cfd68444d158b9e5781666bb1fe",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:00:57.176Z",
+      "call_id": "call_4fc0fd152f02437b9b6d42ee4bf857e1",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_qr_continuity_resume_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:05:10.949Z",
+      "call_id": "call_a81919ecaf1d47f39d9f96ad277475f7",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r11"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:06:47.236Z",
+      "call_id": "call_5b9206b8ef9b4bac9cd2beaf92656abc",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "run-b6d23148-group-r12"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:10:07.075Z",
+      "call_id": "call_185f419c3b1e4cb2a1e24e336b217716",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:11:44.205Z",
+      "call_id": "call_3b87c1b7d2284aa38c5f04eda8eb1bd3",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r13"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:12:06.791Z",
+      "call_id": "call_3e093f7516974787858a864b833f6fb1",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r14"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:13:17.801Z",
+      "call_id": "call_bc089dc89d6c4ce68f30fede1c9637bc",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r15"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:14:11.219Z",
+      "call_id": "call_f5cf6d2726fd450f995eceb87e4e28cc",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r16"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:15:06.235Z",
+      "call_id": "call_552f46e13c8a471a9fea315133fc1511",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:15:15.108Z",
+      "call_id": "call_0cff0493049c4970bc3000bbd8100b31",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r17"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:16:23.741Z",
+      "call_id": "call_dfecab9613d54f68863b3fa47924e76b",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r18"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:17:06.785Z",
+      "call_id": "call_eb0b0ffad78a4e14a65c9a8487b19034",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-boxes-r19"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:18:15.763Z",
+      "call_id": "call_e0e574b1b21d4512abfabdf2f01a109b",
+      "runner": "\"$PROOF/docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_b6.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:20:05.041Z",
+      "call_id": "call_eadbb9f3a11a45fc90a49a59e4a87c60",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-packall-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:20:22.891Z",
+      "call_id": "call_848f55ce14594e24bfa724c6a65a4391",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-packall-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:20:57.212Z",
+      "call_id": "call_d7afe10ca05a4c44a6260afac0b1788d",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "group-packall-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:22:26.217Z",
+      "call_id": "call_7bb81064121d436480b4142df6932fa5",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "menu-skip-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:24:39.930Z",
+      "call_id": "call_4da22bc4bfc54a4b9c066e936bacd229",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "menu-transfer-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:26:08.581Z",
+      "call_id": "call_bd7df7486cca41218ccdf5bcb0d31b34",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "rejected-filter-r1"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:27:28.757Z",
+      "call_id": "call_69d59d785ee04c3bbdeb63eb91fda79c",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "rejected-filter-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:28:10.340Z",
+      "call_id": "call_fb6a0e60489e460f9d66d8a493903934",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "rejected-filter-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:29:20.709Z",
+      "call_id": "call_a97e718ac47a49edbe28b85e6d657034",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "rejected-filter-r4"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:35:15.205Z",
+      "call_id": "call_18649dd605c8499a8f52814579cc9810",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_c1e394325.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:39:16.897Z",
+      "call_id": "call_8ab0e3ac83324bdb8c18f0baba91407f",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_c1e394325_r2.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:43:15.275Z",
+      "call_id": "call_10f1937a185949d4b79369cfabd52d01",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_fifo_escape_c1e394325.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:45:24.066Z",
+      "call_id": "call_45dacebf68e3487e9437415a98f01101",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_fifo_escape_c1e394325.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:49:30.882Z",
+      "call_id": "call_8889c41fb9174fed91f1d70ea1308d14",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_error_reset_next_7f493b4.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:49:43.039Z",
+      "call_id": "call_1cc1b457cf234a0eb2a6f07b92f9a71d",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_fifo_escape_7f493b4.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:51:45.234Z",
+      "call_id": "call_122c042837794d94a1b3c6074418be90",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T02:52:49.808Z",
+      "call_id": "call_9bbbad3075924178a942d503d65f664d",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-r2"
+    },
+    {
+      "agent": "native",
+      "timestamp_utc": "2026-10-08T02:52:52.627Z",
+      "call_id": "call_d587dc28d1e940c78fe522809a1df8b1",
+      "runner": "docs/evidence/WMS-666/native-print-proof-2026-10-08/run_m26_fifo_escape_7f493b4_r2.mjs",
+      "evidence_leaf": null
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:01:50.562Z",
+      "call_id": "call_1bcd5365924f4da38738a8ba4029e99b",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-r3"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:06:13.772Z",
+      "call_id": "call_81634a430db241d39c2b031387a928a7",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-r4"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:07:35.984Z",
+      "call_id": "call_2c818f37d9654905998bf49392b38810",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-r5"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:22:04.237Z",
+      "call_id": "call_b9a27d3552a341c2a4a6871c432eb061",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-ffb524e"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:23:06.390Z",
+      "call_id": "call_89ce6958032249db8741b05281335079",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-ffb524e-r2"
+    },
+    {
+      "agent": "release",
+      "timestamp_utc": "2026-10-08T03:24:50.362Z",
+      "call_id": "call_73eb4822491442ab9fe96b83551544b8",
+      "runner": "frontend/tests-e2e/wms666-whole-process/whole-process.mjs",
+      "evidence_leaf": "m25-ui-refusal-unlink-ffb524e-r3"
+    }
+  ]
+}
