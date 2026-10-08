@@ -57,6 +57,8 @@ class TelegramClient:
         if response.status_code >= 500:
             raise TelegramError("unknown", f"http_{response.status_code}")
         if not body.get("ok"):
+            if "message to delete not found" in str(body.get("description", "")).lower():
+                raise TelegramError("rejected", "message_not_found")
             if "message is not modified" in str(body.get("description", "")).lower():
                 raise TelegramError("rejected", "message_not_modified")
             raise TelegramError("rejected", f"http_{response.status_code}")
@@ -94,6 +96,13 @@ class TelegramClient:
         except TelegramError as exc:
             # Telegram rejects an identical edit. Treat only that exact error as success.
             if exc.code != "message_not_modified":
+                raise
+
+    def delete_message(self, chat_id: int, message_id: str) -> None:
+        try:
+            self._call("deleteMessage", {"chat_id": chat_id, "message_id": int(message_id)})
+        except TelegramError as exc:
+            if exc.code != "message_not_found":
                 raise
 
     def send_document(
@@ -302,7 +311,112 @@ def normalize_update(update: dict[str, Any], cfg: Config, bot: str = "intake") -
     )
 
 
-def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None) -> int:
+def reconcile_case_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
+                            owner_chat_id: int, item: Any) -> None:
+    """Project a confirmed outbox result to its card; the delivery key makes retries safe."""
+    linked = native_delivery_case_link(store, owner_chat_id, item)
+    if not linked:
+        return
+    delivered_key = f"delivered:{item['id']}"
+    card = store.kv_get(f"case_card:{linked['topic_id']}", {})
+    event_exists = any(event.get('key') == delivered_key for event in card.get('events', []))
+    if event_exists:
+        # The event and status are already durable, but the Telegram edit may have
+        # returned unknown. Re-render the same card without reapplying its old status.
+        journal.update_card(owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'])
+        return
+    kind = linked.get('kind', 'answer')
+    if kind == 'owner_question':
+        event = 'Вопрос владельцу отправлен: ' + item['text']
+        statuses = {'owner_needed': True}
+    elif kind == 'question':
+        event = 'Уточнение отправлено клиенту: ' + item['text']
+        statuses = {}
+    else:
+        event = 'Ответ отправлен клиенту: ' + item['text']
+        statuses = {'answer_sent': True}
+    journal.update_card(
+        owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
+        statuses=statuses, event=event, event_key=delivered_key,
+    )
+
+
+def native_delivery_case_link(store: Store, owner_chat_id: int, item: Any) -> dict[str, Any] | None:
+    """Return a validated association for an explicit send; reject stale/cross-chat links."""
+    key = str(item['key'])
+    if not key.startswith('native-send:'):
+        return None
+    linked = store.kv_get(f"reply_case:{key}", {})
+    if not isinstance(linked, dict) or not linked.get('topic_id'):
+        return None
+    try:
+        case_chat_id = int(linked['chat_id'])
+        destination_chat_id = int(item['chat_id'])
+        topic_id = str(linked['topic_id'])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if linked.get('kind') not in (None, 'answer', 'question', 'owner_question'):
+        return None
+    card_key = f"case_card:{topic_id}"
+    card = store.kv_get(card_key, {})
+    if not isinstance(card, dict):
+        return None
+    try:
+        if int(card.get('chat_id', 0)) != case_chat_id:
+            return None
+    except (TypeError, ValueError):
+        return None
+    destination = linked.get('destination_chat_id')
+    try:
+        if destination is not None and int(destination) != destination_chat_id:
+            return None
+    except (TypeError, ValueError):
+        return None
+    if destination_chat_id != owner_chat_id and destination_chat_id != int(card['chat_id']):
+        return None
+    return linked
+
+
+def reconcile_unconfirmed_native_delivery(journal: CaseJournal, store: Store, owner_bot: Any,
+                                          owner_chat_id: int, item: Any) -> None:
+    """Record an interrupted explicit send without guessing or retrying its outcome."""
+    linked = native_delivery_case_link(store, owner_chat_id, item)
+    if not linked:
+        return
+    card = store.kv_get(f"case_card:{linked['topic_id']}", {})
+
+    event_key = f"unconfirmed:{item['id']}"
+    if any(event.get('key') == event_key for event in card.get('events', [])):
+        journal.update_card(owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'])
+        return
+    kind = linked.get('kind', 'answer')
+    if kind == 'owner_question':
+        event = (
+            'Вопрос владельцу не подтверждён как доставленный. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте основной личный Telegram-чат.'
+        )
+    elif kind == 'question':
+        event = (
+            'Уточнение клиенту не подтверждено как доставленное. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте исходный Telegram-чат клиента.'
+        )
+    else:
+        event = (
+            'Ответ клиенту не подтверждён как доставленный. Повторно не отправляю, '
+            'чтобы не продублировать; проверьте исходный Telegram-чат клиента.'
+        )
+    status = CaseJournal._current_status(card)
+    if status in {'answer_sent', 'analysis_done'}:
+        status = 'working'
+    journal.update_card(
+        owner_bot, owner_chat_id, linked['topic_id'], linked['chat_id'],
+        statuses={status: True}, event=event, event_key=event_key,
+    )
+
+
+def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | None = None,
+                 explicit_native_action: bool = False,
+                 allow_scoped_client_replies: bool = False) -> int:
     """Отправляет намерения. Клиенту при неизвестном исходе НЕ повторяем (R35).
 
     Маршрут по чату: владельцу только ботом владельца, всем остальным только ботом приёма.
@@ -313,7 +427,15 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
         # An explicit bridge action must never drain older queued messages.
         if only_ids is not None and int(item['id']) not in only_ids:
             continue
+        # The owner's current restriction also covers explicit native actions,
+        # scoped sends, files and previously queued replies. Leave intents pending.
         if (item['chat_id'] != cfg.telegram.owner_chat_id
+                and store.kv_get('native_owner_only', False)):
+            continue
+        explicit_send = (explicit_native_action and only_ids is not None
+                         and item['key'].startswith('native-send:'))
+        scoped_send = allow_scoped_client_replies and only_ids is not None
+        if (item['chat_id'] != cfg.telegram.owner_chat_id and not explicit_send and not scoped_send
                 and not getattr(cfg.agent, 'client_replies_enabled', False)):
             continue
         if not store.claim_outbox(item["id"]):
@@ -352,19 +474,11 @@ def flush_outbox(store: Store, tg: Any, cfg: Config, *, only_ids: set[int] | Non
                 store.finish_outbox(item["id"], "failed")
             continue
         store.finish_outbox(item["id"], "sent", message_id)
-        if getattr(cfg.agent, 'visible_moderator', False):
+        if getattr(cfg.agent, 'visible_moderator', False) or explicit_send:
             journal = CaseJournal(store, getattr(cfg.agent, 'history_dir', '')
                                   or Path(cfg.repo) / 'var/support-conversations')
             journal.sync_chat(int(item['chat_id']))
-            linked = store.kv_get(f"reply_case:{item['key']}", {})
-            if linked:
-                is_answer = linked.get('kind') == 'answer'
-                journal.update_card(
-                    bots.owner, cfg.telegram.owner_chat_id, linked['topic_id'], linked['chat_id'],
-                    statuses={'answer_sent': True} if is_answer else {},
-                    event=('Ответ отправлен клиенту: ' if is_answer else 'Уточнение отправлено клиенту: ')
-                          + item['text'], event_key=f"delivered:{item['id']}",
-                )
+            reconcile_case_delivery(journal, store, bots.owner, cfg.telegram.owner_chat_id, item)
         sent += 1
     return sent
 

@@ -25,11 +25,22 @@ class NativeBridge:
         self.cfg, self.store = cfg, Store(cfg.db_path)
         self.journal = CaseJournal(self.store, archive_root(cfg))
 
+    def _handling_rules(self) -> str:
+        rules = Path(__file__).with_name("agent_instructions.md").read_text(encoding="utf-8").split("## Макеты, работа и выпуск", 1)[0]
+        if self.store.kv_get("native_owner_only", False):
+            rules = ("ТЕКУЩЕЕ РАСПОРЯЖЕНИЕ ВЛАДЕЛЬЦА: только сбор, смысловой разбор "
+                     "и карточки/обратная связь владельцу. Никаких сообщений, вопросов "
+                     "или файлов клиентам. Не менять данные WMS, не запускать разработку "
+                     "и выпуск. Новые сообщения объединять с существующими обращениями "
+                     "по смыслу; не переоткрывать старые решённые вопросы.\n\n" + rules)
+        return rules
+
     def status(self) -> dict[str, Any]:
-        return {"paused": bool(self.store.kv_get("native_paused", True)),
+        return {"handling_rules": self._handling_rules(), "paused": bool(self.store.kv_get("native_paused", True)),
                 "ready": bool(self.store.kv_get("native_ready", False)),
                 "moderator_thread_id": self.cfg.agent.moderator_thread_id,
                 "client_replies_enabled": self.cfg.agent.client_replies_enabled,
+                "owner_only": bool(self.store.kv_get("native_owner_only", False)),
                 "history_root": str(self.journal.root),
                 "latest_message_id": self.store.row("SELECT coalesce(max(id),0) n FROM messages")["n"],
                 "latest_edit_id": self.store.row("SELECT coalesce(max(id),0) n FROM message_revisions")["n"],
@@ -49,7 +60,14 @@ class NativeBridge:
             "SELECT id,text,status,tg_message_id,reply_to,sent_at FROM outbox "
             "WHERE chat_id=? ORDER BY id DESC LIMIT ?", (chat_id, max(1, min(limit, 500))))
         self.journal.sync_chat(chat_id)
-        return {"chat_id": chat_id, "messages": self._messages(list(reversed(rows))),
+        return {"handling_rules": self._handling_rules(),
+                "paused": bool(self.store.kv_get("native_paused", True)),
+                "case_cards": [{k: v for k, v in json.loads(r["value"]).items()
+                    if k in ("topic_id", "number", "title", "summary", "current_status")}
+                    for r in self.store.rows(
+                    "SELECT value FROM kv WHERE key LIKE 'case_card:%'")
+                    if int(json.loads(r["value"]).get("chat_id", 0)) == chat_id],
+                "chat_id": chat_id, "messages": self._messages(list(reversed(rows))),
                 "outgoing": [dict(row) for row in reversed(outgoing)],
                 "full_history": str(self.journal.root / f"chat-{chat_id}" / "history.jsonl")}
 
@@ -80,7 +98,9 @@ class NativeBridge:
             versions[message_id] = digest
             if message_id in (known_materials or {}) and known_materials[message_id] != digest:
                 materials.append(message)
-        return {"messages": self._messages(rows), "edits": revised,
+        return {"handling_rules": self._handling_rules(),
+                "paused": bool(self.store.kv_get("native_paused", True)),
+                "messages": self._messages(rows), "edits": revised,
                 "materials": materials, "material_versions": versions,
                 "next_message_id": max([after_id, *[int(row["id"]) for row in rows]]),
                 "next_edit_id": max([after_edit_id, *[int(row["id"]) for row in edits]])}
@@ -116,18 +136,75 @@ class NativeBridge:
                                        event_key, chat_title=title_chat, task_url=task_url)
 
     def send(self, chat_id: int, text: str, key: str, reply_to: str | None = None,
-             file_path: str | None = None) -> dict[str, Any]:
+             file_path: str | None = None,
+             topic_id: str | int | None = None,
+             message_kind: str = "answer") -> dict[str, Any]:
+        if (chat_id != self.cfg.telegram.owner_chat_id
+                and self.store.kv_get("native_owner_only", False)):
+            raise ValueError("Client sending is blocked by owner; owner-only analysis is active")
         agent = self._delivery()
-        from .telegram import flush_outbox
+        from .telegram import (
+            flush_outbox,
+            reconcile_case_delivery,
+            reconcile_unconfirmed_native_delivery,
+        )
         if chat_id != self.cfg.telegram.owner_chat_id and self.store.binding(chat_id) is None:
             raise ValueError("unknown connected chat")
         stable_key = "native-send:" + key
+        link_key = f"reply_case:{stable_key}"
+        existing_link = self.store.kv_get(link_key, {})
+        if topic_id is not None:
+            linked_card = self.store.kv_get(f"case_card:{topic_id}")
+            if linked_card is None:
+                raise ValueError("unknown case card")
+            case_chat_id = int(linked_card["chat_id"])
+            if chat_id not in (self.cfg.telegram.owner_chat_id, case_chat_id):
+                raise ValueError("case card does not belong to destination chat")
+            if message_kind not in {"answer", "question"}:
+                raise ValueError("message_kind must be 'answer' or 'question'")
+            desired_kind = ("owner_question" if chat_id == self.cfg.telegram.owner_chat_id
+                            else message_kind)
+            link = {"topic_id": str(topic_id), "chat_id": case_chat_id,
+                    "destination_chat_id": chat_id, "kind": desired_kind}
+            if existing_link and existing_link != link:
+                raise ValueError("native send key is already linked to a different case")
+            # Persist the exact case association before the one allowed Telegram send.
+            self.store.kv_set(link_key, link)
         self.store.queue_message(key=stable_key, chat_id=chat_id, text=text, reply_to=reply_to,
                                  purpose="native_reply", repeat_ok=False, file_path=file_path)
         row = self.store.outbox_by_key(stable_key)
-        flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])})
+        if row is None:
+            raise RuntimeError("native send intent was not persisted")
+        if row["status"] == "sending":
+            # A prior process may have stopped after claiming the row. Its Telegram
+            # outcome is unknowable, so mark it and never make a blind second call.
+            self.store.execute(
+                "UPDATE outbox SET status='unknown' WHERE id=? AND status='sending'",
+                (row["id"],),
+            )
+            result = self.store.outbox_by_key(stable_key)
+            self.journal.sync_chat(chat_id)
+            if result is not None and result['status'] == 'unknown':
+                reconcile_unconfirmed_native_delivery(
+                    self.journal, self.store, agent.bots.owner,
+                    self.cfg.telegram.owner_chat_id, result,
+                )
+            return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
+        was_already_sent = row["status"] == "sent"
+        flush_outbox(agent.store, agent.bots, self.cfg, only_ids={int(row["id"])},
+                     explicit_native_action=True)
         result = self.store.outbox_by_key(stable_key)
         self.journal.sync_chat(chat_id)
+        if result["status"] == "sent" and was_already_sent:
+            # Also repairs a crash after Telegram confirmed the send but before its
+            # linked card event was committed. The stable delivered key deduplicates it.
+            reconcile_case_delivery(self.journal, self.store, agent.bots.owner,
+                                    self.cfg.telegram.owner_chat_id, result)
+        elif result['status'] == 'unknown':
+            reconcile_unconfirmed_native_delivery(
+                self.journal, self.store, agent.bots.owner,
+                self.cfg.telegram.owner_chat_id, result,
+            )
         return {"key": key, "status": result["status"], "message_id": result["tg_message_id"]}
 
     def context(self, thread_id: str) -> dict[str, Any]:
