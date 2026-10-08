@@ -216,7 +216,9 @@ describe('WMS-673 preexisting controls (must PASS without product edits)', () =>
     expect(requests.every((r) => r.method === 'GET' && r.auth === 'Bearer synthetic-wms673')).toBe(true)
     expect(JSON.stringify(fixtures)).toBe(before)
     expect(cellsWithoutColor(doc())).toEqual([
-      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет свободного остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
+      // Empty current location list uses the renderer's established wording;
+      // picked quantity still comes from the fresh pick-options response.
+      ['1', '—', 'Товар red WB 1673 · WB-CODE-red', 'ART-red', '46', 'Нет текущего остатка', '№673000', 'S673 0000', '1', '1 / 1', 'sgtin'],
       ['2', '—', 'Товар blue WB 1673 · WB-CODE-blue', 'ART-blue', '46', 'A-02 · Короб B-02: 7', '№673001', 'S673 0001', '1', '0 / 1', 'sgtin'],
     ])
   })

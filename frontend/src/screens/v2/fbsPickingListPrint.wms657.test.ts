@@ -460,11 +460,13 @@ describe('WMS-657 · перенос размера в листе подбора 
   }, 45_000)
 
   it('C5: PDF A4 landscape сохраняет таблицу и полный текст всех колонок', async () => {
+    // WB order IDs are numeric in the product contract; exercise the longest
+    // realistic value instead of a nonnumeric sentinel in a geometry test.
     const html = documentFor([row({
       name: 'PDF-PRODUCT-LONG-WMS-657',
       color: 'PDF-COLOR-WMS-657', identifiers: ['PDF-ARTICLE-WMS-657', 'PDF-IDENTIFIER-WMS-657'],
       locations: ['PDF-LOCATION-LONG-WMS-657'],
-      wbOrders: ['PDF-ORDER-657'],
+      wbOrders: [5524537174],
       stickerCodes: ['S657'],
       marking: 'PDF-MARKING-WMS-657',
     })])
@@ -491,7 +493,7 @@ describe('WMS-657 · перенос размера в листе подбора 
       { label: 'цвет', match: color },
       { label: 'размер', match: size },
       { label: 'ячейка / тара', match: pdfText(table, 6, 'PDF-LOCATION-LONG-WMS-657') },
-      { label: 'заказ', match: pdfText(table, 7, '№PDF-ORDER-657') },
+      { label: 'заказ', match: pdfText(table, 7, '№5524537174') },
       { label: 'стикер', match: pdfText(table, 8, 'S657') },
       { label: 'взять', match: pdfText(table, 9, '1') },
       { label: 'подобрано', match: pdfText(table, 10, '0/1') },
