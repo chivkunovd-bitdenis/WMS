@@ -18,6 +18,7 @@ import {
   type WarehouseObject,
 } from './pickStub'
 import { pickKey, type PickedMap } from './pickRows'
+import { trackPickSave, waitForPickSaves } from './pickSaveLifecycle'
 
 // Принятый экран подбора, подключённый к серверу.
 //
@@ -184,7 +185,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     detail?.seller_id,
   )
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (waitForSave = true) => {
     if (!requestId) {
       setError('Не указан номер отгрузки')
       setLoading(false)
@@ -193,6 +194,7 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     setLoading(true)
     setError(null)
     try {
+      if (waitForSave) await waitForPickSaves([`${BASE}/${requestId}`])
       const [detailRes, optionsRes] = await Promise.all([
         fetch(apiUrl(`${BASE}/${requestId}`), { headers: headers(token) }),
         fetch(apiUrl(`${BASE}/${requestId}/pick-options`), { headers: headers(token) }),
@@ -394,44 +396,59 @@ export function FfUnloadPickPage({ token, requestId: requestIdProp, source, hide
     return refresh
   }, [BASE, requestId, token])
 
+  const confirmedPicked = useRef<PickedMap>({})
+  useEffect(() => {
+    if (screenData) confirmedPicked.current = screenData.picked
+  }, [screenData])
+  const saveChain = useRef<Promise<unknown>>(Promise.resolve())
+
   const setPicked = useCallback(
-    async (payload: { productId: string; place: { key: string }; quantity: number }) => {
-      if (!requestId) return
-      const source = screenData?.placeSource.get(payload.place.key)
-      const locationId = source?.locationId ?? sourceLocationId(payload.place.key)
-      if (!locationId) {
-        setError('Сервер не вернул ячейку, из которой снимается товар')
-        await load()
-        return
+    (payload: { productId: string; place: { key: string }; quantity: number }) => {
+      const save = async () => {
+        if (!requestId) return
+        const placeSource = screenData?.placeSource.get(payload.place.key)
+        const locationId = placeSource?.locationId ?? sourceLocationId(payload.place.key)
+        if (!locationId) {
+          setError('Сервер не вернул ячейку, из которой снимается товар')
+          await load(false)
+          return
+        }
+        setBusy(true)
+        setError(null)
+        try {
+          const res = await fetch(apiUrl(`${BASE}/${requestId}/pick/set`), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', ...headers(token) },
+            body: JSON.stringify({
+              product_id: payload.productId,
+              storage_location_id: locationId,
+              quantity: payload.quantity,
+              ...(source === 'fbs' ? { expected_quantity: confirmedPicked.current[pickKey(payload.productId, payload.place.key)] ?? 0 } : {}),
+              // Тара, из которой снимаем. Пусто — снимаем россыпью с ячейки.
+              container_kind: placeSource?.containerKind ?? null,
+              container_id: placeSource?.containerId ?? null,
+            }),
+          })
+          if (!res.ok) throw new Error(await readApiErrorMessage(res))
+          confirmedPicked.current[pickKey(payload.productId, payload.place.key)] = payload.quantity
+          await updateOption()
+        } catch (err) {
+          const message =
+            err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
+          setError(message)
+          await load(false)
+          setError(message)
+          throw new Error(message)
+        } finally {
+          setBusy(false)
+        }
       }
-      setBusy(true)
-      setError(null)
-      try {
-        const res = await fetch(apiUrl(`${BASE}/${requestId}/pick/set`), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', ...headers(token) },
-          body: JSON.stringify({
-            product_id: payload.productId,
-            storage_location_id: locationId,
-            quantity: payload.quantity,
-            // Тара, из которой снимаем. Пусто — снимаем россыпью с ячейки.
-            container_kind: source?.containerKind ?? null,
-            container_id: source?.containerId ?? null,
-          }),
-        })
-        if (!res.ok) throw new Error(await readApiErrorMessage(res))
-        await updateOption()
-      } catch (err) {
-        const message =
-          err instanceof Error ? err.message : 'Не удалось сохранить снятое количество'
-        setError(message)
-        await load()
-        setError(message)
-      } finally {
-        setBusy(false)
-      }
+      const run = saveChain.current.then(save, save)
+      saveChain.current = run.catch(() => undefined)
+      trackPickSave([`${BASE}/${requestId}`], run)
+      return run
     },
-    [load, requestId, screenData, token, updateOption],
+    [load, requestId, screenData, source, token, updateOption],
   )
 
   const scan = useCallback(

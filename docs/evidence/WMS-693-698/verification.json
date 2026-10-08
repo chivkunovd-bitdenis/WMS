@@ -1,0 +1,2674 @@
+{
+  "date": "2026-10-07",
+  "tasks": [
+    "WMS-693",
+    "WMS-694",
+    "WMS-695",
+    "WMS-696",
+    "WMS-697",
+    "WMS-698"
+  ],
+  "baseline_product_sha": "af965706d6e7d7bfe77d92d064d2982fa89f4cf7",
+  "final_product_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+  "final_browser_run": {
+    "id": 37658991662,
+    "status": "success"
+  },
+  "local_tests": {
+    "passed": 68,
+    "files": 9,
+    "typescript": "passed"
+  },
+  "independent_review": {
+    "initial_sha": "dd05a3d190df89215af5a1efbaba195392f058f2",
+    "initial_blockers": 2,
+    "final_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+    "verdict": "pass"
+  },
+  "browser_runs": [
+    {
+      "id": 37658101455,
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37658101455",
+      "suites": [
+        {
+          "suite": "base",
+          "test_sha": "dd05a3d190df89215af5a1efbaba195392f058f2",
+          "app_sha": "dd05a3d190df89215af5a1efbaba195392f058f2",
+          "counts": {
+            "executed": 29,
+            "passed": 29,
+            "failed": 0,
+            "blocked": 0
+          },
+          "database_checkpoints_verified": 51,
+          "physical_stock_unchanged": true,
+          "cases": [
+            {
+              "name": "packing-flag",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "packing-flag",
+                  "expected_count": 1,
+                  "product": "9c70ccd6-496d-4797-81b6-7be12996dd51",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "sources",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "sources-selected-only",
+                  "expected_count": 0,
+                  "product": "bd78f56e-06fd-4e14-abd2-cd2395958718",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "sources",
+                  "expected_count": 1,
+                  "product": "bd78f56e-06fd-4e14-abd2-cd2395958718",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "auto",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "auto",
+                  "expected_count": 1,
+                  "product": "42a80990-bb28-4176-9141-4a519e0a05c9",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ambiguous",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ambiguous",
+                  "expected_count": 0,
+                  "product": "14479540-da14-45a6-8cff-f2981723ef74",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "wrong",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "wrong-source",
+                  "expected_count": 0,
+                  "product": "46aa462d-92e3-4f3d-a844-7e85f8c76960",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "wrong-queue-recovery",
+                  "expected_count": 1,
+                  "product": "0185e17b-1942-4ebe-ba5b-daf71cf66fab",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "change",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "change",
+                  "expected_count": 1,
+                  "product": "adf37279-3c7a-4fcc-875e-2a7baa16b92c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "change-clear",
+                  "expected_count": 1,
+                  "product": "adf37279-3c7a-4fcc-875e-2a7baa16b92c",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "burst",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "burst",
+                  "expected_count": 5,
+                  "product": "bb5f13dc-bf26-4d7d-a59e-feefae4bb531",
+                  "status": "verified",
+                  "actual_count": 5
+                }
+              ]
+            },
+            {
+              "name": "number-scan",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "number-scan",
+                  "expected_count": 1,
+                  "product": "1965b65e-cfe9-47f0-90ae-d4adeb0cb875",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "number-scan-no-late-manual",
+                  "expected_count": 1,
+                  "product": "1965b65e-cfe9-47f0-90ae-d4adeb0cb875",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "layout",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "layout-ru",
+                  "expected_count": 1,
+                  "product": "1a99ec0b-e270-465f-a434-4ba4d2b49004",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "layout-additional-ean",
+                  "expected_count": 2,
+                  "product": "1a99ec0b-e270-465f-a434-4ba4d2b49004",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "manual",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-12",
+                  "expected_count": 12,
+                  "product": "da604bd5-bbbe-4163-bfdd-3149d8a5dc0e",
+                  "status": "verified",
+                  "actual_count": 12
+                },
+                {
+                  "name": "manual-reduce",
+                  "expected_count": 10,
+                  "product": "da604bd5-bbbe-4163-bfdd-3149d8a5dc0e",
+                  "status": "verified",
+                  "actual_count": 10
+                },
+                {
+                  "name": "manual-increase",
+                  "expected_count": 11,
+                  "product": "da604bd5-bbbe-4163-bfdd-3149d8a5dc0e",
+                  "status": "verified",
+                  "actual_count": 11
+                },
+                {
+                  "name": "manual-undo",
+                  "expected_count": 10,
+                  "product": "da604bd5-bbbe-4163-bfdd-3149d8a5dc0e",
+                  "status": "verified",
+                  "actual_count": 10
+                },
+                {
+                  "name": "manual-zero",
+                  "expected_count": 0,
+                  "product": "da604bd5-bbbe-4163-bfdd-3149d8a5dc0e",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "early-exit",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "early-exit",
+                  "expected_count": 12,
+                  "product": "3e68d359-e47b-4472-99c1-e8d54069427c",
+                  "status": "verified",
+                  "actual_count": 12
+                }
+              ]
+            },
+            {
+              "name": "replay",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "replay-initial",
+                  "expected_count": 1,
+                  "product": "81179771-08b2-47d3-b9aa-5be0d8edaaac",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "replay-same-operation",
+                  "expected_count": 1,
+                  "product": "81179771-08b2-47d3-b9aa-5be0d8edaaac",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "replay-second-physical",
+                  "expected_count": 2,
+                  "product": "81179771-08b2-47d3-b9aa-5be0d8edaaac",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "lost",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "lost-committed-before-abort",
+                  "expected_count": 1,
+                  "product": "cfd82e79-ad6b-480f-91f1-000e9cd46197",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "lost-after-reload",
+                  "expected_count": 1,
+                  "product": "cfd82e79-ad6b-480f-91f1-000e9cd46197",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "get-failure",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "get-failure-committed",
+                  "expected_count": 1,
+                  "product": "67fe9a6a-e6c9-4289-aa84-d2ab921d4815",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "get-failure-reloaded-no-duplicate",
+                  "expected_count": 1,
+                  "product": "67fe9a6a-e6c9-4289-aa84-d2ab921d4815",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "network",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "network-before-server",
+                  "expected_count": 0,
+                  "product": "0cd5e32b-fcb9-46bb-acfd-0b202809dcdb",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "network-recovery",
+                  "expected_count": 1,
+                  "product": "0cd5e32b-fcb9-46bb-acfd-0b202809dcdb",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "last-unit",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "last-unit",
+                  "expected_count": 1,
+                  "product": "ea5bfbdc-a3c2-4798-91cb-38fd224a670a",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "manual-conflict",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-conflict-first",
+                  "expected_count": 2,
+                  "product": "d740a440-0c15-4e47-ab6b-80f18547ee9c",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "manual-conflict-no-silent-overwrite",
+                  "expected_count": 2,
+                  "product": "d740a440-0c15-4e47-ab6b-80f18547ee9c",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "tabs",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "tabs",
+                  "expected_count": 1,
+                  "product": "c889340b-6825-4386-a000-eee813a1371d",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "print",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "group",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group",
+                  "expected_count": 4,
+                  "product": "749f7203-0097-4b63-b665-12a21dbe3edb",
+                  "status": "verified",
+                  "actual_count": 4
+                }
+              ]
+            },
+            {
+              "name": "ozon",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon",
+                  "expected_count": 1,
+                  "product": "8cb8267d-9475-472d-9cad-a67f7ffa6fa1",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-second",
+                  "expected_count": 2,
+                  "product": "8cb8267d-9475-472d-9cad-a67f7ffa6fa1",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-position-2",
+                  "expected_count": 1,
+                  "product": "4bba7fc9-c655-490c-a421-9a45cc39e9e4",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ozon-group",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-group",
+                  "expected_count": 1,
+                  "product": "9bfd5cce-19b0-44c6-b758-acf0b37da990",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-second",
+                  "expected_count": 2,
+                  "product": "9bfd5cce-19b0-44c6-b758-acf0b37da990",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-position-2",
+                  "expected_count": 1,
+                  "product": "6c1a5ea6-d79b-4dfd-b5fc-49c11db8c0ff",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-sellers",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-sellers-first",
+                  "expected_count": 1,
+                  "product": "8543174b-a69b-4f90-b62d-02ce92e594e5",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-sellers-second",
+                  "expected_count": 1,
+                  "product": "39b3051e-a55c-4c6c-a518-f3232b473321",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ozon-null",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-null-server-commit",
+                  "expected_count": 1,
+                  "product": "834f545e-0ae3-4e9e-8a22-9eebba39566c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-null-reload",
+                  "expected_count": 1,
+                  "product": "834f545e-0ae3-4e9e-8a22-9eebba39566c",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "empty",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "empty",
+                  "expected_count": 0,
+                  "product": "5e950907-ec09-460f-a890-471d35d406f0",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "no-stock",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "no-stock",
+                  "expected_count": 0,
+                  "product": "5caedfa7-553d-4021-9820-365213af434a",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "partial",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "partial",
+                  "expected_count": 1,
+                  "product": "f1070367-89cf-4271-9e53-361870dded61",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "suffix",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "suffix-silence",
+                  "expected_count": 1,
+                  "product": "d7a12e90-b139-4483-acc5-8cab38f11cd4",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "suffix-tab",
+                  "expected_count": 2,
+                  "product": "d7a12e90-b139-4483-acc5-8cab38f11cd4",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "focus",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "focus-scanner",
+                  "expected_count": 1,
+                  "product": "4c3671e0-c779-43e5-b212-f16b1beb6a16",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "focus-blank",
+                  "expected_count": 2,
+                  "product": "4c3671e0-c779-43e5-b212-f16b1beb6a16",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "suite": "extended",
+          "test_sha": "dd05a3d190df89215af5a1efbaba195392f058f2",
+          "app_sha": "dd05a3d190df89215af5a1efbaba195392f058f2",
+          "counts": {
+            "executed": 40,
+            "passed": 40,
+            "failed": 0,
+            "blocked": 0
+          },
+          "database_checkpoints_verified": 74,
+          "physical_stock_unchanged": true,
+          "cases": [
+            {
+              "name": "nested-container",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "nested-pallet-not-child-box",
+                  "expected_count": 0,
+                  "product": "4b3de5d5-b00d-4f48-a189-e52b10cd012b",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "nested-exact-box",
+                  "expected_count": 1,
+                  "product": "4b3de5d5-b00d-4f48-a189-e52b10cd012b",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "unlocated-container",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "unlocated-cargo-exact-source",
+                  "expected_count": 1,
+                  "product": "3e3f9558-308f-4e29-b6cf-770d95b13959",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "foreign-reserve",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "foreign-reserve-denied",
+                  "expected_count": 0,
+                  "product": "c48b4945-3f7a-4edf-8dc5-c347ac3d51e2",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "foreign-reserve-auto-denied",
+                  "expected_count": 0,
+                  "product": "c48b4945-3f7a-4edf-8dc5-c347ac3d51e2",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "foreign-location",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "foreign-location",
+                  "expected_count": 0,
+                  "product": "ccf02de1-7430-4514-a47a-f418a5ea844d",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "foreign-location-recovery",
+                  "expected_count": 1,
+                  "product": "ccf02de1-7430-4514-a47a-f418a5ea844d",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "modal-scanner",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "modal-no-picking",
+                  "expected_count": 0,
+                  "product": "50d0d739-8108-4862-9bc6-c07de6086785",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "modal-restored",
+                  "expected_count": 1,
+                  "product": "50d0d739-8108-4862-9bc6-c07de6086785",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "scanner-button",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "button-no-accidental-next",
+                  "expected_count": 1,
+                  "product": "1038799a-512d-4b9a-a67b-fc8e0f200ad9",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "paste-blur",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "paste-source-settled",
+                  "expected_count": 0,
+                  "product": "3dfdb7f1-0954-404b-a279-316ec2707be7",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "paste-blur-commit",
+                  "expected_count": 1,
+                  "product": "3dfdb7f1-0954-404b-a279-316ec2707be7",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "pasted-enter",
+                  "expected_count": 2,
+                  "product": "3dfdb7f1-0954-404b-a279-316ec2707be7",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "outside-no-suffix",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "outside-no-suffix-no-claimed-support",
+                  "expected_count": 0,
+                  "product": "db8f9c54-53f3-48b8-a8d4-cd21a4620c24",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "outside-suffix-recovers",
+                  "expected_count": 1,
+                  "product": "db8f9c54-53f3-48b8-a8d4-cd21a4620c24",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "special-barcode",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "special-ascii-code128",
+                  "expected_count": 1,
+                  "product": "5680909c-5143-4eb1-8873-d38f2942c11e",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "special-gs-safe-rejection",
+                  "expected_count": 1,
+                  "product": "5680909c-5143-4eb1-8873-d38f2942c11e",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "special-gs-queue-recovery",
+                  "expected_count": 2,
+                  "product": "5680909c-5143-4eb1-8873-d38f2942c11e",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "special-ru-layout",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "special-ru-ascii-queue-recovery",
+                  "expected_count": 2,
+                  "product": "374d46a3-520e-4439-9aa5-2833f5fdf8a5",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "server-5xx",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "503-no-success",
+                  "expected_count": 0,
+                  "product": "f2c328d1-3a65-40f9-b58d-34f2ccfff131",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "503-queue-recovery",
+                  "expected_count": 1,
+                  "product": "f2c328d1-3a65-40f9-b58d-34f2ccfff131",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-manual",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-manual-four",
+                  "expected_count": 4,
+                  "product": "23692703-3b77-4d50-8cfb-019e5317a812",
+                  "status": "verified",
+                  "actual_count": 4
+                },
+                {
+                  "name": "group-manual-reduction",
+                  "expected_count": 2,
+                  "product": "23692703-3b77-4d50-8cfb-019e5317a812",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-manual-increment",
+                  "expected_count": 3,
+                  "product": "23692703-3b77-4d50-8cfb-019e5317a812",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "group-manual-undo",
+                  "expected_count": 2,
+                  "product": "23692703-3b77-4d50-8cfb-019e5317a812",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-manual-clear",
+                  "expected_count": 0,
+                  "product": "23692703-3b77-4d50-8cfb-019e5317a812",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "group-conflict",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-conflict-first",
+                  "expected_count": 2,
+                  "product": "5120d4cb-738a-4025-a9ff-3a9a802d1cab",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-preserves-first",
+                  "expected_count": 2,
+                  "product": "5120d4cb-738a-4025-a9ff-3a9a802d1cab",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-reload",
+                  "expected_count": 2,
+                  "product": "5120d4cb-738a-4025-a9ff-3a9a802d1cab",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-fresh-retry",
+                  "expected_count": 3,
+                  "product": "5120d4cb-738a-4025-a9ff-3a9a802d1cab",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "group-partial-set",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-partial-real-first-transaction",
+                  "expected_count": 3,
+                  "product": "c743ed55-74d6-40f1-affc-7b88371fdf21",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "group-lost-set",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-lost-real-commit",
+                  "expected_count": 1,
+                  "product": "00a2e810-ccab-4050-9769-f90ca09383d5",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-lost-replay-no-double-move",
+                  "expected_count": 1,
+                  "product": "00a2e810-ccab-4050-9769-f90ca09383d5",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-lost-new-confirmed-target",
+                  "expected_count": 2,
+                  "product": "00a2e810-ccab-4050-9769-f90ca09383d5",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "print-fallback",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-context-failure",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-group-warehouses",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-ozon-route",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "exhausted-source-return",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "source-exhausted",
+                  "expected_count": 3,
+                  "product": "08719db4-4ff3-4c05-80df-a8807bb56c6b",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "exhausted-reloaded",
+                  "expected_count": 3,
+                  "product": "08719db4-4ff3-4c05-80df-a8807bb56c6b",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "exhausted-restored-origin",
+                  "expected_count": 0,
+                  "product": "08719db4-4ff3-4c05-80df-a8807bb56c6b",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "ozon-handover",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-handover-no-late-write",
+                  "expected_count": 0,
+                  "product": "0815330b-b69c-4e24-8e39-e662b9b1bfc6",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "ozon-group-scan",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-group-primary-scan",
+                  "expected_count": 1,
+                  "product": "2f506aaf-5eb5-48c8-a3a5-ed615416d0a3",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-duplicate-physical-scan",
+                  "expected_count": 2,
+                  "product": "2f506aaf-5eb5-48c8-a3a5-ed615416d0a3",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-second-position",
+                  "expected_count": 1,
+                  "product": "b7a6855d-8c5e-4b75-863a-abf669d32c8e",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-reloaded-first",
+                  "expected_count": 2,
+                  "product": "2f506aaf-5eb5-48c8-a3a5-ed615416d0a3",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-reloaded-second",
+                  "expected_count": 1,
+                  "product": "b7a6855d-8c5e-4b75-863a-abf669d32c8e",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "full-plan-overflow",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "full-plan-1",
+                  "expected_count": 1,
+                  "product": "5a2f8d2e-a73c-4709-b61a-31f44c608f52",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "full-plan-2",
+                  "expected_count": 2,
+                  "product": "5a2f8d2e-a73c-4709-b61a-31f44c608f52",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "full-plan-3",
+                  "expected_count": 3,
+                  "product": "5a2f8d2e-a73c-4709-b61a-31f44c608f52",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "overflow-no-extra",
+                  "expected_count": 3,
+                  "product": "5a2f8d2e-a73c-4709-b61a-31f44c608f52",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "manual-invalid",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-outside-min-max",
+                  "expected_count": 0,
+                  "product": "05cc7c3a-3506-4384-a7c2-29c10d705d7f",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "manual-fraction-rejected",
+                  "expected_count": 0,
+                  "product": "05cc7c3a-3506-4384-a7c2-29c10d705d7f",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "manual-valid-after-errors",
+                  "expected_count": 2,
+                  "product": "05cc7c3a-3506-4384-a7c2-29c10d705d7f",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "manual-empty-is-zero",
+                  "expected_count": 0,
+                  "product": "05cc7c3a-3506-4384-a7c2-29c10d705d7f",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "tree-order-photo",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "tree-display-read-only",
+                  "expected_count": 0,
+                  "product": "0048744f-a5ec-4f99-9c61-eb912f4e5819",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "tree-first-source-after-scan",
+                  "expected_count": 1,
+                  "product": "0048744f-a5ec-4f99-9c61-eb912f4e5819",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "load-detail-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "load-detail-error-no-demo-no-write",
+                  "expected_count": 0,
+                  "product": "9c1b9f26-3053-46c3-9830-9dcbeaa1f768",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "load-options-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "load-options-error-no-demo-no-write",
+                  "expected_count": 0,
+                  "product": "c0e35346-31e4-4a0f-aa1f-c7b8e43e7414",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "catalog-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "catalog-failure-allowed-scan",
+                  "expected_count": 1,
+                  "product": "939b4947-2817-43fd-955a-39da1bad4b40",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-stage-persistence",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-full-plan",
+                  "expected_count": 6,
+                  "product": "e0be6d0a-74a1-4bec-bcf9-617e6db1451f",
+                  "status": "verified",
+                  "actual_count": 6
+                }
+              ]
+            },
+            {
+              "name": "local-slow-input",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "slow-local-enter",
+                  "expected_count": 1,
+                  "product": "367dae5d-4f76-47b6-b31c-901c800dddb5",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "short-local-enter",
+                  "expected_count": 2,
+                  "product": "367dae5d-4f76-47b6-b31c-901c800dddb5",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "photo-failure",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "photo-no-stock-write",
+                  "expected_count": 0,
+                  "product": "a3e8d4c0-5a43-4fbf-b0d0-b4286f51171e",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "print-picked",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "print-picked-before",
+                  "expected_count": 1,
+                  "product": "e7ebdcee-8fd9-4f91-a6d7-7484b87f9e96",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "next-and-history",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "next-return-picking",
+                  "expected_count": 1,
+                  "product": "15cf724f-6d46-4092-887a-0a8dee1d824d",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "scanner-status-audio",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "scan-status-success",
+                  "expected_count": 1,
+                  "product": "2c92a756-0f7a-4529-9973-9cb9ce0c664c",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "loading-busy",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "busy-queue-two",
+                  "expected_count": 2,
+                  "product": "409fa78b-2687-48ac-b1eb-da508797a4ed",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "date-controls",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "date-read-only-stock",
+                  "expected_count": 0,
+                  "product": "65061416-7134-4573-a7b0-e47b2135df49",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "operator-denied",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "operator-no-packaging-access",
+                  "expected_count": 0,
+                  "product": "c67ef430-be39-46d7-97cc-494c4909668c",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "multi-source-undo",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "multi-source-first",
+                  "expected_count": 1,
+                  "product": "0539c803-8c4b-452b-8419-3376ccecbbc8",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "multi-source-second",
+                  "expected_count": 2,
+                  "product": "0539c803-8c4b-452b-8419-3376ccecbbc8",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "multi-source-last-undo",
+                  "expected_count": 1,
+                  "product": "0539c803-8c4b-452b-8419-3376ccecbbc8",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "wb-source-banner",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "wb-source-actual-pick",
+                  "expected_count": 1,
+                  "product": "60dc4a6a-324b-47ff-bc82-ce168a045add",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "source-undo-history",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "undo-source-first",
+                  "expected_count": 1,
+                  "product": "ed85eecb-dd21-4ab2-825e-48d10b82727c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "undo-source-return",
+                  "expected_count": 0,
+                  "product": "ed85eecb-dd21-4ab2-825e-48d10b82727c",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "undo-before-refresh",
+                  "expected_count": 1,
+                  "product": "ed85eecb-dd21-4ab2-825e-48d10b82727c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "manual-return-without-undo-history",
+                  "expected_count": 0,
+                  "product": "ed85eecb-dd21-4ab2-825e-48d10b82727c",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "id": 37658991662,
+      "url": "https://github.com/chivkunovd-bitdenis/WMS/actions/runs/37658991662",
+      "suites": [
+        {
+          "suite": "base",
+          "test_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+          "app_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+          "counts": {
+            "executed": 29,
+            "passed": 29,
+            "failed": 0,
+            "blocked": 0
+          },
+          "database_checkpoints_verified": 51,
+          "physical_stock_unchanged": true,
+          "negative_balances": 0,
+          "cases": [
+            {
+              "name": "packing-flag",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "packing-flag",
+                  "expected_count": 1,
+                  "product": "281febf8-c5af-401b-8469-c2c19da74ff0",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "sources",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "sources-selected-only",
+                  "expected_count": 0,
+                  "product": "0f418842-e2e9-4a49-af3e-59e7d025bb34",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "sources",
+                  "expected_count": 1,
+                  "product": "0f418842-e2e9-4a49-af3e-59e7d025bb34",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "auto",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "auto",
+                  "expected_count": 1,
+                  "product": "54413c28-1bd7-41d3-aafd-77c7de83dbf3",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ambiguous",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ambiguous",
+                  "expected_count": 0,
+                  "product": "3f9fcba6-8d32-4e37-9cdd-c246279cbc29",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "wrong",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "wrong-source",
+                  "expected_count": 0,
+                  "product": "bd53965e-7458-4468-8f63-9f43fadc346e",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "wrong-queue-recovery",
+                  "expected_count": 1,
+                  "product": "f2a6d307-c584-4cce-ab68-0d23835a9fe2",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "change",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "change",
+                  "expected_count": 1,
+                  "product": "e402153a-56f0-42a1-aadb-88dbb07dbdda",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "change-clear",
+                  "expected_count": 1,
+                  "product": "e402153a-56f0-42a1-aadb-88dbb07dbdda",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "burst",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "burst",
+                  "expected_count": 5,
+                  "product": "e99e3d82-9e50-495b-a418-f9ca48fdb259",
+                  "status": "verified",
+                  "actual_count": 5
+                }
+              ]
+            },
+            {
+              "name": "number-scan",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "number-scan",
+                  "expected_count": 1,
+                  "product": "21698044-bab0-4b48-9206-28001e5eb082",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "number-scan-no-late-manual",
+                  "expected_count": 1,
+                  "product": "21698044-bab0-4b48-9206-28001e5eb082",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "layout",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "layout-ru",
+                  "expected_count": 1,
+                  "product": "0285ba69-3f04-4352-8723-6f53f014ef6d",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "layout-additional-ean",
+                  "expected_count": 2,
+                  "product": "0285ba69-3f04-4352-8723-6f53f014ef6d",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "manual",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-12",
+                  "expected_count": 12,
+                  "product": "5dd5fd91-6b68-4f4e-be2c-08220e4eccf9",
+                  "status": "verified",
+                  "actual_count": 12
+                },
+                {
+                  "name": "manual-reduce",
+                  "expected_count": 10,
+                  "product": "5dd5fd91-6b68-4f4e-be2c-08220e4eccf9",
+                  "status": "verified",
+                  "actual_count": 10
+                },
+                {
+                  "name": "manual-increase",
+                  "expected_count": 11,
+                  "product": "5dd5fd91-6b68-4f4e-be2c-08220e4eccf9",
+                  "status": "verified",
+                  "actual_count": 11
+                },
+                {
+                  "name": "manual-undo",
+                  "expected_count": 10,
+                  "product": "5dd5fd91-6b68-4f4e-be2c-08220e4eccf9",
+                  "status": "verified",
+                  "actual_count": 10
+                },
+                {
+                  "name": "manual-zero",
+                  "expected_count": 0,
+                  "product": "5dd5fd91-6b68-4f4e-be2c-08220e4eccf9",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "early-exit",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "early-exit",
+                  "expected_count": 12,
+                  "product": "798b6d4b-911e-4023-aa96-f0e6dff80cfe",
+                  "status": "verified",
+                  "actual_count": 12
+                }
+              ]
+            },
+            {
+              "name": "replay",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "replay-initial",
+                  "expected_count": 1,
+                  "product": "911a8ecb-ea63-4cfd-9066-166d56737a2a",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "replay-same-operation",
+                  "expected_count": 1,
+                  "product": "911a8ecb-ea63-4cfd-9066-166d56737a2a",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "replay-second-physical",
+                  "expected_count": 2,
+                  "product": "911a8ecb-ea63-4cfd-9066-166d56737a2a",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "lost",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "lost-committed-before-abort",
+                  "expected_count": 1,
+                  "product": "d43bca54-3f91-44b5-ab7a-807834946dbd",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "lost-after-reload",
+                  "expected_count": 1,
+                  "product": "d43bca54-3f91-44b5-ab7a-807834946dbd",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "get-failure",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "get-failure-committed",
+                  "expected_count": 1,
+                  "product": "fa556146-3e9a-4641-a9e6-3ee622ec3606",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "get-failure-reloaded-no-duplicate",
+                  "expected_count": 1,
+                  "product": "fa556146-3e9a-4641-a9e6-3ee622ec3606",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "network",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "network-before-server",
+                  "expected_count": 0,
+                  "product": "a44e6217-5312-4279-b0eb-9e97dd7e591f",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "network-recovery",
+                  "expected_count": 1,
+                  "product": "a44e6217-5312-4279-b0eb-9e97dd7e591f",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "last-unit",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "last-unit",
+                  "expected_count": 1,
+                  "product": "6962e5f4-3666-4453-b58c-f8c93801b530",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "manual-conflict",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-conflict-first",
+                  "expected_count": 2,
+                  "product": "00976b55-8b4f-4f41-a4ab-5585169ceba1",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "manual-conflict-no-silent-overwrite",
+                  "expected_count": 2,
+                  "product": "00976b55-8b4f-4f41-a4ab-5585169ceba1",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "tabs",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "tabs",
+                  "expected_count": 1,
+                  "product": "267b4eaf-0c38-48f2-a65d-c20c39775a1c",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "print",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "group",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group",
+                  "expected_count": 4,
+                  "product": "44872c95-0917-4f77-898d-a58befb391b5",
+                  "status": "verified",
+                  "actual_count": 4
+                }
+              ]
+            },
+            {
+              "name": "ozon",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon",
+                  "expected_count": 1,
+                  "product": "891d1638-6ad3-447d-9fdd-a5b75ddb6a03",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-second",
+                  "expected_count": 2,
+                  "product": "891d1638-6ad3-447d-9fdd-a5b75ddb6a03",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-position-2",
+                  "expected_count": 1,
+                  "product": "1558ea9a-83de-42ae-90d0-8f5a61591540",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ozon-group",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-group",
+                  "expected_count": 1,
+                  "product": "4d1e282b-9302-47f2-a867-f3d81f88014c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-second",
+                  "expected_count": 2,
+                  "product": "4d1e282b-9302-47f2-a867-f3d81f88014c",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-position-2",
+                  "expected_count": 1,
+                  "product": "ede95ade-10f8-4c48-a9b7-efcd643d931b",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-sellers",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-sellers-first",
+                  "expected_count": 1,
+                  "product": "83e46133-8ad5-45b7-875f-a5eabe767d6c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-sellers-second",
+                  "expected_count": 1,
+                  "product": "1a1239ed-7cb1-4e22-ab92-b41020c0c8ec",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "ozon-null",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-null-server-commit",
+                  "expected_count": 1,
+                  "product": "d539c8e1-2465-43a3-b046-b2c50340467d",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-null-reload",
+                  "expected_count": 1,
+                  "product": "d539c8e1-2465-43a3-b046-b2c50340467d",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "empty",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "empty",
+                  "expected_count": 0,
+                  "product": "30904dfb-1e76-45ad-9e95-eb643ffd180e",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "no-stock",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "no-stock",
+                  "expected_count": 0,
+                  "product": "b8a808de-4876-4ad5-8272-4b4acd248bd0",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "partial",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "partial",
+                  "expected_count": 1,
+                  "product": "6bbb02d0-8836-41e2-9b47-62435dd09eac",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "suffix",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "suffix-silence",
+                  "expected_count": 1,
+                  "product": "b5be6054-3476-42f2-b7a5-5d0360ef66e3",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "suffix-tab",
+                  "expected_count": 2,
+                  "product": "b5be6054-3476-42f2-b7a5-5d0360ef66e3",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "focus",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "focus-scanner",
+                  "expected_count": 1,
+                  "product": "8e86993f-ff65-4701-83da-3e3f4c289653",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "focus-blank",
+                  "expected_count": 2,
+                  "product": "8e86993f-ff65-4701-83da-3e3f4c289653",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "suite": "extended",
+          "test_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+          "app_sha": "fb27d07fbe7f0e1855a44834bf794a6a45ea55a0",
+          "counts": {
+            "executed": 40,
+            "passed": 40,
+            "failed": 0,
+            "blocked": 0
+          },
+          "database_checkpoints_verified": 74,
+          "physical_stock_unchanged": true,
+          "negative_balances": 0,
+          "cases": [
+            {
+              "name": "nested-container",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "nested-pallet-not-child-box",
+                  "expected_count": 0,
+                  "product": "0a589195-97a9-45c9-a45b-53896e357b7b",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "nested-exact-box",
+                  "expected_count": 1,
+                  "product": "0a589195-97a9-45c9-a45b-53896e357b7b",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "unlocated-container",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "unlocated-cargo-exact-source",
+                  "expected_count": 1,
+                  "product": "a23a5f19-17b8-4f36-a7d3-2113131d21a9",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "foreign-reserve",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "foreign-reserve-denied",
+                  "expected_count": 0,
+                  "product": "d7cb5239-aa5d-4a76-9111-e729825dd7ed",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "foreign-reserve-auto-denied",
+                  "expected_count": 0,
+                  "product": "d7cb5239-aa5d-4a76-9111-e729825dd7ed",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "foreign-location",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "foreign-location",
+                  "expected_count": 0,
+                  "product": "7615d97c-62ce-41b3-b76e-549d2e8dfdd6",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "foreign-location-recovery",
+                  "expected_count": 1,
+                  "product": "7615d97c-62ce-41b3-b76e-549d2e8dfdd6",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "modal-scanner",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "modal-no-picking",
+                  "expected_count": 0,
+                  "product": "a407d7b9-b45d-4b42-9cca-8f645bec93d2",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "modal-restored",
+                  "expected_count": 1,
+                  "product": "a407d7b9-b45d-4b42-9cca-8f645bec93d2",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "scanner-button",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "button-no-accidental-next",
+                  "expected_count": 1,
+                  "product": "54abe359-941d-4932-b226-be4e510e73fe",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "paste-blur",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "paste-source-settled",
+                  "expected_count": 0,
+                  "product": "80473faa-3597-49ac-9502-5ee7670d15d0",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "paste-blur-commit",
+                  "expected_count": 1,
+                  "product": "80473faa-3597-49ac-9502-5ee7670d15d0",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "pasted-enter",
+                  "expected_count": 2,
+                  "product": "80473faa-3597-49ac-9502-5ee7670d15d0",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "outside-no-suffix",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "outside-no-suffix-no-claimed-support",
+                  "expected_count": 0,
+                  "product": "daa5dcb3-4db0-40f1-9a4d-ad8eb7bb475e",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "outside-suffix-recovers",
+                  "expected_count": 1,
+                  "product": "daa5dcb3-4db0-40f1-9a4d-ad8eb7bb475e",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "special-barcode",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "special-ascii-code128",
+                  "expected_count": 1,
+                  "product": "79988720-87f0-4709-9551-b78006e003dd",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "special-gs-safe-rejection",
+                  "expected_count": 1,
+                  "product": "79988720-87f0-4709-9551-b78006e003dd",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "special-gs-queue-recovery",
+                  "expected_count": 2,
+                  "product": "79988720-87f0-4709-9551-b78006e003dd",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "special-ru-layout",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "special-ru-ascii-queue-recovery",
+                  "expected_count": 2,
+                  "product": "3bc171a1-a0ca-4625-83a4-fe634ea8a549",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "server-5xx",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "503-no-success",
+                  "expected_count": 0,
+                  "product": "007eb675-2983-4d60-b59e-8f8f8d791074",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "503-queue-recovery",
+                  "expected_count": 1,
+                  "product": "007eb675-2983-4d60-b59e-8f8f8d791074",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-manual",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-manual-four",
+                  "expected_count": 4,
+                  "product": "6facc340-efd6-4eb1-afcb-267e0b93f96f",
+                  "status": "verified",
+                  "actual_count": 4
+                },
+                {
+                  "name": "group-manual-reduction",
+                  "expected_count": 2,
+                  "product": "6facc340-efd6-4eb1-afcb-267e0b93f96f",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-manual-increment",
+                  "expected_count": 3,
+                  "product": "6facc340-efd6-4eb1-afcb-267e0b93f96f",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "group-manual-undo",
+                  "expected_count": 2,
+                  "product": "6facc340-efd6-4eb1-afcb-267e0b93f96f",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-manual-clear",
+                  "expected_count": 0,
+                  "product": "6facc340-efd6-4eb1-afcb-267e0b93f96f",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "group-conflict",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-conflict-first",
+                  "expected_count": 2,
+                  "product": "e25dac62-5c4f-43b2-97c3-7067b33096bd",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-preserves-first",
+                  "expected_count": 2,
+                  "product": "e25dac62-5c4f-43b2-97c3-7067b33096bd",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-reload",
+                  "expected_count": 2,
+                  "product": "e25dac62-5c4f-43b2-97c3-7067b33096bd",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "group-conflict-fresh-retry",
+                  "expected_count": 3,
+                  "product": "e25dac62-5c4f-43b2-97c3-7067b33096bd",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "group-partial-set",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-partial-real-first-transaction",
+                  "expected_count": 3,
+                  "product": "ec37233e-678e-4515-8545-06c688fa83a1",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "group-lost-set",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-lost-real-commit",
+                  "expected_count": 1,
+                  "product": "b45b44b4-1258-4db8-9ce1-8045f9517437",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-lost-replay-no-double-move",
+                  "expected_count": 1,
+                  "product": "b45b44b4-1258-4db8-9ce1-8045f9517437",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "group-lost-new-confirmed-target",
+                  "expected_count": 2,
+                  "product": "b45b44b4-1258-4db8-9ce1-8045f9517437",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "print-fallback",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-context-failure",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-group-warehouses",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "print-ozon-route",
+              "status": "passed",
+              "checkpoints": []
+            },
+            {
+              "name": "exhausted-source-return",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "source-exhausted",
+                  "expected_count": 3,
+                  "product": "9b815c58-51a4-4f13-a60a-76ec8c597b07",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "exhausted-reloaded",
+                  "expected_count": 3,
+                  "product": "9b815c58-51a4-4f13-a60a-76ec8c597b07",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "exhausted-restored-origin",
+                  "expected_count": 0,
+                  "product": "9b815c58-51a4-4f13-a60a-76ec8c597b07",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "ozon-handover",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-handover-no-late-write",
+                  "expected_count": 0,
+                  "product": "d4de72fb-c0df-4cd8-9b1a-4733071e6c40",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "ozon-group-scan",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "ozon-group-primary-scan",
+                  "expected_count": 1,
+                  "product": "d59622cb-59fc-4ed4-b68c-e18a616ac74d",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-duplicate-physical-scan",
+                  "expected_count": 2,
+                  "product": "d59622cb-59fc-4ed4-b68c-e18a616ac74d",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-second-position",
+                  "expected_count": 1,
+                  "product": "7b385be2-2a73-44d8-a174-e7b7e3db3fda",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "ozon-group-reloaded-first",
+                  "expected_count": 2,
+                  "product": "d59622cb-59fc-4ed4-b68c-e18a616ac74d",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "ozon-group-reloaded-second",
+                  "expected_count": 1,
+                  "product": "7b385be2-2a73-44d8-a174-e7b7e3db3fda",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "full-plan-overflow",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "full-plan-1",
+                  "expected_count": 1,
+                  "product": "c73eab64-878f-4d94-8ffa-3a098772ad7c",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "full-plan-2",
+                  "expected_count": 2,
+                  "product": "c73eab64-878f-4d94-8ffa-3a098772ad7c",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "full-plan-3",
+                  "expected_count": 3,
+                  "product": "c73eab64-878f-4d94-8ffa-3a098772ad7c",
+                  "status": "verified",
+                  "actual_count": 3
+                },
+                {
+                  "name": "overflow-no-extra",
+                  "expected_count": 3,
+                  "product": "c73eab64-878f-4d94-8ffa-3a098772ad7c",
+                  "status": "verified",
+                  "actual_count": 3
+                }
+              ]
+            },
+            {
+              "name": "manual-invalid",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "manual-outside-min-max",
+                  "expected_count": 0,
+                  "product": "6e47f0ff-7451-4d57-949b-8d35f3c1dfbd",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "manual-fraction-rejected",
+                  "expected_count": 0,
+                  "product": "6e47f0ff-7451-4d57-949b-8d35f3c1dfbd",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "manual-valid-after-errors",
+                  "expected_count": 2,
+                  "product": "6e47f0ff-7451-4d57-949b-8d35f3c1dfbd",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "manual-empty-is-zero",
+                  "expected_count": 0,
+                  "product": "6e47f0ff-7451-4d57-949b-8d35f3c1dfbd",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "tree-order-photo",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "tree-display-read-only",
+                  "expected_count": 0,
+                  "product": "85fc06f4-3cf5-448a-a3ac-fd259092a9e6",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "tree-first-source-after-scan",
+                  "expected_count": 1,
+                  "product": "85fc06f4-3cf5-448a-a3ac-fd259092a9e6",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "load-detail-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "load-detail-error-no-demo-no-write",
+                  "expected_count": 0,
+                  "product": "21b5e2bb-f14c-481a-bff5-63020d5be65f",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "load-options-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "load-options-error-no-demo-no-write",
+                  "expected_count": 0,
+                  "product": "f9e1d733-707f-4b8e-9a8d-98e8c61eed35",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "catalog-error",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "catalog-failure-allowed-scan",
+                  "expected_count": 1,
+                  "product": "1192a307-afaf-4d26-9789-1173b9c8084d",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "group-stage-persistence",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "group-full-plan",
+                  "expected_count": 6,
+                  "product": "43590412-48ae-420a-bd31-ef4984fe2d49",
+                  "status": "verified",
+                  "actual_count": 6
+                }
+              ]
+            },
+            {
+              "name": "local-slow-input",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "slow-local-enter",
+                  "expected_count": 1,
+                  "product": "9f80bb71-f036-409f-92f4-93f7af21c758",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "short-local-enter",
+                  "expected_count": 2,
+                  "product": "9f80bb71-f036-409f-92f4-93f7af21c758",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "photo-failure",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "photo-no-stock-write",
+                  "expected_count": 0,
+                  "product": "c95cf9cb-a802-4258-a9b7-3d9483012226",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "print-picked",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "print-picked-before",
+                  "expected_count": 1,
+                  "product": "79d69a2d-8e4d-45f9-903e-11db1b40ffb1",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "next-and-history",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "next-return-picking",
+                  "expected_count": 1,
+                  "product": "04317c4f-f548-4d4a-a75b-3823ad58b5cf",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "scanner-status-audio",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "scan-status-success",
+                  "expected_count": 1,
+                  "product": "3bf32d65-db0b-47f1-8074-99ef4a6581a5",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "loading-busy",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "busy-queue-two",
+                  "expected_count": 2,
+                  "product": "92a5cb19-b04e-4265-bac2-90ca554fdabd",
+                  "status": "verified",
+                  "actual_count": 2
+                }
+              ]
+            },
+            {
+              "name": "date-controls",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "date-read-only-stock",
+                  "expected_count": 0,
+                  "product": "157604af-f830-4db1-97c4-34eff4b44253",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "operator-denied",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "operator-no-packaging-access",
+                  "expected_count": 0,
+                  "product": "9392fb90-21cb-469a-b717-825146bd5dd8",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            },
+            {
+              "name": "multi-source-undo",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "multi-source-first",
+                  "expected_count": 1,
+                  "product": "cd6faee0-31d3-4600-8f62-8e627c6f9dcd",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "multi-source-second",
+                  "expected_count": 2,
+                  "product": "cd6faee0-31d3-4600-8f62-8e627c6f9dcd",
+                  "status": "verified",
+                  "actual_count": 2
+                },
+                {
+                  "name": "multi-source-last-undo",
+                  "expected_count": 1,
+                  "product": "cd6faee0-31d3-4600-8f62-8e627c6f9dcd",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "wb-source-banner",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "wb-source-actual-pick",
+                  "expected_count": 1,
+                  "product": "a46bbdaa-f110-48e5-a5a9-99720cb96bdd",
+                  "status": "verified",
+                  "actual_count": 1
+                }
+              ]
+            },
+            {
+              "name": "source-undo-history",
+              "status": "passed",
+              "checkpoints": [
+                {
+                  "name": "undo-source-first",
+                  "expected_count": 1,
+                  "product": "30b78b4d-b215-404a-8968-77249129da99",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "undo-source-return",
+                  "expected_count": 0,
+                  "product": "30b78b4d-b215-404a-8968-77249129da99",
+                  "status": "verified",
+                  "actual_count": 0
+                },
+                {
+                  "name": "undo-before-refresh",
+                  "expected_count": 1,
+                  "product": "30b78b4d-b215-404a-8968-77249129da99",
+                  "status": "verified",
+                  "actual_count": 1
+                },
+                {
+                  "name": "manual-return-without-undo-history",
+                  "expected_count": 0,
+                  "product": "30b78b4d-b215-404a-8968-77249129da99",
+                  "status": "verified",
+                  "actual_count": 0
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "production_changed": false,
+  "packing_ci_created_or_run": false
+}
