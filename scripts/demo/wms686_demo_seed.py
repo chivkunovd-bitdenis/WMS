@@ -44,6 +44,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import uuid
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -170,6 +171,45 @@ def import_pool(
     if accepted != len(codes):
         raise SeedError(f"импорт КИЗ принял {accepted} из {len(codes)}: {result}")
     return accepted
+
+
+def place_box(api: Api, warehouse_id: str, request_id: str, box_id: str, cell_id: str) -> None:
+    """Поставить короб приёмки в ячейку так же, как это делает экран «Сортировка»."""
+    api.post(
+        f"/warehouses/{warehouse_id}/sorting-objects/place",
+        json={
+            "kind": "box",
+            "id": box_id,
+            "cell_id": cell_id,
+            "inbound_request_id": request_id,
+            "operation_id": str(uuid.uuid4()),
+        },
+    )
+
+
+def find_product_balance_id(
+    api: Api, warehouse_id: str, cell_id: str, product_id: str, box_id: str
+) -> str:
+    """id остатка товара внутри короба на ячейке — по карте склада (как видит экран)."""
+    cells = api.get(f"/warehouses/{warehouse_id}/map")["cells"]
+    cell = next((row for row in cells if row["id"] == cell_id), None)
+    if cell is None:
+        raise SeedError(f"ячейка {cell_id} не найдена на карте склада")
+
+    def walk(nodes: list[dict[str, Any]], inside_box: bool) -> str | None:
+        for node in nodes:
+            in_box = inside_box or (node.get("kind") == "box" and node.get("id") == box_id)
+            if node.get("kind") == "product" and node.get("product_id") == product_id and in_box:
+                return str(node["id"])
+            found = walk(node.get("children") or [], in_box)
+            if found:
+                return found
+        return None
+
+    balance_id = walk(cell.get("children") or [], False)
+    if balance_id is None:
+        raise SeedError(f"в коробе {box_id} на ячейке {cell_id} нет товара {product_id}")
+    return balance_id
 
 
 def main() -> int:
@@ -302,24 +342,29 @@ def main() -> int:
     api.post(f"{INBOUND_PATH}/{rid}/verify")  # приёмка → «сортировка»
 
     # --- размещение: короба 1 и 2 целиком в «А-1-1», «Футболки 50» в «А-1-2» ---
+    # Штатный путь экрана «Сортировка» (/warehouses/{id}/sorting-objects/place):
+    # он двигает остаток и одновременно записывает место самого короба. Ручка
+    # приёмки .../boxes/{id}/putaway переносит только остаток, и место короба
+    # остаётся «Сортировка» — подбор FBO тогда отвечает 409 invalid_container_reference.
     for index in (0, 1):
-        api.post(
-            f"{INBOUND_PATH}/{rid}/boxes/{boxes[index]['id']}/putaway",
-            json={"storage_location_id": cells[LOC_1]["id"]},
-        )
+        place_box(api, wid, rid, str(boxes[index]["id"]), cells[LOC_1]["id"])
         boxes[index]["location"] = LOC_1
+    place_box(api, wid, rid, str(boxes[2]["id"]), cells[LOC_2]["id"])
     if args.tee50_in_box:
-        api.post(
-            f"{INBOUND_PATH}/{rid}/boxes/{boxes[2]['id']}/putaway",
-            json={"storage_location_id": cells[LOC_2]["id"]},
-        )
         boxes[2]["location"] = LOC_2
     else:
+        # Выкладка из короба: товар остаётся в ячейке, но уже без тары.
+        balance_id = find_product_balance_id(
+            api, wid, cells[LOC_2]["id"], products["t50"]["id"], str(boxes[2]["id"])
+        )
         api.post(
-            f"{INBOUND_PATH}/{rid}/boxes/{boxes[2]['id']}/putaway",
+            f"/warehouses/{wid}/map/move",
             json={
-                "storage_location_id": cells[LOC_2]["id"],
-                "lines": [{"product_id": products["t50"]["id"], "quantity": 8}],
+                "kind": "product",
+                "id": balance_id,
+                "to_kind": "cell",
+                "to_id": cells[LOC_2]["id"],
+                "qty": 8,
             },
         )
         boxes[2]["location"] = f"{LOC_2} (россыпью, короб пуст)"
