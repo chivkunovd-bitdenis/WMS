@@ -1,7 +1,7 @@
 {
   "version": 1,
   "files": {
-    ".github/workflows/ci.yml": "ef13844cbb3e1b9f92c3f098eabe23799b33b47766f709f4e26dd33a41fbc390",
+    ".github/workflows/ci.yml": "85785a903b673b943cb0748a6602a83f853fba24baa37d1f4d7caeab160440fc",
     ".github/workflows/deploy.yml": "1148a4ec8a7a422566fffbb32c4e71abb3a0394f02879d1ef64b899d19629df1",
     "backend/pyproject.toml": "d3cd980626bc601c051bb9fcf652238a80f40968d7c68e4ec84dc72edf659d3a",
     "backend/tests/conftest.py": "343862dcbe644fd8a8c8032625d11329daad349a885f65b1f1036460fff3438e",
@@ -157,7 +157,7 @@
     "frontend/src/screens/v2/wms673MarketplaceProjection.json": "3857d4589b28acbd5a9c537cbdfd1a0cf6bcf00f3e7cc24564d1b0abe9095c53",
     "frontend/src/screens/v2/wms673PrintFixtures.ts": "db0606f327a6416053d308d08cd72ef4089c7b59a520593e81184d56b9079d36",
     "frontend/src/utils/printPreparedQr.test.ts": "44ada2bf35d52736a1874af52f88bc093b9b28db31c9e188fe16649136a90adc",
-    "frontend/tests-e2e/wms652-critical/browser.mjs": "24f146ba0e038645114edb882a85686dc834f8c338d1324c10426b7648bd6dd6",
+    "frontend/tests-e2e/wms652-critical/browser.mjs": "14dcf89d80fba9e98a3e6ad26cb715841adf1e0d82afc2bbdbbdcd81a98aa96c",
     "frontend/tests-e2e/wms652-critical/button-mutations.py": "dd55942fdeb9709d46bad68b451b2efa3aa19737ceaef4e8c55588c63f6459fb",
     "frontend/tests-e2e/wms652-critical/cases.json": "52644992a3ca8a8184638563727e6307f8dc998a46e45db3a60a31f98a65bcc9",
     "frontend/tests-e2e/wms652-critical/fixtures.mjs": "65c102687c3308d9ae342c57bad299502a67d55ba9399129bd7bddc3ec8d068f",
@@ -178,7 +178,7 @@
     "frontend/tests-e2e/wms672-vite.config.ts": "72783b738b38124a3e7ef046ef9d689347fcf330721dae45a38d491bb7b806fd",
     "frontend/vite.config.ts": "edce832d16a60020d4ee3c99214f80ee83297aa5e6a7945d8b74331a3c91f560",
     "frontend/vitest.config.ts": "c5a189e0a84e5bd969515013fb33ecf6c5923f9e551fb9f4c4c5971247b30cda",
-    "scripts/ci/backend_shards.py": "5309a03576d017839fb50b51b31867febfc0fe2307494d0ad904122ca0c7e36b",
+    "scripts/ci/backend_shards.py": "2a1f7a653213a93eceb77ee68b699186754b88f9070e28af2c8e93b27aa80105",
     "scripts/ci/build_process_proof.py": "464f05198b3b896d3ed0def00b34b73195af9e66f64fe4d5b140ced0843203ca",
     "scripts/ci/process_contracts.py": "209be8fe73f3bc3e0555cbc9e4ef39e446449b8aa236f474fa12d0dd082c2684",
     "scripts/ci/product_scope.py": "97bc194cae50c2ac2e2c1b2765b0d63e5432da3fffbf9450270c2f06c8386392",
@@ -223,7 +223,7 @@
     "scripts/ops/tests/wms517-sold-kiz-filter.test.cjs": "f42323a96029cee237928b51221ea9b5837f485ccbb155111c40fe661e48c1f5",
     "tools/print-agent/test_wms_print_direct.py": "4dec75ef706b4acd74d5992b344db8112b7b0080f3c949d0267febbc4604b653",
     "tools/print-agent/test_wms_print_runtime.py": "4a4e175be65af8213ea768fea2fb43c399a5ad0b7d72488bf944280a89860747",
-    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "cc476a5cb9290ca1097db6fb6282b5c7dbaa801b5300220a6f6a2eccb21583c2",
+    "scripts/ci/tests/fixtures/wms652_source_binding_transition.json": "36883826ce5d7df42377775dede54afb5e230578318832545f93c96de1d0861f",
     "scripts/ci/tests/fixtures/wms686_raw_receipt_contract.json": "baed9c233340bbd3c84a6963d2e69d063946514911e9079276b8c8fdb3319fbd",
     "docs/mockups/WMS-686/model.test.ts": "66d78f86881eb501b78f67df3a0f044a06bab6d7aac44648e135a14613eda7f1",
     "scripts/ci/promote_guards.py": "5c1ef28abcada5c2491cf5399ba9964756cdc1d50a1c99a2598fdedabb0efcc5",
@@ -278,15 +278,19 @@
     "backend/tests/test_wms662_exact_fixture_pairs_contract.py": "5f505f389a7b0b38838c69df676882a42509d80932c189475a83caa2e84336b9",
     "backend/uv.lock": "972e7872da04e2c827e186008a1baae240ed4bce06d15f8eaf29867b26ed226e",
     "docs/evidence/WMS-652/batch-exact-ledger-test-contract-20261007/historical-inputs.json": "0fea9e178488f7d83d975ff33111ca99063f8fd77f87a156016f1df58b908c78",
-    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "53c54d384299e90ad3c2892ccb6c611995ffeee14bda2f5bf251b6cd0a21ad20",
+    "frontend/tests-e2e/wms652-cdp-cancellation.test.mjs": "adf1e389c27c4b382d999838b0fab18fcc2fa8c92deb86acf794be03ce1b3b44",
     "scripts/ci/tests/test_reviewed_process_upgrade.py": "29b67659877a7653f0c43bf01901caf4000a7722084239d0254aa7fcd97d966e",
     "scripts/deploy/retain-web-assets.py": "bfb6d0bc7d465bf8c3e9b194a8415f6d257f7097db7426e0ab5362924c78b64c",
     "scripts/ci/tests/test_retain_web_assets.py": "776f150a5c489291b7bb38120c2cab036a3f1892667db9b6043c8d581be9a6df",
     "frontend/tests/fixtures/wms666AcceptedRecoveryHistory.json": "615e82d1b6dd98ca4117ae6c0fd3f3f503bc3eceaab2fea0562b61bd1b3de969",
-    "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "f969581a0f8fd33eb582943a835388cc2bbede6a6260c54298e18bef76e2b117",
+    "frontend/src/components/MarkingPrintDialog.availability.dom.test.tsx": "886c68518e380e38cec98fd2e9f8f48514ba4d3f501095ef39d8dc0e51ff06e3",
     "frontend/src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx": "68740029acf66dff96190979c075e2c1a8caeccb37c212b72780d10e42621cc0",
     "backend/tests/test_wms635_kiz_no_wb_wait.py": "08f38c25b29acef0a5ccbd5164dcd792d29204a47978ab99527a1c1e2f49c644",
-    "backend/tests/test_wms546_marking_verdicts.py": "23f8240bc9b2ea447656db646d28c1696ad0a858751c8bba9db77f6ccef45cdb"
+    "backend/tests/test_wms546_marking_verdicts.py": "23f8240bc9b2ea447656db646d28c1696ad0a858751c8bba9db77f6ccef45cdb",
+    "frontend/src/screens/v2/wms666ChangeScope.test.ts": "f1a0ab3e20f484ed4b901daeae00d899ce6bfd84b4d8efa920dad7fbfb76cf34",
+    "scripts/ci/tests/test_backend_shard_progress.py": "d7083629e4efd4026da8dc5e2693f04b7191127352325661b30132738921c8a8",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx": "1e5663e2fd7e646905e6c65652e7c2081e52d16a9fc6cbca477de49f5ec8c57e",
+    "frontend/src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx": "c5f389f7436e2c4b34727d4d38fce202fa7361e10bb1acb2acd8432976def84b"
   },
   "suites": {
     "backend-fbs": {
@@ -1537,7 +1541,9 @@
         "src/components/MarkingPrintDialog.partialAck.wms666.dom.test.tsx::WMS-666 partial tape acknowledgement recovery keeps a partial tape warning after ack-only recovery without completing or closing the mixed batch",
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 C2: mixed-task group does not gate manual printing on a missing accounting task uses each order current KIZ pool without substituting the group aggregate or another task line",
         "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards shows the ordinary row validation rejection and makes no commit or print",
-        "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B"
+        "src/screens/v2/FfFbsUnifiedPacking.wms666.dom.test.tsx::WMS-666 permanent ordinary-row scan recovery guards queues Escape behind an accepted row validation, finishes that intent, then routes the next scan to B",
+        "src/screens/v2/FfFbsSupplyWorkspace.wms662.c19.dom.test.tsx::C19: partial → full remains order-specific after reopen/page refresh; picking and reads stay unchanged",
+        "src/screens/v2/FfFbsSupplyWorkspace.wms666.history.dom.test.tsx::does not prepare missing stickers or start work when reopening a taskless delivered supply"
       ]
     },
     "print-672": {
